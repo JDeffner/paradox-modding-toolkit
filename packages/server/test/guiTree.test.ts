@@ -1,5 +1,5 @@
 /**
- * GUI widget tree (ck3.showGuiTree): PdxGui hierarchy extraction — widgets vs
+ * GUI widget tree (px.showGuiTree): PdxGui hierarchy extraction — widgets vs
  * attribute blocks, template/type declaration headers, names, using refs,
  * states — plus a vanilla-gated sweep over the real hud.gui.
  */

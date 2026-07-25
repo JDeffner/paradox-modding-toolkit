@@ -4,7 +4,7 @@
  *
  * The extension never bundles tiger (it tracks game patches faster than the
  * extension releases); instead the effective tiger path resolves as:
- * ck3.tigerPath setting → most recent downloaded copy → none.
+ * px.tigerPath setting → most recent downloaded copy → none.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -140,7 +140,7 @@ export async function downloadLatestTiger(
   if (!asset) {
     throw new Error(
       process.platform === "darwin"
-        ? "tiger has no prebuilt macOS binary; build it from source (github.com/amtep/tiger) and set ck3.tigerPath."
+        ? "tiger has no prebuilt macOS binary; build it from source (github.com/amtep/tiger) and set px.tigerPath."
         : `no ${flavor.prefix} asset found for this platform in release ${tag}.`
     );
   }

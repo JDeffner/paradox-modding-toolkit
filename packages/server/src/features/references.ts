@@ -8,7 +8,7 @@ import * as path from "path";
 import type { Location, Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
-import type { Reference } from "@paradox-lsp/protocol/types";
+import type { Reference } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";

@@ -4,7 +4,7 @@
 // server's bundle-relative data fallback expects.
 //
 // Run after `pnpm run compile`:  node scripts/build-server-tarball.mjs
-// Output: paradox-lsp-server-<version>.tar.gz at the repo root.
+// Output: px-lsp-server-<version>.tar.gz at the repo root.
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -22,8 +22,8 @@ if (!existsSync(bundle)) {
 }
 
 const { version } = JSON.parse(readFileSync(join(server, "package.json"), "utf8"));
-const name = `paradox-lsp-server-${version}`;
-const stage = join(tmpdir(), `paradox-lsp-tarball-${process.pid}`);
+const name = `px-lsp-server-${version}`;
+const stage = join(tmpdir(), `px-lsp-tarball-${process.pid}`);
 const pkgDir = join(stage, name);
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(join(pkgDir, "dist"), { recursive: true });

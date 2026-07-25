@@ -4,7 +4,7 @@ import { URI } from "vscode-uri";
 import { provideDefinition } from "../src/features/definition";
 import { provideReferences } from "../src/features/references";
 import { ServerData } from "../src/serverData";
-import type { Definition, Reference } from "@paradox-lsp/protocol/types";
+import type { Definition, Reference } from "@px-lsp/protocol/types";
 
 const def = (source: Definition["source"], file: string, line = 0): Definition => ({
   name: "shared_effect",

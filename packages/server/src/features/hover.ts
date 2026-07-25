@@ -12,8 +12,8 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
 import { URI } from "vscode-uri";
 import type { SchemaEntry } from "../schema/types";
-import type { TokenData } from "@paradox-lsp/protocol/types";
-import { clientCommands } from "@paradox-lsp/protocol/protocol";
+import type { TokenData } from "@px-lsp/protocol/types";
+import { clientCommands } from "@px-lsp/protocol/protocol";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { scopePrefixBefore, wordRangeAt } from "../wordAt";
@@ -38,7 +38,7 @@ import {
   scopeType,
   type CardInput,
 } from "./hoverRender";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 import type { DefineEntry } from "../data/defines";
 
 export function provideHover(

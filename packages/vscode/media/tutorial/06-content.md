@@ -110,9 +110,9 @@ The game has nine language folders (english, french, german, spanish, russian, k
 The extension automates this workflow end to end:
 
 - **Localization Coverage view** (CK3 Activity Bar icon): every key, which languages have it, which are missing or stale, with one-click "Add localization" on missing entries.
-- **CK3 Localization: Add Language** scaffolds a new language folder from your English files, keeping English visible side by side while you translate.
-- **CK3 Localization: Translate Missing Keys** walks you through the gaps.
-- **CK3 Localization: Open Side by Side** pairs a script file with its loc file in a split editor.
+- **Paradox Localization: Add Language** scaffolds a new language folder from your English files, keeping English visible side by side while you translate.
+- **Paradox Localization: Translate Missing Keys** walks you through the gaps.
+- **Paradox Localization: Open Side by Side** pairs a script file with its loc file in a split editor.
 - F12 on a loc key jumps between script usage and yml definition in both directions.
 
 ### Conditional text at scale
@@ -127,7 +127,7 @@ Character, title and province setup lives under `history/`, in a related but dis
 
 1. Create `chron_famed_chronicler` as above, with `trait_chron_famed_chronicler` and `trait_chron_famed_chronicler_desc` loc keys.
 2. Grant the trait from your Chapter 4 event chain: the final event's best option gives it via `add_trait`.
-3. Open the Localization Coverage view and check your mod is at 100 percent for English. Then run **CK3 Localization: Add Language** for German (or any language), translate two keys, and see coverage update.
+3. Open the Localization Coverage view and check your mod is at 100 percent for English. Then run **Paradox Localization: Add Language** for German (or any language), translate two keys, and see coverage update.
 4. Stretch goal: write a `chron_example` loc key using a data function, a concept link and a text icon, and display it via `custom_tooltip` in an event option.
 
 Next: [Chapter 7: Custom GUI](07-gui.md) · [Back to index](index.md)

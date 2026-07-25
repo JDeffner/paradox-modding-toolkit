@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="media/banner.png" alt="CK3 Modding Toolkit">
+<img src="media/banner.png" alt="Paradox Toolkit">
 
-# CK3 Modding Toolkit for VS Code
+# Paradox Toolkit for VS Code
 
 Crusader Kings III mod development, end to end: a language server with a real
 Paradox-script parser, scope-aware completion, instant diagnostics for the
@@ -38,30 +38,30 @@ integration, a live mod overview, and a localization workflow no other tool has.
   (with the LIOS/FIOS winner), an interactive event graph with a node inspector,
   and a GUI widget tree.
 - **DDS and images**: zoomable `.dds` preview, a PNG/JPEG/WebP to DDS converter
-  in the explorer right-click menu, and `CK3: Show Image Guidelines` with the
+  in the explorer right-click menu, and `Paradox: Show Image Guidelines` with the
   sizes vanilla actually uses.
 - **Localization workflow**: inline loc as inlay hints, BOM-correct quick-fix
   editing, a coverage view, and scaffolds for whole translation mods.
-- **Content scaffolds**: `CK3: New Content` generates events, decisions,
+- **Content scaffolds**: `Paradox: New Content` generates events, decisions,
   interactions and on_action hooks that are correct by construction.
-- **Live debugging**: `CK3: Launch CK3 (debug mode)` plus a `CK3: Toggle
+- **Live debugging**: `Paradox: Launch CK3 (debug mode)` plus a `Paradox: Toggle
   error.log Watcher` that surfaces in-game script errors as editor squiggles.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
-- **Bundled 10-chapter tutorial** (`CK3: Open Tutorial`) with every snippet
+- **Bundled 10-chapter tutorial** (`Paradox: Open Tutorial`) with every snippet
   verified against the game files.
 - **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Claude-Skill)**
   ships in `skills/ck3-modding/` for AI-assisted modding.
 
 ## Quick start
 
-1. Install the extension, open your mod folder, and run **CK3: Run Setup &
+1. Install the extension, open your mod folder, and run **Paradox: Run Setup &
    Health Check**. It finds the game via Steam, checks the logs folder, and
    offers to download ck3-tiger. The walkthrough covers the rest.
 2. *(Recommended)* Launch CK3 with `-debug_mode`, open the console (\`), run
-   `script_docs`, then run **CK3: Reload Game Data (script_docs)**. This upgrades
+   `script_docs`, then run **Paradox: Reload Game Data (script_docs)**. This upgrades
    the token data from the bundled wiki lists to your exact game version.
 
 The default configuration is nothing: open your mod folder(s), run Setup once,

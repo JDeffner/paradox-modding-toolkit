@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractReferences, ReferenceIndex } from "../src/index/references";
 import { DefinitionIndex } from "../src/index/indexer";
 import { loadSchema } from "../src/schema/loader";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 
 const schema = loadSchema(null);
 

@@ -18,9 +18,9 @@ import {
   StreamMessageWriter,
   type MessageConnection,
 } from "vscode-jsonrpc/node";
-import { statusNotification, type StatusPayload } from "@paradox-lsp/protocol/protocol";
+import { statusNotification, type StatusPayload } from "@px-lsp/protocol/protocol";
 
-const SERVER = process.env.PARADOX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
+const SERVER = process.env.PX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
 const hasServer = fs.existsSync(SERVER);
 
 const METADATA_JSON = JSON.stringify(

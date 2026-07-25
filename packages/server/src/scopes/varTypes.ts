@@ -14,7 +14,7 @@
  *
  * No `vscode` imports: unit-tested in plain Node.
  */
-import type { Definition, Reference } from "@paradox-lsp/protocol/types";
+import type { Definition, Reference } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import type { ServerData } from "../serverData";
 import { resolveKeyChainScopes, type InferenceContext } from "./inference";

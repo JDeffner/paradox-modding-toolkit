@@ -11,7 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { LineIndex, parseScript, type ValueNode } from "../parser";
-import { walkDir } from "@paradox-lsp/protocol/fsWalk";
+import { walkDir } from "@px-lsp/protocol/fsWalk";
 
 export type DefineLayer = "jomini" | "game" | "mod";
 

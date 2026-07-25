@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { provideFormattingEdits } from "../src/features/formatting";
-import { parseErrorLogLine } from "@paradox-lsp/protocol/errorLogParser";
+import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
 
 function applyEdits(text: string, doc: TextDocument): string {
   const edits = provideFormattingEdits(doc);

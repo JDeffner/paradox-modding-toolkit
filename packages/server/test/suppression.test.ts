@@ -5,7 +5,7 @@ import {
   isSuppressedInline,
   sanitizeStringList,
   scanInlineSuppressions,
-} from "@paradox-lsp/protocol/suppression";
+} from "@px-lsp/protocol/suppression";
 import { LineIndex, parseScript } from "../src/parser";
 import { computeScriptDiagnostics, type FileContext } from "../src/features/diagnostics";
 
@@ -83,22 +83,22 @@ describe("isIgnoredByConfig", () => {
 
 describe("scanInlineSuppressions", () => {
   it("suppresses the same line with matching codes only", () => {
-    const map = scanInlineSuppressions("bad = { # ck3m:ignore unclosed-brace\n");
+    const map = scanInlineSuppressions("bad = { # px:ignore unclosed-brace\n");
     expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
     expect(isSuppressedInline(map, 0, "stray-close")).toBe(false);
   });
   it("suppresses the next line", () => {
-    const map = scanInlineSuppressions("# ck3m:ignore-next-line unclosed-brace\nbad = {\n");
+    const map = scanInlineSuppressions("# px:ignore-next-line unclosed-brace\nbad = {\n");
     expect(isSuppressedInline(map, 1, "unclosed-brace")).toBe(true);
     expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(false);
   });
   it("a bare ignore suppresses every code on the line", () => {
-    const map = scanInlineSuppressions("bad = { # ck3m:ignore\n");
+    const map = scanInlineSuppressions("bad = { # px:ignore\n");
     expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
     expect(isSuppressedInline(map, 0, "anything-at-all")).toBe(true);
   });
   it("accepts multiple codes and unions merged comments", () => {
-    const map = scanInlineSuppressions("x # ck3m:ignore a b\ny # ck3m:ignore-next-line c\nz\n");
+    const map = scanInlineSuppressions("x # px:ignore a b\ny # px:ignore-next-line c\nz\n");
     expect(isSuppressedInline(map, 0, "a")).toBe(true);
     expect(isSuppressedInline(map, 0, "b")).toBe(true);
     expect(isSuppressedInline(map, 2, "c")).toBe(true);
@@ -109,13 +109,13 @@ describe("scanInlineSuppressions", () => {
   // Writing a reason used to parse every word of it as a code, so the
   // suppression silently matched nothing.
   it("stops at a -- rationale instead of reading it as codes", () => {
-    const map = scanInlineSuppressions("bad = { # ck3m:ignore unclosed-brace -- the game tolerates it\n");
+    const map = scanInlineSuppressions("bad = { # px:ignore unclosed-brace -- the game tolerates it\n");
     expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
     expect(isSuppressedInline(map, 0, "the")).toBe(false);
     expect(isSuppressedInline(map, 0, "stray-close")).toBe(false);
   });
   it("treats a bare ignore with only a rationale as suppress-all", () => {
-    const map = scanInlineSuppressions("bad = { # ck3m:ignore -- intentional\n");
+    const map = scanInlineSuppressions("bad = { # px:ignore -- intentional\n");
     expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
     expect(isSuppressedInline(map, 0, "anything-at-all")).toBe(true);
   });
@@ -154,19 +154,19 @@ describe("end-to-end: our diagnostics respect suppression", () => {
   });
 
   it("same-line inline comment removes the diagnostic", () => {
-    const text = "} # ck3m:ignore stray-close\n";
+    const text = "} # px:ignore stray-close\n";
     const kept = diagsWithSuppression(text, file, { ignore: [], ignorePatterns: [] }, "events/my_events.txt");
     expect(kept.some((d) => d.code === "stray-close")).toBe(false);
   });
 
   it("next-line inline comment removes the diagnostic", () => {
-    const text = "# ck3m:ignore-next-line stray-close\n}\n";
+    const text = "# px:ignore-next-line stray-close\n}\n";
     const kept = diagsWithSuppression(text, file, { ignore: [], ignorePatterns: [] }, "events/my_events.txt");
     expect(kept.some((d) => d.code === "stray-close")).toBe(false);
   });
 
   it("suppress-all inline comment removes the diagnostic", () => {
-    const text = "} # ck3m:ignore\n";
+    const text = "} # px:ignore\n";
     const kept = diagsWithSuppression(text, file, { ignore: [], ignorePatterns: [] }, "events/my_events.txt");
     expect(kept.some((d) => d.code === "stray-close")).toBe(false);
   });
@@ -191,7 +191,7 @@ describe("tiger-forwarded reports respect the same predicates", () => {
 
   it("filters a tiger report by inline comment on its line", () => {
     // Line 2 (0-based 1) carries an ignore for the tiger key.
-    const source = "trait = {\n\tflag = x # ck3m:ignore unknown-field\n}\n";
+    const source = "trait = {\n\tflag = x # px:ignore unknown-field\n}\n";
     const map = scanInlineSuppressions(source);
     expect(isSuppressedInline(map, 1, key)).toBe(true);
     expect(isSuppressedInline(map, 0, key)).toBe(false);

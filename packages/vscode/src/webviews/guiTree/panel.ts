@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { GuiTree } from "@paradox-lsp/protocol/protocol";
+import type { GuiTree } from "@px-lsp/protocol/protocol";
 
 /** Messages the webview sends to the host. */
 type InboundMessage = { type: "open"; line: number; focus?: boolean } | { type: "refresh" };
@@ -18,7 +18,7 @@ type OutboundMessage =
  */
 export class GuiTreePanel {
   private static instance: GuiTreePanel | undefined;
-  private static readonly viewType = "ck3.guiTree";
+  private static readonly viewType = "px.guiTree";
 
   private readonly panel: vscode.WebviewPanel;
   private readonly fetchTree: (uri: vscode.Uri, text: string) => Promise<GuiTree>;
@@ -75,7 +75,7 @@ export class GuiTreePanel {
     GuiTreePanel.instance = new GuiTreePanel(fetchTree, source);
   }
 
-  /** `ck3.guiTreeToggleParents`: flip the ancestors toggle in the live panel. */
+  /** `px.guiTreeToggleParents`: flip the ancestors toggle in the live panel. */
   static toggleParents(): void {
     GuiTreePanel.instance?.post({ type: "toggleParents" });
   }

@@ -3,31 +3,34 @@
  * while CK3 runs and surface entries as diagnostics pointing at the mod files
  * — the edit→test loop without alt-tabbing into a log file.
  *
- * Plus `CK3: Launch CK3 (debug mode)` via the Steam run URL.
+ * Plus `Paradox: Launch CK3 (debug mode)` via the Steam run URL.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
-import { parseErrorLogLine } from "@paradox-lsp/protocol/errorLogParser";
+import type { PxConfig } from "./config";
+import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
 
 const POLL_MS = 1000;
 const CK3_APP_ID = "1158310";
 
 export class ErrorLogWatcher implements vscode.Disposable {
-  private readonly diagnostics = vscode.languages.createDiagnosticCollection("ck3-game");
+  private readonly diagnostics: vscode.DiagnosticCollection;
   private timer: ReturnType<typeof setInterval> | null = null;
   private offset = 0;
   private byUri = new Map<string, vscode.Diagnostic[]>();
   private readonly statusItem: vscode.StatusBarItem;
 
   constructor(
-    private readonly getConfig: () => Ck3Config,
+    private readonly getConfig: () => PxConfig,
     private readonly log: (msg: string) => void
   ) {
+    // Per-profile: this channel reports the GAME's error.log, so it is named
+    // after the active game rather than after us.
+    this.diagnostics = vscode.languages.createDiagnosticCollection(`${getConfig().gameId}-game`);
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 89);
-    this.statusItem.name = "CK3 error.log";
-    this.statusItem.command = "ck3.watchErrorLog";
+    this.statusItem.name = "Game error.log";
+    this.statusItem.command = "px.watchErrorLog";
   }
 
   get watching(): boolean {
@@ -47,7 +50,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
   start(): void {
     const file = this.errorLogFile();
     if (!file) {
-      void vscode.window.showWarningMessage("CK3: logs folder not found (set ck3.logsPath).");
+      void vscode.window.showWarningMessage("Paradox Toolkit: logs folder not found (set px.logsPath).");
       return;
     }
     this.byUri.clear();
@@ -64,7 +67,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.statusItem.show();
     this.log(`watching ${file}`);
     void vscode.window.showInformationMessage(
-      "CK3: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
+      "Paradox Toolkit: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
     );
   }
 
@@ -153,6 +156,6 @@ export async function launchGameDebugCommand(): Promise<void> {
   const url = `steam://run/${CK3_APP_ID}//-debug_mode%20-develop/`;
   await vscode.env.openExternal(vscode.Uri.parse(url));
   void vscode.window.showInformationMessage(
-    "CK3: launching via Steam with -debug_mode -develop. Tip: run 'CK3: Toggle error.log Watcher' to see script errors live."
+    "Paradox Toolkit: launching via Steam with -debug_mode -develop. Tip: run 'Paradox: Toggle error.log Watcher' to see script errors live."
   );
 }

@@ -1,5 +1,5 @@
 /**
- * `CK3: New Content…` — a quick-pick + input-box flow that materializes a
+ * `Paradox: New Content…` — a quick-pick + input-box flow that materializes a
  * ScaffoldResult onto disk. Each generated file lands in the correct folder with
  * the correct encoding (BOM per template flag), and existing files are APPENDED
  * to (never blindly overwritten) so the flow can't create the silent-failure
@@ -8,8 +8,8 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "../config";
-import { escapeRegExp } from "@paradox-lsp/protocol/regex";
+import type { PxConfig } from "../config";
+import { escapeRegExp } from "@px-lsp/protocol/regex";
 import {
   scaffoldDecision,
   scaffoldEvent,
@@ -84,17 +84,17 @@ async function pickKind(): Promise<Kind | undefined> {
     },
   ];
   const pick = await vscode.window.showQuickPick<KindItem>(items, {
-    title: "CK3: New Content",
+    title: "Paradox: New Content",
     placeHolder: "What do you want to create?",
   });
   return pick?.value;
 }
 
-async function askPrefix(cfg: Ck3Config): Promise<string | undefined> {
+async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
   const fallback = cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod";
   const value = lastPrefix ?? fallback;
   const prefix = await vscode.window.showInputBox({
-    title: "CK3: New Content — prefix",
+    title: "Paradox: New Content — prefix",
     prompt: "Mod prefix for filenames and the event namespace (lowercase, letters/digits/_).",
     value,
     validateInput: (v) => (PREFIX_RE.test(v.trim()) ? null : "Must match /^[a-z][a-z0-9_]*$/"),
@@ -107,7 +107,7 @@ async function askPrefix(cfg: Ck3Config): Promise<string | undefined> {
 async function askEventId(prefix: string): Promise<string | undefined> {
   const re = new RegExp(`^${escapeRegExp(prefix)}\\.\\d+$`);
   return vscode.window.showInputBox({
-    title: "CK3: New event — id",
+    title: "Paradox: New event — id",
     prompt: `Event id (must be ${prefix}.<number>).`,
     value: `${prefix}.1`,
     validateInput: (v) => (re.test(v.trim()) ? null : `Event id must be ${prefix}.<number>`),
@@ -117,7 +117,7 @@ async function askEventId(prefix: string): Promise<string | undefined> {
 async function askName(prefix: string, label: string): Promise<string | undefined> {
   const re = /^[a-z][a-z0-9_]*$/;
   return vscode.window.showInputBox({
-    title: `CK3: New ${label} — name`,
+    title: `Paradox: New ${label} — name`,
     prompt: `${label} key (lowercase, letters/digits/_).`,
     value: `${prefix}_${label.replace(/[^a-z]+/g, "_")}`,
     validateInput: (v) => (re.test(v.trim()) ? null : "Must match /^[a-z][a-z0-9_]*$/"),
@@ -130,13 +130,13 @@ async function askVanillaOnAction(): Promise<string | undefined> {
     { label: "$(edit) Other…", detail: "Type another vanilla on_action name" },
   ];
   const pick = await vscode.window.showQuickPick(items, {
-    title: "CK3: on_action hook — which vanilla on_action?",
+    title: "Paradox: on_action hook — which vanilla on_action?",
     placeHolder: "Pick the vanilla on_action to hook into",
   });
   if (!pick) return undefined;
   if (pick.label.startsWith("$(edit)")) {
     return vscode.window.showInputBox({
-      title: "CK3: on_action hook — vanilla on_action",
+      title: "Paradox: on_action hook — vanilla on_action",
       prompt: "Vanilla on_action name (e.g. on_county_faith_change).",
       validateInput: (v) => (/^on_[a-z0-9_]+$/.test(v.trim()) ? null : "Expected an on_<name> identifier"),
     });
@@ -199,7 +199,7 @@ function materializeFile(modPath: string, file: ScaffoldFile): WriteOutcome {
 
 async function materialize(
   result: ScaffoldResult,
-  cfg: Ck3Config,
+  cfg: PxConfig,
   onFileChanged: (fsPath: string) => void
 ): Promise<void> {
   const created: string[] = [];
@@ -235,18 +235,18 @@ async function materialize(
   if (appended.length) parts.push(`appended to ${appended.join(", ")}`);
   if (skipped.length) parts.push(`skipped existing ${skipped.join(", ")}`);
   if (skipped.length && !created.length && !appended.length) {
-    void vscode.window.showWarningMessage(`CK3: ${parts.join("; ")}.`);
+    void vscode.window.showWarningMessage(`Paradox Toolkit: ${parts.join("; ")}.`);
   } else {
-    void vscode.window.showInformationMessage(`CK3: ${parts.join("; ")}.`);
+    void vscode.window.showInformationMessage(`Paradox Toolkit: ${parts.join("; ")}.`);
   }
 }
 
 export async function newContentCommand(
-  cfg: Ck3Config,
+  cfg: PxConfig,
   onFileChanged: (fsPath: string) => void
 ): Promise<void> {
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
     return;
   }
 
@@ -299,6 +299,6 @@ export async function newContentCommand(
   try {
     await materialize(result, cfg, onFileChanged);
   } catch (err) {
-    void vscode.window.showErrorMessage(`CK3: failed to create content: ${String(err)}`);
+    void vscode.window.showErrorMessage(`Paradox Toolkit: failed to create content: ${String(err)}`);
   }
 }

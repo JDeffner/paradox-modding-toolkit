@@ -8,9 +8,9 @@ You have met the enemy in every chapter: silence. This chapter assembles the ful
 
 The extension integrates it fully:
 
-- **CK3 Tiger: Download or Update Binary** fetches the binary matching your platform and sets `ck3.tigerPath`.
-- With `ck3.tigerRunOn` set to `save` (the default), tiger runs on every save of a mod script file, debounced, and its reports appear as squiggles in the editor and entries in the Problems panel. Set it to `manual` and use **CK3 Tiger: Run Validation** when you prefer explicit runs.
-- **CK3 Tiger: Generate ck3-tiger.conf** writes a sensible config into your mod root.
+- **Paradox Tiger: Download or Update Binary** fetches the binary matching your platform and sets `px.tigerPath`.
+- With `px.tigerRunOn` set to `save` (the default), tiger runs on every save of a mod script file, debounced, and its reports appear as squiggles in the editor and entries in the Problems panel. Set it to `manual` and use **Paradox Tiger: Run Validation** when you prefer explicit runs.
+- **Paradox Tiger: Generate ck3-tiger.conf** writes a sensible config into your mod root.
 
 ### Reading tiger output
 
@@ -37,7 +37,7 @@ filter = {
 
 ### Baselines and housekeeping
 
-Two extension commands matter for existing mods. **CK3 Tiger: Create Baseline** snapshots the current reports so that afterwards you only see *new* problems (toggle with **CK3 Tiger: Toggle New-Problems-Only Filter**); this is how you adopt tiger on a mod with 400 pre-existing warnings without despair. **CK3 Tiger: Find Unused Definitions (--unused)** lists scripted effects, triggers and values nothing references, ideal before a release.
+Two extension commands matter for existing mods. **Paradox Tiger: Create Baseline** snapshots the current reports so that afterwards you only see *new* problems (toggle with **Paradox Tiger: Toggle New-Problems-Only Filter**); this is how you adopt tiger on a mod with 400 pre-existing warnings without despair. **Paradox Tiger: Find Unused Definitions (--unused)** lists scripted effects, triggers and values nothing references, ideal before a release.
 
 One structural fact: tiger validates the whole mod, never a single file, because references resolve across game plus mod. And after a CK3 patch, expect transient false positives until the matching tiger release ships (it warns on version mismatch at startup).
 
@@ -45,7 +45,7 @@ One structural fact: tiger validates the whole mod, never a single file, because
 
 Launch with `-debug_mode` and the game writes its complaints to `Documents\Paradox Interactive\Crusader Kings III\logs\error.log`: parse errors, unknown effects, missing loc keys, invalid database references. Read it after every load during development.
 
-The extension's **CK3: Toggle error.log Watcher** tails the file live into the Output panel, so errors appear the moment the game logs them, while you stay in the editor. In-game, the console command `release_mode` toggles an on-screen error counter, the fastest way to notice that a reload introduced breakage.
+The extension's **Paradox: Toggle error.log Watcher** tails the file live into the Output panel, so errors appear the moment the game logs them, while you stay in the editor. In-game, the console command `release_mode` toggles an on-screen error counter, the fastest way to notice that a reload introduced breakage.
 
 Other logs worth knowing in the same folder:
 
@@ -79,7 +79,7 @@ Two console commands generate reference data you (and the extension) will use co
 - **`script_docs`** writes `effects.log`, `triggers.log`, `event_targets.log`, `event_scopes.log`, `modifiers.log` and `on_actions.log` to the logs folder: the complete, version-exact list of every effect, trigger, target and scope in your game, including all DLC and patch changes.
 - **`dump_data_types`** writes every GUI and localization function to `logs/data_types/`, the authoritative reference for Chapter 6's data functions and Chapter 7's bindings.
 
-The extension ships with bundled reference data so completion works out of the box, but after running `script_docs`, **CK3: Reload Game Data (script_docs)** upgrades completion and hover to your exact game version, including modifiers. Regenerate after every game patch. **CK3: Show Index Statistics** shows what the extension currently knows.
+The extension ships with bundled reference data so completion works out of the box, but after running `script_docs`, **Paradox: Reload Game Data (script_docs)** upgrades completion and hover to your exact game version, including modifiers. Regenerate after every game patch. **Paradox: Show Index Statistics** shows what the extension currently knows.
 
 ## The silent-failure checklist
 
@@ -104,7 +104,7 @@ Then: run tiger, read `error.log`, and check `database_conflicts.log`. Between t
 
 ## The extension's own diagnostics
 
-Independently of tiger, the extension continuously checks structural rules it can verify from the index: missing BOM, unknown event ids in `trigger_event`, missing localization for referenced keys, and more. Suppress specific codes via `ck3.diagnostics.ignore` or whole paths via `ck3.diagnostics.ignorePatterns` if a check misfires for your project. **CK3: Show Mod Report** summarizes the state of the whole mod (content counts, problem totals, loc coverage, overrides) in one document, a good pre-release ritual.
+Independently of tiger, the extension continuously checks structural rules it can verify from the index: missing BOM, unknown event ids in `trigger_event`, missing localization for referenced keys, and more. Suppress specific codes via `px.diagnostics.ignore` or whole paths via `px.diagnostics.ignorePatterns` if a check misfires for your project. **Paradox: Show Mod Report** summarizes the state of the whole mod (content counts, problem totals, loc coverage, overrides) in one document, a good pre-release ritual.
 
 ## A closing word on process
 
@@ -113,7 +113,7 @@ The professionals' loop, condensed: copy a working vanilla example, modify it, s
 ## Try it
 
 1. Sabotage your own mod, deliberately, one fault at a time: remove the loc file's BOM; rename `common/decisions` to `common/decision`; delete a closing brace; put `add_gold = 50` inside `is_shown`. For each: predict which layer catches it (tiger squiggle? error.log? pure silence plus checklist?), then verify.
-2. Run `script_docs` in-game, then **CK3: Reload Game Data (script_docs)**, and hover an effect to confirm version-exact docs.
+2. Run `script_docs` in-game, then **Paradox: Reload Game Data (script_docs)**, and hover an effect to confirm version-exact docs.
 3. Open `database_conflicts.log` after a launch and find an override your mod won.
 
 Next: [Chapter 10: Performance and design patterns](10-performance-patterns.md) · [Back to index](index.md)

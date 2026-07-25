@@ -22,11 +22,11 @@ import {
   StreamMessageWriter,
   type MessageConnection,
 } from "vscode-jsonrpc/node";
-import { statusNotification, type StatusPayload } from "@paradox-lsp/protocol/protocol";
+import { statusNotification, type StatusPayload } from "@px-lsp/protocol/protocol";
 
-// PARADOX_LSP_SERVER overrides the bundle under test — used to smoke the
+// PX_LSP_SERVER overrides the bundle under test — used to smoke the
 // extracted release tarball with the exact same flow.
-const SERVER = process.env.PARADOX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
+const SERVER = process.env.PX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
 const hasServer = fs.existsSync(SERVER);
 
 const EFFECTS_TXT = `# Grants a stipend.

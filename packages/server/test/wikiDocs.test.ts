@@ -9,7 +9,7 @@ import {
   parseWikiEventTargets,
   parseWikiTriggers,
 } from "../src/data/wikiDocs";
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 
 // Tests run against the real bundled files so they verify what actually ships.
 const WIKIDOCS = path.join(__dirname, "..", "data", "ck3", "wikidocs");

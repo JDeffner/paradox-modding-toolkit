@@ -19,8 +19,8 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { DependenciesResult, DependencyGroup, DependencyItem } from "@paradox-lsp/protocol/protocol";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { DependenciesResult, DependencyGroup, DependencyItem } from "@px-lsp/protocol/protocol";
+import type { Definition } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { extractReferences } from "../index/references";

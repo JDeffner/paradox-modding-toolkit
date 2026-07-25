@@ -1,5 +1,5 @@
 /**
- * GUI layout preview (ck3.showGuiPreview): renders a .gui file as the game
+ * GUI layout preview (px.showGuiPreview): renders a .gui file as the game
  * would lay it out — rectangles from the server's measured layout engine
  * (docs/gui-designer/calibration/spec.md), real DDS textures decoded via the
  * bundled decoder, and the game's own Gitan font for text.
@@ -15,14 +15,14 @@
  * - toolbar: Undo/Redo (the preview's own edits), Reset (revert the file to
  *   its last saved state, like closing without saving)
  *
- * Every mutation goes through ck3/guiWidgetEdit and is applied as a
+ * Every mutation goes through paradox/guiWidgetEdit and is applied as a
  * WorkspaceEdit, so editor undo and the live-preview refresh also work.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { GuiLayoutResult, GuiWidgetEditResult } from "@paradox-lsp/protocol/protocol";
-import { decodeDds, encodePng } from "@paradox-lsp/server/dds";
+import type { GuiLayoutResult, GuiWidgetEditResult } from "@px-lsp/protocol/protocol";
+import { decodeDds, encodePng } from "@px-lsp/server/dds";
 
 /** Messages the webview sends to the host. */
 type InboundMessage =
@@ -71,7 +71,7 @@ const MAX_TEXTURE_PIXELS = 4096 * 4096;
 
 export class GuiPreviewPanel {
   private static instance: GuiPreviewPanel | undefined;
-  private static readonly viewType = "ck3.guiPreview";
+  private static readonly viewType = "px.guiPreview";
 
   private readonly panel: vscode.WebviewPanel;
   private readonly fetchLayout: (uri: vscode.Uri, text: string) => Promise<GuiLayoutResult>;

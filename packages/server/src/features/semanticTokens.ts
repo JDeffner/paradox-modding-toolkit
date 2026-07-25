@@ -9,7 +9,7 @@
 import { SemanticTokensBuilder } from "vscode-languageserver/node";
 import type { SemanticTokens, SemanticTokensLegend } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { TokenKind } from "@paradox-lsp/protocol/types";
+import type { TokenKind } from "@px-lsp/protocol/types";
 import type { SchemaEntry, RefField } from "../schema/types";
 import { dynamicRefKinds } from "../games/jomini/variables";
 import type { StructureIndex } from "../schema/loader";

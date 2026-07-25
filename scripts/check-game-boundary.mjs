@@ -16,12 +16,7 @@ const EXCLUDED_DIRS = [path.join("packages", "server", "src", "games")];
 const PATTERN = /ck3|crusader|vic3|victoria|hoi4|stellaris/i;
 
 /** file (repo-relative, forward slashes) -> line-level allow pattern. */
-const ALLOW = new Map([
-  // `# ck3m:ignore` is a persisted convention inside users' mod files.
-  ["packages/protocol/src/suppression.ts", /ck3m/i],
-  // Legacy client command ids with shipped default keybindings.
-  ["packages/protocol/src/protocol.ts", /"ck3\.[A-Za-z]+"|"ck3\." prefix/],
-]);
+const ALLOW = new Map();
 
 const violations = [];
 

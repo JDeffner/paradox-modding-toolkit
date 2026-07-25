@@ -11,7 +11,7 @@
  *
  * No `vscode` imports: unit-tested in plain Node.
  */
-import type { GuiTree, GuiTreeNode } from "@paradox-lsp/protocol/protocol";
+import type { GuiTree, GuiTreeNode } from "@px-lsp/protocol/protocol";
 import { LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 
 /** Value-form headers that mark the NEXT assignment as a declaration. */

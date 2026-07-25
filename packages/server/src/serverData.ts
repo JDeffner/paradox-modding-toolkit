@@ -4,7 +4,7 @@
  * invalidate caches. The vscode EventEmitter of the old in-process design is
  * replaced by a minimal callback registry (no vscode imports server-side).
  */
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 import { compileModifierTemplates, type ModifierTemplate } from "./data/modifierTemplates";
 import { emptyDataTypes, type DataTypesData } from "./data/dataTypes";
 import { emptyUsage, type DataFnUsage } from "./data/dataFnUsage";

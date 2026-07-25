@@ -16,7 +16,7 @@ import { CompletionFeature } from "../src/features/completion";
 import { provideHover } from "../src/features/hover";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
-import type { Definition, TokenData } from "@paradox-lsp/protocol/types";
+import type { Definition, TokenData } from "@px-lsp/protocol/types";
 
 let uriCounter = 0;
 const uri = () => `file:///mod/common/modifiers/tmpl-${uriCounter++}.txt`;

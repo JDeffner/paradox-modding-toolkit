@@ -13,7 +13,7 @@ CK3 lives in two places on your machine:
    `Documents\Paradox Interactive\Crusader Kings III\mod`
    Also home to `logs/` (error logs, debug dumps) and `save games/`.
 
-The extension needs to know about both. **CK3: Run Setup & Health Check** auto-detects the game install through Steam and the logs folder through your Documents path; you can override either in Settings (`ck3.gamePath`, `ck3.logsPath`).
+The extension needs to know about both. **Paradox: Run Setup & Health Check** auto-detects the game install through Steam and the logs folder through your Documents path; you can override either in Settings (`px.gamePath`, `px.logsPath`).
 
 ## What a mod is
 
@@ -112,13 +112,13 @@ Set these in Steam (right-click CK3 → Properties → Launch Options):
 - `-develop` : hot-reloads most script files when you save them, no restart needed.
 - `-continuelastsave`, `-random_seed=42`, `-nographics` : occasionally useful for faster iteration and reproducible tests.
 
-The extension's **CK3: Launch CK3 (debug mode)** command starts the game with the right flags directly from VS Code.
+The extension's **Paradox: Launch CK3 (debug mode)** command starts the game with the right flags directly from VS Code.
 
 ## Set up the extension
 
-1. **CK3: Run Setup & Health Check** from the Command Palette. Point it at your game install if auto-detect fails.
+1. **Paradox: Run Setup & Health Check** from the Command Palette. Point it at your game install if auto-detect fails.
 2. Open your mod folder as the workspace (File → Open Folder). The extension indexes `common/`, `events/` and `localization/` and watches for changes.
-3. Optionally run the walkthrough (Help → Welcome → "Get started with the CK3 Modding Toolkit") which steps through script_docs generation and ck3-tiger download. Both are covered in [Chapter 9](09-debugging.md).
+3. Optionally run the walkthrough (Help → Welcome → "Get started with the Paradox Toolkit") which steps through script_docs generation and ck3-tiger download. Both are covered in [Chapter 9](09-debugging.md).
 
 With a game path configured you immediately get: go-to-definition into vanilla files (F12 on any vanilla scripted effect, trait or event id), hover documentation, and completion aware of every vanilla object.
 
@@ -126,7 +126,7 @@ With a game path configured you immediately get: go-to-definition into vanilla f
 
 1. Create a mod called "Chronicle Mod" through the launcher (Mods → Upload Mod → Create a Mod), or write the two metadata files by hand as shown above.
 2. Inside the mod folder, create the empty directory tree: `common/decisions/`, `events/`, `localization/english/`.
-3. Open the mod folder in VS Code and run **CK3: Run Setup & Health Check**. Confirm the status bar item (bottom right, "CK3") reports a healthy setup.
+3. Open the mod folder in VS Code and run **Paradox: Run Setup & Health Check**. Confirm the status bar item (bottom right, "PX") reports a healthy setup.
 4. Add the mod to a playset in the launcher and start the game once with `-debug_mode`. Press `` ` `` (backtick) in-game; if the console opens, you are ready for Chapter 2.
 
 Next: [Chapter 2: Your first mod](02-first-mod.md) · [Back to index](index.md)

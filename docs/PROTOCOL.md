@@ -1,9 +1,9 @@
-# paradox-lsp wire protocol
+# px-lsp wire protocol
 
-The contract between the paradox-lsp language server (`@paradox-lsp/server`)
+The contract between the px-lsp language server (`@px-lsp/server`)
 and any client — the bundled VSCode extension, neovim, or an embedding
-application spawning `paradox-lsp --stdio`. TypeScript clients should import
-the method constants and payload types from `@paradox-lsp/protocol/protocol`
+application spawning `px-lsp --stdio`. TypeScript clients should import
+the method constants and payload types from `@px-lsp/protocol/protocol`
 (the single source of truth); this document mirrors that file for
 non-TypeScript consumers.
 
@@ -32,7 +32,7 @@ fallbacks for bare clients):
 
 ```ts
 interface ParadoxInitOptions {
-  storageDir: string;    // server-side cache dir; default: <os tmp>/paradox-lsp
+  storageDir: string;    // server-side cache dir; default: <os tmp>/px-lsp
   wikidocsDir: string;   // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
   settings: ParadoxSettings;
 }
@@ -94,12 +94,12 @@ interface there is part of this contract.
 
 Code actions and hover markdown reference these client-side commands (a
 client that does not register them simply loses the affordance; nothing else
-breaks). The ids keep their legacy `ck3.` prefix because they shipped with
-user-facing keybindings:
+breaks). The ids carry the `px.` prefix. They were renamed from `ck3.` in the
+Paradox Toolkit rebrand; clients registering the old ids get no fallback:
 
-- `ck3.editLocalization` (args: `[locKey]`)
-- `ck3.openLocalizationSideBySide` (args: `[locKey]`)
-- `ck3.showReferences` (args: `[uri, line, character]`, via a
+- `px.editLocalization` (args: `[locKey]`)
+- `px.openLocalizationSideBySide` (args: `[locKey]`)
+- `px.showReferences` (args: `[uri, line, character]`, via a
   `command:` markdown link in hover — requires the client to trust it)
 
 ## Degraded modes (bare LSP clients)

@@ -4,7 +4,7 @@
  * languages only when they live under the configured mod or game paths.
  */
 import * as vscode from "vscode";
-import type { Ck3Config } from "./config";
+import type { PxConfig } from "./config";
 import { isUnder } from "./config";
 
 /**
@@ -15,7 +15,7 @@ import { isUnder } from "./config";
  * explorer, and other workspaces stay untouched. Existing associations (any
  * scope) win; we only fill gaps, once.
  */
-export async function ensureFileAssociations(cfg: Ck3Config): Promise<void> {
+export async function ensureFileAssociations(cfg: PxConfig): Promise<void> {
   if (!cfg.isCk3Workspace) return;
   if (!vscode.workspace.workspaceFolders?.length) return;
   const wanted: Record<string, string> = {
@@ -42,7 +42,7 @@ export async function ensureFileAssociations(cfg: Ck3Config): Promise<void> {
 
 export function wireLanguageDetection(
   context: vscode.ExtensionContext,
-  getConfig: () => Ck3Config
+  getConfig: () => PxConfig
 ): () => void {
   const apply = async (doc: vscode.TextDocument) => {
     if (doc.uri.scheme !== "file") return;
@@ -86,6 +86,6 @@ export function wireLanguageDetection(
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(apply));
   applyAll();
   // Returned so the caller can re-run detection after the root set changes
-  // (workspace folders added/removed, ck3.parentMods edited).
+  // (workspace folders added/removed, px.parentMods edited).
   return applyAll;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as path from "path";
 import { LazyReferenceScanner, scanContent } from "../src/index/lazyRefs";
-import type { Reference } from "@paradox-lsp/protocol/types";
+import type { Reference } from "@px-lsp/protocol/types";
 
 const GAME = path.join(__dirname, "fixtures", "game");
 

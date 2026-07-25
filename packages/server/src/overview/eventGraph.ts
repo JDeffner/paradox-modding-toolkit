@@ -4,13 +4,8 @@
  * reference index (mod usage sites); node metadata from the definition index.
  */
 import * as fs from "fs";
-import type {
-  EventGraph,
-  EventGraphEdge,
-  EventGraphNode,
-  EventGraphParams,
-} from "@paradox-lsp/protocol/protocol";
-import type { Reference } from "@paradox-lsp/protocol/types";
+import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
+import type { Reference } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import { decode, LineIndex, nodeAtOffset, parseScript, type ParseResult } from "../parser";
 

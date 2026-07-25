@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 
 const { version } = JSON.parse(readFileSync("package.json", "utf8"));
 const preview = `${version}-preview`;
-const vsix = `ck3-modding-toolkit-${preview}.vsix`;
+const vsix = `px-toolkit-${preview}.vsix`;
 const run = (cmd) => execSync(cmd, { stdio: "inherit" });
 
 run(

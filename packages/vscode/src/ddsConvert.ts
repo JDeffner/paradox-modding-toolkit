@@ -1,5 +1,5 @@
 /**
- * Image → DDS conversion (CK3: Convert Image to DDS).
+ * Image → DDS conversion (Paradox: Convert Image to DDS).
  *
  * Decoding: a webview canvas — Chromium decodes PNG/JPEG/WebP natively, so no
  * image-codec dependencies; pixels come back over postMessage. Encoding: the
@@ -8,7 +8,7 @@
  * has transparency, BC1 otherwise.
  */
 import * as vscode from "vscode";
-import { encodeDds, hasTransparency, type DdsEncodeFormat } from "@paradox-lsp/server/dds";
+import { encodeDds, hasTransparency, type DdsEncodeFormat } from "@px-lsp/server/dds";
 
 const EXT_MIME: Record<string, string> = {
   ".png": "image/png",
@@ -100,22 +100,22 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
   }
 
   if (failed.length > 0) {
-    void vscode.window.showErrorMessage(`CK3: DDS conversion failed for ${failed.join("; ")}`);
+    void vscode.window.showErrorMessage(`Paradox Toolkit: DDS conversion failed for ${failed.join("; ")}`);
   }
   if (written.length > 0) {
     const openLabel = "Open preview";
     const guideLabel = "Image guidelines";
     const answer = await vscode.window.showInformationMessage(
-      `CK3: wrote ${written.length} DDS file${written.length === 1 ? "" : "s"} (${written
+      `Paradox Toolkit: wrote ${written.length} DDS file${written.length === 1 ? "" : "s"} (${written
         .map((u) => u.path.split("/").pop())
         .join(", ")})`,
       openLabel,
       guideLabel
     );
     if (answer === openLabel) {
-      await vscode.commands.executeCommand("vscode.openWith", written[0], "ck3.ddsPreview");
+      await vscode.commands.executeCommand("vscode.openWith", written[0], "px.ddsPreview");
     } else if (answer === guideLabel) {
-      await vscode.commands.executeCommand("ck3.imageGuidelines");
+      await vscode.commands.executeCommand("px.imageGuidelines");
     }
   }
 }
@@ -145,7 +145,7 @@ class WebviewDecoder {
   private ensurePanel(): vscode.WebviewPanel {
     if (this.panel) return this.panel;
     const panel = vscode.window.createWebviewPanel(
-      "ck3.ddsConvert",
+      "px.ddsConvert",
       "CK3 DDS Converter",
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, localResourceRoots: [] }

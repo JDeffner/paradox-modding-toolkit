@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "CK3 Script",
+  "name": "Paradox Script",
   "scopeName": "source.paradox",
   "patterns": [
     { "include": "#comment" },

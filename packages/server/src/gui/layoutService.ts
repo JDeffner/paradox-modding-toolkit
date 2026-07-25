@@ -9,7 +9,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { GuiLayoutNode, GuiLayoutResult } from "@paradox-lsp/protocol/protocol";
+import type { GuiLayoutNode, GuiLayoutResult } from "@px-lsp/protocol/protocol";
 import { collectGuiDefs, emptyGuiDefs, mergeGuiDefs, type GuiDefs } from "./guiDefs";
 import { computeGuiLayout, type LayoutNode } from "./layoutEngine";
 

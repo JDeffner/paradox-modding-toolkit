@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { extractDefinitions } from "../src/index/extract";
 import { CK3_SCHEMA, REF_FIELDS, PREFIX_REFS } from "../src/games/ck3/schema";
 import type { SchemaEntry } from "../src/schema/types";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 
 function entry(kind: string): SchemaEntry {
   const e = CK3_SCHEMA.find((s) => s.kind === kind);

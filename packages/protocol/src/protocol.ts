@@ -55,13 +55,14 @@ export interface ParadoxInitOptions {
 /**
  * VSCode client commands the server references in code actions and hover
  * links (part of the wire contract: the client must register exactly these).
- * The legacy "ck3." prefix is kept on purpose — they are public extension
- * command ids with shipped default keybindings.
+ * They carry the "px." prefix: these are public extension command ids with
+ * shipped default keybindings. The prefix was renamed in the Paradox Toolkit
+ * rebrand and no fallback to the old ids is registered.
  */
 export const clientCommands = {
-  editLocalization: "ck3.editLocalization",
-  openLocalizationSideBySide: "ck3.openLocalizationSideBySide",
-  showReferences: "ck3.showReferences",
+  editLocalization: "px.editLocalization",
+  openLocalizationSideBySide: "px.openLocalizationSideBySide",
+  showReferences: "px.showReferences",
 } as const;
 
 // ---- client -> server ------------------------------------------------------

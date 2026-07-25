@@ -14,8 +14,8 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import * as fs from "fs";
-import type { Definition } from "@paradox-lsp/protocol/types";
-import { wholeNamePattern } from "@paradox-lsp/protocol/regex";
+import type { Definition } from "@px-lsp/protocol/types";
+import { wholeNamePattern } from "@px-lsp/protocol/regex";
 import type { ServerData } from "../serverData";
 import { activeProfile } from "../games/active";
 import { wordRangeAt } from "../wordAt";

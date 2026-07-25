@@ -9,7 +9,7 @@
  * sites too (labeled with their mod's name); between two enabled mods the
  * launcher's load order decides, which we cannot know — the note says so.
  */
-import type { OverrideInfo } from "@paradox-lsp/protocol/protocol";
+import type { OverrideInfo } from "@px-lsp/protocol/protocol";
 import type { ServerData } from "../serverData";
 
 const CAP = 2000;

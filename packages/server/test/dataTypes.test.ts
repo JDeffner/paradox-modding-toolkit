@@ -23,7 +23,7 @@ import { emptyUsage, harvestLine, parseDataFnExpr, type DataFnUsage } from "../s
 import { describeDataFn, CURATED_DOCS } from "../src/data/dataFnDocs";
 import { loadDataBindingMacros } from "../src/data/dataBindingMacros";
 import { DefinitionIndex } from "../src/index/indexer";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 import { devPath } from "../../../scripts/devPaths";
 import * as os from "os";
 import * as fs from "fs";

@@ -1,6 +1,6 @@
-# @paradox-lsp/protocol
+# @px-lsp/protocol
 
-The wire contract of the [paradox-lsp language server](https://github.com/JDeffner/ck3-modding-toolkit):
+The wire contract of the [px-lsp language server](https://github.com/JDeffner/ck3-modding-toolkit):
 custom LSP request/notification names, their payload types, the settings and
 initialization-option shapes, plus a few pure helpers shared between the
 server and its clients (tiger report parsing, `.mod` descriptor parsing,
@@ -10,7 +10,7 @@ The package ships plain TypeScript sources (`exports` maps `./*` to
 `./src/*.ts`), so consume it from a bundler/TS toolchain, e.g.:
 
 ```ts
-import { modOverviewRequest, type ModOverview } from "@paradox-lsp/protocol/protocol";
+import { modOverviewRequest, type ModOverview } from "@px-lsp/protocol/protocol";
 ```
 
 Non-TypeScript clients should code against the documented contract instead:

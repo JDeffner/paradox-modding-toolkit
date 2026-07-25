@@ -13,11 +13,11 @@ import {
   type LanguageClientOptions,
   type ServerOptions,
 } from "vscode-languageclient/node";
-import { modRootFor, readConfig, type Ck3Config } from "./config";
+import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
-import { Ck3StatusBar } from "./statusBar";
+import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
 import {
   editLocalizationCommand,
@@ -31,7 +31,7 @@ import { LocFileDefinitionProvider, LocReferenceTracker, jumpToScriptReference }
 import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
-import { registerCk3Views } from "./views";
+import { registerPxViews } from "./views";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiPreviewPanel } from "./webviews/guiPreview/panel";
@@ -76,20 +76,20 @@ import {
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
-} from "@paradox-lsp/protocol/protocol";
-import type { IndexStats } from "@paradox-lsp/protocol/types";
+} from "@px-lsp/protocol/protocol";
+import type { IndexStats } from "@px-lsp/protocol/types";
 
 const LOC_SELECTOR: vscode.DocumentSelector = { language: "paradox-loc", scheme: "file" };
 
 let output: vscode.LogOutputChannel;
-let cfg: Ck3Config;
+let cfg: PxConfig;
 let client: LanguageClient | undefined;
 
 function log(msg: string): void {
   output.appendLine(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
-function toSettings(c: Ck3Config): ParadoxSettings {
+function toSettings(c: PxConfig): ParadoxSettings {
   return {
     gameId: c.gameId,
     gamePath: c.gamePath,
@@ -106,13 +106,13 @@ function toSettings(c: Ck3Config): ParadoxSettings {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  output = vscode.window.createOutputChannel("CK3 Modding Toolkit", { log: true });
+  output = vscode.window.createOutputChannel("Paradox Toolkit", { log: true });
   context.subscriptions.push(output);
 
   const storageDir = context.globalStorageUri.fsPath;
 
   // Effective tiger: explicit setting wins, else the copy we downloaded
-  // ourselves (per-game flavor; Vic3 never uses the ck3.tigerPath setting).
+  // ourselves (per-game flavor; Vic3 never uses the px.tigerPath setting).
   const resolveConfig = () => {
     const c = readConfig();
     if (!c.tigerPath) c.tigerPath = findDownloadedTiger(storageDir, tigerFlavorFor(c.gameId));
@@ -122,7 +122,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   cfg = resolveConfig();
   if (cfg.warnings.length > 0) {
     // Fail soft: features degrade, extension still activates.
-    void vscode.window.showWarningMessage(`CK3 Modding Toolkit: ${cfg.warnings.join(" — ")}`);
+    void vscode.window.showWarningMessage(`Paradox Toolkit: ${cfg.warnings.join(" — ")}`);
   }
   log(
     `activated. gamePath=${cfg.gamePath ?? "(none)"} logsPath=${cfg.logsPath ?? "(none)"} ` +
@@ -132,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Multi-mod workspaces: mod-targeted commands act on the mod that owns the
   // active editor's file, falling back to the primary mod folder.
-  const cfgForActive = (): Ck3Config => {
+  const cfgForActive = (): PxConfig => {
     const file = vscode.window.activeTextEditor?.document.uri.fsPath;
     const root = file ? modRootFor(file, cfg) : null;
     return root && root !== cfg.modPath ? { ...cfg, modPath: root } : cfg;
@@ -141,7 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const reapplyLanguages = wireLanguageDetection(context, () => cfg);
   void ensureFileAssociations(cfg);
 
-  const statusBar = new Ck3StatusBar();
+  const statusBar = new PxStatusBar();
   context.subscriptions.push(statusBar);
   let lastServerStatus: StatusPayload = {
     tokens: 0,
@@ -154,7 +154,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the workspace: present in CK3 workspaces, absent elsewhere. Both change
     // handlers below run through here, so this tracks folder/setting changes.
     statusBar.setVisible(cfg.isCk3Workspace);
-    void vscode.commands.executeCommand("setContext", "ck3.isCk3Workspace", cfg.isCk3Workspace);
+    void vscode.commands.executeCommand("setContext", "px.isCk3Workspace", cfg.isCk3Workspace);
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -175,7 +175,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tigerExtraArgs = (modRoot: string): string[] => {
     const args: string[] = [];
     const bl = baselineFileFor(modRoot);
-    if (context.workspaceState.get<boolean>("ck3.tigerBaselineEnabled") && bl && fs.existsSync(bl)) {
+    if (context.workspaceState.get<boolean>("px.tigerBaselineEnabled") && bl && fs.existsSync(bl)) {
       args.push("--suppress", bl);
     }
     if (tigerUnusedOnce) {
@@ -232,7 +232,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (hover) {
           for (const content of hover.contents) {
             if (content instanceof vscode.MarkdownString) {
-              content.isTrusted = { enabledCommands: ["ck3.showReferences"] };
+              content.isTrusted = { enabledCommands: ["px.showReferences"] };
             }
           }
         }
@@ -240,7 +240,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     },
   };
-  const lc = new LanguageClient("ck3", "CK3 Modding", serverOptions, clientOptions);
+  const lc = new LanguageClient("px", "Paradox Toolkit", serverOptions, clientOptions);
   client = lc;
 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
@@ -280,12 +280,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   wireModWatcher();
   context.subscriptions.push({ dispose: () => modWatchers.forEach((w) => w.dispose()) });
 
-  const watchedRoots = (c: Ck3Config) => [c.modPath ?? "", ...c.parentPaths].join(";");
+  const watchedRoots = (c: PxConfig) => [c.modPath ?? "", ...c.parentPaths].join(";");
 
   // Recompute config-dependent state when settings change.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (!e.affectsConfiguration("ck3")) return;
+      if (!e.affectsConfiguration("px")) return;
       const oldRoots = watchedRoots(cfg);
       cfg = resolveConfig();
       tiger.resetErrorNotice();
@@ -298,7 +298,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       descriptorFeature.refresh();
       void lc.sendNotification(configChangedNotification, toSettings(cfg));
       // Re-run tiger so changed diagnostics suppression settings take effect.
-      if (e.affectsConfiguration("ck3.diagnostics")) tiger.run(false);
+      if (e.affectsConfiguration("px.diagnostics")) tiger.run(false);
     })
   );
 
@@ -335,20 +335,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ---- commands ---------------------------------------------------------------
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.reloadScriptDocs", async () => {
+    vscode.commands.registerCommand("px.reloadScriptDocs", async () => {
       const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
-      void vscode.window.showInformationMessage(`CK3: reloaded script_docs data (${result.tokens} tokens).`);
+      void vscode.window.showInformationMessage(
+        `Paradox Toolkit: reloaded script_docs data (${result.tokens} tokens).`
+      );
     }),
-    vscode.commands.registerCommand("ck3.dumpIndexStats", async () => {
+    vscode.commands.registerCommand("px.dumpIndexStats", async () => {
       const stats = await lc.sendRequest<IndexStats>(indexStatsRequest);
       log(`index stats: ${JSON.stringify(stats, null, 2)}`);
       output.show(true);
     }),
-    vscode.commands.registerCommand("ck3.runTiger", () => tiger.run(true)),
+    vscode.commands.registerCommand("px.runTiger", () => tiger.run(true)),
     // Target of the "N references" hover link: open the references peek for
     // the hovered site (the LSP reference provider supplies the locations).
     vscode.commands.registerCommand(
-      "ck3.showReferences",
+      "px.showReferences",
       async (uriStr: string, line: number, character: number) => {
         const uri = vscode.Uri.parse(uriStr);
         const position = new vscode.Position(line, character);
@@ -361,29 +363,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand("editor.action.showReferences", uri, position, locations);
       }
     ),
-    vscode.commands.registerCommand("ck3.editLocalization", (arg?: unknown) =>
+    vscode.commands.registerCommand("px.editLocalization", (arg?: unknown) =>
       editLocalizationCommand(lookupLoc, cfgForActive(), notifyModFileChanged, arg)
     ),
-    vscode.commands.registerCommand("ck3.openLocalizationSideBySide", (arg?: unknown) =>
+    vscode.commands.registerCommand("px.openLocalizationSideBySide", (arg?: unknown) =>
       openLocalizationSideBySide(lookupLoc, arg)
     ),
-    vscode.commands.registerCommand("ck3.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
-    vscode.commands.registerCommand("ck3.createTranslation", () =>
+    vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
+    vscode.commands.registerCommand("px.createTranslation", () =>
       createTranslationCommand(cfgForActive(), log)
     ),
-    vscode.commands.registerCommand("ck3.createTranslationMod", () => createTranslationModCommand(cfg, log)),
-    vscode.commands.registerCommand("ck3.openInfoDocs", () => openInfoDocsCommand(cfg)),
-    vscode.commands.registerCommand("ck3.openVanillaExamples", () => openVanillaExamplesCommand()),
-    vscode.commands.registerCommand("ck3.convertToDds", (arg?: vscode.Uri, multi?: vscode.Uri[]) =>
+    vscode.commands.registerCommand("px.createTranslationMod", () => createTranslationModCommand(cfg, log)),
+    vscode.commands.registerCommand("px.openInfoDocs", () => openInfoDocsCommand(cfg)),
+    vscode.commands.registerCommand("px.openVanillaExamples", () => openVanillaExamplesCommand()),
+    vscode.commands.registerCommand("px.convertToDds", (arg?: vscode.Uri, multi?: vscode.Uri[]) =>
       convertToDdsCommand(arg, multi)
     ),
-    vscode.commands.registerCommand("ck3.imageGuidelines", () =>
+    vscode.commands.registerCommand("px.imageGuidelines", () =>
       vscode.commands.executeCommand(
         "markdown.showPreview",
         vscode.Uri.file(context.asAbsolutePath("media/image-guidelines.md"))
       )
     ),
-    vscode.commands.registerCommand("ck3.tutorial", () =>
+    vscode.commands.registerCommand("px.tutorial", () =>
       vscode.commands.executeCommand(
         "markdown.showPreview",
         vscode.Uri.file(context.asAbsolutePath("media/tutorial/index.md"))
@@ -394,7 +396,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- overview suite --------------------------------------------------------
 
-  const views = registerCk3Views(context, lc, () => cfg);
+  const views = registerPxViews(context, lc, () => cfg);
   // Event-graph fetches carry the focus mod (unless a call already scoped it),
   // so the graph shows the mod the sidebar shows.
   const fetchGraph = (params: EventGraphParams) =>
@@ -435,12 +437,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
   };
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.refreshViews", () => views.refreshAll()),
-    vscode.commands.registerCommand("ck3.showDependencies", async () => {
+    vscode.commands.registerCommand("px.refreshViews", () => views.refreshAll()),
+    vscode.commands.registerCommand("px.showDependencies", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== "paradox") {
         void vscode.window.showWarningMessage(
-          "CK3: place the cursor on a definition in a script (.txt) file."
+          "Paradox Toolkit: place the cursor on a definition in a script (.txt) file."
         );
         return;
       }
@@ -453,12 +455,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       };
       const result = await lc.sendRequest<DependenciesResult>(dependenciesRequest, params);
       views.showDependencies(result);
-      await vscode.commands.executeCommand("ck3.dependencies.focus");
+      await vscode.commands.executeCommand("px.dependencies.focus");
       if (!result.def) {
-        void vscode.window.showInformationMessage("CK3: no indexed definition under the cursor.");
+        void vscode.window.showInformationMessage("Paradox Toolkit: no indexed definition under the cursor.");
       }
     }),
-    vscode.commands.registerCommand("ck3.showEventGraph", () => {
+    vscode.commands.registerCommand("px.showEventGraph", () => {
       // Seed the graph from where the user is: the event id under the cursor,
       // an on_action/decision name in the matching folders, or the file's
       // namespace — so opening from an applicable file shows related nodes.
@@ -479,10 +481,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       EventGraphPanel.show(context, fetchGraph, params, graphActions);
     }),
-    vscode.commands.registerCommand("ck3.showGuiTree", () => {
+    vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
-        void vscode.window.showWarningMessage("CK3: open a .gui file first.");
+        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
         return;
       }
       GuiTreePanel.show(
@@ -491,11 +493,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         editor.document
       );
     }),
-    vscode.commands.registerCommand("ck3.guiTreeToggleParents", () => GuiTreePanel.toggleParents()),
-    vscode.commands.registerCommand("ck3.showGuiPreview", () => {
+    vscode.commands.registerCommand("px.guiTreeToggleParents", () => GuiTreePanel.toggleParents()),
+    vscode.commands.registerCommand("px.showGuiPreview", () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
-        void vscode.window.showWarningMessage("CK3: open a .gui file first.");
+        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
         return;
       }
       GuiPreviewPanel.show(
@@ -517,35 +519,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
       );
     }),
-    vscode.commands.registerCommand("ck3.modReport", () => modReportCommand(lc, views.focusRoot())),
-    vscode.commands.registerCommand("ck3.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
-    vscode.commands.registerCommand("ck3.tigerCreateBaseline", async () => {
+    vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
+    vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
+    vscode.commands.registerCommand("px.tigerCreateBaseline", async () => {
       // The baseline belongs to the mod of the active editor (multi-mod).
       const bl = baselineFileFor(cfgForActive().modPath);
       if (!bl) {
-        void vscode.window.showWarningMessage("CK3: no mod folder.");
+        void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder.");
         return;
       }
       const count = await tiger.createBaseline(bl);
       if (count !== null) {
-        await context.workspaceState.update("ck3.tigerBaselineEnabled", true);
+        await context.workspaceState.update("px.tigerBaselineEnabled", true);
         void vscode.window.showInformationMessage(
-          `CK3: baseline saved (${count} current reports suppressed). Tiger now shows new problems only.`
+          `Paradox Toolkit: baseline saved (${count} current reports suppressed). Tiger now shows new problems only.`
         );
         tiger.run(false);
       }
     }),
-    vscode.commands.registerCommand("ck3.tigerToggleBaseline", async () => {
-      const enabled = !context.workspaceState.get<boolean>("ck3.tigerBaselineEnabled");
-      await context.workspaceState.update("ck3.tigerBaselineEnabled", enabled);
+    vscode.commands.registerCommand("px.tigerToggleBaseline", async () => {
+      const enabled = !context.workspaceState.get<boolean>("px.tigerBaselineEnabled");
+      await context.workspaceState.update("px.tigerBaselineEnabled", enabled);
       void vscode.window.showInformationMessage(
         enabled
-          ? "CK3: tiger baseline ON — only problems newer than the baseline are shown."
-          : "CK3: tiger baseline OFF — all problems are shown."
+          ? "Paradox Toolkit: tiger baseline ON — only problems newer than the baseline are shown."
+          : "Paradox Toolkit: tiger baseline OFF — all problems are shown."
       );
       tiger.run(false);
     }),
-    vscode.commands.registerCommand("ck3.tigerUnused", () => {
+    vscode.commands.registerCommand("px.tigerUnused", () => {
       tigerUnusedOnce = true;
       tiger.run(true);
     })
@@ -556,12 +558,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const errorLog = new ErrorLogWatcher(() => cfg, log);
   context.subscriptions.push(errorLog);
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.watchErrorLog", () => errorLog.toggle()),
-    vscode.commands.registerCommand("ck3.launchGame", () => launchGameDebugCommand()),
-    vscode.commands.registerCommand("ck3.translateNext", () =>
+    vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
+    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand()),
+    vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),
-    vscode.commands.registerCommand("ck3.newContent", () =>
+    vscode.commands.registerCommand("px.newContent", () =>
       newContentCommand(cfgForActive(), notifyModFileChanged)
     )
   );
@@ -580,8 +582,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log,
   };
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.setup", () => runSetup(setupDeps)),
-    vscode.commands.registerCommand("ck3.downloadTiger", () => downloadTigerCommand(setupDeps, false))
+    vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),
+    vscode.commands.registerCommand("px.downloadTiger", () => downloadTigerCommand(setupDeps, false))
   );
   maybeNudgeSetup(context, cfg);
 }

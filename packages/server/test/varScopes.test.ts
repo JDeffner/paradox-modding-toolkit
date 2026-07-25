@@ -19,7 +19,7 @@ import { buildCallSiteScopes, buildVariableTypes, resolveValueExpr } from "../sr
 import { extractReferences } from "../src/index/references";
 import { loadSchema } from "../src/schema/loader";
 import type { SchemaEntry } from "../src/schema/types";
-import type { Definition, TokenData } from "@paradox-lsp/protocol/types";
+import type { Definition, TokenData } from "@px-lsp/protocol/types";
 
 const TOKENS: TokenData[] = [
   { name: "liege", kind: "event_target", doc: "", scopes: ["input: character", "output: character"] },

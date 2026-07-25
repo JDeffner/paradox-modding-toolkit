@@ -23,7 +23,7 @@ import { provideTextureHover } from "../src/features/textureHover";
 import { CompletionFeature, MAX_ITEMS } from "../src/features/completion";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
-import type { ParadoxSettings } from "@paradox-lsp/protocol/protocol";
+import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { devPath } from "../../../scripts/devPaths";
 
 function makeSettings(over: Partial<ParadoxSettings>): ParadoxSettings {

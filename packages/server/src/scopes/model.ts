@@ -8,7 +8,7 @@
  *
  * No `vscode` imports: unit-tested in plain Node.
  */
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 
 /** Canonical scope names are plain lowercase strings ("character", "landed_title"...). */
 export type Scope = string;

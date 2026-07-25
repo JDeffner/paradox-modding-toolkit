@@ -4,7 +4,7 @@ Verified against the game install (`gui/`, `common/scripted_guis/`) and Princes 
 (state-of-the-art custom UI). When the wiki (https://ck3.paradoxwikis.com/Interface) conflicts
 with local files, the files win.
 
-Companion material (paths relative to the ck3-modding-toolkit repo this skill ships in,
+Companion material (paths relative to the px-toolkit repo this skill ships in,
 `packages/vscode/skills/ck3-modding/` → repo root is `../../../../`; standalone copies of the skill: find the repo at
 github.com/JDeffner/ck3-modding-toolkit):
 - **Measured layout spec (pixel-exact, the authority for layout math)**:
@@ -180,7 +180,7 @@ Vanilla registers every base type in `gui/preload/defaults.gui` (`types Default 
 
 A 4-batch in-game calibration campaign measured the exact layout rules (screenshot analysis,
 flat-color markers). Full spec with per-rule provenance:
-`docs/gui-designer/calibration/spec.md` in the ck3-modding-toolkit repo — read it when a layout
+`docs/gui-designer/calibration/spec.md` in the px-toolkit repo — read it when a layout
 question needs numbers. The load-bearing facts:
 
 - **Anchors**: `widgetanchor` implicitly DEFAULTS to the `parentanchor` value (not top-left):

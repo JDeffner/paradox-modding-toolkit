@@ -5,7 +5,7 @@
  * previews use (DXT1/3/5, BC7, uncompressed); the webview only displays.
  */
 import * as vscode from "vscode";
-import { decodeDds, ddsFormatInfo, encodePng } from "@paradox-lsp/server/dds";
+import { decodeDds, ddsFormatInfo, encodePng } from "@px-lsp/server/dds";
 
 class DdsDocument implements vscode.CustomDocument {
   constructor(
@@ -18,8 +18,8 @@ class DdsDocument implements vscode.CustomDocument {
 }
 
 export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<DdsDocument> {
-  static readonly viewType = "ck3.ddsPreview";
-  private static readonly promptKey = "ck3.ddsPreviewPromptShown";
+  static readonly viewType = "px.ddsPreview";
+  private static readonly promptKey = "px.ddsPreviewPromptShown";
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -42,7 +42,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     const keep = "Keep DDS preview";
     const builtin = "Use VS Code default";
     const answer = await vscode.window.showInformationMessage(
-      "The CK3 Modding Toolkit now previews .dds textures. Keep it as the default editor for .dds files?",
+      "The Paradox Toolkit now previews .dds textures. Keep it as the default editor for .dds files?",
       keep,
       builtin
     );
@@ -52,7 +52,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
       assoc["*.dds"] = "default";
       await config.update("workbench.editorAssociations", assoc, vscode.ConfigurationTarget.Global);
       void vscode.window.showInformationMessage(
-        "CK3: .dds files will use the VS Code default editor. Right-click a .dds → 'Open With…' to preview one anyway, or edit workbench.editorAssociations to undo."
+        "Paradox Toolkit: .dds files will use the VS Code default editor. Right-click a .dds → 'Open With…' to preview one anyway, or edit workbench.editorAssociations to undo."
       );
     }
   }

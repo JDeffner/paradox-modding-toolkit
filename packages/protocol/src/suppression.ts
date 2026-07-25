@@ -8,8 +8,8 @@
  * Two mechanisms:
  *   1. Settings: the diagnostics.ignore setting (diagnostic codes) and
  *      the diagnostics.ignorePatterns setting (globs on the workspace-relative path).
- *   2. Inline comments: `# ck3m:ignore <code…>` (same line) and
- *      `# ck3m:ignore-next-line <code…>` (following line); a bare form with no
+ *   2. Inline comments: `# px:ignore <code…>` (same line) and
+ *      `# px:ignore-next-line <code…>` (following line); a bare form with no
  *      codes suppresses every diagnostic on the target line. A trailing
  *      `-- <rationale>` is allowed and ignored.
  */
@@ -112,16 +112,16 @@ export function isIgnoredByConfig(
  */
 export type InlineSuppressions = Map<number, string[] | null>;
 
-const IGNORE_RE = /#\s*ck3m:ignore(-next-line)?\b([^\n]*)/i;
+const IGNORE_RE = /#\s*px:ignore(-next-line)?\b([^\n]*)/i;
 
 /**
- * Scan a document's text for `# ck3m:ignore[-next-line] <code…>` comments.
- * Cheap: only lines containing `ck3m:ignore` are parsed. `-next-line` targets
+ * Scan a document's text for `# px:ignore[-next-line] <code…>` comments.
+ * Cheap: only lines containing `px:ignore` are parsed. `-next-line` targets
  * the following line; the plain form targets its own line.
  */
 export function scanInlineSuppressions(text: string): InlineSuppressions {
   const map: InlineSuppressions = new Map();
-  if (!text.includes("ck3m:ignore")) return map;
+  if (!text.includes("px:ignore")) return map;
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -140,7 +140,7 @@ export function scanInlineSuppressions(text: string): InlineSuppressions {
 /**
  * The codes following the marker, stopping at a `--` rationale. Writing a
  * reason is the natural instinct, and without the cut-off every word of it
- * parsed as a code, turning a suppression that matched everything into one
+ * parsed as a code — turning a suppression that matched everything into one
  * that matched nothing, silently. Codes are kebab-case slugs
  * (`unclosed-brace`, `loc-no-header`), so a leading `-` can only be the
  * separator.
@@ -173,6 +173,6 @@ function mergeSuppression(map: InlineSuppressions, line: number, codes: string[]
 export function isSuppressedInline(map: InlineSuppressions, line: number, code: string | undefined): boolean {
   if (!map.has(line)) return false;
   const codes = map.get(line) ?? null;
-  if (codes === null) return true; // bare `# ck3m:ignore` suppresses all
+  if (codes === null) return true; // bare `# px:ignore` suppresses all
   return code !== undefined && codes.includes(code);
 }

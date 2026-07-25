@@ -3,17 +3,17 @@
  * recently visited script reference of each loc key, so a translator can jump
  * back and forth between a translation and its implementation.
  *
- * F12 (and the `CK3 Localization: Go to Script Usage` command) on a loc entry goes to
+ * F12 (and the `Paradox Localization: Go to Script Usage` command) on a loc entry goes to
  * the remembered spot first; if the key was never visited this session, the
  * mod's script files are scanned for usages instead.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { wholeNamePattern } from "@paradox-lsp/protocol/regex";
-import type { Ck3Config } from "./config";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
-import { findLocKeyRefs, locKeyOnLine } from "@paradox-lsp/protocol/locRefs";
+import { wholeNamePattern } from "@px-lsp/protocol/regex";
+import type { PxConfig } from "./config";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { findLocKeyRefs, locKeyOnLine } from "@px-lsp/protocol/locRefs";
 
 export { locKeyOnLine };
 
@@ -87,7 +87,7 @@ export function findScriptReferences(modPaths: string[], key: string, cap = 20):
 export class LocFileDefinitionProvider implements vscode.DefinitionProvider {
   constructor(
     private readonly tracker: LocReferenceTracker,
-    private readonly getConfig: () => Ck3Config
+    private readonly getConfig: () => PxConfig
   ) {}
 
   provideDefinition(document: vscode.TextDocument, position: vscode.Position): vscode.Location[] {
@@ -103,17 +103,17 @@ export class LocFileDefinitionProvider implements vscode.DefinitionProvider {
   }
 }
 
-export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: Ck3Config): Promise<void> {
+export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: PxConfig): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== "paradox-loc") {
     void vscode.window.showWarningMessage(
-      "CK3: open a localization yml and place the cursor on a key first."
+      "Paradox Toolkit: open a localization yml and place the cursor on a key first."
     );
     return;
   }
   const key = locKeyOnLine(editor.document.lineAt(editor.selection.active.line).text);
   if (!key) {
-    void vscode.window.showWarningMessage("CK3: no localization key on this line.");
+    void vscode.window.showWarningMessage("Paradox Toolkit: no localization key on this line.");
     return;
   }
 
@@ -127,7 +127,9 @@ export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: C
   }
 
   if (!location) {
-    void vscode.window.showInformationMessage(`CK3: no script reference of "${key}" found in the mod.`);
+    void vscode.window.showInformationMessage(
+      `Paradox Toolkit: no script reference of "${key}" found in the mod.`
+    );
     return;
   }
   const doc = await vscode.workspace.openTextDocument(location.uri);

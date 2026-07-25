@@ -11,7 +11,7 @@ import { provideDataFnHover } from "../src/features/datafunction";
 import { ServerData } from "../src/serverData";
 import { emptyDataTypes } from "../src/data/dataTypes";
 import { emptyUsage } from "../src/data/dataFnUsage";
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 import type { Scope } from "../src/scopes/model";
 
 const EFFECT: TokenData = {

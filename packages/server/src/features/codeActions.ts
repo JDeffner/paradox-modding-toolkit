@@ -6,8 +6,8 @@
 import { CodeActionKind, type CodeAction, type Diagnostic, type Range } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ServerData } from "../serverData";
-import { findLocKeyRefs, type LocKeyRef } from "@paradox-lsp/protocol/locRefs";
-import { clientCommands } from "@paradox-lsp/protocol/protocol";
+import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
+import { clientCommands } from "@px-lsp/protocol/protocol";
 import { getLineText } from "../documents";
 import { activeProfile } from "../games/active";
 

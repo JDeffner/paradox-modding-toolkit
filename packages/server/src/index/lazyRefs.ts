@@ -19,8 +19,8 @@
  * No `vscode` imports here: unit-tested in plain Node.
  */
 import * as fs from "fs";
-import type { DefSource, Reference } from "@paradox-lsp/protocol/types";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
+import type { DefSource, Reference } from "@px-lsp/protocol/types";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { classifyKeyword } from "../contextKeywords";
 
 export interface LazyRefRoot {

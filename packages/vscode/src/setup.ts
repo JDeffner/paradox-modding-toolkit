@@ -1,20 +1,20 @@
 /**
- * `CK3: Run Setup & Health Check` — one command that detects everything it can (Steam install,
+ * `Paradox: Run Setup & Health Check` — one command that detects everything it can (Steam install,
  * logs folder, tiger), writes the settings, and reports what remains for the
  * user with concrete instructions. Re-runnable as a health check.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
-import { LOG_FILES } from "@paradox-lsp/protocol/constants";
-import { readDescriptorName } from "@paradox-lsp/protocol/descriptorMod";
+import type { PxConfig } from "./config";
+import { LOG_FILES } from "@px-lsp/protocol/constants";
+import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
 import { findCk3GamePath } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 
 export interface SetupDeps {
   storageDir: string;
-  getConfig: () => Ck3Config;
+  getConfig: () => PxConfig;
   /** Re-read config and rebuild data (called after settings were written). */
   refresh: () => void;
   log: (msg: string) => void;
@@ -56,14 +56,14 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    void vscode.window.showErrorMessage(`CK3: tiger download failed — ${msg}`);
+    void vscode.window.showErrorMessage(`Paradox Toolkit: tiger download failed — ${msg}`);
     return null;
   }
 }
 
 export async function runSetup(deps: SetupDeps): Promise<void> {
   const report: string[] = [];
-  const config = vscode.workspace.getConfiguration("ck3");
+  const config = vscode.workspace.getConfiguration("px");
   let cfg = deps.getConfig();
 
   // 1. Game path: detect via Steam when unset/invalid.
@@ -76,7 +76,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
       report.push(`✓ game: found via Steam and saved to settings — ${detected}`);
     } else {
       report.push(
-        "✗ game: not found in any Steam library. Set ck3.gamePath to .../steamapps/common/Crusader Kings III/game"
+        "✗ game: not found in any Steam library. Set px.gamePath to .../steamapps/common/Crusader Kings III/game"
       );
     }
   }
@@ -102,11 +102,11 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   } else if (cfg.logsPath) {
     report.push(
       `• script_docs logs: not generated yet (bundled wiki data is used meanwhile). ` +
-        `Launch CK3 with -debug_mode, open the console (\`), run "script_docs", then run "CK3: Reload Game Data (script_docs)".`
+        `Launch CK3 with -debug_mode, open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)".`
     );
   } else {
     report.push(
-      "✗ logs folder: not found — set ck3.logsPath to Documents/Paradox Interactive/Crusader Kings III/logs"
+      "✗ logs folder: not found — set px.logsPath to Documents/Paradox Interactive/Crusader Kings III/logs"
     );
   }
   if (cfg.logsPath && !fs.existsSync(path.join(cfg.logsPath, "data_types.log"))) {
@@ -125,7 +125,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     report.push(
       bin
         ? `✓ ck3-tiger: downloaded — ${bin}`
-        : "• ck3-tiger: skipped (diagnostics disabled). Run 'CK3 Tiger: Download or Update Binary' anytime."
+        : "• ck3-tiger: skipped (diagnostics disabled). Run 'Paradox Tiger: Download or Update Binary' anytime."
     );
   }
 
@@ -133,7 +133,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
 
   deps.log("setup report:\n  " + report.join("\n  "));
   const ok = report.filter((l) => l.startsWith("✓")).length;
-  const summary = `CK3 setup: ${ok}/4 ready. ${report.some((l) => l.startsWith("✗") || l.startsWith("•")) ? "Details in the CK3 Modding Toolkit output." : "All set!"}`;
+  const summary = `CK3 setup: ${ok}/4 ready. ${report.some((l) => l.startsWith("✗") || l.startsWith("•")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
   const action = await vscode.window.showInformationMessage(summary, "Show details");
   if (action === "Show details") {
     await vscode.commands.executeCommand("workbench.action.output.toggleOutput");
@@ -143,18 +143,18 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
 /** One-time nudge on first activation without a configured game path. Only in
  * actual CK3 workspaces — fresh installs must not be nagged in unrelated
  * projects. */
-export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: Ck3Config): void {
+export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: PxConfig): void {
   if (!cfg.isCk3Workspace) return;
   if (cfg.gamePath) return;
-  if (context.globalState.get<boolean>("ck3.setupNudged")) return;
-  void context.globalState.update("ck3.setupNudged", true);
+  if (context.globalState.get<boolean>("px.setupNudged")) return;
+  void context.globalState.update("px.setupNudged", true);
   void vscode.window
     .showInformationMessage(
-      "The CK3 Modding Toolkit can configure itself (find the game, set up tiger).",
+      "The Paradox Toolkit can configure itself (find the game, set up tiger).",
       "Run Setup & Health Check",
       "Later"
     )
     .then((choice) => {
-      if (choice === "Run Setup & Health Check") void vscode.commands.executeCommand("ck3.setup");
+      if (choice === "Run Setup & Health Check") void vscode.commands.executeCommand("px.setup");
     });
 }

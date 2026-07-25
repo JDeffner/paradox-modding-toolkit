@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "CK3 GUI",
+  "name": "Paradox GUI",
   "scopeName": "source.paradox-gui",
   "patterns": [
     { "include": "#gui-keyword" },

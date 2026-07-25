@@ -76,7 +76,7 @@ async function hoverTextAt(uri: vscode.Uri, pos: vscode.Position): Promise<strin
 }
 
 export async function run(): Promise<void> {
-  const EXT_ID = "JDeffner.ck3-modding-toolkit";
+  const EXT_ID = "JDeffner.px-toolkit";
 
   await check("extension activates", async () => {
     const { ms } = await poll("activation", 60_000, 1000, async () => {
@@ -88,7 +88,7 @@ export async function run(): Promise<void> {
 
   await check("commands registered", async () => {
     const cmds = new Set(await vscode.commands.getCommands(true));
-    const wanted = ["ck3.showDependencies", "ck3.showGuiPreview", "ck3.showGuiTree", "ck3.showEventGraph"];
+    const wanted = ["px.showDependencies", "px.showGuiPreview", "px.showGuiTree", "px.showEventGraph"];
     const missing = wanted.filter((c) => !cmds.has(c));
     if (missing.length > 0) throw new Error(`missing: ${missing.join(", ")}`);
   });
@@ -203,7 +203,7 @@ export async function run(): Promise<void> {
 
   await check("GUI preview opens (datamodel ghosts render server-side)", async () => {
     await openFirst("gui/**/*.gui");
-    await vscode.commands.executeCommand("ck3.showGuiPreview");
+    await vscode.commands.executeCommand("px.showGuiPreview");
     await sleep(3000); // webview + layout request
   });
 
@@ -213,13 +213,13 @@ export async function run(): Promise<void> {
     if (!m) throw new Error("no top-level def found in scripted_effects");
     const pos = ed.document.positionAt(m.index + 1);
     ed.selection = new vscode.Selection(pos, pos);
-    await vscode.commands.executeCommand("ck3.showDependencies");
+    await vscode.commands.executeCommand("px.showDependencies");
     await sleep(1500);
     return `cursor on ${m[1]}`;
   });
 
   await check("event graph opens", async () => {
-    await vscode.commands.executeCommand("ck3.showEventGraph");
+    await vscode.commands.executeCommand("px.showEventGraph");
     await sleep(2000);
   });
 

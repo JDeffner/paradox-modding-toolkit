@@ -27,7 +27,7 @@ import {
   guiWidgetEditRequest,
   statusNotification,
   type StatusPayload,
-} from "@paradox-lsp/protocol/protocol";
+} from "@px-lsp/protocol/protocol";
 
 const SERVER = path.join(__dirname, "..", "dist", "server.js");
 const WIKIDOCS = path.join(__dirname, "..", "data", "ck3", "wikidocs");
@@ -236,7 +236,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     // Call sites in both workspace mods count, and the count links to the
     // references view via the trusted command.
     expect(hover!.contents.value).toContain("2 references");
-    expect(hover!.contents.value).toContain("command:ck3.showReferences");
+    expect(hover!.contents.value).toContain("command:px.showReferences");
   });
 
   it("F12 in a loc value jumps from Custom2('X') to the custom loc definition", async () => {
@@ -352,7 +352,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
 		icon = { size = { 40 40 } texture = "gfx/interface/colors/white.dds" }
 	}
 }`,
-    })) as import("@paradox-lsp/protocol/protocol").GuiLayoutResult;
+    })) as import("@px-lsp/protocol/protocol").GuiLayoutResult;
     expect(result.nodeCount).toBe(3);
     expect(result.nodes[0].rect).toEqual({ x: 0, y: 0, w: 200, h: 100 });
     expect(result.nodes[0].line).toBe(0);

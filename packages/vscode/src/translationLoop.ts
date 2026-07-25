@@ -6,24 +6,24 @@
  */
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
-import { locCoverageRequest, type LocCoverage } from "@paradox-lsp/protocol/protocol";
-import type { Ck3Config } from "./config";
+import { locCoverageRequest, type LocCoverage } from "@px-lsp/protocol/protocol";
+import type { PxConfig } from "./config";
 import { replaceLocLineValue, upsertNewModLoc } from "./locCommands";
 
 export async function translateNextCommand(
   lc: LanguageClient,
-  cfg: Ck3Config,
+  cfg: PxConfig,
   onLocFileChanged: (file: string) => void
 ): Promise<void> {
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
     return;
   }
   const coverage = await lc.sendRequest<LocCoverage[]>(locCoverageRequest);
   const candidates = coverage.filter((l) => l.untranslated.length + l.missing.length > 0);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
-      "CK3: localization coverage is complete — nothing to translate."
+      "Paradox Toolkit: localization coverage is complete — nothing to translate."
     );
     return;
   }
@@ -57,7 +57,7 @@ export async function translateNextCommand(
       try {
         if (replaceLocLineValue(item.file, item.line, value)) onLocFileChanged(item.file);
       } catch (err) {
-        void vscode.window.showErrorMessage(`CK3: failed to write ${item.key}: ${String(err)}`);
+        void vscode.window.showErrorMessage(`Paradox Toolkit: failed to write ${item.key}: ${String(err)}`);
         break;
       }
     }
@@ -76,7 +76,7 @@ export async function translateNextCommand(
       const file = upsertNewModLoc(cfg, item.key, value, lang.language);
       onLocFileChanged(file);
     } catch (err) {
-      void vscode.window.showErrorMessage(`CK3: failed to create ${item.key}: ${String(err)}`);
+      void vscode.window.showErrorMessage(`Paradox Toolkit: failed to create ${item.key}: ${String(err)}`);
       break;
     }
     done++;
@@ -84,7 +84,7 @@ export async function translateNextCommand(
 
   if (done > 0) {
     void vscode.window.showInformationMessage(
-      `CK3: ${done}/${total} ${lang.language} entr${done === 1 ? "y" : "ies"} written.`
+      `Paradox Toolkit: ${done}/${total} ${lang.language} entr${done === 1 ? "y" : "ies"} written.`
     );
   }
 }

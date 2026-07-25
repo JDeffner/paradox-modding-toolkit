@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseScript } from "../src/parser";
 import { ScopeModel } from "../src/scopes/model";
 import { collectSavedScopeTypes, inferScopeAt } from "../src/scopes/inference";
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 
 /** A miniature link table shaped like real script_docs output. */
 const TOKENS: TokenData[] = [

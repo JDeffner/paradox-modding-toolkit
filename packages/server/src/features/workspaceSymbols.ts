@@ -4,7 +4,7 @@
  */
 import { SymbolKind, type WorkspaceSymbol } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 
 const MAX_RESULTS = 512;

@@ -11,8 +11,8 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { TokenData, TokenKind } from "@paradox-lsp/protocol/types";
-import { LOG_FILES } from "@paradox-lsp/protocol/constants";
+import type { TokenData, TokenKind } from "@px-lsp/protocol/types";
+import { LOG_FILES } from "@px-lsp/protocol/constants";
 
 export { LOG_FILES };
 

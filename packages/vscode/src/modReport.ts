@@ -1,5 +1,5 @@
 /**
- * `CK3: Show Mod Report` — a one-page markdown dashboard: content inventory,
+ * `Paradox: Show Mod Report` — a one-page markdown dashboard: content inventory,
  * diagnostics by severity/source, localization coverage, override map.
  * Rendered through VS Code's native markdown preview.
  */
@@ -14,8 +14,8 @@ import {
   type ModOverview,
   type ModScopedParams,
   type OverrideInfo,
-} from "@paradox-lsp/protocol/protocol";
-import type { IndexStats } from "@paradox-lsp/protocol/types";
+} from "@px-lsp/protocol/protocol";
+import type { IndexStats } from "@px-lsp/protocol/types";
 
 function diagnosticsSummary(): string[] {
   const counts = new Map<string, number>();

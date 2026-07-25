@@ -1,15 +1,15 @@
-# paradox-lsp
+# px-lsp
 
 Monorepo for the Paradox-script language tooling:
 
-- [`packages/server`](packages/server) — `@paradox-lsp/server`, the language
+- [`packages/server`](packages/server) — `@px-lsp/server`, the language
   server (node-ipc and `--stdio`). Its [README](packages/server/README.md)
   covers standalone use from other editors (neovim setup, release tarball).
-- [`packages/protocol`](packages/protocol) — `@paradox-lsp/protocol`, the wire
+- [`packages/protocol`](packages/protocol) — `@px-lsp/protocol`, the wire
   contract (custom requests/notifications, settings types) plus helpers shared
   between server and clients.
-- [`packages/vscode`](packages/vscode) — the **CK3 Modding Toolkit** VS Code
-  extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=JDeffner.ck3-modding-toolkit)),
+- [`packages/vscode`](packages/vscode) — the **Paradox Toolkit** VS Code
+  extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)),
   the primary client. Its README is the user-facing one.
 
 Development: `pnpm install`, then `pnpm run compile` (bundles server +

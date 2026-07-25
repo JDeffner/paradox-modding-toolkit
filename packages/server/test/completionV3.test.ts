@@ -9,7 +9,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { CompletionFeature, matchesTypedWord, MAX_ITEMS } from "../src/features/completion";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
-import type { Definition, TokenData } from "@paradox-lsp/protocol/types";
+import type { Definition, TokenData } from "@px-lsp/protocol/types";
 import { fuzzyScore, FuzzyScoreOptionsDefault } from "./vscodeFuzzy";
 
 let uriCounter = 0;

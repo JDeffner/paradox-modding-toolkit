@@ -4,6 +4,6 @@
 
 **Download ck3-tiger** fetches the latest release into the extension's own storage; no manual install, no settings. Re-run the same command after a game patch to update.
 
-- Runs automatically on save (debounced) — set `ck3.tigerRunOn` to `manual` if your mod is large and you prefer running **CK3 Tiger: Run Validation** yourself
-- Already have tiger? Point `ck3.tigerPath` at your binary; the setting always wins over the downloaded copy
-- macOS has no prebuilt binary — build from source and set `ck3.tigerPath`
+- Runs automatically on save (debounced) — set `px.tigerRunOn` to `manual` if your mod is large and you prefer running **Paradox Tiger: Run Validation** yourself
+- Already have tiger? Point `px.tigerPath` at your binary; the setting always wins over the downloaded copy
+- macOS has no prebuilt binary — build from source and set `px.tigerPath`

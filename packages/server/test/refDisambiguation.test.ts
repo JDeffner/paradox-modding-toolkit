@@ -11,7 +11,7 @@ import { provideSemanticTokens } from "../src/features/semanticTokens";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
 import { CK3_SCHEMA } from "../src/games/ck3/schema";
-import type { TokenData } from "@paradox-lsp/protocol/types";
+import type { TokenData } from "@px-lsp/protocol/types";
 
 const schema = loadSchema(null);
 const eventEntry = CK3_SCHEMA.find((e) => e.kind === "event")!;

@@ -6,10 +6,10 @@
  */
 import * as path from "path";
 import * as fs from "fs";
-import type { LocCoverage, LocIssue } from "@paradox-lsp/protocol/protocol";
+import type { LocCoverage, LocIssue } from "@px-lsp/protocol/protocol";
 import type { SchemaEntry } from "../schema/types";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
-import { detectLocFileLanguage } from "@paradox-lsp/protocol/translationCore";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
 import { parseLoc } from "../parser";
 import type { ServerData } from "../serverData";
 

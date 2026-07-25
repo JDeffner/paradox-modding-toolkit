@@ -1,16 +1,16 @@
 /**
  * Localization editing commands: an input-box flow that writes back to the yml
  * (preserving the UTF-8 BOM and the `:0` version suffix) and a side-by-side
- * view. Loc lookups go to the language server (ck3/lookupLoc); the file writes
+ * view. Loc lookups go to the language server (paradox/lookupLoc); the file writes
  * stay client-side where the editor UX lives.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
-import type { LocEntryInfo } from "@paradox-lsp/protocol/protocol";
-import { findLocKeyRefs, type LocKeyRef } from "@paradox-lsp/protocol/locRefs";
-import { escapeRegExp } from "@paradox-lsp/protocol/regex";
+import type { PxConfig } from "./config";
+import type { LocEntryInfo } from "@px-lsp/protocol/protocol";
+import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
+import { escapeRegExp } from "@px-lsp/protocol/regex";
 
 const BOM = "﻿";
 
@@ -70,12 +70,12 @@ function escapeLocValue(value: string): string {
 }
 
 /** The mod's replace file — reserved for OVERRIDING vanilla keys (game semantics). */
-function modReplaceFile(cfg: Ck3Config, language?: string): string {
+function modReplaceFile(cfg: PxConfig, language?: string): string {
   const lang = language ?? cfg.locLanguage;
   return path.join(cfg.modPath!, "localization", "replace", lang, `zzz_ck3_modding_edits_l_${lang}.yml`);
 }
 
-export function upsertInReplaceFile(cfg: Ck3Config, key: string, value: string, language?: string): string {
+export function upsertInReplaceFile(cfg: PxConfig, key: string, value: string, language?: string): string {
   return upsertIntoYml(modReplaceFile(cfg, language), language ?? cfg.locLanguage, key, value);
 }
 
@@ -100,7 +100,7 @@ function upsertIntoYml(file: string, language: string, key: string, value: strin
 }
 
 /** All non-replace loc files of `language` in the mod. */
-function modLocFiles(cfg: Ck3Config, language: string): string[] {
+function modLocFiles(cfg: PxConfig, language: string): string[] {
   const root = path.join(cfg.modPath!, "localization");
   const out: string[] = [];
   const walk = (dir: string) => {
@@ -130,7 +130,7 @@ function modLocFiles(cfg: Ck3Config, language: string): string[] {
  * `localization/replace/` is reserved for overriding vanilla keys — new keys
  * there would only clutter the mod layout.
  */
-export function upsertNewModLoc(cfg: Ck3Config, key: string, value: string, language?: string): string {
+export function upsertNewModLoc(cfg: PxConfig, key: string, value: string, language?: string): string {
   const lang = language ?? cfg.locLanguage;
   const files = modLocFiles(cfg, lang);
   const prefix = key.includes(".") ? key.slice(0, key.indexOf(".") + 1) : key.split("_")[0] + "_";
@@ -183,7 +183,7 @@ function sanitizeName(raw: string): string {
  * brand-new key → the right mod loc file (upsertNewModLoc).
  */
 export async function writeLocSmart(
-  cfg: Ck3Config,
+  cfg: PxConfig,
   lookup: LocLookup,
   key: string,
   value: string
@@ -197,17 +197,17 @@ export async function writeLocSmart(
 
 export async function editLocalizationCommand(
   lookup: LocLookup,
-  cfg: Ck3Config,
+  cfg: PxConfig,
   onLocFileChanged: (file: string) => void,
   arg: unknown
 ): Promise<void> {
   const key = await resolveKeyFromEditor(lookup, arg);
   if (!key) {
-    void vscode.window.showWarningMessage("CK3: place the cursor on a localization key first.");
+    void vscode.window.showWarningMessage("Paradox Toolkit: place the cursor on a localization key first.");
     return;
   }
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
     return;
   }
 
@@ -230,19 +230,19 @@ export async function editLocalizationCommand(
     const file = await writeLocSmart(cfg, lookup, key, newValue);
     onLocFileChanged(file);
   } catch (err) {
-    void vscode.window.showErrorMessage(`CK3: failed to write localization: ${String(err)}`);
+    void vscode.window.showErrorMessage(`Paradox Toolkit: failed to write localization: ${String(err)}`);
   }
 }
 
 export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown): Promise<void> {
   const key = await resolveKeyFromEditor(lookup, arg);
   if (!key) {
-    void vscode.window.showWarningMessage("CK3: place the cursor on a localization key first.");
+    void vscode.window.showWarningMessage("Paradox Toolkit: place the cursor on a localization key first.");
     return;
   }
   const def = (await lookup(key))[0];
   if (!def) {
-    void vscode.window.showWarningMessage(`CK3: no localization entry found for "${key}".`);
+    void vscode.window.showWarningMessage(`Paradox Toolkit: no localization entry found for "${key}".`);
     return;
   }
   const doc = await vscode.workspace.openTextDocument(def.file);

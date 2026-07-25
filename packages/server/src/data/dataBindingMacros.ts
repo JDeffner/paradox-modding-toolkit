@@ -11,7 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { parseScript } from "../parser";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
 import type { DataTypesData } from "./dataTypes";
 
 /** Split a `Name(a,b)` signature into its function name and argument names. */

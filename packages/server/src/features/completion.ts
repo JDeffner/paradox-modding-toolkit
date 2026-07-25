@@ -46,13 +46,13 @@ import {
   type CompletionItem,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { Definition, DefSource, TokenData } from "@paradox-lsp/protocol/types";
+import type { Definition, DefSource, TokenData } from "@px-lsp/protocol/types";
 import type { SchemaEntry, KeySpec, RefField } from "../schema/types";
 import type { FreqContext, FreqData } from "../schema/freqs";
 import { VAR_PREFIX_KINDS, dynamicRefKinds } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
 import { emptyFreqData } from "../schema/freqs";
-import { isLocProperty } from "@paradox-lsp/protocol/locProperties";
+import { isLocProperty } from "@px-lsp/protocol/locProperties";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import {
@@ -67,7 +67,7 @@ import { getParse, getSavedScopes } from "../parseCache";
 import { inferScopeAt } from "../scopes/inference";
 import { inferenceContextFor, variableTypes } from "../scopes/varTypes";
 import type { Scope } from "../scopes/model";
-import type { ParadoxSettings } from "@paradox-lsp/protocol/protocol";
+import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion } from "./assetPaths";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */

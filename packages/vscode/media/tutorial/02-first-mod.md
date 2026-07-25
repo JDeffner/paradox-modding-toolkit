@@ -10,7 +10,7 @@ A **decision** is a button in the Decisions tab. It needs:
 2. Localization for its name, description and confirm button
 3. (Optionally) an illustration, an AI opinion of it, a cooldown
 
-We will write it by hand so you understand every line. For future content, the **CK3: New Content** command scaffolds a decision, event, interaction or on_action hook with all the boilerplate and matching localization in one step.
+We will write it by hand so you understand every line. For future content, the **Paradox: New Content** command scaffolds a decision, event, interaction or on_action hook with all the boilerplate and matching localization in one step.
 
 ## Step 1: the decision script
 
@@ -96,17 +96,17 @@ l_english:
 
 Note the format: **one leading space** before each key, then `key:` (an optional number after the colon, like `key:0`, is a legacy versioning marker you will see everywhere in vanilla), then the text in quotes. `[ROOT.Char.GetTitledFirstName]` is a data function that inserts the character's name at runtime; Chapter 6 goes deep on these.
 
-The extension helps here more than anywhere: it shows the localized text inline next to script keys, flags keys that have no localization, and the lightbulb on a script key offers "Add localization" so you never have to leave the script file. **CK3 Localization: Edit Key at Cursor** and **CK3 Localization: Open Side by Side** round out the workflow.
+The extension helps here more than anywhere: it shows the localized text inline next to script keys, flags keys that have no localization, and the lightbulb on a script key offers "Add localization" so you never have to leave the script file. **Paradox Localization: Edit Key at Cursor** and **Paradox Localization: Open Side by Side** round out the workflow.
 
 If you save the yml without a BOM, the extension raises a `missing-bom` diagnostic. Heed it. This single byte is the most common reason localization "does not work".
 
 ## Step 3: validate before you launch
 
-If you set up ck3-tiger (Chapter 1 walkthrough, or **CK3 Tiger: Download or Update Binary**), the extension runs it on every save and shows problems as squiggles in the editor and in the Problems panel. A clean tiger run before launching the game saves you a restart cycle per bug. Chapter 9 covers tiger in depth.
+If you set up ck3-tiger (Chapter 1 walkthrough, or **Paradox Tiger: Download or Update Binary**), the extension runs it on every save and shows problems as squiggles in the editor and in the Problems panel. A clean tiger run before launching the game saves you a restart cycle per bug. Chapter 9 covers tiger in depth.
 
 ## Step 4: test in-game
 
-1. Launch with `-debug_mode` (or use **CK3: Launch CK3 (debug mode)**).
+1. Launch with `-debug_mode` (or use **Paradox: Launch CK3 (debug mode)**).
 2. Load or start any game as a landed adult ruler.
 3. Open the Decisions tab. "Commission a Chronicle" should be listed under major decisions.
 4. Take it. Watch your gold drop by 50 and prestige rise by 150.
@@ -130,7 +130,7 @@ Work through this list in order; it is the Chapter 1 material biting:
 4. **`is_shown` too strict**: test as a character who definitely passes (`is_ruler`, `is_landed`).
 5. **Loc shows as raw key** (`chron_commission_chronicle_decision` in-game): the yml is not loading. Check the filename suffix, the first line and the BOM.
 
-`error.log` lives in `Documents\Paradox Interactive\Crusader Kings III\logs\`. The extension's **CK3: Toggle error.log Watcher** command tails it live into the Output panel while you test.
+`error.log` lives in `Documents\Paradox Interactive\Crusader Kings III\logs\`. The extension's **Paradox: Toggle error.log Watcher** command tails it live into the Output panel while you test.
 
 ## What you just learned
 

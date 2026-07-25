@@ -11,7 +11,7 @@
  *
  * No `vscode` imports here: unit-tested in plain Node.
  */
-import type { Definition, DefSource, Reference } from "@paradox-lsp/protocol/types";
+import type { Definition, DefSource, Reference } from "@px-lsp/protocol/types";
 import {
   dynamicRefKinds,
   VARIABLE_SET_KINDS,
@@ -20,7 +20,7 @@ import {
   VAR_PREFIX_KINDS,
 } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
-import { isLocProperty } from "@paradox-lsp/protocol/locProperties";
+import { isLocProperty } from "@px-lsp/protocol/locProperties";
 import { classifyKeyword } from "../contextKeywords";
 import type { SchemaData } from "../schema/loader";
 import {

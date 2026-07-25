@@ -13,7 +13,7 @@
  * No `vscode` imports here: this module is unit-tested in plain Node.
  */
 import * as path from "path";
-import type { Definition, TokenData } from "@paradox-lsp/protocol/types";
+import type { Definition, TokenData } from "@px-lsp/protocol/types";
 import { activeProfile } from "../games/active";
 
 export interface PlaceholderSpec {

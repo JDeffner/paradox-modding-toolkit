@@ -1,24 +1,24 @@
 {
-  "name": "paradox-lsp",
+  "name": "px-lsp",
   "version": "0.2.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": {
-    "name": "Jo\uff83\uff6bl Deffner"
+    "name": "Joël Deffner"
   },
   "scripts": {
-    "compile": "pnpm --filter ck3-modding-toolkit run compile",
+    "compile": "pnpm --filter px-toolkit run compile",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",
-    "package": "pnpm --filter ck3-modding-toolkit run package",
-    "testp": "pnpm --filter ck3-modding-toolkit run testp"
+    "package": "pnpm --filter px-toolkit run package",
+    "testp": "pnpm --filter px-toolkit run testp"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@paradox-lsp/protocol": "workspace:*",
-    "@paradox-lsp/server": "workspace:*",
+    "@px-lsp/protocol": "workspace:*",
+    "@px-lsp/server": "workspace:*",
     "@types/node": "^26.1.0",
     "@types/vscode": "^1.90.0",
     "@vscode/test-electron": "^3.1.0",

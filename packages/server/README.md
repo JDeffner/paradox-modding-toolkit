@@ -1,8 +1,10 @@
-# paradox-lsp server
+<img src="media/px-lsp.svg" alt="PX LSP" width="96" align="right" />
+
+# px-lsp server
 
 Language server for Crusader Kings III Paradox script, localization (`.yml`)
 and `.gui` files. This is the engine behind the
-[CK3 Modding Toolkit](https://marketplace.visualstudio.com/items?itemName=JDeffner.ck3-modding-toolkit)
+[Paradox Toolkit](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
 VS Code extension, usable standalone from **any LSP-capable editor** over
 `--stdio` (neovim, Zed, Helix, ...).
 
@@ -20,12 +22,12 @@ bundled wiki data as the fallback.
 
 ## Install
 
-Download `paradox-lsp-server-<version>.tar.gz` from the
+Download `px-lsp-server-<version>.tar.gz` from the
 [GitHub releases](https://github.com/JDeffner/ck3-modding-toolkit/releases)
-and extract it anywhere, e.g. `~/.local/share/paradox-lsp/`. Layout:
+and extract it anywhere, e.g. `~/.local/share/px-lsp/`. Layout:
 
 ```
-paradox-lsp-server-<version>/
+px-lsp-server-<version>/
   dist/server.js     # the bundled server
   data/ck3/          # bundled fallback data (found automatically)
   README.md LICENSE
@@ -34,7 +36,7 @@ paradox-lsp-server-<version>/
 Sanity check:
 
 ```bash
-node path/to/paradox-lsp-server-<version>/dist/server.js --stdio
+node path/to/px-lsp-server-<version>/dist/server.js --stdio
 # it waits for LSP messages on stdin; Ctrl+C to quit
 ```
 
@@ -64,10 +66,10 @@ vim.filetype.add({
 **2. The server.** Adjust the three paths:
 
 ```lua
-vim.lsp.config("paradox_lsp", {
+vim.lsp.config("px_lsp", {
   cmd = {
     "node",
-    vim.fn.expand("~/.local/share/paradox-lsp/paradox-lsp-server-0.1.2/dist/server.js"),
+    vim.fn.expand("~/.local/share/px-lsp/px-lsp-server-<version>/dist/server.js"),
     "--stdio",
   },
   filetypes = { "paradox", "paradox-loc", "paradox-gui" },
@@ -83,7 +85,7 @@ vim.lsp.config("paradox_lsp", {
     },
   },
 })
-vim.lsp.enable("paradox_lsp")
+vim.lsp.enable("px_lsp")
 ```
 
 You do NOT need to set a mod path: the server indexes the workspace root

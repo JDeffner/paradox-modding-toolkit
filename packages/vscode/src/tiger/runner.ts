@@ -6,16 +6,16 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { spawn, type ChildProcess } from "child_process";
-import type { Ck3Config } from "../config";
+import type { PxConfig } from "../config";
 import { isUnder, modRootFor } from "../config";
-import { hasMetadataDescriptor } from "@paradox-lsp/protocol/descriptorMetadata";
-import { parseTigerJson, type TigerReport } from "@paradox-lsp/protocol/tigerParser";
+import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
+import { parseTigerJson, type TigerReport } from "@px-lsp/protocol/tigerParser";
 import {
   isIgnoredByConfig,
   isSuppressedInline,
   scanInlineSuppressions,
   type InlineSuppressions,
-} from "@paradox-lsp/protocol/suppression";
+} from "@px-lsp/protocol/suppression";
 
 const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
   fatal: vscode.DiagnosticSeverity.Error,
@@ -49,7 +49,7 @@ export class TigerRunner implements vscode.Disposable {
   private rerunRoot: string | undefined;
 
   constructor(
-    private readonly getConfig: () => Ck3Config,
+    private readonly getConfig: () => PxConfig,
     private readonly log: (msg: string) => void,
     /** Extra CLI args per run (per-mod baseline --suppress, one-shot --unused). */
     private readonly extraArgs: (modRoot: string) => string[] = () => []
@@ -86,7 +86,7 @@ export class TigerRunner implements vscode.Disposable {
 
   /** The mod a run targets: an explicit root, else the mod owning the active
    * editor's file (multi-mod workspaces), else the primary mod folder. */
-  private resolveRoot(cfg: Ck3Config, explicit?: string): string | null {
+  private resolveRoot(cfg: PxConfig, explicit?: string): string | null {
     if (explicit) return explicit;
     const active = vscode.window.activeTextEditor?.document.uri.fsPath;
     if (active) {
@@ -114,14 +114,15 @@ export class TigerRunner implements vscode.Disposable {
     if (!cfg.tigerPath) {
       if (manual) {
         void vscode.window.showWarningMessage(
-          "CK3: set ck3.tigerPath to a ck3-tiger binary to enable diagnostics."
+          "Paradox Toolkit: set px.tigerPath to a ck3-tiger binary to enable diagnostics."
         );
       }
       return;
     }
     const modRoot = this.resolveRoot(cfg, rootOverride);
     if (!modRoot) {
-      if (manual) void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+      if (manual)
+        void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
       return;
     }
     // tiger refuses folders without a mod descriptor (descriptor.mod for CK3,
@@ -131,8 +132,8 @@ export class TigerRunner implements vscode.Disposable {
     if (!hasDescriptor(modRoot)) {
       if (manual) {
         this.notifyError(
-          `CK3: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
-            "Is ck3.modPath pointing at the mod itself? Mods created via the launcher have one."
+          `Paradox Toolkit: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
+            "Is px.modPath pointing at the mod itself? Mods created via the launcher have one."
         );
       } else {
         this.log(`tiger: skipped, no mod descriptor in ${modRoot} (not a mod workspace?)`);
@@ -166,7 +167,7 @@ export class TigerRunner implements vscode.Disposable {
     try {
       child = spawn(cfg.tigerPath, args, { windowsHide: true });
     } catch (err) {
-      this.notifyError(`CK3: failed to start ck3-tiger: ${String(err)}`);
+      this.notifyError(`Paradox Toolkit: failed to start ck3-tiger: ${String(err)}`);
       return;
     }
     this.child = child;
@@ -176,7 +177,7 @@ export class TigerRunner implements vscode.Disposable {
     child.on("error", (err) => {
       this.child = null;
       this.showDone(null);
-      this.notifyError(`CK3: could not run ck3-tiger (${err.message}). Check ck3.tigerPath.`);
+      this.notifyError(`Paradox Toolkit: could not run ck3-tiger (${err.message}). Check px.tigerPath.`);
     });
     child.on("close", (code, signal) => {
       this.child = null;
@@ -194,7 +195,7 @@ export class TigerRunner implements vscode.Disposable {
         // Non-zero exit with no JSON = broken invocation; parse failures degrade to
         // a notification, never a crash.
         this.notifyError(
-          `CK3: ck3-tiger produced no readable JSON report (exit code ${code}).` +
+          `Paradox Toolkit: ck3-tiger produced no readable JSON report (exit code ${code}).` +
             (stderr ? ` stderr: ${stderr.slice(0, 300)}` : "")
         );
         return;
@@ -213,7 +214,9 @@ export class TigerRunner implements vscode.Disposable {
     return new Promise((resolve) => {
       const cfg = this.getConfig();
       if (!cfg.tigerPath || !cfg.modPath) {
-        void vscode.window.showWarningMessage("CK3: tiger and a mod folder are required for a baseline.");
+        void vscode.window.showWarningMessage(
+          "Paradox Toolkit: tiger and a mod folder are required for a baseline."
+        );
         resolve(null);
         return;
       }
@@ -230,7 +233,7 @@ export class TigerRunner implements vscode.Disposable {
       try {
         child = spawn(cfg.tigerPath, args, { windowsHide: true });
       } catch (err) {
-        this.notifyError(`CK3: failed to start ck3-tiger: ${String(err)}`);
+        this.notifyError(`Paradox Toolkit: failed to start ck3-tiger: ${String(err)}`);
         resolve(null);
         return;
       }
@@ -239,7 +242,7 @@ export class TigerRunner implements vscode.Disposable {
       child.on("close", () => {
         const reports = parseTigerJson(stdout);
         if (reports === null) {
-          this.notifyError("CK3: tiger produced no readable JSON for the baseline.");
+          this.notifyError("Paradox Toolkit: tiger produced no readable JSON for the baseline.");
           resolve(null);
           return;
         }
@@ -247,7 +250,7 @@ export class TigerRunner implements vscode.Disposable {
           fs.mkdirSync(path.dirname(outFile), { recursive: true });
           fs.writeFileSync(outFile, stdout);
         } catch (err) {
-          this.notifyError(`CK3: could not write the baseline file: ${String(err)}`);
+          this.notifyError(`Paradox Toolkit: could not write the baseline file: ${String(err)}`);
           resolve(null);
           return;
         }

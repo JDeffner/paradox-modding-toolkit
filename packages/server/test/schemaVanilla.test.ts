@@ -18,7 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { extractDefinitions } from "../src/index/extract";
 import { CK3_SCHEMA } from "../src/games/ck3/schema";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 import { devPath } from "../../../scripts/devPaths";
 
 const GAME = devPath("gamePath");

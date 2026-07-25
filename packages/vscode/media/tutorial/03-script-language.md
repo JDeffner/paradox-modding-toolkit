@@ -93,7 +93,7 @@ Rules that save hours:
 - Never write `scope:` in front of `root`, `prev` or event targets. `scope:` is only for names you saved (plus the auto-provided ones like `scope:actor` in interactions).
 - You may still meet `event_target:` in old wiki pages; that is the legacy CK2-era spelling. Modern mods use `scope:` exclusively.
 
-The optional setting `ck3.scopeInlayHints` displays the inferred scope type after scope-changing openers (for example `every_vassal = {  # character`) while you learn.
+The optional setting `px.scopeInlayHints` displays the inferred scope type after scope-changing openers (for example `every_vassal = {  # character`) while you learn.
 
 ## Lists and iterators
 

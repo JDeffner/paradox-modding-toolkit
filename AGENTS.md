@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A VS Code extension ("CK3 Modding Toolkit", id `ck3-modding-toolkit`) that gives Crusader
+A VS Code extension ("Paradox Toolkit", id `px-toolkit`) that gives Crusader
 Kings III mod authors a full language workbench: an LSP server with a
 hand-written tolerant parser for Paradox/Jomini script, grammar-aware
 completion, hover docs, diagnostics for the silent-failure class of bugs,
@@ -23,6 +23,14 @@ game files or a harvest, or don't add it.
   items but emits zero diagnostics and never removes an item for scope
   reasons. (Server-side word-filtering/capping is fine — it mirrors what the
   client drops anyway.)
+- **PX names the product, `ck3` names the game.** Everything we invent is
+  `px`/Paradox Toolkit: extension id `px-toolkit`, `px.*` settings and
+  commands, `@px-lsp/*` packages, `# px:ignore`, `px-descriptor`. Everything
+  belonging to Crusader Kings III stays `ck3`: the `gameId`, `games/ck3/`,
+  `data/ck3/`, `ck3-tiger`, `ck3-script`, `.ck3modding/` in the user's mod,
+  and the `zzz_ck3_modding_edits_*.yml` file we write into it. The
+  `paradox*` language ids and the `paradox/*` wire methods predate the brand
+  and mean "the engine family" — do NOT rename them to `px`.
 - **Deep validation belongs to ck3-tiger,** not us. Our own diagnostics stay
   structural and certain (braces, encodings, folder traps).
 - **CK3 fails silently.** Every writer in this repo must produce files that
@@ -47,8 +55,8 @@ game files or a harvest, or don't add it.
 | Path | What lives there |
 |---|---|
 | `packages/vscode/src/` | Extension host: language-mode switching, tiger runner + download, views (`views.ts`), webview panels (`webviews/eventGraph`, `webviews/guiTree`), DDS editor/converter, loc commands, scaffolds (`scaffold/`), setup |
-| `packages/server/src/` | The LSP server (`@paradox-lsp/server`). `parser/` (tolerant CST, encoding), `index/` (definition/reference indexing, extraction modes), `features/` (completion, hover, guiLanguage, diagnostics, semantic tokens, …), `scopes/` (inference), `overview/` (graph, event detail, coverage, overrides), `schema/` (loader + the CK3 tables: `ck3Schema.ts`, `structures.ts`, `ambientScopes.ts`) |
-| `packages/protocol/src/` | `@paradox-lsp/protocol`: wire protocol (`protocol.ts`), shared types/constants, translation core, suppression, tiger report parser, descriptorMod, fsWalk. One subpath export per module (`@paradox-lsp/protocol/<module>`); no barrel |
+| `packages/server/src/` | The LSP server (`@px-lsp/server`). `parser/` (tolerant CST, encoding), `index/` (definition/reference indexing, extraction modes), `features/` (completion, hover, guiLanguage, diagnostics, semantic tokens, …), `scopes/` (inference), `overview/` (graph, event detail, coverage, overrides), `schema/` (loader + the CK3 tables: `ck3Schema.ts`, `structures.ts`, `ambientScopes.ts`) |
+| `packages/protocol/src/` | `@px-lsp/protocol`: wire protocol (`protocol.ts`), shared types/constants, translation core, suppression, tiger report parser, descriptorMod, fsWalk. One subpath export per module (`@px-lsp/protocol/<module>`); no barrel |
 | `packages/server/data/ck3/` | Bundled harvested data: `freqs.json` (usage counts), `structures.json` (all `_*.info` keys), `guiSchema.json` (widget vocabulary). JSON-imported, inlined into the server bundle |
 | `packages/*/test/` | Vitest suites, package-local. The bulk (plus `fixtures/`, `parser/`, `dds/`) lives in `packages/server/test`: `vscodeFuzzy.ts` = faithful port of VS Code's suggest scoring; `rankEvalCore.ts` = ranking eval harness; `lspSmoke.test.ts` forks the real bundle over node IPC. Protocol-pure tests in `packages/protocol/test`; client-ish ones in `packages/vscode/test` |
 | `scripts/` | Build-time harvests and evals (see "Regenerating data") |
@@ -99,6 +107,8 @@ pnpm install
 pnpm run compile        # server bundle + extension bundle, then copies
                         # server.js + data/ck3 into packages/vscode (self-contained)
 npx tsc --noEmit        # typecheck (esbuild does not check types)
+pnpm run lint           # eslint + prettier --check (both gate CI)
+pnpm run lint:fix       # autofix what is autofixable
 npx vitest run          # fast suite (corpus-gated tests skip without env)
 
 # Full gated suite (needs gamePath + corpusPath in dev-paths.json, or the env vars):
@@ -134,8 +144,11 @@ minor version odd while pre-release (0.1.x, 0.3.x — Marketplace convention);
 vsix builds use `--pre-release` until 1.0.
 
 Gotchas:
-- Delete stray `dist/*.cjs` (harvest/eval bundles) before `vsce package` —
-  everything in `dist/` ships.
+- **The tag must match `packages/vscode/package.json` version.** `v0.1.3`
+  was tagged on a commit still reading `0.1.2`, so the release carried a
+  vsix whose version disagreed with its own tag. Bump first, then tag.
+- `dist/*.cjs` (harvest/eval bundles) are excluded by `.vscodeignore` now,
+  so a stray one can no longer ship; no manual delete needed.
 - Git prints LF→CRLF warnings on commit; harmless, ignore.
 - The vsix must stay self-contained: everything is esbuild-bundled, so new
   runtime npm deps are almost never the answer.
@@ -152,6 +165,8 @@ delete the .cjs).
 | `build-gui-schema.ts` | `packages/server/data/ck3/guiSchema.json` | Widget types + per-type property counts from the vanilla `gui/` tree |
 | `build-freqs.ts` | `packages/server/data/ck3/freqs.json` | Per-context token/def usage counts (vanilla + corpus) |
 | `audit-schema-coverage.ts` | stdout | Compares CK3_SCHEMA + structures.json against every game `_*.info` and common/ folder; run per patch, gaps should be 0 or documented |
+| `gen-brand.ts` | `packages/vscode/media/icon.{png,svg}`, `media/px-view.svg`, `packages/server/media/px-lsp.svg` | The PX lockup. Geometry lives in `brandGeometry.ts` so the raster and the vector cannot drift; it asserts the ink is centred, so an off-centre icon fails the build rather than shipping |
+| `gen-icons.mjs` | `packages/vscode/media/fileicons/*.svg` | The per-language file icons (unrelated to the brand lockup) |
 | `rank-eval.ts` / `fuzzy-diag.ts` | stdout | Completion-quality measurement: rank-eval replays real corpus positions; fuzzy-diag replays typed prefixes through VS Code's own scoring — run BEFORE and AFTER any ranking change |
 
 ## Testing philosophy

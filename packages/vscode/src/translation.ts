@@ -1,5 +1,5 @@
 /**
- * Translation workflow (VS Code side): the `CK3 Localization: Add Language` command
+ * Translation workflow (VS Code side): the `Paradox Localization: Add Language` command
  * scaffolds a new language from an existing one. The overlay of the source
  * language in translated files is served by the language server as inlay
  * hints.
@@ -7,15 +7,15 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
+import type { PxConfig } from "./config";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
 import {
   LOC_LANGUAGES,
   buildTranslation,
   detectLocFileLanguage,
   mergeTranslation,
   retargetLocPath,
-} from "@paradox-lsp/protocol/translationCore";
+} from "@px-lsp/protocol/translationCore";
 
 /** Languages that actually occur in the mod's localization folder. */
 function languagesInMod(locDir: string): string[] {
@@ -27,21 +27,23 @@ function languagesInMod(locDir: string): string[] {
   return [...langs].sort();
 }
 
-export async function createTranslationCommand(cfg: Ck3Config, log: (msg: string) => void): Promise<void> {
+export async function createTranslationCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
     return;
   }
   const locDir = path.join(cfg.modPath, "localization");
   if (!fs.existsSync(locDir)) {
-    void vscode.window.showWarningMessage(`CK3: the mod has no localization folder yet (${locDir}).`);
+    void vscode.window.showWarningMessage(
+      `Paradox Toolkit: the mod has no localization folder yet (${locDir}).`
+    );
     return;
   }
 
   const present = languagesInMod(locDir);
   if (present.length === 0) {
     void vscode.window.showWarningMessage(
-      "CK3: no localization files with a language marker found in the mod."
+      "Paradox Toolkit: no localization files with a language marker found in the mod."
     );
     return;
   }
@@ -107,7 +109,7 @@ export async function createTranslationCommand(cfg: Ck3Config, log: (msg: string
     }
   }
 
-  const summary = `CK3: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
+  const summary = `Paradox Toolkit: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
   log(summary);
   void vscode.window.showInformationMessage(summary);
   if (firstFile) {

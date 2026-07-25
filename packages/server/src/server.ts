@@ -20,7 +20,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { Definition } from "@paradox-lsp/protocol/types";
+import type { Definition } from "@px-lsp/protocol/types";
 import {
   configChangedNotification,
   indexChangedNotification,
@@ -53,7 +53,7 @@ import {
   type GuiWidgetEditParams,
   dependenciesRequest,
   type DependenciesParams,
-} from "@paradox-lsp/protocol/protocol";
+} from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
 import { computeGuiLayoutResult, invalidateGuiDefsCache } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
@@ -113,11 +113,7 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
-import {
-  isIgnoredByConfig,
-  isSuppressedInline,
-  scanInlineSuppressions,
-} from "@paradox-lsp/protocol/suppression";
+import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
@@ -712,7 +708,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   setActiveProfile(resolveProfile(settings.gameId));
   deriveBundledDataDirs();
   if (!storageDir) {
-    storageDir = path.join(os.tmpdir(), "paradox-lsp");
+    storageDir = path.join(os.tmpdir(), "px-lsp");
     try {
       fs.mkdirSync(storageDir, { recursive: true });
     } catch {

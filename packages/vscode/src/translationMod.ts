@@ -1,5 +1,5 @@
 /**
- * `CK3 Localization: New Translation Mod` — pick any indexed mod (workspace
+ * `Paradox Localization: New Translation Mod` — pick any indexed mod (workspace
  * mod or read-only parent), pick a target language, and scaffold a standalone
  * translation mod next to it: descriptor with a dependency on the source,
  * blanked loc files under localization/<lang>/replace/, and a TRANSLATE.md
@@ -9,13 +9,13 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
-import { parseDescriptor, readDescriptorName } from "@paradox-lsp/protocol/descriptorMod";
-import { LOC_LANGUAGES, detectLocFileLanguage } from "@paradox-lsp/protocol/translationCore";
+import type { PxConfig } from "./config";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { parseDescriptor, readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { LOC_LANGUAGES, detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
 import { buildTranslationMod, type SourceLocFile } from "./translationBuild";
 
-function uniqueRoots(cfg: Ck3Config): string[] {
+function uniqueRoots(cfg: PxConfig): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const r of [cfg.modPath, ...cfg.workspaceMods, ...cfg.parentPaths]) {
@@ -39,12 +39,12 @@ function supportedVersionOf(root: string): string | null {
   }
 }
 
-export async function createTranslationModCommand(cfg: Ck3Config, log: (msg: string) => void): Promise<void> {
+export async function createTranslationModCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   // 1. Source mod: any indexed root with localization files.
   const candidates = uniqueRoots(cfg).filter((r) => fs.existsSync(path.join(r, "localization")));
   if (candidates.length === 0) {
     void vscode.window.showWarningMessage(
-      "CK3: no mod with a localization folder found (open the mod to translate as a workspace folder or list it in ck3.parentMods)."
+      "Paradox Toolkit: no mod with a localization folder found (open the mod to translate as a workspace folder or list it in px.parentMods)."
     );
     return;
   }
@@ -67,7 +67,9 @@ export async function createTranslationModCommand(cfg: Ck3Config, log: (msg: str
     ...new Set(locFiles.map(detectLocFileLanguage).filter((l): l is string => l !== null)),
   ].sort();
   if (present.length === 0) {
-    void vscode.window.showWarningMessage("CK3: no localization files with a language marker in that mod.");
+    void vscode.window.showWarningMessage(
+      "Paradox Toolkit: no localization files with a language marker in that mod."
+    );
     return;
   }
   const sourceDefault = present.includes(cfg.locLanguage) ? cfg.locLanguage : present[0];
@@ -135,7 +137,7 @@ export async function createTranslationModCommand(cfg: Ck3Config, log: (msg: str
     fs.writeFileSync(abs, g.content, "utf8");
   }
   const summary =
-    `CK3: translation mod created at ${dest} — ${result.locFiles} loc file(s), ` +
+    `Paradox Toolkit: translation mod created at ${dest} — ${result.locFiles} loc file(s), ` +
     `${result.entries} entries to translate. TRANSLATE.md has the workflow and AI prompt.`;
   log(summary);
 

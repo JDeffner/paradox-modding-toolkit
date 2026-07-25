@@ -1,11 +1,11 @@
 /**
  * Status bar item summarizing the extension's data health at a glance:
- * engine tokens, index size, tiger availability. Click runs CK3: Run Setup
+ * engine tokens, index size, tiger availability. Click runs Paradox: Run Setup
  * & Health Check.
  */
 import * as vscode from "vscode";
 
-export interface Ck3Status {
+export interface PxStatus {
   tokens: number;
   indexing: boolean;
   tokensFromScriptDocs: boolean;
@@ -15,14 +15,14 @@ export interface Ck3Status {
   tigerOk: boolean;
 }
 
-export class Ck3StatusBar implements vscode.Disposable {
+export class PxStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-    this.item.name = "CK3 Modding Toolkit";
-    this.item.command = "ck3.setup";
-    this.item.text = "$(loading~spin) CK3";
+    this.item.name = "Paradox Toolkit";
+    this.item.command = "px.setup";
+    this.item.text = "$(loading~spin) PX";
   }
 
   /** Shown only in CK3 workspaces; hidden (not disposed) elsewhere so it can
@@ -32,11 +32,11 @@ export class Ck3StatusBar implements vscode.Disposable {
     else this.item.hide();
   }
 
-  update(s: Ck3Status): void {
+  update(s: PxStatus): void {
     const healthy = s.gameOk && s.modOk && s.tigerOk && s.tokens > 0;
-    this.item.text = s.indexing ? "$(loading~spin) CK3" : healthy ? "$(check) CK3" : "$(warning) CK3";
+    this.item.text = s.indexing ? "$(loading~spin) PX" : healthy ? "$(check) PX" : "$(warning) PX";
     const lines = [
-      `**CK3 Modding Toolkit** — click to run setup & health check`,
+      `**Paradox Toolkit** — click to run setup & health check`,
       "",
       `${s.tokens > 0 ? "✓" : "✗"} engine tokens: ${s.tokens}${s.tokens > 0 ? (s.tokensFromScriptDocs ? " (script_docs + wiki)" : " (bundled wiki only)") : ""}`,
       `${s.definitions > 0 ? "✓" : "✗"} indexed definitions: ${s.definitions}`,

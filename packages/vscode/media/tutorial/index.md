@@ -1,6 +1,6 @@
 # CK3 Modding Tutorial
 
-Welcome. This tutorial takes you from "never modded a Paradox game" to building complete, patch-safe, performant Crusader Kings III mods. It is written for the CK3 Modding Toolkit extension, so along the way you will also learn the tooling that makes the work faster: completion, hover docs, the event graph, ck3-tiger diagnostics, localization tools and more.
+Welcome. This tutorial takes you from "never modded a Paradox game" to building complete, patch-safe, performant Crusader Kings III mods. It is written for the Paradox Toolkit extension, so along the way you will also learn the tooling that makes the work faster: completion, hover docs, the event graph, ck3-tiger diagnostics, localization tools and more.
 
 Every code snippet in these pages was checked against the actual game files (CK3 1.19) or against Paradox's own `.info` schema documents that ship inside the game folder. When you finish, you will know not just the syntax but the habits that separate mods that work from mods that silently do nothing.
 
@@ -29,12 +29,12 @@ If you have modded CK3 before, skim Chapters 1 and 2 anyway. They cover the over
 
 Keep these bookmarked; the tutorial refers to them constantly:
 
-1. **The game files.** Your CK3 install's `game/` folder is the ultimate reference. Roughly 150 `_*.info` files inside `common/` subfolders (for example `common/decisions/_decisions.info`, `common/on_action/_on_actions.info`, `events/_events.info`) are Paradox's own schema documentation, more current than any wiki. With a file open, run **CK3: Open Format Docs (.info) for This File** to jump straight to the matching one.
+1. **The game files.** Your CK3 install's `game/` folder is the ultimate reference. Roughly 150 `_*.info` files inside `common/` subfolders (for example `common/decisions/_decisions.info`, `common/on_action/_on_actions.info`, `events/_events.info`) are Paradox's own schema documentation, more current than any wiki. With a file open, run **Paradox: Open Format Docs (.info) for This File** to jump straight to the matching one.
 2. **`script_docs` dumps.** The in-game console command `script_docs` writes the complete, version-exact list of every effect, trigger, scope and event target to your logs folder. The extension reads these for completion and hover (see [Chapter 9](09-debugging.md)).
 3. **Vanilla examples.** Never write script from scratch. Find a vanilla file that does something similar, copy it, modify it. The game's `events/tutorial_events.txt` and `common/scripted_triggers/00_bastard_triggers.txt` are annotated goldmines.
 
 ## Before you start
 
-Run **CK3: Run Setup & Health Check** from the Command Palette (`Ctrl+Shift+P`). It finds your CK3 install through Steam, checks the logs folder and offers to download the ck3-tiger validator. Then open your mod folder (the one containing `common/`, `events/`, `localization/`) as your VS Code workspace so the extension can index it.
+Run **Paradox: Run Setup & Health Check** from the Command Palette (`Ctrl+Shift+P`). It finds your CK3 install through Steam, checks the logs folder and offers to download the ck3-tiger validator. Then open your mod folder (the one containing `common/`, `events/`, `localization/`) as your VS Code workspace so the extension can index it.
 
 Ready? Start with [Chapter 1: Setup and how CK3 loads mods](01-setup.md).

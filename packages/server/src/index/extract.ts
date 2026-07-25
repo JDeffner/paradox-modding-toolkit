@@ -5,7 +5,7 @@
  *
  * No `vscode` imports here: unit-tested in plain Node.
  */
-import type { Definition, DefSource } from "@paradox-lsp/protocol/types";
+import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import { LineIndex, parseLoc, parseScript, walkStatements, type Statement } from "../parser";
 import { docForDefinition } from "./docComments";

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "CK3 Mod Descriptor",
+  "name": "Paradox Mod Descriptor",
   "scopeName": "source.paradox-mod",
   "patterns": [
     { "include": "#comment" },

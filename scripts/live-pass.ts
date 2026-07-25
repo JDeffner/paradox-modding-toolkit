@@ -33,8 +33,8 @@ async function main(): Promise<void> {
     path.join(userDataDir, "User", "settings.json"),
     JSON.stringify(
       {
-        "ck3.gamePath": devPaths.gamePath,
-        "ck3.logsPath": devPaths.logsPath ?? null,
+        "px.gamePath": devPaths.gamePath,
+        "px.logsPath": devPaths.logsPath ?? null,
         "security.workspace.trust.enabled": false,
         "extensions.autoCheckUpdates": false,
         "extensions.autoUpdate": false,

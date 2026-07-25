@@ -22,8 +22,8 @@ happens, and how to fix it.
 | [wrong-localization-folder](./wrong-localization-folder.md) | Error | `ck3-script` | `localisation/` (British) ignored |
 | [unknown-event](./unknown-event.md) | Warning | `ck3-script` | `trigger_event` to a non-existent mod event does nothing |
 | [missing-required-loc](./missing-required-loc.md) | Warning | `ck3-script` | Definition shows raw loc keys in game |
-| [descriptor-missing](./descriptor-missing.md) | Error | `ck3-descriptor` | Mod folder has no `descriptor.mod`; launcher/Workshop/tiger can't use it |
-| [descriptor-missing-field](./descriptor-missing-field.md) | Error/Warning | `ck3-descriptor` | Launcher can't list the mod (`name`/`version`) or check compatibility (`supported_version`) |
-| [descriptor-unknown-key](./descriptor-unknown-key.md) | Warning | `ck3-descriptor` | Key silently ignored by the launcher |
-| [descriptor-duplicate-key](./descriptor-duplicate-key.md) | Warning | `ck3-descriptor` | Only the last of the duplicate values counts |
-| [descriptor-path-ignored](./descriptor-path-ignored.md) | Warning | `ck3-descriptor` | `path=` inside descriptor.mod is dead weight and leaks machine paths |
+| [descriptor-missing](./descriptor-missing.md) | Error | `px-descriptor` | Mod folder has no `descriptor.mod`; launcher/Workshop/tiger can't use it |
+| [descriptor-missing-field](./descriptor-missing-field.md) | Error/Warning | `px-descriptor` | Launcher can't list the mod (`name`/`version`) or check compatibility (`supported_version`) |
+| [descriptor-unknown-key](./descriptor-unknown-key.md) | Warning | `px-descriptor` | Key silently ignored by the launcher |
+| [descriptor-duplicate-key](./descriptor-duplicate-key.md) | Warning | `px-descriptor` | Only the last of the duplicate values counts |
+| [descriptor-path-ignored](./descriptor-path-ignored.md) | Warning | `px-descriptor` | `path=` inside descriptor.mod is dead weight and leaks machine paths |

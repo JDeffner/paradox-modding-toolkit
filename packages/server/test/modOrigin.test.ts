@@ -8,7 +8,7 @@ import * as os from "os";
 import * as path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { ModOriginResolver } from "../src/index/modOrigin";
-import { readDescriptorName } from "@paradox-lsp/protocol/descriptorMod";
+import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
 import { ServerData } from "../src/serverData";
 import { provideHover } from "../src/features/hover";
 import { computeModOverview } from "../src/overview/modOverview";

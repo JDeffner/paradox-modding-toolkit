@@ -12,7 +12,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
 
 export interface DataFnExample {
   /** The full bracketed expression, capped for display. */

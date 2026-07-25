@@ -1,9 +1,9 @@
 /**
  * The CK3 activity-bar container (rework plan AD-7): native tree views —
  * Tools, Mod Overview, Problems by Type, Localization Coverage, Overrides &
- * Conflicts. All data comes from the language server via ck3/* requests
+ * Conflicts. All data comes from the language server via paradox/* requests
  * (except Problems, which slices the editor's own diagnostics); views refresh
- * on the server's ck3/indexChanged notification.
+ * on the server's paradox/indexChanged notification.
  */
 import * as vscode from "vscode";
 import * as path from "path";
@@ -19,14 +19,14 @@ import {
   type ModOverview,
   type ModScopedParams,
   type OverrideInfo,
-} from "@paradox-lsp/protocol/protocol";
-import { readDescriptorName } from "@paradox-lsp/protocol/descriptorMod";
-import { allWorkspaceModCandidates, modRootFor, type Ck3Config } from "./config";
+} from "@px-lsp/protocol/protocol";
+import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
 
 /**
  * Which mod the mod-scoped views (Overview, Loc Coverage, Overrides, event
  * graph, report) show. Default: follow the mod that owns the active editor's
- * file; the user can pin one via `CK3: Pick Focus Mod` instead. There is no
+ * file; the user can pin one via `Paradox: Pick Focus Mod` instead. There is no
  * "primary mod" — this is a view filter, nothing else.
  */
 export class FocusMod {
@@ -36,9 +36,9 @@ export class FocusMod {
 
   constructor(
     private readonly state: vscode.Memento,
-    private readonly getCfg: () => Ck3Config
+    private readonly getCfg: () => PxConfig
   ) {
-    this.pinned = state.get<string | null>("ck3.focusModRoot", null) ?? null;
+    this.pinned = state.get<string | null>("px.focusModRoot", null) ?? null;
   }
 
   /** Every mod the workspace edits (dedup, config order). */
@@ -73,7 +73,7 @@ export class FocusMod {
 
   async pin(root: string | null): Promise<void> {
     this.pinned = root;
-    await this.state.update("ck3.focusModRoot", root);
+    await this.state.update("px.focusModRoot", root);
   }
 
   label(root: string | null = this.current()): string {
@@ -102,8 +102,8 @@ function openCommand(file: string, line: number): vscode.Command {
 
 class Node extends vscode.TreeItem {
   children: Node[] = [];
-  /** For loc-coverage items: the loc key, consumed by ck3.addLocalizationFromView. */
-  ck3Key?: string;
+  /** For loc-coverage items: the loc key, consumed by px.addLocalizationFromView. */
+  pxKey?: string;
 
   constructor(label: string, state: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None) {
     super(label, state);
@@ -270,15 +270,15 @@ class LocCoverageProvider extends BaseProvider {
           if (value && i.value) item.description = i.value.slice(0, 60);
           item.iconPath = new vscode.ThemeIcon("symbol-string");
           item.contextValue = contextValue;
-          item.ck3Key = i.key;
+          item.pxKey = i.key;
           return item;
         });
         node.children.push(cat);
       };
-      // Missing keys carry an inline "Add localization…" action (ck3.locMissing).
-      category("Missing (referenced but not defined)", "error", lang.missing, "ck3.locMissing");
-      category("Orphaned (defined but never referenced)", "circle-slash", lang.orphaned, "ck3.locKey");
-      category("Untranslated (identical to source)", "arrow-right", lang.untranslated, "ck3.locKey", true);
+      // Missing keys carry an inline "Add localization…" action (px.locMissing).
+      category("Missing (referenced but not defined)", "error", lang.missing, "px.locMissing");
+      category("Orphaned (defined but never referenced)", "circle-slash", lang.orphaned, "px.locKey");
+      category("Untranslated (identical to source)", "arrow-right", lang.untranslated, "px.locKey", true);
       if (node.children.length === 0) {
         const ok = new Node("Complete");
         ok.iconPath = new vscode.ThemeIcon("check");
@@ -343,7 +343,7 @@ class OverridesProvider extends BaseProvider {
 
 // ---- Dependencies --------------------------------------------------------------------
 
-/** Command-driven: holds the last ck3/dependencies result until the next run. */
+/** Command-driven: holds the last paradox/dependencies result until the next run. */
 class DependenciesProvider extends BaseProvider {
   private result: DependenciesResult | null = null;
 
@@ -355,7 +355,7 @@ class DependenciesProvider extends BaseProvider {
   protected async roots(): Promise<Node[]> {
     const r = this.result;
     if (!r || !r.def) {
-      const empty = new Node("Place the cursor on a definition, then run “CK3: Show Dependencies”.");
+      const empty = new Node("Place the cursor on a definition, then run “Paradox: Show Dependencies”.");
       empty.iconPath = new vscode.ThemeIcon("info");
       return [empty];
     }
@@ -413,47 +413,47 @@ class DependenciesProvider extends BaseProvider {
 
 /** One-click launcher for the extension's commands, grouped by workflow. */
 const TOOL_GROUPS: Array<[group: string, items: Array<[label: string, command: string, icon: string]>]> = [
-  ["Create", [["New Content (event, decision, …)", "ck3.newContent", "new-file"]]],
+  ["Create", [["New Content (event, decision, …)", "px.newContent", "new-file"]]],
   [
     "Localization",
     [
-      ["Add Language (scaffold files)", "ck3.createTranslation", "globe"],
-      ["Translate Missing Keys (one by one)", "ck3.translateNext", "arrow-right"],
-      ["New Translation Mod (translate another mod)", "ck3.createTranslationMod", "repo-clone"],
+      ["Add Language (scaffold files)", "px.createTranslation", "globe"],
+      ["Translate Missing Keys (one by one)", "px.translateNext", "arrow-right"],
+      ["New Translation Mod (translate another mod)", "px.createTranslationMod", "repo-clone"],
     ],
   ],
   [
     "Images",
     [
-      ["Convert Image to DDS", "ck3.convertToDds", "file-media"],
-      ["Image Guidelines (sizes & formats)", "ck3.imageGuidelines", "book"],
+      ["Convert Image to DDS", "px.convertToDds", "file-media"],
+      ["Image Guidelines (sizes & formats)", "px.imageGuidelines", "book"],
     ],
   ],
   [
     "Inspect",
     [
-      ["Event Graph", "ck3.showEventGraph", "type-hierarchy"],
-      ["GUI Widget Tree (open a .gui first)", "ck3.showGuiTree", "list-tree"],
-      ["GUI Layout Preview (open a .gui first)", "ck3.showGuiPreview", "preview"],
-      ["Mod Report", "ck3.modReport", "output"],
-      ["Format Docs (.info) for This File", "ck3.openInfoDocs", "question"],
+      ["Event Graph", "px.showEventGraph", "type-hierarchy"],
+      ["GUI Widget Tree (open a .gui first)", "px.showGuiTree", "list-tree"],
+      ["GUI Layout Preview (open a .gui first)", "px.showGuiPreview", "preview"],
+      ["Mod Report", "px.modReport", "output"],
+      ["Format Docs (.info) for This File", "px.openInfoDocs", "question"],
     ],
   ],
   [
     "Validate & Test",
     [
-      ["Run Tiger Validation", "ck3.runTiger", "bug"],
-      ["Launch CK3 (debug mode)", "ck3.launchGame", "play"],
-      ["Toggle error.log Watcher", "ck3.watchErrorLog", "eye"],
-      ["Run Setup & Health Check", "ck3.setup", "tools"],
+      ["Run Tiger Validation", "px.runTiger", "bug"],
+      ["Launch CK3 (debug mode)", "px.launchGame", "play"],
+      ["Toggle error.log Watcher", "px.watchErrorLog", "eye"],
+      ["Run Setup & Health Check", "px.setup", "tools"],
     ],
   ],
-  ["Learn", [["Tutorial: CK3 Modding from Zero", "ck3.tutorial", "mortar-board"]]],
+  ["Learn", [["Tutorial: CK3 Modding from Zero", "px.tutorial", "mortar-board"]]],
 ];
 
 class ToolsProvider extends BaseProvider {
   constructor(
-    private readonly getCfg: () => Ck3Config,
+    private readonly getCfg: () => PxConfig,
     private readonly focus: FocusMod
   ) {
     super();
@@ -478,11 +478,11 @@ class ToolsProvider extends BaseProvider {
     const g = new Node("Workspace Mods", vscode.TreeItemCollapsibleState.Expanded);
     const pick = new Node("Pick Focus Mod (sidebar views)");
     pick.iconPath = new vscode.ThemeIcon("folder-library");
-    pick.command = { command: "ck3.pickFocusMod", title: "Pick Focus Mod" };
+    pick.command = { command: "px.pickFocusMod", title: "Pick Focus Mod" };
     pick.description = this.focus.isPinned() ? `${this.focus.label()} (pinned)` : this.focus.label();
     const exclude = new Node("Exclude Mods from Indexing");
     exclude.iconPath = new vscode.ThemeIcon("eye-closed");
-    exclude.command = { command: "ck3.excludeMods", title: "Exclude Workspace Mods from Indexing" };
+    exclude.command = { command: "px.excludeMods", title: "Exclude Workspace Mods from Indexing" };
     g.children = [pick, exclude];
 
     const excluded = this.getCfg().excludedMods;
@@ -504,19 +504,19 @@ class ToolsProvider extends BaseProvider {
 
 // ---- registration ----------------------------------------------------------------------
 
-export interface Ck3Views {
+export interface PxViews {
   refreshAll(): void;
-  /** Populate and reveal the Dependencies view from a ck3/dependencies result. */
+  /** Populate and reveal the Dependencies view from a paradox/dependencies result. */
   showDependencies(result: DependenciesResult): void;
   /** The mod the mod-scoped views currently show (event graph/report reuse it). */
   focusRoot(): string | null;
 }
 
-export function registerCk3Views(
+export function registerPxViews(
   context: vscode.ExtensionContext,
   lc: LanguageClient,
-  getCfg: () => Ck3Config
-): Ck3Views {
+  getCfg: () => PxConfig
+): PxViews {
   const focus = new FocusMod(context.workspaceState, getCfg);
   const overview = new OverviewProvider(lc, focus);
   const problems = new ProblemsProvider();
@@ -527,9 +527,9 @@ export function registerCk3Views(
 
   // Mod-scoped views are created as TreeViews so their header can show WHICH
   // mod they describe (the focus mod's descriptor name).
-  const overviewView = vscode.window.createTreeView("ck3.overview", { treeDataProvider: overview });
-  const locCoverageView = vscode.window.createTreeView("ck3.locCoverage", { treeDataProvider: locCoverage });
-  const overridesView = vscode.window.createTreeView("ck3.overrides", { treeDataProvider: overrides });
+  const overviewView = vscode.window.createTreeView("px.overview", { treeDataProvider: overview });
+  const locCoverageView = vscode.window.createTreeView("px.locCoverage", { treeDataProvider: locCoverage });
+  const overridesView = vscode.window.createTreeView("px.overrides", { treeDataProvider: overrides });
   const updateDescriptions = () => {
     const label = focus.label();
     const suffix = focus.isPinned() ? `${label} (pinned)` : label;
@@ -543,11 +543,11 @@ export function registerCk3Views(
     overviewView,
     locCoverageView,
     overridesView,
-    vscode.window.registerTreeDataProvider("ck3.problems", problems),
-    vscode.window.registerTreeDataProvider("ck3.dependencies", dependencies),
-    vscode.window.registerTreeDataProvider("ck3.tools", tools),
-    vscode.commands.registerCommand("ck3.addLocalizationFromView", (node?: { ck3Key?: string }) =>
-      vscode.commands.executeCommand("ck3.editLocalization", node?.ck3Key)
+    vscode.window.registerTreeDataProvider("px.problems", problems),
+    vscode.window.registerTreeDataProvider("px.dependencies", dependencies),
+    vscode.window.registerTreeDataProvider("px.tools", tools),
+    vscode.commands.registerCommand("px.addLocalizationFromView", (node?: { pxKey?: string }) =>
+      vscode.commands.executeCommand("px.editLocalization", node?.pxKey)
     )
   );
 
@@ -574,13 +574,13 @@ export function registerCk3Views(
     })
   );
 
-  // `CK3: Pick Focus Mod` — pin one workspace mod or go back to following the
+  // `Paradox: Pick Focus Mod` — pin one workspace mod or go back to following the
   // active editor. Descriptor names, so 20 folders stay tellable apart.
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.pickFocusMod", async () => {
+    vscode.commands.registerCommand("px.pickFocusMod", async () => {
       const roots = focus.roots();
       if (roots.length === 0) {
-        void vscode.window.showInformationMessage("CK3: no workspace mods to focus.");
+        void vscode.window.showInformationMessage("Paradox Toolkit: no workspace mods to focus.");
         return;
       }
       type Item = vscode.QuickPickItem & { root: string | null };
@@ -607,11 +607,11 @@ export function registerCk3Views(
     })
   );
 
-  // `CK3: Exclude Workspace Mods from Indexing` — checked mods are skipped
-  // entirely. Persisted in the workspace's ck3.excludedMods setting; the
+  // `Paradox: Exclude Workspace Mods from Indexing` — checked mods are skipped
+  // entirely. Persisted in the workspace's px.excludedMods setting; the
   // config-change listener pushes new paths to the server, which reindexes.
   context.subscriptions.push(
-    vscode.commands.registerCommand("ck3.excludeMods", async () => {
+    vscode.commands.registerCommand("px.excludeMods", async () => {
       const cfg = getCfg();
       const candidates = allWorkspaceModCandidates();
       const known = new Set(candidates.map((r) => r.toLowerCase()));
@@ -620,7 +620,7 @@ export function registerCk3Views(
         if (!known.has(p.toLowerCase())) candidates.push(p);
       }
       if (candidates.length === 0) {
-        void vscode.window.showInformationMessage("CK3: no workspace mods found.");
+        void vscode.window.showInformationMessage("Paradox Toolkit: no workspace mods found.");
         return;
       }
       const excluded = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
@@ -637,7 +637,7 @@ export function registerCk3Views(
         placeHolder: "Checked mods are skipped entirely: no completion, navigation, diagnostics or views",
       });
       if (!picked) return;
-      await vscode.workspace.getConfiguration("ck3").update(
+      await vscode.workspace.getConfiguration("px").update(
         "excludedMods",
         picked.map((i) => i.root),
         vscode.ConfigurationTarget.Workspace

@@ -1,6 +1,64 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - Paradox Toolkit (rebrand)
+
+The extension is now **Paradox Toolkit** (`JDeffner.px-toolkit`), a new
+Marketplace entry. The engine behind it became game-agnostic in this release
+and already ships a Victoria 3 preview, so a CK3-only name and a `ck3.*`
+settings namespace no longer described the product.
+
+### Breaking
+
+- **New extension id.** This is a separate Marketplace listing; the old
+  `JDeffner.ck3-modding-toolkit` does not update into it. Install the new one
+  and uninstall the old one.
+- **Every setting and command moved from `ck3.*` to `px.*`** with no fallback.
+  Re-enter your settings (`px.gamePath`, `px.logsPath`, `px.tigerPath`, ...) and
+  re-apply any custom keybindings.
+- **Inline diagnostic suppression is now `# px:ignore`** (and
+  `# px:ignore-next-line`). `# ck3m:ignore` comments already in your mod files
+  stop suppressing anything. The **codes** themselves are unchanged, so a
+  find-and-replace of the marker is the whole migration.
+- **`.dds` files may fail to open** if you ever used "Reopen Editor With..." on
+  one: VS Code remembers `workbench.editorAssociations` pointing at the old
+  `ck3.ddsPreview` view type. Clear that entry, or set it to `px.ddsPreview`.
+- **The index cache is rebuilt once** on first run: the cache location follows
+  the extension id. Nothing is lost, the first scan just takes its usual minute.
+- **npm packages renamed** to `@px-lsp/protocol` and `@px-lsp/server`; the
+  standalone server binary and tarball are now `px-lsp`.
+
+### Unchanged on purpose
+
+`gameId: "ck3"`, the `.ck3modding/` config folder in your mod (it holds your
+`schema.json`, `playset.json` and tiger baseline, and is per-game by design),
+the `zzz_ck3_modding_edits_l_*.yml` loc file the editor writes, `ck3-tiger`
+itself, the `ck3-script` diagnostic source, the `paradox`/`paradox-loc`/
+`paradox-gui` language ids, and the `paradox/*` LSP wire methods.
+
+### Fixed
+
+- **Symlinked mods are indexed.** Every directory walker skipped symlinks and
+  Windows junctions outright, so a mod linked into the Paradox `mod/` folder,
+  the standard Linux workflow, was silently invisible along with everything in
+  it. Link cycles terminate and no file is indexed twice.
+- **A suppression comment with a reason works.** `# px:ignore unclosed-brace
+  -- the game tolerates it` parsed every word of the rationale as a diagnostic
+  code, so it silently suppressed nothing. Text after `--` is now ignored.
+- **The language server gets a heap ceiling sized for the index.** The
+  definition index costs ~924 B per definition (~408 MB for a full vanilla
+  scan), and Node's default old-space on an 8 GB machine is around 2 GB, which
+  a total conversion plus a framework parent could exhaust.
+
+### Changed
+
+- Palette categories are `Paradox`, `Paradox Tiger` and `Paradox Localization`;
+  the status-bar badge reads `PX`; language display names are `Paradox Script`,
+  `Paradox Localization`, `Paradox GUI`, `Paradox Format Docs` and
+  `Paradox Mod Descriptor` (the underlying language ids never changed).
+- Our own descriptor diagnostics report as `px-descriptor`, and the game
+  error.log channel is named per profile.
+
+## 0.1.2 (alpha)
 
 Fixes for the first GitHub issue reports (#1-#4), plus default hotkeys and a
 quieter footprint outside CK3 workspaces.

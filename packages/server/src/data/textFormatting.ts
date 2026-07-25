@@ -18,7 +18,7 @@
  */
 import * as fs from "fs";
 import { LineIndex, parseScript, type BlockNode } from "../parser";
-import { listFiles } from "@paradox-lsp/protocol/fsWalk";
+import { listFiles } from "@px-lsp/protocol/fsWalk";
 import * as path from "path";
 
 export type FormatLayer = "jomini" | "game" | "mod" | "builtin";

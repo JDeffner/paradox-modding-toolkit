@@ -7,7 +7,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Ck3Config } from "./config";
+import type { PxConfig } from "./config";
 import { looksLikeGameDir } from "./config";
 import {
   DESCRIPTOR_FIELDS,
@@ -17,7 +17,7 @@ import {
   scaffoldDescriptor,
   validateDescriptor,
   wildcardVersion,
-} from "@paradox-lsp/protocol/descriptorMod";
+} from "@px-lsp/protocol/descriptorMod";
 
 const MOD_SELECTOR: vscode.DocumentSelector = { language: "paradox-mod", scheme: "file" };
 const SEVERITY = {
@@ -84,7 +84,7 @@ function fieldDocs(key: string): vscode.MarkdownString | null {
 }
 
 class DescriptorCompletionProvider implements vscode.CompletionItemProvider {
-  constructor(private readonly getConfig: () => Ck3Config) {}
+  constructor(private readonly getConfig: () => PxConfig) {}
 
   provideCompletionItems(doc: vscode.TextDocument, pos: vscode.Position): vscode.CompletionItem[] {
     const text = doc.getText();
@@ -200,10 +200,10 @@ export interface DescriptorModFeature extends vscode.Disposable {
 
 export function registerDescriptorMod(
   context: vscode.ExtensionContext,
-  getConfig: () => Ck3Config,
+  getConfig: () => PxConfig,
   log: (msg: string) => void
 ): DescriptorModFeature {
-  const diagnostics = vscode.languages.createDiagnosticCollection("ck3-descriptor");
+  const diagnostics = vscode.languages.createDiagnosticCollection("px-descriptor");
   let missingNotified = false;
   let watcher: vscode.FileSystemWatcher | null = null;
   let watchedRoot: string | null = null;
@@ -218,7 +218,7 @@ export function registerDescriptorMod(
           i.message,
           SEVERITY[i.severity]
         );
-        d.source = "ck3-descriptor";
+        d.source = "px-descriptor";
         d.code = i.code;
         return d;
       })
@@ -303,15 +303,18 @@ export function registerDescriptorMod(
         "Steam Workshop uploads and ck3-tiger all read it.",
       vscode.DiagnosticSeverity.Error
     );
-    d.source = "ck3-descriptor";
+    d.source = "px-descriptor";
     d.code = "descriptor-missing";
     diagnostics.set(descriptorUri, [d]);
     if (!missingNotified) {
       missingNotified = true;
       void vscode.window
-        .showErrorMessage(`CK3: this mod has no descriptor.mod (${modPath}).`, "Create descriptor.mod")
+        .showErrorMessage(
+          `Paradox Toolkit: this mod has no descriptor.mod (${modPath}).`,
+          "Create descriptor.mod"
+        )
         .then((choice) => {
-          if (choice) void vscode.commands.executeCommand("ck3.createDescriptor");
+          if (choice) void vscode.commands.executeCommand("px.createDescriptor");
         });
     }
   };
@@ -319,7 +322,7 @@ export function registerDescriptorMod(
   const createDescriptor = async () => {
     const cfg = getConfig();
     if (!cfg.modPath) {
-      void vscode.window.showWarningMessage("CK3: no mod folder (open one or set ck3.modPath).");
+      void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
       return;
     }
     const file = path.join(cfg.modPath, "descriptor.mod");
@@ -344,7 +347,7 @@ export function registerDescriptorMod(
       "{"
     ),
     vscode.languages.registerHoverProvider(MOD_SELECTOR, new DescriptorHoverProvider()),
-    vscode.commands.registerCommand("ck3.createDescriptor", createDescriptor),
+    vscode.commands.registerCommand("px.createDescriptor", createDescriptor),
     vscode.workspace.onDidOpenTextDocument(validateDoc),
     vscode.workspace.onDidChangeTextDocument((e) => validateDoc(e.document))
   );

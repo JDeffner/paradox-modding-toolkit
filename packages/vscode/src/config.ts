@@ -3,14 +3,14 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
-import { sanitizeStringList } from "@paradox-lsp/protocol/suppression";
-import { hasMetadataDescriptor } from "@paradox-lsp/protocol/descriptorMetadata";
+import { sanitizeStringList } from "@px-lsp/protocol/suppression";
+import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { findGameFolder } from "./steamDetect";
-import { ck3Meta } from "@paradox-lsp/server/games/ck3/meta";
-import { vic3Meta } from "@paradox-lsp/server/games/vic3/meta";
+import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
 
-export interface Ck3Config {
-  /** Active game profile id: "ck3", or "vic3" behind ck3.vic3Preview. */
+export interface PxConfig {
+  /** Active game profile id: "ck3", or "vic3" behind px.vic3Preview. */
   gameId: string;
   /** Path to `Crusader Kings III/game`, or null if unset/invalid. */
   gamePath: string | null;
@@ -21,16 +21,16 @@ export interface Ck3Config {
   /** Mod folder; defaults to the first workspace folder that looks like a mod
    * (containers of mods expand to their child mods). */
   modPath: string | null;
-  /** Parent/dependency mod roots: `ck3.parentMods` plus any additional
+  /** Parent/dependency mod roots: `px.parentMods` plus any additional
    * workspace mod (see workspaceMods). Load order, base first. */
   parentPaths: string[];
   /** Every mod root that comes from the workspace itself (folders that look
    * like mods, plus child mods of container folders), minus modPath. These are
    * the mods the user is EDITING — per-file features (tiger runs, loc writes,
-   * reference indexing) treat them like the mod, unlike ck3.parentMods
+   * reference indexing) treat them like the mod, unlike px.parentMods
    * dependencies which are read-only context. */
   workspaceMods: string[];
-  /** `ck3.excludedMods`: workspace mod roots skipped entirely (sanitized). */
+  /** `px.excludedMods`: workspace mod roots skipped entirely (sanitized). */
   excludedMods: string[];
   locLanguage: string;
   scopeInlayHints: boolean;
@@ -45,7 +45,7 @@ export interface Ck3Config {
   /** True when this workspace actually holds CK3 content (a mod or a game
    * install) and the extension is enabled — the gate for all visible UI
    * (status bar, sidebar views, palette commands). The machine-scope
-   * ck3.gamePath setting deliberately does NOT count: it is set once per
+   * px.gamePath setting deliberately does NOT count: it is set once per
    * machine and would light the extension up in every window. */
   isCk3Workspace: boolean;
   /** Human-readable problems found while validating paths. */
@@ -113,22 +113,22 @@ function looksLikeMetadataMod(dir: string): boolean {
   }
 }
 
-export function readConfig(): Ck3Config {
-  const cfg = vscode.workspace.getConfiguration("ck3");
+export function readConfig(): PxConfig {
+  const cfg = vscode.workspace.getConfiguration("px");
   const warnings: string[] = [];
 
   const readPath = (key: string, label: string): string | null => {
     const value = (cfg.get<string>(key) ?? "").trim();
     if (value === "") return null;
     if (!fs.existsSync(value)) {
-      warnings.push(`${label} ("ck3.${key}") does not exist: ${value}`);
+      warnings.push(`${label} ("px.${key}") does not exist: ${value}`);
       return null;
     }
     return value;
   };
 
   // A CK3 game install opened as a workspace folder can stand in for an unset
-  // or invalid ck3.gamePath (data dir directly, or the install root resolved to
+  // or invalid px.gamePath (data dir directly, or the install root resolved to
   // its game/ subfolder). Not a warning: setup.ts reports the effective path.
   let workspaceGameDir: string | null = null;
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
@@ -146,7 +146,7 @@ export function readConfig(): Ck3Config {
 
   let modPath = readPath("modPath", "Mod path");
 
-  // `ck3.excludedMods`: workspace mods the user opted out of indexing.
+  // `px.excludedMods`: workspace mods the user opted out of indexing.
   const excludedMods = sanitizeStringList(cfg.get("excludedMods"))
     .map((p) => p.trim())
     .filter((p) => p !== "");
@@ -209,7 +209,7 @@ export function readConfig(): Ck3Config {
     const value = raw.trim();
     if (value === "") continue;
     if (!fs.existsSync(value)) {
-      warnings.push(`Parent mod ("ck3.parentMods") does not exist: ${value}`);
+      warnings.push(`Parent mod ("px.parentMods") does not exist: ${value}`);
       continue;
     }
     addParent(value);
@@ -218,7 +218,7 @@ export function readConfig(): Ck3Config {
 
   // Game selection (M4 preview): a workspace whose mod-of-record carries a
   // .metadata/metadata.json descriptor (and no launcher .mod file) is a
-  // Victoria 3 mod — honored only behind ck3.vic3Preview. The ck3.* path
+  // Victoria 3 mod — honored only behind px.vic3Preview. The px.* path
   // settings describe CK3 and are deliberately IGNORED for a Vic3 workspace:
   // game/logs resolve from Steam/Documents, tiger from the vic3-tiger
   // download (see extension.ts).
@@ -270,7 +270,7 @@ function normKey(p: string): string {
 }
 
 /**
- * Every workspace mod root candidate, IGNORING `ck3.excludedMods` — the
+ * Every workspace mod root candidate, IGNORING `px.excludedMods` — the
  * exclusion picker needs the full list so excluded mods can be re-included.
  */
 export function allWorkspaceModCandidates(): string[] {
@@ -327,7 +327,7 @@ function isDirEntry(full: string, entry: fs.Dirent): boolean {
 }
 
 /** The workspace mod root a file belongs to (modPath first), or null. */
-export function modRootFor(file: string, cfg: Ck3Config): string | null {
+export function modRootFor(file: string, cfg: PxConfig): string | null {
   for (const root of [cfg.modPath, ...cfg.workspaceMods]) {
     if (root && isUnder(root, file)) return root;
   }

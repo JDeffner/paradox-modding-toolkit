@@ -7,10 +7,10 @@
     // typescript-eslint (typescript-eslint/typescript-eslint#10940).
     "types": ["node", "vscode"],
     "paths": {
-      "@paradox-lsp/protocol/*": ["./packages/protocol/src/*"],
-      "@paradox-lsp/server/dds": ["./packages/server/src/dds/index.ts"],
-      "@paradox-lsp/server/parser": ["./packages/server/src/parser/index.ts"],
-      "@paradox-lsp/server/*": ["./packages/server/src/*"]
+      "@px-lsp/protocol/*": ["./packages/protocol/src/*"],
+      "@px-lsp/server/dds": ["./packages/server/src/dds/index.ts"],
+      "@px-lsp/server/parser": ["./packages/server/src/parser/index.ts"],
+      "@px-lsp/server/*": ["./packages/server/src/*"]
     }
   },
   "include": [

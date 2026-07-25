@@ -1,5 +1,5 @@
 {
-  "name": "@paradox-lsp/server",
+  "name": "@px-lsp/server",
   "version": "0.2.0",
   "license": "GPL-3.0-or-later",
   "description": "Language server for Paradox script (Crusader Kings III first), usable over node-ipc or stdio from any LSP client.",
@@ -17,11 +17,12 @@
     "directory": "packages/server"
   },
   "bin": {
-    "paradox-lsp": "./dist/server.js"
+    "px-lsp": "./dist/server.js"
   },
   "files": [
     "dist",
     "data",
+    "media",
     "src",
     "README.md",
     "LICENSE"
@@ -40,7 +41,7 @@
     "prepublishOnly": "npm run compile"
   },
   "dependencies": {
-    "@paradox-lsp/protocol": "workspace:*",
+    "@px-lsp/protocol": "workspace:*",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-uri": "^3.1.0"

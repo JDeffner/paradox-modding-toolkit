@@ -8,8 +8,8 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { DefKind, Definition, DefSource, IndexStats } from "@paradox-lsp/protocol/types";
-import { listFiles, walkDir } from "@paradox-lsp/protocol/fsWalk";
+import type { DefKind, Definition, DefSource, IndexStats } from "@px-lsp/protocol/types";
+import { listFiles, walkDir } from "@px-lsp/protocol/fsWalk";
 import { activeProfile } from "../games/active";
 import type { SchemaEntry } from "../schema/types";
 import { EVENT_ID, extractDefinitions, extractLocDefinitions } from "./extract";

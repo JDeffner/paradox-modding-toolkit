@@ -9,4 +9,4 @@ The extension then:
 - re-indexes files as you save them
 - lets your definitions **shadow** vanilla ones with the same name, exactly like the game does
 
-If your mod lives somewhere else, set `ck3.modPath` instead.
+If your mod lives somewhere else, set `px.modPath` instead.

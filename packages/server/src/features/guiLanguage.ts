@@ -25,7 +25,7 @@ import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { renderCard, renderHover } from "./hoverRender";
 import { assetDirContext, provideAssetDirCompletion } from "./assetPaths";
-import type { ParadoxSettings } from "@paradox-lsp/protocol/protocol";
+import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import * as path from "path";
 import { URI } from "vscode-uri";
 

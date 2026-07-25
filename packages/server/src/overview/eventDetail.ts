@@ -12,7 +12,7 @@ import type {
   EventOptionInfo,
   EventRefInfo,
   EventSectionInfo,
-} from "@paradox-lsp/protocol/protocol";
+} from "@px-lsp/protocol/protocol";
 import type { ServerData } from "../serverData";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 

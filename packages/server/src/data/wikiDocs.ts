@@ -11,7 +11,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { TokenData, TokenKind } from "@paradox-lsp/protocol/types";
+import type { TokenData, TokenKind } from "@px-lsp/protocol/types";
 import { activeProfile } from "../games/active";
 
 const NAME_RE = /^[A-Za-z0-9_.:]+$/;

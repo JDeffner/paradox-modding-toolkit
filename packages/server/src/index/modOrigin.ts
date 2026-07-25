@@ -6,8 +6,8 @@
  * No `vscode` imports: unit-tested in plain Node.
  */
 import * as path from "path";
-import { readDescriptorName } from "@paradox-lsp/protocol/descriptorMod";
-import { readMetadataName } from "@paradox-lsp/protocol/descriptorMetadata";
+import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { readMetadataName } from "@px-lsp/protocol/descriptorMetadata";
 
 /** Display name from either descriptor convention (launcher .mod file, else
  *  .metadata/metadata.json), so labels work for every supported game. */

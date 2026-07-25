@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { EventDetail, EventGraph, EventGraphParams } from "@paradox-lsp/protocol/protocol";
+import type { EventDetail, EventGraph, EventGraphParams } from "@px-lsp/protocol/protocol";
 import { layoutGraph } from "./layout";
 
 /** Messages the webview sends to the host. */
@@ -35,7 +35,7 @@ export interface EventGraphActions {
  */
 export class EventGraphPanel {
   private static instance: EventGraphPanel | undefined;
-  private static readonly viewType = "ck3.eventGraph";
+  private static readonly viewType = "px.eventGraph";
 
   private readonly panel: vscode.WebviewPanel;
   private readonly fetchGraph: (params: EventGraphParams) => Promise<EventGraph>;
@@ -151,7 +151,7 @@ export class EventGraphPanel {
             await this.actions.editLoc(msg.key, msg.value, msg.file, msg.line);
           } catch (err) {
             void vscode.window.showErrorMessage(
-              `CK3: localization write failed: ${err instanceof Error ? err.message : String(err)}`
+              `Paradox Toolkit: localization write failed: ${err instanceof Error ? err.message : String(err)}`
             );
           }
           await this.sendDetail(msg.id);
@@ -163,7 +163,7 @@ export class EventGraphPanel {
             await this.actions.addOption(msg.id, msg.file, msg.endLine, msg.count);
           } catch (err) {
             void vscode.window.showErrorMessage(
-              `CK3: add option failed: ${err instanceof Error ? err.message : String(err)}`
+              `Paradox Toolkit: add option failed: ${err instanceof Error ? err.message : String(err)}`
             );
           }
           await this.sendDetail(msg.id);

@@ -12,7 +12,7 @@
 import { CompletionItemKind, type CompletionItem } from "vscode-languageserver/node";
 import * as fs from "fs";
 import * as path from "path";
-import type { ParadoxSettings } from "@paradox-lsp/protocol/protocol";
+import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import type { CompletionResult } from "./completion";
 
 /** Top-level folders under a content root that hold referenceable assets. */
