@@ -43,75 +43,65 @@ function walk(dir: string, ext: string, out: string[]): void {
 }
 
 run("mod corpus (AGOT)", () => {
-  it(
-    "parses the whole script tree with no exceptions and near-zero structural errors",
-    () => {
-      const root = CORPUS!;
-      const files: string[] = [];
-      for (const d of ["common", "events", "history", "gui"]) walk(path.join(root, d), ".txt", files);
-      expect(files.length).toBeGreaterThan(0);
+  it("parses the whole script tree with no exceptions and near-zero structural errors", () => {
+    const root = CORPUS!;
+    const files: string[] = [];
+    for (const d of ["common", "events", "history", "gui"]) walk(path.join(root, d), ".txt", files);
+    expect(files.length).toBeGreaterThan(0);
 
-      let withErrors = 0;
-      const offenders: string[] = [];
-      for (const file of files) {
-        const { text } = decode(fs.readFileSync(file));
-        // "zero parse exceptions": parseScript must never throw on any file.
-        const res = parseScript(text);
-        if (res.errors.length > 0) {
-          withErrors++;
-          if (offenders.length < 20) {
-            const e = res.errors[0];
-            offenders.push(`${path.relative(root, file)} :: ${e.code} @${e.range.start}`);
-          }
+    let withErrors = 0;
+    const offenders: string[] = [];
+    for (const file of files) {
+      const { text } = decode(fs.readFileSync(file));
+      // "zero parse exceptions": parseScript must never throw on any file.
+      const res = parseScript(text);
+      if (res.errors.length > 0) {
+        withErrors++;
+        if (offenders.length < 20) {
+          const e = res.errors[0];
+          offenders.push(`${path.relative(root, file)} :: ${e.code} @${e.range.start}`);
         }
       }
-      const ratio = withErrors / files.length;
+    }
+    const ratio = withErrors / files.length;
+    // eslint-disable-next-line no-console
+    console.log(
+      `\n[mod-corpus] txt files: ${files.length}, with-errors: ${withErrors} (${(ratio * 100).toFixed(3)}%)`
+    );
+    if (offenders.length) {
       // eslint-disable-next-line no-console
-      console.log(`\n[mod-corpus] txt files: ${files.length}, with-errors: ${withErrors} (${(ratio * 100).toFixed(3)}%)`);
-      if (offenders.length) {
-        // eslint-disable-next-line no-console
-        console.log("[mod-corpus] offenders (sample):\n  " + offenders.join("\n  "));
-      }
-      expect(ratio).toBeLessThan(0.005);
-    },
-    120000
-  );
+      console.log("[mod-corpus] offenders (sample):\n  " + offenders.join("\n  "));
+    }
+    expect(ratio).toBeLessThan(0.005);
+  }, 120000);
 
-  it(
-    "yields definition counts above the measured A0 floors",
-    () => {
-      const defs = scanRoot(CORPUS!, "mod", { locLanguage: "english" });
-      const byKind: Record<string, number> = {};
-      for (const d of defs) byKind[d.kind] = (byKind[d.kind] ?? 0) + 1;
+  it("yields definition counts above the measured A0 floors", () => {
+    const defs = scanRoot(CORPUS!, "mod", { locLanguage: "english" });
+    const byKind: Record<string, number> = {};
+    for (const d of defs) byKind[d.kind] = (byKind[d.kind] ?? 0) + 1;
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `\n[mod-corpus] effects=${byKind.scripted_effect} triggers=${byKind.scripted_trigger} ` +
-          `values=${byKind.script_value} modifiers=${byKind.scripted_modifier}`
-      );
+    // eslint-disable-next-line no-console
+    console.log(
+      `\n[mod-corpus] effects=${byKind.scripted_effect} triggers=${byKind.scripted_trigger} ` +
+        `values=${byKind.script_value} modifiers=${byKind.scripted_modifier}`
+    );
 
-      // Floors just under the A0-measured yield (14,877 · 3,707 · 7,108 · 307).
-      expect(byKind.scripted_effect ?? 0).toBeGreaterThanOrEqual(14000);
-      expect(byKind.scripted_trigger ?? 0).toBeGreaterThanOrEqual(3500);
-      expect(byKind.script_value ?? 0).toBeGreaterThanOrEqual(6500);
-      expect(byKind.scripted_modifier ?? 0).toBeGreaterThanOrEqual(300);
-    },
-    120000
-  );
+    // Floors just under the A0-measured yield (14,877 · 3,707 · 7,108 · 307).
+    expect(byKind.scripted_effect ?? 0).toBeGreaterThanOrEqual(14000);
+    expect(byKind.scripted_trigger ?? 0).toBeGreaterThanOrEqual(3500);
+    expect(byKind.script_value ?? 0).toBeGreaterThanOrEqual(6500);
+    expect(byKind.scripted_modifier ?? 0).toBeGreaterThanOrEqual(300);
+  }, 120000);
 
-  it(
-    "captures a PdxDoc block for a known documented AGOT effect (§E)",
-    () => {
-      const defs = scanRoot(CORPUS!, "mod", { locLanguage: "english" });
-      // `# used in disburse_tour_activity_rewards on scope:host` sits directly
-      // above `accolades_activity_complete_tour_glory_effect` in
-      // common/scripted_effects/00_accolades_scripted_effects.txt.
-      const def = defs.find((d) => d.name === "accolades_activity_complete_tour_glory_effect");
-      expect(def, "known documented effect indexed").toBeDefined();
-      expect(def!.doc, "doc prose captured").toContain("disburse_tour_activity_rewards");
-    },
-    120000
-  );
+  it("captures a PdxDoc block for a known documented AGOT effect (§E)", () => {
+    const defs = scanRoot(CORPUS!, "mod", { locLanguage: "english" });
+    // `# used in disburse_tour_activity_rewards on scope:host` sits directly
+    // above `accolades_activity_complete_tour_glory_effect` in
+    // common/scripted_effects/00_accolades_scripted_effects.txt.
+    const def = defs.find((d) => d.name === "accolades_activity_complete_tour_glory_effect");
+    expect(def, "known documented effect indexed").toBeDefined();
+    expect(def!.doc, "doc prose captured").toContain("disburse_tour_activity_rewards");
+  }, 120000);
 });
 
 // Smoke tests for the §B2/§B3 wiring. Synthetic documents — always run.
@@ -149,7 +139,14 @@ describe("character_interaction completion & hover smoke (§B2/§B3)", () => {
   it("hover on a structure key returns the doc", () => {
     const text = "my_interaction = {\n\tis_shown = { }\n}";
     const doc = TextDocument.create(uri(), "paradox", 1, text);
-    const hover = provideHover(data, doc, { line: 1, character: 2 }, new Set(["character"]), interactionEntry, () => schema);
+    const hover = provideHover(
+      data,
+      doc,
+      { line: 1, character: 2 },
+      new Set(["character"]),
+      interactionEntry,
+      () => schema
+    );
     expect(hover).not.toBeNull();
     expect((hover!.contents as { value: string }).value).toContain("character_interactions");
   });

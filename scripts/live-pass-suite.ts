@@ -24,7 +24,12 @@ async function check(name: string, fn: () => Promise<string | void>): Promise<vo
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function poll<T>(label: string, timeoutMs: number, stepMs: number, fn: () => Promise<T | null>): Promise<{ value: T; ms: number }> {
+async function poll<T>(
+  label: string,
+  timeoutMs: number,
+  stepMs: number,
+  fn: () => Promise<T | null>
+): Promise<{ value: T; ms: number }> {
   const t0 = Date.now();
   for (;;) {
     const value = await fn();
@@ -50,16 +55,23 @@ async function appendText(editor: vscode.TextEditor, text: string): Promise<vsco
 
 async function completionsAt(uri: vscode.Uri, pos: vscode.Position, trigger?: string): Promise<string[]> {
   const list = await vscode.commands.executeCommand<vscode.CompletionList>(
-    "vscode.executeCompletionItemProvider", uri, pos, trigger
+    "vscode.executeCompletionItemProvider",
+    uri,
+    pos,
+    trigger
   );
   return (list?.items ?? []).map((i) => (typeof i.label === "string" ? i.label : i.label.label));
 }
 
 async function hoverTextAt(uri: vscode.Uri, pos: vscode.Position): Promise<string> {
-  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", uri, pos);
+  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+    "vscode.executeHoverProvider",
+    uri,
+    pos
+  );
   return (hovers ?? [])
     .flatMap((h) => h.contents)
-    .map((c) => (typeof c === "string" ? c : (c as vscode.MarkdownString).value ?? ""))
+    .map((c) => (typeof c === "string" ? c : ((c as vscode.MarkdownString).value ?? "")))
     .join("\n");
 }
 
@@ -87,11 +99,17 @@ export async function run(): Promise<void> {
   let engineTokenPos: vscode.Position | null = null;
   await check("engine-token hover (is_adult) latency", async () => {
     scriptEditor = await openFirst("events/*.txt");
-    await appendText(scriptEditor, "\n# live-pass scratch (never saved)\nlp_probe = {\n\tis_adult = yes\n}\n");
+    await appendText(
+      scriptEditor,
+      "\n# live-pass scratch (never saved)\nlp_probe = {\n\tis_adult = yes\n}\n"
+    );
     const doc = scriptEditor.document;
     let line = -1;
     for (let l = doc.lineCount - 1; l >= Math.max(0, doc.lineCount - 6); l--) {
-      if (doc.lineAt(l).text.includes("is_adult")) { line = l; break; }
+      if (doc.lineAt(l).text.includes("is_adult")) {
+        line = l;
+        break;
+      }
     }
     if (line < 0) throw new Error("probe line not found after edit");
     engineTokenPos = new vscode.Position(line, doc.lineAt(line).text.indexOf("is_adult") + 2);
@@ -120,7 +138,9 @@ export async function run(): Promise<void> {
     const pos = await appendText(ed, "NCharacter|");
     const labels = await completionsAt(ed.document.uri, pos, "|");
     if (!labels.some((l) => l.includes("MAX_STRESS_LEVEL"))) {
-      throw new Error(`MAX_STRESS_LEVEL not offered (${labels.length} items: ${labels.slice(0, 5).join(", ")})`);
+      throw new Error(
+        `MAX_STRESS_LEVEL not offered (${labels.length} items: ${labels.slice(0, 5).join(", ")})`
+      );
     }
     return `${labels.length} constants`;
   });
@@ -141,7 +161,8 @@ export async function run(): Promise<void> {
     locEditor = await openFirst("localization/**/*_l_english.yml");
     const pos = await appendText(locEditor, '\n lp_probe:0 "text #');
     const labels = await completionsAt(locEditor.document.uri, pos, "#");
-    if (!labels.includes("G")) throw new Error(`G not offered (${labels.length}: ${labels.slice(0, 8).join(", ")})`);
+    if (!labels.includes("G"))
+      throw new Error(`G not offered (${labels.length}: ${labels.slice(0, 8).join(", ")})`);
     return `${labels.length} tags`;
   });
 
@@ -172,7 +193,9 @@ export async function run(): Promise<void> {
     if (!m) return "no using= in mod gui — skipped (counts as pass, noted for triage)";
     const off = ed.document.positionAt(m.index + m[0].indexOf(m[1]) + 1);
     const defs = await vscode.commands.executeCommand<vscode.Location[]>(
-      "vscode.executeDefinitionProvider", ed.document.uri, off
+      "vscode.executeDefinitionProvider",
+      ed.document.uri,
+      off
     );
     if (!defs || defs.length === 0) throw new Error(`no definition for using = ${m[1]}`);
     return `${m[1]} -> ${defs[0].uri.fsPath.split(/[\\/]/).slice(-2).join("/")}`;

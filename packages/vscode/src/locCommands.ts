@@ -17,7 +17,9 @@ export type LocLookup = (key: string) => Promise<LocEntryInfo[]>;
 
 export function locKeyRefAt(document: vscode.TextDocument, position: vscode.Position): LocKeyRef | null {
   const refs = findLocKeyRefs(document.lineAt(position.line).text);
-  return refs.find((r) => position.character >= r.start - 1 && position.character <= r.end + 1) ?? refs[0] ?? null;
+  return (
+    refs.find((r) => position.character >= r.start - 1 && position.character <= r.end + 1) ?? refs[0] ?? null
+  );
 }
 
 async function resolveKeyFromEditor(lookup: LocLookup, arg: unknown): Promise<string | null> {
@@ -69,13 +71,7 @@ function escapeLocValue(value: string): string {
 /** The mod's replace file — reserved for OVERRIDING vanilla keys (game semantics). */
 function modReplaceFile(cfg: Ck3Config, language?: string): string {
   const lang = language ?? cfg.locLanguage;
-  return path.join(
-    cfg.modPath!,
-    "localization",
-    "replace",
-    lang,
-    `zzz_ck3_modding_edits_l_${lang}.yml`
-  );
+  return path.join(cfg.modPath!, "localization", "replace", lang, `zzz_ck3_modding_edits_l_${lang}.yml`);
 }
 
 export function upsertInReplaceFile(cfg: Ck3Config, key: string, value: string, language?: string): string {
@@ -139,7 +135,9 @@ export function upsertNewModLoc(cfg: Ck3Config, key: string, value: string, lang
   const lang = language ?? cfg.locLanguage;
   const files = modLocFiles(cfg, lang);
   const prefix = key.includes(".") ? key.slice(0, key.indexOf(".") + 1) : key.split("_")[0] + "_";
-  const prefixRe = new RegExp(`^\\s*${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[A-Za-z0-9_.\\-]*:\\d*\\s*"`);
+  const prefixRe = new RegExp(
+    `^\\s*${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[A-Za-z0-9_.\\-]*:\\d*\\s*"`
+  );
 
   let best: string | null = null;
   let bestCount = 0;
@@ -165,12 +163,20 @@ export function upsertNewModLoc(cfg: Ck3Config, key: string, value: string, lang
   const target =
     best ??
     largest ??
-    path.join(cfg.modPath!, "localization", lang, `${sanitizeName(path.basename(cfg.modPath!))}_l_${lang}.yml`);
+    path.join(
+      cfg.modPath!,
+      "localization",
+      lang,
+      `${sanitizeName(path.basename(cfg.modPath!))}_l_${lang}.yml`
+    );
   return upsertIntoYml(target, lang, key, value);
 }
 
 function sanitizeName(raw: string): string {
-  const s = raw.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+  const s = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return s || "mod";
 }
 
@@ -179,7 +185,12 @@ function sanitizeName(raw: string): string {
  * vanilla-only key → the replace file (that IS the override mechanism);
  * brand-new key → the right mod loc file (upsertNewModLoc).
  */
-export async function writeLocSmart(cfg: Ck3Config, lookup: LocLookup, key: string, value: string): Promise<string> {
+export async function writeLocSmart(
+  cfg: Ck3Config,
+  lookup: LocLookup,
+  key: string,
+  value: string
+): Promise<string> {
   const defs = await lookup(key);
   const modDef = defs.find((d) => d.source === "mod");
   if (modDef && replaceLocLineValue(modDef.file, modDef.line, value)) return modDef.file;
@@ -205,7 +216,7 @@ export async function editLocalizationCommand(
 
   const defs = await lookup(key);
   const modDef = defs.find((d) => d.source === "mod");
-  const currentValue = modDef ? readLocValueFromFile(modDef) ?? modDef.value ?? "" : defs[0]?.value ?? "";
+  const currentValue = modDef ? (readLocValueFromFile(modDef) ?? modDef.value ?? "") : (defs[0]?.value ?? "");
 
   const newValue = await vscode.window.showInputBox({
     title: `Localization: ${key}`,
@@ -240,6 +251,11 @@ export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown
   const doc = await vscode.workspace.openTextDocument(def.file);
   await vscode.window.showTextDocument(doc, {
     viewColumn: vscode.ViewColumn.Beside,
-    selection: new vscode.Range(def.line, 0, def.line, doc.lineAt(Math.min(def.line, doc.lineCount - 1)).text.length),
+    selection: new vscode.Range(
+      def.line,
+      0,
+      def.line,
+      doc.lineAt(Math.min(def.line, doc.lineCount - 1)).text.length
+    ),
   });
 }

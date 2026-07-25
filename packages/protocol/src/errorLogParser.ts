@@ -5,7 +5,8 @@
  */
 
 /** `... in file: events/x.txt line: 12` / `file: "gui/y.gui" near line: 3` */
-const FILE_LINE = /file:\s*"?([^"\r\n]+?\.(?:txt|yml|gui|info|mod|gfx|asset))"?(?:\s+(?:near\s+)?line:?\s*(\d+))?/i;
+const FILE_LINE =
+  /file:\s*"?([^"\r\n]+?\.(?:txt|yml|gui|info|mod|gfx|asset))"?(?:\s+(?:near\s+)?line:?\s*(\d+))?/i;
 const SEVERITY = /^\[\d{2}:\d{2}:\d{2}\]\[([EW])\]/;
 
 export interface ParsedGameError {

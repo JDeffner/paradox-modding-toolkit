@@ -31,7 +31,12 @@ export function hasTransparency(rgba: Uint8Array): boolean {
 }
 
 /** Encode RGBA8 pixels as a DDS file (no mipmaps). */
-export function encodeDds(width: number, height: number, rgba: Uint8Array, format: DdsEncodeFormat): Uint8Array {
+export function encodeDds(
+  width: number,
+  height: number,
+  rgba: Uint8Array,
+  format: DdsEncodeFormat
+): Uint8Array {
   if (rgba.length < width * height * 4) throw new Error("pixel buffer too small");
   const data =
     format === "bgra8" ? encodeBgra(width, height, rgba) : encodeBlocks(width, height, rgba, format);

@@ -141,9 +141,7 @@ run("requiredLoc coverage >= 95%", () => {
         }
         const coverage = hit / defs.length;
         // eslint-disable-next-line no-console
-        console.log(
-          `  ${entry.kind} "${pattern}": ${(coverage * 100).toFixed(1)}% (${hit}/${defs.length})`
-        );
+        console.log(`  ${entry.kind} "${pattern}": ${(coverage * 100).toFixed(1)}% (${hit}/${defs.length})`);
         expect(
           coverage,
           `${entry.kind} pattern "${pattern}" only ${(coverage * 100).toFixed(1)}% covered`

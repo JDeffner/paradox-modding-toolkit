@@ -84,7 +84,17 @@ describe("knowledge table", () => {
   it("covers the launcher's full key set with docs and snippets", () => {
     const keys = DESCRIPTOR_FIELDS.map((f) => f.key);
     expect(keys.sort()).toEqual(
-      ["dependencies", "name", "path", "picture", "remote_file_id", "replace_path", "supported_version", "tags", "version"].sort()
+      [
+        "dependencies",
+        "name",
+        "path",
+        "picture",
+        "remote_file_id",
+        "replace_path",
+        "supported_version",
+        "tags",
+        "version",
+      ].sort()
     );
     for (const f of DESCRIPTOR_FIELDS) {
       expect(f.summary.length, f.key).toBeGreaterThan(10);

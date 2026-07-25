@@ -3,11 +3,12 @@ import { decodeDds, ddsFormatInfo } from "../../src/dds/decoder";
 
 function fourCC(s: string): number {
   return (
-    (s.charCodeAt(0) & 0xff) |
-    ((s.charCodeAt(1) & 0xff) << 8) |
-    ((s.charCodeAt(2) & 0xff) << 16) |
-    ((s.charCodeAt(3) & 0xff) << 24)
-  ) >>> 0;
+    ((s.charCodeAt(0) & 0xff) |
+      ((s.charCodeAt(1) & 0xff) << 8) |
+      ((s.charCodeAt(2) & 0xff) << 16) |
+      ((s.charCodeAt(3) & 0xff) << 24)) >>>
+    0
+  );
 }
 
 describe("fuzz / robustness", () => {

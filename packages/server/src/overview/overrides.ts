@@ -39,10 +39,7 @@ export function computeOverrides(
     const shadowed = data.index
       .lookupAll(def.name)
       .filter(
-        (d) =>
-          d.kind === def.kind &&
-          d !== def &&
-          (d.source !== "mod" || data.modRootOf(d.file) !== ownRoot)
+        (d) => d.kind === def.kind && d !== def && (d.source !== "mod" || data.modRootOf(d.file) !== ownRoot)
       );
     if (shadowed.length === 0) continue;
     seen.add(dedupe);
@@ -54,9 +51,7 @@ export function computeOverrides(
       // Whole-file replacement at the same relative path still wins.
       const modRel = ownRoot ? relUnder(ownRoot, def.file) : null;
       const replacesFile =
-        modRel !== null &&
-        gamePath !== null &&
-        shadowed.some((s) => relUnder(gamePath, s.file) === modRel);
+        modRel !== null && gamePath !== null && shadowed.some((s) => relUnder(gamePath, s.file) === modRel);
       if (replacesFile) {
         winner = "mod";
         note = "whole-file replacement (same relative path)";
@@ -72,7 +67,12 @@ export function computeOverrides(
       kind: def.kind,
       mod: { source: "mod", label: data.originLabel(def), file: def.file, line: def.line },
       shadowed: shadowed.map((s) => ({
-        source: s.source === "mod" ? ("mod" as const) : s.source === "parent" ? ("parent" as const) : ("vanilla" as const),
+        source:
+          s.source === "mod"
+            ? ("mod" as const)
+            : s.source === "parent"
+              ? ("parent" as const)
+              : ("vanilla" as const),
         label: data.originLabel(s),
         file: s.file,
         line: s.line,

@@ -43,7 +43,7 @@ describe("buildTranslation", () => {
     const src = BOM + 'l_english:\n # section\n key_a:0 "Hello"\n key_b:1 "World"\n';
     const out = buildTranslation(src, "german");
     expect(out.startsWith(BOM + "l_german:")).toBe(true);
-    expect(out).toContain(' # section');
+    expect(out).toContain(" # section");
     // Values are blanked; the source text stays visible as an inline comment.
     expect(out).toContain('key_a:0 "" # english: Hello');
     expect(out).not.toContain('key_a:0 "Hello"');

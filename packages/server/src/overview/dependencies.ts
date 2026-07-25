@@ -19,11 +19,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type {
-  DependenciesResult,
-  DependencyGroup,
-  DependencyItem,
-} from "@paradox-lsp/protocol/protocol";
+import type { DependenciesResult, DependencyGroup, DependencyItem } from "@paradox-lsp/protocol/protocol";
 import type { Definition } from "@paradox-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";

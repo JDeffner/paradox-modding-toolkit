@@ -76,7 +76,7 @@ function scriptSymbols(document: TextDocument): DocumentSymbol[] {
     }
     symbols.push({
       name,
-      detail: isEvent ? childScalar(stmts, "type") ?? undefined : undefined,
+      detail: isEvent ? (childScalar(stmts, "type") ?? undefined) : undefined,
       kind: isEvent ? SymbolKind.Event : SymbolKind.Function,
       range: toLspRange(lineIndex, stmt.range),
       selectionRange: toLspRange(lineIndex, stmt.key.range),

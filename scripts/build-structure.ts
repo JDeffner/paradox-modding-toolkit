@@ -72,7 +72,10 @@ function harvest(text: string): { topLevel: KeySpec[]; blocks: Record<string, Ke
       let inlineDoc = "";
       const hash = rhs.indexOf("#");
       if (hash >= 0) {
-        inlineDoc = rhs.slice(hash + 1).replace(/^#+\s?/, "").trim();
+        inlineDoc = rhs
+          .slice(hash + 1)
+          .replace(/^#+\s?/, "")
+          .trim();
         rhs = rhs.slice(0, hash);
       }
       const docParts = [...pending, inlineDoc].filter(Boolean);

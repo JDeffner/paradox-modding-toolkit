@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  hasUtf8Bom,
-  isValidUtf8,
-  decode,
-} from "../../src/parser/index";
+import { hasUtf8Bom, isValidUtf8, decode } from "../../src/parser/index";
 
 function bytes(...b: number[]): Uint8Array {
   return new Uint8Array(b);

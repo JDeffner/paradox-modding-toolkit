@@ -163,12 +163,7 @@ export function expandWidget(
   return { baseKey: base, statements };
 }
 
-function spliceTemplates(
-  statements: Statement[],
-  defs: GuiDefs,
-  out: Statement[],
-  depth: number
-): void {
+function spliceTemplates(statements: Statement[], defs: GuiDefs, out: Statement[], depth: number): void {
   if (depth > MAX_DEPTH) return;
   for (const stmt of statements) {
     if (
@@ -232,7 +227,10 @@ export interface GuiBlockSite {
  * FIOS spirit); `blockoverride` declarations inside templates re-expose the
  * same name and count too.
  */
-export function collectOverridableBlocks(root: ResolvedGuiDef, sources: GuiDefs[]): Map<string, GuiBlockSite> {
+export function collectOverridableBlocks(
+  root: ResolvedGuiDef,
+  sources: GuiDefs[]
+): Map<string, GuiBlockSite> {
   const out = new Map<string, GuiBlockSite>();
   const seen = new Set<string>();
   const walk = (statements: Statement[], file: string | undefined, depth: number): void => {
@@ -255,7 +253,11 @@ export function collectOverridableBlocks(root: ResolvedGuiDef, sources: GuiDefs[
         walk(stmt.value.statements, file, depth + 1);
         continue;
       }
-      if (stmt.kind === "assignment" && stmt.key.text.toLowerCase() === "using" && stmt.value?.kind === "scalar") {
+      if (
+        stmt.kind === "assignment" &&
+        stmt.key.text.toLowerCase() === "using" &&
+        stmt.value?.kind === "scalar"
+      ) {
         const tplName = stmt.value.text;
         if (!seen.has(`t:${tplName}`)) {
           seen.add(`t:${tplName}`);

@@ -40,7 +40,9 @@ export async function createTranslationCommand(cfg: Ck3Config, log: (msg: string
 
   const present = languagesInMod(locDir);
   if (present.length === 0) {
-    void vscode.window.showWarningMessage("CK3: no localization files with a language marker found in the mod.");
+    void vscode.window.showWarningMessage(
+      "CK3: no localization files with a language marker found in the mod."
+    );
     return;
   }
 

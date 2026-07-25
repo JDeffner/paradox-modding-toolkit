@@ -100,7 +100,7 @@ export function provideSemanticTokens(
     const field = refFields?.get(key.text);
     if (!field) {
       // Pattern families (has_*_flag, is_in_list) — scalar form only.
-      return refFields && form === "scalar" ? dynamicRefKinds(key.text) ?? undefined : undefined;
+      return refFields && form === "scalar" ? (dynamicRefKinds(key.text) ?? undefined) : undefined;
     }
     return field.form !== (form === "scalar" ? "list" : "scalar") ? field.kinds : undefined;
   };

@@ -63,7 +63,9 @@ export async function createTranslationModCommand(cfg: Ck3Config, log: (msg: str
 
   // 2. Languages: source from what the mod actually ships, target from the rest.
   const locFiles = listFiles(path.join(sourceRoot, "localization"), ".yml");
-  const present = [...new Set(locFiles.map(detectLocFileLanguage).filter((l): l is string => l !== null))].sort();
+  const present = [
+    ...new Set(locFiles.map(detectLocFileLanguage).filter((l): l is string => l !== null)),
+  ].sort();
   if (present.length === 0) {
     void vscode.window.showWarningMessage("CK3: no localization files with a language marker in that mod.");
     return;

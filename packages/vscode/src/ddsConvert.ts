@@ -67,9 +67,16 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
           progress.report({ message: name });
           try {
             const bytes = await vscode.workspace.fs.readFile(file);
-            const decoded = await decoder.decode(name, `data:${EXT_MIME[extOf(file)]};base64,${Buffer.from(bytes).toString("base64")}`);
+            const decoded = await decoder.decode(
+              name,
+              `data:${EXT_MIME[extOf(file)]};base64,${Buffer.from(bytes).toString("base64")}`
+            );
             const format: DdsEncodeFormat =
-              formatPick.format === "auto" ? (hasTransparency(decoded.rgba) ? "bc3" : "bc1") : formatPick.format;
+              formatPick.format === "auto"
+                ? hasTransparency(decoded.rgba)
+                  ? "bc3"
+                  : "bc1"
+                : formatPick.format;
             const target = file.with({ path: file.path.replace(/\.[^.]+$/, ".dds") });
             if (await exists(target)) {
               const answer = await vscode.window.showWarningMessage(
@@ -144,16 +151,25 @@ class WebviewDecoder {
       { enableScripts: true, localResourceRoots: [] }
     );
     panel.webview.html = decoderHtml();
-    panel.webview.onDidReceiveMessage((msg: { type: string; id: string; width?: number; height?: number; data?: string; message?: string }) => {
-      const waiter = this.waiters.get(msg.id);
-      if (!waiter) return;
-      this.waiters.delete(msg.id);
-      if (msg.type === "pixels" && msg.data !== undefined) {
-        waiter.resolve({ width: msg.width!, height: msg.height!, rgba: Buffer.from(msg.data, "base64") });
-      } else {
-        waiter.reject(new Error(msg.message ?? "decode failed"));
+    panel.webview.onDidReceiveMessage(
+      (msg: {
+        type: string;
+        id: string;
+        width?: number;
+        height?: number;
+        data?: string;
+        message?: string;
+      }) => {
+        const waiter = this.waiters.get(msg.id);
+        if (!waiter) return;
+        this.waiters.delete(msg.id);
+        if (msg.type === "pixels" && msg.data !== undefined) {
+          waiter.resolve({ width: msg.width!, height: msg.height!, rgba: Buffer.from(msg.data, "base64") });
+        } else {
+          waiter.reject(new Error(msg.message ?? "decode failed"));
+        }
       }
-    });
+    );
     panel.onDidDispose(() => {
       this.panel = null;
       for (const w of this.waiters.values()) w.reject(new Error("converter closed"));

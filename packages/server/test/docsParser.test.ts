@@ -25,7 +25,10 @@ describe("parseLog", () => {
   });
 
   it("parses event_targets input/output scopes", () => {
-    const tokens = parseLog(fs.readFileSync(path.join(FIXTURE_LOGS, "event_targets.log"), "utf8"), "event_target");
+    const tokens = parseLog(
+      fs.readFileSync(path.join(FIXTURE_LOGS, "event_targets.log"), "utf8"),
+      "event_target"
+    );
     const culture = tokens.find((t) => t.name === "culture")!;
     expect(culture.scopes).toContain("input: character");
     expect(culture.scopes).toContain("output: culture");

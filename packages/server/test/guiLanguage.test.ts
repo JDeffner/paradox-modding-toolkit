@@ -79,7 +79,7 @@ describe("GUI completion", () => {
   });
 
   it("unknown value positions stay quiet (no soup)", () => {
-    const { items } = provideAt(makeData(), 'widget = {\n\ttexture = |\n}');
+    const { items } = provideAt(makeData(), "widget = {\n\ttexture = |\n}");
     expect(items).toHaveLength(0);
   });
 
@@ -130,7 +130,7 @@ describe("GUI completion", () => {
 
 describe("GUI hover", () => {
   it("widget type hover shows usage and common properties", () => {
-    const text = "flowcontainer = {\n\tname = \"x\"\n}";
+    const text = 'flowcontainer = {\n\tname = "x"\n}';
     const doc = TextDocument.create(uri(), "paradox-gui", 1, text);
     const hover = provideGuiHover(makeData(), doc, { line: 0, character: 3 });
     expect(hover).not.toBeNull();

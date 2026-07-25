@@ -92,7 +92,7 @@ const LOC_YML =
   "﻿l_english:\n" +
   ' smoke.1.t:0 "Smoke"\n' +
   ' smoke.1.a:0 "OK"\n' +
-  ' smoke.1.desc:0 "Hi [ROOT.Char.Custom2(\'SmokeCustom\', scope:host)]"\n';
+  " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n";
 
 function toUri(p: string): string {
   return "file:///" + p.replace(/\\/g, "/").replace(/^\//, "");
@@ -159,8 +159,10 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
         },
       },
     });
-    expect((init as { capabilities: { completionProvider: { resolveProvider: boolean } } }).capabilities
-      .completionProvider.resolveProvider).toBe(true);
+    expect(
+      (init as { capabilities: { completionProvider: { resolveProvider: boolean } } }).capabilities
+        .completionProvider.resolveProvider
+    ).toBe(true);
     await conn.sendNotification("initialized", {});
 
     conn.sendNotification("textDocument/didOpen", {
@@ -201,7 +203,10 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     const result = (await conn.sendRequest("textDocument/completion", {
       textDocument: { uri: eventsUri },
       position: { line: 6, character: 2 },
-    })) as { isIncomplete: boolean; items: Array<{ label: string; documentation?: unknown; data?: unknown }> };
+    })) as {
+      isIncomplete: boolean;
+      items: Array<{ label: string; documentation?: unknown; data?: unknown }>;
+    };
     expect(Array.isArray(result.items)).toBe(true);
     const labels = result.items.map((i) => i.label);
     expect(labels).toContain("my_smoke_effect");
@@ -214,7 +219,8 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     const resolved = (await conn.sendRequest("completionItem/resolve", item)) as {
       documentation?: { value?: string } | string;
     };
-    const doc = typeof resolved.documentation === "string" ? resolved.documentation : resolved.documentation?.value;
+    const doc =
+      typeof resolved.documentation === "string" ? resolved.documentation : resolved.documentation?.value;
     expect(doc).toContain("Gives gold");
   });
 

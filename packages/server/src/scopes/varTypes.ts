@@ -156,7 +156,11 @@ export function variableTypes(
   if (cached && cached.revision === data.index.revision) return cached.info;
   const info = buildVariableTypes(
     data.index.entries(
-      (d) => d.kind in VAR_KIND_PREFIX || d.kind in LIST_KIND_PREFIX || d.kind === "list" || d.kind === "saved_scope"
+      (d) =>
+        d.kind in VAR_KIND_PREFIX ||
+        d.kind in LIST_KIND_PREFIX ||
+        d.kind === "list" ||
+        d.kind === "saved_scope"
     ),
     data.scopeModel,
     rootScopesForFile
@@ -254,8 +258,14 @@ export function resolveValueExpr(
   const first = parts[0];
   if (first === "root") {
     current = rootScopesForFile(file);
-  } else if (first.startsWith("scope:") || first.startsWith("var:") || first.startsWith("local_var:") ||
-             first.startsWith("global_var:") || first === "this" || first === "prev") {
+  } else if (
+    first.startsWith("scope:") ||
+    first.startsWith("var:") ||
+    first.startsWith("local_var:") ||
+    first.startsWith("global_var:") ||
+    first === "this" ||
+    first === "prev"
+  ) {
     return null; // runtime anchor — unknowable statically
   } else {
     // Global/data link anchor: culture:x, faith:x, character:123, title:k_x …

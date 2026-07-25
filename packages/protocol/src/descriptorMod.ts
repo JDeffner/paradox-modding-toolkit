@@ -223,7 +223,11 @@ export function parseDescriptor(text: string): DescriptorEntry[] {
 // ---- validation ------------------------------------------------------------------
 
 export interface DescriptorIssue {
-  code: "descriptor-missing-field" | "descriptor-unknown-key" | "descriptor-duplicate-key" | "descriptor-path-ignored";
+  code:
+    | "descriptor-missing-field"
+    | "descriptor-unknown-key"
+    | "descriptor-duplicate-key"
+    | "descriptor-path-ignored";
   severity: "error" | "warning";
   line: number;
   startCol: number;

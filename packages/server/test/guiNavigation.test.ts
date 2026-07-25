@@ -98,7 +98,7 @@ describe("gui go-to-definition", () => {
   }
 
   it("using = Template jumps to the template declaration in the same doc", () => {
-    const text = LIB + '\nwindow = {\n\tusing = Cell|Header\n}\n';
+    const text = LIB + "\nwindow = {\n\tusing = Cell|Header\n}\n";
     const locs = definitionAt(text)!;
     expect(locs).toHaveLength(1);
     expect(locs[0].range.start.line).toBe(1); // template CellHeader
@@ -136,8 +136,8 @@ describe("gui go-to-definition", () => {
 
 describe("FIOS merge keeps provenance", () => {
   it("first definition wins and keeps its file", () => {
-    const a = collectGuiDefs("template T { block \"a\" {} }", undefined, "a.gui");
-    const b = collectGuiDefs("template T { block \"b\" {} }", undefined, "b.gui");
+    const a = collectGuiDefs('template T { block "a" {} }', undefined, "a.gui");
+    const b = collectGuiDefs('template T { block "b" {} }', undefined, "b.gui");
     const merged = emptyGuiDefs();
     mergeGuiDefs(merged, a);
     mergeGuiDefs(merged, b);

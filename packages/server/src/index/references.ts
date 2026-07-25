@@ -222,13 +222,23 @@ export function extractReferences(
       if (value.kind === "scalar" && !value.quoted) nameScalar = value;
       else if (value.kind === "block" && kind === "flag") {
         for (const s of value.statements) {
-          if (s.kind === "assignment" && !s.key.quoted && s.key.text === "flag" && s.value?.kind === "scalar") {
+          if (
+            s.kind === "assignment" &&
+            !s.key.quoted &&
+            s.key.text === "flag" &&
+            s.value?.kind === "scalar"
+          ) {
             nameScalar = s.value;
             break;
           }
         }
       }
-      if (nameScalar && !nameScalar.quoted && NAME_OK.test(nameScalar.text) && !nameScalar.text.includes(":")) {
+      if (
+        nameScalar &&
+        !nameScalar.quoted &&
+        NAME_OK.test(nameScalar.text) &&
+        !nameScalar.text.includes(":")
+      ) {
         const def: Definition = {
           name: nameScalar.text,
           kind,
@@ -250,7 +260,7 @@ export function extractReferences(
     // set_variable = { name = x value = y } / set_variable = x → implicit
     // definition(s) in the right namespace; list set-sites dual-index (see
     // VARIABLE_SET_KINDS docs in the shared schema).
-    const setKind = key !== null ? VARIABLE_SET_KINDS[key] ?? VARIABLE_LIST_SET_KINDS[key] : undefined;
+    const setKind = key !== null ? (VARIABLE_SET_KINDS[key] ?? VARIABLE_LIST_SET_KINDS[key]) : undefined;
     if (key !== null && setKind && value) {
       let nameScalar: ScalarNode | null = null;
       let exprScalar: ScalarNode | null = null;
@@ -263,7 +273,12 @@ export function extractReferences(
           else if (s.key.text === "value" || s.key.text === "target") exprScalar = s.value;
         }
       }
-      if (nameScalar && NAME_OK.test(nameScalar.text) && !nameScalar.quoted && !nameScalar.text.includes(":")) {
+      if (
+        nameScalar &&
+        NAME_OK.test(nameScalar.text) &&
+        !nameScalar.quoted &&
+        !nameScalar.text.includes(":")
+      ) {
         const line = lines.positionAt(nameScalar.range.start).line;
         const container = topLevelName(ancestors);
         // Only true set-sites carry the value expression (change_* holds a delta).
@@ -290,13 +305,23 @@ export function extractReferences(
       if (value.kind === "scalar" && !value.quoted) nameScalar = value;
       else if (value.kind === "block") {
         for (const s of value.statements) {
-          if (s.kind === "assignment" && !s.key.quoted && s.key.text === "name" && s.value?.kind === "scalar") {
+          if (
+            s.kind === "assignment" &&
+            !s.key.quoted &&
+            s.key.text === "name" &&
+            s.value?.kind === "scalar"
+          ) {
             nameScalar = s.value;
             break;
           }
         }
       }
-      if (nameScalar && !nameScalar.quoted && !nameScalar.text.includes(":") && !nameScalar.text.includes("$")) {
+      if (
+        nameScalar &&
+        !nameScalar.quoted &&
+        !nameScalar.text.includes(":") &&
+        !nameScalar.text.includes("$")
+      ) {
         // List reads accept only lists; scalar reads accept both (has_variable
         // is true for a list variable).
         const kinds = readKind.endsWith("_list") ? [readKind] : [readKind, `${readKind}_list`];
@@ -360,7 +385,12 @@ export function extractReferences(
       const field = schema.refFields.get(key);
       if (field && field.form !== "scalar") {
         for (const s of value.statements) {
-          if (s.kind === "value" && s.value.kind === "scalar" && !s.value.quoted && !s.value.text.includes(":")) {
+          if (
+            s.kind === "value" &&
+            s.value.kind === "scalar" &&
+            !s.value.quoted &&
+            !s.value.text.includes(":")
+          ) {
             pushRef(s.value.text, field.kinds, s.value.range.start);
           }
         }

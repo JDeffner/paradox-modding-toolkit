@@ -57,11 +57,20 @@ function scopeHints(
     if (stmt.kind !== "assignment" || stmt.key.quoted || stmt.value?.kind !== "block") return;
     const key = stmt.key.text.toLowerCase();
     const changes =
-      /^(?:every|any|random|ordered)_/.test(key) || key.startsWith("scope:") || data.scopeModel.links.has(key);
+      /^(?:every|any|random|ordered)_/.test(key) ||
+      key.startsWith("scope:") ||
+      data.scopeModel.links.has(key);
     if (!changes) return;
     const pos = lineIndex.positionAt(stmt.value.openBrace + 1);
     if (pos.line < range.start.line || pos.line > range.end.line) return;
-    const inference = inferScopeAt(result, stmt.value.openBrace + 1, data.scopeModel, rootScopes, savedScopes, ictx);
+    const inference = inferScopeAt(
+      result,
+      stmt.value.openBrace + 1,
+      data.scopeModel,
+      rootScopes,
+      savedScopes,
+      ictx
+    );
     if (!inference.scopes || inference.scopes.size === 0) return;
     hints.push({
       position: pos,

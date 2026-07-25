@@ -156,7 +156,7 @@ describe("completion v3 — value blocks (ai_chance, ai_will_do, weight)", () =>
     expect(labels).not.toContain("add_gold");
     expect(labels).not.toContain("save_scope_as");
     // Math keys are the top tier.
-    const sorted = [...items].sort((a, b) => (a.sortText ?? a.label) < (b.sortText ?? b.label) ? -1 : 1);
+    const sorted = [...items].sort((a, b) => ((a.sortText ?? a.label) < (b.sortText ?? b.label) ? -1 : 1));
     expect(sorted[0].label).toBe("value");
   });
 

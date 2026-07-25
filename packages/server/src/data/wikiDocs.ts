@@ -148,7 +148,6 @@ export const WIKI_FILES: Array<{ file: string; parse: (md: string) => TokenData[
   { file: "Scopes_list.md", parse: parseWikiEventTargets },
 ];
 
-
 /** Parse all bundled wiki list files found in `dir`. Missing files are skipped. */
 export function loadWikiTokens(dir: string): TokenData[] {
   const tokens: TokenData[] = [];

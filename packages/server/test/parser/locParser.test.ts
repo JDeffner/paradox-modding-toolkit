@@ -22,20 +22,16 @@ describe("parseLoc — happy path", () => {
 
     expect(k1.key).toBe("other_key");
     expect(k1.version).toBeNull();
-    expect(text.slice(k1.valueRange.start, k1.valueRange.end)).toBe(
-      "no version number"
-    );
+    expect(text.slice(k1.valueRange.start, k1.valueRange.end)).toBe("no version number");
 
     expect(k2.key).toBe("escaped");
     expect(k2.version).toBe(1);
     // value range covers text inside quotes (escapes not unescaped)
-    expect(text.slice(k2.valueRange.start, k2.valueRange.end)).toBe(
-      'he said \\"hi\\" to me'
-    );
+    expect(text.slice(k2.valueRange.start, k2.valueRange.end)).toBe('he said \\"hi\\" to me');
   });
 
   it("key ranges slice out the key exactly", () => {
-    const text = "l_english:\n my.key-name:0 \"v\"\n";
+    const text = 'l_english:\n my.key-name:0 "v"\n';
     const res = parseLoc(text);
     const e = res.entries[0];
     expect(text.slice(e.keyRange.start, e.keyRange.end)).toBe("my.key-name");
@@ -44,37 +40,35 @@ describe("parseLoc — happy path", () => {
 
 describe("parseLoc — BOM", () => {
   it("hadBom true and offsets still line up", () => {
-    const text = "﻿l_english:\n key:0 \"hello\"\n";
+    const text = '﻿l_english:\n key:0 "hello"\n';
     const res = parseLoc(text);
     expect(res.hadBom).toBe(true);
     expect(res.language).toBe("english");
     expect(res.entries).toHaveLength(1);
-    expect(text.slice(res.entries[0].valueRange.start, res.entries[0].valueRange.end)).toBe(
-      "hello"
-    );
+    expect(text.slice(res.entries[0].valueRange.start, res.entries[0].valueRange.end)).toBe("hello");
   });
 
   it("hadBom false when no BOM", () => {
-    const res = parseLoc("l_english:\n key:0 \"hi\"\n");
+    const res = parseLoc('l_english:\n key:0 "hi"\n');
     expect(res.hadBom).toBe(false);
   });
 });
 
 describe("parseLoc — errors", () => {
   it("tab-indent error", () => {
-    const text = "l_english:\n\tkey:0 \"v\"\n";
+    const text = 'l_english:\n\tkey:0 "v"\n';
     const res = parseLoc(text);
     expect(res.errors.some((e) => e.code === "tab-indent")).toBe(true);
   });
 
   it("missing header", () => {
-    const res = parseLoc(" key:0 \"v\"\n");
+    const res = parseLoc(' key:0 "v"\n');
     expect(res.errors.some((e) => e.code === "no-header")).toBe(true);
     expect(res.language).toBeNull();
   });
 
   it("content before header", () => {
-    const text = "garbage line\nl_english:\n key:0 \"v\"\n";
+    const text = 'garbage line\nl_english:\n key:0 "v"\n';
     const res = parseLoc(text);
     expect(res.errors.some((e) => e.code === "content-before-header")).toBe(true);
     expect(res.language).toBe("english");
@@ -82,7 +76,7 @@ describe("parseLoc — errors", () => {
   });
 
   it("bad entry", () => {
-    const text = "l_english:\n this is not an entry\n key:0 \"ok\"\n";
+    const text = 'l_english:\n this is not an entry\n key:0 "ok"\n';
     const res = parseLoc(text);
     expect(res.errors.some((e) => e.code === "bad-entry")).toBe(true);
     expect(res.entries).toHaveLength(1);
@@ -95,8 +89,7 @@ describe("parseLoc — errors", () => {
   });
 
   it("comments and blank lines are ignored", () => {
-    const text =
-      "# top comment\nl_english:\n\n # indented comment\n key:0 \"v\"\n\n";
+    const text = '# top comment\nl_english:\n\n # indented comment\n key:0 "v"\n\n';
     const res = parseLoc(text);
     expect(res.errors).toHaveLength(0);
     expect(res.entries).toHaveLength(1);

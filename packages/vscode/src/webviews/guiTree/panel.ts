@@ -61,7 +61,10 @@ export class GuiTreePanel {
   }
 
   /** Create or reveal the singleton panel and load the tree for `source`. */
-  static show(fetchTree: (uri: vscode.Uri, text: string) => Promise<GuiTree>, source: vscode.TextDocument): void {
+  static show(
+    fetchTree: (uri: vscode.Uri, text: string) => Promise<GuiTree>,
+    source: vscode.TextDocument
+  ): void {
     if (GuiTreePanel.instance) {
       const inst = GuiTreePanel.instance;
       inst.sourceUri = source.uri;

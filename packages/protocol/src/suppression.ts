@@ -154,11 +154,7 @@ function mergeSuppression(map: InlineSuppressions, line: number, codes: string[]
 }
 
 /** True when line `line` has an inline suppression covering `code`. */
-export function isSuppressedInline(
-  map: InlineSuppressions,
-  line: number,
-  code: string | undefined
-): boolean {
+export function isSuppressedInline(map: InlineSuppressions, line: number, code: string | undefined): boolean {
   if (!map.has(line)) return false;
   const codes = map.get(line) ?? null;
   if (codes === null) return true; // bare `# ck3m:ignore` suppresses all

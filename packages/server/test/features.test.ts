@@ -86,7 +86,11 @@ describe("localization structural diagnostics", () => {
   });
 
   it("flags the localisation/ (British) folder", () => {
-    const diags = locDiags('l_english:\n key:0 "v"\n', `${MOD}\\localisation\\english\\mine_l_english.yml`, true);
+    const diags = locDiags(
+      'l_english:\n key:0 "v"\n',
+      `${MOD}\\localisation\\english\\mine_l_english.yml`,
+      true
+    );
     expect(diags.some((d) => d.code === "wrong-localization-folder")).toBe(true);
   });
 

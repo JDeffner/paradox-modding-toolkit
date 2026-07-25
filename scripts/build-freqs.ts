@@ -29,7 +29,9 @@ const NAME_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const gamePath = devPath("gamePath");
 const modPath = process.argv[2] ?? devPath("corpusPath");
 if (!gamePath && !modPath) {
-  console.error("usage: build-freqs [modCorpusDir]  (needs gamePath and/or corpusPath — see dev-paths.example.json)");
+  console.error(
+    "usage: build-freqs [modCorpusDir]  (needs gamePath and/or corpusPath — see dev-paths.example.json)"
+  );
   process.exit(1);
 }
 
@@ -57,10 +59,7 @@ function collect(dir: string, out: string[]): void {
 }
 
 /** Same mapping the eval harness/completion use: file kind + block nesting. */
-function classifyPosition(
-  entryKind: string | null,
-  enclosing: string[]
-): FreqContext | null {
+function classifyPosition(entryKind: string | null, enclosing: string[]): FreqContext | null {
   const depth = enclosing.length;
   if (depth === 1) {
     if (entryKind === "event") return "event_top";

@@ -20,11 +20,7 @@ export interface LocEntry {
 }
 
 export type LocErrorCode =
-  | "no-header"
-  | "bad-entry"
-  | "tab-indent"
-  | "unterminated-value"
-  | "content-before-header";
+  "no-header" | "bad-entry" | "tab-indent" | "unterminated-value" | "content-before-header";
 
 export interface LocError {
   code: LocErrorCode;
@@ -83,11 +79,7 @@ export function parseLoc(text: string): LocParseResult {
     // Compute where the next line starts (handle \r\n).
     let nextStart = lineEnd;
     if (nextStart < len) {
-      if (
-        text.charCodeAt(nextStart) === 13 &&
-        nextStart + 1 < len &&
-        text.charCodeAt(nextStart + 1) === 10
-      ) {
+      if (text.charCodeAt(nextStart) === 13 && nextStart + 1 < len && text.charCodeAt(nextStart + 1) === 10) {
         nextStart += 2;
       } else {
         nextStart += 1;
@@ -164,8 +156,7 @@ export function parseLoc(text: string): LocParseResult {
       // Non-blank, non-comment content before the header.
       errors.push({
         code: "content-before-header",
-        message:
-          "Content appears before the localization header (e.g. `l_english:`).",
+        message: "Content appears before the localization header (e.g. `l_english:`).",
         range: { start: base + contentStart, end: base + line.length },
       });
       return;
@@ -191,12 +182,7 @@ export function parseLoc(text: string): LocParseResult {
     parseEntry(trimmed, base + contentStart, line, base);
   }
 
-  function parseEntry(
-    entryText: string,
-    entryBase: number,
-    fullLine: string,
-    lineBase: number
-  ): void {
+  function parseEntry(entryText: string, entryBase: number, fullLine: string, lineBase: number): void {
     // entryBase = offset in `text` of entryText[0].
     let j = 0;
     // Read key.
@@ -293,7 +279,7 @@ export function parseLoc(text: string): LocParseResult {
   function badEntry(fullLine: string, lineBase: number): void {
     errors.push({
       code: "bad-entry",
-      message: "Malformed localization entry; expected `key: \"value\"`.",
+      message: 'Malformed localization entry; expected `key: "value"`.',
       range: { start: lineBase, end: lineBase + fullLine.length },
     });
   }

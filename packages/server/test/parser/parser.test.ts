@@ -47,9 +47,7 @@ my_event = {
       if (stmt.kind === "assignment") {
         // key text matches its slice
         expect(text.slice(stmt.key.range.start, stmt.key.range.end)).toBe(
-          stmt.key.quoted
-            ? `"${stmt.key.text}"`
-            : stmt.key.text
+          stmt.key.quoted ? `"${stmt.key.text}"` : stmt.key.text
         );
       }
     });
@@ -172,7 +170,7 @@ describe("GUI style", () => {
     expect(gui.value?.kind).toBe("block");
   });
 
-  it("quoted keys: blockoverride \"top\" { }", () => {
+  it('quoted keys: blockoverride "top" { }', () => {
     // Parses as: bare value `blockoverride`, then GUI-style `"top" { }` where
     // the quoted scalar is the key of an op-less block assignment.
     const { root, errors } = parseScript('blockoverride "top" { }');
@@ -215,16 +213,10 @@ describe("special word forms", () => {
   });
 
   it("dates, negatives, dollar params", () => {
-    expect((firstAssignment("date = 1066.9.15").value as ScalarNode).text).toBe(
-      "1066.9.15"
-    );
+    expect((firstAssignment("date = 1066.9.15").value as ScalarNode).text).toBe("1066.9.15");
     expect((firstAssignment("x = -0.5").value as ScalarNode).text).toBe("-0.5");
-    expect((firstAssignment("x = $PARAM$").value as ScalarNode).text).toBe(
-      "$PARAM$"
-    );
-    expect(
-      (firstAssignment("x = culture:czech").value as ScalarNode).text
-    ).toBe("culture:czech");
+    expect((firstAssignment("x = $PARAM$").value as ScalarNode).text).toBe("$PARAM$");
+    expect((firstAssignment("x = culture:czech").value as ScalarNode).text).toBe("culture:czech");
   });
 
   it("apostrophe words", () => {
@@ -247,9 +239,7 @@ describe("special word forms", () => {
   });
 
   it("comments in awkward places", () => {
-    const { root, comments, errors } = parseScript(
-      "a = # inline\n b\nc = { # inside\n d = 1 }"
-    );
+    const { root, comments, errors } = parseScript("a = # inline\n b\nc = { # inside\n d = 1 }");
     expect(errors).toHaveLength(0);
     expect(comments.length).toBe(2);
     const a = root.statements[0] as AssignmentNode;

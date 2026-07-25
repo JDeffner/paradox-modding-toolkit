@@ -46,7 +46,9 @@ export function extractDefinitions(
 
   // Scripted effects/triggers/modifiers can declare $PARAM$ parameters in their body.
   const harvestParams =
-    entry.kind === "scripted_effect" || entry.kind === "scripted_trigger" || entry.kind === "scripted_modifier";
+    entry.kind === "scripted_effect" ||
+    entry.kind === "scripted_trigger" ||
+    entry.kind === "scripted_modifier";
   const PARAM = /\$([A-Za-z0-9_]+)(?:\|[^$\n]*)?\$/g;
 
   // Names declared INSIDE a definition body but referenced like definitions
@@ -100,7 +102,13 @@ export function extractDefinitions(
         }
         if (entry.kind === "game_concept" && stmt.value?.kind === "block") {
           for (const s of stmt.value.statements) {
-            if (s.kind !== "assignment" || s.key.quoted || s.key.text !== "alias" || s.value?.kind !== "block") continue;
+            if (
+              s.kind !== "assignment" ||
+              s.key.quoted ||
+              s.key.text !== "alias" ||
+              s.value?.kind !== "block"
+            )
+              continue;
             for (const el of s.value.statements) {
               if (el.kind !== "value" || el.value.kind !== "scalar" || el.value.quoted) continue;
               if (!DEF_NAME.test(el.value.text) || seenInnerNames.has(el.value.text)) continue;

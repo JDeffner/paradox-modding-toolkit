@@ -70,7 +70,11 @@ beforeAll(() => {
   data.index.addAll([
     at("det.1", "event", { line: 2 }),
     at("det.2", "event", { line: 42 }),
-    at("det.1.t", "loc_key", { file: path.join(dir, "det_l_english.yml"), line: 1, value: "A Detailed Event" }),
+    at("det.1.t", "loc_key", {
+      file: path.join(dir, "det_l_english.yml"),
+      line: 1,
+      value: "A Detailed Event",
+    }),
     at("det.1.a", "loc_key", { file: path.join(dir, "det_l_english.yml"), line: 2, value: "Take the gold" }),
     at("my_scripted_effect", "scripted_effect", { file: path.join(dir, "fx.txt"), line: 5 }),
     at("my_scripted_trigger", "scripted_trigger", { file: path.join(dir, "tr.txt"), line: 7 }),

@@ -11,14 +11,7 @@
  */
 
 /** Recognized structured tags (§E1). Unknown `@tags` render as prose. */
-export const KNOWN_DOC_TAGS = new Set([
-  "scope",
-  "param",
-  "saves",
-  "returns",
-  "example",
-  "deprecated",
-]);
+export const KNOWN_DOC_TAGS = new Set(["scope", "param", "saves", "returns", "example", "deprecated"]);
 
 /** One structured tag line: `@scope`, `@param NAME desc`, `@example`, … */
 export interface DocTag {

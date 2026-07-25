@@ -5,10 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { TextFormattingIndex, rgbCss } from "../src/data/textFormatting";
-import {
-  provideFormatTagCompletion,
-  provideFormatTagHover,
-} from "../src/features/locFormatting";
+import { provideFormatTagCompletion, provideFormatTagHover } from "../src/features/locFormatting";
 
 const BASE = `textformatting = {
 	format = { name = G format = "color:{0,1,0}" override = no }

@@ -133,7 +133,13 @@ describe("event override_* blocks (_events.info)", () => {
     expect(ctx?.block).toBe("override_background");
     expect(ctx?.keys.has("reference")).toBe(true);
     expect(ctx?.keys.has("trigger")).toBe(true);
-    for (const block of ["override_transition", "override_effect_2d", "override_icon", "override_header_background", "override_sound"]) {
+    for (const block of [
+      "override_transition",
+      "override_effect_2d",
+      "override_icon",
+      "override_header_background",
+      "override_sound",
+    ]) {
       const sub = ctxAt(`my.1 = {\n\t${block} = {\n\t\t|\n\t}\n}`);
       expect(sub?.keys.has("reference"), block).toBe(true);
     }
@@ -144,7 +150,14 @@ describe("event override_* blocks (_events.info)", () => {
     const text = 'my.1 = {\n\toverride_background = {\n\t\treference = "wilderness_mountains"\n\t}\n}';
     const doc = TextDocument.create(uri(), "paradox", 1, text);
     const col = text.split("\n")[2].indexOf("reference");
-    const hover = provideHover(data, doc, { line: 2, character: col + 1 }, new Set(["character"]), eventEntry, () => schema);
+    const hover = provideHover(
+      data,
+      doc,
+      { line: 2, character: col + 1 },
+      new Set(["character"]),
+      eventEntry,
+      () => schema
+    );
     expect(hover).not.toBeNull();
     const md = (hover!.contents as { value: string }).value;
     expect(md).toContain("event key");
@@ -154,7 +167,13 @@ describe("event override_* blocks (_events.info)", () => {
   it("completes event backgrounds after `reference = ` inside override_background", () => {
     const data = new ServerData();
     data.index.addAll([
-      { name: "wilderness_mountains", kind: "event_background", file: "01_event_backgrounds.txt", line: 0, source: "vanilla" },
+      {
+        name: "wilderness_mountains",
+        kind: "event_background",
+        file: "01_event_backgrounds.txt",
+        line: 0,
+        source: "vanilla",
+      },
     ]);
     const completion = new CompletionFeature(data, () => schema);
     const text = "my.1 = {\n\toverride_background = {\n\t\treference = \n\t}\n}";
@@ -222,10 +241,10 @@ describe("completion wiring (§B2/§B3)", () => {
     // Structure keys are the top slot tier ("0"); everything else is tier ≥ "1"
     // (Workstream C composed scheme "<T><F><S><label>"), so a structure key sorts
     // ahead of every non-structure item.
-    const sorted = [...items].sort((a, b) =>
-      (a.sortText ?? a.label).localeCompare(b.sortText ?? b.label)
+    const sorted = [...items].sort((a, b) => (a.sortText ?? a.label).localeCompare(b.sortText ?? b.label));
+    const structLabels = new Set(
+      items.filter((i) => i.kind === CompletionItemKind.Keyword).map((i) => i.label)
     );
-    const structLabels = new Set(items.filter((i) => i.kind === CompletionItemKind.Keyword).map((i) => i.label));
     const firstNonStruct = sorted.findIndex((i) => !structLabels.has(i.label));
     const isShownRank = sorted.findIndex((i) => i.label === "is_shown");
     if (firstNonStruct >= 0) expect(isShownRank).toBeLessThan(firstNonStruct);
@@ -262,7 +281,14 @@ describe("hover wiring (§B2/§B3)", () => {
     const text = "my_interaction = {\n\tis_shown = { scope:actor = { } }\n}";
     const doc = TextDocument.create(uri(), "paradox", 1, text);
     const col = text.split("\n")[1].indexOf("actor");
-    const hover = provideHover(data, doc, { line: 1, character: col + 1 }, new Set(["character"]), interactionEntry, () => schema);
+    const hover = provideHover(
+      data,
+      doc,
+      { line: 1, character: col + 1 },
+      new Set(["character"]),
+      interactionEntry,
+      () => schema
+    );
     expect(hover).not.toBeNull();
     const md = (hover!.contents as { value: string }).value;
     expect(md).toContain("scope:actor");
@@ -275,7 +301,14 @@ describe("hover wiring (§B2/§B3)", () => {
       "my_interaction = {\n\tredirect = { save_scope_as = my_target }\n\ton_accept = { scope:my_target = { } }\n}";
     const doc = TextDocument.create(uri(), "paradox", 1, text);
     const col = text.split("\n")[2].indexOf("my_target");
-    const hover = provideHover(data, doc, { line: 2, character: col + 1 }, new Set(["character"]), interactionEntry, () => schema);
+    const hover = provideHover(
+      data,
+      doc,
+      { line: 2, character: col + 1 },
+      new Set(["character"]),
+      interactionEntry,
+      () => schema
+    );
     const md = (hover!.contents as { value: string }).value;
     expect(md).toContain("Saved in this file");
   });

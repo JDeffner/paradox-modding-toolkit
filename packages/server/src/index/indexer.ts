@@ -215,7 +215,9 @@ interface IndexCacheFile {
   kinds: string[];
   files: string[];
   // [name, kindIdx, fileIdx, line, value|0, paramsSpaceJoined|0, doc|0, tags|0]
-  defs: Array<[string, number, number, number, string | Absent, string | Absent, string | Absent, CachedTags]>;
+  defs: Array<
+    [string, number, number, number, string | Absent, string | Absent, string | Absent, CachedTags]
+  >;
 }
 
 export function saveIndexCache(cacheFile: string, gameVersion: string, defs: Definition[]): void {
@@ -238,7 +240,16 @@ export function saveIndexCache(cacheFile: string, gameVersion: string, defs: Def
       fileIdx.set(def.file, fi);
     }
     const tags: CachedTags = def.tags && def.tags.length > 0 ? def.tags.map((t) => [t.tag, t.text]) : 0;
-    rows.push([def.name, ki, fi, def.line, def.value ?? 0, def.params ? def.params.join(" ") : 0, def.doc ?? 0, tags]);
+    rows.push([
+      def.name,
+      ki,
+      fi,
+      def.line,
+      def.value ?? 0,
+      def.params ? def.params.join(" ") : 0,
+      def.doc ?? 0,
+      tags,
+    ]);
   }
   const payload: IndexCacheFile = { cacheFormat: INDEX_CACHE_FORMAT, gameVersion, kinds, files, defs: rows };
   fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
@@ -253,7 +264,8 @@ export function loadIndexCache(cacheFile: string, expectedGameVersion: string): 
     return null;
   }
   if (payload.cacheFormat !== INDEX_CACHE_FORMAT || payload.gameVersion !== expectedGameVersion) return null;
-  if (!Array.isArray(payload.files) || !Array.isArray(payload.defs) || !Array.isArray(payload.kinds)) return null;
+  if (!Array.isArray(payload.files) || !Array.isArray(payload.defs) || !Array.isArray(payload.kinds))
+    return null;
   const defs: Definition[] = [];
   for (const [name, kindIdx, fileIdx, line, value, params, doc, tags] of payload.defs) {
     const kind = payload.kinds[kindIdx];

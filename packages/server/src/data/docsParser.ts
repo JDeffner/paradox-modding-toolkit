@@ -29,7 +29,8 @@ const SYNTAX_LINE = /^(?:<[^>]+>|[A-Za-z_][A-Za-z0-9_]*)\s*(?:[<>]=?|!=|=)/;
 // DocsLoadResult.templates downstream, never into the concrete token list.
 const TAG_LINE = /^Tag:\s*([A-Za-z0-9_.$]+)\s*(?:,\s*(.*))?$/;
 const SCOPE_LINE = /^(Supported [Ss]copes|Input [Ss]copes|Output [Ss]copes):\s*(.*)$/;
-const META_LINE = /^(Supported [Tt]argets|Targets?|Traits|Categories|Use [Aa]reas|Requires [Dd]ata|Wild[ _]?[Cc]ard|Global [Ll]ink):\s*(.*)$/;
+const META_LINE =
+  /^(Supported [Tt]argets|Targets?|Traits|Categories|Use [Aa]reas|Requires [Dd]ata|Wild[ _]?[Cc]ard|Global [Ll]ink):\s*(.*)$/;
 
 export function parseLog(content: string, kind: TokenKind): TokenData[] {
   const tokens: TokenData[] = [];
@@ -246,7 +247,8 @@ export function loadTokenData(logsDir: string, cacheFile: string, forceReparse =
   } catch {
     return fresh();
   }
-  if (cached.cacheFormat !== DOCS_CACHE_FORMAT || !cached.tokens || !cached.templates || !cached.mtimes) return fresh();
+  if (cached.cacheFormat !== DOCS_CACHE_FORMAT || !cached.tokens || !cached.templates || !cached.mtimes)
+    return fresh();
 
   // Cache is valid only if the exact same set of files exists with the same mtimes.
   const currentMtimes: Record<string, number> = {};
@@ -261,9 +263,14 @@ export function loadTokenData(logsDir: string, cacheFile: string, forceReparse =
   const cachedKeys = Object.keys(cached.mtimes).sort().join(",");
   const currentKeys = Object.keys(currentMtimes).sort().join(",");
   const same =
-    cachedKeys === currentKeys &&
-    Object.entries(currentMtimes).every(([f, t]) => cached.mtimes[f] === t);
+    cachedKeys === currentKeys && Object.entries(currentMtimes).every(([f, t]) => cached.mtimes[f] === t);
   if (!same) return fresh();
 
-  return { tokens: cached.tokens, templates: cached.templates, mtimes: cached.mtimes, missing, fromCache: true };
+  return {
+    tokens: cached.tokens,
+    templates: cached.templates,
+    mtimes: cached.mtimes,
+    missing,
+    fromCache: true,
+  };
 }

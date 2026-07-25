@@ -1,149 +1,91 @@
 {
-	"if / limit": {
-		"prefix": "if",
-		"body": [
-			"if = {",
-			"\tlimit = { ${1:condition} }",
-			"\t$0",
-			"}"
-		],
-		"description": "if block with a limit trigger"
-	},
-	"else_if / limit": {
-		"prefix": "elseif",
-		"body": [
-			"else_if = {",
-			"\tlimit = { ${1:condition} }",
-			"\t$0",
-			"}"
-		],
-		"description": "else_if block with a limit trigger"
-	},
-	"else": {
-		"prefix": "else",
-		"body": [
-			"else = {",
-			"\t$0",
-			"}"
-		],
-		"description": "else block"
-	},
-	"random_list": {
-		"prefix": "rl",
-		"body": [
-			"random_list = {",
-			"\t${1:50} = {",
-			"\t\t$2",
-			"\t}",
-			"\t${3:50} = {",
-			"\t\t$0",
-			"\t}",
-			"}"
-		],
-		"description": "random_list with two weighted branches"
-	},
-	"add_opinion": {
-		"prefix": "opinion",
-		"body": [
-			"add_opinion = {",
-			"\ttarget = ${1:scope:recipient}",
-			"\tmodifier = ${2:opinion_modifier}",
-			"\topinion = ${3:10}",
-			"}"
-		],
-		"description": "add_opinion modifier block"
-	},
-	"add_character_modifier (timed)": {
-		"prefix": "cmod",
-		"body": [
-			"add_character_modifier = {",
-			"\tmodifier = ${1:my_modifier}",
-			"\tdays = ${2:365}",
-			"}"
-		],
-		"description": "Timed add_character_modifier"
-	},
-	"trigger_event (days)": {
-		"prefix": "te",
-		"body": [
-			"trigger_event = { id = ${1:namespace.1} days = ${2:1} }$0"
-		],
-		"description": "trigger_event with a days delay"
-	},
-	"trigger_event (block)": {
-		"prefix": "teb",
-		"body": [
-			"trigger_event = {",
-			"\tid = ${1:namespace.1}",
-			"\tdays = ${2:{ 1 7 }}",
-			"}$0"
-		],
-		"description": "trigger_event block form"
-	},
-	"save_scope_as": {
-		"prefix": "ssa",
-		"body": [
-			"save_scope_as = ${1:my_scope}$0"
-		],
-		"description": "save_scope_as"
-	},
-	"hidden_effect": {
-		"prefix": "he",
-		"body": [
-			"hidden_effect = {",
-			"\t$0",
-			"}"
-		],
-		"description": "hidden_effect block"
-	},
-	"custom_tooltip": {
-		"prefix": "ctt",
-		"body": [
-			"custom_tooltip = {",
-			"\ttext = ${1:tooltip_key}",
-			"\t$0",
-			"}"
-		],
-		"description": "custom_tooltip block"
-	},
-	"every_ / random_ iterator": {
-		"prefix": "every",
-		"body": [
-			"${1|every,random,ordered,any|}_${2:vassal} = {",
-			"\tlimit = { ${3:condition} }",
-			"\t$0",
-			"}"
-		],
-		"description": "every_/random_/ordered_/any_ iterator with a limit"
-	},
-	"event option": {
-		"prefix": "option",
-		"body": [
-			"option = {",
-			"\tname = ${1:namespace_1_a}",
-			"\t$0",
-			"}"
-		],
-		"description": "Event option block"
-	},
-	"ai_chance with modifier": {
-		"prefix": "aichance",
-		"body": [
-			"ai_chance = {",
-			"\tbase = ${1:100}",
-			"\tmodifier = {",
-			"\t\tadd = ${2:10}",
-			"\t\t${3:condition}",
-			"\t}",
-			"}"
-		],
-		"description": "ai_chance with a modifier"
-	},
-	"scripted effect call": {
-		"prefix": "callfx",
-		"body": [
-			"${1:my_scripted_effect} = { ${2:PARAM} = ${3:value} }$0"
-		],
-		"description": "Call a scripted effect/trigger with a parameter"
-	}
+  "if / limit": {
+    "prefix": "if",
+    "body": ["if = {", "\tlimit = { ${1:condition} }", "\t$0", "}"],
+    "description": "if block with a limit trigger"
+  },
+  "else_if / limit": {
+    "prefix": "elseif",
+    "body": ["else_if = {", "\tlimit = { ${1:condition} }", "\t$0", "}"],
+    "description": "else_if block with a limit trigger"
+  },
+  "else": {
+    "prefix": "else",
+    "body": ["else = {", "\t$0", "}"],
+    "description": "else block"
+  },
+  "random_list": {
+    "prefix": "rl",
+    "body": ["random_list = {", "\t${1:50} = {", "\t\t$2", "\t}", "\t${3:50} = {", "\t\t$0", "\t}", "}"],
+    "description": "random_list with two weighted branches"
+  },
+  "add_opinion": {
+    "prefix": "opinion",
+    "body": [
+      "add_opinion = {",
+      "\ttarget = ${1:scope:recipient}",
+      "\tmodifier = ${2:opinion_modifier}",
+      "\topinion = ${3:10}",
+      "}"
+    ],
+    "description": "add_opinion modifier block"
+  },
+  "add_character_modifier (timed)": {
+    "prefix": "cmod",
+    "body": ["add_character_modifier = {", "\tmodifier = ${1:my_modifier}", "\tdays = ${2:365}", "}"],
+    "description": "Timed add_character_modifier"
+  },
+  "trigger_event (days)": {
+    "prefix": "te",
+    "body": ["trigger_event = { id = ${1:namespace.1} days = ${2:1} }$0"],
+    "description": "trigger_event with a days delay"
+  },
+  "trigger_event (block)": {
+    "prefix": "teb",
+    "body": ["trigger_event = {", "\tid = ${1:namespace.1}", "\tdays = ${2:{ 1 7 }}", "}$0"],
+    "description": "trigger_event block form"
+  },
+  "save_scope_as": {
+    "prefix": "ssa",
+    "body": ["save_scope_as = ${1:my_scope}$0"],
+    "description": "save_scope_as"
+  },
+  "hidden_effect": {
+    "prefix": "he",
+    "body": ["hidden_effect = {", "\t$0", "}"],
+    "description": "hidden_effect block"
+  },
+  "custom_tooltip": {
+    "prefix": "ctt",
+    "body": ["custom_tooltip = {", "\ttext = ${1:tooltip_key}", "\t$0", "}"],
+    "description": "custom_tooltip block"
+  },
+  "every_ / random_ iterator": {
+    "prefix": "every",
+    "body": ["${1|every,random,ordered,any|}_${2:vassal} = {", "\tlimit = { ${3:condition} }", "\t$0", "}"],
+    "description": "every_/random_/ordered_/any_ iterator with a limit"
+  },
+  "event option": {
+    "prefix": "option",
+    "body": ["option = {", "\tname = ${1:namespace_1_a}", "\t$0", "}"],
+    "description": "Event option block"
+  },
+  "ai_chance with modifier": {
+    "prefix": "aichance",
+    "body": [
+      "ai_chance = {",
+      "\tbase = ${1:100}",
+      "\tmodifier = {",
+      "\t\tadd = ${2:10}",
+      "\t\t${3:condition}",
+      "\t}",
+      "}"
+    ],
+    "description": "ai_chance with a modifier"
+  },
+  "scripted effect call": {
+    "prefix": "callfx",
+    "body": ["${1:my_scripted_effect} = { ${2:PARAM} = ${3:value} }$0"],
+    "description": "Call a scripted effect/trigger with a parameter"
+  }
 }

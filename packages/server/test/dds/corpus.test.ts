@@ -99,7 +99,7 @@ describe.skipIf(!GAME)("CK3 corpus", () => {
         const msg = (e as Error).message;
         // Only "unsupported format" (or clean truncation) is acceptable.
         expect(msg, `unexpected error for ${file}: ${msg}`).toMatch(
-          /unsupported format|truncated|not a valid DDS/,
+          /unsupported format|truncated|not a valid DDS/
         );
         if (/unsupported format/.test(msg)) cleanUnsupported++;
       }
@@ -118,7 +118,7 @@ describe.skipIf(!GAME)("CK3 corpus", () => {
     // eslint-disable-next-line no-console
     console.log(
       `\nOverall: ${overallOk}/${overallTotal} decoded (${overallRate}%), ` +
-        `clean-unsupported: ${cleanUnsupported}`,
+        `clean-unsupported: ${cleanUnsupported}`
     );
     // eslint-disable-next-line no-console
     console.log(`Trait icons: ${traitOk}/${traitTotal} decoded (${traitRate}%)\n`);

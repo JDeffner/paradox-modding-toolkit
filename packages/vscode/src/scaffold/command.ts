@@ -172,9 +172,7 @@ function materializeFile(modPath: string, file: ScaffoldFile): WriteOutcome {
     // existing file without it would silently drop the appended event.
     if (file.requiredHeader) {
       const norm = (s: string) => s.trim().replace(/\s+/g, " ");
-      const firstCode = existing
-        .split(/\r?\n/)
-        .find((l) => l.trim() !== "" && !l.trim().startsWith("#"));
+      const firstCode = existing.split(/\r?\n/).find((l) => l.trim() !== "" && !l.trim().startsWith("#"));
       if (norm(firstCode ?? "") !== norm(file.requiredHeader)) {
         existing = file.requiredHeader + eol + eol + existing;
       }

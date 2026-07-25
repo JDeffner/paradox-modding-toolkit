@@ -10,7 +10,10 @@ function ctxAt(snippet: string) {
 
 describe("detectContext", () => {
   it("reports trigger context inside trigger = { }", () => {
-    expect(ctxAt("my_event.1 = {\n\ttrigger = {\n\t\t|\n\t}\n}")).toEqual({ context: "trigger", keyword: "trigger" });
+    expect(ctxAt("my_event.1 = {\n\ttrigger = {\n\t\t|\n\t}\n}")).toEqual({
+      context: "trigger",
+      keyword: "trigger",
+    });
   });
 
   it("reports effect context inside immediate = { }", () => {
@@ -26,13 +29,15 @@ describe("detectContext", () => {
   });
 
   it("limit inside an effect iterator is trigger context", () => {
-    expect(ctxAt("immediate = {\n\tevery_child = {\n\t\tlimit = {\n\t\t\t|\n\t\t}\n\t}\n}").context).toBe("trigger");
+    expect(ctxAt("immediate = {\n\tevery_child = {\n\t\tlimit = {\n\t\t\t|\n\t\t}\n\t}\n}").context).toBe(
+      "trigger"
+    );
   });
 
   it("effect iterator body after the limit block is effect context", () => {
-    expect(ctxAt("immediate = {\n\tevery_child = {\n\t\tlimit = { is_adult = yes }\n\t\t|\n\t}\n}").context).toBe(
-      "effect"
-    );
+    expect(
+      ctxAt("immediate = {\n\tevery_child = {\n\t\tlimit = { is_adult = yes }\n\t\t|\n\t}\n}").context
+    ).toBe("effect");
   });
 
   it("any_ iterators are trigger context", () => {
@@ -51,11 +56,14 @@ describe("detectContext", () => {
 
   it("math keys opening a block yield value context anywhere", () => {
     // Script-value math embedded in an effect argument.
-    expect(ctxAt("immediate = {\n\tadd_gold = {\n\t\tvalue = {\n\t\t\t|\n\t\t}\n\t}\n}").context).toBe("value");
+    expect(ctxAt("immediate = {\n\tadd_gold = {\n\t\tvalue = {\n\t\t\t|\n\t\t}\n\t}\n}").context).toBe(
+      "value"
+    );
     expect(ctxAt("ai_will_do = {\n\tadd = {\n\t\t|\n\t}\n}").context).toBe("value");
     // limit inside math-if switches back to trigger grammar.
     expect(
-      ctxAt("some_weight = {\n\tadd = {\n\t\tif = {\n\t\t\tlimit = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}").context
+      ctxAt("some_weight = {\n\tadd = {\n\t\tif = {\n\t\t\tlimit = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}")
+        .context
     ).toBe("trigger");
   });
 

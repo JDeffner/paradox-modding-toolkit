@@ -2,11 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "CK3 Localization",
   "scopeName": "source.paradox-loc",
-  "patterns": [
-    { "include": "#comment" },
-    { "include": "#language-header" },
-    { "include": "#entry" }
-  ],
+  "patterns": [{ "include": "#comment" }, { "include": "#language-header" }, { "include": "#entry" }],
   "repository": {
     "comment": {
       "name": "comment.line.number-sign.paradox-loc",

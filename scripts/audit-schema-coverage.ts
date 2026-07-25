@@ -86,8 +86,7 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const covered = (dir: string): boolean =>
   CK3_SCHEMA.some((e) => dir === e.path || dir.startsWith(e.path + "/") || e.path.startsWith(dir + "/"));
-const intentional = (dir: string): boolean =>
-  INTENTIONAL.some((e) => dir === e || dir.startsWith(e + "/"));
+const intentional = (dir: string): boolean => INTENTIONAL.some((e) => dir === e || dir.startsWith(e + "/"));
 
 /** Does the folder's layout fit the standard `name = { ... }` extraction? */
 function probeFolder(dir: string): { files: number; defs: number; standard: boolean; sample: string[] } {

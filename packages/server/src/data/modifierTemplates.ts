@@ -122,7 +122,8 @@ export function expandModifierTemplates(
   const out: TemplateExpansion[] = [];
   for (const template of templates) {
     if (template.spec.values) {
-      for (const v of template.spec.values) out.push({ name: template.prefix + v + template.suffix, template });
+      for (const v of template.spec.values)
+        out.push({ name: template.prefix + v + template.suffix, template });
       continue;
     }
     const kind = template.spec.kind!;

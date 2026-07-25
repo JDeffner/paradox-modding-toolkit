@@ -66,12 +66,17 @@ const SCRIPT_ERROR_SEVERITY: Record<string, DiagnosticSeverity> = {
 
 function scriptErrorHint(code: string): string {
   const game = activeProfile().shortName;
-  if (code === "unclosed-brace") return ` ${game} silently ignores everything in the file after an unbalanced brace.`;
+  if (code === "unclosed-brace")
+    return ` ${game} silently ignores everything in the file after an unbalanced brace.`;
   if (code === "stray-close") return ` ${game} may misread the rest of the file.`;
   return "";
 }
 
-export function computeScriptDiagnostics(parse: ParseResult, lines: LineIndex, ctx: FileContext): Diagnostic[] {
+export function computeScriptDiagnostics(
+  parse: ParseResult,
+  lines: LineIndex,
+  ctx: FileContext
+): Diagnostic[] {
   const out: Diagnostic[] = [];
 
   for (const err of parse.errors) {
@@ -168,7 +173,8 @@ const LOC_ERROR_SEVERITY: Record<string, DiagnosticSeverity> = {
 
 function locErrorHint(code: string): string {
   if (code === "no-header") return " Without an l_<language>: header the game loads none of these entries.";
-  if (code === "tab-indent") return ` ${activeProfile().shortName} rejects tab indentation in localization files.`;
+  if (code === "tab-indent")
+    return ` ${activeProfile().shortName} rejects tab indentation in localization files.`;
   return "";
 }
 
@@ -179,7 +185,9 @@ export function computeLocDiagnostics(loc: LocParseResult, lines: LineIndex, ctx
 
   for (const err of loc.errors) {
     const severity = LOC_ERROR_SEVERITY[err.code] ?? DiagnosticSeverity.Warning;
-    out.push(diag(toRange(lines, err.range), severity, `loc-${err.code}`, err.message + locErrorHint(err.code)));
+    out.push(
+      diag(toRange(lines, err.range), severity, `loc-${err.code}`, err.message + locErrorHint(err.code))
+    );
   }
 
   // BOM is checked against the bytes on disk (editors strip it from the buffer text).

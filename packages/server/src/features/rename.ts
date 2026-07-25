@@ -4,7 +4,13 @@
  * definition lives in the mod are renameable — renaming a vanilla override
  * would silently un-override it.
  */
-import { ResponseError, type Position, type Range as LspRange, type TextEdit, type WorkspaceEdit } from "vscode-languageserver/node";
+import {
+  ResponseError,
+  type Position,
+  type Range as LspRange,
+  type TextEdit,
+  type WorkspaceEdit,
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import * as fs from "fs";
@@ -33,7 +39,10 @@ function targetAt(data: ServerData, document: TextDocument, position: Position):
 
   const defs = data.index.lookupAll(name);
   if (defs.length === 0) {
-    throw new ResponseError(0, `No indexed definition of "${name}" — only indexed names can be renamed safely.`);
+    throw new ResponseError(
+      0,
+      `No indexed definition of "${name}" — only indexed names can be renamed safely.`
+    );
   }
   const foreign = defs.find((d) => d.source !== "mod");
   if (foreign) {
@@ -102,7 +111,10 @@ export function provideRename(
   return { changes };
 }
 
-function readLine(def: Definition, readOpenDocument: (uri: string) => TextDocument | undefined): string | null {
+function readLine(
+  def: Definition,
+  readOpenDocument: (uri: string) => TextDocument | undefined
+): string | null {
   const uri = URI.file(def.file).toString();
   const open = readOpenDocument(uri);
   if (open) return getLineText(open, def.line);
@@ -116,7 +128,9 @@ function readLine(def: Definition, readOpenDocument: (uri: string) => TextDocume
 
 /** First word-boundary occurrence of `name` on the line. */
 function findNameOnLine(lineText: string, name: string): number {
-  const re = new RegExp(`(?<![A-Za-z0-9_.\\-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`);
+  const re = new RegExp(
+    `(?<![A-Za-z0-9_.\\-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`
+  );
   const m = re.exec(lineText);
   return m ? m.index : -1;
 }

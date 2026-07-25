@@ -15,7 +15,9 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const server = join(root, "packages", "server");
 const bundle = join(server, "dist", "server.js");
 if (!existsSync(bundle)) {
-  console.error("build-server-tarball: packages/server/dist/server.js missing — run `pnpm run compile` first.");
+  console.error(
+    "build-server-tarball: packages/server/dist/server.js missing — run `pnpm run compile` first."
+  );
   process.exit(1);
 }
 

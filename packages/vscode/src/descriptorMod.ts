@@ -309,10 +309,7 @@ export function registerDescriptorMod(
     if (!missingNotified) {
       missingNotified = true;
       void vscode.window
-        .showErrorMessage(
-          `CK3: this mod has no descriptor.mod (${modPath}).`,
-          "Create descriptor.mod"
-        )
+        .showErrorMessage(`CK3: this mod has no descriptor.mod (${modPath}).`, "Create descriptor.mod")
         .then((choice) => {
           if (choice) void vscode.commands.executeCommand("ck3.createDescriptor");
         });
@@ -340,7 +337,12 @@ export function registerDescriptorMod(
   };
 
   context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider(MOD_SELECTOR, new DescriptorCompletionProvider(getConfig), '"', "{"),
+    vscode.languages.registerCompletionItemProvider(
+      MOD_SELECTOR,
+      new DescriptorCompletionProvider(getConfig),
+      '"',
+      "{"
+    ),
     vscode.languages.registerHoverProvider(MOD_SELECTOR, new DescriptorHoverProvider()),
     vscode.commands.registerCommand("ck3.createDescriptor", createDescriptor),
     vscode.workspace.onDidOpenTextDocument(validateDoc),

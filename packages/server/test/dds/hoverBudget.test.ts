@@ -14,9 +14,11 @@ function noisyRgba(w: number, h: number): Uint8Array {
   const out = new Uint8Array(w * h * 4);
   let s = 123456789 >>> 0;
   const rnd = () => {
-    s ^= s << 13; s >>>= 0;
+    s ^= s << 13;
+    s >>>= 0;
     s ^= s >> 17;
-    s ^= s << 5; s >>>= 0;
+    s ^= s << 5;
+    s >>>= 0;
     return s & 0xff;
   };
   for (let i = 0; i < w * h; i++) {

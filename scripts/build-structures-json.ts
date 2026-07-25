@@ -26,9 +26,34 @@ const KEY_LINE = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/;
 const NAME_OK = /^[a-z][a-z0-9_]*$/;
 /** Grammar/logic words that completion serves through the context layer, not as structure keys. */
 const STOPLIST = new Set([
-  "if", "else", "else_if", "limit", "and", "or", "not", "nor", "nand", "this", "root", "prev", "from",
-  "yes", "no", "value", "add", "multiply", "divide", "subtract", "min", "max", "factor", "base",
-  "first_valid", "triggered_desc", "random_list", "e_g",
+  "if",
+  "else",
+  "else_if",
+  "limit",
+  "and",
+  "or",
+  "not",
+  "nor",
+  "nand",
+  "this",
+  "root",
+  "prev",
+  "from",
+  "yes",
+  "no",
+  "value",
+  "add",
+  "multiply",
+  "divide",
+  "subtract",
+  "min",
+  "max",
+  "factor",
+  "base",
+  "first_valid",
+  "triggered_desc",
+  "random_list",
+  "e_g",
 ]);
 const MAX_KEYS_PER_KIND = 60;
 const MAX_DOC = 240;
@@ -60,8 +85,10 @@ const ROOT_PHRASES: Array<[RegExp, string]> = [
   [/travel plan owner/, "character"],
   [/travel plan/, "travel_plan"],
   [/casus belli/, "casus_belli"],
-  [/character|ruler|player\b|owner|host\b|councillor|liege|attacker|defender|claimant|employer|employee|courtier|agent\b|knight|promoter|vassal|recipient|actor|founder|holder|creator|schemer|guest|governor|spouse|heir/,
-    "character"],
+  [
+    /character|ruler|player\b|owner|host\b|councillor|liege|attacker|defender|claimant|employer|employee|courtier|agent\b|knight|promoter|vassal|recipient|actor|founder|holder|creator|schemer|guest|governor|spouse|heir/,
+    "character",
+  ],
   [/\bcontract\b/, "task_contract"],
   [/\bmemory\b/, "character_memory"],
   [/\bhouse\b/, "dynasty_house"],
@@ -130,10 +157,18 @@ function harvestInfo(text: string): Map<string, KeySpecJson> {
         let inlineDoc = "";
         const hash = rhs.indexOf("#");
         if (hash >= 0) {
-          inlineDoc = rhs.slice(hash + 1).replace(/^#+\s?/, "").trim();
+          inlineDoc = rhs
+            .slice(hash + 1)
+            .replace(/^#+\s?/, "")
+            .trim();
           rhs = rhs.slice(0, hash);
         }
-        const doc = [...pending, inlineDoc].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, MAX_DOC);
+        const doc = [...pending, inlineDoc]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, MAX_DOC);
         // Nearest root-scope declaration above (or inline with) the key wins.
         let scope: string | undefined;
         for (const line of [...pending, inlineDoc]) {

@@ -29,7 +29,13 @@ import { buildEvalEnv } from "../packages/server/test/rankEvalCore";
 import { loadTokenDataFromLogs } from "../packages/server/src/data/docsParser";
 import { loadWikiTokens, mergeWikiTokens } from "../packages/server/src/data/wikiDocs";
 import { classifyFile } from "../packages/server/src/index/indexer";
-import { walkStatements, decode, LineIndex, type ScalarNode, type Statement } from "../packages/server/src/parser";
+import {
+  walkStatements,
+  decode,
+  LineIndex,
+  type ScalarNode,
+  type Statement,
+} from "../packages/server/src/parser";
 import { getParse, getSavedScopes } from "../packages/server/src/parseCache";
 import { inferScopeAt } from "../packages/server/src/scopes/inference";
 import { inferenceContextFor } from "../packages/server/src/scopes/varTypes";
@@ -124,7 +130,10 @@ function harvestVarSets(text: string, file: string, into: NameTable): void {
   const lineOf = mkLineOf(text);
   for (const [key, ns] of Object.entries(SET_KEYS)) {
     // scalar form: set_variable = X   |   block form: set_variable = { name = X
-    const re = new RegExp(`\\b${key}\\s*=\\s*(?:([A-Za-z0-9_.\\-]+)|\\{[^{}]*?name\\s*=\\s*([A-Za-z0-9_.\\-]+))`, "g");
+    const re = new RegExp(
+      `\\b${key}\\s*=\\s*(?:([A-Za-z0-9_.\\-]+)|\\{[^{}]*?name\\s*=\\s*([A-Za-z0-9_.\\-]+))`,
+      "g"
+    );
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       const name = m[1] ?? m[2];
@@ -203,7 +212,12 @@ async function main(): Promise<void> {
   });
   const logTokens = loadTokenDataFromLogs(logsPath);
   if (logTokens.tokens.length > 0) {
-    env.data.setTokens(mergeWikiTokens(logTokens.tokens, loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))));
+    env.data.setTokens(
+      mergeWikiTokens(
+        logTokens.tokens,
+        loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))
+      )
+    );
   }
   console.log(`env ready in ${((Date.now() - t0) / 1000).toFixed(1)}s: ${env.data.tokens.length} tokens`);
 
@@ -212,7 +226,8 @@ async function main(): Promise<void> {
   const onActionScopes = parseOnActionsLog(logsPath);
   env.data.onActionScopes = onActionScopes;
   env.data.rootScopesForFile = (file: string) => {
-    const e = classifyFile(modPath, file, env.schema.entries) ?? classifyFile(gamePath, file, env.schema.entries);
+    const e =
+      classifyFile(modPath, file, env.schema.entries) ?? classifyFile(gamePath, file, env.schema.entries);
     return e?.rootScopes?.length ? new Set(e.rootScopes.map((x) => x.toLowerCase())) : null;
   };
 
@@ -293,7 +308,12 @@ async function main(): Promise<void> {
       for (const stmt of result.root.statements) {
         if (stmt.kind !== "assignment" || stmt.value?.kind !== "block") continue;
         for (const s of stmt.value.statements) {
-          if (s.kind === "assignment" && !s.key.quoted && s.key.text === "scope" && s.value?.kind === "scalar") {
+          if (
+            s.kind === "assignment" &&
+            !s.key.quoted &&
+            s.key.text === "scope" &&
+            s.value?.kind === "scalar"
+          ) {
             tally(
               eventScopeOverrides,
               s.value.text,
@@ -377,19 +397,31 @@ async function main(): Promise<void> {
         if (stmt.value.kind === "scalar" && !stmt.value.quoted) nameScalar = stmt.value;
         else if (stmt.value.kind === "block") {
           for (const s of stmt.value.statements) {
-            if (s.kind === "assignment" && !s.key.quoted && s.key.text === "name" && s.value?.kind === "scalar") {
+            if (
+              s.kind === "assignment" &&
+              !s.key.quoted &&
+              s.key.text === "name" &&
+              s.value?.kind === "scalar"
+            ) {
               nameScalar = s.value;
               break;
             }
           }
         }
         if (nameScalar && !nameScalar.text.includes("$") && !nameScalar.text.includes(":")) {
-          if (setNs) modVars.add(setNs, nameScalar.text, { file: rel, line: lineIndex.positionAt(nameScalar.range.start).line });
+          if (setNs)
+            modVars.add(setNs, nameScalar.text, {
+              file: rel,
+              line: lineIndex.positionAt(nameScalar.range.start).line,
+            });
           else if (readNs) {
             const ok = modVars.has(readNs, nameScalar.text) || vanillaVars.has(readNs, nameScalar.text);
             if (!ok) {
               const others = [
-                ...new Set([...modVars.namespacesOf(nameScalar.text), ...vanillaVars.namespacesOf(nameScalar.text)]),
+                ...new Set([
+                  ...modVars.namespacesOf(nameScalar.text),
+                  ...vanillaVars.namespacesOf(nameScalar.text),
+                ]),
               ];
               const label =
                 others.length > 0
@@ -404,10 +436,17 @@ async function main(): Promise<void> {
       // every_in_list = { variable = X } — is X indexed for completion?
       if (IN_LIST_ITERATORS.test(key) && stmt.value?.kind === "block") {
         for (const s of stmt.value.statements) {
-          if (s.kind === "assignment" && !s.key.quoted && s.key.text === "variable" && s.value?.kind === "scalar") {
+          if (
+            s.kind === "assignment" &&
+            !s.key.quoted &&
+            s.key.text === "variable" &&
+            s.value?.kind === "scalar"
+          ) {
             const name = s.value.text;
             if (name.includes("$") || name.includes(":")) continue;
-            const indexed = env.data.index.lookup(name).some((d) => d.kind.endsWith("_list") || d.kind === "variable");
+            const indexed = env.data.index
+              .lookup(name)
+              .some((d) => d.kind.endsWith("_list") || d.kind === "variable");
             if (!indexed) tally(listRefUnindexed, `${key} variable = ${name}`, siteOf(s.value.range.start));
           }
         }
@@ -418,7 +457,14 @@ async function main(): Promise<void> {
       const tok = toks?.find((t) => t.kind === "trigger" || t.kind === "effect");
       if (!tok) return;
       inferSites++;
-      const inference = inferScopeAt(result, stmt.key.range.start, env.data.scopeModel, rootScopes, saved, ictx);
+      const inference = inferScopeAt(
+        result,
+        stmt.key.range.start,
+        env.data.scopeModel,
+        rootScopes,
+        saved,
+        ictx
+      );
       if (!inference.scopes || inference.scopes.size === 0) {
         unknownSites++;
         // Attribute: last chain element that produced "unknown", else the root.
@@ -429,7 +475,12 @@ async function main(): Promise<void> {
               .replace(/(?:local_|global_)?var:[A-Za-z0-9_\-]+/, "var:*")
           : "(no root scope)";
         tally(unknownCauses, causeKey, siteOf(stmt.key.range.start));
-        if (!rootScopes) tally(unknownRootKinds, entry?.kind ?? `(unclassified: ${rel.split("/").slice(0, 2).join("/")})`, siteOf(stmt.key.range.start));
+        if (!rootScopes)
+          tally(
+            unknownRootKinds,
+            entry?.kind ?? `(unclassified: ${rel.split("/").slice(0, 2).join("/")})`,
+            siteOf(stmt.key.range.start)
+          );
         return;
       }
       const supported = env.data.scopeModel.inputScopesOf(tok.kind as "trigger" | "effect", key);
@@ -443,7 +494,9 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`\naudited ${modFiles.length} files; ${inferSites} trigger/effect sites, ${unknownSites} unknown-scope (${((unknownSites / Math.max(1, inferSites)) * 100).toFixed(1)}%)`);
+  console.log(
+    `\naudited ${modFiles.length} files; ${inferSites} trigger/effect sites, ${unknownSites} unknown-scope (${((unknownSites / Math.max(1, inferSites)) * 100).toFixed(1)}%)`
+  );
   printTallies("EVENT `scope = X` ROOT OVERRIDES the schema ignores", eventScopeOverrides);
   printTallies("UNKNOWN-ROOT sites by file kind (schema has no rootScopes)", unknownRootKinds);
   printTallies("UNKNOWN-SCOPE causes (chain segment that lost the type)", unknownCauses, 40);

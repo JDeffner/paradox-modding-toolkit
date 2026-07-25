@@ -19,13 +19,7 @@
  * holds the golden fixtures derived from the calibration screenshots).
  */
 import { LineIndex, parseScript, type BlockNode, type ScalarNode, type Statement } from "../parser";
-import {
-  collectBlockOverrides,
-  collectGuiDefs,
-  emptyGuiDefs,
-  expandWidget,
-  type GuiDefs,
-} from "./guiDefs";
+import { collectBlockOverrides, collectGuiDefs, emptyGuiDefs, expandWidget, type GuiDefs } from "./guiDefs";
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -123,8 +117,14 @@ export const GHOST_OPACITY = 0.45;
  * The client renderer mirrors this exactly.
  */
 export interface NineSliceRegion {
-  sx: number; sy: number; sw: number; sh: number;
-  dx: number; dy: number; dw: number; dh: number;
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
 }
 export function computeNineSlice(
   rect: LayoutRect,
@@ -138,8 +138,16 @@ export function computeNineSlice(
   const br = Math.max(0, Math.min(border[2], texW - bl, rect.w - bl));
   const bb = Math.max(0, Math.min(border[3], texH - bt, rect.h - bt));
   // Source and destination column/row spans: [start, size] triples.
-  const sCols: [number, number][] = [[0, bl], [bl, texW - bl - br], [texW - br, br]];
-  const sRows: [number, number][] = [[0, bt], [bt, texH - bt - bb], [texH - bb, bb]];
+  const sCols: [number, number][] = [
+    [0, bl],
+    [bl, texW - bl - br],
+    [texW - br, br],
+  ];
+  const sRows: [number, number][] = [
+    [0, bt],
+    [bt, texH - bt - bb],
+    [texH - bb, bb],
+  ];
   const dCols: [number, number][] = [
     [rect.x, bl],
     [rect.x + bl, rect.w - bl - br],
@@ -292,10 +300,26 @@ interface WNode {
 
 /** Attribute blocks that are data, not child widgets (mirrors guiTree.ts). */
 const PROPERTY_BLOCKS = new Set([
-  "size", "position", "framesize", "spriteborder", "color", "disabledcolor",
-  "uv_scale", "margin", "padding", "mipmaplodbias", "modify_texture",
-  "resizeparent", "soundeffect", "cursor_properties", "background", "state",
-  "animation", "attachanimation", "blockoverride", "block",
+  "size",
+  "position",
+  "framesize",
+  "spriteborder",
+  "color",
+  "disabledcolor",
+  "uv_scale",
+  "margin",
+  "padding",
+  "mipmaplodbias",
+  "modify_texture",
+  "resizeparent",
+  "soundeffect",
+  "cursor_properties",
+  "background",
+  "state",
+  "animation",
+  "attachanimation",
+  "blockoverride",
+  "block",
 ]);
 
 const CLASS_BY_KEY: Record<string, WidgetClass> = {
@@ -366,13 +390,7 @@ interface BuildCtx {
  */
 const SKIP_SUBTREES = new Set(["tooltipwidget"]);
 
-function buildWNode(
-  key: string,
-  block: BlockNode,
-  ctx: BuildCtx,
-  line?: number,
-  ownLine = false
-): WNode {
+function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number, ownLine = false): WNode {
   const lower = key.toLowerCase();
   // Cycle/depth guard: a TYPE instantiated inside its own expansion gets no
   // type expansion (instance statements + templates only), which breaks
@@ -475,8 +493,7 @@ function buildWNode(
           // Line info only for statements physically inside this instance's
           // block (type-def content lives in other files): children spliced
           // from types inherit the instance's line.
-          const inInstance =
-            stmt.range.start >= block.range.start && stmt.range.end <= block.range.end;
+          const inInstance = stmt.range.start >= block.range.start && stmt.range.end <= block.range.end;
           const childLine = inInstance ? ctx.lineOf(stmt.key.range.start) : line;
           node.children.push(
             buildWNode(
@@ -659,13 +676,28 @@ function anchorFractions(spec: string | undefined): [number, number] {
   if (!spec) return [0, 0];
   for (const part of spec.toLowerCase().split("|")) {
     switch (part.trim()) {
-      case "left": fx = 0; break;
-      case "hcenter": fx = 0.5; break;
-      case "right": fx = 1; break;
-      case "top": fy = 0; break;
-      case "vcenter": fy = 0.5; break;
-      case "bottom": fy = 1; break;
-      case "center": fx = 0.5; fy = 0.5; break;
+      case "left":
+        fx = 0;
+        break;
+      case "hcenter":
+        fx = 0.5;
+        break;
+      case "right":
+        fx = 1;
+        break;
+      case "top":
+        fy = 0;
+        break;
+      case "vcenter":
+        fy = 0.5;
+        break;
+      case "bottom":
+        fy = 1;
+        break;
+      case "center":
+        fx = 0.5;
+        fy = 0.5;
+        break;
     }
   }
   return [fx, fy];
@@ -695,11 +727,16 @@ function policy(node: WNode, horizontal: boolean): Policy {
   if (node.cls === "expand") return "growing"; // B4-T8, B3-P2
   const p = str(node, horizontal ? "layoutpolicy_horizontal" : "layoutpolicy_vertical");
   switch (p?.toLowerCase()) {
-    case "expanding": return "expanding";
-    case "growing": return "growing";
-    case "preferred": return "preferred";
-    case "shrinking": return "shrinking";
-    default: return "fixed";
+    case "expanding":
+      return "expanding";
+    case "growing":
+      return "growing";
+    case "preferred":
+      return "preferred";
+    case "shrinking":
+      return "shrinking";
+    default:
+      return "fixed";
   }
 }
 
@@ -807,8 +844,7 @@ function arrange(
     // Ghosts are synthetic placeholders: never draggable/editable even though
     // the item template statements physically exist in the document.
     editable: node.ownLine && node.line !== undefined && !node.ghost,
-    srcPosition:
-      srcPosition && srcPosition.length >= 2 ? [srcPosition[0], srcPosition[1]] : undefined,
+    srcPosition: srcPosition && srcPosition.length >= 2 ? [srcPosition[0], srcPosition[1]] : undefined,
     srcSize: srcSize && srcSize.length >= 2 ? [srcSize[0], srcSize[1]] : undefined,
     ghost: node.ghost ? true : undefined,
     children: [],
@@ -923,8 +959,8 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
   const vertical = box.vertical;
   const [ml, mt, mr, mb] = margins(box);
   const spacing = num(box, "spacing") ?? 0;
-  const contentMain = (vertical ? rect.h - mt - mb : rect.w - ml - mr);
-  const contentCross = (vertical ? rect.w - ml - mr : rect.h - mt - mb);
+  const contentMain = vertical ? rect.h - mt - mb : rect.w - ml - mr;
+  const contentCross = vertical ? rect.w - ml - mr : rect.h - mt - mb;
   const n = box.children.length;
   if (n === 0) return [];
 
@@ -941,9 +977,7 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
   let free = contentMain - mains.reduce((a, b) => a + b, 0) - spacing * (n - 1);
   const mainPolicies = box.children.map((c) => policy(c, !vertical));
   if (free > 0) {
-    const expanders = mainPolicies
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p === "expanding");
+    const expanders = mainPolicies.map((p, i) => ({ p, i })).filter(({ p }) => p === "expanding");
     // Without expanding siblings, growing AND preferred take the space; the
     // growing case is measured (B3-P2), preferred sharing with growing is
     // unmeasured — treated as the same tier.
@@ -977,9 +1011,7 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
     const child = box.children[i];
     const main = mains[i];
     const stretchCross =
-      crossPolicies[i] === "expanding" ||
-      crossPolicies[i] === "growing" ||
-      crossPolicies[i] === "preferred";
+      crossPolicies[i] === "expanding" || crossPolicies[i] === "growing" || crossPolicies[i] === "preferred";
     const cross = stretchCross ? contentCross : Math.min(crosses[i], Number.POSITIVE_INFINITY);
     const crossOffset =
       (vertical ? rect.x + ml : rect.y + mt) + (stretchCross ? 0 : (contentCross - cross) / 2);
@@ -1039,10 +1071,7 @@ function textContent(node: WNode): string {
   return str(node, "raw_text") ?? str(node, "text") ?? "";
 }
 
-function textSize(
-  node: WNode,
-  measurer: TextMeasurer
-): { size: { w: number; h: number }; lines: string[] } {
+function textSize(node: WNode, measurer: TextMeasurer): { size: { w: number; h: number }; lines: string[] } {
   const fontsize = num(node, "fontsize") ?? 15; // Font_Size_Small default
   const content = textContent(node);
   const maxWidth = num(node, "max_width");
@@ -1090,12 +1119,7 @@ function textInfo(node: WNode, rect: LayoutRect, measurer: TextMeasurer): TextIn
   };
 }
 
-function wrapWords(
-  text: string,
-  maxWidth: number,
-  fontsize: number,
-  measurer: TextMeasurer
-): string[] {
+function wrapWords(text: string, maxWidth: number, fontsize: number, measurer: TextMeasurer): string[] {
   const words = text.split(" ");
   const lines: string[] = [];
   let line = "";

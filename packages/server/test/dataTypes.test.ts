@@ -102,7 +102,10 @@ describe("DumpDataTypes log parser", () => {
     expect(data.globals.get("GetPlayer")).toMatchObject({ ret: "Character", kind: "function" });
     expect(data.globals.get("ACTIVITY")).toMatchObject({ ret: "Activity", kind: "promote" });
     expect(data.types.get("Character")?.get("IsLandedRuler")?.ret).toBe("bool");
-    expect(data.types.get("Faith")?.get("GetAdherentName")).toMatchObject({ ret: "CString", args: ["CString"] });
+    expect(data.types.get("Faith")?.get("GetAdherentName")).toMatchObject({
+      ret: "CString",
+      args: ["CString"],
+    });
     expect(data.globals.has("SomeMacro")).toBe(false);
   });
 
@@ -283,7 +286,7 @@ describe("datafunction hover", () => {
   });
 
   it("stays quiet outside expressions and on unknown names", () => {
-    const line = "some_key: \"plain text\"";
+    const line = 'some_key: "plain text"';
     expect(provideDataFnHover(data, emptyUsage(), line, 5)).toBeNull();
     const unknown = 'x = "[Bogus.Chain]"';
     expect(provideDataFnHover(data, emptyUsage(), unknown, unknown.indexOf("Chain") + 1)).toBeNull();
@@ -432,7 +435,12 @@ describe("datafunction signature help", () => {
 
   it("uses dump/wiki args when known, highlighting the active parameter", () => {
     const dumped = parseDataTypesDump(
-      ["ObjectsEqual( CObject, CObject )", "Definition type: Global function", "Return type: bool", "----"].join("\n"),
+      [
+        "ObjectsEqual( CObject, CObject )",
+        "Definition type: Global function",
+        "Return type: bool",
+        "----",
+      ].join("\n"),
       loadBundledDataTypes()
     );
     const line = 'visible = "[ObjectsEqual( HouseAspiration.Self, HouseAsp';
@@ -627,12 +635,7 @@ describe("index-backed argument completion", () => {
     const idx = index([{ name: "brave", kind: "trait", source: "vanilla" }]);
     const usage = emptyUsage();
     harvestLine(usage, "text = \"[Character.GetHouseAspiration('some_aspect')]\"", "f.gui", 1);
-    const result = provideDataFnCompletion(
-      data,
-      usage,
-      "text = \"[Character.GetHouseAspiration('",
-      idx
-    )!;
+    const result = provideDataFnCompletion(data, usage, "text = \"[Character.GetHouseAspiration('", idx)!;
     const labels = result.items.map((i) => i.label);
     expect(labels).toContain("some_aspect");
     expect(labels).not.toContain("brave"); // trait index must not leak in
@@ -671,7 +674,8 @@ describe("datatype-name completion and hover in cast literals", () => {
   });
 
   it("hovers a cast type name as a data type", () => {
-    const line = "visible = \"[GreaterThan_CFixedPoint( GetPlayer.MakeScope.ScriptValue('x'), '(CFixedPoint)0' )]\"";
+    const line =
+      "visible = \"[GreaterThan_CFixedPoint( GetPlayer.MakeScope.ScriptValue('x'), '(CFixedPoint)0' )]\"";
     const hover = provideDataFnHover(data, emptyUsage(), line, line.indexOf("CFixedPoint)") + 2)!;
     expect(hover.markdown).toContain("data type");
     expect(line.slice(hover.start, hover.end)).toBe("CFixedPoint");

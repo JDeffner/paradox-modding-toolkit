@@ -32,7 +32,11 @@ export class ModOriginResolver {
     this.roots = modRoots
       .map((root) => ({
         root,
-        prefix: path.normalize(root).toLowerCase().replace(/[\\/]+$/, "") + path.sep,
+        prefix:
+          path
+            .normalize(root)
+            .toLowerCase()
+            .replace(/[\\/]+$/, "") + path.sep,
         label: clip(readModName(root) ?? path.basename(root)),
       }))
       .sort((a, b) => b.prefix.length - a.prefix.length);
@@ -60,7 +64,10 @@ export class ModOriginResolver {
 
   /** Display label for a known mod root ("Mod Alpha" for its path). */
   labelForRoot(root: string): string {
-    const lower = path.normalize(root).toLowerCase().replace(/[\\/]+$/, "");
+    const lower = path
+      .normalize(root)
+      .toLowerCase()
+      .replace(/[\\/]+$/, "");
     for (const r of this.roots) {
       if (r.prefix === lower + path.sep) return r.label;
     }

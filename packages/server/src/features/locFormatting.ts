@@ -65,7 +65,9 @@ export function provideFormatTagCompletion(
       sortText: name.toLowerCase(),
     };
     const entry = index.winner(name)!;
-    const docParts = [entry.layer === "builtin" ? "Engine built-in format." : `\`${entry.format || "(style only)"}\``];
+    const docParts = [
+      entry.layer === "builtin" ? "Engine built-in format." : `\`${entry.format || "(style only)"}\``,
+    ];
     if (color) docParts.push(`Color: ${color}`);
     item.documentation = { kind: MarkupKind.Markdown, value: docParts.join("\n\n") };
     return item;
@@ -118,6 +120,8 @@ export function provideFormatTagHover(
 
 function sourceLink(entry: FormatEntry): string {
   const rel = guiRelTail(entry.file);
-  const target = URI.file(entry.file).with({ fragment: String(entry.line + 1) }).toString();
+  const target = URI.file(entry.file)
+    .with({ fragment: String(entry.line + 1) })
+    .toString();
   return `${entry.layer} · [${rel}](${target})`;
 }

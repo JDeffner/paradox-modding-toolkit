@@ -320,17 +320,22 @@ function loadDocs(force: boolean): void {
     scriptTokens = result.tokens;
     modifierTemplates = result.templates;
     tokensFromScriptDocs = scriptTokens.length > 0;
-    if (result.fromCache) log(`loaded token data from cache (${result.tokens.length} tokens, ${Date.now() - t0}ms)`);
+    if (result.fromCache)
+      log(`loaded token data from cache (${result.tokens.length} tokens, ${Date.now() - t0}ms)`);
     else log(`parsed script_docs logs (${result.tokens.length} tokens, ${Date.now() - t0}ms)`);
     if (result.missing.length > 0) {
-      log(`missing log files in ${settings.logsPath}: ${result.missing.join(", ")} (run script_docs in the game console)`);
+      log(
+        `missing log files in ${settings.logsPath}: ${result.missing.join(", ")} (run script_docs in the game console)`
+      );
     }
   } else {
     log("script_docs logs path not found; engine tokens come from the bundled wiki docs only.");
   }
   data.setModifierTemplates(modifierTemplates);
   if (data.modifierTemplates.length > 0) {
-    log(`templated modifiers: ${data.modifierTemplates.length} templates expand against the definition index`);
+    log(
+      `templated modifiers: ${data.modifierTemplates.length} templates expand against the definition index`
+    );
   }
   const t1 = Date.now();
   const wikiTokens = loadWikiTokens(wikidocsDir);
@@ -358,7 +363,9 @@ function loadDocs(force: boolean): void {
   }
 
   const t2 = Date.now();
-  const usageCache = storageDir ? path.join(storageDir, `dataFnUsage${activeProfile().cacheSuffix}.json`) : null;
+  const usageCache = storageDir
+    ? path.join(storageDir, `dataFnUsage${activeProfile().cacheSuffix}.json`)
+    : null;
   const generation = ++usageGeneration;
   void loadDataFnUsageAsync(settings.gamePath, settings.locLanguage, usageCache, force)
     .then((result) => {
@@ -513,7 +520,11 @@ function readPlayset(modPath: string): string[] {
   try {
     if (!fs.existsSync(file)) return [];
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    const list: unknown[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.parents) ? parsed.parents : [];
+    const list: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.parents)
+        ? parsed.parents
+        : [];
     const roots: string[] = [];
     for (const p of list) {
       if (typeof p !== "string") continue;
@@ -588,7 +599,9 @@ async function buildIndex(): Promise<void> {
       );
       let defs = loadIndexCache(cacheFile, version);
       if (defs) {
-        log(`loaded vanilla index from cache: ${defs.length} definitions, game ${version} (${Date.now() - t0}ms)`);
+        log(
+          `loaded vanilla index from cache: ${defs.length} definitions, game ${version} (${Date.now() - t0}ms)`
+        );
       } else {
         log(`indexing vanilla (game ${version})...`);
         const progress = await connection.window.createWorkDoneProgress();
@@ -643,7 +656,8 @@ function rescanModFile(fsPath: string): void {
   const entry = classifyFile(root, fsPath, schema.entries);
   const isScript = lower.endsWith(".txt");
   if (!entry && !isScript) return;
-  if (entry?.kind === "loc_key" && !isWantedLocFile(path.relative(root, fsPath), settings.locLanguage)) return;
+  if (entry?.kind === "loc_key" && !isWantedLocFile(path.relative(root, fsPath), settings.locLanguage))
+    return;
 
   data.index.removeFile(fsPath);
   const content = fs.existsSync(fsPath) ? readFileStripBom(fsPath) : null;
@@ -767,7 +781,8 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
     newSettings.locLanguage !== settings.locLanguage;
   const diagChanged =
     JSON.stringify(newSettings.diagnosticsIgnore) !== JSON.stringify(settings.diagnosticsIgnore) ||
-    JSON.stringify(newSettings.diagnosticsIgnorePatterns) !== JSON.stringify(settings.diagnosticsIgnorePatterns) ||
+    JSON.stringify(newSettings.diagnosticsIgnorePatterns) !==
+      JSON.stringify(settings.diagnosticsIgnorePatterns) ||
     newSettings.diagnosticsVanilla !== settings.diagnosticsVanilla;
   settings = newSettings;
   completion.setSettings(settings);
@@ -820,7 +835,13 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));
 
 connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
-  computeGuiLayoutResult(params.text ?? "", settings.gamePath, settings.modPath, settings.parentPaths, engineRoots())
+  computeGuiLayoutResult(
+    params.text ?? "",
+    settings.gamePath,
+    settings.modPath,
+    settings.parentPaths,
+    engineRoots()
+  )
 );
 
 connection.onRequest(guiWidgetEditRequest, (params: GuiWidgetEditParams) =>
@@ -901,8 +922,13 @@ connection.onHover((params) => {
     });
     const flat = lineText.replace(/\r?\n$/, "");
     const dataFn =
-      provideDataFnHover(data.dataTypes, data.dataFnUsage, flat, params.position.character, settings.gamePath) ??
-      provideFormatTagHover(data.textFormatting, flat, params.position.character);
+      provideDataFnHover(
+        data.dataTypes,
+        data.dataFnUsage,
+        flat,
+        params.position.character,
+        settings.gamePath
+      ) ?? provideFormatTagHover(data.textFormatting, flat, params.position.character);
     if (!dataFn) return null;
     return {
       contents: { kind: MarkupKind.Markdown, value: dataFn.markdown },
@@ -1044,7 +1070,10 @@ function relForPatterns(fsPath: string): string {
   const lower = fsPath.toLowerCase();
   for (const root of contentRoots()) {
     if (lower.startsWith(root.toLowerCase())) {
-      return fsPath.slice(root.length).replace(/^[\\/]+/, "").replace(/\\/g, "/");
+      return fsPath
+        .slice(root.length)
+        .replace(/^[\\/]+/, "")
+        .replace(/\\/g, "/");
     }
   }
   return fsPath.replace(/\\/g, "/").split("/").pop() ?? "";

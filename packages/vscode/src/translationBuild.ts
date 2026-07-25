@@ -52,7 +52,10 @@ function countTranslatable(content: string, sourceLang: string): number {
 
 /** `localization/english/sub/x_l_english.yml` → `localization/<t>/replace/sub/x_l_<t>.yml`. */
 export function targetLocPath(relPath: string, sourceLang: string, targetLang: string): string {
-  const parts = relPath.replace(/\\/g, "/").split("/").filter((p) => p !== "");
+  const parts = relPath
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((p) => p !== "");
   // Drop everything up to and including "localization", then the language
   // and/or replace segments — what remains is the file's own subpath.
   const locIdx = parts.findIndex((p) => p.toLowerCase() === "localization");
@@ -76,7 +79,10 @@ function descriptor(opts: TranslationModOptions): string {
   return lines.join("\n");
 }
 
-function translateGuide(opts: TranslationModOptions, generated: Array<{ relPath: string; entries: number }>): string {
+function translateGuide(
+  opts: TranslationModOptions,
+  generated: Array<{ relPath: string; entries: number }>
+): string {
   const { sourceLang, targetLang, sourceName } = opts;
   const totalEntries = generated.reduce((n, f) => n + f.entries, 0);
   const checklist = generated

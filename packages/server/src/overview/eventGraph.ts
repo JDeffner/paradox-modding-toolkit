@@ -4,7 +4,12 @@
  * reference index (mod usage sites); node metadata from the definition index.
  */
 import * as fs from "fs";
-import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } from "@paradox-lsp/protocol/protocol";
+import type {
+  EventGraph,
+  EventGraphEdge,
+  EventGraphNode,
+  EventGraphParams,
+} from "@paradox-lsp/protocol/protocol";
 import type { Reference } from "@paradox-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import { decode, LineIndex, nodeAtOffset, parseScript, type ParseResult } from "../parser";
@@ -65,14 +70,31 @@ function labelEdges(data: ServerData, edges: EventGraphEdge[], sites: Map<EventG
       const key = stmt.key.text.toLowerCase();
       if (key === "option") {
         // Use the option's localized text when available.
-        const block = stmt.value?.kind === "block" ? stmt.value : stmt.value?.kind === "tagged-block" ? stmt.value.block : null;
+        const block =
+          stmt.value?.kind === "block"
+            ? stmt.value
+            : stmt.value?.kind === "tagged-block"
+              ? stmt.value.block
+              : null;
         const nameStmt = block?.statements.find(
           (s) => s.kind === "assignment" && s.key.text.toLowerCase() === "name" && s.value?.kind === "scalar"
         );
-        const nameKey = nameStmt?.kind === "assignment" && nameStmt.value?.kind === "scalar" ? nameStmt.value.text : null;
+        const nameKey =
+          nameStmt?.kind === "assignment" && nameStmt.value?.kind === "scalar" ? nameStmt.value.text : null;
         const text = nameKey ? data.index.lookup(nameKey).find((d) => d.kind === "loc_key")?.value : null;
         label = text ? `option: ${text.length > 28 ? text.slice(0, 27) + "…" : text}` : "option";
-      } else if (["immediate", "after", "on_actions", "trigger", "effect", "events", "random_events", "first_valid"].includes(key)) {
+      } else if (
+        [
+          "immediate",
+          "after",
+          "on_actions",
+          "trigger",
+          "effect",
+          "events",
+          "random_events",
+          "first_valid",
+        ].includes(key)
+      ) {
         label = key;
       }
     }

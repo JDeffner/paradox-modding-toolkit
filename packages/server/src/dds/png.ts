@@ -76,15 +76,21 @@ export function encodePng(width: number, height: number, rgba: Uint8Array): Uint
   const compressed = deflateSync(raw);
 
   const ihdrChunk = chunk("IHDR", ihdr);
-  const idatChunk = chunk("IDAT", new Uint8Array(compressed.buffer, compressed.byteOffset, compressed.byteLength));
+  const idatChunk = chunk(
+    "IDAT",
+    new Uint8Array(compressed.buffer, compressed.byteOffset, compressed.byteLength)
+  );
   const iendChunk = chunk("IEND", new Uint8Array(0));
 
   const total = sig.length + ihdrChunk.length + idatChunk.length + iendChunk.length;
   const out = new Uint8Array(total);
   let off = 0;
-  out.set(sig, off); off += sig.length;
-  out.set(ihdrChunk, off); off += ihdrChunk.length;
-  out.set(idatChunk, off); off += idatChunk.length;
+  out.set(sig, off);
+  off += sig.length;
+  out.set(ihdrChunk, off);
+  off += ihdrChunk.length;
+  out.set(idatChunk, off);
+  off += idatChunk.length;
   out.set(iendChunk, off);
   return out;
 }

@@ -21,7 +21,10 @@ describe("extractReferences", () => {
 
   it("records list-form references (events = { ... })", () => {
     const r = refs("on_birth_mod = {\n\tevents = {\n\t\tmy.1\n\t\tmy.2\n\t}\n}\n");
-    expect(r.references.filter((x) => x.kinds.includes("event")).map((x) => x.name)).toEqual(["my.1", "my.2"]);
+    expect(r.references.filter((x) => x.kinds.includes("event")).map((x) => x.name)).toEqual([
+      "my.1",
+      "my.2",
+    ]);
   });
 
   it("records scope:x usages with the range of the name only", () => {
@@ -78,7 +81,12 @@ describe("ReferenceIndex", () => {
   it("removeFile drops that file's references only", () => {
     const idx = new ReferenceIndex();
     const a = refs("e = { trigger_event = ns.1 }").references;
-    const b = extractReferences("f = { trigger_event = ns.1 }", "C:\\mod\\events\\other.txt", "mod", schema).references;
+    const b = extractReferences(
+      "f = { trigger_event = ns.1 }",
+      "C:\\mod\\events\\other.txt",
+      "mod",
+      schema
+    ).references;
     idx.addAll(a);
     idx.addAll(b);
     expect(idx.lookup("ns.1")).toHaveLength(2);

@@ -24,7 +24,13 @@ const conceptEntry = CK3_SCHEMA.find((e) => e.kind === "game_concept")!;
 let uriCounter = 0;
 const uri = () => `file:///mod/events/gaps-fixture-${uriCounter++}.txt`;
 
-function hoverMd(data: ServerData, text: string, line: number, character: number, entry = eventEntry): string | null {
+function hoverMd(
+  data: ServerData,
+  text: string,
+  line: number,
+  character: number,
+  entry = eventEntry
+): string | null {
   const doc = TextDocument.create(uri(), "paradox", 1, text);
   const hover = provideHover(data, doc, { line, character }, new Set(["character"]), entry, () => schema);
   return hover ? (hover.contents as { value: string }).value : null;
@@ -32,7 +38,8 @@ function hoverMd(data: ServerData, text: string, line: number, character: number
 
 describe("implicit definitions: flags, lists, trait groups, aliases", () => {
   it("add_character_flag declares a flag; has_*_flag references it", () => {
-    const text = "x = {\n\tadd_character_flag = my_flag\n\tadd_house_flag = { flag = house_flag days = 10 }\n\ttr = { has_character_flag = my_flag }\n}";
+    const text =
+      "x = {\n\tadd_character_flag = my_flag\n\tadd_house_flag = { flag = house_flag days = 10 }\n\ttr = { has_character_flag = my_flag }\n}";
     const out = extractReferences(text, "C:\\m\\common\\decisions\\f.txt", "mod", schema);
     expect(out.implicitDefs.map((d) => `${d.kind}:${d.name}`)).toEqual(
       expect.arrayContaining(["flag:my_flag", "flag:house_flag"])
@@ -41,7 +48,8 @@ describe("implicit definitions: flags, lists, trait groups, aliases", () => {
   });
 
   it("add_to_list declares a list; is_in_list and list = reference it", () => {
-    const text = "x = {\n\tadd_to_list = characters\n\ttr = { is_in_list = characters }\n\tevery_in_list = { list = characters }\n}";
+    const text =
+      "x = {\n\tadd_to_list = characters\n\ttr = { is_in_list = characters }\n\tevery_in_list = { list = characters }\n}";
     const out = extractReferences(text, "C:\\m\\common\\decisions\\f.txt", "mod", schema);
     expect(out.implicitDefs.some((d) => d.kind === "list" && d.name === "characters")).toBe(true);
     expect(out.references.filter((r) => r.name === "characters" && r.kinds.includes("list"))).toHaveLength(2);
@@ -84,7 +92,9 @@ describe("semantic coloring: enums and namespaces", () => {
 
   it("type = character_event colors as an enum member", () => {
     const tokens = tokensOf("my.1 = {\n\ttype = character_event\n}");
-    expect(tokens.some((t) => t.line === 1 && t.length === "character_event".length && t.type === ENUM_MEMBER)).toBe(true);
+    expect(
+      tokens.some((t) => t.line === 1 && t.length === "character_event".length && t.type === ENUM_MEMBER)
+    ).toBe(true);
   });
 
   it("namespace values color as events", () => {
@@ -111,7 +121,14 @@ describe("hover fallback cards", () => {
   it("macro params: AMOUNT resolves against the called scripted effect", () => {
     const data = new ServerData();
     data.index.addAll([
-      { name: "apply_xp_effect", kind: "scripted_effect", file: "e.txt", line: 0, source: "mod", params: ["AMOUNT"] },
+      {
+        name: "apply_xp_effect",
+        kind: "scripted_effect",
+        file: "e.txt",
+        line: 0,
+        source: "mod",
+        params: ["AMOUNT"],
+      },
     ]);
     const md = hoverMd(data, "my.1 = {\n\tapply_xp_effect = { AMOUNT = 3 }\n}", 1, 22);
     expect(md).toContain("parameter");
@@ -163,11 +180,15 @@ describe("structure additions from the audit", () => {
   it("interaction ai_targets block carries the ai_recipients enum", () => {
     const keys = schema.structures.keysByKindBlock.get("character_interaction")?.get("ai_targets");
     expect(keys?.get("ai_recipients")?.values).toContain("scripted_relations");
-    expect(schema.structures.keysByKindBlock.get("character_interaction")?.get("")?.has("ai_frequency")).toBe(true);
+    expect(schema.structures.keysByKindBlock.get("character_interaction")?.get("")?.has("ai_frequency")).toBe(
+      true
+    );
   });
 
   it("KEY_PATCHES fill enums without reordering: trait valid_sex, scheme category", () => {
-    expect(schema.structures.keysByKindBlock.get("trait")?.get("")?.get("valid_sex")?.values).toBe("enum:all|male|female");
+    expect(schema.structures.keysByKindBlock.get("trait")?.get("")?.get("valid_sex")?.values).toBe(
+      "enum:all|male|female"
+    );
     const category = schema.structures.keysByKindBlock.get("scheme_type")?.get("")?.get("category");
     expect(category?.values).toBe("enum:personal|contract|hostile");
     expect(category?.freq).toBe(71); // harvested metadata preserved

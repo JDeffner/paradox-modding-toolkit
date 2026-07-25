@@ -23,7 +23,12 @@ import type { Definition, TokenData } from "@paradox-lsp/protocol/types";
 
 const TOKENS: TokenData[] = [
   { name: "liege", kind: "event_target", doc: "", scopes: ["input: character", "output: character"] },
-  { name: "primary_title", kind: "event_target", doc: "", scopes: ["input: character", "output: landed_title"] },
+  {
+    name: "primary_title",
+    kind: "event_target",
+    doc: "",
+    scopes: ["input: character", "output: landed_title"],
+  },
   { name: "holder", kind: "event_target", doc: "", scopes: ["input: landed_title", "output: character"] },
   { name: "culture", kind: "event_target", doc: "", scopes: ["input: character", "output: culture"] },
   { name: "title", kind: "event_target", doc: "", scopes: ["output: landed_title"] },
@@ -89,7 +94,8 @@ describe("inference: iterator false-friends and math keys", () => {
 
 describe("inference: prev pops the scope stack", () => {
   it("prev.prev walks two levels back", () => {
-    const text = "e = {\n\tprimary_title = {\n\t\tholder = {\n\t\t\tprev.prev = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}";
+    const text =
+      "e = {\n\tprimary_title = {\n\t\tholder = {\n\t\t\tprev.prev = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}";
     expect(scopesAt(text)).toEqual(["character"]);
   });
 });
@@ -150,7 +156,9 @@ describe("inference: variable value types", () => {
 
   it("var:x.link chains from the variable's type", () => {
     const ctx: InferenceContext = { varTypes: new Map([["var:her", new Set(["character"])]]) };
-    expect(scopesAt("e = {\n\tvar:her.primary_title = {\n\t\t|\n\t}\n}", CHARACTER, ctx)).toEqual(["landed_title"]);
+    expect(scopesAt("e = {\n\tvar:her.primary_title = {\n\t\t|\n\t}\n}", CHARACTER, ctx)).toEqual([
+      "landed_title",
+    ]);
   });
 
   it("untyped var:x stays unknown", () => {
@@ -212,7 +220,9 @@ describe("variable value-type resolution (varTypes)", () => {
   });
 
   it("resolves root-anchored chains through the set-file's root scope", () => {
-    expect(resolveValueExpr("root.primary_title", "f.txt", model, charRoot)).toEqual(new Set(["landed_title"]));
+    expect(resolveValueExpr("root.primary_title", "f.txt", model, charRoot)).toEqual(
+      new Set(["landed_title"])
+    );
   });
 
   it("runtime anchors stay unknown", () => {
@@ -225,7 +235,14 @@ describe("variable value-type resolution (varTypes)", () => {
       { name: "who", kind: "variable", file: "a.txt", line: 0, source: "mod", value: "title:k_x.holder" },
       { name: "who", kind: "variable", file: "b.txt", line: 0, source: "mod", value: "title:k_y" },
       { name: "who", kind: "local_variable", file: "c.txt", line: 0, source: "mod", value: "5" },
-      { name: "crew", kind: "variable_list", file: "d.txt", line: 0, source: "mod", value: "title:k_x.holder" },
+      {
+        name: "crew",
+        kind: "variable_list",
+        file: "d.txt",
+        line: 0,
+        source: "mod",
+        value: "title:k_x.holder",
+      },
     ];
     const info = buildVariableTypes(defs, model, noRoot);
     expect(info.types.get("var:who")).toEqual(new Set(["character", "landed_title"]));
@@ -428,7 +445,9 @@ describe("ad-hoc list item types (add_to_list sites)", () => {
       new Set(["landed_title"])
     );
     expect(resolveKeyChainScopes([""], model, CHARACTER)).toEqual(new Set(["character"]));
-    expect(resolveKeyChainScopes(["liege.primary_title"], model, CHARACTER)).toEqual(new Set(["landed_title"]));
+    expect(resolveKeyChainScopes(["liege.primary_title"], model, CHARACTER)).toEqual(
+      new Set(["landed_title"])
+    );
   });
 
   it("resolveKeyChainScopes treats scope:/var: anchors as unknown", () => {
@@ -450,7 +469,14 @@ describe("ad-hoc list item types (add_to_list sites)", () => {
 
   it("buildVariableTypes resolves ad-hoc list item types from the chain", () => {
     const defs: Definition[] = [
-      { name: "titles", kind: "list", file: "f.txt", line: 0, source: "mod", value: "option.every_held_title" },
+      {
+        name: "titles",
+        kind: "list",
+        file: "f.txt",
+        line: 0,
+        source: "mod",
+        value: "option.every_held_title",
+      },
     ];
     const info = buildVariableTypes(defs, model, charRoot);
     expect(info.adhocListItemTypes.get("titles")).toEqual(new Set(["landed_title"]));

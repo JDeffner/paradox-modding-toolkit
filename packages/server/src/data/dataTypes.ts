@@ -47,7 +47,13 @@ interface BundledShape {
 }
 
 export function emptyDataTypes(): DataTypesData {
-  return { globals: new Map(), types: new Map(), typeNamesLower: new Map(), source: "bundled wiki", count: 0 };
+  return {
+    globals: new Map(),
+    types: new Map(),
+    typeNamesLower: new Map(),
+    source: "bundled wiki",
+    count: 0,
+  };
 }
 
 function typeMembers(data: DataTypesData, type: string): Map<string, DataTypeMember> {
@@ -124,7 +130,10 @@ export function parseDataTypesDump(text: string, into?: DataTypesData): DataType
     let args: string[] | null = null;
     const paren = signature.indexOf("(");
     if (paren >= 0) {
-      const argText = signature.slice(paren + 1, signature.lastIndexOf(")") >= 0 ? signature.lastIndexOf(")") : undefined);
+      const argText = signature.slice(
+        paren + 1,
+        signature.lastIndexOf(")") >= 0 ? signature.lastIndexOf(")") : undefined
+      );
       args = argText
         .split(",")
         .map((a) => a.trim())
@@ -230,7 +239,7 @@ export function membersOf(data: DataTypesData, typeName: string): Map<string, Da
   const direct = data.types.get(typeName);
   if (direct) return direct;
   const canonical = data.typeNamesLower.get(typeName.toLowerCase());
-  return canonical ? data.types.get(canonical) ?? null : null;
+  return canonical ? (data.types.get(canonical) ?? null) : null;
 }
 
 /**

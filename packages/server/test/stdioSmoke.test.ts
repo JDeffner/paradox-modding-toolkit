@@ -70,7 +70,10 @@ describe.skipIf(!hasServer)("LSP smoke over --stdio with bare-client fallbacks",
 
     child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
     exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
-    conn = createMessageConnection(new StreamMessageReader(child.stdout!), new StreamMessageWriter(child.stdin!));
+    conn = createMessageConnection(
+      new StreamMessageReader(child.stdout!),
+      new StreamMessageWriter(child.stdin!)
+    );
     conn.onNotification(statusNotification, (p: StatusPayload) => {
       statuses.push(p);
     });

@@ -92,7 +92,10 @@ function openCommand(file: string, line: number): vscode.Command {
     title: "Open",
     arguments: [
       vscode.Uri.file(file),
-      { selection: new vscode.Range(line, 0, line, 0), preview: true } satisfies vscode.TextDocumentShowOptions,
+      {
+        selection: new vscode.Range(line, 0, line, 0),
+        preview: true,
+      } satisfies vscode.TextDocumentShowOptions,
     ],
   };
 }
@@ -363,8 +366,18 @@ class DependenciesProvider extends BaseProvider {
     header.command = openCommand(r.def.file, r.def.line);
     return [
       header,
-      this.section(`Dependents (${count(r.dependents)})`, "references", r.dependents, "nothing in the mod references this"),
-      this.section(`Dependencies (${count(r.dependencies)})`, "type-hierarchy-sub", r.dependencies, "this definition references nothing indexed"),
+      this.section(
+        `Dependents (${count(r.dependents)})`,
+        "references",
+        r.dependents,
+        "nothing in the mod references this"
+      ),
+      this.section(
+        `Dependencies (${count(r.dependencies)})`,
+        "type-hierarchy-sub",
+        r.dependencies,
+        "this definition references nothing indexed"
+      ),
     ];
   }
 
@@ -400,12 +413,7 @@ class DependenciesProvider extends BaseProvider {
 
 /** One-click launcher for the extension's commands, grouped by workflow. */
 const TOOL_GROUPS: Array<[group: string, items: Array<[label: string, command: string, icon: string]>]> = [
-  [
-    "Create",
-    [
-      ["New Content (event, decision, …)", "ck3.newContent", "new-file"],
-    ],
-  ],
+  ["Create", [["New Content (event, decision, …)", "ck3.newContent", "new-file"]]],
   [
     "Localization",
     [
@@ -440,12 +448,7 @@ const TOOL_GROUPS: Array<[group: string, items: Array<[label: string, command: s
       ["Run Setup & Health Check", "ck3.setup", "tools"],
     ],
   ],
-  [
-    "Learn",
-    [
-      ["Tutorial: CK3 Modding from Zero", "ck3.tutorial", "mortar-board"],
-    ],
-  ],
+  ["Learn", [["Tutorial: CK3 Modding from Zero", "ck3.tutorial", "mortar-board"]]],
 ];
 
 class ToolsProvider extends BaseProvider {
@@ -484,10 +487,7 @@ class ToolsProvider extends BaseProvider {
 
     const excluded = this.getCfg().excludedMods;
     if (excluded.length > 0) {
-      const list = new Node(
-        `Excluded (${excluded.length})`,
-        vscode.TreeItemCollapsibleState.Collapsed
-      );
+      const list = new Node(`Excluded (${excluded.length})`, vscode.TreeItemCollapsibleState.Collapsed);
       list.iconPath = new vscode.ThemeIcon("circle-slash");
       list.children = excluded.map((p) => {
         const item = new Node(readDescriptorName(p) ?? path.basename(p));
@@ -637,9 +637,11 @@ export function registerCk3Views(
         placeHolder: "Checked mods are skipped entirely: no completion, navigation, diagnostics or views",
       });
       if (!picked) return;
-      await vscode.workspace
-        .getConfiguration("ck3")
-        .update("excludedMods", picked.map((i) => i.root), vscode.ConfigurationTarget.Workspace);
+      await vscode.workspace.getConfiguration("ck3").update(
+        "excludedMods",
+        picked.map((i) => i.root),
+        vscode.ConfigurationTarget.Workspace
+      );
       tools.refresh();
     })
   );

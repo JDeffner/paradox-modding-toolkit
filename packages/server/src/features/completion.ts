@@ -39,7 +39,12 @@
  * two-digit frequency bucket F (log2×6 scale; dense rank for structure keys),
  * source tiebreak S ("0" mod, "1" other), label as final alphabetical tiebreak.
  */
-import { CompletionItemKind, InsertTextFormat, MarkupKind, type CompletionItem } from "vscode-languageserver/node";
+import {
+  CompletionItemKind,
+  InsertTextFormat,
+  MarkupKind,
+  type CompletionItem,
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { Definition, DefSource, TokenData } from "@paradox-lsp/protocol/types";
 import type { SchemaEntry, KeySpec, RefField } from "../schema/types";
@@ -50,7 +55,11 @@ import { emptyFreqData } from "../schema/freqs";
 import { isLocProperty } from "@paradox-lsp/protocol/locProperties";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
-import { expandModifierTemplates, matchTemplatedModifier, templatedModifierDoc } from "../data/modifierTemplates";
+import {
+  expandModifierTemplates,
+  matchTemplatedModifier,
+  templatedModifierDoc,
+} from "../data/modifierTemplates";
 import { detectContextFromParse, blockStackFromParse, type BlockContext } from "../context";
 import { structureContextAt } from "../structure";
 import type { ParseResult } from "../parser";
@@ -148,7 +157,10 @@ function tokenItem(t: TokenData): CompletionItem {
 }
 
 function defItem(d: Definition, origin: string = d.source): CompletionItem {
-  const item: CompletionItem = { label: d.name, kind: DEF_ITEM_KINDS[d.kind] ?? CompletionItemKind.Reference };
+  const item: CompletionItem = {
+    label: d.name,
+    kind: DEF_ITEM_KINDS[d.kind] ?? CompletionItemKind.Reference,
+  };
   item.detail = `${d.kind.replace(/_/g, " ")} (${origin})`;
   item.data = { t: "def", k: d.kind, n: d.name };
   return item;
@@ -200,7 +212,26 @@ export function matchesTypedWord(wordLow: string, label: string): boolean {
   return false;
 }
 
-const SEPARATORS = new Set(["_", ".", "-", ":", " ", "/", "\\", "'", '"', "$", "(", ")", "[", "]", "{", "}", "<", ">"]);
+const SEPARATORS = new Set([
+  "_",
+  ".",
+  "-",
+  ":",
+  " ",
+  "/",
+  "\\",
+  "'",
+  '"',
+  "$",
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  "<",
+  ">",
+]);
 
 function isStrongPosition(label: string, labelLow: string, i: number): boolean {
   if (i === 0) return true;
@@ -276,8 +307,8 @@ export class CompletionFeature {
    */
   private mergedCount(name: string, fctx: FreqContext | null): number {
     const bundled = fctx
-      ? this.freqs.contexts[fctx][name] ?? this.freqs.tokens[name] ?? 0
-      : this.freqs.tokens[name] ?? 0;
+      ? (this.freqs.contexts[fctx][name] ?? this.freqs.tokens[name] ?? 0)
+      : (this.freqs.tokens[name] ?? 0);
     const live = this.data.refIndex.usageCount(name);
     return bundled > live ? bundled : live;
   }
@@ -409,7 +440,7 @@ export class CompletionFeature {
         token.kind === "trigger" || token.kind === "effect"
           ? this.data.scopeModel.inputScopesOf(token.kind, token.name)
           : token.kind === "event_target"
-            ? this.data.scopeModel.links.get(token.name)?.inputs ?? null
+            ? (this.data.scopeModel.links.get(token.name)?.inputs ?? null)
             : null;
       if (supported === null) {
         // A scope-agnostic trigger/effect (no declared input scopes) is valid in
@@ -549,7 +580,11 @@ export class CompletionFeature {
     // every_/random_/ordered_<list> as effects and any_<list> as a trigger.
     if (context !== "value") {
       const prefixes =
-        context === "trigger" ? ["any"] : context === "effect" ? ["every", "random", "ordered"] : ["any", "every", "random", "ordered"];
+        context === "trigger"
+          ? ["any"]
+          : context === "effect"
+            ? ["every", "random", "ordered"]
+            : ["any", "every", "random", "ordered"];
       for (const d of this.data.index.entries((def) => def.kind === "scripted_list")) {
         for (const prefix of prefixes) {
           const label = `${prefix}_${d.name}`;
@@ -572,7 +607,11 @@ export class CompletionFeature {
     // (unknown context, per the kind filters above). Rebuilt with this cache
     // per index revision — never materialized into tokenMap.
     if (context === "unknown") {
-      for (const e of expandModifierTemplates(this.data.modifierTemplates, this.data.index, this.data.completableKinds)) {
+      for (const e of expandModifierTemplates(
+        this.data.modifierTemplates,
+        this.data.index,
+        this.data.completableKinds
+      )) {
         if (byLabel.has(e.name)) continue; // a concrete dumped modifier wins
         byLabel.set(e.name, items.length);
         items.push({
@@ -609,7 +648,11 @@ export class CompletionFeature {
       case "value":
         return false; // math keys + iterators only; script values complete as VALUES
       default:
-        return def.kind === "scripted_trigger" || def.kind === "scripted_effect" || def.kind === "scripted_modifier";
+        return (
+          def.kind === "scripted_trigger" ||
+          def.kind === "scripted_effect" ||
+          def.kind === "scripted_modifier"
+        );
     }
   }
 
@@ -807,7 +850,11 @@ export class CompletionFeature {
         const typed = varInfo
           ? (isList ? varInfo.listItemTypes : varInfo.types).get(`${p}:${d.name}`)
           : undefined;
-        const typeNote = typed ? ` → ${isList ? "list of " : ""}${[...typed].join("|")}` : isList ? " (list)" : "";
+        const typeNote = typed
+          ? ` → ${isList ? "list of " : ""}${[...typed].join("|")}`
+          : isList
+            ? " (list)"
+            : "";
         items.set(d.name, {
           label: d.name,
           kind: CompletionItemKind.Variable,

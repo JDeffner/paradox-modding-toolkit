@@ -53,7 +53,13 @@ function engineHover(token: TokenData, rendered = `${token.name} = yes`): string
   const text = `x = {\n\t${rendered}\n}`;
   const doc = TextDocument.create(`file:///mod/common/e-${uriCounter++}.txt`, "paradox", 1, text);
   const ch = text.split("\n")[1].indexOf(token.name) + 1;
-  const hover = provideHover(data, doc, { line: 1, character: ch }, new Set(["character"]) as Set<Scope>, null);
+  const hover = provideHover(
+    data,
+    doc,
+    { line: 1, character: ch },
+    new Set(["character"]) as Set<Scope>,
+    null
+  );
   expect(hover).not.toBeNull();
   return (hover!.contents as { value: string }).value;
 }

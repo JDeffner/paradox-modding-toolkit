@@ -23,7 +23,7 @@ const mkdoc = (text: string) => TextDocument.create(`file:///f${n++}.txt`, "para
 
 describe("formatter (indentation only)", () => {
   it("reindents by brace depth with tabs", () => {
-    const input = 'a = {\nb = {\n      x = 1\n }\n}\n';
+    const input = "a = {\nb = {\n      x = 1\n }\n}\n";
     const doc = mkdoc(input);
     expect(applyEdits(input, doc)).toBe("a = {\n\tb = {\n\t\tx = 1\n\t}\n}\n");
   });
@@ -59,7 +59,7 @@ describe("formatter (indentation only)", () => {
 describe("error.log parsing", () => {
   it("parses the standard file/line entry", () => {
     const p = parseErrorLogLine(
-      '[18:33:24][E][dlc_descriptor.cpp:70]: Invalid supported_version in file: mod/ugc_2220326926.mod line: 7\r'
+      "[18:33:24][E][dlc_descriptor.cpp:70]: Invalid supported_version in file: mod/ugc_2220326926.mod line: 7\r"
     );
     expect(p).toMatchObject({ relFile: "mod/ugc_2220326926.mod", line: 6, severity: "error" });
     expect(p!.message).toContain("Invalid supported_version");

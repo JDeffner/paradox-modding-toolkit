@@ -17,7 +17,14 @@ import type { ServerData } from "../serverData";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 
 const SECTION_KEYS = new Set(["trigger", "immediate", "after", "on_trigger_fail"]);
-const OPTION_META_KEYS = new Set(["name", "trigger", "ai_chance", "show_as_unavailable", "flag", "custom_tooltip"]);
+const OPTION_META_KEYS = new Set([
+  "name",
+  "trigger",
+  "ai_chance",
+  "show_as_unavailable",
+  "flag",
+  "custom_tooltip",
+]);
 const EVENT_ID = /^[A-Za-z][A-Za-z0-9_\-]*\.\d+$/;
 const SCOPE_PREFIX = /^(scope|var|local_var|global_var):([A-Za-z0-9_.\-]+)$/;
 const MAX_SECTION_KEYS = 12;
@@ -169,7 +176,8 @@ function collectRefs(
       return;
     }
     if (!isKey && EVENT_ID.test(textValue) && textValue !== selfId) {
-      if (data.index.lookup(textValue).some((d) => d.kind === "event")) add("event", textValue, offset, ["event"]);
+      if (data.index.lookup(textValue).some((d) => d.kind === "event"))
+        add("event", textValue, offset, ["event"]);
       return;
     }
     const defs = data.index.lookup(textValue);
@@ -188,7 +196,8 @@ function collectRefs(
     for (const s of b.statements) {
       if (s.kind === "assignment") {
         if (!s.key.quoted) scanScalar(s.key.text, s.key.range.start, true);
-        if (s.value?.kind === "scalar" && !s.value.quoted) scanScalar(s.value.text, s.value.range.start, false);
+        if (s.value?.kind === "scalar" && !s.value.quoted)
+          scanScalar(s.value.text, s.value.range.start, false);
         const sub = childBlock(s);
         if (sub) walk(sub);
       } else if (s.value.kind === "scalar" && !s.value.quoted) {

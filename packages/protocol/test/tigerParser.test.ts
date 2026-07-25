@@ -29,7 +29,12 @@ describe("parseTigerJson", () => {
       key: "unknown-field",
       message: "unknown token `add_goldd`",
     });
-    expect(reports[0].locations[0]).toMatchObject({ path: "events/my_events.txt", linenr: 12, column: 9, length: 9 });
+    expect(reports[0].locations[0]).toMatchObject({
+      path: "events/my_events.txt",
+      linenr: 12,
+      column: 9,
+      length: 9,
+    });
   });
 
   it("tolerates progress noise before the JSON array", () => {
@@ -38,7 +43,9 @@ describe("parseTigerJson", () => {
   });
 
   it("skips malformed entries instead of failing", () => {
-    const reports = parseTigerJson(JSON.stringify([{ nonsense: true }, { message: "ok", severity: "tips", locations: [] }]))!;
+    const reports = parseTigerJson(
+      JSON.stringify([{ nonsense: true }, { message: "ok", severity: "tips", locations: [] }])
+    )!;
     expect(reports).toHaveLength(1);
     expect(reports[0].severity).toBe("tips");
   });

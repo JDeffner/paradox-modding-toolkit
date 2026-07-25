@@ -37,7 +37,10 @@ export interface DefineResolution {
 function renderValue(text: string, value: ValueNode): string {
   if (value.kind === "scalar") return value.quoted ? `"${value.text}"` : value.text;
   const raw = text.slice(value.range.start, value.range.end);
-  const collapsed = raw.replace(/#[^\n]*/g, " ").replace(/\s+/g, " ").trim();
+  const collapsed = raw
+    .replace(/#[^\n]*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return collapsed.length > 200 ? collapsed.slice(0, 199) + "…" : collapsed;
 }
 

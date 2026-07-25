@@ -149,8 +149,7 @@ export class LineIndex {
     }
     const start = this.lineStarts[line];
     // Clamp character to the end of this line (start of next line, or EOF).
-    const nextStart =
-      line + 1 < this.lineStarts.length ? this.lineStarts[line + 1] : this.length;
+    const nextStart = line + 1 < this.lineStarts.length ? this.lineStarts[line + 1] : this.length;
     let ch = pos.character;
     if (ch < 0) ch = 0;
     let offset = start + ch;
@@ -184,10 +183,7 @@ function statementChildBlock(stmt: Statement): BlockNode | null {
  */
 export function walkStatements(
   root: RootNode | BlockNode,
-  cb: (
-    stmt: Statement,
-    ancestors: readonly (AssignmentNode | BlockNode)[]
-  ) => void
+  cb: (stmt: Statement, ancestors: readonly (AssignmentNode | BlockNode)[]) => void
 ): void {
   const ancestors: (AssignmentNode | BlockNode)[] = [];
 
@@ -240,10 +236,7 @@ function offsetInRange(offset: number, range: Range): boolean {
  * enclosing statement chain (i.e. the assignment/value-statement that owns the
  * block the cursor is inside). Returns null if offset is outside all statements.
  */
-export function nodeAtOffset(
-  root: RootNode,
-  offset: number
-): { path: Statement[] } | null {
+export function nodeAtOffset(root: RootNode, offset: number): { path: Statement[] } | null {
   const path: Statement[] = [];
 
   const searchStatements = (statements: Statement[]): boolean => {

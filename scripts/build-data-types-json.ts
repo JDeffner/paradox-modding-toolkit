@@ -25,7 +25,8 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 function cleanRet(cell: string): string | null {
   const linked = /^\[([^\]]+)\]\([^)]*\)$/.exec(cell);
   const value = (linked ? linked[1] : cell).trim();
-  if (value.length === 0 || value === "[unregistered]" || value === "unregistered" || value === "void") return null;
+  if (value.length === 0 || value === "[unregistered]" || value === "unregistered" || value === "void")
+    return null;
   return NAME.test(value) ? value : null;
 }
 
@@ -82,7 +83,8 @@ function put(into: Record<string, string | null>, name: string, ret: string | nu
 }
 
 for (const [name, ret] of tableRows(h2.get("List of Global Promotes") ?? [])) put(globalPromotes, name, ret);
-for (const [name, ret] of tableRows(h2.get("List of Global Functions") ?? [])) put(globalFunctions, name, ret);
+for (const [name, ret] of tableRows(h2.get("List of Global Functions") ?? []))
+  put(globalFunctions, name, ret);
 
 const typesBody = h2.get("Types") ?? [];
 for (const [typeName, body] of sections(typesBody, "### ")) {

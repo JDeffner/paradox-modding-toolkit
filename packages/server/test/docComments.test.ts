@@ -125,7 +125,8 @@ describe("extractDefinitions — BOM + CRLF handling", () => {
   });
 
   it("harvests $PARAM$ and doc together", () => {
-    const content = "# Legitimize.\n# @param DYNASTY_HOUSE the house\nmy_effect = {\n\tset_house = $DYNASTY_HOUSE$\n}\n";
+    const content =
+      "# Legitimize.\n# @param DYNASTY_HOUSE the house\nmy_effect = {\n\tset_house = $DYNASTY_HOUSE$\n}\n";
     const [def] = extract(content);
     expect(def.params).toEqual(["DYNASTY_HOUSE"]);
     expect(def.doc).toBe("Legitimize.");

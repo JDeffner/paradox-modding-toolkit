@@ -27,9 +27,7 @@ function diagnosticsSummary(): string[] {
     }
   }
   if (counts.size === 0) return ["No problems reported. Clean."];
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([key, n]) => `| ${key} | ${n} |`);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => `| ${key} | ${n} |`);
 }
 
 export async function modReportCommand(lc: LanguageClient, modRoot: string | null = null): Promise<void> {
@@ -84,7 +82,8 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
     for (const o of overrides.slice(0, 100)) {
       lines.push(`| ${o.name} | ${o.kind} | ${o.rule} | ${o.winner === "mod" ? "mod" : "**vanilla**"} |`);
     }
-    if (overrides.length > 100) lines.push("", `… and ${overrides.length - 100} more (see the Overrides view).`);
+    if (overrides.length > 100)
+      lines.push("", `… and ${overrides.length - 100} more (see the Overrides view).`);
     lines.push("");
   }
 

@@ -55,7 +55,10 @@ export interface FuzzyScoreOptions {
   readonly boostFullMatch: boolean;
 }
 
-export const FuzzyScoreOptionsDefault: FuzzyScoreOptions = { boostFullMatch: true, firstMatchCanBeWeak: false };
+export const FuzzyScoreOptionsDefault: FuzzyScoreOptions = {
+  boostFullMatch: true,
+  firstMatchCanBeWeak: false,
+};
 
 const _maxLen = 128;
 
@@ -174,7 +177,11 @@ export function fuzzyScore(
     const maxWordMatchPos = _maxWordMatchPos[patternPos];
     const nextMaxWordMatchPos = patternPos + 1 < patternLen ? _maxWordMatchPos[patternPos + 1] : wordLen;
 
-    for (column = minWordMatchPos - wordStart + 1, wordPos = minWordMatchPos; wordPos < nextMaxWordMatchPos; column++, wordPos++) {
+    for (
+      column = minWordMatchPos - wordStart + 1, wordPos = minWordMatchPos;
+      wordPos < nextMaxWordMatchPos;
+      column++, wordPos++
+    ) {
       let score = Number.MIN_SAFE_INTEGER;
       let canComeDiag = false;
 
@@ -204,9 +211,15 @@ export function fuzzyScore(
       const leftScore = canComeLeft ? _table[row][column - 1] + (_diag[row][column - 1] > 0 ? -5 : 0) : 0;
 
       const canComeLeftLeft = wordPos > minWordMatchPos + 1 && _diag[row][column - 1] > 0;
-      const leftLeftScore = canComeLeftLeft ? _table[row][column - 2] + (_diag[row][column - 2] > 0 ? -5 : 0) : 0;
+      const leftLeftScore = canComeLeftLeft
+        ? _table[row][column - 2] + (_diag[row][column - 2] > 0 ? -5 : 0)
+        : 0;
 
-      if (canComeLeftLeft && (!canComeLeft || leftLeftScore >= leftScore) && (!canComeDiag || leftLeftScore >= diagScore)) {
+      if (
+        canComeLeftLeft &&
+        (!canComeLeft || leftLeftScore >= leftScore) &&
+        (!canComeDiag || leftLeftScore >= diagScore)
+      ) {
         _table[row][column] = leftLeftScore;
         _arrows[row][column] = Arrow.LeftLeft;
         _diag[row][column] = 0;
@@ -323,10 +336,16 @@ function _doScore(
   let isGapLocation = false;
   if (wordPos === patternPos - patternStart) {
     score = pattern[patternPos] === word[wordPos] ? 7 : 5;
-  } else if (isUpperCaseAtPos(wordPos, word, wordLow) && (wordPos === 0 || !isUpperCaseAtPos(wordPos - 1, word, wordLow))) {
+  } else if (
+    isUpperCaseAtPos(wordPos, word, wordLow) &&
+    (wordPos === 0 || !isUpperCaseAtPos(wordPos - 1, word, wordLow))
+  ) {
     score = pattern[patternPos] === word[wordPos] ? 7 : 5;
     isGapLocation = true;
-  } else if (isSeparatorAtPos(wordLow, wordPos) && (wordPos === 0 || !isSeparatorAtPos(wordLow, wordPos - 1))) {
+  } else if (
+    isSeparatorAtPos(wordLow, wordPos) &&
+    (wordPos === 0 || !isSeparatorAtPos(wordLow, wordPos - 1))
+  ) {
     score = 5;
   } else if (isSeparatorAtPos(wordLow, wordPos - 1) || isWhitespaceAtPos(wordLow, wordPos - 1)) {
     score = 5;
@@ -338,7 +357,10 @@ function _doScore(
   }
 
   if (!isGapLocation) {
-    isGapLocation = isUpperCaseAtPos(wordPos, word, wordLow) || isSeparatorAtPos(wordLow, wordPos - 1) || isWhitespaceAtPos(wordLow, wordPos - 1);
+    isGapLocation =
+      isUpperCaseAtPos(wordPos, word, wordLow) ||
+      isSeparatorAtPos(wordLow, wordPos - 1) ||
+      isWhitespaceAtPos(wordLow, wordPos - 1);
   }
 
   if (patternPos === patternStart) {
@@ -412,7 +434,15 @@ function fuzzyScoreWithPermutations(
     for (let movingPatternPos = patternPos + 1; movingPatternPos < tries; movingPatternPos++) {
       const newPattern = nextTypoPermutation(pattern, movingPatternPos);
       if (newPattern) {
-        const candidate = fuzzyScore(newPattern, newPattern.toLowerCase(), patternPos, word, lowWord, wordPos, options);
+        const candidate = fuzzyScore(
+          newPattern,
+          newPattern.toLowerCase(),
+          patternPos,
+          word,
+          lowWord,
+          wordPos,
+          options
+        );
         if (candidate) {
           candidate[0] -= 3;
           if (!top || candidate[0] > top[0]) {
@@ -468,7 +498,11 @@ export function initialSort<T extends SimItem>(items: T[]): T[] {
  * (for a non-empty word) fuzzy-score each item — DROPPING non-matches — and sort
  * by score desc / idx asc. filterGraceful upgrades the scorer for lists ≤ 2000.
  */
-export function simulateSuggest<T extends SimItem>(items: T[], typedWord: string, filterGraceful = true): SimResult<T>[] {
+export function simulateSuggest<T extends SimItem>(
+  items: T[],
+  typedWord: string,
+  filterGraceful = true
+): SimResult<T>[] {
   const sorted = initialSort(items);
   const word = typedWord;
   const wordLow = word.toLowerCase();
@@ -483,7 +517,15 @@ export function simulateSuggest<T extends SimItem>(items: T[], typedWord: string
     }
     let score: FuzzyScore | undefined;
     if (typeof item.filterText === "string") {
-      score = scoreFn(word, wordLow, 0, item.filterText, item.filterText.toLowerCase(), 0, FuzzyScoreOptionsDefault);
+      score = scoreFn(
+        word,
+        wordLow,
+        0,
+        item.filterText,
+        item.filterText.toLowerCase(),
+        0,
+        FuzzyScoreOptionsDefault
+      );
     } else {
       score = scoreFn(word, wordLow, 0, item.label, item.label.toLowerCase(), 0, FuzzyScoreOptionsDefault);
     }

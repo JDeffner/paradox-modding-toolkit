@@ -330,7 +330,11 @@ function serialize(usage: DataFnUsage, stamp: string): CacheShape {
     starts: toObj(usage.starts),
     pairs: toObj(new Map([...usage.pairs].map(([k, v]) => [k, toObj(v)]))),
     memberPool: toObj(usage.memberPool),
-    argCounts: toObj(new Map([...usage.argCounts].map(([k, v]) => [k, toObj(new Map([...v].map(([n, c]) => [String(n), c])))]))),
+    argCounts: toObj(
+      new Map(
+        [...usage.argCounts].map(([k, v]) => [k, toObj(new Map([...v].map(([n, c]) => [String(n), c])))])
+      )
+    ),
     literals: toObj(new Map([...usage.literals].map(([k, v]) => [k, toObj(v)]))),
     formats: toObj(usage.formats),
     examples: toObj(usage.examples),
@@ -345,7 +349,10 @@ function deserialize(cache: CacheShape): DataFnUsage {
     pairs: new Map(Object.entries(cache.pairs ?? {}).map(([k, v]) => [k, toMap(v)])),
     memberPool: toMap(cache.memberPool),
     argCounts: new Map(
-      Object.entries(cache.argCounts ?? {}).map(([k, v]) => [k, new Map(Object.entries(v).map(([n, c]) => [Number(n), c]))])
+      Object.entries(cache.argCounts ?? {}).map(([k, v]) => [
+        k,
+        new Map(Object.entries(v).map(([n, c]) => [Number(n), c])),
+      ])
     ),
     literals: new Map(Object.entries(cache.literals ?? {}).map(([k, v]) => [k, toMap(v)])),
     formats: toMap(cache.formats),

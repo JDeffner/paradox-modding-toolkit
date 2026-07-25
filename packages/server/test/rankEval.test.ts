@@ -70,53 +70,49 @@ const CORPUS = devPath("corpusPath");
 const run = CORPUS ? describe : describe.skip;
 
 run("completion ranking eval (§C4)", () => {
-  it(
-    "reports per-context top-1/top-5/MRR and clears the acceptance floors",
-    () => {
-      const env = buildEvalEnv({
-        wikidocsDir: path.join(__dirname, "..", "data", "ck3", "wikidocs"),
-        freqsDir: path.join(__dirname, "..", "data", "ck3"),
-        gamePath: devPath("gamePath"),
-        modPath: CORPUS!,
-      });
-      // perContext 80 keeps the suite ~90 s while sampling ~450 positions; the
-      // recorded header numbers use the standalone script at perContext 200.
-      const { samples, metrics } = runRankEval(env, CORPUS!, { seed: 1234567, perContext: 80 });
-      expect(samples.length).toBeGreaterThan(300);
+  it("reports per-context top-1/top-5/MRR and clears the acceptance floors", () => {
+    const env = buildEvalEnv({
+      wikidocsDir: path.join(__dirname, "..", "data", "ck3", "wikidocs"),
+      freqsDir: path.join(__dirname, "..", "data", "ck3"),
+      gamePath: devPath("gamePath"),
+      modPath: CORPUS!,
+    });
+    // perContext 80 keeps the suite ~90 s while sampling ~450 positions; the
+    // recorded header numbers use the standalone script at perContext 200.
+    const { samples, metrics } = runRankEval(env, CORPUS!, { seed: 1234567, perContext: 80 });
+    expect(samples.length).toBeGreaterThan(300);
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `\nrank eval (${samples.length} samples, ${env.data.index.stats().total} defs):\n` +
-          formatMetrics(metrics)
-      );
+    // eslint-disable-next-line no-console
+    console.log(
+      `\nrank eval (${samples.length} samples, ${env.data.index.stats().total} defs):\n` +
+        formatMetrics(metrics)
+    );
 
-      const by = (c: EvalContext): ContextMetrics => metrics.find((m) => m.context === c)!;
+    const by = (c: EvalContext): ContextMetrics => metrics.find((m) => m.context === c)!;
 
-      // Defensive floors, well below the measured numbers (header) so the suite is
-      // not brittle across game patches. Top-5 ≥ 80% (§C4 draft) is unreachable by
-      // construction — each structural context has >5 equally-common keys in one
-      // slot tier — so we assert the ranking WORKS: the hottest keys lead (strong
-      // top-1/MRR relative to a random ~1/N baseline) and structure keys are always
-      // offered. See the header for the full reasoning and per-key evidence.
-      for (const c of ["event_top", "event_option", "decision_top"] as const) {
-        const m = by(c);
-        expect(m.n, `${c} sampled`).toBeGreaterThan(0);
-        expect(m.top5, `${c} top-5`).toBeGreaterThanOrEqual(0.3);
-        expect(m.mrr, `${c} MRR`).toBeGreaterThanOrEqual(0.2);
-      }
-      // interaction_top: ~22% of sampled keys aren't in the shipped structure table
-      // (AGOT custom/older interaction keys), so its floors are lower; still far
-      // above the baseline (top5 22.5%→27.5%).
-      expect(by("interaction_top").top5, "interaction top-5").toBeGreaterThanOrEqual(0.2);
+    // Defensive floors, well below the measured numbers (header) so the suite is
+    // not brittle across game patches. Top-5 ≥ 80% (§C4 draft) is unreachable by
+    // construction — each structural context has >5 equally-common keys in one
+    // slot tier — so we assert the ranking WORKS: the hottest keys lead (strong
+    // top-1/MRR relative to a random ~1/N baseline) and structure keys are always
+    // offered. See the header for the full reasoning and per-key evidence.
+    for (const c of ["event_top", "event_option", "decision_top"] as const) {
+      const m = by(c);
+      expect(m.n, `${c} sampled`).toBeGreaterThan(0);
+      expect(m.top5, `${c} top-5`).toBeGreaterThanOrEqual(0.3);
+      expect(m.mrr, `${c} MRR`).toBeGreaterThanOrEqual(0.2);
+    }
+    // interaction_top: ~22% of sampled keys aren't in the shipped structure table
+    // (AGOT custom/older interaction keys), so its floors are lower; still far
+    // above the baseline (top5 22.5%→27.5%).
+    expect(by("interaction_top").top5, "interaction top-5").toBeGreaterThanOrEqual(0.2);
 
-      // Effect/trigger blocks: §C4's MRR ≥ 0.5 overall is not met on the FULL vanilla
-      // + AGOT index (long tail of thousands of mid-frequency effects/triggers sorts
-      // alphabetically within a log bucket). The overhaul's real win is the hot keys
-      // leading (save_scope_as→1, exists→1, …; baseline had them in the hundreds), a
-      // 15-40x MRR lift over baseline. Floors set to the measured overall numbers.
-      expect(by("trigger_block").mrr, "trigger MRR (overall)").toBeGreaterThanOrEqual(0.08);
-      expect(by("effect_block").mrr, "effect MRR (overall)").toBeGreaterThanOrEqual(0.06);
-    },
-    180000
-  );
+    // Effect/trigger blocks: §C4's MRR ≥ 0.5 overall is not met on the FULL vanilla
+    // + AGOT index (long tail of thousands of mid-frequency effects/triggers sorts
+    // alphabetically within a log bucket). The overhaul's real win is the hot keys
+    // leading (save_scope_as→1, exists→1, …; baseline had them in the hundreds), a
+    // 15-40x MRR lift over baseline. Floors set to the measured overall numbers.
+    expect(by("trigger_block").mrr, "trigger MRR (overall)").toBeGreaterThanOrEqual(0.08);
+    expect(by("effect_block").mrr, "effect MRR (overall)").toBeGreaterThanOrEqual(0.06);
+  }, 180000);
 });

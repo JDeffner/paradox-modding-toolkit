@@ -40,16 +40,13 @@ describe("extractDefinitions — representative entries", () => {
   it("decision: top-level keys", () => {
     const content = [
       "commission_artifact_decision = {",
-      "\tpicture = { reference = \"gfx/x.dds\" }",
+      '\tpicture = { reference = "gfx/x.dds" }',
       "\tis_shown = { always = yes }",
       "}",
       "recruit_terrain_specialist_decision = { cost = { gold = 100 } }",
     ].join("\n");
     const defs = extractDefinitions(content, entry("decision"), "d.txt", "vanilla");
-    expect(names(defs)).toEqual([
-      "commission_artifact_decision",
-      "recruit_terrain_specialist_decision",
-    ]);
+    expect(names(defs)).toEqual(["commission_artifact_decision", "recruit_terrain_specialist_decision"]);
   });
 
   it("event: only namespace.NNN ids, skips namespace= and helper keys", () => {
@@ -98,9 +95,7 @@ describe("extractDefinitions — representative entries", () => {
       "}",
     ].join("\n");
     const defs = extractDefinitions(content, entry("gui_type"), "x.gui", "vanilla");
-    expect(names(defs).sort()).toEqual(
-      ["another_widget", "my_template", "my_widget"].sort()
-    );
+    expect(names(defs).sort()).toEqual(["another_widget", "my_template", "my_widget"].sort());
   });
 
   it("culture: top-level keys", () => {
@@ -126,21 +121,12 @@ describe("extractDefinitions — representative entries", () => {
       "murder_feast_murderer_modifier = { dread = 10 }",
     ].join("\n");
     const defs = extractDefinitions(content, entry("static_modifier"), "m.txt", "vanilla");
-    expect(names(defs)).toEqual([
-      "feast_strategy_discussions_modifier",
-      "murder_feast_murderer_modifier",
-    ]);
+    expect(names(defs)).toEqual(["feast_strategy_discussions_modifier", "murder_feast_murderer_modifier"]);
   });
 });
 
 describe("CK3_SCHEMA sanity", () => {
-  const validExtraction = new Set([
-    "top-level-key",
-    "event-id",
-    "nested-title",
-    "gui-type",
-    "loc-key",
-  ]);
+  const validExtraction = new Set(["top-level-key", "event-id", "nested-title", "gui-type", "loc-key"]);
 
   it("has a healthy number of entries", () => {
     expect(CK3_SCHEMA.length).toBeGreaterThanOrEqual(55);

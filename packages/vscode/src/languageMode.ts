@@ -28,8 +28,7 @@ export async function ensureFileAssociations(cfg: Ck3Config): Promise<void> {
   const existing = files.get<Record<string, string>>("associations") ?? {};
   const missing = Object.entries(wanted).filter(([glob]) => !(glob in existing));
   if (missing.length === 0) return;
-  const workspaceValue =
-    files.inspect<Record<string, string>>("associations")?.workspaceValue ?? {};
+  const workspaceValue = files.inspect<Record<string, string>>("associations")?.workspaceValue ?? {};
   try {
     await files.update(
       "associations",

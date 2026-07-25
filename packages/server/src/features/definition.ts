@@ -25,7 +25,11 @@ export function provideDefinition(data: ServerData, document: TextDocument, posi
  * localization, `scope_name.GetHerHis` chain segments to save sites, etc.
  * Plain loc-key navigation stays with the client-side provider.
  */
-export function provideLocDefinition(data: ServerData, document: TextDocument, position: Position): Location[] {
+export function provideLocDefinition(
+  data: ServerData,
+  document: TextDocument,
+  position: Position
+): Location[] {
   const lineText = getLineText(document, position.line);
   // Only inside an unclosed [ before the cursor — i.e. within an expression.
   if (datafunctionExprAt(lineText.slice(0, position.character)) === null) return [];
@@ -52,9 +56,7 @@ export function provideLocDefinition(data: ServerData, document: TextDocument, p
 const SOURCE_ORDER: Record<DefSource, number> = { mod: 0, parent: 1, vanilla: 2 };
 
 function orderedDefs(data: ServerData, word: string) {
-  return [...data.index.lookupAll(word)].sort(
-    (a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source]
-  );
+  return [...data.index.lookupAll(word)].sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source]);
 }
 
 function lookupLocations(data: ServerData, word: string): Location[] {

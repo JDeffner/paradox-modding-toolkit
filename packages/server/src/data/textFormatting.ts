@@ -136,7 +136,10 @@ export class TextFormattingIndex {
       chain.push(n);
       const entry = this.winner(n);
       if (!entry) return; // builtin / unknown leaf
-      for (const seg of entry.format.split(";").map((s) => s.trim()).filter(Boolean)) {
+      for (const seg of entry.format
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean)) {
         const color = parseColor(seg);
         if (color) {
           if (!rgb) rgb = color;

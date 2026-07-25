@@ -6,7 +6,11 @@
 import { describe, expect, it } from "vitest";
 import { decodeDds, encodeDds, hasTransparency } from "../../src/dds";
 
-function image(width: number, height: number, fill: (x: number, y: number) => [number, number, number, number]) {
+function image(
+  width: number,
+  height: number,
+  fill: (x: number, y: number) => [number, number, number, number]
+) {
   const px = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {

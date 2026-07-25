@@ -60,12 +60,7 @@ describe("buildGuiTree", () => {
     const flow = root.children[0];
     expect(flow.key).toBe("flowcontainer");
     expect(flow.name).toBe("observer_status");
-    expect(flow.children.map((c) => c.key)).toEqual([
-      "background",
-      "text_single",
-      "icon_observer",
-      "state",
-    ]);
+    expect(flow.children.map((c) => c.key)).toEqual(["background", "text_single", "icon_observer", "state"]);
   });
 
   it("attribute blocks (size, position) are not nodes; custom types are", () => {

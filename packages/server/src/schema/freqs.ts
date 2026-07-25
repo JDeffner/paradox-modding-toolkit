@@ -17,12 +17,7 @@ import * as path from "path";
 
 /** The frequency contexts. Mirrors the eval harness's EvalContext set. */
 export type FreqContext =
-  | "event_top"
-  | "event_option"
-  | "interaction_top"
-  | "decision_top"
-  | "effect_block"
-  | "trigger_block";
+  "event_top" | "event_option" | "interaction_top" | "decision_top" | "effect_block" | "trigger_block";
 
 export const FREQ_CONTEXTS: FreqContext[] = [
   "event_top",

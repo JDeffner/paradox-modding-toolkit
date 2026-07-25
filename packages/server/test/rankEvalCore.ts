@@ -31,12 +31,7 @@ import type { SchemaEntry } from "../src/schema/types";
 
 /** The completion contexts we sample and report separately. */
 export type EvalContext =
-  | "event_top"
-  | "event_option"
-  | "interaction_top"
-  | "decision_top"
-  | "effect_block"
-  | "trigger_block";
+  "event_top" | "event_option" | "interaction_top" | "decision_top" | "effect_block" | "trigger_block";
 
 export const EVAL_CONTEXTS: EvalContext[] = [
   "event_top",
@@ -69,7 +64,7 @@ export interface ContextMetrics {
 export class Rng {
   private state: number;
   constructor(seed: number) {
-    this.state = (seed >>> 0) || 1;
+    this.state = seed >>> 0 || 1;
   }
   next(): number {
     // xorshift32
@@ -192,12 +187,41 @@ const NAME_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * effect/trigger "missing" counts: limit, modifier, NOT, this, OR, …).
  */
 const NON_ITEM_KEYS = new Set([
-  "if", "else", "else_if", "limit", "trigger_if", "trigger_else", "trigger_else_if",
-  "and", "or", "not", "nor", "nand", "any", "all",
-  "modifier", "ai_value_modifier", "compare_modifier", "opinion_modifier",
-  "this", "root", "prev", "from",
-  "base", "add", "subtract", "multiply", "divide", "min", "max", "factor", "weight", "value",
-  "list", "chance", "random",
+  "if",
+  "else",
+  "else_if",
+  "limit",
+  "trigger_if",
+  "trigger_else",
+  "trigger_else_if",
+  "and",
+  "or",
+  "not",
+  "nor",
+  "nand",
+  "any",
+  "all",
+  "modifier",
+  "ai_value_modifier",
+  "compare_modifier",
+  "opinion_modifier",
+  "this",
+  "root",
+  "prev",
+  "from",
+  "base",
+  "add",
+  "subtract",
+  "multiply",
+  "divide",
+  "min",
+  "max",
+  "factor",
+  "weight",
+  "value",
+  "list",
+  "chance",
+  "random",
 ]);
 
 /**
@@ -234,11 +258,7 @@ function candidatesInFile(text: string, entryKind: string | null): Candidate[] {
  * the nearest classifying keyword — mirroring what completion's own context
  * detection sees.
  */
-function classifyPosition(
-  entryKind: string | null,
-  enclosing: string[],
-  depth: number
-): EvalContext | null {
+function classifyPosition(entryKind: string | null, enclosing: string[], depth: number): EvalContext | null {
   // Structural top-level: directly inside a definition body (depth 1) of a kind
   // whose structure layer we ship.
   if (depth === 1) {
@@ -337,9 +357,7 @@ function evalOne(
   const holed = text.slice(0, cand.keyStart) + text.slice(cand.keyEnd);
   const uri = `file:///${file.replace(/\\/g, "/")}#h${cand.keyStart}`;
   const doc = TextDocument.create(uri, "paradox", 1, holed);
-  const rootScopes = entry?.rootScopes?.length
-    ? new Set(entry.rootScopes.map((s) => s.toLowerCase()))
-    : null;
+  const rootScopes = entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null;
   let items: CompletionItem[];
   try {
     items = env.completion.provide(doc, cand.keyStart, rootScopes, entry, Number.MAX_SAFE_INTEGER).items;

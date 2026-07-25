@@ -11,13 +11,7 @@
  * offset range via WorkspaceEdit, which keeps undo, dirty state, and the
  * live-preview refresh loop in the editor's hands.
  */
-import {
-  LineIndex,
-  parseScript,
-  type AssignmentNode,
-  type BlockNode,
-  type Statement,
-} from "../parser";
+import { LineIndex, parseScript, type AssignmentNode, type BlockNode, type Statement } from "../parser";
 
 export interface WidgetTextEdit {
   /** UTF-16 offsets into the request's text. */
@@ -57,9 +51,8 @@ export function computeGuiWidgetEdit(
   // Insert as the first statement, using the indentation of the block's
   // first child (or the key's own indentation plus one tab).
   const keyPos = lineIndex.positionAt(target.key.range.start);
-  const keyIndent = text
-    .slice(lineIndex.lineStart(keyPos.line), target.key.range.start)
-    .match(/^[ \t]*/)?.[0] ?? "";
+  const keyIndent =
+    text.slice(lineIndex.lineStart(keyPos.line), target.key.range.start).match(/^[ \t]*/)?.[0] ?? "";
   let indent = keyIndent + "\t";
   const first = block.statements[0];
   if (first) {
@@ -72,11 +65,7 @@ export function computeGuiWidgetEdit(
 }
 
 /** First assignment-with-block whose key starts on `line` (depth-first). */
-function findWidgetAt(
-  statements: Statement[],
-  line: number,
-  lineIndex: LineIndex
-): AssignmentNode | null {
+function findWidgetAt(statements: Statement[], line: number, lineIndex: LineIndex): AssignmentNode | null {
   for (const stmt of statements) {
     if (stmt.kind !== "assignment") continue;
     const block = valueBlock(stmt);

@@ -21,16 +21,7 @@ import { Token, tokenize } from "./lexer.js";
 // itself stays game-agnostic.
 import { activeProfile } from "../games/active";
 
-const OPERATORS: ReadonlySet<string> = new Set([
-  "=",
-  "?=",
-  "==",
-  "!=",
-  "<",
-  "<=",
-  ">",
-  ">=",
-]);
+const OPERATORS: ReadonlySet<string> = new Set(["=", "?=", "==", "!=", "<", "<=", ">", ">="]);
 
 class Parser {
   private readonly text: string;
@@ -98,10 +89,7 @@ class Parser {
   }
 
   private skipComments(): void {
-    while (
-      this.pos < this.tokens.length &&
-      this.tokens[this.pos].kind === "comment"
-    ) {
+    while (this.pos < this.tokens.length && this.tokens[this.pos].kind === "comment") {
       const c = this.tokens[this.pos];
       this.comments.push({
         text: this.text.slice(c.start, c.end),

@@ -65,8 +65,6 @@ describe("computeGuiWidgetEdit", () => {
 
   it("returns null for unknown lines and non-pair properties", () => {
     expect(computeGuiWidgetEdit(DOC, 99, "position", [0, 0])).toBeNull();
-    expect(
-      computeGuiWidgetEdit(DOC, 3, "name" as unknown as "position", [0, 0])
-    ).toBeNull();
+    expect(computeGuiWidgetEdit(DOC, 3, "name" as unknown as "position", [0, 0])).toBeNull();
   });
 });

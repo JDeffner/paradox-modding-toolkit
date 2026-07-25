@@ -8,17 +8,11 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import {
-  computeGuiLayout,
-  computeNineSlice,
-  GHOST_COUNT,
-  type LayoutNode,
-} from "../src/gui/layoutEngine";
+import { computeGuiLayout, computeNineSlice, GHOST_COUNT, type LayoutNode } from "../src/gui/layoutEngine";
 import { collectGuiDefs, emptyGuiDefs, mergeGuiDefs } from "../src/gui/guiDefs";
 import { devPath } from "../../../scripts/devPaths";
 
-const ICON = (props: string) =>
-  `icon = { ${props} texture = "gfx/interface/colors/white.dds" }`;
+const ICON = (props: string) => `icon = { ${props} texture = "gfx/interface/colors/white.dds" }`;
 
 function lay(snippet: string, w = 1000, h = 1000): LayoutNode {
   const nodes = computeGuiLayout(snippet, { viewport: { w, h } });
@@ -50,9 +44,15 @@ widget = {
 	${ICON("parentanchor = bottom|right size = { 20 20 }")}
 }`);
     const expected: Array<[number, number]> = [
-      [0, 0], [140, 0], [280, 0],
-      [0, 90], [140, 90], [280, 90],
-      [0, 180], [140, 180], [280, 180],
+      [0, 0],
+      [140, 0],
+      [280, 0],
+      [0, 90],
+      [140, 90],
+      [280, 90],
+      [0, 180],
+      [140, 180],
+      [280, 180],
     ];
     expected.forEach(([x, y], i) => expectRect(root.children[i], x, y, 20, 20));
   });
@@ -285,22 +285,19 @@ describe("batch 02/03: flowcontainer, margin_widget, scrollarea", () => {
     expectRect(bare, 0, 0, 250, 30);
     bare.children.forEach((c, i) => expectRect(c, i * 50, 0, 50, 30));
 
-    const sized = lay(
-      `widget = { size = { 200 120 } flowcontainer = { size = { 200 120 } ${FIVE} } }`
-    ).children[0];
+    const sized = lay(`widget = { size = { 200 120 } flowcontainer = { size = { 200 120 } ${FIVE} } }`)
+      .children[0];
     expectRect(sized, 0, 0, 200, 120);
     sized.children.forEach((c, i) => expectRect(c, i * 50, 0, 50, 30)); // overflows
   });
 
   it("B2-K2/K3: vertical direction and spacing", () => {
-    const vertical = lay(
-      `widget = { size = { 200 120 } flowcontainer = { direction = vertical ${FIVE} } }`
-    ).children[0];
+    const vertical = lay(`widget = { size = { 200 120 } flowcontainer = { direction = vertical ${FIVE} } }`)
+      .children[0];
     vertical.children.forEach((c, i) => expectRect(c, 0, i * 30, 50, 30));
 
-    const spaced = lay(
-      `widget = { size = { 200 120 } flowcontainer = { spacing = 10 ${FIVE} } }`
-    ).children[0];
+    const spaced = lay(`widget = { size = { 200 120 } flowcontainer = { spacing = 10 ${FIVE} } }`)
+      .children[0];
     spaced.children.forEach((c, i) => expectRect(c, i * 60, 0, 50, 30));
   });
 
@@ -394,9 +391,7 @@ widget = { size = { 400 100 }
   });
 
   it("B3-S3: metrics scale exactly linearly with fontsize", () => {
-    const root = lay(
-      `widget = { size = { 400 100 } text_single = { fontsize = 30 raw_text = "MMMMM" } }`
-    );
+    const root = lay(`widget = { size = { 400 100 } text_single = { fontsize = 30 raw_text = "MMMMM" } }`);
     expectRect(root.children[0], 0, 0, 138, 42);
   });
 

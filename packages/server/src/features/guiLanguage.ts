@@ -5,7 +5,13 @@
  * property usage counts) plus the definition index's gui_type entries
  * (mod + vanilla `template X { }` / `type x = base { }` declarations).
  */
-import { CompletionItemKind, MarkupKind, type CompletionItem, type Hover, type Position } from "vscode-languageserver/node";
+import {
+  CompletionItemKind,
+  MarkupKind,
+  type CompletionItem,
+  type Hover,
+  type Position,
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { activeProfile } from "../games/active";
 import type { ServerData } from "../serverData";
@@ -14,12 +20,7 @@ import { getParse } from "../parseCache";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
 import { provideDataFnCompletion, provideDataFnHover } from "./datafunction";
 import { guiDefSources, type GuiPaths } from "./guiNavigation";
-import {
-  collectOverridableBlocks,
-  resolveGuiDef,
-  typeBaseChain,
-  type GuiTypeDef,
-} from "../gui/guiDefs";
+import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { renderCard, renderHover } from "./hoverRender";
@@ -214,7 +215,13 @@ export function provideGuiHover(
 
   // A chain segment inside [ ... ] → datafunction card (own range: word
   // boundaries differ, dots split segments).
-  const dataFn = provideDataFnHover(data.dataTypes, data.dataFnUsage, lineText, position.character, paths?.gamePath ?? null);
+  const dataFn = provideDataFnHover(
+    data.dataTypes,
+    data.dataFnUsage,
+    lineText,
+    position.character,
+    paths?.gamePath ?? null
+  );
   if (dataFn) {
     return {
       contents: { kind: MarkupKind.Markdown, value: dataFn.markdown },
@@ -311,7 +318,9 @@ export function provideGuiHover(
       const footer: string[] = [];
       if (def.file !== undefined && def.line !== undefined) {
         footer.push(
-          `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file).with({ fragment: String(def.line + 1) }).toString()})`
+          `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
+            .with({ fragment: String(def.line + 1) })
+            .toString()})`
         );
       }
       cards.push(
@@ -331,7 +340,9 @@ export function provideGuiHover(
   if (!resolvedCard) {
     for (const def of data.index.lookup(word)) {
       if (def.kind !== "gui_type") continue;
-      const link = `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file).with({ fragment: String(def.line + 1) }).toString()})`;
+      const link = `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
+        .with({ fragment: String(def.line + 1) })
+        .toString()})`;
       cards.push(
         renderCard({
           kind: "gui_type",

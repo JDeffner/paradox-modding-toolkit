@@ -7,7 +7,10 @@ import type { ServerData } from "../serverData";
 
 const DEFS_CAP = 500;
 
-export function computeModOverview(data: ServerData, inFocus: (file: string) => boolean = () => true): ModOverview {
+export function computeModOverview(
+  data: ServerData,
+  inFocus: (file: string) => boolean = () => true
+): ModOverview {
   const byKind = new Map<string, OverviewKind>();
   let total = 0;
   for (const def of data.index.allDefinitions()) {

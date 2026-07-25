@@ -11,14 +11,7 @@
  */
 
 /** `--vscode-charts-*` / semantic color slot per kind family (§D2). */
-type ChartColor =
-  | "purple"
-  | "red"
-  | "yellow"
-  | "green"
-  | "orange"
-  | "blue"
-  | "foreground";
+type ChartColor = "purple" | "red" | "yellow" | "green" | "orange" | "blue" | "foreground";
 
 function colorVar(c: ChartColor): string {
   return c === "foreground" ? "var(--vscode-charts-foreground)" : `var(--vscode-charts-${c})`;

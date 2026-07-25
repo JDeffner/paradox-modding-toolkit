@@ -56,7 +56,9 @@ export class LocReferenceTracker {
 /** Scan the workspace mods' script files for lines mentioning `key`. Capped, word-boundary matched. */
 export function findScriptReferences(modPaths: string[], key: string, cap = 20): vscode.Location[] {
   const results: vscode.Location[] = [];
-  const needle = new RegExp(`(?<![A-Za-z0-9_.\\-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`);
+  const needle = new RegExp(
+    `(?<![A-Za-z0-9_.\\-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`
+  );
   const roots = modPaths
     .flatMap((mod) => ["events", "common", "gui", "gfx"].map((d) => path.join(mod, d)))
     .filter((d) => fs.existsSync(d));
@@ -102,13 +104,12 @@ export class LocFileDefinitionProvider implements vscode.DefinitionProvider {
   }
 }
 
-export async function jumpToScriptReference(
-  tracker: LocReferenceTracker,
-  cfg: Ck3Config
-): Promise<void> {
+export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: Ck3Config): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== "paradox-loc") {
-    void vscode.window.showWarningMessage("CK3: open a localization yml and place the cursor on a key first.");
+    void vscode.window.showWarningMessage(
+      "CK3: open a localization yml and place the cursor on a key first."
+    );
     return;
   }
   const key = locKeyOnLine(editor.document.lineAt(editor.selection.active.line).text);

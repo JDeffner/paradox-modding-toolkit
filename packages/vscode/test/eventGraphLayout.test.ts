@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  layoutGraph,
-  type LayoutEdgeInput,
-  type LayoutNodeInput,
-} from "../src/webviews/eventGraph/layout";
+import { layoutGraph, type LayoutEdgeInput, type LayoutNodeInput } from "../src/webviews/eventGraph/layout";
 
 const n = (...ids: string[]): LayoutNodeInput[] => ids.map((id) => ({ id }));
 const e = (from: string, to: string): LayoutEdgeInput => ({ from, to });
@@ -40,11 +36,7 @@ describe("layoutGraph", () => {
   });
 
   it("does not hang on cycles and stays finite", () => {
-    const pos = layoutGraph(
-      n("a", "b", "c"),
-      [e("a", "b"), e("b", "c"), e("c", "a")],
-      "a"
-    );
+    const pos = layoutGraph(n("a", "b", "c"), [e("a", "b"), e("b", "c"), e("c", "a")], "a");
     expect(pos.size).toBe(3);
     expect(allFinite(pos)).toBe(true);
   });
@@ -67,24 +59,14 @@ describe("layoutGraph", () => {
   });
 
   it("produces all-finite positions on a diamond", () => {
-    const pos = layoutGraph(
-      n("a", "b", "c", "d"),
-      [e("a", "b"), e("a", "c"), e("b", "d"), e("c", "d")],
-      "a"
-    );
+    const pos = layoutGraph(n("a", "b", "c", "d"), [e("a", "b"), e("a", "c"), e("b", "d"), e("c", "d")], "a");
     expect(allFinite(pos)).toBe(true);
     expect(pos.get("a")!.x).toBeLessThan(pos.get("d")!.x);
   });
 
   it("is deterministic across two runs", () => {
     const nodes = n("root", "x", "y", "z", "w", "orphan");
-    const edges = [
-      e("root", "x"),
-      e("root", "y"),
-      e("x", "z"),
-      e("y", "z"),
-      e("z", "w"),
-    ];
+    const edges = [e("root", "x"), e("root", "y"), e("x", "z"), e("y", "z"), e("z", "w")];
     const a = layoutGraph(nodes, edges, "root");
     const b = layoutGraph(nodes, edges, "root");
     expect(a.size).toBe(b.size);

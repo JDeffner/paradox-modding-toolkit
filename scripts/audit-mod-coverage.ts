@@ -27,7 +27,13 @@ import { classifyFile } from "../packages/server/src/index/indexer";
 import { provideHover } from "../packages/server/src/features/hover";
 import { provideGuiHover } from "../packages/server/src/features/guiLanguage";
 import { provideSemanticTokens } from "../packages/server/src/features/semanticTokens";
-import { walkStatements, decode, LineIndex, type ScalarNode, type Statement } from "../packages/server/src/parser";
+import {
+  walkStatements,
+  decode,
+  LineIndex,
+  type ScalarNode,
+  type Statement,
+} from "../packages/server/src/parser";
 import { getParse } from "../packages/server/src/parseCache";
 import type { Scope } from "../packages/server/src/scopes/model";
 import grammar from "../packages/vscode/syntaxes/paradox.tmLanguage.json";
@@ -158,7 +164,12 @@ async function main(): Promise<void> {
   // Mirror the live server: script_docs logs are authoritative, wiki fills gaps.
   const logTokens = loadTokenDataFromLogs(logsPath);
   if (logTokens.tokens.length > 0) {
-    env.data.setTokens(mergeWikiTokens(logTokens.tokens, loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))));
+    env.data.setTokens(
+      mergeWikiTokens(
+        logTokens.tokens,
+        loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))
+      )
+    );
   }
   console.log(
     `env ready in ${((Date.now() - t0) / 1000).toFixed(1)}s: ` +
@@ -197,7 +208,13 @@ async function main(): Promise<void> {
     // Real semantic tokens, decoded into start positions.
     const semStarts = new Set<string>();
     {
-      const data = provideSemanticTokens(env.data, doc, env.schema.refFields, entry, env.schema.structures).data;
+      const data = provideSemanticTokens(
+        env.data,
+        doc,
+        env.schema.refFields,
+        entry,
+        env.schema.structures
+      ).data;
       let line = 0;
       let char = 0;
       for (let i = 0; i < data.length; i += 5) {
@@ -215,7 +232,8 @@ async function main(): Promise<void> {
       const sample = `${rel}:${pos.line + 1}`;
 
       let painted = paintedByLine.get(pos.line);
-      if (!painted) paintedByLine.set(pos.line, (painted = paintLine(lines[pos.line] ?? "", isGui ? guiRules : rules)));
+      if (!painted)
+        paintedByLine.set(pos.line, (painted = paintLine(lines[pos.line] ?? "", isGui ? guiRules : rules)));
       const grammarHit = painted.some((p) => p.start <= pos.character && pos.character < p.end);
       const semanticHit = semStarts.has(`${pos.line}:${pos.character}`);
       if (!grammarHit && !semanticHit) record(isGui ? plainGui : plain, scalar.text, role, sample);

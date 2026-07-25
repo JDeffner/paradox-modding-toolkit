@@ -17,7 +17,8 @@ export const KEYWORD_DOCS: Record<string, string> = {
   trigger_if: "Conditional trigger: contents are only checked when its `limit` holds.",
   trigger_else_if: "Checked when the preceding trigger_if did not apply and its own `limit` holds.",
   trigger_else: "Checked when the preceding trigger_if did not apply.",
-  limit: "Trigger block: restricts the enclosing if / iterator / random_list entry to cases where these triggers hold.",
+  limit:
+    "Trigger block: restricts the enclosing if / iterator / random_list entry to cases where these triggers hold.",
   alternative_limit: "Additional trigger set an iterator accepts when `limit` fails.",
   // Logic connectives
   AND: "All child triggers must be true (the implicit default).",

@@ -10,12 +10,7 @@ const UTF8_BOM_1 = 0xbb;
 const UTF8_BOM_2 = 0xbf;
 
 export function hasUtf8Bom(buf: Uint8Array): boolean {
-  return (
-    buf.length >= 3 &&
-    buf[0] === UTF8_BOM_0 &&
-    buf[1] === UTF8_BOM_1 &&
-    buf[2] === UTF8_BOM_2
-  );
+  return buf.length >= 3 && buf[0] === UTF8_BOM_0 && buf[1] === UTF8_BOM_1 && buf[2] === UTF8_BOM_2;
 }
 
 /**

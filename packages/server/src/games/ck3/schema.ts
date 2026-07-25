@@ -75,7 +75,12 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   // NOT extractable with the current modes. We index the groups only.
   { path: "common/laws", kind: "law_group", rootScopes: ["character"] },
   { path: "common/governments", kind: "government", rootScopes: ["character"] },
-  { path: "common/landed_titles", kind: "landed_title", extraction: "nested-title", rootScopes: ["character"] },
+  {
+    path: "common/landed_titles",
+    kind: "landed_title",
+    extraction: "nested-title",
+    rootScopes: ["character"],
+  },
   { path: "common/buildings", kind: "building", requiredLoc: ["building_$"], rootScopes: ["province"] },
   { path: "common/holdings", kind: "holding_type" },
   { path: "common/great_projects/types", kind: "great_project", rootScopes: ["character", "great_project"] },
@@ -125,7 +130,12 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
 
   // --- Activities & schemes ---
   { path: "common/activities/activity_types", kind: "activity_type", rootScopes: ["character"] },
-  { path: "common/schemes/scheme_types", kind: "scheme_type", requiredLoc: ["$"], rootScopes: ["character", "scheme"] },
+  {
+    path: "common/schemes/scheme_types",
+    kind: "scheme_type",
+    requiredLoc: ["$"],
+    rootScopes: ["character", "scheme"],
+  },
   { path: "common/travel/point_of_interest_types", kind: "point_of_interest", rootScopes: ["character"] },
   { path: "common/travel/travel_options", kind: "travel_option", rootScopes: ["character"] },
 

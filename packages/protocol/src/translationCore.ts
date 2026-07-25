@@ -98,7 +98,11 @@ export interface MergeResult {
  * Add entries that exist in the source but not yet in the target, appended at
  * the end under a marker comment. Existing target lines are never touched.
  */
-export function mergeTranslation(targetContent: string, sourceContent: string, sourceLang: string): MergeResult {
+export function mergeTranslation(
+  targetContent: string,
+  sourceContent: string,
+  sourceLang: string
+): MergeResult {
   const hadBom = targetContent.startsWith(BOM);
   const target = hadBom ? targetContent.slice(1) : targetContent;
   const eol = target.includes("\r\n") ? "\r\n" : "\n";
@@ -121,6 +125,11 @@ export function mergeTranslation(targetContent: string, sourceContent: string, s
 
   const lines = target.split(/\r?\n/);
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
-  lines.push("", ` # --- entries missing from this language; ${sourceLang} text in the comments ---`, ...missing, "");
+  lines.push(
+    "",
+    ` # --- entries missing from this language; ${sourceLang} text in the comments ---`,
+    ...missing,
+    ""
+  );
   return { content: (hadBom ? BOM : "") + lines.join(eol), added: missing.length };
 }

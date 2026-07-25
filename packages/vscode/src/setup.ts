@@ -49,7 +49,9 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
         )
     );
     deps.log(`tiger ${result.version} installed at ${result.binaryPath}`);
-    void vscode.window.showInformationMessage(`${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`);
+    void vscode.window.showInformationMessage(
+      `${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
+    );
     deps.refresh();
     return result.binaryPath;
   } catch (err) {
@@ -103,7 +105,9 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
         `Launch CK3 with -debug_mode, open the console (\`), run "script_docs", then run "CK3: Reload Game Data (script_docs)".`
     );
   } else {
-    report.push("✗ logs folder: not found — set ck3.logsPath to Documents/Paradox Interactive/Crusader Kings III/logs");
+    report.push(
+      "✗ logs folder: not found — set ck3.logsPath to Documents/Paradox Interactive/Crusader Kings III/logs"
+    );
   }
   if (cfg.logsPath && !fs.existsSync(path.join(cfg.logsPath, "data_types.log"))) {
     report.push(
@@ -118,7 +122,11 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     report.push(`✓ ck3-tiger: ${effectiveTiger}`);
   } else {
     const bin = await downloadTigerCommand(deps, true);
-    report.push(bin ? `✓ ck3-tiger: downloaded — ${bin}` : "• ck3-tiger: skipped (diagnostics disabled). Run 'CK3 Tiger: Download or Update Binary' anytime.");
+    report.push(
+      bin
+        ? `✓ ck3-tiger: downloaded — ${bin}`
+        : "• ck3-tiger: skipped (diagnostics disabled). Run 'CK3 Tiger: Download or Update Binary' anytime."
+    );
   }
 
   deps.refresh();
@@ -141,7 +149,11 @@ export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: Ck3Config
   if (context.globalState.get<boolean>("ck3.setupNudged")) return;
   void context.globalState.update("ck3.setupNudged", true);
   void vscode.window
-    .showInformationMessage("The CK3 Modding Toolkit can configure itself (find the game, set up tiger).", "Run Setup & Health Check", "Later")
+    .showInformationMessage(
+      "The CK3 Modding Toolkit can configure itself (find the game, set up tiger).",
+      "Run Setup & Health Check",
+      "Later"
+    )
     .then((choice) => {
       if (choice === "Run Setup & Health Check") void vscode.commands.executeCommand("ck3.setup");
     });

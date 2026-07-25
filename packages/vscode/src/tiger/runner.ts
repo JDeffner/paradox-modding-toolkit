@@ -74,7 +74,8 @@ export class TigerRunner implements vscode.Disposable {
       return;
     }
     this.status.text = problemCount === 0 ? "$(check) tiger" : `$(warning) tiger: ${problemCount}`;
-    this.status.tooltip = problemCount === 0 ? "ck3-tiger: no problems" : `ck3-tiger: ${problemCount} report(s)`;
+    this.status.tooltip =
+      problemCount === 0 ? "ck3-tiger: no problems" : `ck3-tiger: ${problemCount} report(s)`;
     this.statusHideTimer = setTimeout(() => this.status.hide(), 5000);
   }
 
@@ -112,7 +113,9 @@ export class TigerRunner implements vscode.Disposable {
     const cfg = this.getConfig();
     if (!cfg.tigerPath) {
       if (manual) {
-        void vscode.window.showWarningMessage("CK3: set ck3.tigerPath to a ck3-tiger binary to enable diagnostics.");
+        void vscode.window.showWarningMessage(
+          "CK3: set ck3.tigerPath to a ck3-tiger binary to enable diagnostics."
+        );
       }
       return;
     }
@@ -294,16 +297,13 @@ export class TigerRunner implements vscode.Disposable {
       if (report.confidence && report.confidence.toLowerCase() !== "reasonable") {
         message += ` (confidence: ${report.confidence})`;
       }
-      const diag = new vscode.Diagnostic(
-        new vscode.Range(line, colStart, line, colEnd),
-        message,
-        severity
-      );
+      const diag = new vscode.Diagnostic(new vscode.Range(line, colStart, line, colEnd), message, severity);
       diag.source = "ck3-tiger";
       diag.code = report.key;
       if (report.locations.length > 1) {
         diag.relatedInformation = report.locations.slice(1).map((rel) => {
-          const relFile = rel.fullpath ?? (path.isAbsolute(rel.path) ? rel.path : path.join(modPath, rel.path));
+          const relFile =
+            rel.fullpath ?? (path.isAbsolute(rel.path) ? rel.path : path.join(modPath, rel.path));
           const relLine = Math.max(0, (rel.linenr ?? 1) - 1);
           const relCol = Math.max(0, (rel.column ?? 1) - 1);
           return new vscode.DiagnosticRelatedInformation(

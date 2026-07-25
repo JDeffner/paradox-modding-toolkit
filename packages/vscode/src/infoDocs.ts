@@ -66,7 +66,9 @@ export async function openInfoDocsCommand(cfg: Ck3Config): Promise<void> {
   }
   const candidates = infoDocsForFile(cfg, editor.document.uri.fsPath);
   if (candidates.length === 0) {
-    void vscode.window.showInformationMessage("CK3: no .info format docs found for this folder in the game files.");
+    void vscode.window.showInformationMessage(
+      "CK3: no .info format docs found for this folder in the game files."
+    );
     return;
   }
 

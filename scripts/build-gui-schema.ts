@@ -66,9 +66,23 @@ function recordValue(key: string, value: string): void {
 
 /** Attribute blocks (`size = { 100% 100% }`) — data, never widget types. */
 const ATTRIBUTE_BLOCKS = new Set([
-  "size", "position", "framesize", "spriteborder", "color", "disabledcolor", "uv_scale",
-  "margin", "padding", "mipmaplodbias", "modify_texture", "resizeparent", "cursor_properties",
-  "min_width", "max_width", "spriteborder_top", "spriteborder_bottom",
+  "size",
+  "position",
+  "framesize",
+  "spriteborder",
+  "color",
+  "disabledcolor",
+  "uv_scale",
+  "margin",
+  "padding",
+  "mipmaplodbias",
+  "modify_texture",
+  "resizeparent",
+  "cursor_properties",
+  "min_width",
+  "max_width",
+  "spriteborder_top",
+  "spriteborder_bottom",
 ]);
 
 const typeCount = new Map<string, number>();
@@ -115,7 +129,10 @@ function walk(statements: Statement[]): void {
   let pendingDecl: string | null = null;
   for (const stmt of statements) {
     if (stmt.kind !== "assignment") {
-      if (stmt.value.kind === "scalar" && ["type", "template", "types", "block", "blockoverride"].includes(stmt.value.text.toLowerCase())) {
+      if (
+        stmt.value.kind === "scalar" &&
+        ["type", "template", "types", "block", "blockoverride"].includes(stmt.value.text.toLowerCase())
+      ) {
         pendingDecl = stmt.value.text.toLowerCase();
       } else if (stmt.value.kind === "block") {
         walk(stmt.value.statements);
@@ -179,9 +196,7 @@ for (const [name, count] of [...typeCount.entries()].sort((a, b) => b[1] - a[1])
     .slice(0, MAX_PROPS_PER_TYPE);
   types[name] = { count, props: Object.fromEntries(kept) };
 }
-const global = Object.fromEntries(
-  [...globalProps.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200)
-);
+const global = Object.fromEntries([...globalProps.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200));
 
 // Enum properties: pure (never dirty) keys whose frequent value tokens form a
 // small bounded set. Values sorted alphabetically for a stable, readable list.

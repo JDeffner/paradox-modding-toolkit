@@ -197,7 +197,12 @@ export function classifyKeyword(rawKeyword: string): KeywordClass {
   if (kw.endsWith("_trigger")) return "trigger";
   if (kw.startsWith("on_") && kw !== "on_action" && kw !== "on_actions") return "effect";
   // Scope changers keep the parent context.
-  if (kw.startsWith("scope:") || kw.startsWith("var:") || kw.startsWith("local_var:") || kw.startsWith("global_var:"))
+  if (
+    kw.startsWith("scope:") ||
+    kw.startsWith("var:") ||
+    kw.startsWith("local_var:") ||
+    kw.startsWith("global_var:")
+  )
     return "transparent";
   if (/^prev+$/.test(kw)) return "transparent";
   return "unknown";

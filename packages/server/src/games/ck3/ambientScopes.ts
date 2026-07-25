@@ -28,20 +28,36 @@ export const AMBIENT_SCOPES: Record<string, AmbientScope[]> = {
       CHAR,
       "Present when the interaction declares a secondary actor (e.g. marriage) or a redirect saves one."
     ),
-    s("secondary_recipient", CHAR, "As secondary_actor, for the recipient side (e.g. the character being married off)."),
-    s("intermediary", CHAR, "The intermediary who forwards the interaction, when one is used. Set/replaced via redirect."),
+    s(
+      "secondary_recipient",
+      CHAR,
+      "As secondary_actor, for the recipient side (e.g. the character being married off)."
+    ),
+    s(
+      "intermediary",
+      CHAR,
+      "The intermediary who forwards the interaction, when one is used. Set/replaced via redirect."
+    ),
   ],
 
   // common/activities/activity_types/_activity_type.info
   activity_type: [
     s("activity", "activity", "The activity (is_valid, on_* effect blocks, phases…)."),
     s("host", CHAR, "Host of the activity."),
-    s("special_option", "flag", "Flag of the selected special option; unset when the activity has no special option category."),
+    s(
+      "special_option",
+      "flag",
+      "Flag of the selected special option; unset when the activity has no special option category."
+    ),
     s("province", "province", "Phase blocks: the location the phase is at / being evaluated in."),
   ],
   // common/activities/guest_invite_rules/_invite_rules.info (root = host character)
   guest_invite_rule: [
-    s("special_option", "flag", "Flag of the selected special option; unset when the activity has no special option category."),
+    s(
+      "special_option",
+      "flag",
+      "Flag of the selected special option; unset when the activity has no special option category."
+    ),
   ],
   // common/activities/intents/_intents.info
   activity_intent: [
@@ -58,17 +74,26 @@ export const AMBIENT_SCOPES: Record<string, AmbientScope[]> = {
     s("second", CHAR, "Second saved character, shown in the pulse-action entry."),
   ],
   // common/activities/activity_locales/_activity_locales.info
-  activity_locale: [
-    s("activity", "activity", "The activity."),
-    s("host", CHAR, "Host of the activity."),
-  ],
+  activity_locale: [s("activity", "activity", "The activity."), s("host", CHAR, "Host of the activity.")],
 
   // common/schemes/scheme_types/_schemes.info
   scheme_type: [
     s("scheme", "scheme", "The scheme itself."),
-    s("owner", CHAR, "The scheme owner (same as scheme_owner, valid in an unbroken chain from the scheme scope)."),
-    s("target", CHAR, "Whatever the scheme targets — a character for character-targeted schemes (title/culture/faith schemes target those types)."),
-    s("target_title", "landed_title", "The targeted title, when the scheme targets a title (otherwise unset)."),
+    s(
+      "owner",
+      CHAR,
+      "The scheme owner (same as scheme_owner, valid in an unbroken chain from the scheme scope)."
+    ),
+    s(
+      "target",
+      CHAR,
+      "Whatever the scheme targets — a character for character-targeted schemes (title/culture/faith schemes target those types)."
+    ),
+    s(
+      "target_title",
+      "landed_title",
+      "The targeted title, when the scheme targets a title (otherwise unset)."
+    ),
     s("agent", CHAR, "An agent in the scheme (on_agent_exposed and similar per-agent effects)."),
   ],
   // common/schemes/agent_types/_agent_types.info
@@ -89,7 +114,11 @@ export const AMBIENT_SCOPES: Record<string, AmbientScope[]> = {
   secret: [
     s("secret_owner", CHAR, "The character the secret is about."),
     s("secret_target", CHAR, "Optional character related to the secret (e.g. the lover in a lover secret)."),
-    s("target", CHAR, "is_shunned/is_criminal: the character checking whether they view the secret as shunned/criminal."),
+    s(
+      "target",
+      CHAR,
+      "is_shunned/is_criminal: the character checking whether they view the secret as shunned/criminal."
+    ),
     s("discoverer", CHAR, "on_discover: the character who discovered the secret."),
     s("secret_exposer", CHAR, "on_expose: the character who exposed the secret."),
   ],
@@ -101,7 +130,11 @@ export const AMBIENT_SCOPES: Record<string, AmbientScope[]> = {
   situation: [
     s("situation", "situation", "The situation."),
     s("situation_sub_region", "situation_sub_region", "The situation sub-region of the current block/phase."),
-    s("situation_participant_group", "situation_participant_group", "The participant group (participant blocks)."),
+    s(
+      "situation_participant_group",
+      "situation_participant_group",
+      "The participant group (participant blocks)."
+    ),
   ],
 
   // common/casus_belli_types/_casus_belli.info

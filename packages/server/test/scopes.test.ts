@@ -60,7 +60,9 @@ describe("scope model", () => {
 
   it("exposes token input scopes for ranking", () => {
     expect(model.inputScopesOf("effect", "add_gold")).toEqual(new Set(["character"]));
-    expect(model.inputScopesOf("effect", "change_development_level")).toEqual(new Set(["county", "province"]));
+    expect(model.inputScopesOf("effect", "change_development_level")).toEqual(
+      new Set(["county", "province"])
+    );
     expect(model.inputScopesOf("effect", "unknown_thing")).toBeNull();
   });
 });
@@ -92,11 +94,15 @@ describe("scope inference at cursor", () => {
   });
 
   it("root resets to the seed scope", () => {
-    expect(scopesAt("e = {\n\tprimary_title = {\n\t\troot = {\n\t\t\t|\n\t\t}\n\t}\n}")).toEqual(["character"]);
+    expect(scopesAt("e = {\n\tprimary_title = {\n\t\troot = {\n\t\t\t|\n\t\t}\n\t}\n}")).toEqual([
+      "character",
+    ]);
   });
 
   it("prev returns to the previous scope", () => {
-    expect(scopesAt("e = {\n\tprimary_title = {\n\t\tprev = {\n\t\t\t|\n\t\t}\n\t}\n}")).toEqual(["character"]);
+    expect(scopesAt("e = {\n\tprimary_title = {\n\t\tprev = {\n\t\t\t|\n\t\t}\n\t}\n}")).toEqual([
+      "character",
+    ]);
   });
 
   it("scope:x resolves through save_scope_as in the same file", () => {
@@ -122,9 +128,9 @@ describe("scope inference at cursor", () => {
   });
 
   it("control flow and boolean operators are scope-transparent", () => {
-    expect(scopesAt("e = {\n\ttrigger = {\n\t\tNOT = {\n\t\t\tany_vassal = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}")).toEqual([
-      "character",
-    ]);
+    expect(
+      scopesAt("e = {\n\ttrigger = {\n\t\tNOT = {\n\t\t\tany_vassal = {\n\t\t\t\t|\n\t\t\t}\n\t\t}\n\t}\n}")
+    ).toEqual(["character"]);
   });
 });
 

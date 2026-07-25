@@ -114,7 +114,12 @@ describe("end-to-end: our diagnostics respect suppression", () => {
   const stray = "}\n";
 
   it("code filter removes the diagnostic", () => {
-    const kept = diagsWithSuppression(stray, file, { ignore: [], ignorePatterns: [] }, "events/my_events.txt");
+    const kept = diagsWithSuppression(
+      stray,
+      file,
+      { ignore: [], ignorePatterns: [] },
+      "events/my_events.txt"
+    );
     expect(kept.length).toBeGreaterThan(0);
     const dropped = diagsWithSuppression(
       stray,

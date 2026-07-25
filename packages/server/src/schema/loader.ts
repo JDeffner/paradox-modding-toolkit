@@ -8,13 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { activeProfile } from "../games/active";
 import type { GameProfile } from "../games/profile";
-import type {
-  AmbientScope,
-  SchemaEntry,
-  KeySpec,
-  RefField,
-  SchemaOverlay,
-} from "./types";
+import type { AmbientScope, SchemaEntry, KeySpec, RefField, SchemaOverlay } from "./types";
 
 /**
  * Per-kind structure/ambient lookup precomputed at schema load (v1.1 §B2/§B3),

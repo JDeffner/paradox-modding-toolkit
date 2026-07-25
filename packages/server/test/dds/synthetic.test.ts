@@ -9,11 +9,12 @@ import { encodePng } from "../../src/dds/png";
 
 function fourCC(s: string): number {
   return (
-    (s.charCodeAt(0) & 0xff) |
-    ((s.charCodeAt(1) & 0xff) << 8) |
-    ((s.charCodeAt(2) & 0xff) << 16) |
-    ((s.charCodeAt(3) & 0xff) << 24)
-  ) >>> 0;
+    ((s.charCodeAt(0) & 0xff) |
+      ((s.charCodeAt(1) & 0xff) << 8) |
+      ((s.charCodeAt(2) & 0xff) << 16) |
+      ((s.charCodeAt(3) & 0xff) << 24)) >>>
+    0
+  );
 }
 
 interface HeaderOpts {
@@ -97,12 +98,11 @@ describe("DXT1 decode", () => {
       const idx = row % 2 === 0 ? 0 : 1;
       bits |= idx << (i * 2);
     }
-    const block = concat(le16(c0), le16(c1), new Uint8Array([
-      bits & 0xff,
-      (bits >> 8) & 0xff,
-      (bits >> 16) & 0xff,
-      (bits >> 24) & 0xff,
-    ]));
+    const block = concat(
+      le16(c0),
+      le16(c1),
+      new Uint8Array([bits & 0xff, (bits >> 8) & 0xff, (bits >> 16) & 0xff, (bits >> 24) & 0xff])
+    );
     const dds = concat(header, block);
 
     const img = decodeDds(dds);
@@ -132,12 +132,11 @@ describe("DXT1 decode", () => {
     // all texels use index 3
     let bits = 0;
     for (let i = 0; i < 16; i++) bits |= 3 << (i * 2);
-    const block = concat(le16(c0), le16(c1), new Uint8Array([
-      bits & 0xff,
-      (bits >> 8) & 0xff,
-      (bits >> 16) & 0xff,
-      (bits >> 24) & 0xff,
-    ]));
+    const block = concat(
+      le16(c0),
+      le16(c1),
+      new Uint8Array([bits & 0xff, (bits >> 8) & 0xff, (bits >> 16) & 0xff, (bits >> 24) & 0xff])
+    );
     const img = decodeDds(concat(header, block));
     expect(Array.from(img.pixels.subarray(0, 4))).toEqual([0, 0, 0, 0]);
   });
@@ -253,10 +252,22 @@ function crc32(bytes: Uint8Array): number {
 describe("PNG encoder", () => {
   it("encodes a 2x2 image that round-trips exactly", () => {
     const rgba = new Uint8Array([
-      255, 0, 0, 255, // red
-      0, 255, 0, 255, // green
-      0, 0, 255, 255, // blue
-      255, 255, 0, 128, // yellow, half alpha
+      255,
+      0,
+      0,
+      255, // red
+      0,
+      255,
+      0,
+      255, // green
+      0,
+      0,
+      255,
+      255, // blue
+      255,
+      255,
+      0,
+      128, // yellow, half alpha
     ]);
     const png = encodePng(2, 2, rgba);
 

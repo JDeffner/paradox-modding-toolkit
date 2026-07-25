@@ -37,7 +37,14 @@ function makeData(): ServerData {
 
 function hoverMd(data: ServerData, text: string, line: number, character: number): string {
   const doc = TextDocument.create(uri(), "paradox", 1, text);
-  const hover = provideHover(data, doc, { line, character }, new Set(["character"]), eventEntry, () => schema);
+  const hover = provideHover(
+    data,
+    doc,
+    { line, character },
+    new Set(["character"]),
+    eventEntry,
+    () => schema
+  );
   expect(hover).not.toBeNull();
   return (hover!.contents as { value: string }).value;
 }
@@ -80,7 +87,9 @@ describe("hover ref-field disambiguation", () => {
 
 describe("semantic-token ref-field disambiguation", () => {
   // Decoded from the LSP delta encoding: [line, char, length, type, modifiers].
-  function decode(data: number[]): Array<{ line: number; char: number; length: number; type: number; mods: number }> {
+  function decode(
+    data: number[]
+  ): Array<{ line: number; char: number; length: number; type: number; mods: number }> {
     const out = [];
     let line = 0;
     let char = 0;

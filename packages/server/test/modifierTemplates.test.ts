@@ -99,13 +99,17 @@ describe("matchTemplatedModifier", () => {
     expect(m.base).toBe("heavy_infantry");
     expect(m.def).toBeUndefined();
     expect(templatedModifierDoc(m)).toContain("built-in men-at-arms base type `heavy_infantry`");
-    expect(matchTemplatedModifier("stationed_heavy_infantry_damage_add", data.modifierTemplates, lookup)).not.toBeNull();
+    expect(
+      matchTemplatedModifier("stationed_heavy_infantry_damage_add", data.modifierTemplates, lookup)
+    ).not.toBeNull();
   });
 
   it("rejects unknown bases, excluded combinations, and empty placeholder slices", () => {
     expect(matchTemplatedModifier("martian_opinion", data.modifierTemplates, lookup)).toBeNull();
     expect(matchTemplatedModifier("armored_footmen_damage_add", data.modifierTemplates, lookup)).toBeNull();
-    expect(matchTemplatedModifier("stationed_nomadic_horde_damage_add", data.modifierTemplates, lookup)).toBeNull();
+    expect(
+      matchTemplatedModifier("stationed_nomadic_horde_damage_add", data.modifierTemplates, lookup)
+    ).toBeNull();
     expect(matchTemplatedModifier("_opinion", data.modifierTemplates, lookup)).toBeNull();
   });
 });
@@ -125,7 +129,9 @@ describe("expandModifierTemplates", () => {
 
   it("respects the completableKinds gate for index-backed kinds only", () => {
     const data = makeData();
-    const names = expandModifierTemplates(data.modifierTemplates, data.index, new Set(["culture"])).map((e) => e.name);
+    const names = expandModifierTemplates(data.modifierTemplates, data.index, new Set(["culture"])).map(
+      (e) => e.name
+    );
     expect(names).toContain("french_opinion");
     expect(names).not.toContain("plains_advantage");
     expect(names).toContain("heavy_infantry_damage_add"); // fixed sets are not gated

@@ -61,7 +61,12 @@ function windowsDocumentsFolder(): string {
   try {
     const out = execFileSync(
       "reg",
-      ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "/v", "Personal"],
+      [
+        "query",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders",
+        "/v",
+        "Personal",
+      ],
       { encoding: "utf8", windowsHide: true }
     );
     const m = /Personal\s+REG_(?:EXPAND_)?SZ\s+(.+)/.exec(out);
@@ -219,7 +224,8 @@ export function readConfig(): Ck3Config {
   // download (see extension.ts).
   const vic3Preview = cfg.get<boolean>("vic3Preview") ?? false;
   const primaryRoot = modPath ?? workspaceRoots[0] ?? null;
-  const gameId = vic3Preview && primaryRoot !== null && looksLikeMetadataMod(primaryRoot) ? vic3Meta.id : ck3Meta.id;
+  const gameId =
+    vic3Preview && primaryRoot !== null && looksLikeMetadataMod(primaryRoot) ? vic3Meta.id : ck3Meta.id;
   if (gameId === vic3Meta.id) {
     gamePath = findGameFolder(vic3Meta.name);
     logsPath = defaultLogsPath(vic3Meta.docsFolderName, vic3Meta.steamAppId);
@@ -232,9 +238,7 @@ export function readConfig(): Ck3Config {
   const enableForWorkspace = cfg.get<boolean>("enableForWorkspace") ?? true;
   const isCk3Workspace =
     enableForWorkspace &&
-    (workspaceGameDir !== null ||
-      (modPath !== null && looksLikeMod(modPath)) ||
-      workspaceMods.length > 0);
+    (workspaceGameDir !== null || (modPath !== null && looksLikeMod(modPath)) || workspaceMods.length > 0);
 
   return {
     gameId,
@@ -259,7 +263,10 @@ export function readConfig(): Ck3Config {
 
 /** Trailing-separator-free lowercase key for path comparisons. */
 function normKey(p: string): string {
-  return path.normalize(p).replace(/[\\/]+$/, "").toLowerCase();
+  return path
+    .normalize(p)
+    .replace(/[\\/]+$/, "")
+    .toLowerCase();
 }
 
 /**

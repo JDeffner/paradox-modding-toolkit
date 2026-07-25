@@ -28,9 +28,7 @@ describe("corpus", () => {
     "parses every vanilla .txt and .yml without throwing, under thresholds",
     async () => {
       const root = GAME_PATH as string;
-      const txtDirs = ["common", "events", "history", "gui"].map((d) =>
-        path.join(root, d)
-      );
+      const txtDirs = ["common", "events", "history", "gui"].map((d) => path.join(root, d));
       const ymlDir = path.join(root, "localization", "english");
 
       const txtFiles: string[] = [];
@@ -53,16 +51,11 @@ describe("corpus", () => {
             out[idx] = await fs.promises.readFile(files[idx]);
           }
         };
-        await Promise.all(
-          Array.from({ length: CONCURRENCY }, () => worker())
-        );
+        await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
         return out;
       };
 
-      const [txtBufs, ymlBufs] = await Promise.all([
-        readAll(txtFiles),
-        readAll(ymlFiles),
-      ]);
+      const [txtBufs, ymlBufs] = await Promise.all([readAll(txtFiles), readAll(ymlFiles)]);
 
       let txtWithErrors = 0;
       const txtOffenders: Array<{ file: string; first: string }> = [];
@@ -106,15 +99,15 @@ describe("corpus", () => {
 
       // eslint-disable-next-line no-console
       console.log(
-        `\n[corpus] txt files: ${txtFiles.length}, with-errors: ${txtWithErrors} (${(
-          txtRatio * 100
-        ).toFixed(3)}%)`
+        `\n[corpus] txt files: ${txtFiles.length}, with-errors: ${txtWithErrors} (${(txtRatio * 100).toFixed(
+          3
+        )}%)`
       );
       // eslint-disable-next-line no-console
       console.log(
-        `[corpus] yml files: ${ymlFiles.length}, with-errors: ${ymlWithErrors} (${(
-          ymlRatio * 100
-        ).toFixed(3)}%)`
+        `[corpus] yml files: ${ymlFiles.length}, with-errors: ${ymlWithErrors} (${(ymlRatio * 100).toFixed(
+          3
+        )}%)`
       );
       // eslint-disable-next-line no-console
       console.log(`[corpus] elapsed: ${elapsed}ms`);

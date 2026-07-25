@@ -188,7 +188,7 @@ function usageCount(usage: DataFnUsage, name: string): number {
 
 /** Member rank: type-specific pairs weigh more than the global pool. */
 function memberRank(usage: DataFnUsage, owner: string | null, name: string): number {
-  const pair = owner ? usage.pairs.get(owner)?.get(name) ?? 0 : 0;
+  const pair = owner ? (usage.pairs.get(owner)?.get(name) ?? 0) : 0;
   return pair * 3 + (usage.memberPool.get(name) ?? 0);
 }
 
@@ -439,7 +439,9 @@ function exampleLines(usage: DataFnUsage, name: string, gameRoot: string | null)
   for (const ex of examples) {
     const site = `${ex.file}:${ex.line}`;
     const link = gameRoot
-      ? `[${site}](${URI.file(path.join(gameRoot, ex.file)).with({ fragment: String(ex.line) }).toString()})`
+      ? `[${site}](${URI.file(path.join(gameRoot, ex.file))
+          .with({ fragment: String(ex.line) })
+          .toString()})`
       : site;
     lines.push(`- \`${ex.text}\` — ${link}`);
   }
@@ -549,9 +551,13 @@ export function provideDataFnHover(
     } else {
       const global = data.globals.get(segment);
       if (global) {
-        lines.push(`\`${segment}${global.args?.length ? `( ${global.args.join(", ")} )` : ""}\`${global.ret ? ` → \`${global.ret}\`` : ""}`);
+        lines.push(
+          `\`${segment}${global.args?.length ? `( ${global.args.join(", ")} )` : ""}\`${global.ret ? ` → \`${global.ret}\`` : ""}`
+        );
         lines.push("", `global ${global.kind} — ${provenance(global)}`);
-        lines.push(...usageDetailLines(usage, segment, global.desc ?? describeDataFn(segment, global), gameRoot));
+        lines.push(
+          ...usageDetailLines(usage, segment, global.desc ?? describeDataFn(segment, global), gameRoot)
+        );
       } else if (uses > 0) {
         lines.push(`\`${segment}\``);
         lines.push("", `not in the data-type tables — ${provenance(null)}`);
@@ -584,7 +590,9 @@ export function provideDataFnHover(
         `\`${ownerType}.${segment}${member.args?.length ? `( ${member.args.join(", ")} )` : ""}\`${member.ret ? ` → \`${member.ret}\`` : ""}`
       );
       lines.push("", `${member.kind} on \`${ownerType}\` — ${provenance(member)}`);
-      lines.push(...usageDetailLines(usage, segment, member.desc ?? describeDataFn(segment, member), gameRoot));
+      lines.push(
+        ...usageDetailLines(usage, segment, member.desc ?? describeDataFn(segment, member), gameRoot)
+      );
     } else if (byName.length > 0) {
       const hit = byName[0];
       lines.push(
@@ -595,13 +603,23 @@ export function provideDataFnHover(
         `${hit.member.kind} on \`${hit.owner}\` — ${provenance(hit.member)}, matched by name (the chain before it did not resolve to a type)`
       );
       if (byName.length > 1) {
-        lines.push("", `Also defined on: ${byName.slice(1).map((o) => `\`${o.owner}\``).join(" ")}${byName.length >= 6 ? " …" : ""}`);
+        lines.push(
+          "",
+          `Also defined on: ${byName
+            .slice(1)
+            .map((o) => `\`${o.owner}\``)
+            .join(" ")}${byName.length >= 6 ? " …" : ""}`
+        );
       }
-      lines.push(...usageDetailLines(usage, segment, hit.member.desc ?? describeDataFn(segment, hit.member), gameRoot));
+      lines.push(
+        ...usageDetailLines(usage, segment, hit.member.desc ?? describeDataFn(segment, hit.member), gameRoot)
+      );
     } else if (uses > 0) {
       lines.push(`\`${segment}\``);
       lines.push("", `member — ${provenance(null)}`);
-      lines.push(...usageDetailLines(usage, segment, describeDataFn(segment, null), gameRoot, dumpHintFor(data)));
+      lines.push(
+        ...usageDetailLines(usage, segment, describeDataFn(segment, null), gameRoot, dumpHintFor(data))
+      );
     } else {
       return null;
     }
@@ -692,7 +710,10 @@ export function provideDataFnSignature(
       .map(([v]) => `'${v}'`);
     docParts.push(`Observed arguments: ${top.join(", ")}${lits.size > 6 ? ", …" : ""}`);
   }
-  if (member === undefined) docParts.push(`Arity observed in vanilla usage (${usage.argCounts.get(fn)?.get(argNames.length) ?? 0} sites).`);
+  if (member === undefined)
+    docParts.push(
+      `Arity observed in vanilla usage (${usage.argCounts.get(fn)?.get(argNames.length) ?? 0} sites).`
+    );
 
   return {
     signatures: [

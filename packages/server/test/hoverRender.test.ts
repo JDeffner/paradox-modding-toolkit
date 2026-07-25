@@ -35,7 +35,9 @@ describe("kind badges (§D2)", () => {
 describe("scope pills (§D3)", () => {
   it("blue when the scope matches the current cursor scope, muted otherwise", () => {
     const current = new Set(["character"]);
-    expect(scopePill("character", current)).toBe('<span style="color:var(--vscode-charts-blue);">character</span>');
+    expect(scopePill("character", current)).toBe(
+      '<span style="color:var(--vscode-charts-blue);">character</span>'
+    );
     expect(scopePill("province", current)).toBe(
       '<span style="color:var(--vscode-descriptionForeground);">province</span>'
     );
@@ -56,13 +58,17 @@ describe("Mock 1 — engine trigger (is_ai-shaped)", () => {
   });
 
   it("badge + bold name on line 1", () => {
-    expect(md.startsWith('<span style="color:var(--vscode-charts-purple);">■ trigger</span> **is_ai**')).toBe(true);
+    expect(md.startsWith('<span style="color:var(--vscode-charts-purple);">■ trigger</span> **is_ai**')).toBe(
+      true
+    );
   });
 
   it("prose, italic traits, and a --- footer with a blue scope pill", () => {
     expect(md).toContain("Is the character AI-controlled?");
     expect(md).toContain("*Traits: yes/no · comparison ok*");
-    expect(md).toContain("\n---\nSupported scopes: <span style=\"color:var(--vscode-charts-blue);\">character</span>");
+    expect(md).toContain(
+      '\n---\nSupported scopes: <span style="color:var(--vscode-charts-blue);">character</span>'
+    );
   });
 });
 
@@ -77,9 +83,11 @@ describe("Mock 2 — mod scripted trigger with reference count", () => {
   });
 
   it("green badge, name, · mod on line 1", () => {
-    expect(md.startsWith('<span style="color:var(--vscode-charts-green);">■ scripted trigger</span> **is_human** · mod')).toBe(
-      true
-    );
+    expect(
+      md.startsWith(
+        '<span style="color:var(--vscode-charts-green);">■ scripted trigger</span> **is_human** · mod'
+      )
+    ).toBe(true);
   });
 
   it("fences the example with the paradox language id", () => {
@@ -100,7 +108,9 @@ describe("Mock 3 — saved scope", () => {
   });
 
   it("orange badge, name, blue → type on line 1", () => {
-    expect(md).toContain('<span style="color:var(--vscode-charts-orange);">■ saved scope</span> **scope:secondary_recipient**');
+    expect(md).toContain(
+      '<span style="color:var(--vscode-charts-orange);">■ saved scope</span> **scope:secondary_recipient**'
+    );
     expect(md).toContain('→ <span style="color:var(--vscode-charts-blue);">character</span>');
   });
 
@@ -111,7 +121,10 @@ describe("Mock 3 — saved scope", () => {
 
 describe("hover assembly (§D2)", () => {
   it("appends the scope footer exactly once, after the cards", () => {
-    const md = renderHover([renderCard({ kind: "trigger", name: "a" }), renderCard({ kind: "effect", name: "b" })], scopeHereLine("character", "root · every_vassal"));
+    const md = renderHover(
+      [renderCard({ kind: "trigger", name: "a" }), renderCard({ kind: "effect", name: "b" })],
+      scopeHereLine("character", "root · every_vassal")
+    );
     expect(md.match(/Scope here:/g)).toHaveLength(1);
     expect(md.trimEnd().endsWith("Scope here: **character** (root · every_vassal)")).toBe(true);
     // Cards are joined by the --- separator.

@@ -318,15 +318,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tracker = new LocReferenceTracker();
   tracker.wire(context);
   context.subscriptions.push(
-    vscode.languages.registerDefinitionProvider(LOC_SELECTOR, new LocFileDefinitionProvider(tracker, () => cfg))
+    vscode.languages.registerDefinitionProvider(
+      LOC_SELECTOR,
+      new LocFileDefinitionProvider(tracker, () => cfg)
+    )
   );
 
   // Title button "Open .info Reference" shows only when the active file maps to
   // a game folder that has a relevant _*.info doc.
   updateInfoDocContext(cfg);
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => updateInfoDocContext(cfg))
-  );
+  context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => updateInfoDocContext(cfg)));
 
   // ---- commands ---------------------------------------------------------------
 
@@ -364,7 +365,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("ck3.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
-    vscode.commands.registerCommand("ck3.createTranslation", () => createTranslationCommand(cfgForActive(), log)),
+    vscode.commands.registerCommand("ck3.createTranslation", () =>
+      createTranslationCommand(cfgForActive(), log)
+    ),
     vscode.commands.registerCommand("ck3.createTranslationMod", () => createTranslationModCommand(cfg, log)),
     vscode.commands.registerCommand("ck3.openInfoDocs", () => openInfoDocsCommand(cfg)),
     vscode.commands.registerCommand("ck3.openVanillaExamples", () => openVanillaExamplesCommand()),
@@ -400,7 +403,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       lc.sendRequest<EventDetail | null>(eventDetailRequest, { id } satisfies EventDetailParams),
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
-        if (!replaceLocLineValue(file, line, value)) throw new Error(`line ${line + 1} is not a loc entry anymore`);
+        if (!replaceLocLineValue(file, line, value))
+          throw new Error(`line ${line + 1} is not a loc entry anymore`);
         notifyModFileChanged(file);
         return;
       }
@@ -414,11 +418,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const optionKey = `${id}.${String.fromCharCode(97 + Math.min(count, 25))}`;
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
       const edit = new vscode.WorkspaceEdit();
-      edit.insert(
-        doc.uri,
-        new vscode.Position(endLine, 0),
-        `\toption = {\n\t\tname = ${optionKey}\n\t}\n`
-      );
+      edit.insert(doc.uri, new vscode.Position(endLine, 0), `\toption = {\n\t\tname = ${optionKey}\n\t}\n`);
       if (!(await vscode.workspace.applyEdit(edit))) throw new Error("edit rejected");
       await doc.save();
       notifyModFileChanged(file);
@@ -436,7 +436,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("ck3.showDependencies", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== "paradox") {
-        void vscode.window.showWarningMessage("CK3: place the cursor on a definition in a script (.txt) file.");
+        void vscode.window.showWarningMessage(
+          "CK3: place the cursor on a definition in a script (.txt) file."
+        );
         return;
       }
       const params: DependenciesParams = {
@@ -450,9 +452,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       views.showDependencies(result);
       await vscode.commands.executeCommand("ck3.dependencies.focus");
       if (!result.def) {
-        void vscode.window.showInformationMessage(
-          "CK3: no indexed definition under the cursor."
-        );
+        void vscode.window.showInformationMessage("CK3: no indexed definition under the cursor.");
       }
     }),
     vscode.commands.registerCommand("ck3.showEventGraph", () => {
@@ -463,10 +463,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       let params: EventGraphParams = {};
       if (editor && editor.document.languageId === "paradox") {
         const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
-        const range = editor.document.getWordRangeAtPosition(
-          editor.selection.active,
-          /[A-Za-z0-9_.\-]+/
-        );
+        const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.\-]+/);
         const word = range ? editor.document.getText(range) : "";
         if (/^[A-Za-z0-9_\-]+\.\d+$/.test(word)) {
           params = { root: word };
@@ -561,7 +558,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("ck3.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),
-    vscode.commands.registerCommand("ck3.newContent", () => newContentCommand(cfgForActive(), notifyModFileChanged))
+    vscode.commands.registerCommand("ck3.newContent", () =>
+      newContentCommand(cfgForActive(), notifyModFileChanged)
+    )
   );
 
   // ---- onboarding ---------------------------------------------------------------

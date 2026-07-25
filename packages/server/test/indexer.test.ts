@@ -14,7 +14,7 @@ const GAME = path.join(__dirname, "fixtures", "game");
 
 describe("parseScriptDefinitions", () => {
   it("finds only top-level assignments", () => {
-    const content = 'outer = {\n\tinner = {\n\t\tdeep = yes\n\t}\n}\nsecond = { x = 1 }\n';
+    const content = "outer = {\n\tinner = {\n\t\tdeep = yes\n\t}\n}\nsecond = { x = 1 }\n";
     const defs = parseScriptDefinitions(content, "scripted_effect", "f.txt", "mod");
     expect(defs.map((d) => [d.name, d.line])).toEqual([
       ["outer", 0],
@@ -123,9 +123,13 @@ describe("DefinitionIndex", () => {
 
 describe("file classification", () => {
   it("classifies files under whitelisted folders", () => {
-    expect(classifyFile(MOD, path.join(MOD, "common", "scripted_effects", "x.txt"))?.kind).toBe("scripted_effect");
+    expect(classifyFile(MOD, path.join(MOD, "common", "scripted_effects", "x.txt"))?.kind).toBe(
+      "scripted_effect"
+    );
     expect(classifyFile(MOD, path.join(MOD, "events", "sub", "x.txt"))?.kind).toBe("event");
-    expect(classifyFile(MOD, path.join(MOD, "localization", "english", "x_l_english.yml"))?.kind).toBe("loc_key");
+    expect(classifyFile(MOD, path.join(MOD, "localization", "english", "x_l_english.yml"))?.kind).toBe(
+      "loc_key"
+    );
     expect(classifyFile(MOD, path.join(MOD, "gfx", "x.txt"))).toBeNull();
     expect(classifyFile(MOD, path.join("elsewhere", "x.txt"))).toBeNull();
   });

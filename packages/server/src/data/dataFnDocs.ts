@@ -22,32 +22,48 @@ export const CURATED_DOCS: ReadonlyMap<string, string> = new Map<string, string>
   ["IsDataModelEmpty", "True when the given data model (list) has no entries."],
   ["GetDataModelSize", "Number of entries in the given data model (list)."],
   // Selection / text
-  ["SelectLocalization", "Picks between two loc keys: `SelectLocalization( bool, key_if_true, key_if_false )`."],
+  [
+    "SelectLocalization",
+    "Picks between two loc keys: `SelectLocalization( bool, key_if_true, key_if_false )`.",
+  ],
   ["Select_CString", "Picks between two strings by a boolean: `Select_CString( bool, if_true, if_false )`."],
   ["Concatenate", "Concatenates its string arguments into one string."],
   ["Localize", "Looks up a localization key by name and returns its text."],
   ["GetHerHis", "Possessive pronoun for the character (her/his). `|U` capitalizes."],
   ["GetSheHe", "Subject pronoun for the character (she/he). `|U` capitalizes."],
   ["GetHerHim", "Object pronoun for the character (her/him). `|U` capitalizes."],
-  ["Custom", "Runs a customizable localization (common/customizable_localization) on this object: `Custom('key')`."],
+  [
+    "Custom",
+    "Runs a customizable localization (common/customizable_localization) on this object: `Custom('key')`.",
+  ],
   ["Custom2", "Customizable localization taking a second scope argument: `Custom2('key', OtherScope)`."],
   // Commands / gui plumbing
   ["IsValidCommand", "True when the given gui command is currently allowed (drives enabled states)."],
   ["GetCommandDesc", "Tooltip text explaining the given gui command's current state."],
-  ["GetVariableSystem", "The gui-local variable store; chain `.Set/.Toggle/.Exists/.HasValue` for pure-UI state."],
-  ["GetNullCharacter", "An empty Character reference; used to blank a datacontext or as a comparison target."],
+  [
+    "GetVariableSystem",
+    "The gui-local variable store; chain `.Set/.Toggle/.Exists/.HasValue` for pure-UI state.",
+  ],
+  [
+    "GetNullCharacter",
+    "An empty Character reference; used to blank a datacontext or as a comparison target.",
+  ],
   ["EmptyScope", "An empty scope object; used to blank out a context."],
   ["GetPlayer", "The local player's character."],
   ["GetScriptedGui", "Looks up a scripted_gui by name: chain `.IsShown/.IsValid/.Execute` with a GuiScope."],
   ["GuiScope", "Builds a scope bundle for scripted_gui calls: `.SetRoot(...).AddScope('name', ...).End`."],
-  ["AddScope", "Adds a named scope to the bundle: `AddScope( 'name', object )` (read as `scope:name` in script)."],
+  [
+    "AddScope",
+    "Adds a named scope to the bundle: `AddScope( 'name', object )` (read as `scope:name` in script).",
+  ],
   ["SetRoot", "Sets the scripted_gui's root scope in a GuiScope chain."],
   ["MakeScope", "Wraps an object as a script scope (for GuiScope chains and scripted_gui calls)."],
   ["End", "Finishes a GuiScope builder chain."],
 ]);
 
 /** Arithmetic/compare families are generated, not listed one by one. */
-const TYPED_FAMILY = /^(Add|Subtract|Multiply|Divide|Min|Max|EqualTo|NotEqualTo|LessThan|GreaterThan|LessThanOrEqualTo|GreaterThanOrEqualTo|IntTo|FixedPointTo|FloatTo)_?([A-Za-z0-9]+)?$/;
+const TYPED_FAMILY =
+  /^(Add|Subtract|Multiply|Divide|Min|Max|EqualTo|NotEqualTo|LessThan|GreaterThan|LessThanOrEqualTo|GreaterThanOrEqualTo|IntTo|FixedPointTo|FloatTo)_?([A-Za-z0-9]+)?$/;
 const FAMILY_DOC: Record<string, string> = {
   Add: "Sum of the two arguments",
   Subtract: "First argument minus the second",

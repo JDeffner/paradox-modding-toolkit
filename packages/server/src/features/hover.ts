@@ -117,9 +117,7 @@ export function provideHover(
             .map((d) => `set in [${path.basename(d.file)}:${d.line + 1}](${URI.file(d.file)}#L${d.line + 1})`)
             .join("  \n")
         : undefined;
-    cards.push(
-      renderCard({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc })
-    );
+    cards.push(renderCard({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc }));
   }
 
   // When the word is the VALUE of a schema ref field (`theme = faith`,
@@ -320,7 +318,9 @@ function provenance(def: { file: string; line: number }): string {
   const label = `${path.basename(def.file)}:${def.line + 1}`;
   // Plain text when no absolute path is available (fail-soft, e.g. synthetic defs).
   if (!def.file || !path.isAbsolute(def.file)) return label;
-  const target = URI.file(def.file).with({ fragment: String(def.line + 1) }).toString();
+  const target = URI.file(def.file)
+    .with({ fragment: String(def.line + 1) })
+    .toString();
   return `[${label}](${target})`;
 }
 
@@ -493,7 +493,12 @@ function relationTriggerCard(data: ServerData, word: string): string | null {
   if (!m) return null;
   const def = data.index.lookup(m[2]).find((d) => d.kind === "scripted_relation");
   if (!def) return null;
-  const verb = m[1] === "has" ? "Trigger: the scoped character has" : m[1] === "set" ? "Effect: gives the scoped character" : "Effect: removes the scoped character's";
+  const verb =
+    m[1] === "has"
+      ? "Trigger: the scoped character has"
+      : m[1] === "set"
+        ? "Effect: gives the scoped character"
+        : "Effect: removes the scoped character's";
   return renderCard({
     kind: m[1] === "has" ? "trigger" : "effect",
     name: word,
@@ -598,7 +603,9 @@ function defineSourceLink(e: DefineEntry): string {
   const norm = e.file.replace(/\\/g, "/");
   const i = norm.toLowerCase().lastIndexOf("/common/defines/");
   const rel = i >= 0 ? `${norm.slice(i + 1)}:${e.line + 1}` : `${path.basename(e.file)}:${e.line + 1}`;
-  const target = URI.file(e.file).with({ fragment: String(e.line + 1) }).toString();
+  const target = URI.file(e.file)
+    .with({ fragment: String(e.line + 1) })
+    .toString();
   return `${e.layer} · [${rel}](${target})`;
 }
 

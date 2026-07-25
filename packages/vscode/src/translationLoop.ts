@@ -22,7 +22,9 @@ export async function translateNextCommand(
   const coverage = await lc.sendRequest<LocCoverage[]>(locCoverageRequest);
   const candidates = coverage.filter((l) => l.untranslated.length + l.missing.length > 0);
   if (candidates.length === 0) {
-    void vscode.window.showInformationMessage("CK3: localization coverage is complete — nothing to translate.");
+    void vscode.window.showInformationMessage(
+      "CK3: localization coverage is complete — nothing to translate."
+    );
     return;
   }
 
@@ -81,6 +83,8 @@ export async function translateNextCommand(
   }
 
   if (done > 0) {
-    void vscode.window.showInformationMessage(`CK3: ${done}/${total} ${lang.language} entr${done === 1 ? "y" : "ies"} written.`);
+    void vscode.window.showInformationMessage(
+      `CK3: ${done}/${total} ${lang.language} entr${done === 1 ? "y" : "ies"} written.`
+    );
   }
 }

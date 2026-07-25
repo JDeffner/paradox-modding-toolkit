@@ -330,7 +330,11 @@ export function inferScopeAt(
         let item: Set<Scope> | null = null;
         const varName = node ? childScalar(node, "variable") : null;
         if (varName && ctx?.varListItemTypes) {
-          const ns = lower.includes("_in_global_") ? "global_var" : lower.includes("_in_local_") ? "local_var" : "var";
+          const ns = lower.includes("_in_global_")
+            ? "global_var"
+            : lower.includes("_in_local_")
+              ? "local_var"
+              : "var";
           item = ctx.varListItemTypes.get(`${ns}:${varName}`) ?? null;
         }
         if (!item) {
@@ -458,7 +462,13 @@ export function resolveKeyChainScopes(
 function childScalar(stmt: Statement, key: string): string | null {
   if (stmt.kind !== "assignment" || stmt.value?.kind !== "block") return null;
   for (const s of stmt.value.statements) {
-    if (s.kind === "assignment" && !s.key.quoted && s.key.text === key && s.value?.kind === "scalar" && !s.value.quoted) {
+    if (
+      s.kind === "assignment" &&
+      !s.key.quoted &&
+      s.key.text === key &&
+      s.value?.kind === "scalar" &&
+      !s.value.quoted
+    ) {
       return s.value.text;
     }
   }
