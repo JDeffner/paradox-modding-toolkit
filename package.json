@@ -4,27 +4,40 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": {
-    "name": "Joël Deffner"
+    "name": "Jo\uff83\uff6bl Deffner"
   },
   "scripts": {
     "compile": "pnpm --filter ck3-modding-toolkit run compile",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",
     "package": "pnpm --filter ck3-modding-toolkit run package",
     "testp": "pnpm --filter ck3-modding-toolkit run testp"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@paradox-lsp/protocol": "workspace:*",
     "@paradox-lsp/server": "workspace:*",
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.1.0",
     "@types/vscode": "^1.90.0",
-    "@vscode/test-electron": "^3.0.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.3.0",
-    "esbuild": "^0.24.0",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
+    "esbuild": "^0.28.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10",
     "vscode-jsonrpc": "^9.0.1",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@<5.0.8": ">=5.0.8"
+    }
   }
 }

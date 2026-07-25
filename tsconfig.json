@@ -1,13 +1,16 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
+    // No baseUrl: `paths` targets resolve relative to this file. That is also
+    // the only form TypeScript 7 accepts (it removed baseUrl outright), so this
+    // config typechecks clean on both — the 7.x bump is blocked only by
+    // typescript-eslint (typescript-eslint/typescript-eslint#10940).
     "types": ["node", "vscode"],
     "paths": {
-      "@paradox-lsp/protocol/*": ["packages/protocol/src/*"],
-      "@paradox-lsp/server/dds": ["packages/server/src/dds/index.ts"],
-      "@paradox-lsp/server/parser": ["packages/server/src/parser/index.ts"],
-      "@paradox-lsp/server/*": ["packages/server/src/*"]
+      "@paradox-lsp/protocol/*": ["./packages/protocol/src/*"],
+      "@paradox-lsp/server/dds": ["./packages/server/src/dds/index.ts"],
+      "@paradox-lsp/server/parser": ["./packages/server/src/parser/index.ts"],
+      "@paradox-lsp/server/*": ["./packages/server/src/*"]
     }
   },
   "include": [
@@ -17,6 +20,7 @@
     "packages/server/test",
     "packages/vscode/src",
     "packages/vscode/test",
-    "scripts"
+    "scripts",
+    "vitest.config.ts"
   ]
 }
