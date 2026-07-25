@@ -263,7 +263,7 @@ async function main(): Promise<void> {
     }
     const rel = relOf(file);
     harvestVarSets(text, rel, modVars);
-    const re = /save_(?:temporary_)?scope_value_as\s*=\s*\{[^{}]*?name\s*=\s*([A-Za-z0-9_\-]+)/g;
+    const re = /save_(?:temporary_)?scope_value_as\s*=\s*\{[^{}]*?name\s*=\s*([A-Za-z0-9_-]+)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) modValueSaves.add(m[1]);
   }
@@ -329,7 +329,7 @@ async function main(): Promise<void> {
     // scope:NAME occurrences in any scalar (keys and values), incl. dot chains.
     const scanScopeRefs = (scalar: ScalarNode) => {
       if (scalar.quoted) return;
-      const re = /scope:([A-Za-z0-9_\-]+)/g;
+      const re = /scope:([A-Za-z0-9_-]+)/g;
       let m: RegExpExecArray | null;
       while ((m = re.exec(scalar.text)) !== null) {
         const name = m[1];
@@ -356,7 +356,7 @@ async function main(): Promise<void> {
     // var-prefix usages in scalars.
     const scanVarRefs = (scalar: ScalarNode) => {
       if (scalar.quoted) return;
-      const re = /(?:^|\.)((?:local_|global_)?var):([A-Za-z0-9_\-]+)/g;
+      const re = /(?:^|\.)((?:local_|global_)?var):([A-Za-z0-9_-]+)/g;
       let m: RegExpExecArray | null;
       while ((m = re.exec(scalar.text)) !== null) {
         const ns = VAR_PREFIX_NS[m[1]];
@@ -471,8 +471,8 @@ async function main(): Promise<void> {
         const cause = [...inference.chain].reverse().find((c) => c.endsWith("unknown"));
         const causeKey = cause
           ? cause
-              .replace(/scope:[A-Za-z0-9_\-]+/, "scope:*")
-              .replace(/(?:local_|global_)?var:[A-Za-z0-9_\-]+/, "var:*")
+              .replace(/scope:[A-Za-z0-9_-]+/, "scope:*")
+              .replace(/(?:local_|global_)?var:[A-Za-z0-9_-]+/, "var:*")
           : "(no root scope)";
         tally(unknownCauses, causeKey, siteOf(stmt.key.range.start));
         if (!rootScopes)

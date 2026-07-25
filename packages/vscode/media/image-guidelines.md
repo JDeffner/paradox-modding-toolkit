@@ -4,7 +4,7 @@ Every number below was **measured from the vanilla 1.19 game files** (most
 common size and format per folder), so match them and your art will drop into
 the game's UI without scaling artifacts. Sizes are width×height in pixels.
 
-Convert PNG/JPEG/WebP to DDS with **CK3: Convert Image to DDS** (also in the
+Convert PNG/JPEG/WebP to DDS with **Paradox: Convert Image to DDS** (also in the
 right-click menu on image files and the CK3 Tools view). Preview any `.dds` by
 just clicking it.
 

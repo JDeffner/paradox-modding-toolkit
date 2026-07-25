@@ -424,7 +424,9 @@ describe("usage-aware hover", () => {
 
   it("links examples into the game folder when a root is known", () => {
     const line = 'x = "[HouseAspiration.Self]"';
-    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "F:\game")!;
+    // "F:\game" collapses to "F:game" in a JS string — a separator-less path
+    // that only passed because the link builder just needs a non-empty root.
+    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "F:/game")!;
     expect(hover.markdown).toContain("file://");
   });
 });

@@ -36,9 +36,9 @@ const BATCH = 200;
  * a near-universal name; real identifiers stay far below it. */
 const MAX_REFS = 5000;
 
-const NAME_OK = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+const NAME_OK = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 /** Identifier characters: a hit is a token only when NOT flanked by these. */
-const IDENT = /[A-Za-z0-9_.\-]/;
+const IDENT = /[A-Za-z0-9_.-]/;
 
 const yieldNow = () => new Promise<void>((resolve) => setImmediate(resolve));
 

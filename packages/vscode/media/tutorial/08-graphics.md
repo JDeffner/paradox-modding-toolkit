@@ -2,7 +2,7 @@
 
 Sooner or later your trait needs an icon and your event wants a background. CK3 textures are DDS files at specific sizes, and the game's failure mode here is the familiar one: a wrong path or size produces an empty graphic and **zero error output**. This chapter gives you the formats, the sizes and the tooling.
 
-The extension bundles a full reference measured from the vanilla 1.19 files: run **CK3: Show Image Guidelines (sizes & formats)** to open it. The tables below are the highlights; the guidelines document has the complete folder-by-folder listing.
+The extension bundles a full reference measured from the vanilla 1.19 files: run **Paradox: Show Image Guidelines (sizes & formats)** to open it. The tables below are the highlights; the guidelines document has the complete folder-by-folder listing.
 
 ## The golden rule: exact paths
 
@@ -24,7 +24,7 @@ The extension softens this: hover any `gfx/...` path in script to preview the te
 
 Rule of thumb, measured straight from the vanilla data: **small icons uncompressed, big illustrations BC1, alpha gradients BC3.**
 
-You do not need Photoshop plugins for any of this. **CK3: Convert Image to DDS** converts PNG, JPEG or WebP (also available by right-clicking an image file in the Explorer). Its automatic mode picks BC3 if the image has transparency and BC1 otherwise, and it writes no mipmaps, matching vanilla interface textures. Export your art as PNG with straight (non-premultiplied) alpha and let the converter do the rest.
+You do not need Photoshop plugins for any of this. **Paradox: Convert Image to DDS** converts PNG, JPEG or WebP (also available by right-clicking an image file in the Explorer). Its automatic mode picks BC3 if the image has transparency and BC1 otherwise, and it writes no mipmaps, matching vanilla interface textures. Export your art as PNG with straight (non-premultiplied) alpha and let the converter do the rest.
 
 ## The sizes that matter most
 
@@ -83,7 +83,7 @@ Character appearance is a gene/DNA system spanning `common/genes`, `common/ethni
 ## Try it
 
 1. Draw or generate a 120×120 icon for `chron_famed_chronicler` (a quill, obviously). Export as PNG.
-2. Right-click it in the VS Code Explorer, run **CK3: Convert Image to DDS**, and place the result at `gfx/interface/icons/traits/chron_famed_chronicler.dds` in your mod.
+2. Right-click it in the VS Code Explorer, run **Paradox: Convert Image to DDS**, and place the result at `gfx/interface/icons/traits/chron_famed_chronicler.dds` in your mod.
 3. Click the `.dds` to check it in the preview, then confirm in-game: the trait now shows your icon in the character window.
 4. Stretch goal: compose a coat of arms in the Royal Court designer, copy it to clipboard, and attach it to a custom-named landed title in a sandbox mod.
 

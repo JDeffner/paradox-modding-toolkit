@@ -118,10 +118,10 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
     });
     await conn.sendNotification("initialized", {});
 
-    conn.sendNotification("textDocument/didOpen", {
+    void conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri: eventsUri, languageId: "paradox", version: 1, text: EVENTS_TXT },
     });
-    conn.sendNotification("textDocument/didOpen", {
+    void conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri: brokenUri, languageId: "paradox", version: 1, text: BROKEN_TXT },
     });
 
@@ -178,7 +178,7 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
 
   it("shuts down cleanly", async () => {
     await conn.sendRequest("shutdown");
-    conn.sendNotification("exit");
+    void conn.sendNotification("exit");
     const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
     expect(code).toBe(0);
   });

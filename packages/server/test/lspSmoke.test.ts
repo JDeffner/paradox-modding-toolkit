@@ -165,7 +165,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     ).toBe(true);
     await conn.sendNotification("initialized", {});
 
-    conn.sendNotification("textDocument/didOpen", {
+    void conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri: eventsUri, languageId: "paradox", version: 1, text: EVENTS_TXT },
     });
 
@@ -181,7 +181,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   afterAll(async () => {
     try {
       await conn.sendRequest("shutdown");
-      conn.sendNotification("exit");
+      void conn.sendNotification("exit");
     } catch {
       /* server may already be gone */
     }
@@ -240,7 +240,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   });
 
   it("F12 in a loc value jumps from Custom2('X') to the custom loc definition", async () => {
-    conn.sendNotification("textDocument/didOpen", {
+    void conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri: locUri, languageId: "paradox-loc", version: 1, text: LOC_YML },
     });
     const line = 3; // the smoke.1.desc line

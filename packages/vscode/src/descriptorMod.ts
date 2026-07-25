@@ -325,7 +325,7 @@ export function registerDescriptorMod(
     const file = path.join(cfg.modPath, "descriptor.mod");
     if (!fs.existsSync(file)) {
       const folderName = path.basename(cfg.modPath);
-      const modName = folderName.replace(/[_\-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+      const modName = folderName.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
       const detected = detectGameVersion(cfg.gamePath);
       const version = (detected && wildcardVersion(detected)) ?? "1.*";
       fs.writeFileSync(file, scaffoldDescriptor(modName, version), "utf8");

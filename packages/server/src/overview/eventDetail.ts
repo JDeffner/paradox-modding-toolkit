@@ -25,8 +25,8 @@ const OPTION_META_KEYS = new Set([
   "flag",
   "custom_tooltip",
 ]);
-const EVENT_ID = /^[A-Za-z][A-Za-z0-9_\-]*\.\d+$/;
-const SCOPE_PREFIX = /^(scope|var|local_var|global_var):([A-Za-z0-9_.\-]+)$/;
+const EVENT_ID = /^[A-Za-z][A-Za-z0-9_-]*\.\d+$/;
+const SCOPE_PREFIX = /^(scope|var|local_var|global_var):([A-Za-z0-9_.-]+)$/;
 const MAX_SECTION_KEYS = 12;
 const MAX_REFS = 200;
 

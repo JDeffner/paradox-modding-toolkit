@@ -9,6 +9,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type { Ck3Config } from "../config";
+import { escapeRegExp } from "@paradox-lsp/protocol/regex";
 import {
   scaffoldDecision,
   scaffoldEvent,
@@ -104,7 +105,7 @@ async function askPrefix(cfg: Ck3Config): Promise<string | undefined> {
 }
 
 async function askEventId(prefix: string): Promise<string | undefined> {
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\.\\d+$`);
+  const re = new RegExp(`^${escapeRegExp(prefix)}\\.\\d+$`);
   return vscode.window.showInputBox({
     title: "CK3: New event — id",
     prompt: `Event id (must be ${prefix}.<number>).`,

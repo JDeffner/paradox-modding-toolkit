@@ -10,6 +10,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { wholeNamePattern } from "@paradox-lsp/protocol/regex";
 import type { Ck3Config } from "./config";
 import { listFiles } from "@paradox-lsp/protocol/fsWalk";
 import { findLocKeyRefs, locKeyOnLine } from "@paradox-lsp/protocol/locRefs";
@@ -56,9 +57,7 @@ export class LocReferenceTracker {
 /** Scan the workspace mods' script files for lines mentioning `key`. Capped, word-boundary matched. */
 export function findScriptReferences(modPaths: string[], key: string, cap = 20): vscode.Location[] {
   const results: vscode.Location[] = [];
-  const needle = new RegExp(
-    `(?<![A-Za-z0-9_.\\-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`
-  );
+  const needle = new RegExp(wholeNamePattern(key));
   const roots = modPaths
     .flatMap((mod) => ["events", "common", "gui", "gfx"].map((d) => path.join(mod, d)))
     .filter((d) => fs.existsSync(d));

@@ -107,20 +107,19 @@ describe.skipIf(!GAME)("CK3 corpus", () => {
 
     // Log histogram + stats
     const sortedHist = [...histogram.entries()].sort((a, b) => b[1] - a[1]);
-    // eslint-disable-next-line no-console
+
     console.log("\n=== DDS format histogram ===");
     for (const [fmt, n] of sortedHist) {
-      // eslint-disable-next-line no-console
       console.log(`  ${fmt.padEnd(20)} ${n}`);
     }
     const overallRate = overallTotal ? ((overallOk / overallTotal) * 100).toFixed(1) : "n/a";
     const traitRate = traitTotal ? ((traitOk / traitTotal) * 100).toFixed(1) : "n/a";
-    // eslint-disable-next-line no-console
+
     console.log(
       `\nOverall: ${overallOk}/${overallTotal} decoded (${overallRate}%), ` +
         `clean-unsupported: ${cleanUnsupported}`
     );
-    // eslint-disable-next-line no-console
+
     console.log(`Trait icons: ${traitOk}/${traitTotal} decoded (${traitRate}%)\n`);
 
     if (traitTotal > 0) {

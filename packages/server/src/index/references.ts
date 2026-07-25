@@ -33,7 +33,7 @@ import {
   type Statement,
 } from "../parser";
 
-const NAME_OK = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+const NAME_OK = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 /** Words that are never references even in name position. */
 const NOT_A_NAME = new Set(["yes", "no", "this", "root", "prev", "from"]);
 

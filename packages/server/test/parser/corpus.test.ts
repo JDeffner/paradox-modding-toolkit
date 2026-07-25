@@ -97,33 +97,28 @@ describe("corpus", () => {
       const txtRatio = txtFiles.length ? txtWithErrors / txtFiles.length : 0;
       const ymlRatio = ymlFiles.length ? ymlWithErrors / ymlFiles.length : 0;
 
-      // eslint-disable-next-line no-console
       console.log(
         `\n[corpus] txt files: ${txtFiles.length}, with-errors: ${txtWithErrors} (${(txtRatio * 100).toFixed(
           3
         )}%)`
       );
-      // eslint-disable-next-line no-console
+
       console.log(
         `[corpus] yml files: ${ymlFiles.length}, with-errors: ${ymlWithErrors} (${(ymlRatio * 100).toFixed(
           3
         )}%)`
       );
-      // eslint-disable-next-line no-console
+
       console.log(`[corpus] elapsed: ${elapsed}ms`);
       if (txtOffenders.length) {
-        // eslint-disable-next-line no-console
         console.log("[corpus] txt offenders (sample):");
         for (const o of txtOffenders) {
-          // eslint-disable-next-line no-console
           console.log(`  ${o.file} :: ${o.first}`);
         }
       }
       if (ymlOffenders.length) {
-        // eslint-disable-next-line no-console
         console.log("[corpus] yml offenders (sample):");
         for (const o of ymlOffenders) {
-          // eslint-disable-next-line no-console
           console.log(`  ${o.file} :: ${o.first}`);
         }
       }

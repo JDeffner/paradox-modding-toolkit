@@ -64,12 +64,11 @@ run("mod corpus (AGOT)", () => {
       }
     }
     const ratio = withErrors / files.length;
-    // eslint-disable-next-line no-console
+
     console.log(
       `\n[mod-corpus] txt files: ${files.length}, with-errors: ${withErrors} (${(ratio * 100).toFixed(3)}%)`
     );
     if (offenders.length) {
-      // eslint-disable-next-line no-console
       console.log("[mod-corpus] offenders (sample):\n  " + offenders.join("\n  "));
     }
     expect(ratio).toBeLessThan(0.005);
@@ -80,7 +79,6 @@ run("mod corpus (AGOT)", () => {
     const byKind: Record<string, number> = {};
     for (const d of defs) byKind[d.kind] = (byKind[d.kind] ?? 0) + 1;
 
-    // eslint-disable-next-line no-console
     console.log(
       `\n[mod-corpus] effects=${byKind.scripted_effect} triggers=${byKind.scripted_trigger} ` +
         `values=${byKind.script_value} modifiers=${byKind.scripted_modifier}`

@@ -82,7 +82,6 @@ run("completion ranking eval (§C4)", () => {
     const { samples, metrics } = runRankEval(env, CORPUS!, { seed: 1234567, perContext: 80 });
     expect(samples.length).toBeGreaterThan(300);
 
-    // eslint-disable-next-line no-console
     console.log(
       `\nrank eval (${samples.length} samples, ${env.data.index.stats().total} defs):\n` +
         formatMetrics(metrics)

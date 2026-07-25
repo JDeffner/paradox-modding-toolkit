@@ -10,7 +10,8 @@
  *      the diagnostics.ignorePatterns setting (globs on the workspace-relative path).
  *   2. Inline comments: `# ck3m:ignore <code…>` (same line) and
  *      `# ck3m:ignore-next-line <code…>` (following line); a bare form with no
- *      codes suppresses every diagnostic on the target line.
+ *      codes suppresses every diagnostic on the target line. A trailing
+ *      `-- <rationale>` is allowed and ignored.
  */
 
 /**
@@ -130,13 +131,28 @@ export function scanInlineSuppressions(text: string): InlineSuppressions {
     const m = IGNORE_RE.exec(line.slice(hash));
     if (!m) continue;
     const target = m[1] ? i + 1 : i;
-    const codes = m[2]
-      .trim()
-      .split(/\s+/)
-      .filter((c) => c !== "");
+    const codes = parseCodes(m[2]);
     mergeSuppression(map, target, codes.length === 0 ? null : codes);
   }
   return map;
+}
+
+/**
+ * The codes following the marker, stopping at a `--` rationale. Writing a
+ * reason is the natural instinct, and without the cut-off every word of it
+ * parsed as a code, turning a suppression that matched everything into one
+ * that matched nothing, silently. Codes are kebab-case slugs
+ * (`unclosed-brace`, `loc-no-header`), so a leading `-` can only be the
+ * separator.
+ */
+function parseCodes(rest: string): string[] {
+  const out: string[] = [];
+  for (const token of rest.trim().split(/\s+/)) {
+    if (token === "") continue;
+    if (token.startsWith("-")) break; // `-- because the game allows it`
+    out.push(token);
+  }
+  return out;
 }
 
 function mergeSuppression(map: InlineSuppressions, line: number, codes: string[] | null): void {

@@ -5,7 +5,7 @@
 //
 // Run after `pnpm run compile`:  node scripts/build-server-tarball.mjs
 // Output: paradox-lsp-server-<version>.tar.gz at the repo root.
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -29,10 +29,22 @@ rmSync(stage, { recursive: true, force: true });
 mkdirSync(join(pkgDir, "dist"), { recursive: true });
 
 cpSync(bundle, join(pkgDir, "dist", "server.js"));
-cpSync(join(server, "data", "ck3", "freqs.json"), join(pkgDir, "data", "ck3", "freqs.json"));
-cpSync(join(server, "data", "ck3", "wikidocs"), join(pkgDir, "data", "ck3", "wikidocs"), { recursive: true });
-// Build-time input only; not shipped (same as the .vsix).
-rmSync(join(pkgDir, "data", "ck3", "wikidocs", "Data_types.md"), { force: true });
+
+// Every bundled game gets its data/<gameId>/ folder, discovered rather than
+// listed: hardcoding "ck3" here would silently ship the wrong data for the
+// next game (the other tables are inlined into the bundle by esbuild; only
+// these two are read from disk at runtime).
+const dataRoot = join(server, "data");
+for (const gameId of readdirSync(dataRoot)) {
+  if (!statSync(join(dataRoot, gameId)).isDirectory()) continue;
+  for (const asset of ["freqs.json", "wikidocs"]) {
+    const from = join(dataRoot, gameId, asset);
+    if (!existsSync(from)) continue;
+    cpSync(from, join(pkgDir, "data", gameId, asset), { recursive: true });
+  }
+  // Build-time input only; not shipped (same as the .vsix).
+  rmSync(join(pkgDir, "data", gameId, "wikidocs", "Data_types.md"), { force: true });
+}
 cpSync(join(root, "LICENSE"), join(pkgDir, "LICENSE"));
 cpSync(join(server, "README.md"), join(pkgDir, "README.md"));
 

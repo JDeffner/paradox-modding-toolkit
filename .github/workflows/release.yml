@@ -46,6 +46,10 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Same gate as CI: a tag build must not ship a boundary violation.
+      - name: Game boundary (no game strings outside games/ and vscode/)
+        run: node scripts/check-game-boundary.mjs
+
       # Compile BEFORE the tests: the LSP/stdio/vic3 smoke tests fork
       # dist/server.js and silently skip when it does not exist.
       - run: pnpm run compile

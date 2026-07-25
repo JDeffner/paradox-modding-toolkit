@@ -830,7 +830,7 @@ function arrange(
   measurer: TextMeasurer,
   forced?: LayoutRect
 ): LayoutNode {
-  const rect = forced ?? placeInParent(node, content, measurer, parentKind);
+  const rect = forced ?? placeInParent(node, content, measurer);
   const srcPosition = node.pairs.get("position");
   const srcSize = node.pairs.get("size");
   const out: LayoutNode = {
@@ -898,12 +898,7 @@ function arrange(
 }
 
 /** Size + anchor + position for a child of a NON-box parent. */
-function placeInParent(
-  node: WNode,
-  content: LayoutRect,
-  measurer: TextMeasurer,
-  parentKind: ParentKind
-): LayoutRect {
+function placeInParent(node: WNode, content: LayoutRect, measurer: TextMeasurer): LayoutRect {
   let w: number;
   let h: number;
   if (node.cls === "box") {

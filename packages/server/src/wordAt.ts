@@ -4,7 +4,7 @@
  * the editor selects. No `vscode` imports.
  */
 
-const WORD = /[A-Za-z0-9_][A-Za-z0-9_.\-]*/g;
+const WORD = /[A-Za-z0-9_][A-Za-z0-9_.-]*/g;
 
 export interface WordRange {
   word: string;
@@ -42,7 +42,7 @@ export function scopePrefixBefore(lineText: string, range: WordRange): string | 
     if (before.endsWith(p)) {
       // Make sure the prefix is a whole token (not the tail of a longer word).
       const at = before.length - p.length;
-      if (at === 0 || !/[A-Za-z0-9_.\-]/.test(before[at - 1])) return p;
+      if (at === 0 || !/[A-Za-z0-9_.-]/.test(before[at - 1])) return p;
     }
   }
   return null;

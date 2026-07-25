@@ -299,8 +299,8 @@ function expandModContainer(dir: string): string[] {
   const mods: string[] = [];
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
       const child = path.join(dir, entry.name);
+      if (!isDirEntry(child, entry)) continue;
       if (looksLikeGameDir(child)) continue;
       if (looksLikeMod(child)) mods.push(child);
     }
@@ -308,6 +308,22 @@ function expandModContainer(dir: string): string[] {
     // Unreadable folder: contributes nothing.
   }
   return mods;
+}
+
+/**
+ * True for a real directory AND for a symlink/junction resolving to one. A
+ * Dirent reports a link as neither file nor directory, and symlinking a mod
+ * into the Paradox `mod/` folder is the standard Linux workflow, so gating on
+ * `isDirectory()` alone makes those mods invisible.
+ */
+function isDirEntry(full: string, entry: fs.Dirent): boolean {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return fs.statSync(full).isDirectory();
+  } catch {
+    return false; // dangling link
+  }
 }
 
 /** The workspace mod root a file belongs to (modPath first), or null. */

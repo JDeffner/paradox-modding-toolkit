@@ -159,7 +159,7 @@ Note `datacontext` goes on the widget **inside** `item`, not on `item` itself. F
 - The game ships an empty sandbox window at `gui/debug/test_gui.gui` and a component gallery at `gui/debug/window_component_library.gui`; spawning the test window from the component library (or console `gui.CreateWidget gui/debug/test_gui.gui test_window`) gives you a scratch canvas. These live in the game folder, so revert any edits when done (Steam "Verify integrity" restores them).
 - GUI errors land in `error.log` and `gui_warnings.log`.
 
-In VS Code, the extension gives `.gui` files their own language mode with highlighting, and **CK3: Show GUI Widget Tree** (also in the editor title bar for `.gui` files) renders the file's widget hierarchy as a collapsible tree, which beats scrolling a thousand-line file to understand its nesting.
+In VS Code, the extension gives `.gui` files their own language mode with highlighting, and **Paradox: Show GUI Widget Tree** (also in the editor title bar for `.gui` files) renders the file's widget hierarchy as a collapsible tree, which beats scrolling a thousand-line file to understand its nesting.
 
 ## Pitfalls: crashes and silences
 
@@ -170,7 +170,7 @@ Classic **silent failures**: registry name not matching the widget name (never s
 ## Try it
 
 1. Build the five-file fame bar above. Launch, take the archive decision, confirm the bar appears with the right fill.
-2. Open `gui/chron_shared/chron_types.gui` and run **CK3: Show GUI Widget Tree** to see the structure you built.
+2. Open `gui/chron_shared/chron_types.gui` and run **Paradox: Show GUI Widget Tree** to see the structure you built.
 3. Turn on `tweak gui.debug` in-game and hover your bar: confirm it reports your file and line.
 4. Stretch goal: add a `text_single` under the progressbar showing `[GetPlayer.MakeScope.ScriptValue('chron_fame_level')]` as a number, and a state animation on `_show`.
 

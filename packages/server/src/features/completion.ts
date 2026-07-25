@@ -248,15 +248,15 @@ function isSubsequence(wordLow: string, wordPos: number, labelLow: string, label
   return wordPos === wordLow.length;
 }
 
-const VALUE_POSITION = /([A-Za-z_][A-Za-z0-9_.\-]*)\s*\??=\s*"?([A-Za-z0-9_.\-]*)$/;
+const VALUE_POSITION = /([A-Za-z_][A-Za-z0-9_.-]*)\s*\??=\s*"?([A-Za-z0-9_.-]*)$/;
 /** Any `prefix:name` being typed; dispatching on the prefix happens in provide(). */
-const PREFIX_POSITION = /([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.\-]*)$/;
+const PREFIX_POSITION = /([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.-]*)$/;
 /** `define:NS|CONST` (pipe separator): group 1 namespace, group 2 present when a
  * `|` was typed, group 3 the constant. Handled ahead of PREFIX_POSITION because
  * the pipe form is not a plain `prefix:name`. */
 const DEFINE_POSITION = /(?:^|[^A-Za-z0-9_])define:([A-Za-z0-9_]*)(\|([A-Za-z0-9_]*))?$/;
 /** The word being typed at the cursor (mirrors the language's wordPattern). */
-const WORD_AT_END = /[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+const WORD_AT_END = /[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
 /** Prefixes that reference freeform names (no index kind): offer nothing.
  * `define` is handled separately (its pipe form completes namespaces/constants). */

@@ -106,6 +106,19 @@ describe("scanInlineSuppressions", () => {
   it("ignores files without the marker cheaply", () => {
     expect(scanInlineSuppressions("just = script\n").size).toBe(0);
   });
+  // Writing a reason used to parse every word of it as a code, so the
+  // suppression silently matched nothing.
+  it("stops at a -- rationale instead of reading it as codes", () => {
+    const map = scanInlineSuppressions("bad = { # ck3m:ignore unclosed-brace -- the game tolerates it\n");
+    expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
+    expect(isSuppressedInline(map, 0, "the")).toBe(false);
+    expect(isSuppressedInline(map, 0, "stray-close")).toBe(false);
+  });
+  it("treats a bare ignore with only a rationale as suppress-all", () => {
+    const map = scanInlineSuppressions("bad = { # ck3m:ignore -- intentional\n");
+    expect(isSuppressedInline(map, 0, "unclosed-brace")).toBe(true);
+    expect(isSuppressedInline(map, 0, "anything-at-all")).toBe(true);
+  });
 });
 
 describe("end-to-end: our diagnostics respect suppression", () => {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "CK3 Datafunction Expression",
+  "name": "Paradox Datafunction Expression",
   "scopeName": "source.paradox-datafunction",
   "patterns": [{ "include": "#expression" }],
   "repository": {

@@ -175,7 +175,7 @@ export function parseOnActionsLog(logsDir: string): Map<string, string> {
   } catch {
     return scopes;
   }
-  const entry = /^([A-Za-z0-9_.\-]+):\s*\r?\nFrom Code: (?:Yes|No)\s*\r?\nExpected Scope: (\w+)/gm;
+  const entry = /^([A-Za-z0-9_.-]+):\s*\r?\nFrom Code: (?:Yes|No)\s*\r?\nExpected Scope: (\w+)/gm;
   let m: RegExpExecArray | null;
   while ((m = entry.exec(content)) !== null) scopes.set(m[1], m[2].toLowerCase());
   return scopes;

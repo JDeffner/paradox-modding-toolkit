@@ -5,6 +5,7 @@
  * that touch the VS Code UI. All parsing/indexing/analysis lives in the server.
  */
 import * as vscode from "vscode";
+import * as os from "os";
 import * as path from "path";
 import {
   LanguageClient,
@@ -39,6 +40,7 @@ import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
+import { serverHeapMb } from "./serverHeap";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
@@ -193,12 +195,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ---- language server -----------------------------------------------------
 
   const serverModule = context.asAbsolutePath(path.join("dist", "server.js"));
+  const heapArg = `--max-old-space-size=${serverHeapMb(os.totalmem())}`;
   const serverOptions: ServerOptions = {
-    run: { module: serverModule, transport: TransportKind.ipc },
+    run: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: [heapArg] } },
     debug: {
       module: serverModule,
       transport: TransportKind.ipc,
-      options: { execArgv: ["--nolazy", "--inspect=6009"] },
+      options: { execArgv: ["--nolazy", "--inspect=6009", heapArg] },
     },
   };
   // wikidocsDir is deliberately NOT sent: the server derives data/<gameId>/
@@ -463,14 +466,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       let params: EventGraphParams = {};
       if (editor && editor.document.languageId === "paradox") {
         const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
-        const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.\-]+/);
+        const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
         const word = range ? editor.document.getText(range) : "";
-        if (/^[A-Za-z0-9_\-]+\.\d+$/.test(word)) {
+        if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) {
           params = { root: word };
-        } else if (/\/(on_action|decisions)\//.test(fsPath) && /^[A-Za-z0-9_\-]{3,}$/.test(word)) {
+        } else if (/\/(on_action|decisions)\//.test(fsPath) && /^[A-Za-z0-9_-]{3,}$/.test(word)) {
           params = { root: word };
         } else {
-          const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_\-]+)/.exec(editor.document.getText());
+          const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
           if (ns) params = { namespace: ns[1] };
         }
       }

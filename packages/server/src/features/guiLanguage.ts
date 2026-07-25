@@ -71,8 +71,8 @@ function rank2(rank: number): string {
   return String(Math.min(99, rank)).padStart(2, "0");
 }
 
-const VALUE_POSITION = /([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?([A-Za-z0-9_.\-]*)$/;
-const WORD_AT_END = /[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+const VALUE_POSITION = /([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?([A-Za-z0-9_.-]*)$/;
+const WORD_AT_END = /[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
 /** Innermost enclosing widget-block key at the offset, lowercased. */
 function enclosingType(document: TextDocument, offset: number): string | null {

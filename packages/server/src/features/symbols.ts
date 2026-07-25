@@ -61,7 +61,7 @@ function scriptSymbols(document: TextDocument): DocumentSymbol[] {
       if (child.kind !== "assignment" || child.key.quoted) continue;
       if (!INTERESTING_CHILD_BLOCKS.has(child.key.text)) continue;
       if (child.value?.kind !== "block") continue;
-      let label = child.key.text;
+      const label = child.key.text;
       let detail: string | undefined;
       if (child.key.text === "option") {
         detail = childScalar(child.value.statements, "name") ?? undefined;

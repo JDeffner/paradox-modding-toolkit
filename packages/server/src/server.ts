@@ -854,7 +854,7 @@ connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>
 
 connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {
   let name = params?.name;
-  let kind = params?.kind;
+  const kind = params?.kind;
   // Cursor-driven: resolve the word under the position in the open document.
   if (!name && params?.uri && params.position) {
     const doc = documents.get(params.uri);

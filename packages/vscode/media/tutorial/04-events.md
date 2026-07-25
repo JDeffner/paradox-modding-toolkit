@@ -2,7 +2,7 @@
 
 Events are the beating heart of CK3 content: the popup windows with portraits, flavor text and choices. This chapter covers their anatomy, how to chain them, and the single most important compatibility rule in all of CK3 modding: how to hook events into the game with on_actions without breaking other mods.
 
-The authoritative schema is `events/_events.info` in the game folder (open any event file and run **CK3: Open Format Docs (.info) for This File**). The best annotated examples are in `events/tutorial_events.txt`.
+The authoritative schema is `events/_events.info` in the game folder (open any event file and run **Paradox: Open Format Docs (.info) for This File**). The best annotated examples are in `events/tutorial_events.txt`.
 
 ## Anatomy of an event
 
@@ -117,7 +117,7 @@ One override warning from Chapter 1 bears repeating: **you cannot override a sin
 
 ### The event graph
 
-Once you have a few chained events, run **CK3: Show Event Graph**. It renders your namespaces as an interactive graph: which event triggers which, from which on_action or decision, with dead ends and orphans visible at a glance. Click a node to open the inspector with the event's portraits, options and effects summarized. It is the fastest way to review a chain's structure before testing, and to find the event that nothing fires.
+Once you have a few chained events, run **Paradox: Show Event Graph**. It renders your namespaces as an interactive graph: which event triggers which, from which on_action or decision, with dead ends and orphans visible at a glance. Click a node to open the inspector with the event's portraits, options and effects summarized. It is the fastest way to review a chain's structure before testing, and to find the event that nothing fires.
 
 ## on_actions: hooking into the game
 
@@ -203,6 +203,6 @@ Test without waiting: the console command `event chron.0001` fires it instantly 
 1. Add `chron.0002`: the finished chronicle is presented at court a season later. Fire it from `chron.0001`'s first option with `trigger_event = { id = chron.0002 months = 3 }`. Reuse `scope:scribe`.
 2. Give `chron.0002` a `first_valid` desc that varies if the ruler has `arrogant`.
 3. Add a yearly hook: append a `chron_yearly` on_action to `random_yearly_playable_pulse` with a 10 percent chance to fire a small "your chronicle is quoted at a feast" event for rulers who have taken the decision (track it with `set_variable` in the decision effect, check `has_variable` in the event trigger).
-4. Open **CK3: Show Event Graph** and admire your chain. Then check the graph shows the on_action edge into `chron.0010`.
+4. Open **Paradox: Show Event Graph** and admire your chain. Then check the graph shows the on_action edge into `chron.0010`.
 
 Next: [Chapter 5: Decisions and character interactions](05-decisions-interactions.md) · [Back to index](index.md)

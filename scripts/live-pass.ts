@@ -82,4 +82,4 @@ async function main(): Promise<void> {
   process.exit(failed ? 1 : 2);
 }
 
-main();
+void main();

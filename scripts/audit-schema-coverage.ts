@@ -104,7 +104,7 @@ function probeFolder(dir: string): { files: number; defs: number; standard: bool
       for (const stmt of result.root.statements) {
         if (stmt.kind !== "assignment") continue;
         const isBlock = stmt.value?.kind === "block" || stmt.value?.kind === "tagged-block";
-        const nameOk = /^[A-Za-z][A-Za-z0-9_.\-]*$/.test(stmt.key.text) && !stmt.key.text.startsWith("@");
+        const nameOk = /^[A-Za-z][A-Za-z0-9_.-]*$/.test(stmt.key.text) && !stmt.key.text.startsWith("@");
         if (isBlock && nameOk) {
           defs++;
           if (sample.length < 3) sample.push(stmt.key.text);

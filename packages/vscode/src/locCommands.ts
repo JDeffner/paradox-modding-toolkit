@@ -10,6 +10,7 @@ import * as path from "path";
 import type { Ck3Config } from "./config";
 import type { LocEntryInfo } from "@paradox-lsp/protocol/protocol";
 import { findLocKeyRefs, type LocKeyRef } from "@paradox-lsp/protocol/locRefs";
+import { escapeRegExp } from "@paradox-lsp/protocol/regex";
 
 const BOM = "﻿";
 
@@ -88,9 +89,7 @@ function upsertIntoYml(file: string, language: string, key: string, value: strin
     lines = [`l_${language}:`, ""];
   }
   const entry = ` ${key}:0 "${escapeLocValue(value)}"`;
-  const existing = lines.findIndex((l) =>
-    new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\d*\\s*"`).test(l)
-  );
+  const existing = lines.findIndex((l) => new RegExp(`^\\s*${escapeRegExp(key)}:\\d*\\s*"`).test(l));
   if (existing >= 0) lines[existing] = entry;
   else {
     while (lines.length > 1 && lines[lines.length - 1].trim() === "") lines.pop();
@@ -135,9 +134,7 @@ export function upsertNewModLoc(cfg: Ck3Config, key: string, value: string, lang
   const lang = language ?? cfg.locLanguage;
   const files = modLocFiles(cfg, lang);
   const prefix = key.includes(".") ? key.slice(0, key.indexOf(".") + 1) : key.split("_")[0] + "_";
-  const prefixRe = new RegExp(
-    `^\\s*${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[A-Za-z0-9_.\\-]*:\\d*\\s*"`
-  );
+  const prefixRe = new RegExp(`^\\s*${escapeRegExp(prefix)}[A-Za-z0-9_.\\-]*:\\d*\\s*"`);
 
   let best: string | null = null;
   let bestCount = 0;

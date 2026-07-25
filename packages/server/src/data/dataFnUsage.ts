@@ -134,7 +134,7 @@ export function parseDataFnExpr(text: string): { chain: Seg[]; format: string | 
       pos = close + 1;
       return { kind: "literal", value };
     }
-    if (/[0-9\-]/.test(ch)) {
+    if (/[0-9-]/.test(ch)) {
       const m = /^-?[0-9]+(\.[0-9]+)?/.exec(text.slice(pos));
       if (!m) return null;
       pos += m[0].length;

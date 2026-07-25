@@ -13,9 +13,9 @@ import { docForDefinition } from "./docComments";
 /** Max loc value length kept in memory; the edit flow re-reads the yml from disk. */
 export const LOC_VALUE_LIMIT = 200;
 
-const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
-export const EVENT_ID = /^[A-Za-z0-9_\-]+\.\d+$/;
-const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_\-]+$/;
+const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+export const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
+const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_-]+$/;
 
 export function extractDefinitions(
   content: string,

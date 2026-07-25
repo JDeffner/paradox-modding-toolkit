@@ -15,6 +15,7 @@ export const vic3Profile: GameProfile = {
   blockRefFields: VIC3_BLOCK_REF_FIELDS,
   structureSources: {},
   modifierPlaceholders: {},
-  wikiNote: "Source: Vic3 wiki (may lag behind the current game version)",
+  // No bundled wiki tokens in the preview cut, so nothing ever renders this.
+  wikiNote: "",
   diagnosticSource: "vic3-script",
 };

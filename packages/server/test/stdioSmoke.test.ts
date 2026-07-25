@@ -94,7 +94,7 @@ describe.skipIf(!hasServer)("LSP smoke over --stdio with bare-client fallbacks",
     ).toBe(true);
     await conn.sendNotification("initialized", {});
 
-    conn.sendNotification("textDocument/didOpen", {
+    void conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri: eventsUri, languageId: "paradox", version: 1, text: EVENTS_TXT },
     });
 
@@ -132,7 +132,7 @@ describe.skipIf(!hasServer)("LSP smoke over --stdio with bare-client fallbacks",
 
   it("shuts down cleanly over stdio", async () => {
     await conn.sendRequest("shutdown");
-    conn.sendNotification("exit");
+    void conn.sendNotification("exit");
     const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
     expect(code).toBe(0);
   });

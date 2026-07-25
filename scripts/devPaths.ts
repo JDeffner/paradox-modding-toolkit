@@ -21,6 +21,8 @@ const ENV_VARS = {
   modPath: "CK3_MOD_PATH",
   /** A large third-party mod used as eval corpus (rank-eval, modCorpus tests). */
   corpusPath: "CK3_MOD_CORPUS",
+  /** The ck3-tiger binary, for gen-skill's `<tiger>` placeholder. */
+  tigerPath: "CK3_TIGER_PATH",
 } as const;
 
 export type DevPathKey = keyof typeof ENV_VARS;

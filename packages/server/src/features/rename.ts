@@ -15,13 +15,14 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import * as fs from "fs";
 import type { Definition } from "@paradox-lsp/protocol/types";
+import { wholeNamePattern } from "@paradox-lsp/protocol/regex";
 import type { ServerData } from "../serverData";
 import { activeProfile } from "../games/active";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { stripPrefix } from "./references";
 
-const VALID_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+const VALID_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
 interface RenameTarget {
   name: string;
@@ -128,9 +129,7 @@ function readLine(
 
 /** First word-boundary occurrence of `name` on the line. */
 function findNameOnLine(lineText: string, name: string): number {
-  const re = new RegExp(
-    `(?<![A-Za-z0-9_.\\-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.\\-])`
-  );
+  const re = new RegExp(wholeNamePattern(name));
   const m = re.exec(lineText);
   return m ? m.index : -1;
 }

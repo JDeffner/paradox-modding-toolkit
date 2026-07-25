@@ -5,7 +5,7 @@ import { loadWikiTokens } from "../src/data/wikiDocs";
 import { ServerData } from "../src/serverData";
 import { CompletionFeature } from "../src/features/completion";
 import { loadSchema } from "../src/schema/loader";
-import { scanRoot } from "../src/index/indexer";
+import { DefinitionIndex, scanRoot } from "../src/index/indexer";
 import { devPath } from "../../../scripts/devPaths";
 
 const GAME = devPath("gamePath");
@@ -59,18 +59,54 @@ describe("performance budgets", () => {
     }
     samples.sort((a, b) => a - b);
     const p95 = samples[Math.floor(samples.length * 0.95)];
-    // eslint-disable-next-line no-console
+
     console.log(`completion p95: ${p95.toFixed(1)}ms (min ${samples[0].toFixed(1)}ms)`);
     expect(p95).toBeLessThan(100);
   });
 
-  it.skipIf(!GAME)("cold vanilla scan stays under 60s", () => {
+  it.skipIf(!GAME)("cold vanilla scan stays under 60s", { timeout: 120_000 }, () => {
     const t0 = Date.now();
     const defs = scanRoot(GAME!, "vanilla", { locLanguage: "english" });
     const elapsed = Date.now() - t0;
-    // eslint-disable-next-line no-console
     console.log(`cold scan: ${elapsed}ms, ${defs.length} definitions`);
     expect(elapsed).toBeLessThan(60_000);
     expect(defs.length).toBeGreaterThan(300_000);
+  });
+
+  /**
+   * The index is the server's dominant allocation and it is unbounded by
+   * design: every extra root (parentPaths, workspace mods) adds its whole
+   * definition set. Measured at ~924 B per definition, i.e. ~408 MB retained
+   * for a full vanilla scan, which is why the client raises the forked
+   * server's heap ceiling (packages/vscode/src/serverHeap.ts).
+   *
+   * Budgeting the PER-DEFINITION cost rather than the total keeps this
+   * meaningful across game patches: it fails when a field is added to
+   * Definition or a string stops being shared, not when the game grows.
+   */
+  it.skipIf(!GAME)("index costs under 2.5 KB per definition", { timeout: 120_000 }, () => {
+    // Needs the real collector on both sides of the measurement, otherwise the
+    // delta is dominated by whatever the previous test left behind (see the
+    // --expose-gc note in vitest.config.ts).
+    expect(global.gc, "run vitest with --expose-gc").toBeTypeOf("function");
+    global.gc!();
+    const before = process.memoryUsage().heapUsed;
+
+    const defs = scanRoot(GAME!, "vanilla", { locLanguage: "english" });
+    const index = new DefinitionIndex();
+    index.addAll(defs);
+
+    global.gc!();
+    const used = process.memoryUsage().heapUsed - before;
+    const bytesPerDef = used / defs.length;
+    console.log(
+      `index memory: ${(used / 1024 / 1024).toFixed(0)} MB for ${defs.length} defs ` +
+        `(${bytesPerDef.toFixed(0)} B/def)`
+    );
+
+    expect(index.stats().total).toBe(defs.length);
+    // A non-positive reading means the measurement broke, not that the index is free.
+    expect(bytesPerDef).toBeGreaterThan(200);
+    expect(bytesPerDef).toBeLessThan(2560);
   });
 });

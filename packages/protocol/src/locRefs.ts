@@ -7,7 +7,7 @@
  */
 import { isLocProperty } from "./locProperties";
 
-const PROP_VALUE = /([A-Za-z_][A-Za-z0-9_.\-]*)\s*=\s*("?)([A-Za-z_][A-Za-z0-9_.\-]*)\2/g;
+const PROP_VALUE = /([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*("?)([A-Za-z_][A-Za-z0-9_.-]*)\2/g;
 
 export interface LocKeyRef {
   prop: string;

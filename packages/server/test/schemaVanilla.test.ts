@@ -48,7 +48,7 @@ function walkFiles(dir: string, ext: string): string[] {
 }
 
 /** Fast loc-key set: scan every english yml for ` key:` lines (no full parse). */
-const LOC_KEY = /^\s*([A-Za-z0-9_.\-]+):\s?\d*\s*"/;
+const LOC_KEY = /^\s*([A-Za-z0-9_.-]+):\s?\d*\s*"/;
 function loadLocKeys(root: string): Set<string> {
   const keys = new Set<string>();
   const dir = path.join(root, "localization", "english");
@@ -72,7 +72,9 @@ run("vanilla corpus extraction", () => {
   const counts: Record<string, number> = {};
   const missing: string[] = [];
 
-  it("every .txt folder yields definitions (missing folders skipped)", () => {
+  // Walks and extracts every vanilla .txt folder; seconds of real work, so it
+  // needs a real bound rather than the 5s default.
+  it("every .txt folder yields definitions (missing folders skipped)", { timeout: 120_000 }, () => {
     for (const entry of txtEntries) {
       const folder = path.join(GAME!, entry.path);
       if (!fs.existsSync(folder)) {
@@ -92,14 +94,12 @@ run("vanilla corpus extraction", () => {
     // Table
     const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     const pad = Math.max(...rows.map(([k]) => k.length));
-    // eslint-disable-next-line no-console
+
     console.log("\n  kind -> vanilla definition count");
     for (const [kind, n] of rows) {
-      // eslint-disable-next-line no-console
       console.log(`  ${kind.padEnd(pad)}  ${n}`);
     }
     if (missing.length) {
-      // eslint-disable-next-line no-console
       console.log(`\n  folders absent in this install (skipped): ${missing.join(", ")}`);
     }
   });
@@ -113,7 +113,7 @@ run("vanilla corpus extraction", () => {
       const content = readText(file);
       total += extractDefinitions(content, entry, file, "vanilla").length;
     }
-    // eslint-disable-next-line no-console
+
     console.log(`  gui_type  ${total}`);
     expect(total).toBeGreaterThan(0);
   });
@@ -140,7 +140,7 @@ run("requiredLoc coverage >= 95%", () => {
           if (keys.has(key)) hit++;
         }
         const coverage = hit / defs.length;
-        // eslint-disable-next-line no-console
+
         console.log(`  ${entry.kind} "${pattern}": ${(coverage * 100).toFixed(1)}% (${hit}/${defs.length})`);
         expect(
           coverage,

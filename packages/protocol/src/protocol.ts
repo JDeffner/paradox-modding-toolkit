@@ -6,6 +6,9 @@
  *
  * No `vscode` / `vscode-languageserver` imports: plain wire types only.
  */
+// Referenced only from the {@link IndexStats} doc link below, which ESLint's
+// unused-vars analysis does not see.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { IndexStats } from "./types";
 
 /** Resolved extension settings, computed client-side (path validation, Steam
