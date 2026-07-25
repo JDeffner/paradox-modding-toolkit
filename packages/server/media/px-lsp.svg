@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <clipPath id="t"><rect x="0" y="27" width="128" height="34" /></clipPath>
+    <clipPath id="b"><rect x="0" y="67" width="128" height="34" /></clipPath>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="#17161A" />
+  <g fill="none" stroke-width="8" stroke-linecap="butt" stroke-linejoin="miter">
+    <g clip-path="url(#t)">
+  <path d="M39.679 27L39.679 61" stroke="#F2EDE3" />
+  <path d="M39.679 31L47.679 31" stroke="#F2EDE3" />
+  <path d="M47.679 31A8 8 0 0 1 47.679 47" stroke="#F2EDE3" />
+  <path d="M39.679 47L47.679 47" stroke="#F2EDE3" />
+  <path d="M68.679 22L88.679 66" stroke="#F2EDE3" />
+  <path d="M88.679 22L68.679 66" stroke="#F2EDE3" />
+    </g>
+    <g clip-path="url(#b)">
+  <path d="M27.5 67L27.5 101" stroke="#C8952F" />
+  <path d="M27.5 97L45.5 97" stroke="#C8952F" />
+  <path d="M69.108 75.277A6.5 6.5 0 1 0 63 84" stroke="#C8952F" />
+  <path d="M63 84A6.5 6.5 0 1 1 56.892 92.723" stroke="#C8952F" />
+  <path d="M84.5 67L84.5 101" stroke="#C8952F" />
+  <path d="M84.5 71L92.5 71" stroke="#C8952F" />
+  <path d="M92.5 71A8 8 0 0 1 92.5 87" stroke="#C8952F" />
+  <path d="M84.5 87L92.5 87" stroke="#C8952F" />
+    </g>
+  </g>
+</svg>
