@@ -34,6 +34,14 @@ import {
 const SERVER = path.join(__dirname, "..", "dist", "server.js");
 const WIKIDOCS = path.join(__dirname, "..", "data", "ck3", "wikidocs");
 const hasServer = fs.existsSync(SERVER);
+// A silent skip here makes a "full suite green" omit the entire wire-level
+// smoke, so the skip announces itself. Raw stderr, not console.warn: vitest
+// swallows console output from files whose every test is skipped.
+if (!hasServer) {
+  process.stderr.write(
+    `\nlspSmoke: SKIPPING every wire-level smoke test, ${SERVER} is not built. Run \`pnpm run compile\` first.\n`
+  );
+}
 // Read from disk, not imported: this must catch a bundle whose inlined version
 // drifted from the manifest the package publishes.
 const PKG_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version;

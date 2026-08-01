@@ -22,6 +22,14 @@ import { statusNotification, type StatusPayload } from "@px-lsp/protocol/protoco
 
 const SERVER = process.env.PX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
 const hasServer = fs.existsSync(SERVER);
+// Same loud-skip rule as lspSmoke: a missing bundle must not pass silently.
+// Raw stderr, not console.warn: vitest swallows console output from files
+// whose every test is skipped.
+if (!hasServer) {
+  process.stderr.write(
+    `\nvic3Smoke: SKIPPING the Vic3 wire-level smoke, ${SERVER} is not built. Run \`pnpm run compile\` first.\n`
+  );
+}
 
 const METADATA_JSON = JSON.stringify(
   {
