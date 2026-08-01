@@ -1,0 +1,20 @@
+# px fixture: the copied FRAGMENT half of copy/paste. Rows: W20.
+#
+# Block text handed to the clipboard is verbatim: the attached comment, the
+# nested body and the interior indent levels all come along. This file is that
+# fragment as it sits on disk (tab-indented, one level deep, two top-level
+# widgets so a multi-widget paste has a source too). Pasting it must strip the
+# fragment's COMMON leading whitespace as a string prefix, convert interior
+# indent LEVELS to the destination's unit, convert newlines to the
+# destination's, and land by the same rules as an ordinary insert.
+
+	# the A widget
+	widget = {
+		name = "px_fragment_a"
+		icon = {
+			size = { 4 4 }
+		}
+	}
+	widget = {
+		name = "px_fragment_b"
+	}

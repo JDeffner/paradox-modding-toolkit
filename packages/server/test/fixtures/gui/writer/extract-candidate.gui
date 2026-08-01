@@ -1,0 +1,29 @@
+# px fixture: extract as type. Rows: W21.
+#
+# Extracting px_card as a CK3 `type` must not move a single pixel: the rects
+# before and after the extraction are identical. The batch is two edits (the
+# definition lands at the top of the file, the widget's body is replaced by an
+# instance of the new type), and the split is by USE-SITE IDENTITY: `name` and
+# `position` are what identify this one use, so they are lifted onto the
+# instance and leave the definition body, while size and the subtree stay in the
+# definition. The widget's attached comment describes the use, so it stays at
+# the use site.
+#
+# Refusals: a root widget (there is nowhere to put the instance), and an empty
+# or whitespace-only type name.
+
+window = {
+	name = "px_extract_root"
+	size = { 400 300 }
+
+	# the card this window shows
+	widget = {
+		name = "px_card"
+		position = { 30 40 }
+		size = { 100 60 }
+
+		icon = {
+			size = { 20 20 }
+		}
+	}
+}

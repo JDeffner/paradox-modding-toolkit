@@ -1,0 +1,27 @@
+# px fixture: writing at a template use site. Rows: W09.
+#
+# A `using`-supplied property has no span at the use site (it resolves lazily
+# through the type chain), and a template-expanded node has no span at all. So a
+# write must never reach into the template definition: setting `size` on
+# px_use_site adds a LOCAL override inside the use site's own body and leaves
+# the template's bytes untouched, and every structural edit refuses a synthetic
+# node outright with a reason rather than guessing.
+#
+# The template's own children are also not source siblings of the use site's
+# children: an index built from the expanded tree would move the wrong block.
+
+template PxRow {
+	size = { 5 5 }
+	widget = {
+		name = "px_from_template"
+	}
+}
+
+vbox = {
+	name = "px_use_site"
+	using = PxRow
+
+	widget = {
+		name = "px_real_child"
+	}
+}

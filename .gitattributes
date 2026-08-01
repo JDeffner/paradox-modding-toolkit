@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The .gui fixture corpus is byte-exact: its line endings, indent unit and
+# trailing whitespace ARE what the writer invariants assert. Normalization would
+# silently rewrite the CRLF fixture into an LF one and delete the case.
+packages/server/test/fixtures/gui/**/*.gui -text

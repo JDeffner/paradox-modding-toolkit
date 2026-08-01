@@ -1,0 +1,20 @@
+# px fixture: wrap in container. Rows: W22.
+#
+# Wrapping a NON-contiguous selection (px_wrap_a and px_wrap_c, skipping
+# px_wrap_b) puts the new container in the FIRST member's slot and leaves the
+# skipped sibling where it was; both members end up inside the container in
+# selection order, re-indented one level deeper, each carrying its own attached
+# comment. The document still parses to exactly one root.
+
+window = {
+	name = "px_wrap_root"
+	size = { 400 300 }
+
+	# label A
+	widget = { name = "px_wrap_a" size = { 10 10 } }
+
+	widget = { name = "px_wrap_b" size = { 20 20 } }
+
+	# label C
+	widget = { name = "px_wrap_c" size = { 30 30 } }
+}

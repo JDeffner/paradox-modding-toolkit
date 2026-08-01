@@ -1,0 +1,18 @@
+# px fixture: CRLF line endings. Rows: W06, W20.
+#
+# The whole file is CRLF-terminated. Every write must follow the FILE, not the
+# platform: an inserted entry, an inserted child widget and a pasted fragment
+# all come out CRLF-terminated here, whatever the fragment itself used. A
+# single-line body inside a CRLF file still stays a single line.
+
+widget = {
+	# keep this comment
+	name = "px_crlf_widget"
+	size = { 10 10 }	# and this trailing one
+
+	vbox = {
+		spacing = 1
+	}
+
+	hbox = { spacing = 2 }
+}

@@ -1,0 +1,66 @@
+# px fixture: text metrics. Rows: L01, L08.
+#
+# Line box height is 21 at fontsize 15 and every metric scales EXACTLY linearly
+# with fontsize. A line's layout width is (n-1)*advance + ink(last glyph).
+# `max_width` clamps the box to exactly that width with right elision;
+# `multiline = yes` + `max_width` wraps at word boundaries with a line advance
+# equal to the single-line box height, and the box width is the widest line.
+# `align` inside a fixed-size textbox is exact with zero internal padding.
+#
+# text_single is autoresize = yes / elide = right. The vanilla text_multi TYPE
+# carries a hardcoded size = { 45 45 }, so a fixed-size textbox ignores
+# max_width entirely; this file declares its own text_multi so the fixture is
+# self-contained and does not depend on the game's preload types.
+
+types PxFixtureLabels {
+	type px_text_single = textbox {
+		autoresize = yes
+		elide = right
+		fontsize = 15
+	}
+	type px_text_multi = textbox {
+		size = { 45 45 }
+		multiline = yes
+		fontsize = 15
+	}
+}
+
+widget = {
+	name = "px_text_frame"
+	size = { 400 400 }
+
+	px_text_single = { name = "px_text_m10" raw_text = "MMMMMMMMMM" }
+	px_text_single = { name = "px_text_i10" position = { 0 30 } raw_text = "iiiiiiiiii" }
+	px_text_single = { name = "px_text_m1" position = { 0 60 } raw_text = "M" }
+	px_text_single = { name = "px_text_m2" position = { 0 90 } raw_text = "MM" }
+	px_text_single = { name = "px_text_big" position = { 0 120 } fontsize = 30 raw_text = "MMMMM" }
+	px_text_single = { name = "px_text_elided" position = { 0 170 } max_width = 60 raw_text = "MMMMMMMMMM" }
+
+	px_text_single = {
+		name = "px_text_wrapped"
+		position = { 0 200 }
+		multiline = yes
+		max_width = 150
+		raw_text = "MMMM MMMM MMMM MMMM"
+	}
+
+	px_text_multi = { name = "px_text_multi_default" position = { 200 200 } max_width = 120 raw_text = "MMMM MMMM MMMM MMMM" }
+
+	px_text_single = {
+		name = "px_text_align_right"
+		position = { 0 260 }
+		size = { 150 40 }
+		autoresize = no
+		align = right|vcenter
+		raw_text = "MM"
+	}
+
+	px_text_single = {
+		name = "px_text_align_center"
+		position = { 0 310 }
+		size = { 150 40 }
+		autoresize = no
+		align = center
+		raw_text = "MM"
+	}
+}

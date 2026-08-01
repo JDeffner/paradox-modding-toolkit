@@ -1,0 +1,28 @@
+# px fixture: a box nested in a box hugs. Rows: L12.
+#
+# The fill rule is scoped to a box whose parent is NOT a box. Nested in another
+# box, an hbox/vbox content-sizes on both axes: it hugs its children exactly
+# (packed, no residual gaps), and is then placed by the outer box's normal child
+# rules, which means cross-centred and space-around on the main axis. A nested
+# hbox therefore does NOT spread its own children across the outer box's width.
+
+widget = {
+	name = "px_nested_frame"
+	size = { 420 300 }
+
+	vbox = {
+		name = "px_outer_column"
+
+		vbox = {
+			name = "px_inner_column"
+			widget = { name = "px_inner_wide" size = { 300 30 } }
+			widget = { name = "px_inner_narrow" size = { 100 30 } }
+		}
+
+		hbox = {
+			name = "px_inner_row"
+			widget = { name = "px_inner_row_a" size = { 40 40 } }
+			widget = { name = "px_inner_row_b" size = { 40 40 } }
+		}
+	}
+}

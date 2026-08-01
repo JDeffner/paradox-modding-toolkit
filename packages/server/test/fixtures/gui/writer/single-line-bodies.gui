@@ -1,0 +1,18 @@
+# px fixture: single-line and empty bodies. Rows: W06, W15, W16, W25.
+#
+# A one-line body must STAY one line: an inserted entry or child is appended
+# inside the braces with a single separator space, an empty `{}` gets a spaced
+# entry, and delete takes that separator space back so insert and delete are
+# exact inverses (the bug this pins is `{ a  }` accumulating a space per
+# round trip). A paste of a multi-line fragment into a one-line body is refused
+# rather than exploding the author's line.
+
+window = {
+	name = "px_one_line_window"
+	size = { 300 300 }
+
+	vbox = { spacing = 5 }
+	widget = { size = { 4 4 } }
+	widget = {}
+	hbox = { spacing = 2 widget = { size = { 8 8 } } }
+}

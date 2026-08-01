@@ -1,0 +1,54 @@
+# px fixture: generic datamodel placeholder rows. Rows: L16.
+#
+# A `datamodel` list has no runtime rows in a static preview, so the preview
+# stamps out copies of the resolved `item` template. This is a presentation
+# affordance, NOT a measured engine rule: what the fixture pins is that the
+# copies are laid out as ordinary children of the container's real policy
+# (so a vbox stacks them along y and inherits its `spacing`), that they are
+# capped by a container whose own explicit size is known, and that they are
+# never editable.
+
+widget = {
+	name = "px_ghost_frame"
+	size = { 200 400 }
+
+	vbox = {
+		name = "px_ghost_column"
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_ghost_row" size = { 40 30 } }
+		}
+	}
+}
+
+widget = {
+	name = "px_ghost_spacing_frame"
+	position = { 220 0 }
+	size = { 200 400 }
+
+	widget = {
+		name = "px_ghost_spaced"
+		datamodel = "[GetPxFixtureList]"
+		spacing = 5
+		item = {
+			widget = { name = "px_ghost_spaced_row" size = { 60 30 } }
+		}
+	}
+}
+
+widget = {
+	name = "px_ghost_capped_frame"
+	position = { 440 0 }
+	size = { 500 500 }
+
+	# Authored height 50, item height 30: only one row fits, so the placeholder
+	# count is capped instead of overrunning the container.
+	vbox = {
+		name = "px_ghost_capped"
+		size = { 100 50 }
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_ghost_capped_row" size = { 40 30 } }
+		}
+	}
+}

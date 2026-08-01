@@ -1,0 +1,31 @@
+# px fixture: a plain reorder target. Rows: W11, W17.
+#
+# Three contiguous children, nothing between them but whitespace, so a reorder
+# is a pure permutation of the body: move first to last, last to first, middle
+# to first and first to middle all have hand-checkable results, a same-index
+# move is a no-op rather than a churn edit, and an out-of-range index clamps
+# instead of throwing. The moved text is carried VERBATIM, so the non-whitespace
+# character count cannot change.
+#
+# The same three children are the duplicate target: a copy lands immediately
+# after its original, only the copy is renamed, and duplicate-then-delete-the-
+# copy restores the file exactly.
+
+vbox = {
+	widget = {
+		name = "px_order_a"
+	}
+	widget = {
+		name = "px_order_b"
+	}
+	widget = {
+		name = "px_order_c"
+	}
+}
+
+vbox = {
+	name = "px_single_child_box"
+	widget = {
+		name = "px_order_only"
+	}
+}

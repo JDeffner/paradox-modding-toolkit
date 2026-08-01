@@ -1,0 +1,38 @@
+# px fixture: comment attachment and trailing comment runs.
+# Rows: W13, W16, W24.
+#
+# A block is [attached comments][declaration][trailing blank lines].
+#   - A comment DIRECTLY above a widget describes it, so it travels with the
+#     widget on a reorder and goes with it on a delete.
+#   - A blank line breaks the attachment, so a section header stays put.
+#   - A body that ENDS in a run of comments (commented-out code is everywhere in
+#     hand-authored .gui) must not adopt them: the append point for a new child
+#     is the last child's block end, not the closing-brace line. Otherwise an
+#     inserted widget lands below the comments, and deleting it again takes them
+#     with it.
+
+vbox = {
+	# section header, separated by a blank line below
+
+	# the A widget
+	widget = {
+		name = "px_comment_a"
+	}
+	# the B widget
+	widget = {
+		name = "px_comment_b"
+	}
+
+	# trailing run, the append trap:
+	# widget = {
+	#     name = "px_commented_out"
+	# }
+}
+
+vbox = {
+	name = "px_no_children_trailing_comments"
+	spacing = 4
+
+	# nothing but a comment run after the last entry
+	# widget = { name = "px_also_commented_out" }
+}

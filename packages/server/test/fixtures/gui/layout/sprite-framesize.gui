@@ -1,0 +1,36 @@
+# px fixture: frame / framesize sheets. Rows: L22.
+#
+# `framesize = { w h }` makes the texture a 2D GRID of cols x rows cells, where
+# cols = texW/w and rows = texH/h. `frame = N` is 1-based and ROW-MAJOR:
+# col = (N-1) % cols, row = (N-1) / cols, so frame 4 on a 3-wide sheet wraps
+# down to the second row rather than running off the first. It is not a
+# horizontal-only strip. frame <= 0 clamps to the first cell and a frame past
+# the last clamps to the last.
+#
+# gfx/px_fixtures/framestrip.dds stands for a 96x64 sheet at framesize 32x32,
+# that is a 3x2 grid: frames 1..6 are (0,0) (1,0) (2,0) (0,1) (1,1) (2,1).
+
+widget = {
+	name = "px_frame_sheet"
+	size = { 400 200 }
+
+	icon = { name = "px_frame_clamp_low" position = { 0 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 0 }
+	icon = { name = "px_frame_1" position = { 40 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 1 }
+	icon = { name = "px_frame_2" position = { 80 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 2 }
+	icon = { name = "px_frame_3" position = { 120 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 3 }
+	icon = { name = "px_frame_4" position = { 160 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 4 }
+	icon = { name = "px_frame_5" position = { 200 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 5 }
+	icon = { name = "px_frame_6" position = { 240 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 6 }
+	icon = { name = "px_frame_clamp_high" position = { 280 0 } size = { 32 32 } texture = "gfx/px_fixtures/framestrip.dds" framesize = { 32 32 } frame = 7 }
+
+	# A non-square sheet: 747x234 at framesize 249x78 is a 3x3 grid, so frame 5
+	# is the centre cell.
+	icon = {
+		name = "px_frame_centre"
+		position = { 0 60 }
+		size = { 249 78 }
+		texture = "gfx/px_fixtures/button_sheet.dds"
+		framesize = { 249 78 }
+		frame = 5
+	}
+}

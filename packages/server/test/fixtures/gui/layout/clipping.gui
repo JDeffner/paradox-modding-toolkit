@@ -1,0 +1,48 @@
+# px fixture: clipping containers. Rows: L17.
+#
+# A plain widget does NOT clip: a child may render entirely outside its rect.
+# scrollarea, scrollbox and any widget carrying `scissor = yes` DO clip their
+# subtree, so a descendant's drawn rect is clamped to the clipper's. A
+# scrollarea at scroll offset 0 puts the content origin at the viewport origin,
+# and a bare `scrollwidget` renders its content without scrollbar chrome.
+
+widget = {
+	name = "px_clip_frame"
+	size = { 300 300 }
+
+	# No clipping: the spill is drawn in full.
+	widget = {
+		name = "px_noclip"
+		size = { 100 100 }
+		widget = { name = "px_noclip_spill" size = { 200 40 } }
+	}
+
+	# scissor = yes on a plain widget clips it.
+	widget = {
+		name = "px_scissor"
+		position = { 0 120 }
+		scissor = yes
+		size = { 100 100 }
+		widget = { name = "px_scissor_spill" size = { 200 40 } }
+	}
+
+	scrollarea = {
+		name = "px_scrollarea"
+		position = { 120 0 }
+		size = { 160 120 }
+		scrollwidget = {
+			widget = {
+				name = "px_scroll_content"
+				size = { 300 300 }
+				widget = { name = "px_scroll_corner" position = { 280 280 } size = { 20 20 } }
+			}
+		}
+	}
+
+	scrollbox = {
+		name = "px_scrollbox"
+		position = { 120 140 }
+		size = { 160 120 }
+		widget = { name = "px_scrollbox_spill" size = { 300 40 } }
+	}
+}

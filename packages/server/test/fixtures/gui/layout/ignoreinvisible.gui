@@ -1,0 +1,39 @@
+# px fixture: ignoreinvisible. Rows: L27.
+#
+# `ignoreinvisible` defaults to yes on hbox/vbox: a hidden child is collapsed
+# out of the layout entirely and its siblings shift up to fill the gap. That
+# covers a plain `visible = no` and a `visible = "[expr]"` binding that
+# evaluates false at runtime, which is the mechanism behind conditional
+# connector lines and hidden columns. With `ignoreinvisible = no` the hidden
+# child still occupies its slot.
+#
+# The two columns below must differ by exactly the hidden child's height.
+
+widget = {
+	name = "px_ignoreinvisible_frame"
+	size = { 300 400 }
+
+	vbox = {
+		name = "px_collapsing_column"
+		widget = { name = "px_collapse_first" size = { 100 30 } }
+		widget = { name = "px_collapse_hidden" size = { 100 30 } visible = no }
+		widget = { name = "px_collapse_last" size = { 100 30 } }
+	}
+
+	vbox = {
+		name = "px_keeping_column"
+		position = { 120 0 }
+		ignoreinvisible = no
+		widget = { name = "px_keep_first" size = { 100 30 } }
+		widget = { name = "px_keep_hidden" size = { 100 30 } visible = no }
+		widget = { name = "px_keep_last" size = { 100 30 } }
+	}
+
+	vbox = {
+		name = "px_bound_column"
+		position = { 0 200 }
+		widget = { name = "px_bound_first" size = { 100 30 } }
+		widget = { name = "px_bound_maybe" size = { 100 30 } visible = "[IsPxFixtureShown]" }
+		widget = { name = "px_bound_last" size = { 100 30 } }
+	}
+}

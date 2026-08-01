@@ -1,0 +1,92 @@
+# px fixture: main-axis layout policies. Rows: L03, L04, L06.
+#
+# Policy-driven resizing runs FIRST; the space-around distribution then applies
+# to whatever free space is left (usually none, so children end up packed from
+# the box origin).
+#   expanding : each of k expanding children gets floor + free/k, an equal SHARE
+#               of the free space, not an equal final size.
+#   growing   : receives NOTHING while an expanding sibling exists, and keeps its
+#               own explicit size rather than overflowing. Alone (or among other
+#               growers) it behaves like expanding and shares the free space.
+#   expand    : the `expand` widget type and `expand = {}` are both growing, so
+#               a spacer pushes later siblings flush to the far edge.
+#   deficit   : content > box makes every shrinkable child (preferred and
+#               shrinking alike) lose deficit/k, an equal DELTA, with no
+#               shrinking-first priority. A child floored at its minimum stops
+#               and the rest absorb what is left.
+
+widget = {
+	name = "px_policy_frame"
+	size = { 300 80 }
+
+	hbox = {
+		name = "px_policy_row"
+		widget = { name = "px_policy_fixed" size = { 40 40 } }
+		widget = { name = "px_policy_expanding" layoutpolicy_horizontal = expanding size = { 40 40 } }
+		widget = { name = "px_policy_growing" layoutpolicy_horizontal = growing size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_share_frame"
+	position = { 0 100 }
+	size = { 300 80 }
+
+	hbox = {
+		name = "px_share_row"
+		widget = { name = "px_share_small" layoutpolicy_horizontal = expanding size = { 40 40 } }
+		widget = { name = "px_share_big" layoutpolicy_horizontal = expanding size = { 100 40 } }
+	}
+}
+
+widget = {
+	name = "px_growers_frame"
+	position = { 0 200 }
+	size = { 300 80 }
+
+	# No expander present: the growers share the free space between them.
+	hbox = {
+		name = "px_growers_row"
+		widget = { name = "px_growers_fixed" size = { 100 40 } }
+		widget = { name = "px_growers_a" layoutpolicy_horizontal = growing size = { 0 40 } }
+		widget = { name = "px_growers_b" layoutpolicy_horizontal = growing size = { 0 40 } }
+	}
+}
+
+widget = {
+	name = "px_spacer_frame"
+	position = { 0 300 }
+	size = { 200 80 }
+
+	hbox = {
+		name = "px_spacer_row"
+		widget = { name = "px_spacer_left" size = { 40 40 } }
+		expand = {}
+		widget = { name = "px_spacer_right" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_deficit_frame"
+	position = { 0 400 }
+	size = { 120 80 }
+
+	hbox = {
+		name = "px_deficit_row"
+		widget = { name = "px_deficit_preferred" layoutpolicy_horizontal = preferred size = { 100 40 } }
+		widget = { name = "px_deficit_shrinking" layoutpolicy_horizontal = shrinking size = { 60 40 } }
+	}
+}
+
+widget = {
+	name = "px_deficit_fixed_frame"
+	position = { 0 500 }
+	size = { 1000 80 }
+
+	# A fixed child never shrinks; the preferred one absorbs the whole deficit.
+	hbox = {
+		name = "px_deficit_fixed_row"
+		widget = { name = "px_deficit_hard" size = { 600 40 } }
+		widget = { name = "px_deficit_soft" layoutpolicy_horizontal = preferred size = { 600 40 } }
+	}
+}

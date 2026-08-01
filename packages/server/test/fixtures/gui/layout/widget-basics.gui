@@ -1,0 +1,26 @@
+# px fixture: plain widget sizing. Rows: L20, L33.
+#
+# A plain widget with no `size` is a ZERO rect: it does not hug and it does not
+# fill, and nothing of it is drawn, but its children still lay out from its
+# origin. Percent sizes resolve against the parent rect. `scale` multiplies the
+# resolved rect at the same origin, so a scaled icon overflows an unclipping
+# parent rather than being fitted into it.
+
+widget = {
+	name = "px_basics_frame"
+	size = { 300 200 }
+
+	# Sizeless: zero rect, child still placed from its origin.
+	widget = {
+		name = "px_sizeless"
+		position = { 20 10 }
+		widget = { name = "px_sizeless_child" position = { 30 20 } size = { 20 20 } }
+	}
+
+	# Percent against the parent rect.
+	widget = { name = "px_half" position = { 0 100 } size = { 50% 25% } }
+
+	# scale multiplies the rect, origin unchanged.
+	icon = { name = "px_scaled" position = { 200 100 } size = { 30 30 } scale = 2.0 }
+	icon = { name = "px_unscaled" position = { 200 150 } size = { 30 30 } }
+}

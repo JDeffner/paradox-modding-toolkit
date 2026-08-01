@@ -1,0 +1,72 @@
+# px fixture: flowcontainer. Rows: L13.
+#
+# A flowcontainer never auto-wraps: children flow in ONE run along the main axis
+# (a row, or a column with `direction = vertical`), overflowing the parent
+# unclipped. It hugs its content and sits at the parent's ORIGIN, with no
+# centring, which is where it differs from a box. `spacing` separates items
+# along the flow axis. It is the ONE container that honors a child's
+# `parentanchor` on the cross axis.
+#
+# OPEN (see the parity checklist): whether an explicit `size` sets the flow's
+# own rect (toolkit batch 03 Q1) or is ignored the way a box's is (Studio
+# GUI009). The two `px_flow_sized*` cases below are the discriminator.
+
+widget = {
+	name = "px_flow_frame"
+	size = { 200 120 }
+
+	flowcontainer = {
+		name = "px_flow_run"
+		widget = { name = "px_flow_a" size = { 50 30 } }
+		widget = { name = "px_flow_b" size = { 50 30 } }
+		widget = { name = "px_flow_c" size = { 50 30 } }
+		widget = { name = "px_flow_d" size = { 50 30 } }
+		widget = { name = "px_flow_e" size = { 50 30 } }
+	}
+}
+
+widget = {
+	name = "px_flow_sized_frame"
+	position = { 0 140 }
+	size = { 200 120 }
+
+	flowcontainer = {
+		name = "px_flow_sized"
+		size = { 200 120 }
+		widget = { name = "px_flow_sized_a" size = { 50 30 } }
+		widget = { name = "px_flow_sized_b" size = { 50 30 } }
+		widget = { name = "px_flow_sized_c" size = { 50 30 } }
+		widget = { name = "px_flow_sized_d" size = { 50 30 } }
+		widget = { name = "px_flow_sized_e" size = { 50 30 } }
+	}
+}
+
+widget = {
+	name = "px_flow_vertical_frame"
+	position = { 220 0 }
+	size = { 200 200 }
+
+	flowcontainer = {
+		name = "px_flow_column"
+		direction = vertical
+		spacing = 10
+		widget = { name = "px_flow_column_a" size = { 50 30 } }
+		widget = { name = "px_flow_column_b" size = { 50 30 } }
+		widget = { name = "px_flow_column_c" size = { 50 30 } }
+	}
+}
+
+widget = {
+	name = "px_flow_anchor_frame"
+	position = { 220 220 }
+	size = { 400 100 }
+
+	# The exception to box centring: a flow child's parentanchor IS honored on
+	# the cross axis, so px_flow_anchor_low sits on the run's bottom edge.
+	flowcontainer = {
+		name = "px_flow_anchor_run"
+		spacing = 5
+		widget = { name = "px_flow_anchor_tall" size = { 100 30 } }
+		widget = { name = "px_flow_anchor_low" parentanchor = bottom size = { 50 20 } }
+	}
+}

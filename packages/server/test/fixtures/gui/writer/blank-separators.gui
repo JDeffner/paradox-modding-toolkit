@@ -1,0 +1,27 @@
+# px fixture: blank lines between siblings. Rows: W12.
+#
+# Trailing blank lines belong to the block ABOVE them. With them belonging to
+# nobody, every reorder leaves them behind and bunches them together, and
+# repeated reorders accumulate blank lines indefinitely; making a block carry
+# its own spacing is what makes a move a pure permutation and a
+# move-and-move-back the identity.
+#
+# Three separator styles in one body: one blank line, two blank lines, and none.
+
+vbox = {
+	widget = {
+		name = "px_gap_a"
+	}
+
+	widget = {
+		name = "px_gap_b"
+	}
+
+
+	widget = {
+		name = "px_gap_c"
+	}
+	widget = {
+		name = "px_gap_d"
+	}
+}

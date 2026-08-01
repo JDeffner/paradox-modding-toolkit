@@ -1,0 +1,91 @@
+# px fixture: template / type / using expansion and local overrides. Rows: L32.
+#
+# A `type` instance inherits the definition's properties; an instance property
+# overrides the inherited one. A type chain resolves through its base type all
+# the way to the engine built-in, and inherits the base's behavior class (a type
+# whose root is hbox fills a plain parent like any box). `using = <Template>`
+# splices the template's statements into the use site, and a property set at the
+# use site wins over the spliced one. `local_template` never crosses files.
+# `block "name" { ... }` declares a slot; a `blockoverride "name"` on the
+# instance fills it, an empty one blanks it, and an override reaches blocks
+# nested deep inside the type's subtree.
+
+types PxFixtureTypes {
+	type px_card = widget {
+		size = { 100 50 }
+	}
+
+	type px_row = hbox {
+		widget = { name = "px_row_kid" size = { 40 40 } }
+	}
+
+	type px_derived_row = px_row { }
+
+	type px_slotted = widget {
+		size = { 200 100 }
+		block "px_content" {
+			widget = { name = "px_slot_default" size = { 20 20 } }
+		}
+	}
+
+	type px_deep_slotted = widget {
+		size = { 200 100 }
+		widget = {
+			name = "px_deep_holder"
+			size = { 100 100 }
+			block "px_deep_slot" {
+				widget = { name = "px_deep_default" size = { 10 10 } }
+			}
+		}
+	}
+}
+
+template PxDeco {
+	size = { 80 40 }
+	background = { texture = "gfx/px_fixtures/flat.dds" color = { 0.2 0.2 0.2 1 } }
+}
+
+local_template PxLocalDeco {
+	size = { 1 1 }
+}
+
+widget = {
+	name = "px_template_frame"
+	size = { 700 400 }
+
+	px_card = { name = "px_card_positioned" position = { 10 10 } }
+	px_card = { name = "px_card_resized" position = { 10 80 } size = { 60 60 } }
+
+	widget = {
+		name = "px_derived_frame"
+		position = { 140 10 }
+		size = { 180 120 }
+		px_derived_row = { }
+	}
+
+	widget = { name = "px_using_plain" position = { 340 10 } using = PxDeco }
+	widget = { name = "px_using_overridden" position = { 340 60 } using = PxDeco size = { 30 30 } }
+	widget = { name = "px_using_local" position = { 340 100 } using = PxLocalDeco }
+
+	px_slotted = { name = "px_slot_untouched" position = { 10 160 } }
+	px_slotted = {
+		name = "px_slot_filled"
+		position = { 220 160 }
+		blockoverride "px_content" {
+			widget = { name = "px_slot_override" size = { 50 50 } }
+		}
+	}
+	px_slotted = {
+		name = "px_slot_blanked"
+		position = { 430 160 }
+		blockoverride "px_content" { }
+	}
+
+	px_deep_slotted = {
+		name = "px_deep_filled"
+		position = { 10 280 }
+		blockoverride "px_deep_slot" {
+			widget = { name = "px_deep_override" size = { 30 30 } }
+		}
+	}
+}

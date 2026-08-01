@@ -5,6 +5,13 @@ Rules for the GUI designer's layout engine. Every rule carries provenance:
 Open questions at the bottom. Game version at measurement time: current
 live CK3 install, 100% UI scaling, 1:1 pixels.
 
+A second body of measurements, taken in game on 2026-07-17 by the Sage's
+Clausewitz Studio calibration mod, is merged in below under "Studio in-game
+verifications (2026-07-17)". Those rules carry `(Studio §X, in-game
+2026-07-17)` instead of a batch id. Where that session independently
+re-confirmed a rule this spec already had, the confirmation is recorded in
+`docs/gui-designer/parity-checklist.md` §F rather than duplicated here.
+
 ## Coordinate system and rendering
 
 - Origin top-left, +x right, +y down, UI units == screen pixels at 100%
@@ -185,6 +192,146 @@ state) or as exact deterministic math (nine-slice) in the fixtures.
   treated as inert property blocks: base widget properties win and nothing
   inside a `state` leaks into the rect. (Confirmed by fixture.)
 
+## Studio in-game verifications (2026-07-17)
+
+Measured in game by the Sage's Clausewitz Studio calibration mod, section by
+section (§H..§L), and encoded in its layout engine. Facts only; the toolkit's
+own coverage of each is tracked in `docs/gui-designer/parity-checklist.md`.
+
+### What a box drops on its children
+
+- `align = left/right` on a box child does NOTHING: all three of left, right
+  and unset rendered at the same centred position. `align` is a
+  TEXT-INTERNAL property, positioning text inside a fixed-size text widget's
+  own rect, and has no meaning as a box placement. (Studio §H, in-game
+  2026-07-17)
+- A box likewise ignores a child's `parentanchor`; cross-axis placement is
+  unconditionally per-child centring, with no per-child override. That is the
+  vcenter that staggers variable-height columns in an hbox. (Studio §H,
+  in-game 2026-07-17)
+- A box places its children itself and ignores their `position`. (Studio, §H
+  session, 2026-07-17. CONFLICT: this repo's layout engine applies a box
+  child's `position` as an extra offset and labels the choice unmeasured; see
+  parity-checklist.md §G "Open conflicts".)
+- `layoutpolicy_horizontal/vertical = expanding` makes a child fill the
+  remaining space on that axis, shared among expanding siblings. An expanding
+  child must NOT define the box's cross size; only fixed children do.
+  (Studio, encoded rule)
+
+### Container sizing
+
+- Only `widget` holds a fixed pixel `size`. `hbox`/`vbox`/`flowcontainer`
+  size to their content and silently drop an explicit pixel `size` (a vbox
+  with `size = { 210 850 }` renders at content height, not 850). For a
+  fixed-size box, wrap in a `widget`. (Studio, encoded rule. For
+  `flowcontainer` this CONFLICTS with B3-Q1 above, which measured the size as
+  setting the container's own rect; see parity-checklist.md §G.)
+- An EMPTY `container` collapses to 0: it sizes to content, and a fixed
+  `size` will not hold it open. A `widget` keeps its size when empty, so a
+  spacer or padding row must be a `widget`. (Studio, encoded rule)
+- A datamodel gridbox `item` sizes to its content, the bounding box of its
+  children, the way a `container` does, rather than taking a generic widget
+  default. A positioned child extends that box to its far edge. (Studio,
+  encoded rule)
+- `ignoreinvisible` defaults to `yes` on hbox/vbox: a hidden child is
+  collapsed out of the layout and its siblings shift up to fill the gap.
+  That covers a plain `visible = no` and a `visible = "[expr]"` binding that
+  evaluates false, which is the mechanism behind conditional connector lines
+  and hidden columns. (Studio, encoded rule)
+- `resizeparent = yes` inverts the direction: the widget resizes ITS PARENT
+  to its own content size (used on the inner widget of a `zoomwidget` so the
+  pan/zoom bounds fit the content). Side effect: a fixed-size widget that is
+  a DIRECT child of a resizeparent container can be collapsed; nesting it one
+  level deeper, inside a plain child, preserves its size. (Studio, encoded
+  rule)
+- `margin` on a plain `widget` is ignored. Only `margin_widget`, and the
+  layout containers acting on their own children, honor margins. (Studio,
+  encoded rule)
+- `flowcontainer` is the one container that DOES honor a child's
+  `parentanchor` on the cross axis. (Studio, encoded rule)
+- Clipping containers are `scrollarea`, `scrollbox`, and any widget carrying
+  `scissor = yes`. (Studio, encoded rule; this spec had measured `scrollarea`
+  only, B3-R1)
+
+### Grid boxes
+
+- `dynamicgridbox` flows its `item` template VERTICALLY by default: items go
+  down a column and wrap into a new column after `datamodel_wrap` items, so
+  `datamodel_wrap` is items-per-COLUMN. `flipdirection = yes` transposes the
+  fill to horizontal (across a row, wrapping down) and does NOT mirror
+  anything; the flipped grid still starts top-left. Items pack at their OWN
+  size: `addcolumn`/`addrow` are not the stride here (14px items with
+  `addcolumn = 70` packed at 14px). `maxhorizontalslots` caps columns only
+  while filling horizontally. (Studio §K v2, in-game 2026-07-17)
+- `fixedgridbox` has the SAME flow (vertical default, `flipdirection`
+  transposes, `maxhorizontalslots` caps only when horizontal) but uses
+  `addcolumn`/`addrow` as the CELL SIZE and therefore the stride:
+  `addcolumn = 60` items sat 60px apart. Vanilla shape check:
+  `characters_grid` (no flip, `addcolumn = 650`) is a vertical list,
+  `traits_grid` (`flipdirection = yes`) a horizontal row. (Studio §K v3,
+  in-game 2026-07-17)
+- A `fixedgridbox` item with NO concrete size anywhere in its chain (instance,
+  `using`, type chain) takes its CELL size, which is how a row whose only
+  content is a 100%-fill child fills its cell. An item WITH a concrete size
+  keeps it and sits at the cell origin (a 14px item in a 60px cell stayed
+  14px). (Studio §K v3, in-game 2026-07-17)
+- `setitemsizefromcell = yes` (gridbox only) forces every cell to the WIDEST
+  item's size, giving uniform cells: 6 text bars of varying width all
+  rendered at the widest's 79px with it on, ragged with it off. It needs a
+  `datamodel`; static hand-written children cannot produce it. (Studio §K v3,
+  in-game 2026-07-17)
+
+### Sprite fill mode (answers the spec's open nine-slice question)
+
+Nine-slicing requires BOTH a `Cornered*` `spriteType` AND a non-zero
+`spriteborder`. Measured against a purpose-built 48x48 texture with a 16px
+border, pixel-scanned from screenshots. (Studio §J, in-game 2026-07-17)
+
+- `Corneredtiled` + border: corners drawn at native 16px, edges and centre
+  TILE at their native size (4px stripes stayed 4px). (§J2)
+- `Corneredstretched` + border: corners native, edges and centre STRETCH
+  (4px stripes widened to ~36px). (§J3)
+- `spriteborder` with NO `Cornered*` type: the border is IGNORED and the
+  whole texture plain-stretches, corners and all (a 16px corner became 66px
+  at scale 200/48). (§J4)
+- `2*border > size` on an axis: the four corners each render at size/2 and
+  MEET; there is no edge or centre. (§J5, measured at 24x24)
+- `Corneredtiled` with NO `spriteborder`: the whole texture plain-TILES (the
+  48px frame repeats). A bare tiled type behaves the same. (§J6)
+- Asymmetric `spriteborder = { 16 8 }` still nine-slices; x is the left/right
+  corner WIDTH and y the top/bottom corner HEIGHT. (§J7)
+- Rule: nine-slice iff `Cornered*` AND a non-zero border; otherwise Tile for
+  a `*tiled*` type, else Stretch.
+
+### Sprite frames (answers the spec's open frame question)
+
+- `framesize = { w h }` makes the texture a 2D GRID indexed ROW-MAJOR and
+  1-based. The texture is `cols*w x rows*h`; `frame = N` picks column
+  `(N-1) % cols`, row `(N-1) / cols`. `frame <= 0` clamps to the first cell
+  and a frame past the last clamps to it. It is NOT a horizontal-only strip:
+  frames past the first row DO wrap down (a 3x2 calibration sheet showed
+  frame 4 as the first cell of the bottom row). `button_event.dds` is the
+  vanilla shape check: 747x234 at `framesize = { 249 78 }` is a 3x3 grid.
+  (Studio §L, in-game 2026-07-17)
+
+### Non-layout facts recorded for completeness
+
+Kept here so the merged spec loses nothing, even though neither affects a
+computed rect.
+
+- There is no engine path to bottom-align variable-length columns in a
+  pannable canvas: the dynasty tree top-aligns (root at top) and does not
+  bottom-align its leaves. Two workarounds: reverse so the anchor item is at
+  the top, or pad shorter columns with invisible holder-height `widget` rows
+  so every column has equal total height. (Studio, encoded rule)
+- GUI data binding has no list reverse and no parametrized list name: a
+  datamodel renders in list order, and `GetGlobalList('name')` takes a
+  literal name that cannot be driven per item. Script-side, variable lists
+  only append and dedup identical scopes, so N distinct filler entries need
+  `ordered_in_global_list = { max = <var> ... }`; a `limit`-gated
+  `every_in_global_list` does not work, because the limit is snapshotted
+  before the effects run. (Studio, encoded rule)
+
 ## Practical notes for the calibration harness itself
 
 - Labels must sit >= 28px above measured rects: antialiased descenders
@@ -200,11 +347,22 @@ state) or as exact deterministic math (nine-slice) in the fixtures.
 - Sub-pixel rasterization rule (floor/round/ceil) for fractional box
   offsets — pin down once a case makes it observable at larger scale.
 - The 16px-tall elided line box oddity (B3-S1).
-- Nine-slice `spriteborder` geometry is now emitted deterministically (see
-  Phase 2 additions), but its interaction with `texture_density` and
-  `spriteType` tiling-vs-stretch is still UNmeasured — a purpose-built
-  calibration DDS texture (the repo's DDS encoder can generate one) would
-  pin down whether edges tile or stretch and how density scales the border.
-- Sprite frames, `mirror`, fixedgridbox cell math, `ignoreinvisible`,
-  overlappingitembox, scrollbar chrome metrics, `alwaystransparent`/input
-  behavior (irrelevant to static rendering).
+- Nine-slice `texture_density` scaling of the border. The tiling-vs-stretch
+  half of this question is CLOSED by the Studio §J session above; how density
+  scales the border is still unmeasured.
+- `mirror`, overlappingitembox, scrollbar chrome metrics,
+  `alwaystransparent`/input behavior (irrelevant to static rendering).
+- The two open CONFLICTS between this spec and the Studio measurements, both
+  of which need one in-game probe to settle:
+  - a `flowcontainer` with an explicit `size` (B3-Q1 says it sets the
+    container's own rect; the Studio treats it as ignored);
+  - `position` on a box child (this spec is silent, this repo's engine adds
+    it as an offset, the Studio drops it per §H).
+  Fixtures for both are waiting in
+  `packages/server/test/fixtures/gui/layout/`; see
+  `docs/gui-designer/parity-checklist.md` §G.
+
+CLOSED since batch 04, by the Studio §J/§K/§L in-game session recorded above:
+sprite frames (`framesize` grids), fixedgridbox cell math, dynamicgridbox
+flow, `setitemsizefromcell`, `ignoreinvisible`, and `spriteType`
+tiling-vs-stretch.

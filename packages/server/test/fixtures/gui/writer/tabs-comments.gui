@@ -1,0 +1,34 @@
+# px fixture: the ordinary hand-authored shape. Rows: W01, W02, W03, W04, W05.
+#
+# Tab-indented, comment-rich, with a trailing comment on a live entry. This is
+# the baseline the span invariants run over: every recorded key/value span must
+# re-tokenize to the model's value, a replace must rewrite ONLY the old value's
+# bytes, an insert must land on its own line before the closing brace at the
+# body's own indent, a remove must take the whole line unless a trailing comment
+# still holds information, and a batch of several edits must apply end-first
+# against the SAME text without any offset going stale.
+
+window = {
+	name = "px_writer_window"
+	size = { 100 200 }		# the window's own frame
+
+	# the header strip
+	widget = {
+		name = "px_header"
+		position = { 10 20 }
+		parentanchor = top|left
+		visible = "[IsPxFixtureShown]"
+	}
+
+	vbox = {
+		# a body that already has children, so an insert has an indent to copy
+		widget = {
+			name = "px_body_first"
+			size = { 40 40 }
+		}
+		widget = {
+			name = "px_body_second"
+			size = { 40 40 }
+		}
+	}
+}

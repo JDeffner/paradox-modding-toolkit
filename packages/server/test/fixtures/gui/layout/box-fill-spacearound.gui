@@ -1,0 +1,90 @@
+# px fixture: anchored box fill + space-around. Rows: L19, L02, L24.
+#
+# An hbox/vbox whose parent is a plain widget FILLS that parent on BOTH axes,
+# with no layoutpolicy asked for, and its explicit `size` is ignored entirely
+# (smaller or larger makes no difference: only `widget` holds a fixed pixel size).
+# The main-axis surplus is then distributed as space-around: with n children,
+# total content C, spacing s and main-axis margin m in a box of main size W,
+# free = W - 2m - C - s(n-1) and every child receives side = free/(2n) on BOTH
+# sides, so the visible gap between neighbours is s + 2*side and the leading
+# inset is m + side. Cross axis: every child is individually centred.
+
+widget = {
+	name = "px_fill_frame"
+	position = { 20 20 }
+	size = { 500 140 }
+
+	hbox = {
+		name = "px_fill_row"
+		widget = { name = "px_fill_a" size = { 100 60 } }
+		widget = { name = "px_fill_b" size = { 60 90 } }
+		widget = { name = "px_fill_c" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_ignored_size_frame"
+	position = { 20 200 }
+	size = { 180 120 }
+
+	# Both of these must render at 180x120: a box cannot take a pixel size.
+	hbox = {
+		name = "px_too_small"
+		size = { 150 80 }
+		widget = { name = "px_too_small_kid" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_ignored_size_frame_big"
+	position = { 20 340 }
+	size = { 180 120 }
+
+	hbox = {
+		name = "px_too_big"
+		size = { 220 140 }
+		widget = { name = "px_too_big_kid" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_spacing_frame"
+	position = { 240 200 }
+	size = { 180 120 }
+
+	# spacing widens the gap INSIDE the space-around distribution.
+	hbox = {
+		name = "px_spaced_row"
+		spacing = 8
+		widget = { name = "px_spaced_a" size = { 60 40 } }
+		widget = { name = "px_spaced_b" size = { 40 60 } }
+		widget = { name = "px_spaced_c" size = { 30 20 } }
+	}
+}
+
+widget = {
+	name = "px_vertical_frame"
+	position = { 240 340 }
+	size = { 140 160 }
+
+	# The vertical mirror of the same model.
+	vbox = {
+		name = "px_column"
+		widget = { name = "px_column_a" size = { 60 40 } }
+		widget = { name = "px_column_b" size = { 40 60 } }
+		widget = { name = "px_column_c" size = { 30 20 } }
+	}
+}
+
+# A box translated by `position` keeps its filled size and overflows unclipped.
+widget = {
+	name = "px_translated_frame"
+	position = { 460 200 }
+	size = { 180 120 }
+
+	hbox = {
+		name = "px_translated_row"
+		position = { 10 10 }
+		widget = { name = "px_translated_kid" size = { 40 40 } }
+	}
+}

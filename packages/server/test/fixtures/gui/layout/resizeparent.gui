@@ -1,0 +1,30 @@
+# px fixture: resizeparent. Rows: L28.
+#
+# `resizeparent = yes` inverts the usual direction: the widget resizes ITS
+# PARENT to its own content size. It is what makes a zoomwidget's pan/zoom
+# bounds fit the content.
+#
+# The side effect worth pinning: a fixed-size widget that is a DIRECT child of
+# a resizeparent container can get collapsed. Nesting it one level deeper,
+# inside a plain child, preserves its size. px_rp_direct and px_rp_nested are
+# the same 120x40 widget in the two positions.
+
+widget = {
+	name = "px_resizeparent_frame"
+	size = { 400 300 }
+
+	widget = {
+		name = "px_rp_host"
+		size = { 400 300 }
+		widget = {
+			name = "px_rp_content"
+			resizeparent = yes
+			widget = { name = "px_rp_direct" size = { 120 40 } }
+			widget = {
+				name = "px_rp_holder"
+				position = { 0 60 }
+				widget = { name = "px_rp_nested" size = { 120 40 } }
+			}
+		}
+	}
+}
