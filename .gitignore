@@ -12,6 +12,9 @@ docs/*
 !docs/guides/
 # The wire contract external clients code against — public, versioned.
 !docs/PROTOCOL.md
+# The guide for applications embedding the server; public, linked from the
+# server README.
+!docs/EMBEDDING.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).

@@ -7,20 +7,39 @@ the method constants and payload types from `@px-lsp/protocol/protocol`
 (the single source of truth); this document mirrors that file for
 non-TypeScript consumers.
 
+Wiring the server into an application rather than an editor? `EMBEDDING.md`
+next to this file is the guide for that: the process contract, the
+initialization options worth sending, URI and document-sync conventions, and
+the in-tree reference clients. This document stays the per-method reference.
+
 **Versioning**: the protocol is versioned with the packages (lockstep with
 the extension). Treat any change here as an API change; additions are
 backward-compatible, renames/removals are called out in the changelog.
-Current as of 0.1.2 (the M2 `paradox/*` rename).
+Current as of 0.3.0 (the Paradox Toolkit rebrand and the three game
+profiles; `paradox/*` has been the method prefix since 0.1.2). Four additions
+are in the repository but not yet in a release: `serverInfo` in the
+`initialize` result, the `client` capability object superseding
+`clientCommands`, `paradox/scopeAt`, and `dataDir`. All four are additive:
+a client written against 0.3.0 keeps working unchanged.
 
 ## Transport and lifecycle
 
 - Transports: `--stdio` (auto-detected from argv; what external clients use)
-  and node-ipc (VSCode). Standard JSON-RPC 2.0 LSP framing.
+  and node-ipc (VSCode). `--socket=<port>` and `--pipe=<name>` are accepted by
+  the underlying library, but nothing ships using them. Standard JSON-RPC 2.0
+  LSP framing. The process-level contract around this (the `processId` orphan
+  watchdog, the clean-stdout guarantee, the shutdown/exit sequence) is in
+  `EMBEDDING.md`.
 - Standard LSP: the server implements completion (+resolve), signatureHelp,
   hover, definition, references, rename (+prepare), documentSymbol,
   workspaceSymbol, codeAction, inlayHint, foldingRange, documentFormatting,
   semanticTokens (full), publishDiagnostics, and workDoneProgress for the
   vanilla scan.
+- Document sync: `Incremental`, with `openClose` and `save`. A `didChange`
+  content change carrying no `range` (a full-document replacement) is accepted
+  too, and is the simpler choice for a non-editor client. `version` must
+  increase on every change: the per-document parse cache is keyed by uri +
+  version, so a reused version serves the previous parse.
 - Language ids: `paradox` (script `.txt`), `paradox-loc` (localization
   `.yml`), `paradox-gui` (`.gui`). The client decides which files get which
   id; the server keys per-request behavior off it.
@@ -36,13 +55,13 @@ fallbacks for bare clients):
 
 ```ts
 interface ParadoxInitOptions {
-  storageDir: string;   // server-side cache dir; default: <os tmp>/px-lsp
-  dataDir: string;      // root of the bundled per-game data: <dataDir>/<gameId>/{wikidocs/,freqs.json}
-                        // default: data/ next to dist/server.js
-  wikidocsDir: string;  // DEPRECATED narrow override for the wikidocs folder alone, see below
-  client: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
-  clientCommands: boolean;           // DEPRECATED alias, see below
-  settings: ParadoxSettings;
+  storageDir?: string;   // server-side cache dir; default: <os tmp>/px-lsp
+  dataDir?: string;      // root of the bundled per-game data: <dataDir>/<gameId>/{wikidocs/,freqs.json}
+                         // default: data/ next to dist/server.js
+  wikidocsDir?: string;  // DEPRECATED narrow override for the wikidocs folder alone, see below
+  client?: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
+  clientCommands?: boolean;           // DEPRECATED alias, see below
+  settings?: ParadoxSettings;
 }
 
 interface ParadoxClientCapabilities {
@@ -77,10 +96,11 @@ true }`, which is what the VSCode extension used to declare. `false` or absent
 resolves to all-off. It is ignored when `client` is present. New clients should
 send `client`.
 
-One server instance serves one game at a time. The client detects the game
-per workspace (descriptor file, else configuration) and sends it as
-`settings.gameId` at initialize and in `paradox/configChanged`; changing it
-triggers a full reload.
+One server instance serves one game at a time, and choosing it is the client's
+job: there is no server-side auto-detection. The VSCode extension detects it
+per workspace (descriptor shape, else configuration); any other client sends
+what it knows. It travels as `settings.gameId` at initialize and in
+`paradox/configChanged`; changing it triggers a full reload.
 
 Bundled data is per-game: everything the server loads from disk lives under
 `<root>/<gameId>/`, where the root is `dataDir` when the client sends one and
@@ -154,7 +174,10 @@ Toolkit rebrand; clients registering the old ids get no fallback:
 ## Degraded modes (bare LSP clients)
 
 Documented behavior without the VSCode client: no tiger diagnostics (tiger
-runs client-side) and no overview webview UIs. Completion, hover, definition,
+runs client-side), no overview webview UIs (the data behind every one of them
+is on the wire; only the drawing is VSCode's), and no `.dds` rendering (a
+texture hover carries a `data:` URI, which a client that does not render
+images in markdown shows as link text). Completion, hover, definition,
 references, rename, symbols, formatting, folding, inlay hints, semantic
 tokens and structural diagnostics all work over plain LSP.
 

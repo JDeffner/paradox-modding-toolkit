@@ -59,7 +59,8 @@ node path/to/px-lsp-server-<version>/dist/server.js --stdio
 
 `px-lsp-win-x64-<version>.zip` from the same release is the tarball payload
 plus an unmodified official Node build, so nothing has to be installed first.
-It is the artifact to embed if you ship the server inside another application.
+It is the artifact to embed if you ship the server inside another application
+(`docs/EMBEDDING.md` in the repo is the guide for doing that).
 
 ```
 px-lsp-win-x64-<version>/
@@ -174,7 +175,10 @@ first), `diagnosticsIgnore` (codes to suppress), `diagnosticsIgnorePatterns`
 
 Beyond standard LSP the server also answers custom `paradox/*` requests
 (overview data, GUI layout, …) — see `docs/PROTOCOL.md` in the repo; a plain
-editor client can ignore them entirely.
+editor client can ignore them entirely. Wiring the server into an application
+instead of an editor is a different job: `docs/EMBEDDING.md` has the guide for
+that (process contract, the initialization options an app should send, URI and
+document-sync conventions, reference clients).
 
 On neovim 0.10, use `require("lspconfig.configs")` with the same `cmd`/
 `init_options` and `root_dir = require("lspconfig.util").root_pattern("descriptor.mod", ".metadata")`.

@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+### Added (embedding the server)
+
+For applications that run px-lsp inside themselves rather than for editor
+users. Every protocol addition below is backward-compatible: a client written
+against 0.3.0 keeps working unchanged, and the VS Code extension behaves
+exactly as before. The guide that ties them together is `docs/EMBEDDING.md`
+(process contract, the initialization options an app should send, URI and
+document-sync conventions, what is deliberately absent for a bare client, and
+the in-tree reference clients).
+
+- **The `initialize` result announces `serverInfo`** `{ name: "px-lsp",
+  version }`, with the version read from the server package manifest so it
+  cannot drift from the artifact you unpacked. Standard LSP clients read it to
+  log which server they got and to gate features on its version; px-lsp used to
+  answer anonymously.
+- **`initializationOptions.client` replaces the `clientCommands` boolean.** One
+  "is this VS Code" switch conflated three unrelated things (rich hover markup,
+  the `px.*` command ids, who watches the mod tree), so any other client was
+  all-or-nothing. It is now
+  `{ hoverHtml?, commands?: string[], ownFileWatcher? }`, each independent and
+  off by default, and every gate site asks a semantic question instead of
+  testing the client's identity. `clientCommands` keeps working, deprecated,
+  with both of its former states byte-identical.
+- **`paradox/scopeAt`** reports the inferred scope chain and the visible saved
+  scopes at a position, which is what a scope status bar needs. It is a
+  read-only view of the same inference completion and hover already run, so a
+  status bar can never disagree with what ranking saw. Scopes are string
+  arrays, never one name: an ambiguous link stays ambiguous and an empty array
+  means unknown.
+- **`initializationOptions.dataDir`** names the root that contains the
+  per-game data folders, so `wikidocs/` and `freqs.json` resolve independently
+  under `<dataDir>/<gameId>/` and both re-derive when the game changes. The old
+  `wikidocsDir` derived the freqs directory from its parent and stayed pinned to
+  one game; it keeps working, deprecated and narrowed to the wiki mirror alone.
+- **`px-lsp-win-x64-<version>.zip`**, a self-contained Windows server artifact:
+  the tarball payload plus an unmodified official `node.exe` (pinned, fetched
+  from nodejs.org and checksum-verified at build time), Node's own license as
+  `NODE-LICENSE`, and a `px-lsp.cmd` launcher that resolves every path from its
+  own folder. Installing the language server no longer means installing Node
+  first on every machine you target.
+
 ## 0.3.0 - Paradox Toolkit (rebrand + three games)
 
 The extension is now **Paradox Toolkit** (`JDeffner.px-toolkit`), a new
