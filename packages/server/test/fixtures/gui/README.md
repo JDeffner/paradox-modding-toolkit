@@ -20,6 +20,17 @@ Widget names are prefixed `px_` and texture paths point at `gfx/px_fixtures/`, n
 which exists in any game or mod: a fixture can never be mistaken for game content, and a
 grep for a vanilla path can never land in here.
 
+## `layout-rects.baseline.txt`
+
+Not a fixture: the recorded rect dump of every `layout/` fixture (S07 in the checklist,
+the Studio's `--render-gui` equivalent). `guiLayoutMerge.test.ts` compares against it, so
+any layout-engine change shows up as a numeric diff instead of silently drifting. When the
+change is intended, re-record it and let review read the diff:
+
+```bash
+PX_WRITE_GUI_RECT_BASELINE=1 npx vitest run packages/server/test/guiLayoutMerge.test.ts
+```
+
 ## Rules for adding a fixture
 
 - Minimal. One file exercises one behavior or one tight family of related behaviors.

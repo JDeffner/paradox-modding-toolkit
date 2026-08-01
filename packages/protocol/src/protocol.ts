@@ -410,10 +410,24 @@ export interface GuiLayoutFill {
   color?: [number, number, number, number];
   /**
    * Nine-slice border widths [left, top, right, bottom] in texture pixels
-   * (from `spriteborder`/`spriteborder_<side>`). Present => draw corners
-   * unscaled, stretch the edges; absent => stretch the whole texture.
+   * (from `spriteborder`/`spriteborder_<side>`). The values as authored;
+   * `mode` says whether they apply.
    */
   border?: [number, number, number, number];
+  /**
+   * How to draw the texture. Nine-slicing needs BOTH a `Cornered*` spriteType
+   * AND a non-zero border; a border alone is ignored and the whole texture
+   * stretches. `nineslice-*` = corners unscaled, edges and centre tiled or
+   * stretched per the suffix; `tile` = repeat the whole texture.
+   */
+  mode?: "stretch" | "tile" | "nineslice-stretch" | "nineslice-tile";
+  /** `framesize = { w h }` cell size when the texture is a frame sheet. */
+  framesize?: [number, number];
+  /**
+   * 1-based frame index into that sheet, row-major over the cols x rows grid
+   * (cols = texW/w). Out-of-range values clamp to the first or last cell.
+   */
+  frame?: number;
 }
 export interface GuiLayoutText {
   text: string;

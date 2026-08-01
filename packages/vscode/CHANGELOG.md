@@ -33,6 +33,31 @@
   collected from the active game profile's event/on_action reference fields,
   not a hard-coded key list.
 
+### Changed (GUI preview fidelity)
+
+- **The layout engine learned the rules a second measured engine had and this
+  one did not.** Grid boxes lay out for real: `fixedgridbox` uses
+  `addcolumn`/`addrow` as the cell size and stride, `dynamicgridbox` packs
+  items at their own size, both fill down a column by default and transpose
+  with `flipdirection`, `maxhorizontalslots` caps a row and
+  `setitemsizefromcell` makes every cell the widest item's. A hidden child
+  collapses out of an hbox/vbox and its siblings shift up (`ignoreinvisible`);
+  a `resizeparent = yes` child resizes its parent to its own content; a
+  `container` and a datamodel `item` size to their content, so an empty
+  container collapses instead of holding its `size` open; `scrollbox` and
+  `scissor = yes` clip like `scrollarea`; a flowcontainer honors a child's
+  `parentanchor` on the cross axis; a `minimumsize` floors a shrinking child
+  and the deficit redistributes over the rest. Sprite fills now say HOW they
+  fill (nine-slice needs a `Cornered*` type AND a border, otherwise the border
+  is ignored and the texture stretches or tiles), and the preview stopped
+  nine-slicing on a border alone. Frame sheets (`framesize` + `frame`) resolve
+  their cell, row-major and 1-based. Every rule cites the in-game measurement
+  it comes from; the three where the two engines contradict each other are
+  recorded as disputed and left alone rather than guessed at.
+- Fixed: `minimumsize = { w h }` was being read as a child widget, so in an
+  hbox or vbox it consumed a layout slot of its own and shifted the real
+  children (413 vanilla widgets carry one).
+
 ### Added (embedding the server)
 
 For applications that run px-lsp inside themselves rather than for editor

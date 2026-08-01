@@ -14,6 +14,16 @@
  * Phase 2 (presentation, NOT calibrated pixel rules): datamodel-list ghost
  * placeholders, nine-slice `spriteborder` geometry on fills, and confirmed
  * exclusion of `state = {}` transition blocks from layout.
+ * Phase 3 (G2 layout merge): the rules spec.md carries under "Studio-verified
+ * engine behaviors" — grid box flow and cell math, clipping containers,
+ * `ignoreinvisible`, `resizeparent`, container/item content sizing, sprite
+ * fill MODE and frame sheets. Those comments cite the spec bullet's own
+ * source tag plus the parity-checklist row, e.g. "(Studio §K v3, L14a)";
+ * docs/gui-designer/parity-checklist.md is the row index. Three rows are
+ * DISPUTED between the two engines (L07c state-supplied position, L13e sized
+ * flowcontainer, L23 position on a box child) and are deliberately NOT
+ * implemented: both sides measured, so the checklist asks for a re-run rather
+ * than letting one engine overwrite the other.
  *
  * No `vscode` imports: unit-tested in plain Node (test/guiLayout.test.ts
  * holds the golden fixtures derived from the calibration screenshots).
@@ -32,6 +42,15 @@ export interface LayoutRect {
   h: number;
 }
 
+/**
+ * How a texture fills its rect. Nine-slicing needs BOTH a `Cornered*`
+ * spriteType AND a non-zero `spriteborder`; a border on its own is IGNORED and
+ * the whole texture plain-stretches, and a `*tiled*` type without a border
+ * tiles the whole texture. Nine-sliced edges then tile or stretch with the
+ * type. (Studio §J1-J7, in-game 2026-07-17; L21a-d.)
+ */
+export type FillMode = "stretch" | "tile" | "nineslice-stretch" | "nineslice-tile";
+
 export interface Fill {
   texture?: string;
   /** rgba 0..1; rendered = round(v*255), straight sRGB multiply (B1-G). */
@@ -39,11 +58,22 @@ export interface Fill {
   /**
    * Nine-slice border widths [left, top, right, bottom] in texture pixels,
    * sourced from the `spriteborder`/`spriteborder_<side>` .gui attributes.
-   * Present => the renderer draws corners unscaled and stretches the edges
-   * (see computeNineSlice). Geometry is deterministic; the values are read
-   * straight from the document, not a calibrated layout rule.
+   * The values are read straight from the document, not a calibrated layout
+   * rule; `mode` is what says whether they APPLY (a border without a
+   * `Cornered*` type does not, Studio §J4).
    */
   border?: [number, number, number, number];
+  /**
+   * Fill mode from `spriteType` + `spriteborder` (Studio §J, L21a-d). Set on
+   * every textured fill. `nineslice-*` means computeNineSlice's regions apply,
+   * with edges tiled or stretched per the suffix; `tile` repeats the whole
+   * texture; `stretch` scales it to the rect.
+   */
+  mode?: FillMode;
+  /** `framesize = { w h }` grid cell size when the texture is a frame sheet (Studio §L, L22). */
+  framesize?: [number, number];
+  /** 1-based `frame` index into that grid, clamped by computeFrameCell (Studio §L, L22). */
+  frame?: number;
 }
 
 export interface TextInfo {
@@ -172,6 +202,40 @@ export function computeNineSlice(
   return out;
 }
 
+/**
+ * Frame-sheet cell for `framesize = { w h }` + `frame = N`: the texture is a
+ * cols x rows GRID indexed ROW-MAJOR and 1-based, so frame 4 on a 3-wide sheet
+ * is the first cell of the SECOND row, not a fourth column. `frame <= 0`
+ * clamps to the first cell, a frame past the last clamps to the last.
+ * (Studio §L, in-game 2026-07-17; L22.) Deterministic geometry like
+ * computeNineSlice: the texture's pixel size comes from the renderer.
+ */
+export function computeFrameCell(
+  framesize: [number, number],
+  frame: number,
+  texW: number,
+  texH: number
+): { sx: number; sy: number; sw: number; sh: number } {
+  const [fw, fh] = framesize;
+  if (fw <= 0 || fh <= 0) return { sx: 0, sy: 0, sw: texW, sh: texH };
+  const cols = Math.max(1, Math.floor(texW / fw));
+  const rows = Math.max(1, Math.floor(texH / fh));
+  const index = Math.min(Math.max(Math.floor(frame) - 1, 0), cols * rows - 1);
+  return { sx: (index % cols) * fw, sy: Math.floor(index / cols) * fh, sw: fw, sh: fh };
+}
+
+/**
+ * Fill mode: nine-slice iff a `Cornered*` type AND a non-zero border,
+ * otherwise tile for a `*tiled*` type, else stretch (Studio §J, L21a-d).
+ */
+function fillMode(spriteType: string | undefined, border?: [number, number, number, number]): FillMode {
+  const type = spriteType?.toLowerCase() ?? "";
+  const tiled = type.includes("tiled");
+  const cornered = type.startsWith("cornered") && (border?.some((v) => v > 0) ?? false);
+  if (cornered) return tiled ? "nineslice-tile" : "nineslice-stretch";
+  return tiled ? "tile" : "stretch";
+}
+
 export interface TextMeasurer {
   /** Advance-model width of one line: (n-1)*advance + ink(last). (B2-L) */
   lineWidth(text: string, fontsize: number): number;
@@ -272,15 +336,19 @@ type WidgetClass =
   | "plain" // widget, window, button, icon, ... : explicit size or ZERO (B4-T1)
   | "box" // hbox, vbox
   | "flow" // flowcontainer
-  | "container" // container: hugs at origin (B2-I4)
+  | "container" // container: hugs at origin, empty = 0 (B2-I4, L25)
+  | "item" // datamodel item template: content-sizes like a container (L10)
+  | "grid" // fixedgridbox / dynamicgridbox (L14, L15)
   | "marginwidget" // margin offsets children (B3-Q2, B4-T3)
-  | "scrollarea" // clips (B3-R1)
+  | "scrollarea" // scrollarea / scrollbox: clips (B3-R1, L17b)
   | "textbox" // text metrics sizing
   | "expand"; // growing spacer (B4-T8)
 
 interface WNode {
   key: string;
   cls: WidgetClass;
+  /** grid only: fixedgridbox (addcolumn/addrow ARE the cell size and stride). */
+  fixedCells: boolean;
   vertical: boolean; // vbox / flow direction=vertical
   props: Map<string, ScalarNode>;
   pairs: Map<string, number[]>; // size/position/margin/color number lists
@@ -291,16 +359,24 @@ interface WNode {
   bg?: Fill;
   ghost?: boolean; // placeholder copy of a datamodel item template
   /**
-   * Resolved item-template widgets from a datamodel container's `item = {}`
-   * block, captured during process() and stamped out as ghost copies.
+   * Resolved `item = {}` wrapper from a datamodel container, captured during
+   * process() and stamped out as ghost copies. The wrapper NODE is kept rather
+   * than spliced away: a datamodel item content-sizes to the bounding box of
+   * its children the way a container does, and a gridbox needs that rect (L10).
    */
-  itemTemplate?: WNode[];
+  itemTemplate?: WNode;
   children: WNode[];
 }
 
-/** Attribute blocks that are data, not child widgets (mirrors guiTree.ts). */
+/**
+ * Attribute blocks that are data, not child widgets (a superset of
+ * guiTree.ts's list: layout also reads `background`/`state`/`block` blocks).
+ * `minimumsize = { w h }` belongs here and used to be walked as a phantom
+ * child widget, which cost a box child a whole space-around slot (L04c).
+ */
 const PROPERTY_BLOCKS = new Set([
   "size",
+  "minimumsize",
   "position",
   "framesize",
   "spriteborder",
@@ -327,8 +403,12 @@ const CLASS_BY_KEY: Record<string, WidgetClass> = {
   vbox: "box",
   flowcontainer: "flow",
   container: "container",
+  item: "item",
+  fixedgridbox: "grid",
+  dynamicgridbox: "grid",
   margin_widget: "marginwidget",
   scrollarea: "scrollarea",
+  scrollbox: "scrollarea", // same viewport behavior; both clip (L17b)
   textbox: "textbox",
   text_single: "textbox",
   text_multi: "textbox",
@@ -402,6 +482,7 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
   const node: WNode = {
     key: lower,
     cls: classify(baseKey),
+    fixedCells: baseKey === "fixedgridbox",
     vertical: baseKey === "vbox",
     props: new Map(),
     pairs: new Map(),
@@ -450,15 +531,16 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
           // of the per-row widget (the universal vanilla pattern — verified in
           // window_character.gui skills hbox + modifiers fixedgridbox: item is
           // always a plain wrapper whose children are the row widget). Captured
-          // here, stamped out as ghost copies after process().
-          const itemNode = buildWNode(
+          // here, stamped out as ghost copies after process(). The wrapper node
+          // survives because the item has a rect of its own: it content-sizes
+          // to the bounding box of its children (L10).
+          node.itemTemplate = buildWNode(
             "item",
             child,
             { ...ctx, overrides: ov, stack: childStack },
             line,
             false
           );
-          node.itemTemplate = itemNode.children;
           continue;
         }
         if (SKIP_SUBTREES.has(k)) {
@@ -530,10 +612,10 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
   // laid out as a normal child. Stamp GHOST_COUNT (capped) ghost copies so the
   // container's real layout policy (box/flow stacking) is visible. Reuses the
   // already-resolved template widgets; no extra expansion machinery.
-  if (node.itemTemplate && node.itemTemplate.length > 0) {
-    for (const t of node.itemTemplate) markGhost(t);
+  if (node.itemTemplate && node.itemTemplate.children.length > 0) {
+    markGhost(node.itemTemplate);
     const count = ghostCount(node);
-    for (let i = 0; i < count; i++) node.children.push(...node.itemTemplate);
+    for (let i = 0; i < count; i++) node.children.push(node.itemTemplate);
   }
   return node;
 }
@@ -555,14 +637,29 @@ function ghostCount(node: WNode): number {
   if (!size || !node.itemTemplate) return GHOST_COUNT;
   const avail = node.vertical ? size.h : size.w;
   if (avail <= 0) return GHOST_COUNT;
-  let itemMain = 0;
-  for (const t of node.itemTemplate) {
-    const s = explicitSize(t);
-    if (!s) return GHOST_COUNT; // item bounds unknown: no cap
-    itemMain += node.vertical ? s.h : s.w;
-  }
+  const extent = staticExtent(node.itemTemplate);
+  if (!extent) return GHOST_COUNT; // item bounds unknown: no cap
+  const itemMain = node.vertical ? extent.h : extent.w;
   if (itemMain <= 0) return GHOST_COUNT;
   return Math.max(1, Math.min(GHOST_COUNT, Math.floor(avail / itemMain)));
+}
+
+/**
+ * The item template's bounding box from AUTHORED sizes alone (the build phase
+ * has no measurer, so a text row stays unknown). Null when any child lacks an
+ * explicit size.
+ */
+function staticExtent(item: WNode): { w: number; h: number } | null {
+  let w = 0;
+  let h = 0;
+  for (const c of item.children) {
+    const s = explicitSize(c);
+    if (!s) return null;
+    const pos = c.pairs.get("position") ?? [0, 0];
+    w = Math.max(w, (pos[0] ?? 0) + s.w);
+    h = Math.max(h, (pos[1] ?? 0) + s.h);
+  }
+  return { w, h };
 }
 
 function fakeScalar(text: string): ScalarNode {
@@ -575,11 +672,20 @@ function fillFrom(block: BlockNode, consts: Map<string, number>, defs: GuiDefs):
   // the template; expandWidget with an unknown key just splices templates.
   const { statements } = expandWidget("#background", block, defs);
   let sprite: number[] | undefined;
+  let spriteType: string | undefined;
+  let framesize: number[] | undefined;
+  let frame: number | undefined;
   const side: { l?: number; t?: number; r?: number; b?: number } = {};
   for (const stmt of statements) {
     if (stmt.kind !== "assignment") continue;
     const k = stmt.key.text.toLowerCase();
     if (k === "texture" && stmt.value?.kind === "scalar") fill.texture = stmt.value.text;
+    if (k === "spritetype" && stmt.value?.kind === "scalar") spriteType = stmt.value.text;
+    if (k === "frame" && stmt.value?.kind === "scalar") frame = toNumber(stmt.value.text, consts);
+    if (k === "framesize") {
+      const b = blockOf(stmt);
+      if (b) framesize = numbersIn(b, consts);
+    }
     if (k === "color") {
       const b = blockOf(stmt);
       if (b) {
@@ -603,6 +709,14 @@ function fillFrom(block: BlockNode, consts: Map<string, number>, defs: GuiDefs):
   }
   const border = borderTuple(sprite, side);
   if (border) fill.border = border;
+  if (fill.texture !== undefined) {
+    fill.mode = fillMode(spriteType, border); // Studio §J, L21a-d
+    if (framesize && framesize.length >= 2) {
+      // Studio §L, L22: the sheet grid; `frame` defaults to the first cell.
+      fill.framesize = [framesize[0], framesize[1]];
+      fill.frame = frame ?? 1;
+    }
+  }
   return fill;
 }
 
@@ -740,6 +854,49 @@ function policy(node: WNode, horizontal: boolean): Policy {
   }
 }
 
+/**
+ * A statically hidden child. `visible = no` is deterministic and collapses;
+ * a `visible = "[binding]"` cannot be evaluated in a static preview, so the
+ * widget is KEPT even though the engine collapses a binding that evaluates
+ * false at runtime (spec.md `ignoreinvisible`, L27) — showing it is the
+ * non-destructive default for a preview, and the same unknown makes a
+ * container's content unmeasurable (L11b).
+ */
+function hidden(node: WNode): boolean {
+  return node.props.get("visible")?.text.toLowerCase() === "no";
+}
+
+/** `ignoreinvisible` defaults to yes on hbox/vbox (spec.md, L27). */
+function collapsesHidden(box: WNode): boolean {
+  return box.props.get("ignoreinvisible")?.text.toLowerCase() !== "no";
+}
+
+/**
+ * `minimumsize = { w h }` floor. Applied on the box MAIN axis only: it is the
+ * floor a shrinking child stops at, which is what the deficit redistribution
+ * needs (L04c). Cross-axis effect unmeasured.
+ */
+function minimumSize(node: WNode): { w: number; h: number } {
+  const min = node.pairs.get("minimumsize");
+  return { w: min?.[0] ?? 0, h: min?.[1] ?? 0 };
+}
+
+/**
+ * The child whose `resizeparent = yes` dictates this widget's size: the widget
+ * takes that child's content extent instead of its own authored size
+ * (spec.md "Container sizing", L28). The source's "a fixed-size DIRECT child
+ * of one CAN be collapsed" side effect is NOT implemented: "can" is not a rect
+ * rule, and nothing measured says when it fires.
+ */
+function resizeParentSource(node: WNode): WNode | undefined {
+  return node.children.find((c) => yes(c, "resizeparent"));
+}
+
+/** Classes that size to their content and drop an explicit `size` (L25, L10). */
+function contentSized(cls: WidgetClass): boolean {
+  return cls === "container" || cls === "item";
+}
+
 // ---------------------------------------------------------------------------
 // Natural (content-hug) sizes, bottom-up
 // ---------------------------------------------------------------------------
@@ -752,20 +909,40 @@ function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: numbe
       return textSize(node, measurer).size;
     case "box": {
       // Hug = children floors + spacing + margins (B2-I2: exact, packed).
+      // A collapsed hidden child contributes nothing, not even its spacing
+      // (L27). An expanding child contributes its FLOOR only: it must not
+      // define the box's cross size, only fixed children do (L31).
       const [ml, mt, mr, mb] = margins(node);
       const spacing = num(node, "spacing") ?? 0;
       let main = 0;
       let cross = 0;
-      node.children.forEach((c, i) => {
+      let laid = 0;
+      for (const c of boxChildren(node)) {
         const s = naturalSize(c, measurer);
-        const cm = node.vertical ? s.h : s.w;
+        const min = minimumSize(c);
+        const cm = Math.max(node.vertical ? s.h : s.w, node.vertical ? min.h : min.w);
         const cc = node.vertical ? s.w : s.h;
-        main += cm + (i > 0 ? spacing : 0);
+        main += cm + (laid > 0 ? spacing : 0);
         cross = Math.max(cross, cc);
-      });
+        laid++;
+      }
       return node.vertical
         ? { w: cross + ml + mr, h: main + mt + mb }
         : { w: main + ml + mr, h: cross + mt + mb };
+    }
+    case "grid": {
+      // A grid keeps an authored size; otherwise it hugs the slots it filled
+      // (unmeasured: neither source records a gridbox's own rect without a
+      // size, and every fixture authors the cells rather than the box).
+      const explicit = explicitSize(node);
+      if (explicit) return explicit;
+      let w = 0;
+      let h = 0;
+      for (const cell of gridCells(node, measurer)) {
+        w = Math.max(w, cell.x + cell.w);
+        h = Math.max(h, cell.y + cell.h);
+      }
+      return { w, h };
     }
     case "flow": {
       // Single non-wrapping run (B2-K, B3-Q1). Explicit size sets the flow's
@@ -783,31 +960,54 @@ function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: numbe
       return node.vertical ? { w: cross, h: main } : { w: main, h: cross };
     }
     case "container":
+    case "item":
+      // Hug the extent of the children at their positions (B2-I4), ALWAYS: an
+      // explicit `size` does not hold an empty container open, it collapses to
+      // 0 (L25), and a datamodel `item` sizes to its content the same way
+      // rather than taking a generic widget default (L10).
+      return hugChildren(node, measurer);
     case "marginwidget": {
       const explicit = explicitSize(node);
       if (explicit) return explicit;
-      // Hug the extent of children at their positions (B2-I4). Anchored
-      // children inside a hugging container are unmeasured; extent uses
-      // position + natural size only.
-      const [ml, mt] = margins(node);
-      let w = 0;
-      let h = 0;
-      for (const c of node.children) {
-        const s = naturalSize(c, measurer);
-        const pos = c.pairs.get("position") ?? [0, 0];
-        w = Math.max(w, (pos[0] ?? 0) + s.w);
-        h = Math.max(h, (pos[1] ?? 0) + s.h);
-      }
-      return { w: w + ml, h: h + mt };
+      return hugChildren(node, measurer);
     }
     default: {
-      // Plain widget/icon/window: explicit size or ZERO — no hug (B4-T1).
+      // Plain widget/icon/window: explicit size or ZERO — no hug (B4-T1),
+      // unless a `resizeparent = yes` child dictates the size instead (L28).
+      const resizer = resizeParentSource(node);
+      if (resizer) return hugChildren(resizer, measurer);
       const explicit = explicitSize(node);
       if (!explicit) return { w: 0, h: 0 };
       const scale = num(node, "scale") ?? 1; // multiplies the rect (B4-T4)
       return { w: explicit.w * scale, h: explicit.h * scale };
     }
   }
+}
+
+/**
+ * Bounding box of the children at their positions (B2-I4). Anchored children
+ * inside a hugging container are unmeasured; the extent uses position +
+ * natural size only. A plainly hidden child is skipped and the rest still
+ * content-size (L11c).
+ */
+function hugChildren(node: WNode, measurer: TextMeasurer): { w: number; h: number } {
+  const [ml, mt] = margins(node);
+  let w = 0;
+  let h = 0;
+  for (const c of node.children) {
+    if (hidden(c)) continue;
+    const s = naturalSize(c, measurer);
+    const pos = c.pairs.get("position") ?? [0, 0];
+    w = Math.max(w, (pos[0] ?? 0) + s.w);
+    h = Math.max(h, (pos[1] ?? 0) + s.h);
+  }
+  return { w: w + ml, h: h + mt };
+}
+
+/** A box's laid-out children: hidden ones collapse out unless asked not to (L27). */
+function boxChildren(box: WNode): WNode[] {
+  if (!collapsesHidden(box)) return box.children;
+  return box.children.filter((c) => !hidden(c));
 }
 
 /** Explicit size with percentages unresolved (returns the raw number). */
@@ -837,7 +1037,12 @@ function arrange(
     key: node.key,
     name: str(node, "name"),
     rect,
-    clip: node.cls === "scrollarea",
+    // scrollarea (measured B3-R1), scrollbox, and any widget carrying
+    // `scissor = yes` clip their subtree (spec.md "Clipping containers", L17b).
+    // L17c's "clamp the descendant rects in the flatten" stays a RENDERER job
+    // here: these rects are true geometry and the client clips them (the
+    // B3-R1 golden pins the unclamped corner rect, and guiPreview clips it).
+    clip: node.cls === "scrollarea" || yes(node, "scissor"),
     bg: node.bg,
     line: node.line,
     positioned: forced === undefined,
@@ -866,7 +1071,16 @@ function arrange(
       r: num(node, "spriteborder_right"),
       b: num(node, "spriteborder_bottom"),
     });
-    out.fill = { texture: str(node, "texture"), color, border };
+    const texture = str(node, "texture");
+    out.fill = { texture, color, border };
+    if (texture !== undefined) {
+      out.fill.mode = fillMode(str(node, "spritetype"), border); // Studio §J, L21a-d
+      const framesize = node.pairs.get("framesize");
+      if (framesize && framesize.length >= 2) {
+        out.fill.framesize = [framesize[0], framesize[1]]; // Studio §L, L22
+        out.fill.frame = num(node, "frame") ?? 1;
+      }
+    }
   }
 
   switch (node.cls) {
@@ -875,6 +1089,9 @@ function arrange(
       break;
     case "flow":
       out.children = arrangeFlowChildren(node, rect, measurer);
+      break;
+    case "grid":
+      out.children = arrangeGridChildren(node, rect, measurer);
       break;
     case "marginwidget": {
       // Margins inset the children's coordinate space; the widget's own rect
@@ -913,8 +1130,15 @@ function placeInParent(node: WNode, content: LayoutRect, measurer: TextMeasurer)
     const s = textSize(node, measurer).size;
     w = s.w;
     h = s.h;
+  } else if (contentSized(node.cls)) {
+    // container / datamodel item: content, never the authored size (L25, L10).
+    const s = naturalSize(node, measurer);
+    w = s.w;
+    h = s.h;
   } else {
-    const explicit = explicitSize(node);
+    // A `resizeparent = yes` child replaces this widget's authored size with
+    // that child's content extent (L28).
+    const explicit = resizeParentSource(node) ? null : explicitSize(node);
     if (explicit) {
       // Percent sizes resolve against the parent rect (B4-T2).
       w = node.sizePct[0] ? (explicit.w / 100) * content.w : explicit.w;
@@ -956,21 +1180,34 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
   const spacing = num(box, "spacing") ?? 0;
   const contentMain = vertical ? rect.h - mt - mb : rect.w - ml - mr;
   const contentCross = vertical ? rect.w - ml - mr : rect.h - mt - mb;
-  const n = box.children.length;
-  if (n === 0) return [];
+  if (box.children.length === 0) return [];
 
-  const naturals = box.children.map((c) => {
+  // `ignoreinvisible` defaults to yes: a plainly hidden child is collapsed out
+  // of the layout and its siblings shift up to fill the gap (spec.md, L27). It
+  // still reaches the tree, as a ZERO rect at the cursor, so the preview can
+  // list and select it; nothing of it is drawn, which is what the game does.
+  const laid = boxChildren(box);
+  const kept = new Set(laid);
+  const n = laid.length;
+
+  const naturals = laid.map((c) => {
     if (c.cls === "box") {
       // box-in-box hugs (B2-I2)
       return naturalSize(c, measurer);
     }
     return resolvedChildSize(c, rect, measurer);
   });
-  const mains = naturals.map((s) => (vertical ? s.h : s.w));
+  // `minimumsize = { w h }` floors the main-axis size and is where a shrinking
+  // child stops (L04c).
+  const minMains = laid.map((c) => {
+    const min = minimumSize(c);
+    return vertical ? min.h : min.w;
+  });
+  const mains = naturals.map((s, i) => Math.max(vertical ? s.h : s.w, minMains[i]));
   const crosses = naturals.map((s) => (vertical ? s.w : s.h));
 
-  let free = contentMain - mains.reduce((a, b) => a + b, 0) - spacing * (n - 1);
-  const mainPolicies = box.children.map((c) => policy(c, !vertical));
+  let free = n === 0 ? 0 : contentMain - mains.reduce((a, b) => a + b, 0) - spacing * (n - 1);
+  const mainPolicies = laid.map((c) => policy(c, !vertical));
   if (free > 0) {
     const expanders = mainPolicies.map((p, i) => ({ p, i })).filter(({ p }) => p === "expanding");
     // Without expanding siblings, growing AND preferred take the space; the
@@ -986,24 +1223,46 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
       free = 0;
     }
   } else if (free < 0) {
-    const shrinkers = mainPolicies
+    // Deficit: every shrinkable child loses deficit/k, an equal DELTA with no
+    // shrinking-first priority (B2-J3, B3-P4). A child that reaches its floor
+    // stops there and the REST absorb what it could not give, so the total
+    // still fits (L04c); a `fixed` child never shrinks at all (L04b).
+    let owed = -free;
+    let pool = mainPolicies
       .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p === "preferred" || p === "shrinking");
-    if (shrinkers.length > 0) {
-      const delta = free / shrinkers.length; // equal delta (B3-P4)
-      for (const { i } of shrinkers) mains[i] = Math.max(0, mains[i] + delta);
-      free = 0;
+      .filter(({ p }) => p === "preferred" || p === "shrinking")
+      .map(({ i }) => i);
+    while (owed > 1e-9 && pool.length > 0) {
+      const delta = owed / pool.length;
+      const next: number[] = [];
+      for (const i of pool) {
+        const room = Math.max(0, mains[i] - minMains[i]);
+        const take = Math.min(delta, room);
+        mains[i] -= take;
+        owed -= take;
+        if (room > delta) next.push(i);
+      }
+      if (next.length === pool.length) break; // nobody floored: converged
+      pool = next;
     }
-    // No shrinkable children: keep floors and overflow, packed (unmeasured).
-    if (free < 0) free = 0;
+    // Nothing left that can give: keep the floors and overflow (unmeasured).
+    free = 0;
   }
 
-  const side = free / (2 * n); // space-around (B1-E/F)
-  const crossPolicies = box.children.map((c) => policy(c, vertical));
+  const side = n > 0 ? free / (2 * n) : 0; // space-around (B1-E/F)
+  const crossPolicies = laid.map((c) => policy(c, vertical));
   const out: LayoutNode[] = [];
   let cursor = (vertical ? rect.y + mt : rect.x + ml) + side;
-  for (let i = 0; i < n; i++) {
-    const child = box.children[i];
+  let i = -1;
+  for (const child of box.children) {
+    if (!kept.has(child)) {
+      const zero: LayoutRect = vertical
+        ? { x: rect.x + ml, y: cursor, w: 0, h: 0 }
+        : { x: cursor, y: rect.y + mt, w: 0, h: 0 };
+      out.push(arrange(child, zero, "box", measurer, zero));
+      continue;
+    }
+    i++;
     const main = mains[i];
     const stretchCross =
       crossPolicies[i] === "expanding" || crossPolicies[i] === "growing" || crossPolicies[i] === "preferred";
@@ -1029,18 +1288,122 @@ function arrangeFlowChildren(flow: WNode, rect: LayoutRect, measurer: TextMeasur
   let cursor = flow.vertical ? rect.y : rect.x;
   for (const child of flow.children) {
     const s = resolvedChildSize(child, rect, measurer);
-    // Cross-axis alignment inside a flow is unmeasured (all calibration
-    // children were equal-height); origin-aligned here.
+    // flowcontainer is the ONE container that honors a child's `parentanchor`
+    // on the cross axis (spec.md "Container sizing", L13d); widgetanchor still
+    // mirrors it (B1-B/C). Unset anchors keep the measured origin alignment
+    // (B2-K1). The MAIN axis stays the flow cursor.
+    const pa = str(child, "parentanchor");
+    const [pfx, pfy] = anchorFractions(pa);
+    const [wfx, wfy] = anchorFractions(str(child, "widgetanchor") ?? pa);
+    const crossOffset = flow.vertical ? rect.x + pfx * rect.w - wfx * s.w : rect.y + pfy * rect.h - wfy * s.h;
     const forced: LayoutRect = flow.vertical
-      ? { x: rect.x, y: cursor, w: s.w, h: s.h }
-      : { x: cursor, y: rect.y, w: s.w, h: s.h };
+      ? { x: crossOffset, y: cursor, w: s.w, h: s.h }
+      : { x: cursor, y: crossOffset, w: s.w, h: s.h };
     out.push(arrange(child, forced, "flow", measurer, forced));
     cursor += (flow.vertical ? s.h : s.w) + spacing;
   }
   return out;
 }
 
-/** Child size with % and scale resolved (children of boxes/flows). */
+/** One slotted grid child, in the grid's own (0,0-based) coordinates. */
+interface GridCell {
+  child: WNode;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Grid box slotting, shared by naturalSize and the arrangement so the two
+ * cannot drift. Both kinds fill VERTICALLY by default (down a column, wrapping
+ * into a new column after `datamodel_wrap` items, so datamodel_wrap is
+ * items-per-COLUMN); `flipdirection = yes` transposes the fill to horizontal
+ * and mirrors nothing (the flipped grid still starts top-left);
+ * `maxhorizontalslots` caps the slots per line only while filling horizontally.
+ * (Studio §K v2/v3, in-game 2026-07-17; L14b, L15.)
+ *
+ * fixedgridbox uses `addcolumn`/`addrow` as the CELL SIZE and therefore the
+ * stride (L14a); dynamicgridbox packs items at their OWN size, where
+ * addcolumn/addrow are not the stride (L15).
+ */
+function gridCells(grid: WNode, measurer: TextMeasurer): GridCell[] {
+  if (grid.children.length === 0) return [];
+  const horizontal = yes(grid, "flipdirection");
+  const wrap = num(grid, "datamodel_wrap") ?? 0;
+  const maxSlots = num(grid, "maxhorizontalslots") ?? 0;
+  let perLine = wrap > 0 ? wrap : Number.POSITIVE_INFINITY;
+  if (horizontal && maxSlots > 0) perLine = Math.min(perLine, maxSlots);
+
+  const contents = grid.children.map((c) => resolvedChildSize(c, { x: 0, y: 0, w: 0, h: 0 }, measurer));
+  let cellW = num(grid, "addcolumn") ?? 0;
+  let cellH = num(grid, "addrow") ?? 0;
+  if (grid.fixedCells && yes(grid, "setitemsizefromcell")) {
+    // Every cell takes the WIDEST item's size, so ragged rows go uniform
+    // (Studio §K v3, L29). Measured on width; applied per axis here, and an
+    // axis no item can size falls back to addcolumn/addrow.
+    const w = Math.max(0, ...contents.map((s) => s.w));
+    const h = Math.max(0, ...contents.map((s) => s.h));
+    if (w > 0) cellW = w;
+    if (h > 0) cellH = h;
+  }
+
+  const out: GridCell[] = [];
+  let slot = 0;
+  let line = 0;
+  let mainCursor = 0;
+  let crossCursor = 0;
+  let lineCross = 0;
+  grid.children.forEach((child, i) => {
+    const content = contents[i];
+    let cell: GridCell;
+    if (grid.fixedCells) {
+      // An item with NO concrete size anywhere in its chain takes the CELL
+      // size; one with a concrete size keeps it at the cell ORIGIN
+      // (Studio §K v3, L14c).
+      const concrete = content.w > 0 || content.h > 0;
+      cell = {
+        child,
+        x: (horizontal ? slot : line) * cellW,
+        y: (horizontal ? line : slot) * cellH,
+        w: concrete ? content.w : cellW,
+        h: concrete ? content.h : cellH,
+      };
+    } else {
+      cell = {
+        child,
+        x: horizontal ? mainCursor : crossCursor,
+        y: horizontal ? crossCursor : mainCursor,
+        w: content.w,
+        h: content.h,
+      };
+      mainCursor += horizontal ? content.w : content.h;
+      // Cross stride = the widest item of the line (unmeasured beyond the
+      // uniform-item case every calibration grid used).
+      lineCross = Math.max(lineCross, horizontal ? content.h : content.w);
+    }
+    out.push(cell);
+    slot++;
+    if (slot >= perLine) {
+      slot = 0;
+      line++;
+      mainCursor = 0;
+      crossCursor += lineCross;
+      lineCross = 0;
+    }
+  });
+  return out;
+}
+
+/** fixedgridbox / dynamicgridbox: slot the children, cells relative to the grid. */
+function arrangeGridChildren(grid: WNode, rect: LayoutRect, measurer: TextMeasurer): LayoutNode[] {
+  return gridCells(grid, measurer).map((cell) => {
+    const forced: LayoutRect = { x: rect.x + cell.x, y: rect.y + cell.y, w: cell.w, h: cell.h };
+    return arrange(cell.child, forced, "plain", measurer, forced);
+  });
+}
+
+/** Child size with % and scale resolved (children of boxes/flows/grids). */
 function resolvedChildSize(
   node: WNode,
   parentRect: LayoutRect,
@@ -1048,7 +1411,7 @@ function resolvedChildSize(
 ): { w: number; h: number } {
   if (node.cls === "textbox") return textSize(node, measurer).size;
   const explicit = explicitSize(node);
-  if (node.cls !== "box" && explicit) {
+  if (node.cls !== "box" && !contentSized(node.cls) && explicit) {
     const scale = num(node, "scale") ?? 1;
     return {
       w: (node.sizePct[0] ? (explicit.w / 100) * parentRect.w : explicit.w) * scale,

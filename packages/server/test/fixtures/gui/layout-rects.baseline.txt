@@ -1,0 +1,373 @@
+anchors.gui
+  widget#px_anchor_frame 0 0 300 200
+    widget#px_a_tl 0 0 20 20
+    widget#px_a_tc 140 0 20 20
+    widget#px_a_tr 280 0 20 20
+    widget#px_a_ml 0 90 20 20
+    widget#px_a_mc 140 90 20 20
+    widget#px_a_mr 280 90 20 20
+    widget#px_a_bl 0 180 20 20
+    widget#px_a_bc 140 180 20 20
+    widget#px_a_br 280 180 20 20
+    widget#px_a_explicit 130 80 40 40
+    widget#px_a_inset 250 150 20 20
+    widget#px_a_outside 310 210 20 20
+    widget#px_a_mid 30 20 100 60
+      widget#px_a_leaf 40 30 20 20
+box-child-ignored.gui
+  widget#px_ignored_frame 0 0 420 300
+    vbox#px_ignored_column 0 0 420 300
+      widget#px_plain 160 15 100 30
+      widget#px_positioned 200 115 100 30
+      widget#px_anchored 160 135 100 30
+      widget#px_align_left 160 195 100 30
+      widget#px_align_right 160 255 100 30
+  widget#px_cross_frame 0 320 420 200
+    vbox#px_cross_column 0 320 420 200
+      widget#px_cross_fixed 60 320 300 30
+      widget#px_cross_expander 180 350 60 170
+box-fill-spacearound.gui
+  widget#px_fill_frame 20 20 500 140
+    hbox#px_fill_row 20 20 500 140
+      widget#px_fill_a 70 60 100 60
+      widget#px_fill_b 270 45 60 90
+      widget#px_fill_c 430 70 40 40
+  widget#px_ignored_size_frame 20 200 180 120
+    hbox#px_too_small 20 200 180 120
+      widget#px_too_small_kid 90 240 40 40
+  widget#px_ignored_size_frame_big 20 340 180 120
+    hbox#px_too_big 20 340 180 120
+      widget#px_too_big_kid 90 380 40 40
+  widget#px_spacing_frame 240 200 180 120
+    hbox#px_spaced_row 240 200 180 120
+      widget#px_spaced_a 245.67 240 60 40
+      widget#px_spaced_b 325 230 40 60
+      widget#px_spaced_c 384.33 250 30 20
+  widget#px_vertical_frame 240 340 140 160
+    vbox#px_column 240 340 140 160
+      widget#px_column_a 280 346.67 60 40
+      widget#px_column_b 290 400 40 60
+      widget#px_column_c 295 473.33 30 20
+  widget#px_translated_frame 460 200 180 120
+    hbox#px_translated_row 470 210 180 120
+      widget#px_translated_kid 540 250 40 40
+box-margins.gui
+  widget#px_margin_frame 0 0 180 120
+    hbox#px_margin_row 0 0 180 120
+      widget#px_margin_a 16.33 40 60 40
+      widget#px_margin_b 85 30 40 60
+      widget#px_margin_c 133.67 50 30 20
+  widget#px_directional_frame 0 140 180 120
+    hbox#px_directional_row 0 140 180 120
+      widget#px_directional_kid 70 195 40 40
+  widget#px_margin_widget_frame 0 280 200 120
+    margin_widget#px_margin_widget_full 0 280 200 120
+      widget#px_margin_widget_kid 20 290 40 40
+  widget#px_plain_margin_frame 0 420 200 120
+    widget#px_plain_margin 0 420 200 120
+      widget#px_plain_margin_kid 0 420 40 40
+box-nested-hug.gui
+  widget#px_nested_frame 0 0 420 300
+    vbox#px_outer_column 0 0 420 300
+      vbox#px_inner_column 60 50 300 60
+        widget#px_inner_wide 60 50 300 30
+        widget#px_inner_narrow 160 80 100 30
+      hbox#px_inner_row 170 210 80 40
+        widget#px_inner_row_a 170 210 40 40
+        widget#px_inner_row_b 210 210 40 40
+box-policies.gui
+  widget#px_policy_frame 0 0 300 80
+    hbox#px_policy_row 0 0 300 80
+      widget#px_policy_fixed 0 20 40 40
+      widget#px_policy_expanding 40 20 220 40
+      widget#px_policy_growing 260 20 40 40
+  widget#px_share_frame 0 100 300 80
+    hbox#px_share_row 0 100 300 80
+      widget#px_share_small 0 120 120 40
+      widget#px_share_big 120 120 180 40
+  widget#px_growers_frame 0 200 300 80
+    hbox#px_growers_row 0 200 300 80
+      widget#px_growers_fixed 0 220 100 40
+      widget#px_growers_a 100 220 100 40
+      widget#px_growers_b 200 220 100 40
+  widget#px_spacer_frame 0 300 200 80
+    hbox#px_spacer_row 0 300 200 80
+      widget#px_spacer_left 0 320 40 40
+      expand 40 300 120 80
+      widget#px_spacer_right 160 320 40 40
+  widget#px_deficit_frame 0 400 120 80
+    hbox#px_deficit_row 0 400 120 80
+      widget#px_deficit_preferred 0 420 80 40
+      widget#px_deficit_shrinking 80 420 40 40
+  widget#px_deficit_fixed_frame 0 500 1000 80
+    hbox#px_deficit_fixed_row 0 500 1000 80
+      widget#px_deficit_hard 0 520 600 40
+      widget#px_deficit_soft 600 520 400 40
+clipping.gui
+  widget#px_clip_frame 0 0 300 300
+    widget#px_noclip 0 0 100 100
+      widget#px_noclip_spill 0 0 200 40
+    widget#px_scissor 0 120 100 100 [clip]
+      widget#px_scissor_spill 0 120 200 40
+    scrollarea#px_scrollarea 120 0 160 120 [clip]
+      widget#px_scroll_content 120 0 300 300
+        widget#px_scroll_corner 400 280 20 20
+    scrollbox#px_scrollbox 120 140 160 120 [clip]
+      widget#px_scrollbox_spill 120 140 300 40
+container-measurability.gui
+  widget#px_container_frame 0 0 500 500
+    container#px_container_measurable 0 0 80 35
+      widget#px_container_a 0 0 40 30
+      widget#px_container_b 60 15 20 20
+    container#px_container_empty 0 100 0 0
+    container#px_unmeasurable_zero 0 200 0 0
+      button#px_zero_child 0 200 0 0
+    container#px_unmeasurable_unknown_type 0 260 0 0
+      px_type_this_file_never_defines 0 260 0 0
+    container#px_unmeasurable_datamodel 0 320 10 10
+      widget#px_datamodel_child 0 320 10 10
+    container#px_unmeasurable_binding 0 380 50 50
+      widget#px_binding_child 0 380 50 50
+    container#px_container_hidden_skipped 200 200 25 25
+      widget#px_hidden_big 200 200 300 300
+      widget#px_shown_small 200 200 25 25
+    fixedgridbox#px_item_content_size 200 300 23 119
+      item 200 300 23 23 [ghost]
+        widget#px_item_inner 200 300 23 23 [ghost]
+      item 200 348 23 23 [ghost]
+        widget#px_item_inner 200 348 23 23 [ghost]
+      item 200 396 23 23 [ghost]
+        widget#px_item_inner 200 396 23 23 [ghost]
+    fixedgridbox#px_item_content_offset 200 380 50 126
+      item 200 380 50 30 [ghost]
+        widget#px_item_offset 230 390 20 20 [ghost]
+      item 200 428 50 30 [ghost]
+        widget#px_item_offset 230 438 20 20 [ghost]
+      item 200 476 50 30 [ghost]
+        widget#px_item_offset 230 486 20 20 [ghost]
+datamodel-ghosts.gui
+  widget#px_ghost_frame 0 0 200 400
+    vbox#px_ghost_column 0 0 200 400
+      item 80 51.67 40 30 [ghost]
+        widget#px_ghost_row 80 51.67 40 30 [ghost]
+      item 80 185 40 30 [ghost]
+        widget#px_ghost_row 80 185 40 30 [ghost]
+      item 80 318.33 40 30 [ghost]
+        widget#px_ghost_row 80 318.33 40 30 [ghost]
+  widget#px_ghost_spacing_frame 220 0 200 400
+    widget#px_ghost_spaced 220 0 0 0
+      item 220 0 60 30 [ghost]
+        widget#px_ghost_spaced_row 220 0 60 30 [ghost]
+      item 220 0 60 30 [ghost]
+        widget#px_ghost_spaced_row 220 0 60 30 [ghost]
+      item 220 0 60 30 [ghost]
+        widget#px_ghost_spaced_row 220 0 60 30 [ghost]
+  widget#px_ghost_capped_frame 440 0 500 500
+    vbox#px_ghost_capped 440 0 500 500
+      item 670 235 40 30 [ghost]
+        widget#px_ghost_capped_row 670 235 40 30 [ghost]
+end-to-end-window.gui
+  window#px_end_to_end 0 0 500 700
+    vbox#px_page 0 0 500 700
+      px_label#px_page_title 192.5 26 115 21
+      hbox#px_toolbar 190 83 120 24
+        widget#px_toolbar_left 190 83 60 24
+        expand 250 83 0 24
+        widget#px_toolbar_right 250 83 60 24
+      vbox#px_section_a 100 143 300 100
+        widget#px_section_a_text 150 143 200 20
+        vbox#px_section_a_buttons 100 163 300 80
+          px_button#px_button_a1 100 163 300 40
+          px_button#px_button_a2 100 203 300 40
+      vbox#px_section_b 100 279 300 105
+        widget#px_section_b_text 150 279 200 20
+        widget#px_section_b_spacer 247.5 299 5 5
+        vbox#px_section_b_buttons 100 304 300 80
+          px_button#px_button_b1 100 304 300 40
+          px_button#px_button_b2 100 344 300 40
+      flowcontainer#px_chips 184 420 132 18
+        widget#px_chip_a 184 420 40 18
+        widget#px_chip_b 230 420 40 18
+        widget#px_chip_c 276 420 40 18
+      scrollarea#px_scroll 20 474 460 200 [clip]
+        vbox#px_scroll_list 20 474 460 200
+          item 30 491.33 440 32 [ghost]
+            widget#px_scroll_row 30 491.33 440 32 [ghost]
+          item 30 558 440 32 [ghost]
+            widget#px_scroll_row 30 558 440 32 [ghost]
+          item 30 624.67 440 32 [ghost]
+            widget#px_scroll_row 30 624.67 440 32 [ghost]
+flow-container.gui
+  widget#px_flow_frame 0 0 200 120
+    flowcontainer#px_flow_run 0 0 250 30
+      widget#px_flow_a 0 0 50 30
+      widget#px_flow_b 50 0 50 30
+      widget#px_flow_c 100 0 50 30
+      widget#px_flow_d 150 0 50 30
+      widget#px_flow_e 200 0 50 30
+  widget#px_flow_sized_frame 0 140 200 120
+    flowcontainer#px_flow_sized 0 140 200 120
+      widget#px_flow_sized_a 0 140 50 30
+      widget#px_flow_sized_b 50 140 50 30
+      widget#px_flow_sized_c 100 140 50 30
+      widget#px_flow_sized_d 150 140 50 30
+      widget#px_flow_sized_e 200 140 50 30
+  widget#px_flow_vertical_frame 220 0 200 200
+    flowcontainer#px_flow_column 220 0 50 110
+      widget#px_flow_column_a 220 0 50 30
+      widget#px_flow_column_b 220 40 50 30
+      widget#px_flow_column_c 220 80 50 30
+  widget#px_flow_anchor_frame 220 220 400 100
+    flowcontainer#px_flow_anchor_run 220 220 155 30
+      widget#px_flow_anchor_tall 220 220 100 30
+      widget#px_flow_anchor_low 325 230 50 20
+grid-dynamic.gui
+  widget#px_dyn_frame 0 0 300 300
+    dynamicgridbox#px_dyn_vertical 0 0 40 120
+      item 0 0 40 40 [ghost]
+        widget#px_dyn_cell 0 0 40 40 [ghost]
+      item 0 40 40 40 [ghost]
+        widget#px_dyn_cell 0 40 40 40 [ghost]
+      item 0 80 40 40 [ghost]
+        widget#px_dyn_cell 0 80 40 40 [ghost]
+  widget#px_dyn_flip_frame 0 320 300 300
+    dynamicgridbox#px_dyn_horizontal 0 320 120 40
+      item 0 320 40 40 [ghost]
+        widget#px_dyn_flip_cell 0 320 40 40 [ghost]
+      item 40 320 40 40 [ghost]
+        widget#px_dyn_flip_cell 40 320 40 40 [ghost]
+      item 80 320 40 40 [ghost]
+        widget#px_dyn_flip_cell 80 320 40 40 [ghost]
+  widget#px_dyn_cap_frame 320 320 300 300
+    dynamicgridbox#px_dyn_capped 320 320 80 80
+      item 320 320 40 40 [ghost]
+        widget#px_dyn_capped_cell 320 320 40 40 [ghost]
+      item 360 320 40 40 [ghost]
+        widget#px_dyn_capped_cell 360 320 40 40 [ghost]
+      item 320 360 40 40 [ghost]
+        widget#px_dyn_capped_cell 320 360 40 40 [ghost]
+grid-fixed.gui
+  widget#px_fixed_frame 0 0 700 400
+    fixedgridbox#px_fixed_vertical 0 0 14 94
+      item 0 0 14 14 [ghost]
+        widget#px_fixed_cell 0 0 14 14 [ghost]
+      item 0 40 14 14 [ghost]
+        widget#px_fixed_cell 0 40 14 14 [ghost]
+      item 0 80 14 14 [ghost]
+        widget#px_fixed_cell 0 80 14 14 [ghost]
+    fixedgridbox#px_fixed_horizontal 100 0 134 14
+      item 100 0 14 14 [ghost]
+        widget#px_fixed_flip_cell 100 0 14 14 [ghost]
+      item 160 0 14 14 [ghost]
+        widget#px_fixed_flip_cell 160 0 14 14 [ghost]
+      item 220 0 14 14 [ghost]
+        widget#px_fixed_flip_cell 220 0 14 14 [ghost]
+    fixedgridbox#px_fixed_capped 320 0 74 54
+      item 320 0 14 14 [ghost]
+        widget#px_fixed_capped_cell 320 0 14 14 [ghost]
+      item 380 0 14 14 [ghost]
+        widget#px_fixed_capped_cell 380 0 14 14 [ghost]
+      item 320 40 14 14 [ghost]
+        widget#px_fixed_capped_cell 320 40 14 14 [ghost]
+    fixedgridbox#px_fixed_no_intrinsic 0 200 350 171
+      item 0 200 350 57 [ghost]
+        button#px_fixed_fill_button 0 200 0 0 [ghost]
+          widget#px_fixed_fill_inner 0 200 0 0 [ghost]
+      item 0 257 350 57 [ghost]
+        button#px_fixed_fill_button 0 257 0 0 [ghost]
+          widget#px_fixed_fill_inner 0 257 0 0 [ghost]
+      item 0 314 350 57 [ghost]
+        button#px_fixed_fill_button 0 314 0 0 [ghost]
+          widget#px_fixed_fill_inner 0 314 0 0 [ghost]
+    fixedgridbox#px_fixed_uniform 380 200 40 60
+      item 380 200 40 20 [ghost]
+        widget#px_fixed_uniform_cell 380 200 40 20 [ghost]
+      item 380 220 40 20 [ghost]
+        widget#px_fixed_uniform_cell 380 220 40 20 [ghost]
+      item 380 240 40 20 [ghost]
+        widget#px_fixed_uniform_cell 380 240 40 20 [ghost]
+    fixedgridbox#px_fixed_decorative 560 200 0 0
+ignoreinvisible.gui
+  widget#px_ignoreinvisible_frame 0 0 300 400
+    vbox#px_collapsing_column 0 0 300 400
+      widget#px_collapse_first 100 85 100 30
+      widget#px_collapse_hidden 0 285 0 0
+      widget#px_collapse_last 100 285 100 30
+    vbox#px_keeping_column 120 0 300 400
+      widget#px_keep_first 220 51.67 100 30
+      widget#px_keep_hidden 220 185 100 30
+      widget#px_keep_last 220 318.33 100 30
+    vbox#px_bound_column 0 200 300 400
+      widget#px_bound_first 100 251.67 100 30
+      widget#px_bound_maybe 100 385 100 30
+      widget#px_bound_last 100 518.33 100 30
+resizeparent.gui
+  widget#px_resizeparent_frame 0 0 400 300
+    widget#px_rp_host 0 0 120 60
+      widget#px_rp_content 0 0 0 0
+        widget#px_rp_direct 0 0 120 40
+        widget#px_rp_holder 0 60 0 0
+          widget#px_rp_nested 0 60 120 40
+sprite-framesize.gui
+  widget#px_frame_sheet 0 0 400 200
+    icon#px_frame_clamp_low 0 0 32 32
+    icon#px_frame_1 40 0 32 32
+    icon#px_frame_2 80 0 32 32
+    icon#px_frame_3 120 0 32 32
+    icon#px_frame_4 160 0 32 32
+    icon#px_frame_5 200 0 32 32
+    icon#px_frame_6 240 0 32 32
+    icon#px_frame_clamp_high 280 0 32 32
+    icon#px_frame_centre 0 60 249 78
+sprite-nineslice.gui
+  widget#px_nineslice_frame 0 0 700 400
+    icon#px_ns_native 0 0 200 200
+    icon#px_ns_tiled_border 220 0 200 200
+    icon#px_ns_stretch_bord 440 0 200 200
+    icon#px_ns_border_only 0 220 200 200
+    icon#px_ns_corner_clamp 220 220 24 24
+    icon#px_ns_type_only 260 220 200 200
+    icon#px_ns_tiled_type 480 220 200 200
+    widget#px_ns_asymmetric 0 440 200 200
+    widget#px_ns_per_side 220 440 200 200
+state-blocks.gui
+  widget#px_state_frame 0 0 300 200
+    icon#px_state_static 10 10 40 40
+    widget#px_state_only 0 0 40 40
+templates-types.gui
+  widget#px_template_frame 0 0 700 400
+    px_card#px_card_positioned 10 10 100 50
+    px_card#px_card_resized 10 80 60 60
+    widget#px_derived_frame 140 10 180 120
+      px_derived_row 140 10 180 120
+        widget#px_row_kid 210 50 40 40
+    widget#px_using_plain 340 10 80 40
+    widget#px_using_overridden 340 60 30 30
+    widget#px_using_local 340 100 1 1
+    px_slotted#px_slot_untouched 10 160 200 100
+      widget#px_slot_default 10 160 20 20
+    px_slotted#px_slot_filled 220 160 200 100
+      widget#px_slot_override 220 160 50 50
+    px_slotted#px_slot_blanked 430 160 200 100
+    px_deep_slotted#px_deep_filled 10 280 200 100
+      widget#px_deep_holder 10 280 100 100
+        widget#px_deep_override 10 280 30 30
+text-metrics.gui
+  widget#px_text_frame 0 0 400 400
+    px_text_single#px_text_m10 0 0 139 21
+    px_text_single#px_text_i10 0 30 40 21
+    px_text_single#px_text_m1 0 60 13 21
+    px_text_single#px_text_m2 0 90 27 21
+    px_text_single#px_text_big 0 120 138 42
+    px_text_single#px_text_elided 0 170 60 21
+    px_text_single#px_text_wrapped 0 200 115 42
+    px_text_multi#px_text_multi_default 200 200 45 45
+    px_text_single#px_text_align_right 0 260 150 40
+    px_text_single#px_text_align_center 0 310 150 40
+widget-basics.gui
+  widget#px_basics_frame 0 0 300 200
+    widget#px_sizeless 20 10 0 0
+      widget#px_sizeless_child 50 30 20 20
+    widget#px_half 0 100 150 50
+    icon#px_scaled 200 100 60 60
+    icon#px_unscaled 200 150 30 30

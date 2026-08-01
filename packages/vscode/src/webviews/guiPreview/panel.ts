@@ -620,7 +620,11 @@ function paintFill(rect, fill) {
     ctx.globalAlpha *= alpha;
     const tw = src.naturalWidth || src.width || 0;
     const th = src.naturalHeight || src.height || 0;
-    if (fill.border && tw > 0 && th > 0) {
+    // Nine-slice only when the engine says the border APPLIES: it needs a
+    // Cornered* spriteType too, and a border on its own is ignored by the game
+    // (spec.md Studio §J4). Older results carry no mode; keep their behavior.
+    const sliced = fill.border && (!fill.mode || fill.mode.indexOf("nineslice") === 0);
+    if (sliced && tw > 0 && th > 0) {
       for (const [sx, sy, sw, sh, dx, dy, dw, dh] of nineSlice(rect, fill.border, tw, th)) {
         ctx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
       }

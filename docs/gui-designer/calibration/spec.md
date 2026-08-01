@@ -363,15 +363,21 @@ computed rect.
   scales the border is still unmeasured.
 - `mirror`, overlappingitembox, scrollbar chrome metrics,
   `alwaystransparent`/input behavior (irrelevant to static rendering).
-- The two open CONFLICTS between this spec and the Studio measurements, both
-  of which need one in-game probe to settle:
+- The three open CONFLICTS between this spec and the Studio measurements,
+  each of which needs one in-game probe to settle:
   - a `flowcontainer` with an explicit `size` (B3-Q1 says it sets the
     container's own rect; the Studio treats it as ignored);
   - `position` on a box child (this spec is silent, this repo's engine adds
-    it as an offset, the Studio drops it per §H).
-  Fixtures for both are waiting in
+    it as an offset, the Studio drops it per §H);
+  - a `state` block supplying the resting position of a widget that has none
+    (the phase-2 section above says nothing inside a `state` leaks into the
+    rect, which is what the engine does; the Studio's engine substitutes the
+    state's position. Neither is in-game dated. Surfaced by the G2 merge,
+    2026-08-01).
+  Fixtures for all three are waiting in
   `packages/server/test/fixtures/gui/layout/`; see
-  `docs/gui-designer/parity-checklist.md` §G.
+  `docs/gui-designer/parity-checklist.md` §G. G2 implemented nothing for any
+  of them, so no measured golden was overwritten by the other engine's rule.
 
 CLOSED since batch 04, by the Studio §J/§K/§L in-game session recorded above:
 sprite frames (`framesize` grids), fixedgridbox cell math, dynamicgridbox

@@ -15,9 +15,17 @@ copying them, so every row below points at a fixture in
 | Verdict | Meaning |
 |---|---|
 | **covered** | The toolkit already implements this AND asserts it. The citing test is named. |
+| **done (G2)** | Landed in the G2 layout merge, with the citing test named. Engine rules cite their spec.md bullet in `layoutEngine.ts`. |
 | **G1** | Writer rebuild. Nothing equivalent exists here; `widgetEdit.ts` (91 lines, position/size only) is the whole current writer. |
 | **G2** | Layout merge. Either unimplemented here, or implemented but never asserted, or implemented DIFFERENTLY (those rows say so). |
+| **disputed** | The two engines encode CONTRADICTORY rules and both sides measured. Nothing is implemented and no golden is flipped: the row names both sources and the in-game probe that settles it. |
 | **dropped** | Out of the G1/G2 acceptance gates, with the reason. Some return at a later G phase; the reason says which. |
+
+G2 ran on 2026-08-01. Its goldens live in `packages/server/test/guiLayoutMerge.test.ts` (cited
+per row below) alongside the rect-dump baseline `test/fixtures/gui/layout-rects.baseline.txt`
+(S07). Four rows stayed open, and they are the honest residue rather than an oversight:
+three DISPUTED (L07c, L13e, L23) and three deferred for want of a measurement or a preview-UX
+decision (L01f, L06c, L11b).
 
 "Implemented but never asserted" counts as **G2**, not covered: an unasserted behavior is
 not something G2 can be judged by, and the whole point of the regenerated corpus is that
@@ -36,7 +44,7 @@ Fixture paths are relative to `packages/server/test/fixtures/gui/`.
 | L01c | `max_width` clamps with right elision | `layout/text-metrics.gui` | **covered** by `guiLayout.test.ts` "B3-S1" |
 | L01d | `multiline` + `max_width` wraps at word boundaries, advance = line box | `layout/text-metrics.gui` | **covered** by `guiLayout.test.ts` "B3-S2" |
 | L01e | `align` in a fixed-size textbox: exact, zero internal padding | `layout/text-metrics.gui` | **covered** by `guiLayout.test.ts` "B4-T6" |
-| L01f | Per-glyph advance/ink beyond the measured `M` / `i` / space | `layout/text-metrics.gui` | **G2**: the toolkit's `GLYPHS` table has three entries and a `DEFAULT_GLYPH` guess; the Studio's model measures the alphabet, so a mixed-case string (its `"Hello"` case) is only approximate here |
+| L01f | Per-glyph advance/ink beyond the measured `M` / `i` / space | `layout/text-metrics.gui` | **G2**, deferred: the toolkit's `GLYPHS` table has three entries and a `DEFAULT_GLYPH` guess, and NEITHER source carries a per-glyph table — spec.md measured `M`/`i`/space only, and the Studio's numbers are inside its engine, not in the merged spec. Filling it in is a calibration batch (render the alphabet, measure advance and ink), not a merge |
 | L01g | The vanilla `text_multi` type's hardcoded `size = { 45 45 }` wins over `max_width` | `layout/text-metrics.gui` | **covered** by `guiLayout.test.ts` "B2-L" |
 | L02a | Space-around: n children, side = free/(2n) on BOTH sides, gap = s + 2·side | `layout/box-fill-spacearound.gui` | **covered** by `guiLayout.test.ts` "B1-E1", "B1-F1/F2" |
 | L02b | `spacing` adds inside the gap; `margin = { a b }` is horizontal, vertical | `layout/box-fill-spacearound.gui`, `layout/box-margins.gui` | **covered** by `guiLayout.test.ts` "B1-E2", "B1-E3" |
@@ -44,67 +52,67 @@ Fixture paths are relative to `packages/server/test/fixtures/gui/`.
 | L03a | `expanding` children each get floor + free/k (equal SHARE, not equal size) | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B2-J2 + B3-P3" |
 | L03b | `growing` yields to an expanding sibling and keeps its own explicit size | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B2-J1" |
 | L03c | `growing` alone behaves like expanding | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B3-P2 + B4-T8" |
-| L03d | Two growers with no expander share the free space equally | `layout/box-policies.gui` | **G2**: implemented (`takers` falls back to growers) but only the single-grower case is asserted |
+| L03d | Two growers with no expander share the free space equally | `layout/box-policies.gui` | **done (G2)**: was implemented (`takers` falls back to growers), now asserted by `guiLayoutMerge.test.ts` "L03d: two growers with no expander share the free space equally" |
 | L04a | Deficit: every shrinkable child loses deficit/k, equal DELTA, no shrinking-first priority | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B2-J3 + B3-P4" |
-| L04b | A `fixed` child never shrinks; the shrinkable sibling absorbs the whole deficit | `layout/box-policies.gui` | **G2**: implemented, never asserted (both children are shrinkable in the current case) |
-| L04c | Minimum-size floors and the redistribution loop: a floored child stops at its min and the rest absorb what is left, total still fits | `layout/box-policies.gui` | **G2**: the toolkit has no per-child minimum and no redistribution loop; it clamps at 0 in one pass |
+| L04b | A `fixed` child never shrinks; the shrinkable sibling absorbs the whole deficit | `layout/box-policies.gui` | **done (G2)**: asserted by `guiLayoutMerge.test.ts` "L04b: a fixed child never shrinks" over `px_deficit_fixed_row` |
+| L04c | Minimum-size floors and the redistribution loop: a floored child stops at its min and the rest absorb what is left, total still fits | `layout/box-policies.gui` | **done (G2)**: the deficit pass loops now — a child floored at its `minimumsize` stops and the rest absorb the remainder, so the total fits. The floor is the vanilla `minimumsize = { w h }` property (413 uses in the game tree), which was ALSO being walked as a phantom child widget and cost a box child a whole space-around slot; it is an attribute block now. Main axis only (cross unmeasured). No corpus fixture carries `minimumsize`, so the goldens are inline in `guiLayoutMerge.test.ts` "L04c: a floored child stops at its minimumsize" and "L04c: minimumsize is an attribute block" — a G0 gap worth closing when `box-policies.gui` is next touched |
 | L05a | `parentanchor` picks the parent point; the nine combinations are exact | `layout/anchors.gui` | **covered** by `guiLayout.test.ts` "B1-B" |
 | L05b | `widgetanchor` defaults to the VALUE of `parentanchor`, not top-left | `layout/anchors.gui` | **covered** by `guiLayout.test.ts` "B1-C" |
 | L05c | `position` is added after anchoring, always screen-space +right/+down | `layout/anchors.gui` | **covered** by `guiLayout.test.ts` "B1-D" |
 | L05d | Nested offsets accumulate linearly, no implicit padding | `layout/anchors.gui` | **covered** by `guiLayout.test.ts` "B1-H" |
 | L06a | `layoutpolicy_horizontal/vertical` classification | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B2-J1" |
 | L06b | The `expand` widget TYPE is growing | `layout/box-policies.gui` | **covered** by `guiLayout.test.ts` "B3-P2 + B4-T8" |
-| L06c | An `expand = {}` PROPERTY on an ordinary widget makes it growing | `layout/box-policies.gui` | **G2**: the toolkit reads `expand` only as a child element, never as a property |
+| L06c | An `expand = {}` PROPERTY on an ordinary widget makes it growing | `layout/box-policies.gui` | **G2**, deferred: the toolkit reads `expand` only as a child element. Nothing implemented, for two reasons: spec.md has no bullet for the property form (its `expand = {}` bullet, B4-T8/B3-P2, is the spacer WIDGET), and the vanilla tree has no instance of it — all 2,100+ `expand = {}` occurrences are standalone spacer widgets, a few carrying `minimumsize`/`layoutpolicy_*` of their own. `box-policies.gui` has no such shape either. Needs a spec bullet (or a counter-example) before it can be more than a guess |
 | L07a | `state = {}` never leaks into the resting rect; it is not a child widget | `layout/state-blocks.gui` | **covered** by `guiLayout.test.ts` "phase 2: state blocks excluded from layout" |
 | L07b | A widget with no state block keeps its STATIC position (no substitution) | `layout/state-blocks.gui` | **covered** by the same test |
-| L07c | A state block SUPPLIES the resting position when the widget has none | `layout/state-blocks.gui` | **G2**: not implemented here; states are inert full stop |
+| L07c | A state block SUPPLIES the resting position when the widget has none | `layout/state-blocks.gui` | **disputed**, needs in-game recheck: the Studio's engine has a state SUPPLY the resting position, and `state-blocks.gui`'s header (px_state_only) was authored to that expectation. spec.md's phase-2 bullet says the opposite in as many words — "nothing inside a `state` leaks into the rect" — and that is what the engine does and what `guiLayout.test.ts` "phase 2: state blocks excluded from layout" asserts. Neither side is in-game dated (spec.md's is "confirmed by fixture", the Studio's is an encoded rule), so ONE probe settles it: a widget with no `position` of its own and a `state` that carries one, screenshotted at rest |
 | L08 | Text sizing end to end through the node (`raw_text` → measured rect) | `layout/text-metrics.gui` | **covered** by `guiLayout.test.ts` text-metrics suite |
 | L09 | Real `.gui` parse → box arrangement, the closest headless mirror of a preview | `layout/end-to-end-window.gui` | **covered**: the `guiLayout.test.ts` batch-01/02/03 suites parse real snippets end to end; the new fixture adds the COMBINATION case (spacer + expanding text + button column alignment) |
-| L10 | A datamodel gridbox `item` content-sizes (bounding box of its children, positioned child extends it), not a generic widget default | `layout/container-measurability.gui` | **G2**: the toolkit splices `item` children straight in; there is no `item` rect to size |
+| L10 | A datamodel gridbox `item` content-sizes (bounding box of its children, positioned child extends it), not a generic widget default | `layout/container-measurability.gui` | **done (G2)**: the `item` block is a NODE now instead of being spliced away, and it content-sizes like a container (a positioned child extends it to its far edge). Asserted by `guiLayoutMerge.test.ts` "L10: a datamodel item content-sizes" and "the ghost rows are item wrappers that hug their row widget" |
 | L11a | `container` hugs its absolutely-positioned children at the parent origin | `layout/container-measurability.gui` | **covered** by `guiLayout.test.ts` "B2-I4" |
-| L11b | Content-sizing runs only when the content is statically MEASURABLE; `{ 0 0 }` children, a child of an unknown type, a `datamodel`, or a binding-valued `visible` all make it unmeasurable, and the preview keeps a visible default rather than collapsing | `layout/container-measurability.gui` | **G2**: no measurability guard here |
-| L11c | A plainly `visible = no` child is SKIPPED and the rest still content-size | `layout/container-measurability.gui` | **G2** |
+| L11b | Content-sizing runs only when the content is statically MEASURABLE; `{ 0 0 }` children, a child of an unknown type, a `datamodel`, or a binding-valued `visible` all make it unmeasurable, and the preview keeps a visible default rather than collapsing | `layout/container-measurability.gui` | **G2**, deferred to G3: nothing implemented. The guard's OUTPUT is a preview default size for content that cannot be measured, and no measurement in either source pins that number — all four `px_unmeasurable_*` cases authored a container with no `size`, so a guard here could only invent pixels, which is the one thing this engine does not do. It is a preview-UX decision (the GHOST_COUNT/GHOST_OPACITY precedent), so it belongs with G3's canvas. The engine's current answers for those four are recorded in the rect baseline |
+| L11c | A plainly `visible = no` child is SKIPPED and the rest still content-size | `layout/container-measurability.gui` | **done (G2)**: content sizing skips a plainly hidden child (a binding-valued `visible` is KEPT: a static preview cannot evaluate it). Asserted by `guiLayoutMerge.test.ts` "L11c: a plainly hidden child is skipped" |
 | L12a | A box nested in a box HUGS its content (no fill) and is then placed by the outer box's rules | `layout/box-nested-hug.gui` | **covered** by `guiLayout.test.ts` "B2-I2" |
-| L12b | `align = left/right` on a box child does NOTHING; cross placement is unconditionally centred | `layout/box-child-ignored.gui` | **G2**: correct by construction here (`align` is only read for text offsets) but never asserted |
+| L12b | `align = left/right` on a box child does NOTHING; cross placement is unconditionally centred | `layout/box-child-ignored.gui` | **done (G2)**: still correct by construction, asserted now by `guiLayoutMerge.test.ts` "L12b: align and parentanchor on a box child do nothing" (which also pins the parentanchor half of the same spec bullet) |
 | L13a | flowcontainer never wraps; one run along the main axis, overflowing unclipped | `layout/flow-container.gui` | **covered** by `guiLayout.test.ts` "B2-K1 + B3-Q1" |
 | L13b | flowcontainer hugs its content and sits at the parent ORIGIN, no centring | `layout/flow-container.gui` | **covered** by the same test |
 | L13c | `direction = vertical` and `spacing` | `layout/flow-container.gui` | **covered** by `guiLayout.test.ts` "B2-K2/K3" |
-| L13d | flowcontainer HONORS a child's `parentanchor` on the cross axis (the one container that does) | `layout/flow-container.gui` | **G2**: the toolkit origin-aligns flow children and says so ("unmeasured") |
-| L13e | Whether an explicit `size` sets the flow's own rect (toolkit B3-Q1) or is ignored like a box's (Studio GUI009) | `layout/flow-container.gui` | **G2**: the two sides DISAGREE; see §G "Open conflicts" |
-| L14a | fixedgridbox: `addcolumn`/`addrow` are the CELL SIZE and the stride | `layout/grid-fixed.gui` | **G2**: no fixedgridbox support here |
-| L14b | fixedgridbox flow: vertical single column by default, `flipdirection` transposes, `maxhorizontalslots` caps only while horizontal, `datamodel_wrap` sets the wrap | `layout/grid-fixed.gui` | **G2** |
-| L14c | An item with no concrete size anywhere in its chain takes the CELL size; one with a concrete size keeps it at the cell origin | `layout/grid-fixed.gui` | **G2** |
-| L14d | A fixedgridbox with no `item` still lays out decorative slots | `layout/grid-fixed.gui` | **G2** |
-| L15 | dynamicgridbox: vertical fill by default, `datamodel_wrap` = items per COLUMN, `flipdirection` transposes without mirroring, items pack at their OWN size (addcolumn/addrow are not the stride) | `layout/grid-dynamic.gui` | **G2**: no dynamicgridbox support here |
+| L13d | flowcontainer HONORS a child's `parentanchor` on the cross axis (the one container that does) | `layout/flow-container.gui` | **done (G2)**: a flow child's `parentanchor` (with `widgetanchor` mirroring it) now places it on the cross axis; an unset anchor keeps the measured origin run. Asserted by `guiLayoutMerge.test.ts` "L13d: ... the one container that does" |
+| L13e | Whether an explicit `size` sets the flow's own rect (toolkit B3-Q1) or is ignored like a box's (Studio GUI009) | `layout/flow-container.gui` | **disputed**, needs in-game recheck: unchanged by G2. Toolkit B3-Q1 measured the size setting the container's own rect; the Studio's GUI009 groups flowcontainer with the boxes and drops it. B3-Q1's golden stands and nothing was implemented against it; `px_flow_sized` is the probe. See §G |
+| L14a | fixedgridbox: `addcolumn`/`addrow` are the CELL SIZE and the stride | `layout/grid-fixed.gui` | **done (G2)**: `addcolumn`/`addrow` are the cell size and the stride. Asserted by `guiLayoutMerge.test.ts` "L14a/L14b: addcolumn/addrow are the cell size and the stride" |
+| L14b | fixedgridbox flow: vertical single column by default, `flipdirection` transposes, `maxhorizontalslots` caps only while horizontal, `datamodel_wrap` sets the wrap | `layout/grid-fixed.gui` | **done (G2)**: one flow model for both grid kinds, asserted by `guiLayoutMerge.test.ts` "L14b: flipdirection transposes the fill, maxhorizontalslots caps it" |
+| L14c | An item with no concrete size anywhere in its chain takes the CELL size; one with a concrete size keeps it at the cell origin | `layout/grid-fixed.gui` | **done (G2)**: asserted by `guiLayoutMerge.test.ts` "L14c: an item with no concrete size anywhere takes the CELL size". Note the fixture's inner chain (`button` > 100%-fill `widget`) still resolves to a zero rect INSIDE the cell-sized item, because a sizeless widget is a zero rect (B4-T1, measured); what fills a cell-sized item is not a rule either source records |
+| L14d | A fixedgridbox with no `item` still lays out decorative slots | `layout/grid-fixed.gui` | **done (G2)**: ordinary children are slotted like items. `px_fixed_decorative` has no children at all, so the corpus only pins that it stays a finite empty node; the slotting itself is an inline case in `guiLayoutMerge.test.ts` "L14d: a grid with no item template still slots its ordinary children" |
+| L15 | dynamicgridbox: vertical fill by default, `datamodel_wrap` = items per COLUMN, `flipdirection` transposes without mirroring, items pack at their OWN size (addcolumn/addrow are not the stride) | `layout/grid-dynamic.gui` | **done (G2)**: items pack at their own size, same flow model, addcolumn/addrow are NOT the stride. Asserted by `guiLayoutMerge.test.ts` "L15: dynamicgridbox packs at the item's own size" (both cases) |
 | L16a | A datamodel list stamps placeholder rows laid out by the container's real policy | `layout/datamodel-ghosts.gui` | **covered** by `guiLayout.test.ts` "phase 2: datamodel list placeholders" |
 | L16b | Placeholder count is capped by a container whose own explicit size is known | `layout/datamodel-ghosts.gui` | **covered** by the same suite, "caps ghosts to the container's own explicit size" |
 | L16c | Placeholders are never editable | `layout/datamodel-ghosts.gui` | **covered** by the same suite |
 | L16d | A container inside a HORIZONTAL box collapses to a single placeholder | `layout/datamodel-ghosts.gui` | **dropped**: a Studio canvas affordance, not an engine fact. The toolkit stamps into the container's real policy, so a horizontal box lays the placeholders across; changing that is a G3 preview-UX decision, not a layout invariant |
 | L17a | scrollarea clips; content origin at the viewport origin at scroll 0; a bare `scrollwidget` renders without scrollbar chrome | `layout/clipping.gui` | **covered** by `guiLayout.test.ts` "B3-R1" |
-| L17b | `scrollbox` and `scissor = yes` also clip | `layout/clipping.gui` | **G2**: only `scrollarea` sets `clip` here |
-| L17c | Descendant rects are CLAMPED to the clipper (the flatten does it, not only the renderer) | `layout/clipping.gui` | **G2**: the toolkit sets a `clip` flag and leaves clamping to the client renderer |
+| L17b | `scrollbox` and `scissor = yes` also clip | `layout/clipping.gui` | **done (G2)**: `scrollbox` and any `scissor = yes` widget clip too. Asserted by `guiLayoutMerge.test.ts` "scrollarea, scrollbox and scissor = yes clip" |
+| L17c | Descendant rects are CLAMPED to the clipper (the flatten does it, not only the renderer) | `layout/clipping.gui` | **divergence, deliberate**: the toolkit keeps TRUE geometry on the node plus a `clip` flag, and the client clamps (`guiPreview` already does, per clipping ancestor). Same pixels; clamping in the flatten would rewrite `guiLayout.test.ts` "B3-R1", a measured golden, and would throw away the real rect an inspector and the writer need. Pinned by `guiLayoutMerge.test.ts` "L17c: a clipped descendant keeps its true rect" |
 | L18 | Bookmark map characters: feet-anchored portrait placement | none | **dropped**: a CK3 bookmark-screen preview inside the Studio app, not a `.gui` layout rule and not a toolkit surface in any G phase |
 | L19a | An hbox/vbox whose parent is a plain widget FILLS it on both axes with no layoutpolicy asked for | `layout/box-fill-spacearound.gui` | **covered** by `guiLayout.test.ts` "B1-E1", "B2-I1 + B3-P1" |
 | L19b | The main-axis surplus then spreads as space-around | `layout/box-fill-spacearound.gui` | **covered** by the same tests |
 | L20a | A sizeless plain widget is a ZERO rect; children still render from its origin | `layout/widget-basics.gui` | **covered** by `guiLayout.test.ts` "B4-T1" |
 | L20b | `scale` multiplies the resolved rect at the same origin | `layout/widget-basics.gui` | **covered** by `guiLayout.test.ts` "B4-T4" |
-| L21a | Nine-slice requires BOTH a `Cornered*` spriteType AND a non-zero `spriteborder` | `layout/sprite-nineslice.gui` | **G2**: the toolkit nine-slices on a border alone, which the Studio's §J4 measured as WRONG |
-| L21b | A border without a `Cornered*` type is ignored; the whole texture plain-stretches | `layout/sprite-nineslice.gui` | **G2** |
-| L21c | A `Cornered*` type with no border tiles (for a `*tiled*` type) or stretches the whole texture | `layout/sprite-nineslice.gui` | **G2** |
-| L21d | Nine-slice edge behavior: `Corneredtiled` tiles the edges, `Corneredstretched` stretches them | `layout/sprite-nineslice.gui` | **G2**: the toolkit's `computeNineSlice` always stretches |
+| L21a | Nine-slice requires BOTH a `Cornered*` spriteType AND a non-zero `spriteborder` | `layout/sprite-nineslice.gui` | **done (G2)**: fills carry a `mode` (`stretch` / `tile` / `nineslice-stretch` / `nineslice-tile`) computed from `spriteType` + border; `border` stays the parsed attribute either way, so the phase-2 parsing goldens are untouched. `guiPreview` nine-slices only when the mode says so. Asserted by `guiLayoutMerge.test.ts` "nine-slice needs BOTH a Cornered* type and a non-zero border" |
+| L21b | A border without a `Cornered*` type is ignored; the whole texture plain-stretches | `layout/sprite-nineslice.gui` | **done (G2)**: `guiLayoutMerge.test.ts` "a border with no Cornered* type is ignored: the whole texture stretches" |
+| L21c | A `Cornered*` type with no border tiles (for a `*tiled*` type) or stretches the whole texture | `layout/sprite-nineslice.gui` | **done (G2)**: `guiLayoutMerge.test.ts` "a tiled type with no border tiles the whole texture" |
+| L21d | Nine-slice edge behavior: `Corneredtiled` tiles the edges, `Corneredstretched` stretches them | `layout/sprite-nineslice.gui` | **done (G2)**, engine half: the mode distinguishes `nineslice-tile` from `nineslice-stretch`, which is what the renderer needs; `computeNineSlice`'s region geometry is shared by both and unchanged. DRAWING tiled edges is G3 renderer work (`guiPreview` still stretches them) |
 | L21e | `2·border > size` on an axis → the corners clamp to size/2 and meet, no centre | `layout/sprite-nineslice.gui` | **covered** by `guiLayout.test.ts` "computeNineSlice: borders clamp so opposite sides never overlap" |
 | L21f | `spriteborder = { x y }` axis order (x = left/right width, y = top/bottom height) and the `spriteborder_<side>` overrides | `layout/sprite-nineslice.gui` | **covered** by `guiLayout.test.ts` "carries border geometry from a background block", "per-side overrides win over the { x y } pair" |
 | L21g | The nine regions: corners 1:1, edges on one axis, centre on both | `layout/sprite-nineslice.gui` | **covered** by `guiLayout.test.ts` "computeNineSlice: exact 9 regions" |
-| L22 | `framesize = { w h }` is a 2D grid, row-major, 1-based; frame ≤ 0 clamps to the first cell and a frame past the last clamps to it | `layout/sprite-framesize.gui` | **G2**: no frame support here at all |
-| L23 | A box IGNORES a child's `position` (and `parentanchor`): the slot is the box's business | `layout/box-child-ignored.gui` | **G2**: the toolkit ADDS `position` as an extra offset and marks it "unmeasured". This is a real divergence, and the writer's `PositionIgnoredReason` (W10) depends on the engine agreeing |
+| L22 | `framesize = { w h }` is a 2D grid, row-major, 1-based; frame ≤ 0 clamps to the first cell and a frame past the last clamps to it | `layout/sprite-framesize.gui` | **done (G2)**, engine half: fills carry `framesize`/`frame`, and `computeFrameCell` resolves the row-major 1-based cell with both clamps, mirroring `computeNineSlice`'s split (the texture's pixel size belongs to the renderer). Asserted by `guiLayoutMerge.test.ts` "L22: frame sheets" (the fixture wiring and the grid math, including the vanilla 747x234 @ 249x78 shape). Drawing the cell is G3: `guiPreview` still paints the whole sheet |
+| L23 | A box IGNORES a child's `position` (and `parentanchor`): the slot is the box's business | `layout/box-child-ignored.gui` | **disputed**, needs in-game recheck: unchanged by G2, deliberately. The Studio drops a box child's `position` (its §H session, 2026-07-17); this engine adds it as an offset and labels the choice unmeasured; spec.md is silent. `box-child-ignored.gui`'s `px_positioned` is the probe and is left UNASSERTED by the G2 goldens, which assert the settled siblings (`align`, `parentanchor`) instead. W10's `PositionIgnoredReason` cannot be trusted until this is settled |
 | L24 | Only `widget` holds a fixed pixel `size`; hbox/vbox ignore an explicit one, smaller or larger | `layout/box-fill-spacearound.gui` | **covered** by `guiLayout.test.ts` "B2-I1 + B3-P1" |
-| L25 | An EMPTY `container` collapses to 0: a fixed `size` will not hold it open | `layout/container-measurability.gui` | **G2**: the toolkit returns the explicit size for a container |
-| L26 | `margin` on a plain `widget` is ignored; only `margin_widget` and the layout containers honor margins | `layout/box-margins.gui` | **G2**: the toolkit reads `margin` on a plain widget's children coordinate space only through `marginwidget`, so the plain case is correct by construction but unasserted |
-| L27 | `ignoreinvisible` (default `yes` on hbox/vbox) collapses hidden children, including a binding-false `visible`, so siblings shift up | `layout/ignoreinvisible.gui` | **G2**: the toolkit lays hidden children out normally |
-| L28 | `resizeparent = yes` resizes the PARENT to the widget's content; a fixed-size DIRECT child of one can collapse, nesting one level deeper preserves it | `layout/resizeparent.gui` | **G2**: `resizeparent` is parsed as an inert property block here |
-| L29 | `setitemsizefromcell = yes` (gridbox) forces every cell to the WIDEST item's size; needs a datamodel | `layout/grid-fixed.gui` | **G2** |
+| L25 | An EMPTY `container` collapses to 0: a fixed `size` will not hold it open | `layout/container-measurability.gui` | **done (G2)**: `container` (and a datamodel `item`) content-size ALWAYS — an explicit `size` no longer holds an empty one open. Asserted by `guiLayoutMerge.test.ts` "L25: an EMPTY container collapses to 0" |
+| L26 | `margin` on a plain `widget` is ignored; only `margin_widget` and the layout containers honor margins | `layout/box-margins.gui` | **done (G2)**: still correct by construction, asserted now by `guiLayoutMerge.test.ts` "`margin` on a plain widget is ignored; margin_widget offsets its children" (the two shapes side by side) |
+| L27 | `ignoreinvisible` (default `yes` on hbox/vbox) collapses hidden children, including a binding-false `visible`, so siblings shift up | `layout/ignoreinvisible.gui` | **done (G2)**: a plainly hidden child is collapsed out of a box's distribution (`ignoreinvisible` defaults to yes) and stays in the tree as a ZERO rect so the preview can still list it. A BINDING-valued `visible` is KEPT: a static preview cannot evaluate it, and showing it is the non-destructive default (documented in the engine). Asserted by `guiLayoutMerge.test.ts` "L27: ignoreinvisible", three cases |
+| L28 | `resizeparent = yes` resizes the PARENT to the widget's content; a fixed-size DIRECT child of one can collapse, nesting one level deeper preserves it | `layout/resizeparent.gui` | **done (G2)**, measured half: a `resizeparent = yes` child now sizes its PARENT to that child's content extent. The "a fixed-size DIRECT child CAN be collapsed" side effect is NOT implemented — "can" is not a rect rule and nothing measured says when it fires — so the goldens pin the direct and the nested widget both keeping their size. `guiLayoutMerge.test.ts` "the widget resizes its PARENT to its own content extent" |
+| L29 | `setitemsizefromcell = yes` (gridbox) forces every cell to the WIDEST item's size; needs a datamodel | `layout/grid-fixed.gui` | **done (G2)**: `setitemsizefromcell = yes` takes the cell from the widest item instead of addcolumn/addrow. Measured on width, applied per axis, with an axis no item can size falling back to addcolumn/addrow. Asserted by `guiLayoutMerge.test.ts` "L29: setitemsizefromcell makes every cell the widest item's size" |
 | L30 | A percentage WIDTH inside a vbox crashes the game (the vbox's width is content-derived, so `%` cannot resolve); height `%` is the milder case | none | **dropped**: an authoring hazard with no rect consequence. Recorded in `calibration/spec.md`; it belongs to a `.gui` linter, and no linter is in the G-plan |
-| L31 | An expanding child must not DEFINE a box's cross size; only fixed children do | `layout/box-child-ignored.gui` | **G2**: the toolkit stretches an expanding child to the cross content size, which is the same outcome for the child but leaves the box's own cross measurement unasserted |
+| L31 | An expanding child must not DEFINE a box's cross size; only fixed children do | `layout/box-child-ignored.gui` | **done (G2)**: the hug path already used each child's FLOOR, so an expanding child cannot define the cross size; asserted by `guiLayoutMerge.test.ts` "L31: an expanding child takes main-axis space without defining the cross size" |
 | L32a | `type` instantiation, instance properties overriding the definition, type chains to the built-in root, base behavior class inherited | `layout/templates-types.gui` | **covered** by `guiLayout.test.ts` "instantiates a type with instance overrides winning", "resolves type chains and inherits the base behavior class" |
 | L32b | `using = <Template>` splices; a use-site property wins; `local_template` never crosses files | `layout/templates-types.gui` | **covered** by `guiLayout.test.ts` "splices templates via using =", "merges stores FIOS" |
 | L32c | `block` slot + `blockoverride` fill / blank, including a block nested deep in the type's subtree | `layout/templates-types.gui` | **covered** by `guiLayout.test.ts` "block declares a slot, blockoverride fills or blanks it", "blockoverride reaches blocks nested deep in the type's subtree" |
@@ -169,7 +177,7 @@ gates that matter for G1.
 | S04 | Insert-then-delete restores the file byte for byte | **G1** |
 | S05 | Duplicate-then-delete-the-copy restores the file byte for byte | **G1** |
 | S06 | Every widget body's recorded braces land on `{` and `}` | **G1** |
-| S07 | Headless rect dump over a corpus (`--render-gui` equivalent), diffed numerically before and after a change | **G2**: the consolidation plan schedules the rect-dump harness with the layout merge |
+| S07 | Headless rect dump over a corpus (`--render-gui` equivalent), diffed numerically before and after a change | **done (G2)**: `guiLayoutMerge.test.ts` "S07: rect dump over the fixture corpus" dumps every rect of every `layout/` fixture against `test/fixtures/gui/layout-rects.baseline.txt`, recorded 2026-08-01 over the merged engine. Re-record with `PX_WRITE_GUI_RECT_BASELINE=1` so an intended change lands as a numeric diff in review. The Studio's 126-rect test-mod dump stays unreproducible here by design (§G) |
 | S08 | Headless app smoke driving the REAL editor through select → add → duplicate → delete → undo → redo, asserting one document edit per batch, selection surviving the re-parse, and the file byte-identical after undoing the run (`--gui-edit-smoke` equivalent) | **dropped** from G1/G2: it drives a UI that does not exist here yet; the plan schedules the Playwright equivalent alongside G3's webview |
 | S09 | The expanding-axis guard never reports an expanding axis for a widget OUTSIDE a layout container (otherwise the guard starts refusing resizes the engine would have honoured) | **G1**: a refusal-honesty invariant, testable headlessly |
 
@@ -228,7 +236,7 @@ assumed. This is the honest starting inventory for G2.
 - `@constant` resolution, and unresolvable values (data bindings, unknown macros) folded
   to 0 so rects stay finite over the whole vanilla tree.
 
-**Not implemented (the G2 diff)**
+**The G2 diff, as it stood before the merge**
 
 - A box IGNORING a child's `position`; the toolkit adds it as an offset (L23).
 - `ignoreinvisible` / hidden-child collapse (L27).
@@ -244,6 +252,28 @@ assumed. This is the honest starting inventory for G2.
 - A state block supplying a resting position (L07c).
 - The `expand` PROPERTY form (L06c).
 - A per-glyph text metrics table beyond `M` / `i` / space (L01f).
+
+**What G2 landed, and what it left** (2026-08-01, `layoutEngine.ts` phase 3)
+
+All of the above except six rows: L27, L28, L17b, L10/L14/L15/L29, L21a-d, L22, L25 and
+L11c, L04c, L13d shipped with goldens. Left standing, each for a stated reason rather than
+for want of time:
+
+- **L23** and **L07c** and **L13e** are DISPUTED (see §G): both engines measured, they
+  disagree, and one in-game probe each settles it. Nothing was implemented and no golden
+  was flipped in either direction.
+- **L17c** is a deliberate divergence: true geometry on the node plus a `clip` flag, the
+  client clamps. Same pixels, and the measured B3-R1 golden stays.
+- **L11b** (the measurability guard) needs a preview default SIZE that no measurement
+  pins; it moves to G3 with the canvas.
+- **L06c** and **L01f** have no source at all — no spec.md bullet, and for L06c no vanilla
+  instance of the shape either. Both need a measurement before they can be code.
+
+Two side effects worth knowing: `minimumsize` is an attribute block now (it was being
+walked as a phantom child widget, costing a box child a space-around slot), and a
+datamodel `item` is a NODE in the layout tree instead of being spliced away, which is what
+gives a gridbox cell something to size. Vanilla sweep after the merge: 373 files, 334,628
+nodes, no non-finite rect, 1.6 s (before: 329,500 nodes, 1.5 s).
 
 ---
 
@@ -310,7 +340,7 @@ ROADMAP, with the one correction the file counts force:
 | Single-entry rewrites byte-identical | **29,765** | Same caveat |
 | Contiguous boxes round-tripping through reorder | **3,094**, with **593** interleaved bodies skipped | The pre-fix figure is the interesting one: **3,335 of 3,687** real boxes FAILED move-and-back before blank lines were given an owner |
 | Insert-then-delete and duplicate-then-delete | **0 of 6,209** failing | The pre-fix figure was **74 of 152** parents in the test mod alone |
-| Rect dump | **126 rects** on the Studio test mod | NOT reproducible here: that mod is not in this repo and is not being copied. The toolkit re-records its own rect baseline over `fixtures/gui/layout/` at G2 |
+| Rect dump | **126 rects** on the Studio test mod | NOT reproducible here: that mod is not in this repo and is not being copied. RECORDED at G2 instead over this repo's own corpus: 352 rects across the 21 `layout/` fixtures, in `test/fixtures/gui/layout-rects.baseline.txt` (2026-08-01). The vanilla side is the sweep above: 373 files, 334,628 nodes, zero non-finite rects |
 | App smoke | 16/16 → 34/34 → 45/45 → 50/50 across 8 vanilla files + the test mod | S08, dropped from G1/G2 |
 
 Any non-zero failure count in a sweep is a failure. A materially different total (files,
@@ -339,17 +369,29 @@ it.skipIf(!guiDir)("vanilla sweep: every span re-tokenizes", () => { /* … */ }
 - The sweep must never WRITE to the game folder. Everything is in memory, as the Studio's
   own sweep is.
 
-### Open conflicts to settle in G2
+### Open conflicts: DISPUTED after G2, one probe each
 
-Two places where the two engines encode different rules. Neither can be resolved by
-reading code; both need a measurement, and both have a fixture waiting.
+Three places where the two engines encode contradictory rules. None can be resolved by
+reading code, all three need one in-game measurement, and all three have a fixture waiting.
+G2 implemented NOTHING for them and flipped no golden in either direction: both sides were
+measured, so overwriting one with the other would destroy evidence rather than settle it.
 
 1. **flowcontainer with an explicit `size`** (L13e). Toolkit batch 03 (Q1) measured that
    the size sets the container's own rect but not a wrap width; the Studio's GUI009 groups
    flowcontainer with the boxes and ignores the size outright. `layout/flow-container.gui`
-   carries both shapes side by side.
+   carries both shapes side by side (`px_flow_run` vs `px_flow_sized`). Probe: put both in
+   a mod, screenshot, compare the two backgrounds' extents.
 2. **`position` on a box child** (L23). The Studio drops it (and refuses the drag on that
-   basis); the toolkit adds it as an offset and labels the choice unmeasured. The writer's
-   refusal honesty depends on the engine agreeing, so this must be settled before G1's
-   `PositionIgnoredReason` equivalent can be trusted. `layout/box-child-ignored.gui` is the
-   probe.
+   basis, §H session 2026-07-17); the toolkit adds it as an offset and labels the choice
+   unmeasured; spec.md is silent. The writer's refusal honesty depends on the engine
+   agreeing, so this must be settled before G1's `PositionIgnoredReason` equivalent can be
+   trusted. `layout/box-child-ignored.gui` is the probe: `px_positioned` carries
+   `position = { 40 40 }` next to four identical siblings, and its rect is deliberately
+   left unasserted by the G2 goldens.
+3. **A state block supplying a resting position** (L07c). NEW as of G2, and it points the
+   other way: the Studio's engine lets a `state` supply the resting position of a widget
+   that has none, `state-blocks.gui`'s `px_state_only` was authored to that expectation,
+   and spec.md's phase-2 bullet says the exact opposite ("nothing inside a `state` leaks
+   into the rect"), which is what this engine does and what `guiLayout.test.ts` asserts.
+   Neither source is in-game dated. Probe: a sizeless-position widget whose only offset
+   lives in a `state`, screenshotted at rest.
