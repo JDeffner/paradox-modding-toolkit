@@ -37,7 +37,9 @@ fallbacks for bare clients):
 ```ts
 interface ParadoxInitOptions {
   storageDir: string;   // server-side cache dir; default: <os tmp>/px-lsp
-  wikidocsDir: string;  // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
+  dataDir: string;      // root of the bundled per-game data: <dataDir>/<gameId>/{wikidocs/,freqs.json}
+                        // default: data/ next to dist/server.js
+  wikidocsDir: string;  // DEPRECATED narrow override for the wikidocs folder alone, see below
   client: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
   clientCommands: boolean;           // DEPRECATED alias, see below
   settings: ParadoxSettings;
@@ -81,10 +83,19 @@ per workspace (descriptor file, else configuration) and sends it as
 triggers a full reload.
 
 Bundled data is per-game: everything the server loads from disk lives under
-`data/<gameId>/` next to `dist/server.js`. Only `ck3` ships a `wikidocs/`
-bundle today, so `vic3` and `eu5` report `tokens: 0` in `paradox/status` and
-never render wiki-token hovers — a missing `data/<gameId>/` folder is a
-supported state, not an error.
+`<root>/<gameId>/`, where the root is `dataDir` when the client sends one and
+otherwise `data/` next to `dist/server.js`. `wikidocs/` and `freqs.json` are
+resolved independently under that folder, and the root is re-resolved against
+the new `gameId` when the game changes. Only `ck3` ships a `wikidocs/` bundle
+today, so `vic3` and `eu5` report `tokens: 0` in `paradox/status` and never
+render wiki-token hovers — a missing `<gameId>/` folder is a supported state,
+not an error.
+
+`wikidocsDir` is a **deprecated** narrow override kept for older clients: it
+replaces the `wikidocs/` folder alone, leaves `freqs.json` on the `dataDir`/
+bundle root, and, being one fixed folder, does not follow a `gameId` change.
+Clients that ship the data apart from the server bundle should send `dataDir`
+instead.
 
 ## Custom methods: client → server
 

@@ -83,9 +83,20 @@ export interface ParadoxInitOptions {
    * `client` is present.
    */
   clientCommands?: boolean;
-  /** Override for the bundled wikidocs/ folder. Normally omitted: the server
-   * derives data/<gameId>/wikidocs next to its own bundle, which stays
-   * correct across game profiles. */
+  /**
+   * Root holding the bundled per-game data directories: the server reads
+   * `<dataDir>/<gameId>/wikidocs/` and `<dataDir>/<gameId>/freqs.json`.
+   * Normally omitted: the server uses `data/` next to its own bundle. Set it
+   * when the data ships apart from the server bundle (an embedder unpacking
+   * both separately). Re-resolved against the new `gameId` whenever the game
+   * changes, so it stays profile-correct.
+   */
+  dataDir?: string;
+  /**
+   * @deprecated Send {@link ParadoxInitOptions.dataDir} instead. Overrides the
+   * wikidocs/ folder ALONE — freqs.json still comes from `dataDir`/the bundle —
+   * and, being one fixed folder, it does NOT follow a `gameId` change.
+   */
   wikidocsDir?: string;
   settings?: ParadoxSettings;
 }

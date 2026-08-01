@@ -235,9 +235,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       options: { execArgv: ["--nolazy", "--inspect=6009", heapArg] },
     },
   };
-  // wikidocsDir is deliberately NOT sent: the server derives data/<gameId>/
-  // next to its bundle (identical folder in this vsix), which keeps the
-  // bundled wiki/freqs profile-correct even when the game changes.
+  // dataDir/wikidocsDir are deliberately NOT sent: the server derives
+  // data/<gameId>/ next to its bundle (identical folder in this vsix), which
+  // keeps the bundled wiki/freqs profile-correct even when the game changes.
   const initOptions: ParadoxInitOptions = {
     storageDir,
     // This client registers every px.* command, renders the sanitized hover

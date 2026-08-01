@@ -704,26 +704,24 @@ function rescanModFile(fsPath: string): void {
 // ---- lifecycle ---------------------------------------------------------------
 
 /**
- * Bundled-data locations for the ACTIVE profile: an explicit client override
- * wins, else data/<gameId>/ next to the bundle (dist/server.js sits next to
- * data/ in the repo checkout, the .vsix and the release tarball alike).
- * wikidocs/ and freqs.json are derived independently: a game may ship freqs
- * without a wiki mirror. Both fail soft when the game bundles no data.
- * Re-derived whenever the game profile changes.
+ * Bundled-data locations for the ACTIVE profile: the per-game folder is
+ * <root>/<gameId>/, where root is the client's dataDir or data/ next to the
+ * bundle (dist/server.js sits next to data/ in the repo checkout, the .vsix
+ * and the release tarball alike). wikidocs/ and freqs.json are derived
+ * independently from it: a game may ship freqs without a wiki mirror, and the
+ * deprecated wikidocsDir override moves the wiki mirror alone. Both fail soft
+ * when the game bundles no data. Re-derived whenever the game profile changes.
  */
 function deriveBundledDataDirs(): void {
-  const dataDir = path.resolve(__dirname, "..", "data", activeProfile().id);
+  const gameDir = path.join(clientDataDir || path.resolve(__dirname, "..", "data"), activeProfile().id);
   wikidocsDir = clientWikidocsDir;
   if (!wikidocsDir) {
-    const bundled = path.join(dataDir, "wikidocs");
+    const bundled = path.join(gameDir, "wikidocs");
     if (fs.existsSync(bundled)) wikidocsDir = bundled;
   }
-  if (wikidocsDir) {
-    freqsDir = path.dirname(wikidocsDir);
-  } else {
-    freqsDir = fs.existsSync(path.join(dataDir, "freqs.json")) ? dataDir : "";
-  }
+  freqsDir = fs.existsSync(path.join(gameDir, "freqs.json")) ? gameDir : "";
 }
+let clientDataDir = "";
 let clientWikidocsDir = "";
 let clientOwnFileWatcher = false;
 let clientWatchedFilesDynamic = false;
@@ -731,6 +729,7 @@ let clientWatchedFilesDynamic = false;
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const init = (params.initializationOptions ?? {}) as Partial<ParadoxInitOptions>;
   storageDir = init.storageDir ?? "";
+  clientDataDir = init.dataDir ?? "";
   clientWikidocsDir = init.wikidocsDir ?? "";
   // Client capabilities (PROTOCOL.md §Initialization): rich hover markup,
   // command links and command actions are emitted only where the client
