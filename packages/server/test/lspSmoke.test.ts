@@ -3,7 +3,7 @@
  * over node IPC exactly like the VS Code client does (TransportKind.ipc →
  * --node-ipc), drive the real protocol — initialize with ParadoxInitOptions,
  * didOpen, completion + resolve, hover, definition, semantic tokens, the
- * paradox/guiTree request — and assert sane answers.
+ * paradox/scopeAt and paradox/guiTree requests — and assert sane answers.
  *
  * This is the closest headless stand-in for a live VS Code pass: it exercises
  * the exact client↔server wiring (bundle, transport, init options, custom
@@ -25,7 +25,9 @@ import {
   guiLayoutRequest,
   guiTreeRequest,
   guiWidgetEditRequest,
+  scopeAtRequest,
   statusNotification,
+  type ScopeAtResult,
   type StatusPayload,
 } from "@px-lsp/protocol/protocol";
 
@@ -53,6 +55,16 @@ smoke.1 = {
 	}
 	option = {
 		name = smoke.1.a
+	}
+}
+
+smoke.2 = {
+	type = character_event
+	immediate = {
+		save_scope_as = smoke_actor
+		capital_province = {
+			change_development_level = 1
+		}
 	}
 }
 `;
@@ -341,6 +353,31 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     const effects = result.dependencies.find((g) => g.kind === "scripted_effect");
     expect(effects).toBeDefined();
     expect(effects!.items.map((i) => i.name).sort()).toContain("my_smoke_effect");
+  });
+
+  it("paradox/scopeAt reports the chain and the file's saved scopes", async () => {
+    // Line 19 sits inside smoke.2's `capital_province = { … }` block, two
+    // levels below the event's declared character root.
+    const result = (await conn.sendRequest(scopeAtRequest, {
+      uri: eventsUri,
+      position: { line: 19, character: 4 },
+    })) as ScopeAtResult | null;
+    expect(result).not.toBeNull();
+    expect(result!.scopes).toEqual(["province"]);
+    expect(result!.chain[0]).toEqual({ scopes: ["character"] });
+    expect(result!.chain[result!.chain.length - 1]).toEqual({
+      entryKeyword: "capital_province",
+      scopes: ["province"],
+    });
+    expect(result!.savedScopes).toContainEqual({ name: "smoke_actor", scopes: ["character"] });
+  });
+
+  it("paradox/scopeAt answers null for a document that is not open script", async () => {
+    const result = await conn.sendRequest(scopeAtRequest, {
+      uri: toUri(path.join(modDir, "events", "not_open.txt")),
+      position: { line: 0, character: 0 },
+    });
+    expect(result).toBeNull();
   });
 
   it("paradox/guiTree answers for gui text", async () => {

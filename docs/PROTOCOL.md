@@ -101,6 +101,7 @@ supported state, not an error.
 | `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
 | `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name) |
+| `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text }` → `GuiLayoutResult` — measured layout rectangles for a .gui document |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — text edit for a preview drag/property change |
@@ -108,6 +109,12 @@ supported state, not an error.
 `ModScopedParams` is `{ modRoot?: string | null }`: restrict a mod-scoped
 request to one workspace mod (absolute root path); absent = all workspace
 mods.
+
+`paradox/scopeAt` reports scopes as string ARRAYS, never a single name: a link
+or iterator with several documented outputs stays ambiguous, and an empty
+array means unknown. That is the honest answer, not an error — the server
+annotates and ranks, it never hides or diagnoses on scope grounds. Render
+several as `a|b` and none as "unknown".
 
 Full payload shapes: see `packages/protocol/src/protocol.ts` — every
 interface there is part of this contract.

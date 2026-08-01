@@ -484,3 +484,60 @@ export interface DependenciesResult {
   /** Named definitions referenced inside `def`'s block, grouped by target kind. */
   dependencies: DependencyGroup[];
 }
+
+/**
+ * Request: the inferred scope chain at a cursor position;
+ * {@link ScopeAtParams} -> {@link ScopeAtResult} | null. Answers for OPEN
+ * script documents only (the server reads the client's text, not the disk);
+ * null means "not open / not a script document", which a status bar renders as
+ * nothing rather than as an error.
+ *
+ * This is a read-out of the same inference completion, hover and inlay hints
+ * run at a position: it ranks and annotates, never diagnoses, and never
+ * asserts more than the derived link tables actually say.
+ */
+export const scopeAtRequest = "paradox/scopeAt";
+export interface ScopeAtParams {
+  uri: string;
+  /** 0-based, as in LSP. */
+  position: { line: number; character: number };
+}
+
+/** One resolved step of the walk from the root scope down to the cursor. */
+export interface ScopeChainStep {
+  /**
+   * The key that produced the step: a link (`liege`), an iterator
+   * (`every_vassal`), `root`/`prev`, a `scope:x` / `var:x` anchor, or a data
+   * link abbreviated as `culture:…`. Absent on the FIRST step only, which is
+   * the enclosing definition's root scope and comes from no key.
+   */
+  entryKeyword?: string;
+  /** Scopes after this step; empty = unknown. */
+  scopes: string[];
+}
+
+/** A saved scope visible in the document, with the type it resolves to. */
+export interface SavedScopeInfo {
+  name: string;
+  /** Scopes the name resolves to; empty = unknown. */
+  scopes: string[];
+}
+
+export interface ScopeAtResult {
+  /**
+   * Scopes at the position. A SET, not one name: a link or iterator with
+   * several documented output scopes stays ambiguous instead of guessing, and
+   * an EMPTY array means unknown, which is a first-class answer here. Render
+   * several as `a|b` and none as "unknown".
+   */
+  scopes: string[];
+  /** The walk, outermost (root) first, one entry per scope-changing step. */
+  chain: ScopeChainStep[];
+  /**
+   * Saved scopes visible in the document, name-sorted: every `save_scope_as` /
+   * `save_scope_value_as` site in the file plus the engine-provided ambient
+   * scopes of its definition kind. NOT flow-sensitive — a save further down
+   * the file is listed too, matching what completion and hover already offer.
+   */
+  savedScopes: SavedScopeInfo[];
+}

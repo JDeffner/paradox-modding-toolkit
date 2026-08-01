@@ -57,6 +57,9 @@ import {
   type GuiWidgetEditParams,
   dependenciesRequest,
   type DependenciesParams,
+  scopeAtRequest,
+  type ScopeAtParams,
+  type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
 import { computeGuiLayoutResult, invalidateGuiDefsCache } from "./gui/layoutService";
@@ -101,6 +104,7 @@ import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
 import { provideInlayHints } from "./features/inlayHints";
+import { computeScopeAt } from "./features/scopeAt";
 import { provideCodeActions } from "./features/codeActions";
 import { provideSignatureHelp } from "./features/signatureHelp";
 import { provideDocumentSymbols } from "./features/symbols";
@@ -925,6 +929,21 @@ connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {
   }
   if (!name) return { def: null, dependents: [], dependencies: [] };
   return computeDependencies(data, schema, name, kind);
+});
+
+connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | null => {
+  // Open documents only: the client's text is the authority, and a status bar
+  // asking about a closed/loc/gui document gets "nothing to show", not an error.
+  const doc = params?.uri ? documents.get(params.uri) : undefined;
+  if (!doc || doc.languageId !== "paradox" || !params.position) return null;
+  const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+  return computeScopeAt(
+    data,
+    doc,
+    params.position,
+    entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
+    entry
+  );
 });
 
 connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] => {
