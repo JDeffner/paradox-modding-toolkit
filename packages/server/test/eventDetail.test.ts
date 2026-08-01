@@ -11,7 +11,10 @@ import * as path from "path";
 import { computeEventDetail } from "../src/overview/eventDetail";
 import { computeEventGraph } from "../src/overview/eventGraph";
 import { extractReferences } from "../src/index/references";
-import { loadSchema } from "../src/schema/loader";
+import { setActiveProfile } from "../src/games/active";
+import { defaultProfile } from "../src/games/registry";
+import { vic3Profile } from "../src/games/vic3";
+import { loadSchema, type SchemaData } from "../src/schema/loader";
 import { ServerData } from "../src/serverData";
 
 const EVENT_TXT = `namespace = det
@@ -319,6 +322,214 @@ describe("simulator payload: step-into targets", () => {
     const d = computeEventDetail(data, schema, "det.1")!;
     expect(d.options[1].targetsTotal).toBe(d.options[1].targets.length);
     expect(d.options[1].targetsTotal).toBe(3);
+  });
+});
+
+/**
+ * Victoria 3 events under the Vic3 profile. The fixtures below are written
+ * here, not copied: they reproduce the SHAPES verified against a real install
+ * (top-level `flavor`, `cancellation_trigger`, `default_option` /
+ * `highlighted_option` markers, `trigger_event = { id = X days = N popup = yes }`,
+ * the plural `common/on_actions` folder, weighted `random_events`, and the
+ * `desc = { first_valid = { triggered_desc … } }` localization construct).
+ */
+const VIC3_EVENT_TXT = `namespace = v3det
+
+v3det.1 = {
+	type = country_event
+	placement = scope:v3det_state
+
+	title = v3det.1.t
+	desc = v3det.1.d
+	flavor = v3det.1.f
+
+	duration = 3
+
+	trigger = {
+		has_technology_researched = v3det_tech
+	}
+
+	cancellation_trigger = {
+		NOT = { has_variable = v3det_done }
+	}
+
+	immediate = {
+		set_variable = v3det_done
+	}
+
+	option = {
+		name = v3det.1.a
+		default_option = yes
+		add_technology_progress = {
+			progress = 100
+		}
+		trigger_event = { id = v3det.2 days = 3 popup = yes }
+	}
+
+	option = {
+		name = v3det.1.b
+		highlighted_option = yes
+		trigger = { scope:v3det_state ?= { is_incorporated = yes } }
+		trigger_event = v3det.3
+		trigger_event = { on_action = v3det_pulse }
+	}
+}
+
+v3det.2 = {
+	type = country_event
+}
+
+v3det.3 = {
+	type = country_event
+}
+
+v3det.4 = {
+	type = country_event
+	title = v3det.4.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				desc = v3det.4.d1
+				trigger = { has_technology_researched = v3det_tech }
+			}
+			triggered_desc = {
+				desc = v3det.4.d2
+			}
+		}
+	}
+	flavor = {
+		first_valid = {
+			triggered_desc = {
+				desc = v3det.4.f1
+			}
+		}
+	}
+	immediate = {
+		set_variable = v3det_done
+	}
+}
+`;
+
+const VIC3_ON_ACTION_TXT = `v3det_pulse = {
+	trigger = {
+		always = yes
+	}
+	events = {
+		v3det.2
+	}
+	random_events = {
+		chance_to_happen = 25
+		100 = 0
+		50 = v3det.3
+	}
+	effect = {
+		set_variable = v3det_pulsed
+	}
+}
+`;
+
+describe("computeEventDetail under the Victoria 3 profile", () => {
+  let v3dir: string;
+  let v3file: string;
+  let v3OnActionFile: string;
+  let v3schema: SchemaData;
+  const v3data = new ServerData();
+
+  beforeAll(() => {
+    setActiveProfile(vic3Profile);
+    v3schema = loadSchema(null);
+    v3dir = fs.mkdtempSync(path.join(os.tmpdir(), "vic3-detail-"));
+    v3file = path.join(v3dir, "v3det_events.txt");
+    v3OnActionFile = path.join(v3dir, "v3det_on_actions.txt");
+    fs.writeFileSync(v3file, VIC3_EVENT_TXT, "utf8");
+    fs.writeFileSync(v3OnActionFile, VIC3_ON_ACTION_TXT, "utf8");
+    const at = (name: string, kind: string, extra: object = {}) => ({
+      name,
+      kind,
+      file: v3file,
+      line: 0,
+      source: "mod" as const,
+      ...extra,
+    });
+    const loc = path.join(v3dir, "v3det_l_english.yml");
+    v3data.index.addAll([
+      at("v3det.1", "event", { line: 2 }),
+      at("v3det.2", "event", { line: 46 }),
+      at("v3det.3", "event", { line: 50 }),
+      at("v3det.4", "event", { line: 54 }),
+      at("v3det_pulse", "on_action", { file: v3OnActionFile, line: 0 }),
+      at("v3det.1.t", "loc_key", { file: loc, line: 1, value: "A Cholera Outbreak" }),
+      at("v3det.1.f", "loc_key", { file: loc, line: 2, value: "The pump handle was removed." }),
+      at("v3det.1.a", "loc_key", { file: loc, line: 3, value: "Keep the filth off the streets." }),
+    ]);
+  });
+
+  afterAll(() => {
+    setActiveProfile(defaultProfile);
+    fs.rmSync(v3dir, { recursive: true, force: true });
+  });
+
+  it("resolves the third event string (flavor) with its editable loc site", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.1")!;
+    expect(d.title?.text).toBe("A Cholera Outbreak");
+    expect(d.flavor?.key).toBe("v3det.1.f");
+    expect(d.flavor?.text).toBe("The pump handle was removed.");
+    expect(d.flavor?.file).toContain("v3det_l_english.yml");
+  });
+
+  it("renders cancellation_trigger as a section of its own", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.1")!;
+    const cancel = d.sections.find((s) => s.name === "cancellation_trigger")!;
+    expect(cancel).toBeDefined();
+    expect(cancel.lines.map((l) => `${l.depth}:${l.text}`)).toEqual([
+      "0:NOT = {",
+      "1:has_variable = v3det_done",
+      "0:}",
+    ]);
+    // Source order in the file is trigger, cancellation_trigger, immediate.
+    expect(d.sections.map((s) => s.name)).toEqual(["trigger", "cancellation_trigger", "immediate"]);
+  });
+
+  it("keeps the option markers out of the effect summary but still renders them", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.1")!;
+    expect(d.options[0].effectKeys).toEqual(["add_technology_progress", "trigger_event"]);
+    expect(d.options[1].effectKeys).not.toContain("highlighted_option");
+    // Dropped from the summary only: the walkthrough still shows the marker.
+    expect(d.options[0].lines.map((l) => l.text)).toContain("default_option = yes");
+    expect(d.options[1].lines.map((l) => l.text)).toContain("highlighted_option = yes");
+  });
+
+  it("steps into the block form carrying delay and popup keys", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.1")!;
+    expect(d.options[0].targets).toHaveLength(1);
+    expect(d.options[0].targets[0]).toMatchObject({
+      via: "trigger_event",
+      name: "v3det.2",
+      kind: "event",
+    });
+  });
+
+  it("resolves an on_action fired from an event, and what it fires", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.1")!;
+    const names = d.options[1].targets.map((t) => `${t.via}:${t.name}`);
+    expect(names).toEqual(["trigger_event:v3det.3", "on_action:v3det_pulse"]);
+    const pulse = d.options[1].targets.find((t) => t.name === "v3det_pulse")!;
+    expect(pulse.kind).toBe("on_action");
+    expect(pulse.file).toBe(v3OnActionFile);
+    // `events` plus the weighted `random_events`; `100 = 0` is "no event", and
+    // `chance_to_happen = 25` is a percentage, not an id.
+    expect(pulse.fires!.map((f) => f.name)).toEqual(["v3det.2", "v3det.3"]);
+    expect(pulse.firesTotal).toBe(2);
+  });
+
+  it("marks a first_valid description and flavor dynamic instead of guessing", () => {
+    const d = computeEventDetail(v3data, v3schema, "v3det.4")!;
+    expect(d.desc).toEqual({ key: "", dynamic: true });
+    expect(d.flavor).toEqual({ key: "", dynamic: true });
+    // Measured: all 405 vanilla `first_valid` sites are that localization
+    // construct, none an event list, so the profile must not claim the key —
+    // claiming it would turn every localized description into fake targets.
+    expect(v3schema.refFields.has("first_valid")).toBe(false);
   });
 });
 

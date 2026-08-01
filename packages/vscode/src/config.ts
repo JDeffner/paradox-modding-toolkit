@@ -43,9 +43,13 @@ export interface PxConfig {
   diagnosticsIgnorePatterns: string[];
   /** When false (default) tiger/our diagnostics skip files under the game path. */
   diagnosticsVanilla: boolean;
-  /** True when this workspace actually holds CK3 content (a mod or a game
-   * install) and the extension is enabled — the gate for all visible UI
-   * (status bar, sidebar views, palette commands). The machine-scope
+  /** True when this workspace actually holds content of the ACTIVE game (a mod
+   * or a game install) and the extension is enabled — the gate for all visible
+   * UI (status bar, sidebar views, palette commands). Despite the legacy name
+   * this is game-agnostic: `looksLikeMod` accepts a `.metadata/` descriptor and
+   * `gameDataDir` accepts any Jomini install layout, so a Vic3 or EU5 workspace
+   * lights the same UI up. Anything that really is CK3-only gates on
+   * `isCk3(cfg.gameId)` instead (see px.guiPreviewSupported). The machine-scope
    * px.gamePath setting deliberately does NOT count: it is set once per
    * machine and would light the extension up in every window. */
   isCk3Workspace: boolean;

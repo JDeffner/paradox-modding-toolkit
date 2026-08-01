@@ -85,6 +85,20 @@ describe("simulationSteps", () => {
     expect(steps.map((s) => s.title)).toEqual(["TRIGGER", "ON TRIGGER FAIL", "IMMEDIATE"]);
   });
 
+  it("puts cancellation_trigger with the trigger it re-checks, not after the options", () => {
+    const steps = simulationSteps(
+      detail({
+        sections: [
+          section("trigger", ["has_technology_researched = tech"]),
+          section("immediate", ["set_variable = done"]),
+          section("cancellation_trigger", ["NOT = {"]),
+        ],
+        options: [option()],
+      })
+    );
+    expect(steps.map((s) => s.title)).toEqual(["TRIGGER", "CANCELLATION TRIGGER", "IMMEDIATE", "OPTION A"]);
+  });
+
   it("reports how many lines the server capped away", () => {
     const steps = simulationSteps(
       detail({ sections: [section("immediate", ["a = 1", "b = 2"], { totalLines: 70 })] })

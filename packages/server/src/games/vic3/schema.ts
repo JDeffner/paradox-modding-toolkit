@@ -389,6 +389,13 @@ export const VIC3_REF_FIELDS: RefField[] = [
   // Vic3's random_events is WEIGHTED (`10 = ns.1`), so only the rare bare-list
   // form resolves through this field; kept because the bare form is still legal.
   { key: "random_events", kinds: ["event"], form: "list" },
+  // NOT `first_valid`. common/on_actions/_on_actions.md documents it as an
+  // on_action's "pick the first valid event" list, but all 405 vanilla sites
+  // are the LOCALIZATION construct `desc = { first_valid = { triggered_desc
+  // … } }`, zero are event lists. Claiming it would turn every localized
+  // description into bogus event references. Same for `random_on_actions`,
+  // `first_valid_on_action` and `fallback`: documented in that .md, zero
+  // script sites, so nothing to resolve.
 
   // Technology
   { key: "has_technology_researched", kinds: ["technology"] }, // 1509

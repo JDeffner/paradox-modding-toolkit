@@ -155,6 +155,14 @@ with `totalLines` giving the real count so a UI states what it hid instead of
 truncating silently. An option's `lines` drop `name` / `trigger` / `ai_chance`
 / `ai_value`: those gate or label the option, they are not its effect.
 
+Blocks and keys that only one game has are carried by the same shapes rather
+than a per-game payload, since the names do not collide: `sections` may hold a
+`cancellation_trigger` alongside `trigger` / `immediate` / `after` /
+`on_trigger_fail`, and `flavor` is the event's third displayed string where
+the game has one (absent otherwise). An option's `effectKeys` summary drops
+that game's option markers (`default_option`, `highlighted_option`) the same
+way it drops `custom_tooltip`; `lines` still renders them.
+
 `targets` are the references that hand control on: the step-into edges of an
 event chain. They come from the active profile's event/on_action reference
 fields (`trigger_event` and its `{ id = X }` block form, `on_action`,

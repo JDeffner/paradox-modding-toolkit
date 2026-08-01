@@ -356,6 +356,9 @@ export interface EventDetail {
   theme?: string;
   title?: EventLocField;
   desc?: EventLocField;
+  /** The event's third displayed string in the games whose events have one
+   *  (top-level `flavor`); absent everywhere else. */
+  flavor?: EventLocField;
   sections: EventSectionInfo[];
   options: EventOptionInfo[];
   refs: EventRefInfo[];

@@ -20,7 +20,21 @@ import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 
-const SECTION_KEYS = new Set(["trigger", "immediate", "after", "on_trigger_fail"]);
+/**
+ * Blocks rendered as a step of their own: the union across game profiles,
+ * which is safe because the names do not collide — `on_trigger_fail` and
+ * `cancellation_trigger` each exist in exactly one supported game (measured
+ * against both vanilla event trees: 1074 sites for the latter, 0 in the
+ * other), and a key the game does not have simply never matches.
+ */
+const SECTION_KEYS = new Set(["trigger", "immediate", "after", "on_trigger_fail", "cancellation_trigger"]);
+/**
+ * Keys that gate or label an option instead of describing what it does, so
+ * `effectKeys` stays a summary of effects. The union across game profiles
+ * again; `default_option` (2138 vanilla sites) and `highlighted_option` (225)
+ * belong to the game the last four do not. Like `custom_tooltip` these still
+ * RENDER — only the summary drops them.
+ */
 const OPTION_META_KEYS = new Set([
   "name",
   "trigger",
@@ -28,6 +42,8 @@ const OPTION_META_KEYS = new Set([
   "show_as_unavailable",
   "flag",
   "custom_tooltip",
+  "default_option",
+  "highlighted_option",
 ]);
 /** Not rendered as an option effect: these gate or label the option. */
 const OPTION_NON_EFFECT_KEYS = new Set(["name", "trigger", "ai_chance", "ai_value"]);
@@ -81,6 +97,10 @@ export function computeEventDetail(data: ServerData, schema: SchemaData, id: str
     else if (key === "theme" && scalar) detail.theme = scalar;
     else if (key === "title") detail.title = scalar ? locField(data, scalar) : { key: "", dynamic: true };
     else if (key === "desc") detail.desc = scalar ? locField(data, scalar) : { key: "", dynamic: true };
+    // The third event-level string, where the game has one. Read at the
+    // event's TOP level only: as an option key the same word labels the
+    // option instead, and that is not the event's own text.
+    else if (key === "flavor") detail.flavor = scalar ? locField(data, scalar) : { key: "", dynamic: true };
     else if (SECTION_KEYS.has(key) && sub)
       detail.sections.push(section(data, schema, child.key.text, sub, lineOf));
     else if (key === "option" && sub) detail.options.push(option(data, schema, sub, lineOf));

@@ -32,7 +32,7 @@ stop.
 | Folder schema | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
 | Engine vocabulary before you dump `script_docs` | bundled wiki fallback | none | none |
 | Deep validation | ck3-tiger, auto-download | vic3-tiger, auto-download | none exists yet |
-| Sidebar views, event graph, mod report, coverage | yes | yes | yes |
+| Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
 | `.gui` pixel-accurate layout preview | yes | no (calibrated against CK3 only) | no |
 | Bundled tutorial and AI modding skill | yes | no (CK3 content) | no (CK3 content) |
@@ -81,7 +81,9 @@ reports are very welcome.
 - **Event simulator** (**Simulate Event**): a static walkthrough of what happens
   when an event fires (trigger, immediate, each option with its localized text,
   after) where every onward `trigger_event` is a step-into link, so you can
-  walk a whole chain with a breadcrumb and a Back button.
+  walk a whole chain with a breadcrumb and a Back button. It reads each game's
+  own event vocabulary, so a Victoria 3 event shows its `flavor` line and its
+  `cancellation_trigger` in place.
 - **DDS and images**: zoomable `.dds` preview, a PNG/JPEG/WebP to DDS converter
   in the explorer right-click menu, and **Show Image Guidelines** with the
   sizes vanilla actually uses.

@@ -442,6 +442,7 @@ const toolGroups = (meta: GameMeta): ToolGroup[] => [
     "Inspect",
     [
       ["Event Graph", "px.showEventGraph", "type-hierarchy"],
+      ["Simulate Event (walk one event step by step)", "px.simulateEvent", "debug-alt"],
       ["GUI Widget Tree (open a .gui first)", "px.showGuiTree", "list-tree"],
       ["GUI Layout Preview (open a .gui first)", "px.showGuiPreview", "preview"],
       ["Mod Report", "px.modReport", "output"],

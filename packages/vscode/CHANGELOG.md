@@ -14,6 +14,17 @@
   to it in the editor. Nothing is simulated that the files do not say: a
   reference to an event that is not indexed is labeled unresolvable rather than
   guessed at, and a block longer than 60 lines says how many lines it hid.
+- **Simulate Event reads Victoria 3 events properly.** Verified against the
+  vanilla install, not assumed: a Vic3 event's `flavor` line (its third string,
+  on 2073 of 2261 vanilla events) is resolved through your localization and
+  shown under the description, `cancellation_trigger` is walked as a step of
+  its own right after the trigger it re-checks instead of being dropped, and
+  `default_option` / `highlighted_option` no longer count as option effects
+  (they still show in the option's script, like `custom_tooltip`). Everything
+  else already worked: `trigger_event = { id = X days = N popup = yes }` steps
+  in, and the plural `common/on_actions` folder resolves. The **Simulate
+  Event** command was never CK3-gated and is now also listed in the sidebar's
+  Tools view for every supported game.
 - `paradox/eventDetail` now carries what that walkthrough needs, additively:
   every section and option gains `lines` / `totalLines` (the block rendered as
   pseudo-script, capped, with the honest total) and `targets` / `targetsTotal`

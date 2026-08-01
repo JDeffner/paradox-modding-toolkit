@@ -17,7 +17,7 @@
 import type { EventDetail, EventScriptLine, EventStepTarget } from "@px-lsp/protocol/protocol";
 
 export interface SimStep {
-  kind: "trigger" | "on_trigger_fail" | "immediate" | "option" | "after" | "other";
+  kind: "trigger" | "cancellation_trigger" | "on_trigger_fail" | "immediate" | "option" | "after" | "other";
   /** Heading, e.g. "TRIGGER" or "OPTION A". */
   title: string;
   /** Second heading line: an option's resolved text, else "". */
@@ -37,7 +37,8 @@ export interface SimStep {
 /**
  * The blocks of `detail` in the order the game runs them: the gating trigger
  * (always shown, so "this event has no trigger" is stated rather than left to
- * inference), its on_trigger_fail branch, immediate, every option, then after.
+ * inference), the two branches that belong to it (cancellation_trigger,
+ * on_trigger_fail — one game each), immediate, every option, then after.
  * Sections the event does not have are omitted; sections it has but left empty
  * say so.
  */
@@ -77,6 +78,8 @@ export function simulationSteps(detail: EventDetail): SimStep[] {
   };
 
   pushSection("trigger", "trigger", "TRIGGER", "(no trigger: fires whenever it is called)");
+  // Vic3 only: re-checked while the event waits, and cancels it if it passes.
+  pushSection("cancellation_trigger", "cancellation_trigger", "CANCELLATION TRIGGER", null);
   pushSection("on_trigger_fail", "on_trigger_fail", "ON TRIGGER FAIL", null);
   pushSection("immediate", "immediate", "IMMEDIATE", null);
 
@@ -105,7 +108,7 @@ export function simulationSteps(detail: EventDetail): SimStep[] {
 
   // Any section the server reports that this ordering does not name, so a new
   // one shows up instead of vanishing.
-  const named = ["trigger", "on_trigger_fail", "immediate", "after"];
+  const named = ["trigger", "cancellation_trigger", "on_trigger_fail", "immediate", "after"];
   for (const section of detail.sections) {
     if (named.indexOf(section.name.toLowerCase()) >= 0) continue;
     steps.push({

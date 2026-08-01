@@ -382,6 +382,8 @@ function render(msg) {
   if (titleText) bodyEl.appendChild(el("div", "", titleText)).id = "subtitle";
   const descText = detail.desc && detail.desc.text ? detail.desc.text : "";
   if (descText) bodyEl.appendChild(el("div", "note", descText));
+  const flavorText = detail.flavor && detail.flavor.text ? detail.flavor.text : "";
+  if (flavorText) bodyEl.appendChild(el("div", "note", flavorText));
 
   const badges = el("div", "badges");
   if (detail.type) badges.appendChild(el("span", "badge", detail.type));
