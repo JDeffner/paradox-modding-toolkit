@@ -294,6 +294,10 @@ function renderTarget(container, target, indent) {
     row.appendChild(link);
   } else if (target.kind === "on_action") {
     row.appendChild(target.file ? openLink(target.name, target.file, target.defLine) : el("span", "", target.name));
+    // Merged on_action (mod extending vanilla): fires reads one site only.
+    if ((target.defCount || 1) > 1) {
+      row.appendChild(el("span", "dim", "  (1 of " + target.defCount + " definition sites)"));
+    }
     // The server resolves on_actions exactly one level deep, so a chained one
     // is unresolved by design, not because its definition was unreadable.
     if (indent) {

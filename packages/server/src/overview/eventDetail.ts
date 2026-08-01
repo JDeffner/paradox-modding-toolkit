@@ -270,11 +270,13 @@ function collectTargets(
     total++;
     if (out.length >= MAX_TARGETS) return;
     const target: EventStepTarget = { via, name, kind: "unknown", line: lineOf(offset) };
-    const def = data.index.lookup(name).find((d) => d.kind === wanted);
+    const defs = data.index.lookup(name).filter((d) => d.kind === wanted);
+    const def = defs[0];
     if (def) {
       target.kind = wanted;
       target.file = def.file;
       target.defLine = def.line;
+      if (defs.length > 1) target.defCount = defs.length;
       if (wanted === "on_action" && resolveOnActions) {
         const fired = resolveOnAction(data, schema, def.file, name);
         if (fired) {

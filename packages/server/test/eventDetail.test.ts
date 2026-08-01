@@ -77,6 +77,26 @@ const ON_ACTION_TXT = `det_pulse = {
 }
 `;
 
+const RAND_EVENT_TXT = `namespace = rnd
+
+rnd.1 = {
+	type = character_event
+	immediate = {
+		trigger_event = { on_action = det_rand }
+	}
+}
+`;
+
+const RAND_ON_ACTION_TXT = `det_rand = {
+	random_on_action = {
+		100 = det_pulse
+	}
+	first_valid_on_action = {
+		det_pulse2
+	}
+}
+`;
+
 /** 70 statements: past the 60-line render cap. */
 const BIG_TXT = `namespace = big
 
@@ -103,6 +123,8 @@ beforeAll(() => {
   fs.writeFileSync(file, EVENT_TXT, "utf8");
   fs.writeFileSync(onActionFile, ON_ACTION_TXT, "utf8");
   fs.writeFileSync(bigFile, BIG_TXT, "utf8");
+  fs.writeFileSync(path.join(dir, "rnd_events.txt"), RAND_EVENT_TXT, "utf8");
+  fs.writeFileSync(path.join(dir, "rnd_on_actions.txt"), RAND_ON_ACTION_TXT, "utf8");
   const at = (name: string, kind: string, extra: object = {}) => ({
     name,
     kind,
@@ -116,6 +138,11 @@ beforeAll(() => {
     at("det.2", "event", { line: 42 }),
     at("det.3", "event", { line: 46 }),
     at("det_pulse", "on_action", { file: onActionFile, line: 0 }),
+    // Second definition site: a mod extending det_pulse (defCount hint).
+    at("det_pulse", "on_action", { file: path.join(dir, "det_on_actions_ext.txt"), line: 0 }),
+    at("rnd.1", "event", { file: path.join(dir, "rnd_events.txt"), line: 2 }),
+    at("det_rand", "on_action", { file: path.join(dir, "rnd_on_actions.txt"), line: 0 }),
+    at("det_pulse2", "on_action", { file: path.join(dir, "rnd_on_actions.txt"), line: 4 }),
     at("big.1", "event", { file: bigFile, line: 2 }),
     at("det.1.t", "loc_key", {
       file: path.join(dir, "det_l_english.yml"),
@@ -262,6 +289,24 @@ describe("simulator payload: step-into targets", () => {
     expect(target.fires!.some((f) => f.name === "0")).toBe(false);
     // One level only: the fired events are not themselves expanded.
     expect(target.fires!.every((f) => f.fires === undefined)).toBe(true);
+    // Two indexed definition sites: the hint says which one fires reflects.
+    expect(target.defCount).toBe(2);
+  });
+
+  it("follows random_on_action and first_valid_on_action chains", () => {
+    const d = computeEventDetail(data, schema, "rnd.1")!;
+    const target = d.sections
+      .find((s) => s.name === "immediate")!
+      .targets.find((t) => t.name === "det_rand")!;
+    expect(target.kind).toBe("on_action");
+    expect(target.fires!.map((f) => [f.via, f.name])).toEqual([
+      ["random_on_action", "det_pulse"],
+      ["first_valid_on_action", "det_pulse2"],
+    ]);
+    expect(target.fires!.every((f) => f.kind === "on_action")).toBe(true);
+    // Single-site targets carry no defCount; the merged det_pulse does.
+    expect(target.defCount).toBeUndefined();
+    expect(target.fires![0].defCount).toBe(2);
   });
 
   it("keeps sections without onward references target-free", () => {

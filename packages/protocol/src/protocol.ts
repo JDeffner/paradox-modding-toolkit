@@ -290,6 +290,10 @@ export interface EventStepTarget {
   /** Definition site, when the name is indexed. */
   file?: string;
   defLine?: number;
+  /** Definition sites of that kind, when more than one. on_actions merge
+   * across files (a mod extending a vanilla on_action), so `fires` reflects
+   * only the site at {@link EventStepTarget.file}. */
+  defCount?: number;
   /**
    * on_action targets only: what that on_action itself fires, read from its own
    * definition. Empty when the definition names nothing. Absent when there was
@@ -322,8 +326,8 @@ export interface EventOptionInfo {
   effectKeys: string[];
   hasTrigger: boolean;
   hasAiChance: boolean;
-  /** The option's effects rendered as pseudo-script (name/trigger/ai_chance
-   * dropped: they gate the option, they are not its effect), capped. */
+  /** The option's effects rendered as pseudo-script (name/trigger/ai_chance/
+   * ai_value dropped: they gate the option, they are not its effect), capped. */
   lines: EventScriptLine[];
   totalLines: number;
   /** Events / on_actions this option hands control to, capped. */
