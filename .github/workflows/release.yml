@@ -70,12 +70,20 @@ jobs:
       - name: Build server tarball (standalone --stdio server for other editors)
         run: node scripts/build-server-tarball.mjs
 
+      # Self-contained Windows artifact: the same payload plus the pinned,
+      # checksum-verified official node.exe and px-lsp.cmd, so an embedder
+      # needs no Node on the target machine. No --local-node here: a release
+      # must carry the official binary.
+      - name: Build Windows server zip (bundled node.exe)
+        run: node scripts/build-server-zip.mjs
+
       - uses: actions/upload-artifact@v4
         with:
           name: vsix
           path: |
             packages/vscode/*.vsix
             px-lsp-server-*.tar.gz
+            px-lsp-win-x64-*.zip
 
       - name: GitHub Release (tag builds)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -84,6 +92,7 @@ jobs:
           files: |
             packages/vscode/*.vsix
             px-lsp-server-*.tar.gz
+            px-lsp-win-x64-*.zip
           prerelease: true
           generate_release_notes: true
 

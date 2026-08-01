@@ -18,4 +18,7 @@ dev-paths.json
 packages/vscode/data/
 packages/vscode/THIRD-PARTY-NOTICES.md
 *.tar.gz
+px-lsp-win-x64-*.zip
+# Checksum-verified nodejs.org download cached by scripts/build-server-zip.mjs.
+.cache/
 scripts/nvim-parity/results.json

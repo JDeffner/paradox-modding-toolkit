@@ -22,7 +22,8 @@ mirror in the log. Nothing has to be configured for that.
 
 ## Requirements
 
-- **Node.js 18+** on your PATH.
+- **Node.js 18+** on your PATH (not needed for the Windows zip below, which
+  brings its own).
 - A game install (optional but strongly recommended: powers vanilla
   definitions, asset paths and exact-version tokens).
 
@@ -53,6 +54,24 @@ Sanity check:
 node path/to/px-lsp-server-<version>/dist/server.js --stdio
 # it waits for LSP messages on stdin; Ctrl+C to quit
 ```
+
+### Windows: the self-contained zip
+
+`px-lsp-win-x64-<version>.zip` from the same release is the tarball payload
+plus an unmodified official Node build, so nothing has to be installed first.
+It is the artifact to embed if you ship the server inside another application.
+
+```
+px-lsp-win-x64-<version>/
+  px-lsp.cmd         # the launcher: runs the bundled node against dist/server.js --stdio
+  node.exe           # official nodejs.org win-x64 build, unmodified
+  NODE-LICENSE       # Node's own license (our GPL LICENSE keeps the plain name)
+  dist/ data/ README.md LICENSE THIRD-PARTY-NOTICES.md
+```
+
+Point your client's command at `px-lsp.cmd` and pass no arguments: it already
+adds `--stdio`, and everything it resolves is relative to its own folder, so
+the unpacked directory can live anywhere. Extra arguments are forwarded.
 
 ## Which game
 

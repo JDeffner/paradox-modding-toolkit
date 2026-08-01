@@ -40,3 +40,17 @@ jobs:
           mkdir -p /tmp/px-tarball && tar -xzf px-lsp-server-*.tar.gz -C /tmp/px-tarball
           PX_LSP_SERVER="$(echo /tmp/px-tarball/px-lsp-server-*/dist/server.js)" \
             npx vitest run packages/server/test/stdioSmoke.test.ts
+      # Layout gate for the Windows zip. --local-node keeps the runner off
+      # nodejs.org (a release build downloads the pinned binary instead), and
+      # px-lsp.cmd is checked as text: it cannot run here.
+      - name: Smoke the Windows zip layout
+        shell: bash
+        run: |
+          node scripts/build-server-zip.mjs --local-node
+          mkdir -p /tmp/px-zip && unzip -q px-lsp-win-x64-*.zip -d /tmp/px-zip
+          root="$(echo /tmp/px-zip/px-lsp-win-x64-*)"
+          for f in px-lsp.cmd node.exe NODE-LICENSE dist/server.js LICENSE README.md \
+                   THIRD-PARTY-NOTICES.md data/ck3/freqs.json data/ck3/wikidocs/ATTRIBUTION.md; do
+            test -f "$root/$f" || { echo "zip is missing $f"; exit 1; }
+          done
+          grep -qF '@"%~dp0node.exe" "%~dp0dist\server.js" --stdio %*' "$root/px-lsp.cmd"

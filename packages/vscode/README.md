@@ -139,7 +139,9 @@ The full docs live in the
 
 The language server runs standalone over `--stdio` from any LSP client
 (neovim, Zed, Helix, ...). Grab `px-lsp-server-<version>.tar.gz` from the
-[releases](https://github.com/JDeffner/ck3-modding-toolkit/releases); setup,
+[releases](https://github.com/JDeffner/ck3-modding-toolkit/releases), or
+`px-lsp-win-x64-<version>.zip` if you want one download that already contains
+Node and a `px-lsp.cmd` launcher; setup,
 the per-language capability table and the per-game matrix are in
 [`packages/server/README.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/packages/server/README.md).
 

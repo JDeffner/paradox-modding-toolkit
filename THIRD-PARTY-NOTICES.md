@@ -1,8 +1,9 @@
 # Third-party notices
 
 Paradox Toolkit is GPL-3.0-or-later (see `LICENSE`). It additionally contains
-material derived from the MIT-licensed projects below. Their license texts are
-reproduced verbatim as required.
+material derived from the MIT-licensed projects below, and one release artifact
+bundles an unmodified third-party binary. License texts are reproduced verbatim
+here, or shipped beside the binary where that is noted.
 
 ---
 
@@ -81,3 +82,24 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## Node.js
+
+- Upstream: https://nodejs.org
+- Bundled build: `node-v24.18.1-win-x64`, unmodified
+- Ships in: `px-lsp-win-x64-<version>.zip` only (not in the .vsix, not in the
+  server tarball, not in the npm packages)
+
+**What it is used for.** The self-contained Windows artifact carries the
+official `node.exe` so the server runs on a machine with no Node install.
+`scripts/build-server-zip.mjs` downloads the published dist archive from
+nodejs.org, verifies it against that release's `SHASUMS256.txt` and copies the
+binary in byte for byte; nothing is patched or recompiled, and the toolkit's
+own code stays a separate work in the same archive.
+
+Node's license text also covers the components Node itself bundles (V8,
+OpenSSL, ICU and many more) and runs to thousands of lines, so instead of
+excerpting it the full file ships next to the binary as `NODE-LICENSE`. That
+copy is the one that governs the bundled `node.exe`.
