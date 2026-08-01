@@ -16,6 +16,7 @@ copying them, so every row below points at a fixture in
 |---|---|
 | **covered** | The toolkit already implements this AND asserts it. The citing test is named. |
 | **done (G2)** | Landed in the G2 layout merge, with the citing test named. Engine rules cite their spec.md bullet in `layoutEngine.ts`. |
+| **done (G1 stage n)** | Landed in that stage of the G1 writer rebuild, with the citing test named. The stages are: 1 the span model, then the operations on top of it. |
 | **G1** | Writer rebuild. Nothing equivalent exists here; `widgetEdit.ts` (91 lines, position/size only) is the whole current writer. |
 | **G2** | Layout merge. Either unimplemented here, or implemented but never asserted, or implemented DIFFERENTLY (those rows say so). |
 | **disputed** | The two engines encode CONTRADICTORY rules and both sides measured. Nothing is implemented and no golden is flipped: the row names both sources and the in-game probe that settles it. |
@@ -130,37 +131,69 @@ Fixture paths are relative to `packages/server/test/fixtures/gui/`.
 The toolkit's entire writer today is `packages/server/src/gui/widgetEdit.ts` (91 lines):
 it rewrites or inserts `position`/`size` on the widget whose statement starts on a given
 line, and `guiWidgetEdit.test.ts` asserts six cases. It has no span model, no block
-notion, no batching, no newline or indent-unit awareness, and no refusals. **Every row
-below is therefore G1**, and the table records WHAT G1 owes rather than a verdict column
-that would read "G1" forty times.
+notion, no batching, no newline or indent-unit awareness, and no refusals. Every row below
+started as **G1**; G1 lands in stages, so the Status column records which stage closed a
+row and the test that judges it.
 
-| Row | Behavior | Fixture |
-|---|---|---|
-| W01 | Parser SPANS: `HeaderStart` / body-open / body-close land on the right bytes; a block value's span is the raw block text, a quoted value's span includes the quotes, a key's span points at the key | `writer/tabs-comments.gui` |
-| W02 | Replace: rewrites only the old value's bytes (minimal edit), key lookup case-insensitive, an unchanged value is a no-op rather than a churn edit | `writer/tabs-comments.gui`, `writer/duplicate-keys.gui` |
-| W03 | Insert a property: its own line before the closing brace, at the body's own indent, including a nested body's deeper indent | `writer/tabs-comments.gui`, `writer/spaces-indent.gui` |
-| W04 | Remove a property: takes the whole line, but keeps a line that still carries a trailing comment (remove the entry, not the line) | `writer/tabs-comments.gui` |
-| W05 | Batch: several edits computed against the SAME text and applied end-first; untouched entries stay byte-identical | `writer/tabs-comments.gui`, `writer/nested-selection.gui` |
-| W06 | Formatting preservation: CRLF file gets CRLF inserts; comments survive; a single-line body stays single-line; an empty `{}` body gets a spaced entry; a space-indented file keeps spaces; mixed tab/space bodies each keep their own | `writer/crlf.gui`, `writer/spaces-indent.gui`, `writer/mixed-indent.gui`, `writer/single-line-bodies.gui` |
-| W07 | Duplicate key: rewrite the LAST occurrence (CK3 last-in-wins inside one body) | `writer/duplicate-keys.gui` |
-| W08 | Compound `a\|b` value: the span covers both sides of the pipe and is replaced whole | `writer/duplicate-keys.gui` |
-| W09 | Template use site: an inherited property has no writable entry, so a write adds a LOCAL override and the template's bytes are untouched; a synthetic node reports no source and refuses every op | `writer/template-use-site.gui` |
-| W10 | Refusal honesty: `position` on a box child, `size` on a content-sized type (hbox/vbox/flowcontainer), `size` on a child expanding on BOTH axes; one expanding axis writes and names the axis the box owns; the guard must NOT fire outside a layout container | `writer/refusal-shapes.gui` |
-| W11 | Reorder permutations: first→last, last→first, middle→first, first→middle; same index is a no-op; an out-of-range index clamps; the moved text is carried VERBATIM (non-whitespace character count unchanged) | `writer/reorder-siblings.gui` |
-| W12 | Blank separators belong to the block ABOVE them, so a move-and-move-back is the identity and repeated reorders cannot accumulate blank lines | `writer/blank-separators.gui` |
-| W13 | An attached comment travels with its widget; a blank-line-separated section header stays put | `writer/comment-runs.gui` |
-| W14 | Reorder refusals and scoping: two declarations sharing a line, a single child, template-expanded children excluded from the source sibling list, and a body whose children are INTERLEAVED with non-child content (the move still lands correctly relative to the sibling aimed at, but round-trip identity legitimately does not hold, so a sweep must skip and count it) | `writer/line-sharing.gui`, `writer/reorder-siblings.gui`, `writer/template-use-site.gui`, `writer/interleaved-children.gui` |
-| W15 | Insert a child widget: last in the body at the children's indent, at an index (before that child's BLOCK, comment included), propertyless → an empty block not a malformed one, re-parses as a real child, out-of-range index appends, follows the file's indent unit and newline, single-line and empty bodies stay as they are | `writer/tabs-comments.gui`, `writer/spaces-indent.gui`, `writer/crlf.gui`, `writer/single-line-bodies.gui` |
-| W16 | Delete a widget: removes the whole declaration, leaves sibling properties untouched, takes the widget's attached comment with it, and on a line-sharing declaration keeps the neighbour AND the gap | `writer/tabs-comments.gui`, `writer/comment-runs.gui`, `writer/line-sharing.gui` |
-| W17 | Duplicate: the copy lands immediately after the original, an asked-for rename touches ONLY the copy and keeps its quoting style, duplicating the last child stays inside the parent's body | `writer/reorder-siblings.gui` |
-| W18 | Insert and delete both refuse a synthetic parent; a `type` definition is refused because other files may use it; deleting the only root window is refused | `writer/template-use-site.gui`, `writer/refusal-shapes.gui` |
-| W19 | Copy: block text carries the attached comment and the nested body verbatim; it is null for a line-sharing declaration | `writer/paste-fragment.gui`, `writer/line-sharing.gui` |
-| W20 | Paste: strips the fragment's COMMON leading whitespace as a string prefix, converts interior indent LEVELS to the destination's unit (no tab survives into a space file), converts newlines to the destination's, a multi-widget fragment pastes as several children, index placement matches insert's, and it refuses a single-line body and a blank or non-widget fragment | `writer/paste-fragment.gui`, `writer/paste-destination.gui`, `writer/crlf.gui`, `writer/single-line-bodies.gui` |
-| W21 | Extract as type: a two-edit batch, the definition at the top of the file, `name`/`position` lifted to the instance (use-site identity) and gone from the definition body, the attached comment left at the use site, the re-parsed file carrying the type, and the crown invariant, IDENTICAL rects before and after. Refuses a root widget and an empty type name | `writer/extract-candidate.gui` |
-| W22 | Wrap in container: a non-contiguous selection puts the container in the FIRST member's slot, the skipped sibling stays, members land inside in order re-indented, comments travel, the document still parses to one root | `writer/wrap-candidate.gui` |
-| W23 | Nested selections collapse to the outermost before a batch is built (an overlapping edit would be dropped and half the batch silently lost); property writes do NOT collapse | `writer/nested-selection.gui` |
-| W24 | The append point for a new child is the LAST CHILD's block end, not the closing-brace line; with no children it backs up over a trailing comment run. Otherwise an inserted widget lands below commented-out code and deleting it takes the comments with it | `writer/comment-runs.gui` |
-| W25 | Single-line insert/delete are exact inverses, including the separator space (the `{ a  }` accumulation bug) | `writer/single-line-bodies.gui` |
+| Row | Behavior | Fixture | Status |
+|---|---|---|---|
+| W01 | Parser SPANS: `HeaderStart` / body-open / body-close land on the right bytes; a block value's span is the raw block text, a quoted value's span includes the quotes, a key's span points at the key | `writer/tabs-comments.gui` | **done (G1 stage 1)**: `packages/server/src/gui/sourceModel.ts` records the key, operator and value span of every entry plus each body's braces; asserted by `guiSourceModel.test.ts` "gui source model: spans (W01)" (six cases) and swept by S01/S06 |
+| W02 | Replace: rewrites only the old value's bytes (minimal edit), key lookup case-insensitive, an unchanged value is a no-op rather than a churn edit | `writer/tabs-comments.gui`, `writer/duplicate-keys.gui` | **G1**; the case-insensitive last-in-wins lookup it writes through is `findEntry`, asserted by `guiSourceModel.test.ts` "a duplicate key resolves to the LAST occurrence" |
+| W03 | Insert a property: its own line before the closing brace, at the body's own indent, including a nested body's deeper indent | `writer/tabs-comments.gui`, `writer/spaces-indent.gui` | **G1**; the indent it copies is `GuiBody.indent` / `bodyIndent()` (stage 1) |
+| W04 | Remove a property: takes the whole line, but keeps a line that still carries a trailing comment (remove the entry, not the line) | `writer/tabs-comments.gui` | **G1**; `GuiEntry.trailingComment` marks the lines that must survive (stage 1) |
+| W05 | Batch: several edits computed against the SAME text and applied end-first; untouched entries stay byte-identical | `writer/tabs-comments.gui`, `writer/nested-selection.gui` | **G1** |
+| W06 | Formatting preservation: CRLF file gets CRLF inserts; comments survive; a single-line body stays single-line; an empty `{}` body gets a spaced entry; a space-indented file keeps spaces; mixed tab/space bodies each keep their own | `writer/crlf.gui`, `writer/spaces-indent.gui`, `writer/mixed-indent.gui`, `writer/single-line-bodies.gui` | **G1**; the facts it preserves (`newline`, `indentUnit`, per-body `indent`, `singleLine`, `empty`) are stage 1's, asserted by `guiSourceModel.test.ts` "formatting facts" (four cases) |
+| W07 | Duplicate key: rewrite the LAST occurrence (CK3 last-in-wins inside one body) | `writer/duplicate-keys.gui` | **G1**; see W02 |
+| W08 | Compound `a\|b` value: the span covers both sides of the pipe and is replaced whole | `writer/duplicate-keys.gui` | **G1**; the span half is stage 1's, asserted by `guiSourceModel.test.ts` "a compound a\|b value is one value whose span covers both sides of the pipe" |
+| W09 | Template use site: an inherited property has no writable entry, so a write adds a LOCAL override and the template's bytes are untouched; a synthetic node reports no source and refuses every op | `writer/template-use-site.gui` | **G1**; stage 1 pins the source half (a template's children are not the use site's siblings, `findWidgetAtLine` returns null for a node with no source line) |
+| W10 | Refusal honesty: `position` on a box child, `size` on a content-sized type (hbox/vbox/flowcontainer), `size` on a child expanding on BOTH axes; one expanding axis writes and names the axis the box owns; the guard must NOT fire outside a layout container | `writer/refusal-shapes.gui` | **G1** |
+| W11 | Reorder permutations: first→last, last→first, middle→first, first→middle; same index is a no-op; an out-of-range index clamps; the moved text is carried VERBATIM (non-whitespace character count unchanged) | `writer/reorder-siblings.gui` | **G1**; the text it carries is `GuiEntry.blockSpan` (stage 1) |
+| W12 | Blank separators belong to the block ABOVE them, so a move-and-move-back is the identity and repeated reorders cannot accumulate blank lines | `writer/blank-separators.gui` | **G1**; the ownership is stage 1's `blockSpan`, asserted by `guiSourceModel.test.ts` "blank separators below a block belong to it" (the extents tile) |
+| W13 | An attached comment travels with its widget; a blank-line-separated section header stays put | `writer/comment-runs.gui` | **G1**; the attachment is stage 1's `commentSpan`, asserted by `guiSourceModel.test.ts` "an attached comment belongs to its widget, a separated header does not" |
+| W14 | Reorder refusals and scoping: two declarations sharing a line, a single child, template-expanded children excluded from the source sibling list, and a body whose children are INTERLEAVED with non-child content (the move still lands correctly relative to the sibling aimed at, but round-trip identity legitimately does not hold, so a sweep must skip and count it) | `writer/line-sharing.gui`, `writer/reorder-siblings.gui`, `writer/template-use-site.gui`, `writer/interleaved-children.gui` | **G1**; the two facts a refusal reads are stage 1's `ownLine` and `GuiBody.contiguous`, asserted by `guiSourceModel.test.ts` "an interleaved body is not contiguous" and "a line-sharing declaration owns no lines but keeps its exact span" |
+| W15 | Insert a child widget: last in the body at the children's indent, at an index (before that child's BLOCK, comment included), propertyless → an empty block not a malformed one, re-parses as a real child, out-of-range index appends, follows the file's indent unit and newline, single-line and empty bodies stay as they are | `writer/tabs-comments.gui`, `writer/spaces-indent.gui`, `writer/crlf.gui`, `writer/single-line-bodies.gui` | **G1**; see W06 and W24 for the stage-1 facts it uses |
+| W16 | Delete a widget: removes the whole declaration, leaves sibling properties untouched, takes the widget's attached comment with it, and on a line-sharing declaration keeps the neighbour AND the gap | `writer/tabs-comments.gui`, `writer/comment-runs.gui`, `writer/line-sharing.gui` | **G1**; stage 1 gives it `lineSpan` (comments included, separators excluded) and the exact `span` for a line-sharing declaration |
+| W17 | Duplicate: the copy lands immediately after the original, an asked-for rename touches ONLY the copy and keeps its quoting style, duplicating the last child stays inside the parent's body | `writer/reorder-siblings.gui` | **G1** |
+| W18 | Insert and delete both refuse a synthetic parent; a `type` definition is refused because other files may use it; deleting the only root window is refused | `writer/template-use-site.gui`, `writer/refusal-shapes.gui` | **G1**; stage 1 marks a declaration and its marker word (`GuiEntry.kind === "decl"`, `marker`), asserted by `guiSourceModel.test.ts` "a type definition records its base and its own body" |
+| W19 | Copy: block text carries the attached comment and the nested body verbatim; it is null for a line-sharing declaration | `writer/paste-fragment.gui`, `writer/line-sharing.gui` | **G1**; the block text is `lineSpan`, and `ownLine === false` is the null case (stage 1) |
+| W20 | Paste: strips the fragment's COMMON leading whitespace as a string prefix, converts interior indent LEVELS to the destination's unit (no tab survives into a space file), converts newlines to the destination's, a multi-widget fragment pastes as several children, index placement matches insert's, and it refuses a single-line body and a blank or non-widget fragment | `writer/paste-fragment.gui`, `writer/paste-destination.gui`, `writer/crlf.gui`, `writer/single-line-bodies.gui` | **G1**; a fragment's common prefix is its root body's `indent` (stage 1), asserted by `guiSourceModel.test.ts` "a fragment file reports the common leading indent of its roots" |
+| W21 | Extract as type: a two-edit batch, the definition at the top of the file, `name`/`position` lifted to the instance (use-site identity) and gone from the definition body, the attached comment left at the use site, the re-parsed file carrying the type, and the crown invariant, IDENTICAL rects before and after. Refuses a root widget and an empty type name | `writer/extract-candidate.gui` | **G1** |
+| W22 | Wrap in container: a non-contiguous selection puts the container in the FIRST member's slot, the skipped sibling stays, members land inside in order re-indented, comments travel, the document still parses to one root | `writer/wrap-candidate.gui` | **G1** |
+| W23 | Nested selections collapse to the outermost before a batch is built (an overlapping edit would be dropped and half the batch silently lost); property writes do NOT collapse | `writer/nested-selection.gui` | **G1**; stage 1 makes the collapse a span-containment test (`parent`, nested `blockSpan`s), asserted by `guiSourceModel.test.ts` "a nested selection is detectable by span containment" |
+| W24 | The append point for a new child is the LAST CHILD's block end, not the closing-brace line; with no children it backs up over a trailing comment run. Otherwise an inserted widget lands below commented-out code and deleting it takes the comments with it | `writer/comment-runs.gui` | **G1**; the point itself is stage 1's `GuiBody.appendAfter`, asserted by `guiSourceModel.test.ts` "the append point is the last child's own lines, above a trailing comment run" |
+| W25 | Single-line insert/delete are exact inverses, including the separator space (the `{ a  }` accumulation bug) | `writer/single-line-bodies.gui` | **G1**; `GuiBody.singleLine` / `empty` / `closeOwnLine` are stage 1's (asserted with W06) |
+
+### Stage 1 model decisions (the readings the invariants forced)
+
+The span model is `packages/server/src/gui/sourceModel.ts`. Six places where the rows
+above underspecify what a span or an extent IS, closed so the next reader inherits an
+answer instead of a choice:
+
+1. **An entry is every `key [op] value` statement anywhere in the file**, attribute-block
+   interiors (`background = { texture = … }`) and `type`/`template` definition bodies
+   included, not just the properties of live widgets. That is why the toolkit's entry
+   counts below are not comparable one-for-one with the Studio's (§G).
+2. **The model value a span must re-tokenize to** (S01): a quoted scalar without its
+   quotes, a bare scalar verbatim (so `top\|left` is ONE value, W08), and a block rendered
+   from its tokens with single spaces. The rendering is deliberately independent of the
+   interior whitespace the span itself preserves, so the check is "same tokens", not "same
+   bytes twice".
+3. **Two extents per entry, because delete and reorder need different ones.** `lineSpan` =
+   attached comments plus the entry's own lines; `blockSpan` = that plus the blank lines
+   below it. Reorder moves `blockSpan` (W12: the extents then tile, so a move is a pure
+   permutation), delete removes `lineSpan` (W16: taking the blank separator too would
+   break the insert-then-delete inverse, S04, by one blank line per round trip).
+4. **A comment attaches upward, a blank line breaks it** (W13), and a comment on the
+   entry's own last line is NOT part of the extent: it is `trailingComment`, the
+   information that keeps W04's remove entry-granular instead of line-granular.
+5. **The append point is the last child's `lineSpan` end** (before its blank separators),
+   not its `blockSpan` end, which is the same one-blank-line reasoning as (3).
+6. **Widget vs property uses the layout engine's own attribute-block set**, now exported
+   from `layoutEngine.ts` rather than copied, so a preview selection can never address an
+   attribute block as a widget. One shape needed a rule of its own: vanilla writes a named
+   slot both as `blockoverride "name" { … }` (272 uses) and as `blockoverride = "name"
+   { … }` (29 uses, which the CST reads as one assignment with a tagged-block value). The
+   model normalizes the second into the first, so a slot is one shape downstream.
 
 ---
 
@@ -172,12 +205,12 @@ gates that matter for G1.
 
 | Row | Sweep | Verdict |
 |---|---|---|
-| S01 | Span invariant over every entry of every real file: the recorded span covers key then value in order, and re-tokenizing the span alone reproduces the model's normalized value | **G1** |
+| S01 | Span invariant over every entry of every real file: the recorded span covers key then value in order, and re-tokenizing the span alone reproduces the model's normalized value | **done (G1 stage 1)**: `guiSourceModel.test.ts` "every recorded span re-tokenizes to its model value, over the whole corpus" (39 files) and "… over the vanilla gui tree" (373 files, gated on `dev-paths.json`). Zero mismatches on both; baselines in §G |
 | S02 | Single-entry rewrite leaves every OTHER byte identical, and the file still parses to the same root count | **G1** |
 | S03 | Reorder move-to-end-then-back restores the file byte for byte, over CONTIGUOUS boxes only; interleaved bodies are skipped and counted (`writer/interleaved-children.gui` is the shape that must be skipped) | **G1** |
 | S04 | Insert-then-delete restores the file byte for byte | **G1** |
 | S05 | Duplicate-then-delete-the-copy restores the file byte for byte | **G1** |
-| S06 | Every widget body's recorded braces land on `{` and `}` | **G1** |
+| S06 | Every widget body's recorded braces land on `{` and `}` | **done (G1 stage 1)**: swept with S01 over both corpora (every body, not only widget bodies), plus `guiSourceModel.test.ts` "every body's braces land on braces, and a body's entries are inside it" |
 | S07 | Headless rect dump over a corpus (`--render-gui` equivalent), diffed numerically before and after a change | **done (G2)**: `guiLayoutMerge.test.ts` "S07: rect dump over the fixture corpus" dumps every rect of every `layout/` fixture against `test/fixtures/gui/layout-rects.baseline.txt`, recorded 2026-08-01 over the merged engine. Re-record with `PX_WRITE_GUI_RECT_BASELINE=1` so an intended change lands as a numeric diff in review. The Studio's 126-rect test-mod dump stays unreproducible here by design (§G) |
 | S08 | Headless app smoke driving the REAL editor through select → add → duplicate → delete → undo → redo, asserting one document edit per batch, selection surviving the re-parse, and the file byte-identical after undoing the run (`--gui-edit-smoke` equivalent) | **dropped** from G1/G2: it drives a UI that does not exist here yet; the plan schedules the Playwright equivalent alongside G3's webview |
 | S09 | The expanding-axis guard never reports an expanding axis for a widget OUTSIDE a layout container (otherwise the guard starts refusing resizes the engine would have honoured) | **G1**: a refusal-honesty invariant, testable headlessly |
@@ -325,6 +358,21 @@ guessed baseline is worse than none, because it would be silently "met". G1's co
 records them, and a later drop in any count means a fixture stopped being exercised, which
 is itself a regression.
 
+**Recorded 2026-08-01, G1 stage 1** (the span model), by
+`packages/server/test/guiSourceModel.test.ts`:
+
+| Corpus | Files | Entries | Declarations | Bodies | Span mismatches |
+|---|---|---|---|---|---|
+| Fixture corpus (`test/fixtures/gui/`) | 39 | 1,298 | 399 | 779 | **0** |
+| Vanilla `gui/` tree (dev-paths-gated) | 373 | 172,178 | 45,364 | 68,406 | **0** |
+
+The fixture counts are asserted exactly (a drop means a fixture stopped being exercised);
+the vanilla counts are asserted as a file count plus lower bounds and printed, because a
+game patch legitimately moves them. The vanilla sweep runs in 1.1 s over 277,839 lines.
+"Declarations" is the widget + template/type/slot subset of the entries; the remaining
+126,814 vanilla entries are properties. The later stages append their own rows here
+(rewrites, reorders, inverse round trips) as they land.
+
 The corpus is small on purpose. It is the CI gate and it must stand on its own, because CI
 has no CK3 install. The vanilla sweep below is the fuzz corpus, and it runs only on a
 machine that has the game.
@@ -336,8 +384,8 @@ ROADMAP, with the one correction the file counts force:
 
 | Sweep | Studio number | Note for the toolkit run |
 |---|---|---|
-| Files swept | **376** | This is 373 vanilla `.gui` files **plus the 3 files of the Studio's own test mod**, which its sweep prepends. The toolkit's vanilla-only sweep sees **373** on this machine's install, which matches the count already recorded in `layoutEngine.ts` ("verified over all 373 game .gui files"). Compare 373 vanilla to 373 vanilla, not to 376 |
-| Entries re-tokenized | **96,770** | Includes the test mod's 511 entries; expect a slightly lower vanilla-only figure |
+| Files swept | **376** | This is 373 vanilla `.gui` files **plus the 3 files of the Studio's own test mod**, which its sweep prepends. The toolkit's vanilla-only sweep sees **373** on this machine's install, which matches the count already recorded in `layoutEngine.ts` ("verified over all 373 game .gui files") and was confirmed again by the G1 stage-1 span sweep (2026-08-01), which also found all 373 parsing without a single error. Compare 373 vanilla to 373 vanilla, not to 376 |
+| Entries re-tokenized | **96,770** | Includes the test mod's 511 entries. The toolkit's 2026-08-01 figure is **172,178 over 373 files, zero mismatches**, and the gap is a DEFINITION difference, not a coverage one: an entry here is every `key [op] value` statement in the file, including the interiors of attribute blocks (`background = { texture = … }`) and the bodies of `type`/`template` definitions. 277,839 lines of vanilla `.gui` produce 172,178 entries, so the toolkit's set is close to "every assignment in the tree" and cannot be under-counting the Studio's |
 | Single-entry rewrites byte-identical | **29,765** | Same caveat |
 | Contiguous boxes round-tripping through reorder | **3,094**, with **593** interleaved bodies skipped | The pre-fix figure is the interesting one: **3,335 of 3,687** real boxes FAILED move-and-back before blank lines were given an owner |
 | Insert-then-delete and duplicate-then-delete | **0 of 6,209** failing | The pre-fix figure was **74 of 152** parents in the test mod alone |

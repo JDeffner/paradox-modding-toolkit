@@ -373,8 +373,11 @@ interface WNode {
  * guiTree.ts's list: layout also reads `background`/`state`/`block` blocks).
  * `minimumsize = { w h }` belongs here and used to be walked as a phantom
  * child widget, which cost a box child a whole space-around slot (L04c).
+ * Exported because `sourceModel.ts` splits widgets from properties by the same
+ * set: if the writer and the engine disagreed here, a preview selection could
+ * address an attribute block as if it were a widget.
  */
-const PROPERTY_BLOCKS = new Set([
+export const PROPERTY_BLOCKS = new Set([
   "size",
   "minimumsize",
   "position",
