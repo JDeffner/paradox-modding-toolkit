@@ -1,9 +1,10 @@
 /**
- * paradox/eventDetail: everything the graph inspector shows about one event —
- * localized title/desc/options (with their editable loc sites), section
- * summaries, and every referenced saved scope / variable / scripted
- * effect/trigger / script value / chained event WITH its definition site so
- * the webview can jump straight to it.
+ * paradox/eventDetail: everything the graph inspector and the event simulator
+ * show about one event: localized title/desc/options (with their editable loc
+ * sites), each block rendered back as readable pseudo-script, the events and
+ * on_actions each block hands control to, and every referenced saved scope /
+ * variable / scripted effect/trigger / script value / chained event WITH its
+ * definition site so the webview can jump straight to it.
  */
 import * as fs from "fs";
 import type {
@@ -11,9 +12,12 @@ import type {
   EventLocField,
   EventOptionInfo,
   EventRefInfo,
+  EventScriptLine,
   EventSectionInfo,
+  EventStepTarget,
 } from "@px-lsp/protocol/protocol";
 import type { ServerData } from "../serverData";
+import type { SchemaData } from "../schema/loader";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 
 const SECTION_KEYS = new Set(["trigger", "immediate", "after", "on_trigger_fail"]);
@@ -25,12 +29,20 @@ const OPTION_META_KEYS = new Set([
   "flag",
   "custom_tooltip",
 ]);
+/** Not rendered as an option effect: these gate or label the option. */
+const OPTION_NON_EFFECT_KEYS = new Set(["name", "trigger", "ai_chance", "ai_value"]);
 const EVENT_ID = /^[A-Za-z][A-Za-z0-9_-]*\.\d+$/;
+/** A step-into target has to look like a name, not a weight or a `$PARAM$`. */
+const TARGET_NAME = /^[A-Za-z][A-Za-z0-9_.-]*$/;
 const SCOPE_PREFIX = /^(scope|var|local_var|global_var):([A-Za-z0-9_.-]+)$/;
 const MAX_SECTION_KEYS = 12;
 const MAX_REFS = 200;
+/** Per-block line cap: the same budget the Studio's simulator uses. */
+const MAX_BLOCK_LINES = 60;
+const MAX_TARGETS = 40;
+const MAX_FIRES = 24;
 
-export function computeEventDetail(data: ServerData, id: string): EventDetail | null {
+export function computeEventDetail(data: ServerData, schema: SchemaData, id: string): EventDetail | null {
   const def = data.index.lookup(id).find((d) => d.kind === "event");
   if (!def) return null;
   let text: string;
@@ -69,8 +81,9 @@ export function computeEventDetail(data: ServerData, id: string): EventDetail | 
     else if (key === "theme" && scalar) detail.theme = scalar;
     else if (key === "title") detail.title = scalar ? locField(data, scalar) : { key: "", dynamic: true };
     else if (key === "desc") detail.desc = scalar ? locField(data, scalar) : { key: "", dynamic: true };
-    else if (SECTION_KEYS.has(key) && sub) detail.sections.push(section(child.key.text, sub, lineOf));
-    else if (key === "option" && sub) detail.options.push(option(data, sub, lineOf));
+    else if (SECTION_KEYS.has(key) && sub)
+      detail.sections.push(section(data, schema, child.key.text, sub, lineOf));
+    else if (key === "option" && sub) detail.options.push(option(data, schema, sub, lineOf));
   }
 
   detail.refs = collectRefs(data, id, block, lineOf);
@@ -101,7 +114,13 @@ function locField(data: ServerData, key: string): EventLocField {
   return field;
 }
 
-function section(name: string, block: BlockNode, lineOf: (o: number) => number): EventSectionInfo {
+function section(
+  data: ServerData,
+  schema: SchemaData,
+  name: string,
+  block: BlockNode,
+  lineOf: (o: number) => number
+): EventSectionInfo {
   const keys: string[] = [];
   const seen = new Set<string>();
   for (const s of block.statements) {
@@ -110,15 +129,36 @@ function section(name: string, block: BlockNode, lineOf: (o: number) => number):
     seen.add(s.key.text);
     if (keys.length < MAX_SECTION_KEYS) keys.push(s.key.text);
   }
-  return { name, line: lineOf(block.range.start), keys };
+  const rendered = renderBlock(block, lineOf);
+  const targets = collectTargets(data, schema, block, lineOf);
+  return {
+    name,
+    line: lineOf(block.range.start),
+    keys,
+    lines: rendered.lines,
+    totalLines: rendered.totalLines,
+    targets: targets.targets,
+    targetsTotal: targets.total,
+  };
 }
 
-function option(data: ServerData, block: BlockNode, lineOf: (o: number) => number): EventOptionInfo {
+function option(
+  data: ServerData,
+  schema: SchemaData,
+  block: BlockNode,
+  lineOf: (o: number) => number
+): EventOptionInfo {
+  const rendered = renderBlock(block, lineOf, OPTION_NON_EFFECT_KEYS);
+  const targets = collectTargets(data, schema, block, lineOf);
   const info: EventOptionInfo = {
     line: lineOf(block.range.start),
     effectKeys: [],
     hasTrigger: false,
     hasAiChance: false,
+    lines: rendered.lines,
+    totalLines: rendered.totalLines,
+    targets: targets.targets,
+    targetsTotal: targets.total,
   };
   const seen = new Set<string>();
   for (const s of block.statements) {
@@ -136,6 +176,176 @@ function option(data: ServerData, block: BlockNode, lineOf: (o: number) => numbe
     if (info.effectKeys.length < MAX_SECTION_KEYS) info.effectKeys.push(s.key.text);
   }
   return info;
+}
+
+/**
+ * Flatten a block back into indented pseudo-script. `totalLines` counts every
+ * line the block would produce, so a capped render can say how much it hid
+ * instead of silently truncating.
+ */
+function renderBlock(
+  block: BlockNode,
+  lineOf: (o: number) => number,
+  skipTopLevel?: Set<string>
+): { lines: EventScriptLine[]; totalLines: number } {
+  const lines: EventScriptLine[] = [];
+  let totalLines = 0;
+  const push = (depth: number, text: string, offset: number) => {
+    totalLines++;
+    if (lines.length < MAX_BLOCK_LINES) lines.push({ depth, text, line: lineOf(offset) });
+  };
+
+  const flatten = (b: BlockNode, depth: number): void => {
+    for (const s of b.statements) {
+      if (s.kind === "value") {
+        if (s.value.kind === "scalar") {
+          push(depth, s.value.text, s.value.range.start);
+          continue;
+        }
+        const inner = s.value.kind === "block" ? s.value : s.value.block;
+        push(depth, "{", inner.range.start);
+        flatten(inner, depth + 1);
+        push(depth, "}", inner.closeBrace ?? inner.range.end);
+        continue;
+      }
+      if (depth === 0 && skipTopLevel?.has(s.key.text.toLowerCase())) continue;
+      const head = s.op ? `${s.key.text} ${s.op}` : s.key.text;
+      const v = s.value;
+      if (!v) {
+        push(depth, head, s.key.range.start);
+        continue;
+      }
+      if (v.kind === "scalar") {
+        push(depth, `${head} ${v.quoted ? `"${v.text}"` : v.text}`, s.key.range.start);
+        continue;
+      }
+      const inner = v.kind === "block" ? v : v.block;
+      const tag = v.kind === "tagged-block" ? `${v.tag.text} ` : "";
+      push(depth, `${head} ${tag}{`, s.key.range.start);
+      flatten(inner, depth + 1);
+      push(depth, "}", inner.closeBrace ?? inner.range.end);
+    }
+  };
+  flatten(block, 0);
+  return { lines, totalLines };
+}
+
+/** Ref-field kinds that mean "control moves here". */
+function stepKind(kinds: string[]): "event" | "on_action" | null {
+  if (kinds.includes("event")) return "event";
+  if (kinds.includes("on_action")) return "on_action";
+  return null;
+}
+
+/**
+ * Every event/on_action a block hands control to, in source order. Driven by
+ * the profile's reference fields rather than a hard-coded key list, so
+ * `trigger_event`, `on_action(s)`, `events`, `random_events`, `first_valid`
+ * and any per-game equivalent are all covered by the same walk.
+ *
+ * The block form `trigger_event = { id = X … }` is the one special case: `id`
+ * is too generic to be a schema ref field of its own (see REF_FIELDS), so it
+ * counts only inside a block whose owning key already references events or
+ * on_actions, and it keeps that key as its `via`.
+ */
+function collectTargets(
+  data: ServerData,
+  schema: SchemaData,
+  block: BlockNode,
+  lineOf: (o: number) => number,
+  resolveOnActions = true
+): { targets: EventStepTarget[]; total: number } {
+  const out: EventStepTarget[] = [];
+  const seen = new Set<string>();
+  // Counted past the cap: a capped list that reported its own length as the
+  // total would understate what the block really does.
+  let total = 0;
+
+  const add = (via: string, name: string, offset: number, wanted: "event" | "on_action") => {
+    // `random_events = { 800 = 0 }` weights "no event" as a literal 0.
+    if (!TARGET_NAME.test(name)) return;
+    const key = `${via}:${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    total++;
+    if (out.length >= MAX_TARGETS) return;
+    const target: EventStepTarget = { via, name, kind: "unknown", line: lineOf(offset) };
+    const def = data.index.lookup(name).find((d) => d.kind === wanted);
+    if (def) {
+      target.kind = wanted;
+      target.file = def.file;
+      target.defLine = def.line;
+      if (wanted === "on_action" && resolveOnActions) {
+        const fired = resolveOnAction(data, schema, def.file, name);
+        if (fired) {
+          target.firesTotal = fired.total;
+          target.fires = fired.targets.slice(0, MAX_FIRES);
+        }
+      }
+    }
+    out.push(target);
+  };
+
+  /** The enclosing reference field, so entries inside its block keep its name. */
+  type Field = { via: string; kind: "event" | "on_action" };
+
+  const walk = (b: BlockNode, inherited: Field | null): void => {
+    for (const s of b.statements) {
+      if (s.kind === "value") {
+        // A bare list entry inherits the enclosing field (`events = { a b }`).
+        if (inherited && s.value.kind === "scalar" && !s.value.quoted)
+          add(inherited.via, s.value.text, s.value.range.start, inherited.kind);
+        else if (s.value.kind === "block") walk(s.value, null);
+        else if (s.value.kind === "tagged-block") walk(s.value.block, null);
+        continue;
+      }
+      const key = s.key.quoted ? "" : s.key.text.toLowerCase();
+      const kind = stepKind(schema.refFields.get(key)?.kinds ?? []);
+      const own: Field | null = kind ? { via: key, kind } : null;
+      const v = s.value;
+      if (own && v?.kind === "scalar" && !v.quoted) {
+        add(own.via, v.text, v.range.start, own.kind);
+        continue;
+      }
+      // `random_events = { 100 = evt.1 }`: the weight is the key, the event the
+      // value; `trigger_event = { id = evt.1 … }` names the event under `id`.
+      if (inherited && v?.kind === "scalar" && !v.quoted && (/^\d+(\.\d+)?$/.test(key) || key === "id"))
+        add(inherited.via, v.text, v.range.start, inherited.kind);
+      const sub = childBlock(s);
+      if (sub) walk(sub, own);
+    }
+  };
+  walk(block, null);
+  return { targets: out, total };
+}
+
+/**
+ * What an on_action fires, read from its own definition one level deep. Null
+ * when the definition cannot be read; an empty list is the honest "its
+ * definition names no events" answer.
+ */
+function resolveOnAction(
+  data: ServerData,
+  schema: SchemaData,
+  file: string,
+  name: string
+): { targets: EventStepTarget[]; total: number } | null {
+  let text: string;
+  try {
+    text = decode(fs.readFileSync(file)).text;
+  } catch {
+    return null;
+  }
+  const parse = parseScript(text);
+  const li = new LineIndex(text);
+  const stmt = parse.root.statements.find(
+    (s): s is Statement & { kind: "assignment" } =>
+      s.kind === "assignment" && s.key.text === name && childBlock(s) !== null
+  );
+  if (!stmt) return null;
+  // resolveOnActions=false: one level only, so a self-chaining on_action pair
+  // cannot recurse.
+  return collectTargets(data, schema, childBlock(stmt)!, (o) => li.positionAt(o).line, false);
 }
 
 /**

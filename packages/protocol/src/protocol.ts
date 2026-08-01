@@ -257,12 +257,64 @@ export interface EventLocField {
   /** The value comes from a dynamic block (first_valid / triggered_desc), not a plain key. */
   dynamic?: boolean;
 }
+/**
+ * One flattened line of a rendered block: enough to print an event's logic
+ * back as readable pseudo-script without the client re-parsing anything.
+ */
+export interface EventScriptLine {
+  /** Nesting depth inside the rendered block (0 = a direct child). */
+  depth: number;
+  /** The statement without indentation: `key = value`, `key = {`, `}`, or a bare scalar. */
+  text: string;
+  /** 0-based source line. */
+  line: number;
+}
+
+/**
+ * A reference inside a block that hands control to another event or on_action:
+ * the step-into edge of an event walkthrough. Collected from the schema's
+ * event/on_action reference fields (`trigger_event`, `on_action`, `events`,
+ * `random_events`, …), so a game profile that names them differently is
+ * covered without a hard-coded key list.
+ */
+export interface EventStepTarget {
+  /** The key that produced the reference (`trigger_event`, `on_action`, …). */
+  via: string;
+  /** Referenced event id / on_action name, exactly as written. */
+  name: string;
+  /** What the index says `name` is. "unknown" = not indexed; say so, do not guess. */
+  kind: "event" | "on_action" | "unknown";
+  /** 0-based line of the reference, in the file that contains it (for a
+   * {@link EventStepTarget.fires} entry that is the on_action's own file). */
+  line: number;
+  /** Definition site, when the name is indexed. */
+  file?: string;
+  defLine?: number;
+  /**
+   * on_action targets only: what that on_action itself fires, read from its own
+   * definition. Empty when the definition names nothing. Absent when there was
+   * nothing to read: the name is not an indexed on_action, its file could not
+   * be parsed, or this target already IS one level deep (resolution stops
+   * there, so a self-chaining pair cannot recurse).
+   */
+  fires?: EventStepTarget[];
+  /** Real target count before `fires` was capped. */
+  firesTotal?: number;
+}
+
 export interface EventSectionInfo {
   name: string;
   /** 0-based line of the section key. */
   line: number;
   /** Top-level keys inside the section (capped). */
   keys: string[];
+  /** The section rendered as pseudo-script, capped (`totalLines` is the truth). */
+  lines: EventScriptLine[];
+  totalLines: number;
+  /** Events / on_actions this section hands control to, capped. */
+  targets: EventStepTarget[];
+  /** Real target count before `targets` was capped. */
+  targetsTotal: number;
 }
 export interface EventOptionInfo {
   line: number;
@@ -270,6 +322,14 @@ export interface EventOptionInfo {
   effectKeys: string[];
   hasTrigger: boolean;
   hasAiChance: boolean;
+  /** The option's effects rendered as pseudo-script (name/trigger/ai_chance
+   * dropped: they gate the option, they are not its effect), capped. */
+  lines: EventScriptLine[];
+  totalLines: number;
+  /** Events / on_actions this option hands control to, capped. */
+  targets: EventStepTarget[];
+  /** Real target count before `targets` was capped. */
+  targetsTotal: number;
 }
 export interface EventRefInfo {
   name: string;

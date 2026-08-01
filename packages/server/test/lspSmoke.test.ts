@@ -65,6 +65,7 @@ smoke.2 = {
 		capital_province = {
 			change_development_level = 1
 		}
+		trigger_event = smoke.1
 	}
 }
 `;
@@ -340,6 +341,28 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(detail!.options).toHaveLength(1);
     expect(detail!.options[0].name?.key).toBe("smoke.1.a");
     expect(detail!.refs.some((r) => r.kind === "scripted_effect" && r.name === "my_smoke_effect")).toBe(true);
+  });
+
+  it("paradox/eventDetail carries rendered blocks and step-into targets", async () => {
+    const detail = (await conn.sendRequest("paradox/eventDetail", { id: "smoke.2" })) as {
+      sections: Array<{
+        name: string;
+        lines: Array<{ depth: number; text: string; line: number }>;
+        totalLines: number;
+        targets: Array<{ via: string; name: string; kind: string; defLine?: number }>;
+      }>;
+    } | null;
+    const immediate = detail!.sections.find((s) => s.name === "immediate")!;
+    expect(immediate.totalLines).toBe(immediate.lines.length);
+    expect(immediate.lines.map((l) => `${l.depth}:${l.text}`)).toContain("1:change_development_level = 1");
+    expect(immediate.targets).toHaveLength(1);
+    expect(immediate.targets[0]).toMatchObject({
+      via: "trigger_event",
+      name: "smoke.1",
+      kind: "event",
+      file: eventsFile,
+      defLine: 2,
+    });
   });
 
   it("paradox/dependencies resolves a definition's dependents and dependencies", async () => {

@@ -244,6 +244,12 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "px.simulateEvent",
+        "category": "Paradox",
+        "title": "Simulate Event",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "px.showDependencies",
         "category": "Paradox",
         "title": "Show Dependencies of Definition at Cursor",
@@ -712,6 +718,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.simulateEvent",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.showDependencies",
           "when": "px.isCk3Workspace"
         },
@@ -792,6 +802,13 @@
           "command": "px.addLocalizationFromView",
           "when": "view == px.locCoverage && viewItem =~ /^px\\.loc/",
           "group": "1_edit"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "px.simulateEvent",
+          "when": "editorLangId == paradox && px.isCk3Workspace",
+          "group": "navigation@1"
         }
       ],
       "editor/title": [

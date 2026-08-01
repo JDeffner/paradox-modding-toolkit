@@ -147,6 +147,29 @@ array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
 
+`paradox/eventDetail` carries an event's blocks twice over: `keys` /
+`effectKeys` summarize them for an inspector, and `lines` / `totalLines` /
+`targets` render them for a walkthrough. `lines` is the block flattened back
+into pseudo-script (`{ depth, text, line }` per statement) capped at 60 lines,
+with `totalLines` giving the real count so a UI states what it hid instead of
+truncating silently. An option's `lines` drop `name` / `trigger` / `ai_chance`
+/ `ai_value`: those gate or label the option, they are not its effect.
+
+`targets` are the references that hand control on: the step-into edges of an
+event chain. They come from the active profile's event/on_action reference
+fields (`trigger_event` and its `{ id = X }` block form, `on_action`,
+`on_actions`, `events`, `random_events`, `first_valid`, plus whatever a game
+profile names), never from a hard-coded key list. The list is capped at 40 and
+`targetsTotal` gives the real count, the same honesty rule `totalLines`
+follows. Each target says what its name resolved to: `kind` is `"event"`,
+`"on_action"` or `"unknown"`, and `"unknown"` means the index has no such
+definition, so render it as unresolvable and do not guess. An on_action target
+additionally carries `fires`, what that on_action's own definition fires,
+resolved exactly one level deep: absent when there was nothing to read
+(including a target that is itself already one level deep), `[]` when the
+definition names no events, capped at 24 with `firesTotal` giving the true
+count.
+
 Full payload shapes: see `packages/protocol/src/protocol.ts` — every
 interface there is part of this contract.
 

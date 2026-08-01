@@ -78,6 +78,10 @@ reports are very welcome.
 - **Sidebar**: mod overview, localization coverage, overrides and conflicts
   (with the LIOS/FIOS winner), an interactive event graph with a node inspector,
   and a GUI widget tree.
+- **Event simulator** (**Simulate Event**): a static walkthrough of what happens
+  when an event fires (trigger, immediate, each option with its localized text,
+  after) where every onward `trigger_event` is a step-into link, so you can
+  walk a whole chain with a breadcrumb and a Back button.
 - **DDS and images**: zoomable `.dds` preview, a PNG/JPEG/WebP to DDS converter
   in the explorer right-click menu, and **Show Image Guidelines** with the
   sizes vanilla actually uses.

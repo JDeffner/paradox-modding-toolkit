@@ -34,6 +34,7 @@ import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { registerPxViews } from "./views";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
+import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiPreviewPanel } from "./webviews/guiPreview/panel";
 import { DdsPreviewProvider } from "./ddsEditor";
@@ -496,6 +497,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showInformationMessage("Paradox Toolkit: no indexed definition under the cursor.");
       }
     }),
+    vscode.commands.registerCommand("px.simulateEvent", async () => {
+      const id = await resolveEventIdAtCursor(lc);
+      if (!id) return;
+      EventSimPanel.show(graphActions.fetchDetail, id);
+    }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
       // Seed the graph from where the user is: the event id under the cursor,
       // an on_action/decision name in the matching folders, or the file's
@@ -634,6 +640,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.downloadTiger", () => downloadTigerCommand(setupDeps, false))
   );
   maybeNudgeSetup(context, cfg);
+}
+
+/**
+ * The event id to simulate: the definition under the cursor, resolved exactly
+ * the way Show Dependencies resolves one (server-side, from the indexed word).
+ * When that is not an event the user is asked, pre-filled with the word under
+ * the cursor when it is shaped like an id.
+ */
+async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {
+  const editor = vscode.window.activeTextEditor;
+  let word = "";
+  if (editor && editor.document.languageId === "paradox") {
+    const params: DependenciesParams = {
+      uri: editor.document.uri.toString(),
+      position: {
+        line: editor.selection.active.line,
+        character: editor.selection.active.character,
+      },
+    };
+    const result = await lc.sendRequest<DependenciesResult>(dependenciesRequest, params);
+    if (result.def?.kind === "event") return result.def.name;
+    const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
+    if (range) word = editor.document.getText(range);
+  }
+  const typed = await vscode.window.showInputBox({
+    title: "Simulate Event",
+    prompt: "Event id to walk through",
+    placeHolder: "namespace.123",
+    value: /^[A-Za-z][A-Za-z0-9_-]*\.\d+$/.test(word) ? word : "",
+  });
+  return typed?.trim() || undefined;
 }
 
 export function deactivate(): Thenable<void> | undefined {

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added
+
+- **Simulate Event** (command palette, or right-click in a script file) opens a
+  static walkthrough of an event: its blocks laid out in firing order (trigger,
+  immediate, every option, after), the title, description and option names
+  resolved through your localization, and each block printed back as readable
+  script. Every onward `trigger_event` / on_action reference is a step-into
+  link, so you can walk a whole event chain with a breadcrumb trail and a Back
+  control without opening ten files. Clicking a block heading or any line jumps
+  to it in the editor. Nothing is simulated that the files do not say: a
+  reference to an event that is not indexed is labeled unresolvable rather than
+  guessed at, and a block longer than 60 lines says how many lines it hid.
+- `paradox/eventDetail` now carries what that walkthrough needs, additively:
+  every section and option gains `lines` / `totalLines` (the block rendered as
+  pseudo-script, capped, with the honest total) and `targets` / `targetsTotal`
+  (the events and on_actions the block hands control to, each with its
+  definition site, and for an on_action what it in turn fires). Targets are
+  collected from the active game profile's event/on_action reference fields,
+  not a hard-coded key list.
+
 ### Added (embedding the server)
 
 For applications that run px-lsp inside themselves rather than for editor

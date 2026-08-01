@@ -912,7 +912,7 @@ connection.onRequest(guiWidgetEditRequest, (params: GuiWidgetEditParams) =>
 );
 
 connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>
-  params?.id ? computeEventDetail(data, params.id) : null
+  params?.id ? computeEventDetail(data, schema, params.id) : null
 );
 
 connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {

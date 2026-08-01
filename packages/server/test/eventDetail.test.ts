@@ -1,6 +1,7 @@
 /**
  * ck3/eventDetail extraction: loc resolution with editable sites, section and
- * option summaries, and reference collection (scopes, variables, scripted
+ * option summaries, the rendered pseudo-script + step-into targets the event
+ * simulator walks, and reference collection (scopes, variables, scripted
  * effects/triggers, script values, chained events) with definition sites.
  */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
@@ -43,22 +44,65 @@ det.1 = {
 		name = det.1.b
 		trigger = { scope:det_target = { is_alive = yes } }
 		change_variable = { name = det_count add = var:det_count }
+		trigger_event = {
+			id = det.3
+			days = 3
+		}
+		trigger_event = { on_action = det_pulse }
+		trigger_event = det.404
+	}
+
+	after = {
+		add_prestige = 50
 	}
 }
 
 det.2 = {
 	type = character_event
 }
+
+det.3 = {
+	type = character_event
+}
+`;
+
+const ON_ACTION_TXT = `det_pulse = {
+	events = {
+		det.2
+	}
+	random_events = {
+		900 = 0
+		100 = det.3
+	}
+}
+`;
+
+/** 70 statements: past the 60-line render cap. */
+const BIG_TXT = `namespace = big
+
+big.1 = {
+	type = character_event
+	immediate = {
+${Array.from({ length: 70 }, (_, i) => `\t\tadd_gold = ${i}`).join("\n")}
+	}
+}
 `;
 
 let dir: string;
 let file: string;
+let onActionFile: string;
+let bigFile: string;
 const data = new ServerData();
+const schema = loadSchema(null);
 
 beforeAll(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-detail-"));
   file = path.join(dir, "det_events.txt");
+  onActionFile = path.join(dir, "det_on_actions.txt");
+  bigFile = path.join(dir, "big_events.txt");
   fs.writeFileSync(file, EVENT_TXT, "utf8");
+  fs.writeFileSync(onActionFile, ON_ACTION_TXT, "utf8");
+  fs.writeFileSync(bigFile, BIG_TXT, "utf8");
   const at = (name: string, kind: string, extra: object = {}) => ({
     name,
     kind,
@@ -70,6 +114,9 @@ beforeAll(() => {
   data.index.addAll([
     at("det.1", "event", { line: 2 }),
     at("det.2", "event", { line: 42 }),
+    at("det.3", "event", { line: 46 }),
+    at("det_pulse", "on_action", { file: onActionFile, line: 0 }),
+    at("big.1", "event", { file: bigFile, line: 2 }),
     at("det.1.t", "loc_key", {
       file: path.join(dir, "det_l_english.yml"),
       line: 1,
@@ -90,7 +137,7 @@ afterAll(() => {
 
 describe("computeEventDetail", () => {
   it("resolves the event with type/theme and loc fields", () => {
-    const d = computeEventDetail(data, "det.1")!;
+    const d = computeEventDetail(data, schema, "det.1")!;
     expect(d).not.toBeNull();
     expect(d.type).toBe("character_event");
     expect(d.theme).toBe("intrigue");
@@ -103,7 +150,7 @@ describe("computeEventDetail", () => {
   });
 
   it("summarizes sections and options", () => {
-    const d = computeEventDetail(data, "det.1")!;
+    const d = computeEventDetail(data, schema, "det.1")!;
     const names = d.sections.map((s) => s.name);
     expect(names).toContain("trigger");
     expect(names).toContain("immediate");
@@ -116,7 +163,7 @@ describe("computeEventDetail", () => {
   });
 
   it("collects references with definition sites", () => {
-    const d = computeEventDetail(data, "det.1")!;
+    const d = computeEventDetail(data, schema, "det.1")!;
     const byKey = new Map(d.refs.map((r) => [`${r.kind}:${r.name}`, r]));
     expect(byKey.get("saved_scope:det_target")?.defLine).toBe(16);
     expect(byKey.get("variable:det_count")?.defLine).toBe(18);
@@ -128,13 +175,110 @@ describe("computeEventDetail", () => {
   });
 
   it("returns null for unknown events", () => {
-    expect(computeEventDetail(data, "nope.999")).toBeNull();
+    expect(computeEventDetail(data, schema, "nope.999")).toBeNull();
+  });
+});
+
+describe("simulator payload: rendered blocks", () => {
+  it("renders a section as indented pseudo-script with source lines", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const trigger = d.sections.find((s) => s.name === "trigger")!;
+    expect(trigger.lines.map((l) => l.text)).toEqual([
+      "is_adult = yes",
+      "my_scripted_trigger = yes",
+      "gold >= my_value",
+    ]);
+    expect(trigger.lines.every((l) => l.depth === 0)).toBe(true);
+    expect(trigger.totalLines).toBe(3);
+    // Lines carry their own source line, in order, inside the section.
+    expect(trigger.lines[0].line).toBe(trigger.line + 1);
+    expect(trigger.lines[2].line).toBe(trigger.line + 3);
+  });
+
+  it("nests child blocks and closes them", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const immediate = d.sections.find((s) => s.name === "immediate")!;
+    expect(immediate.lines.map((l) => `${l.depth}:${l.text}`)).toEqual([
+      "0:save_scope_as = det_target",
+      "0:my_scripted_effect = yes",
+      "0:set_variable = {",
+      "1:name = det_count",
+      "1:value = 3",
+      "0:}",
+    ]);
+  });
+
+  it("renders option effects without the option's own gating keys", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const texts = d.options[0].lines.map((l) => l.text);
+    expect(texts).toContain("add_gold = 10");
+    expect(texts).toContain("trigger_event = det.2");
+    // name / ai_chance gate or label the option; they are not its effect.
+    expect(texts.some((t) => t.startsWith("name"))).toBe(false);
+    expect(texts.some((t) => t.startsWith("ai_chance"))).toBe(false);
+    // The option's own trigger is dropped too, block and all.
+    expect(d.options[1].lines.some((l) => l.text.startsWith("trigger "))).toBe(false);
+  });
+
+  it("caps a long block and reports the real line count", () => {
+    const d = computeEventDetail(data, schema, "big.1")!;
+    const immediate = d.sections.find((s) => s.name === "immediate")!;
+    expect(immediate.lines).toHaveLength(60);
+    expect(immediate.totalLines).toBe(70);
+  });
+});
+
+describe("simulator payload: step-into targets", () => {
+  it("finds the scalar form and resolves its definition", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const target = d.options[0].targets.find((t) => t.name === "det.2")!;
+    expect(target).toMatchObject({ via: "trigger_event", kind: "event", file });
+    expect(target.defLine).toBe(42);
+    expect(target.line).toBeGreaterThan(d.options[0].line);
+  });
+
+  it("finds the block form `trigger_event = { id = X }`", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const target = d.options[1].targets.find((t) => t.name === "det.3")!;
+    expect(target).toMatchObject({ via: "trigger_event", kind: "event" });
+  });
+
+  it("labels an unresolvable target instead of guessing", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const target = d.options[1].targets.find((t) => t.name === "det.404")!;
+    expect(target.kind).toBe("unknown");
+    expect(target.file).toBeUndefined();
+    expect(target.fires).toBeUndefined();
+  });
+
+  it("resolves an on_action target's own event targets one level deep", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    const target = d.options[1].targets.find((t) => t.name === "det_pulse")!;
+    expect(target).toMatchObject({ via: "on_action", kind: "on_action", file: onActionFile });
+    expect(target.fires!.map((f) => f.name)).toEqual(["det.2", "det.3"]);
+    expect(target.fires!.every((f) => f.kind === "event")).toBe(true);
+    expect(target.firesTotal).toBe(2);
+    // `900 = 0` is "no event", not a target named 0.
+    expect(target.fires!.some((f) => f.name === "0")).toBe(false);
+    // One level only: the fired events are not themselves expanded.
+    expect(target.fires!.every((f) => f.fires === undefined)).toBe(true);
+  });
+
+  it("keeps sections without onward references target-free", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    expect(d.sections.find((s) => s.name === "after")!.targets).toEqual([]);
+    expect(d.sections.find((s) => s.name === "trigger")!.targets).toEqual([]);
+  });
+
+  it("counts every target, capped list or not", () => {
+    const d = computeEventDetail(data, schema, "det.1")!;
+    expect(d.options[1].targetsTotal).toBe(d.options[1].targets.length);
+    expect(d.options[1].targetsTotal).toBe(3);
   });
 });
 
 describe("event graph v2 (titles + edge origin labels)", () => {
   it("nodes carry localized titles; edges carry their origin option's text", () => {
-    const schema = loadSchema(null);
     const extracted = extractReferences(EVENT_TXT, file, "mod", schema);
     data.refIndex.addAll(extracted.references);
     const graph = computeEventGraph(data, { root: "det.1" });
