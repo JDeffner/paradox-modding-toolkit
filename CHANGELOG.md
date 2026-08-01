@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Final release under this id. The extension continues as Paradox Toolkit (JDeffner.px-toolkit) with Victoria 3 and Europa Universalis V support; install it to keep getting updates.
+
 ## Unreleased
 
 Fixes for the first GitHub issue reports (#1-#4), plus default hotkeys and a

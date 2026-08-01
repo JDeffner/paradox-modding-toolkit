@@ -1,8 +1,8 @@
 {
   "name": "ck3-modding-toolkit",
   "displayName": "CK3 Modding Toolkit",
-  "description": "Crusader Kings III modding toolkit: completion, go-to-definition, hover docs, ck3-tiger diagnostics, inline localization, event graph and GUI preview.",
-  "version": "0.1.2",
+  "description": "This extension has moved to Paradox Toolkit (JDeffner.px-toolkit) with Victoria 3 and Europa Universalis V support. Install the new extension to keep getting updates.",
+  "version": "0.1.4",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
