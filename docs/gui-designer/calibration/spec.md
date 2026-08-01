@@ -5,12 +5,14 @@ Rules for the GUI designer's layout engine. Every rule carries provenance:
 Open questions at the bottom. Game version at measurement time: current
 live CK3 install, 100% UI scaling, 1:1 pixels.
 
-A second body of measurements, taken in game on 2026-07-17 by the Sage's
-Clausewitz Studio calibration mod, is merged in below under "Studio in-game
-verifications (2026-07-17)". Those rules carry `(Studio §X, in-game
-2026-07-17)` instead of a batch id. Where that session independently
-re-confirmed a rule this spec already had, the confirmation is recorded in
-`docs/gui-designer/parity-checklist.md` §F rather than duplicated here.
+A second body of rules from the Sage's Clausewitz Studio is merged in below
+under "Studio-verified engine behaviors": what its calibration mod measured in
+game on 2026-07-17, plus behaviors its engine and linter encode without an
+in-game date on record. Those rules carry `(Studio §X, in-game 2026-07-17)` or
+`(Studio, encoded rule)` instead of a batch id. Where that session
+independently re-confirmed a rule this spec already had, the confirmation is
+recorded in `docs/gui-designer/parity-checklist.md` §F rather than duplicated
+here.
 
 ## Coordinate system and rendering
 
@@ -192,11 +194,14 @@ state) or as exact deterministic math (nine-slice) in the fixtures.
   treated as inert property blocks: base widget properties win and nothing
   inside a `state` leaks into the rect. (Confirmed by fixture.)
 
-## Studio in-game verifications (2026-07-17)
+## Studio-verified engine behaviors
 
-Measured in game by the Sage's Clausewitz Studio calibration mod, section by
-section (§H..§L), and encoded in its layout engine. Facts only; the toolkit's
-own coverage of each is tracked in `docs/gui-designer/parity-checklist.md`.
+Two provenances, labeled per bullet. `(Studio §X, in-game 2026-07-17)` = the
+Sage's Clausewitz Studio calibration mod measured it in game that session,
+section by section (§H..§L). `(Studio, encoded rule)` = its layout engine or
+linter encodes the behavior with no in-game date on record. Facts only; the
+toolkit's own coverage of each is tracked in
+`docs/gui-designer/parity-checklist.md`.
 
 ### What a box drops on its children
 
@@ -226,6 +231,12 @@ own coverage of each is tracked in `docs/gui-designer/parity-checklist.md`.
   fixed-size box, wrap in a `widget`. (Studio, encoded rule. For
   `flowcontainer` this CONFLICTS with B3-Q1 above, which measured the size as
   setting the container's own rect; see parity-checklist.md §G.)
+- A percentage WIDTH inside a `vbox` CRASHES the game: the vbox's width is
+  content-derived and therefore indeterminate, so the `%` has nothing to
+  resolve against. A percentage HEIGHT is the milder case. This is the
+  exception to "percent sizes resolve against the parent's rect" above, and
+  an authoring hazard rather than a rect rule. (Studio, encoded rule;
+  Linter GUI007)
 - An EMPTY `container` collapses to 0: it sizes to content, and a fixed
   `size` will not hold it open. A `widget` keeps its size when empty, so a
   spacer or padding row must be a `widget`. (Studio, encoded rule)

@@ -265,8 +265,9 @@ makes §A's G2 rows the TRUE missing set.
 | Text metrics: 21px line box, linear scaling, advance model | batches 01-03 (G, L, S1-S3) | encoded in the Studio engine, no separate in-game pass recorded |
 
 Everything the Studio measured that spec.md did NOT already have has been merged into
-`calibration/spec.md` under "Studio in-game verifications", each labeled with its source
-and date. Those merged rules are exactly §A's G2 rows.
+`calibration/spec.md` under "Studio-verified engine behaviors", each labeled with its
+source and, where one is on record, its in-game date. Those merged rules are exactly §A's
+G2 rows.
 
 ---
 
