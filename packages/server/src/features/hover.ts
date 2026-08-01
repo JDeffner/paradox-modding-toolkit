@@ -14,7 +14,7 @@ import { URI } from "vscode-uri";
 import type { SchemaEntry } from "../schema/types";
 import type { TokenData } from "@px-lsp/protocol/types";
 import { clientCommands } from "@px-lsp/protocol/protocol";
-import { commandCapableClient } from "../clientMode";
+import { canRunCommand } from "../clientMode";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { scopePrefixBefore, wordRangeAt } from "../wordAt";
@@ -303,7 +303,7 @@ function definitionCard(
   if (refs > 0) {
     const label = `${refs.toLocaleString("en-US")} reference${refs === 1 ? "" : "s"}`;
     footer.push(
-      at && commandCapableClient()
+      at && canRunCommand(clientCommands.showReferences)
         ? `[${label}](command:${clientCommands.showReferences}?${encodeURIComponent(
             JSON.stringify([at.uri, at.line, at.character])
           )} "Show all references")`

@@ -389,3 +389,98 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(applied).toContain("size = { 40 40 }");
   });
 });
+
+/**
+ * The capability object (initializationOptions.client, PROTOCOL.md
+ * §Initialization) over the same wire. It declares hover HTML WITHOUT any
+ * command: a combination the deprecated `clientCommands: true` boolean above
+ * cannot express, so this proves the capabilities are read and gated
+ * independently rather than as one "is this VSCode" switch.
+ */
+describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
+  let child: ChildProcess;
+  let conn: MessageConnection;
+  let modDir: string;
+  let eventsUri: string;
+  const statuses: StatusPayload[] = [];
+
+  beforeAll(async () => {
+    modDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-caps-"));
+    const fx = (rel: string, content: string) => {
+      const full = path.join(modDir, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, content, "utf8");
+      return full;
+    };
+    fx("common/scripted_effects/smoke_effects.txt", EFFECTS_TXT);
+    eventsUri = toUri(fx("events/smoke_events.txt", EVENTS_TXT));
+
+    child = fork(SERVER, ["--node-ipc"], { stdio: ["ignore", "pipe", "pipe", "ipc"], silent: true });
+    conn = createMessageConnection(new IPCMessageReader(child), new IPCMessageWriter(child));
+    conn.onNotification(statusNotification, (p: StatusPayload) => {
+      statuses.push(p);
+    });
+    conn.onNotification(() => undefined);
+    conn.onRequest("window/workDoneProgress/create", () => null);
+    conn.listen();
+
+    await conn.sendRequest("initialize", {
+      processId: process.pid,
+      rootUri: toUri(modDir),
+      workspaceFolders: [{ uri: toUri(modDir), name: "caps" }],
+      capabilities: {},
+      initializationOptions: {
+        storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-caps-storage-")),
+        wikidocsDir: WIKIDOCS,
+        client: { hoverHtml: true, commands: [] },
+        settings: {
+          gamePath: null,
+          logsPath: null,
+          modPath: modDir,
+          parentPaths: [],
+          locLanguage: "english",
+          scopeInlayHints: false,
+          diagnosticsIgnore: [],
+          diagnosticsIgnorePatterns: [],
+          diagnosticsVanilla: false,
+        },
+      },
+    });
+    await conn.sendNotification("initialized", {});
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: eventsUri, languageId: "paradox", version: 1, text: EVENTS_TXT },
+    });
+
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      const latest = statuses[statuses.length - 1];
+      if (latest && !latest.indexing && latest.definitions >= 2) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, 30_000);
+
+  afterAll(async () => {
+    try {
+      await conn.sendRequest("shutdown");
+      void conn.sendNotification("exit");
+    } catch {
+      /* server may already be gone */
+    }
+    await new Promise((r) => setTimeout(r, 200));
+    if (child && !child.killed) child.kill();
+    fs.rmSync(modDir, { recursive: true, force: true });
+  });
+
+  it("hoverHtml without commands: sanitized spans, references footer as plain text", async () => {
+    const hover = (await conn.sendRequest("textDocument/hover", {
+      textDocument: { uri: eventsUri },
+      position: { line: 6, character: 4 },
+    })) as { contents: { value: string } } | null;
+    expect(hover).not.toBeNull();
+    const md = hover!.contents.value;
+    expect(md).toContain("my_smoke_effect");
+    expect(md).toContain("<span"); // client.hoverHtml
+    expect(md).toMatch(/\d+ reference/);
+    expect(md).not.toContain("command:"); // client.commands is empty
+  });
+});

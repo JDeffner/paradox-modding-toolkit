@@ -47,6 +47,7 @@ import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import * as fs from "fs";
 import {
+  allClientCommandIds,
   configChangedNotification,
   indexStatsRequest,
   lookupLocRequest,
@@ -239,10 +240,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // bundled wiki/freqs profile-correct even when the game changes.
   const initOptions: ParadoxInitOptions = {
     storageDir,
-    // This client registers the px.* commands and renders the sanitized hover
-    // HTML; the server keeps rich markup + command actions for us and degrades
-    // to plain markdown + WorkspaceEdits for every other client.
-    clientCommands: true,
+    // This client registers every px.* command, renders the sanitized hover
+    // HTML, and runs its own tuned file watcher (pushing paradox/modFileChanged).
+    // Clients declaring less get plain markdown, WorkspaceEdits instead of
+    // command actions, and a server-side watcher.
+    client: { hoverHtml: true, commands: allClientCommandIds, ownFileWatcher: true },
     settings: toSettings(cfg),
   };
   const clientOptions: LanguageClientOptions = {

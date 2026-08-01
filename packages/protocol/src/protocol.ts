@@ -38,18 +38,49 @@ export interface ParadoxSettings {
   diagnosticsVanilla: boolean;
 }
 
+/**
+ * What the connected client can do beyond plain LSP. Every capability is
+ * independent and off by default, so a bare client gets the degraded shape
+ * without declaring anything and a rich client opts in to exactly the parts
+ * it implements.
+ */
+export interface ParadoxClientCapabilities {
+  /**
+   * The client renders the sanitized `<span style="color:var(--vscode-*)">`
+   * markup in hover markdown (VSCode theme variables). Default false: hover
+   * cards are plain markdown, with the same content.
+   */
+  hoverHtml?: boolean;
+  /**
+   * The command ids the client registers, from {@link clientCommands}. The
+   * server emits `command:` links and command-carrying code actions ONLY for
+   * ids listed here; for the rest it falls back to plain text or a real
+   * WorkspaceEdit. Default: none.
+   */
+  commands?: string[];
+  /**
+   * The client watches the mod tree itself and pushes
+   * {@link modFileChangedNotification}. The server then does NOT register its
+   * own `workspace/didChangeWatchedFiles` watcher. Default false: the server
+   * registers one whenever the client supports dynamic registration.
+   */
+  ownFileWatcher?: boolean;
+}
+
 /** initializationOptions passed at LanguageClient start. All fields optional:
  * the server has fail-soft fallbacks for bare clients. */
 export interface ParadoxInitOptions {
   /** Server-side cache directory (the extension's global storage path). */
   storageDir?: string;
+  /** What this client can do; see {@link ParadoxClientCapabilities}. Absent
+   * fields default to off (the plain-LSP-client shape). */
+  client?: ParadoxClientCapabilities;
   /**
-   * Declares that the client registers the `clientCommands` command ids (and
-   * renders the sanitized HTML spans in hover markdown). Sent by the VSCode
-   * extension only. When absent, the server emits plain markdown, drops
-   * `command:` links, replaces command-carrying code actions with real
-   * WorkspaceEdits where possible, and registers its own file watching if the
-   * client supports dynamic `workspace/didChangeWatchedFiles` registration.
+   * @deprecated Send {@link ParadoxInitOptions.client} instead. `true` is an
+   * alias for `{ hoverHtml: true, commands: <every id in clientCommands>,
+   * ownFileWatcher: true }` (what the VSCode extension declared before the
+   * capabilities object existed); false/absent means all-off. Ignored when
+   * `client` is present.
    */
   clientCommands?: boolean;
   /** Override for the bundled wikidocs/ folder. Normally omitted: the server
@@ -62,17 +93,21 @@ export interface ParadoxInitOptions {
 // ---- client command ids ----------------------------------------------------
 
 /**
- * VSCode client commands the server references in code actions and hover
- * links (part of the wire contract: the client must register exactly these).
- * They carry the "px." prefix: these are public extension command ids with
- * shipped default keybindings. The prefix was renamed in the Paradox Toolkit
- * rebrand and no fallback to the old ids is registered.
+ * Client commands the server references in code actions and hover links (part
+ * of the wire contract: a client that implements one must register exactly
+ * this id and list it in {@link ParadoxClientCapabilities.commands}). They
+ * carry the "px." prefix: these are public extension command ids with shipped
+ * default keybindings. The prefix was renamed in the Paradox Toolkit rebrand
+ * and no fallback to the old ids is registered.
  */
 export const clientCommands = {
   editLocalization: "px.editLocalization",
   openLocalizationSideBySide: "px.openLocalizationSideBySide",
   showReferences: "px.showReferences",
 } as const;
+
+/** Every id in {@link clientCommands}: what a fully capable client registers. */
+export const allClientCommandIds: string[] = Object.values(clientCommands);
 
 // ---- client -> server ------------------------------------------------------
 

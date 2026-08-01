@@ -1,9 +1,10 @@
 /**
- * Code actions on loc-key references in script. For the VSCode client
- * (initializationOptions.clientCommands) they carry client-side commands —
- * the file writes happen in the client, which owns the editor UX. For plain
- * LSP clients the create-key quick fix carries a real WorkspaceEdit instead,
- * and the two editor-command actions are omitted rather than shipped dead.
+ * Code actions on loc-key references in script. Gated per command id
+ * (initializationOptions.client.commands): where the client registers the
+ * command the action carries it, so the file write happens in the client that
+ * owns the editor UX. Where it does not, the create-key quick fix carries a
+ * real WorkspaceEdit instead and the two editor-command actions are omitted
+ * rather than shipped dead.
  */
 import {
   CodeActionKind,
@@ -23,7 +24,7 @@ import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
 import { clientCommands } from "@px-lsp/protocol/protocol";
 import { getLineText } from "../documents";
 import { activeProfile } from "../games/active";
-import { commandCapableClient } from "../clientMode";
+import { canRunCommand } from "../clientMode";
 
 export function locKeyRefAt(lineText: string, character: number): LocKeyRef | null {
   const refs = findLocKeyRefs(lineText);
@@ -42,9 +43,9 @@ export interface LocEditContext {
 /**
  * A WorkspaceEdit that appends `key: ""` to the server-managed loc file
  * (creating it, BOM included, when absent). Only one writer is ever active
- * per session: the VSCode client owns its own zzz_*_edits file (via the
- * px.editLocalization command) and never sees this fallback, so the two
- * files can coexist without fighting.
+ * per session: a client registering px.editLocalization owns its own
+ * zzz_*_edits file and never sees this fallback, so the two files can coexist
+ * without fighting.
  */
 export function locCreateEdit(key: string, docFsPath: string, ctx: LocEditContext): WorkspaceEdit | null {
   const modRoot = ctx.modRootOf(docFsPath);
@@ -95,7 +96,8 @@ export function provideCodeActions(
   locEditContext?: LocEditContext
 ): CodeAction[] {
   const actions: CodeAction[] = [];
-  const rich = commandCapableClient();
+  const canEditLoc = canRunCommand(clientCommands.editLocalization);
+  const canOpenSideBySide = canRunCommand(clientCommands.openLocalizationSideBySide);
 
   // Quick fix on missing-required-loc diagnostics: create the key in place.
   for (const d of diagnostics) {
@@ -103,7 +105,7 @@ export function provideCodeActions(
     const key = (d.data as { key?: string } | undefined)?.key;
     if (!key) continue;
     const title = `${activeProfile().shortName}: Create localization key "${key}"`;
-    if (rich) {
+    if (canEditLoc) {
       actions.push({
         title,
         kind: CodeActionKind.QuickFix,
@@ -116,20 +118,22 @@ export function provideCodeActions(
     }
   }
 
-  // The two editor-command actions exist only for clients that register the
-  // px.* commands; elsewhere they would render and silently do nothing.
-  if (!rich) return actions;
+  // The two editor-command actions exist only for clients that register their
+  // command; elsewhere they would render and silently do nothing.
+  if (!canEditLoc && !canOpenSideBySide) return actions;
 
   const ref = locKeyRefAt(getLineText(document, range.start.line), range.start.character);
   if (!ref) return actions;
 
-  actions.push({
-    title: `${activeProfile().shortName}: Edit localization for "${ref.key}"`,
-    kind: CodeActionKind.QuickFix,
-    command: { command: clientCommands.editLocalization, title: "Edit localization", arguments: [ref.key] },
-  });
+  if (canEditLoc) {
+    actions.push({
+      title: `${activeProfile().shortName}: Edit localization for "${ref.key}"`,
+      kind: CodeActionKind.QuickFix,
+      command: { command: clientCommands.editLocalization, title: "Edit localization", arguments: [ref.key] },
+    });
+  }
 
-  if (data.index.lookup(ref.key).some((d) => d.kind === "loc_key")) {
+  if (canOpenSideBySide && data.index.lookup(ref.key).some((d) => d.kind === "loc_key")) {
     actions.push({
       title: `${activeProfile().shortName}: Open localization side by side`,
       kind: CodeActionKind.Empty,

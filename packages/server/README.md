@@ -135,9 +135,11 @@ vim.lsp.config("px_lsp", {
 vim.lsp.enable("px_lsp")
 ```
 
-Do **not** set `clientCommands`: that flag is the VS Code client declaring that
-it registers the `px.*` editor commands. Without it you get the plain-client
-behavior described above, which is what you want here.
+Do **not** set `client`: those capability flags are a client declaring that it
+registers the `px.*` editor commands, renders the sanitized hover HTML, or runs
+its own file watcher. Declaring none of them gives the plain-client behavior
+described above, which is what you want here. (`clientCommands = true` is the
+deprecated all-on alias; do not set it either.)
 
 **Failure mode to recognize:** if `root_markers` never match, the server falls
 back to the first workspace folder as the mod root. Open the mod folder itself

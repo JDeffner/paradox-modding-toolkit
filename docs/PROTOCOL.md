@@ -36,10 +36,17 @@ fallbacks for bare clients):
 
 ```ts
 interface ParadoxInitOptions {
-  storageDir: string;      // server-side cache dir; default: <os tmp>/px-lsp
-  wikidocsDir: string;     // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
-  clientCommands: boolean; // true ONLY for a client that registers the px.* command ids (the VSCode extension)
+  storageDir: string;   // server-side cache dir; default: <os tmp>/px-lsp
+  wikidocsDir: string;  // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
+  client: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
+  clientCommands: boolean;           // DEPRECATED alias, see below
   settings: ParadoxSettings;
+}
+
+interface ParadoxClientCapabilities {
+  hoverHtml?: boolean;      // client renders the sanitized <span style="color:var(--vscode-*)"> hover markup
+  commands?: string[];      // the px.* command ids this client registers (see "Client command ids")
+  ownFileWatcher?: boolean; // client watches the mod tree itself and pushes paradox/modFileChanged
 }
 
 interface ParadoxSettings {
@@ -56,6 +63,17 @@ interface ParadoxSettings {
   diagnosticsVanilla: boolean;         // false (default) = never diagnose game files
 }
 ```
+
+Every capability in `client` is independent and defaults to **off**, so a
+client declares exactly what it implements and the server tailors its output
+per capability (see "Degraded modes"). A client can take the hover markup
+without registering any command, or register one command and not the others.
+
+`clientCommands: true` is a **deprecated** alias kept for older clients: it
+resolves to `{ hoverHtml: true, commands: <every id below>, ownFileWatcher:
+true }`, which is what the VSCode extension used to declare. `false` or absent
+resolves to all-off. It is ignored when `client` is present. New clients should
+send `client`.
 
 One server instance serves one game at a time. The client detects the game
 per workspace (descriptor file, else configuration) and sends it as
@@ -103,10 +121,12 @@ interface there is part of this contract.
 
 ## Client command ids
 
-Code actions and hover markdown reference these client-side commands (a
-client that does not register them simply loses the affordance; nothing else
-breaks). The ids carry the `px.` prefix. They were renamed from `ck3.` in the
-Paradox Toolkit rebrand; clients registering the old ids get no fallback:
+Code actions and hover markdown reference these client-side commands. A client
+lists the ones it registers in `client.commands`; the server emits `command:`
+links and command-carrying code actions only for listed ids, so an unlisted
+command is never shipped dead (the affordance degrades, nothing else breaks).
+The ids carry the `px.` prefix. They were renamed from `ck3.` in the Paradox
+Toolkit rebrand; clients registering the old ids get no fallback:
 
 - `px.editLocalization` (args: `[locKey]`)
 - `px.openLocalizationSideBySide` (args: `[locKey]`)
@@ -120,16 +140,23 @@ runs client-side) and no overview webview UIs. Completion, hover, definition,
 references, rename, symbols, formatting, folding, inlay hints, semantic
 tokens and structural diagnostics all work over plain LSP.
 
-The `clientCommands` init flag switches the remaining surface automatically.
-When it is absent (every non-VSCode client):
+The `client` capabilities switch the remaining surface automatically, one
+capability at a time. A client declaring nothing (every field off) gets:
 
-- hover markdown is plain (no sanitized HTML spans, no `command:` links);
-- the "create localization key" quick fix carries a real `WorkspaceEdit`
-  (appending to `<locRoot>/<lang>/zzz_px_lsp_edits_l_<lang>.yml`, creating it
-  BOM-first when absent), and the two editor-command actions are omitted;
-- the server dynamically registers `workspace/didChangeWatchedFiles` when the
-  client supports it, so external edits re-index without a restart
-  (`paradox/modFileChanged` remains the push path for clients that watch);
-- index health is mirrored to `window/logMessage`: a startup line naming the
-  resolved bundled-data folders (or their absence) and `status:` lines with
-  token/definition counts on indexing transitions.
+- **`hoverHtml` off** — hover markdown is plain: no sanitized HTML spans. The
+  span *content* is always self-sufficient plain text ("■ trigger", a scope
+  name), so the cards read the same either way;
+- **`px.editLocalization` not listed** — the "create localization key" quick
+  fix carries a real `WorkspaceEdit` instead (appending to
+  `<locRoot>/<lang>/zzz_px_lsp_edits_l_<lang>.yml`, creating it BOM-first when
+  absent), and the "edit localization" action is omitted;
+- **`px.openLocalizationSideBySide` not listed** — that action is omitted;
+- **`px.showReferences` not listed** — the hover reference count renders as
+  plain text instead of a `command:` link;
+- **`ownFileWatcher` off** — the server dynamically registers
+  `workspace/didChangeWatchedFiles` when the client supports dynamic
+  registration, so external edits re-index without a restart. Declare
+  `ownFileWatcher` only if you push `paradox/modFileChanged` yourself;
+- index health is mirrored to `window/logMessage` regardless: a startup line
+  naming the resolved bundled-data folders (or their absence) and `status:`
+  lines with token/definition counts on indexing transitions.

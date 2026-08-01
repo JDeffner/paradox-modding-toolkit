@@ -117,7 +117,7 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
-import { setCommandCapableClient } from "./clientMode";
+import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
@@ -721,17 +721,19 @@ function deriveBundledDataDirs(): void {
   }
 }
 let clientWikidocsDir = "";
-let clientCommandsDeclared = false;
+let clientOwnFileWatcher = false;
 let clientWatchedFilesDynamic = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const init = (params.initializationOptions ?? {}) as Partial<ParadoxInitOptions>;
   storageDir = init.storageDir ?? "";
   clientWikidocsDir = init.wikidocsDir ?? "";
-  // Client mode (PROTOCOL.md §Initialization): only a client declaring
-  // clientCommands gets rich hover markup, command links and command actions.
-  setCommandCapableClient(init.clientCommands === true);
-  clientCommandsDeclared = init.clientCommands === true;
+  // Client capabilities (PROTOCOL.md §Initialization): rich hover markup,
+  // command links and command actions are emitted only where the client
+  // declared it implements them.
+  const clientCaps = resolveClientCapabilities(init);
+  setClientCapabilities(clientCaps);
+  clientOwnFileWatcher = clientCaps.ownFileWatcher;
   clientWatchedFilesDynamic =
     params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
   // Merge onto the defaults: bare clients may send partial settings (e.g.
@@ -792,9 +794,10 @@ connection.onInitialized(() => {
         `engine tokens come from script_docs logs only`
     );
   }
-  // The VSCode client runs its own tuned watcher and pushes paradox/modFileChanged;
-  // for every other client, watch the workspace ourselves when the client can.
-  if (!clientCommandsDeclared && clientWatchedFilesDynamic) {
+  // A client declaring ownFileWatcher runs its own tuned watcher and pushes
+  // paradox/modFileChanged; for every other client, watch the workspace
+  // ourselves when the client supports dynamic registration.
+  if (!clientOwnFileWatcher && clientWatchedFilesDynamic) {
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
       watchers: [{ globPattern: "**/*.{txt,yml,gui,mod}" }, { globPattern: "**/metadata.json" }],
     });

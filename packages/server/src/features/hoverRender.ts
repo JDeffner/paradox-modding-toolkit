@@ -13,16 +13,16 @@
 /** `--vscode-charts-*` / semantic color slot per kind family (§D2). */
 type ChartColor = "purple" | "red" | "yellow" | "green" | "orange" | "blue" | "foreground";
 
-import { commandCapableClient } from "../clientMode";
+import { hoverHtml } from "../clientMode";
 
 function colorVar(c: ChartColor): string {
   return c === "foreground" ? "var(--vscode-charts-foreground)" : `var(--vscode-charts-${c})`;
 }
 
 /** A sanitized colored span. Content is plain text so it survives HTML stripping.
- * Plain-markdown clients (no clientCommands declared) get the bare text. */
+ * Plain-markdown clients (no `client.hoverHtml`) get the bare text. */
 function span(color: ChartColor, text: string): string {
-  if (!commandCapableClient()) return text;
+  if (!hoverHtml()) return text;
   return `<span style="color:${colorVar(color)};">${text}</span>`;
 }
 
@@ -70,7 +70,7 @@ export function kindBadge(kind: string, label = kindLabel(kind)): string {
 export function scopePill(scope: string, current: ReadonlySet<string> | null): string {
   const matches = current !== null && current.has(scope.toLowerCase());
   if (matches) return span("blue", scope);
-  if (!commandCapableClient()) return scope;
+  if (!hoverHtml()) return scope;
   return `<span style="color:var(--vscode-descriptionForeground);">${scope}</span>`;
 }
 
@@ -85,7 +85,7 @@ export function scopeType(type: string): string {
  * theme must not recolor. Content is a ■ so stripping the span leaves a marker.
  */
 export function colorSwatch(rgb: [number, number, number]): string {
-  if (!commandCapableClient()) return "■";
+  if (!hoverHtml()) return "■";
   const to255 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
   return `<span style="color:rgb(${to255(rgb[0])}, ${to255(rgb[1])}, ${to255(rgb[2])});">■</span>`;
 }
