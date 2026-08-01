@@ -71,6 +71,14 @@ describe("buildGuiTree", () => {
     expect(custom.children).toHaveLength(0); // its size block is an attribute
   });
 
+  it("minimumsize is an attribute block, not a phantom child widget", () => {
+    // 414 vanilla widgets carry one. The layout engine stopped walking it as a
+    // child in G2 (parity-checklist.md L04c); the tree view has to agree or it
+    // lists a row that is not a widget.
+    const tree = buildGuiTree(`widget = { minimumsize = { 10 10 } icon = {} }`);
+    expect(tree.nodes[0].children.map((c) => c.key)).toEqual(["icon"]);
+  });
+
   it("states render as state nodes", () => {
     const state = tree.nodes[0].children[0].children.find((c) => c.key === "state")!;
     expect(state.kind).toBe("state");

@@ -56,7 +56,8 @@
   recorded as disputed and left alone rather than guessed at.
 - Fixed: `minimumsize = { w h }` was being read as a child widget, so in an
   hbox or vbox it consumed a layout slot of its own and shifted the real
-  children (413 vanilla widgets carry one).
+  children, and **Show GUI Widget Tree** listed it as a widget row (414
+  vanilla widgets carry one).
 
 ### Added (embedding the server)
 

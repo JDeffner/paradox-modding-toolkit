@@ -15,7 +15,7 @@
  * placeholders, nine-slice `spriteborder` geometry on fills, and confirmed
  * exclusion of `state = {}` transition blocks from layout.
  * Phase 3 (G2 layout merge): the rules spec.md carries under "Studio-verified
- * engine behaviors" — grid box flow and cell math, clipping containers,
+ * engine behaviors", namely grid box flow and cell math, clipping containers,
  * `ignoreinvisible`, `resizeparent`, container/item content sizing, sprite
  * fill MODE and frame sheets. Those comments cite the spec bullet's own
  * source tag plus the parity-checklist row, e.g. "(Studio §K v3, L14a)";
@@ -858,7 +858,7 @@ function policy(node: WNode, horizontal: boolean): Policy {
  * A statically hidden child. `visible = no` is deterministic and collapses;
  * a `visible = "[binding]"` cannot be evaluated in a static preview, so the
  * widget is KEPT even though the engine collapses a binding that evaluates
- * false at runtime (spec.md `ignoreinvisible`, L27) — showing it is the
+ * false at runtime (spec.md `ignoreinvisible`, L27): showing it is the
  * non-destructive default for a preview, and the same unknown makes a
  * container's content unmeasurable (L11b).
  */
@@ -874,7 +874,9 @@ function collapsesHidden(box: WNode): boolean {
 /**
  * `minimumsize = { w h }` floor. Applied on the box MAIN axis only: it is the
  * floor a shrinking child stops at, which is what the deficit redistribution
- * needs (L04c). Cross-axis effect unmeasured.
+ * needs (spec.md "Minimum sizes in the box distribution", L04c). Cross-axis
+ * effect unmeasured. A binding-valued `minimumsize` folds to 0 like every
+ * other unresolvable value (5 vanilla widgets write one).
  */
 function minimumSize(node: WNode): { w: number; h: number } {
   const min = node.pairs.get("minimumsize");
@@ -892,7 +894,16 @@ function resizeParentSource(node: WNode): WNode | undefined {
   return node.children.find((c) => yes(c, "resizeparent"));
 }
 
-/** Classes that size to their content and drop an explicit `size` (L25, L10). */
+/**
+ * Classes that size to their content and drop an explicit `size` (spec.md
+ * "Container sizing", L25 and L10). BROADER than the bullet, which measured
+ * the EMPTY container only: a non-empty one drops its `size` here too, which
+ * is what "it sizes to content" says but not what was measured. It costs
+ * nothing in vanilla, where no `container = { … }` writes its own top-level
+ * `size` (431 blocks, checked 2026-08-01); the narrow reading (keep an
+ * explicit size once there are children) is the alternative if a probe ever
+ * says so. See parity-checklist.md L25.
+ */
 function contentSized(cls: WidgetClass): boolean {
   return cls === "container" || cls === "item";
 }
@@ -910,8 +921,10 @@ function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: numbe
     case "box": {
       // Hug = children floors + spacing + margins (B2-I2: exact, packed).
       // A collapsed hidden child contributes nothing, not even its spacing
-      // (L27). An expanding child contributes its FLOOR only: it must not
-      // define the box's cross size, only fixed children do (L31).
+      // (L27). An expanding child contributes its FLOOR only, never a share of
+      // free space: it cannot GROW the box's cross size (L31). A floor wider
+      // than a fixed sibling's still sets the hug, and that shape is unmeasured
+      // by either source (parity-checklist.md L31).
       const [ml, mt, mr, mb] = margins(node);
       const spacing = num(node, "spacing") ?? 0;
       let main = 0;
@@ -1198,7 +1211,7 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
     return resolvedChildSize(c, rect, measurer);
   });
   // `minimumsize = { w h }` floors the main-axis size and is where a shrinking
-  // child stops (L04c).
+  // child stops (spec.md "Minimum sizes in the box distribution", L04c).
   const minMains = laid.map((c) => {
     const min = minimumSize(c);
     return vertical ? min.h : min.w;
@@ -1226,7 +1239,8 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
     // Deficit: every shrinkable child loses deficit/k, an equal DELTA with no
     // shrinking-first priority (B2-J3, B3-P4). A child that reaches its floor
     // stops there and the REST absorb what it could not give, so the total
-    // still fits (L04c); a `fixed` child never shrinks at all (L04b).
+    // still fits (spec.md "Minimum sizes in the box distribution", L04c);
+    // a `fixed` child never shrinks at all (L04b).
     let owed = -free;
     let pool = mainPolicies
       .map((p, i) => ({ p, i }))

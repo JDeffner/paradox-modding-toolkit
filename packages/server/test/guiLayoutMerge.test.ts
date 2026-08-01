@@ -9,7 +9,7 @@
  *
  * guiLayout.test.ts keeps the batch 01-04 calibration goldens; nothing here
  * changes one. Three checklist rows are DISPUTED between the two engines
- * (L07c, L13e, L23) and are deliberately NOT asserted in either direction —
+ * (L07c, L13e, L23) and are deliberately NOT asserted in either direction:
  * each needs one in-game probe, and the fixture that carries it is named below
  * so the probe has a subject.
  */
@@ -126,10 +126,35 @@ describe("L12b/L31: what a box drops on its children", () => {
     // px_cross_column fills 420x200. Main axis is vertical: floors 30 + 30,
     // free = 140, and the one expanding child takes 30 + 140 = 170. Cross:
     // neither child sets layoutpolicy_horizontal, so both are centred at their
-    // OWN width — the expander stays 60 wide and does not widen the column.
+    // OWN width, so the expander stays 60 wide and does not widen the column.
     expectRect(named(ignored, "px_cross_column"), 0, 320, 420, 200);
     expectRect(named(ignored, "px_cross_fixed"), 60, 320, 300, 30);
     expectRect(named(ignored, "px_cross_expander"), 180, 350, 60, 170);
+  });
+
+  it("L31: an expanding child does not widen a HUGGED box either", () => {
+    // The fixture's column FILLS its parent, so it pins the fill case only.
+    // The hug case is inline: a vbox inside an hbox hugs (B2-I2), and the hug
+    // is the children's FLOORS, so the fixed 100 sets the width and the
+    // expanding sibling's 60 does not add to it. Placement of the vbox in the
+    // 400x200 hbox: free = 400 - 100 = 300, n = 1, side = 150, cross-centred
+    // at (200 - 60)/2 = 70. Inside it, floors 30 + 30 = 60 fill the hug
+    // exactly, so side = 0.
+    //
+    // NOT pinned here: an expander whose OWN floor is wider than the fixed
+    // sibling's. The hug takes max(floors), so it would widen the box, which
+    // reads against "only fixed children define the cross size". Neither
+    // source measures that shape; see parity-checklist.md L31.
+    const hug = layoutText(`
+widget = { size = { 400 200 } hbox = {
+	vbox = {
+		widget = { name = "hug_fixed" size = { 100 30 } }
+		widget = { name = "hug_expander" size = { 60 30 } layoutpolicy_horizontal = expanding }
+	}
+} }`);
+    const vbox = hug.children[0].children[0];
+    expectRect(vbox, 150, 70, 100, 60);
+    expectRect(named([hug], "hug_fixed"), 150, 70, 100, 30);
   });
 });
 

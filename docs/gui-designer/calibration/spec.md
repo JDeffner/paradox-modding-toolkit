@@ -223,6 +223,20 @@ toolkit's own coverage of each is tracked in
   child must NOT define the box's cross size; only fixed children do.
   (Studio, encoded rule)
 
+### Minimum sizes in the box distribution
+
+- `minimumsize = { w h }` is a FLOOR in a box's main-axis distribution: a
+  child that would shrink past it stops there and the remaining shrinkable
+  children absorb what it could not give, looping until the total fits again.
+  So a deficit never pushes a floored child below its minimum and never leaves
+  the row overflowing. The cross-axis effect is not on record. (Studio,
+  encoded rule)
+- `minimumsize` is an attribute block like `size`, not a child widget, so it
+  occupies no slot of its own in the parent's distribution. (Format fact,
+  counted over the vanilla `gui/` tree 2026-08-01: 414 block-form uses across
+  the 373 files, plus 5 written as a `"[binding]"` a static preview cannot
+  resolve)
+
 ### Container sizing
 
 - Only `widget` holds a fixed pixel `size`. `hbox`/`vbox`/`flowcontainer`

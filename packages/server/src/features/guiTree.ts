@@ -20,6 +20,7 @@ const DECL_MARKERS = new Set(["template", "types", "type", "blockoverride", "blo
 /** Attribute blocks — data, not children. Everything else is a node. */
 const PROPERTY_BLOCKS = new Set([
   "size",
+  "minimumsize",
   "position",
   "framesize",
   "spriteborder",
