@@ -146,7 +146,7 @@ class WebviewDecoder {
     if (this.panel) return this.panel;
     const panel = vscode.window.createWebviewPanel(
       "px.ddsConvert",
-      "CK3 DDS Converter",
+      "Paradox DDS Converter",
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, localResourceRoots: [] }
     );

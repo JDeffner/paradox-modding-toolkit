@@ -1,18 +1,19 @@
 /**
  * error.log watcher (rework plan Phase 5): tail the game's logs/error.log
- * while CK3 runs and surface entries as diagnostics pointing at the mod files
- * — the edit→test loop without alt-tabbing into a log file.
+ * while the game runs and surface entries as diagnostics pointing at the mod
+ * files — the edit→test loop without alt-tabbing into a log file.
  *
- * Plus `Paradox: Launch CK3 (debug mode)` via the Steam run URL.
+ * Plus `Paradox: Launch Game (debug mode)` via the Steam run URL of the active
+ * game (meta.steamAppId).
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
+import { metaFor } from "./meta";
 
 const POLL_MS = 1000;
-const CK3_APP_ID = "1158310";
 
 export class ErrorLogWatcher implements vscode.Disposable {
   private readonly diagnostics: vscode.DiagnosticCollection;
@@ -62,7 +63,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
       this.offset = 0;
     }
     this.timer = setInterval(() => this.poll(file), POLL_MS);
-    this.statusItem.text = "$(eye) CK3 error.log";
+    this.statusItem.text = `$(eye) ${metaFor(this.getConfig().gameId).shortName} error.log`;
     this.statusItem.tooltip = "Watching the game's error.log — click to stop";
     this.statusItem.show();
     this.log(`watching ${file}`);
@@ -152,10 +153,11 @@ export class ErrorLogWatcher implements vscode.Disposable {
   }
 }
 
-export async function launchGameDebugCommand(): Promise<void> {
-  const url = `steam://run/${CK3_APP_ID}//-debug_mode%20-develop/`;
+export async function launchGameDebugCommand(cfg: PxConfig): Promise<void> {
+  const meta = metaFor(cfg.gameId);
+  const url = `steam://run/${meta.steamAppId}//-debug_mode%20-develop/`;
   await vscode.env.openExternal(vscode.Uri.parse(url));
   void vscode.window.showInformationMessage(
-    "Paradox Toolkit: launching via Steam with -debug_mode -develop. Tip: run 'Paradox: Toggle error.log Watcher' to see script errors live."
+    `Paradox Toolkit: launching ${meta.name} via Steam with -debug_mode -develop. Tip: run 'Paradox: Toggle error.log Watcher' to see script errors live.`
   );
 }

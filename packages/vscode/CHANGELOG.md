@@ -1,11 +1,106 @@
 # Changelog
 
-## 0.2.0 - Paradox Toolkit (rebrand)
+## 0.3.0 - Paradox Toolkit (rebrand + three games)
 
 The extension is now **Paradox Toolkit** (`JDeffner.px-toolkit`), a new
-Marketplace entry. The engine behind it became game-agnostic in this release
-and already ships a Victoria 3 preview, so a CK3-only name and a `ck3.*`
-settings namespace no longer described the product.
+Marketplace entry, and it supports three games: Crusader Kings III (unchanged),
+**Victoria 3** (new, first-class) and **Europa Universalis V** (new,
+community-sourced schema). A CK3-only name and a `ck3.*` settings namespace no
+longer described the product.
+
+CK3 users: no CK3 behavior was traded away for the other two games. Same
+schema, same bundled wiki data, same tiger integration, byte-identical
+completion ranking. The breaking changes below are all rebrand fallout.
+
+### Added (Victoria 3, shipped)
+
+Victoria 3 is out of preview and has the same language core as CK3.
+
+- **A 72-entry folder schema, verified folder by folder against a real
+  install** (with the community CWT rules used only as a cross-check), 49
+  required-localization claims that were each measured against vanilla before
+  being asserted, and 32 reference fields. Vic3's plural `common/on_actions`
+  and its `.metadata/metadata.json` descriptor are handled natively.
+- **`script_docs` dumps in the new markdown format parse end to end**, proven
+  against real dumps: 1,290 effects, 1,134 triggers, 302 event targets and
+  6,588 modifiers become completion items and hover documentation.
+- **Bundled `.gui` widget schema** harvested from vanilla (579 widget types)
+  and **bundled completion frequency tables** from the vanilla corpus, so
+  ranking is measured for Vic3 too rather than borrowed from CK3.
+- **vic3-tiger** downloads and runs exactly like ck3-tiger, with the same
+  baseline workflow and per-mod diagnostics.
+- Deliberately NOT shipped for Vic3: a bundled wiki fallback (no licensed
+  mirror exists), the `_*.info` structure layer (Vic3 ships no `.info` docs at
+  all) and the pixel-accurate GUI layout preview (its engine was calibrated
+  against CK3). The `.gui` language features and the Widget Tree do work.
+
+### Added (Europa Universalis V, community-sourced)
+
+- **A 518-entry EU5 schema imported from
+  [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config)**
+  (MIT, pinned commit `7f2764a`, EU5 1.3.4-beta) by
+  `scripts/import-cwt-types.ts`. It is **not verified against a live install**
+  and the extension says so, in the setting description, in this changelog and
+  in a one-time notice on first EU5 activation.
+- **The blast radius is bounded by design**: only 8 reference fields, each
+  confirmed by both the CWT rules and EU5's own `script_docs` dumps, and **zero**
+  required-localization patterns. A wrong entry costs you navigation, never a
+  false error squiggle. Fix gaps locally with a `<mod>/.eu5modding/schema.json`
+  overlay, no release needed, and report them with the "Schema gap" issue form.
+- **EU5's layout is understood**: content under the load-stage roots
+  (`in_game/`, `main_menu/`, `loading_screen/`), and database **entry modes** on
+  definition keys. `REPLACE:my_law = { … }`, `INJECT:`, `TRY_REPLACE:` and
+  friends are indexed under their real name instead of being silently skipped.
+- **`script_docs` dumps land in `Documents/Paradox Interactive/Europa
+  Universalis V/docs`**, not `logs/`; the default path follows.
+- **No tiger**: no EU5 build of the tiger validator exists, so the tiger
+  commands are hidden and the ones you can still reach explain why.
+
+### Added (multi-game plumbing)
+
+- **`px.gameId`** (`auto` | `ck3` | `vic3` | `eu5`, default `auto`). The auto
+  ladder reads the mod's descriptor shape: `descriptor.mod` → CK3;
+  `.metadata/` plus stage folders → EU5; `.metadata/` alone → Victoria 3;
+  otherwise CK3. Existing CK3 workspaces are unaffected.
+- **`px.gamePath` / `px.logsPath` / `px.tigerPath` now describe the ACTIVE
+  game and are honored for every game.** Unset paths are auto-detected per
+  game (Steam library for the install, Documents for the dumps). Previously the
+  Vic3 preview ignored them outright.
+- **First-run guidance for games with no bundled data.** Vic3 and EU5 start
+  thin until you dump `script_docs`, so **Run Setup & Health Check** now makes
+  that the first action in its report, with the exact console steps and the
+  right folder for the game.
+- **`THIRD-PARTY-NOTICES.md`** at the repo root carries the MIT texts and the
+  precise statement of what was derived from which CWT config. It ships in the
+  .vsix and in the server tarball.
+
+### Added (standalone / vim)
+
+The server has always run over `--stdio` from any LSP client; this release
+makes a plain client a first-class one instead of a degraded VS Code.
+
+- **Hovers are clean markdown** for clients that do not declare
+  `initializationOptions.clientCommands`: no VS Code `<span>` markup, no
+  `command:` links that go nowhere. The VS Code client declares the flag and
+  keeps its richer rendering.
+- **The "create localization key" quick fix carries a real `WorkspaceEdit`**
+  instead of a command the client cannot run: it appends the key to a
+  server-managed `zzz_*` loc file in your mod, creating it with a UTF-8 BOM if
+  needed. The two editor-command actions are omitted rather than shipped dead.
+- **External file changes are picked up without a restart**: the server
+  registers `workspace/didChangeWatchedFiles` itself when the client supports
+  dynamic registration.
+- **Status is visible in the LSP log.** `window/logMessage` now mirrors the
+  index status (token and definition counts, whether tokens came from
+  `script_docs` or from bundled data) and names the resolved bundled-data
+  directory at startup, so an empty index is diagnosable from `:LspLog`.
+- **The release tarball is smoke-tested by CI after extraction**, which is what
+  actually catches a flattened layout or a missing `data/<game>/` folder.
+- `packages/server/README.md` was rewritten around the questions a non-VS Code
+  user actually has: a per-language-id capability table, a per-game support
+  matrix, the path shapes per game, the two root/filetype failure modes, and
+  how to read the log. `scripts/nvim-parity/` is the headless neovim harness
+  that keeps those claims true.
 
 ### Breaking
 
@@ -26,14 +121,20 @@ settings namespace no longer described the product.
   the extension id. Nothing is lost, the first scan just takes its usual minute.
 - **npm packages renamed** to `@px-lsp/protocol` and `@px-lsp/server`; the
   standalone server binary and tarball are now `px-lsp`.
+- **`px.vic3Preview` is gone.** Victoria 3 support is no longer behind a flag,
+  so the setting has no replacement: set `px.gameId` to `vic3` if auto-detection
+  guesses wrong, and delete the old entry from your settings. Anyone who had it
+  on gets the shipped Vic3 profile, which is a much larger schema and now
+  honors `px.gamePath`/`px.logsPath`/`px.tigerPath`.
 
 ### Unchanged on purpose
 
-`gameId: "ck3"`, the `.ck3modding/` config folder in your mod (it holds your
-`schema.json`, `playset.json` and tiger baseline, and is per-game by design),
-the `zzz_ck3_modding_edits_l_*.yml` loc file the editor writes, `ck3-tiger`
-itself, the `ck3-script` diagnostic source, the `paradox`/`paradox-loc`/
-`paradox-gui` language ids, and the `paradox/*` LSP wire methods.
+The `.ck3modding/` config folder in your CK3 mods (it holds your `schema.json`,
+`playset.json` and tiger baseline, and is per-game by design; Vic3 and EU5 get
+`.vic3modding/` and `.eu5modding/`), the `zzz_ck3_modding_edits_l_*.yml` loc
+file the editor writes, `ck3-tiger` itself, the `ck3-script` diagnostic source
+(`vic3-script` and `eu5-script` for the other games), the `paradox`/
+`paradox-loc`/`paradox-gui` language ids, and the `paradox/*` LSP wire methods.
 
 ### Fixed
 
@@ -51,12 +152,17 @@ itself, the `ck3-script` diagnostic source, the `paradox`/`paradox-loc`/
 
 ### Changed
 
-- Palette categories are `Paradox`, `Paradox Tiger` and `Paradox Localization`;
-  the status-bar badge reads `PX`; language display names are `Paradox Script`,
-  `Paradox Localization`, `Paradox GUI`, `Paradox Format Docs` and
-  `Paradox Mod Descriptor` (the underlying language ids never changed).
+- Tiger and localization palette categories are `Paradox Tiger` and
+  `Paradox Localization`; the status-bar badge reads `PX`; language display
+  names are `Paradox Script`, `Paradox Localization`, `Paradox GUI`,
+  `Paradox Format Docs` and `Paradox Mod Descriptor` (the underlying language
+  ids never changed).
 - Our own descriptor diagnostics report as `px-descriptor`, and the game
   error.log channel is named per profile.
+- **User-facing strings name the active game.** Diagnostic messages, quick-fix
+  titles, the setup report, the error.log status item and the Tools view read
+  "Victoria 3" or "EU5" where they used to hardcode CK3, sourced from the game
+  profile rather than written per site.
 
 ## 0.1.2 (alpha)
 

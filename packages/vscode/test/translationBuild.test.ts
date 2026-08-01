@@ -17,6 +17,10 @@ const SRC = `${BOM}l_english:
 
 function build(files: Array<{ relPath: string; content: string }>) {
   return buildTranslationMod({
+    gameName: "Crusader Kings III",
+    gameShortName: "CK3",
+    tigerName: "ck3-tiger",
+    configDirName: ".ck3modding",
     sourceName: "Big Mod",
     supportedVersion: "1.19.*",
     sourceLang: "english",

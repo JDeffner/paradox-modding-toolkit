@@ -1,0 +1,22 @@
+# Event Target Documentation
+### controller
+Scope to the controller of the object
+Input Scopes: province, state
+Output Scopes: country
+
+### mg
+Scope from a market to the MarketGoods with the specified key
+Requires Data: yes
+Input Scopes: market
+Output Scopes: market_goods
+
+### root
+The root scope of the current context
+
+--------------------
+
+Event Targets Saved from Code:
+
+context
+amendment
+area

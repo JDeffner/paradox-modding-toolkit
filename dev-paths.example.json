@@ -1,7 +1,24 @@
 {
-  "gamePath": "C:/Program Files (x86)/Steam/steamapps/common/Crusader Kings III/game",
-  "logsPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/logs",
-  "modPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/your_mod",
-  "corpusPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/big_corpus_mod",
-  "tigerPath": "C:/Tools/ck3-tiger/ck3-tiger.exe"
+  "games": {
+    "ck3": {
+      "gamePath": "C:/Program Files (x86)/Steam/steamapps/common/Crusader Kings III/game",
+      "logsPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/logs",
+      "modPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/your_mod",
+      "modCorpus": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/big_corpus_mod",
+      "tigerPath": "C:/Tools/ck3-tiger/ck3-tiger.exe"
+    },
+    "vic3": {
+      "gamePath": "C:/Program Files (x86)/Steam/steamapps/common/Victoria 3/game",
+      "logsPath": "C:/Users/you/Documents/Paradox Interactive/Victoria 3/logs",
+      "modPath": "C:/Users/you/Documents/Paradox Interactive/Victoria 3/mod/your_mod",
+      "modCorpus": "C:/Users/you/Documents/Paradox Interactive/Victoria 3/mod/big_corpus_mod",
+      "tigerPath": "C:/Tools/vic3-tiger/vic3-tiger.exe"
+    },
+    "eu5": {
+      "gamePath": "C:/Program Files (x86)/Steam/steamapps/common/Europa Universalis V/game",
+      "logsPath": "C:/Users/you/Documents/Paradox Interactive/Europa Universalis V/logs",
+      "modPath": "C:/Users/you/Documents/Paradox Interactive/Europa Universalis V/mod/your_mod",
+      "modCorpus": "C:/Users/you/Documents/Paradox Interactive/Europa Universalis V/mod/big_corpus_mod"
+    }
+  }
 }

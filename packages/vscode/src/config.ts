@@ -7,10 +7,11 @@ import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { findGameFolder } from "./steamDetect";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
-import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
+import { detectGameId, GAME_METAS } from "./gameDetect";
 
 export interface PxConfig {
-  /** Active game profile id: "ck3", or "vic3" behind px.vic3Preview. */
+  /** Active game profile id: `px.gameId`, or auto-detected from the mod's
+   * descriptor shape ("ck3" | "vic3" | "eu5"). */
   gameId: string;
   /** Path to `Crusader Kings III/game`, or null if unset/invalid. */
   gamePath: string | null;
@@ -80,8 +81,12 @@ function windowsDocumentsFolder(): string {
   return path.join(os.homedir(), "Documents");
 }
 
-function defaultLogsPath(docsFolderName: string, steamAppId: number): string | null {
-  const suffix = ["Paradox Interactive", docsFolderName, "logs"];
+function defaultLogsPath(
+  docsFolderName: string,
+  steamAppId: number,
+  scriptDocsSubdir = "logs"
+): string | null {
+  const suffix = ["Paradox Interactive", docsFolderName, scriptDocsSubdir];
   const candidates: string[] = [];
   if (process.platform === "win32") {
     candidates.push(path.join(windowsDocumentsFolder(), ...suffix));
@@ -102,15 +107,6 @@ function defaultLogsPath(docsFolderName: string, steamAppId: number): string | n
     if (fs.existsSync(c)) return c;
   }
   return null;
-}
-
-/** A Vic3-style mod: metadata descriptor, no launcher .mod descriptor. */
-function looksLikeMetadataMod(dir: string): boolean {
-  try {
-    return hasMetadataDescriptor(dir) && !fs.existsSync(path.join(dir, "descriptor.mod"));
-  } catch {
-    return false;
-  }
 }
 
 export function readConfig(): PxConfig {
@@ -139,10 +135,11 @@ export function readConfig(): PxConfig {
     }
   }
 
-  let gamePath = readPath("gamePath", "Game path") ?? workspaceGameDir;
+  const explicitGamePath = readPath("gamePath", "Game path");
+  let gamePath = explicitGamePath ?? workspaceGameDir;
   let logsPath = readPath("logsPath", "script_docs logs path");
 
-  let tigerPath = readPath("tigerPath", "ck3-tiger path");
+  let tigerPath = readPath("tigerPath", "tiger binary path");
 
   let modPath = readPath("modPath", "Mod path");
 
@@ -216,23 +213,23 @@ export function readConfig(): PxConfig {
   }
   for (const p of workspaceMods) addParent(p);
 
-  // Game selection (M4 preview): a workspace whose mod-of-record carries a
-  // .metadata/metadata.json descriptor (and no launcher .mod file) is a
-  // Victoria 3 mod — honored only behind px.vic3Preview. The px.* path
-  // settings describe CK3 and are deliberately IGNORED for a Vic3 workspace:
-  // game/logs resolve from Steam/Documents, tiger from the vic3-tiger
-  // download (see extension.ts).
-  const vic3Preview = cfg.get<boolean>("vic3Preview") ?? false;
+  // Game selection: `px.gameId` wins; "auto" walks the descriptor-shape
+  // ladder (detectGameId). The px.* path settings describe THE ACTIVE GAME
+  // and are honored for every game when set; unset paths fall back to
+  // per-game auto-detection (Steam library for the install, Documents for
+  // the logs). Tiger: an explicit px.tigerPath is honored everywhere; games
+  // without a tiger (meta.tiger absent) skip tiger entirely downstream.
   const primaryRoot = modPath ?? workspaceRoots[0] ?? null;
-  const gameId =
-    vic3Preview && primaryRoot !== null && looksLikeMetadataMod(primaryRoot) ? vic3Meta.id : ck3Meta.id;
-  if (gameId === vic3Meta.id) {
-    gamePath = findGameFolder(vic3Meta.name);
-    logsPath = defaultLogsPath(vic3Meta.docsFolderName, vic3Meta.steamAppId);
-    tigerPath = null;
-  } else if (logsPath === null && (cfg.get<string>("logsPath") ?? "").trim() === "") {
-    logsPath = defaultLogsPath(ck3Meta.docsFolderName, ck3Meta.steamAppId);
+  const gameId = detectGameId((cfg.get<string>("gameId") ?? "auto").trim().toLowerCase(), primaryRoot);
+  const activeMeta = GAME_METAS[gameId] ?? ck3Meta;
+  if (gameId !== ck3Meta.id) {
+    // workspaceGameDir probes for a CK3-shaped install; never borrow it here.
+    gamePath = explicitGamePath ?? findGameFolder(activeMeta.name);
   }
+  if (logsPath === null && (cfg.get<string>("logsPath") ?? "").trim() === "") {
+    logsPath = defaultLogsPath(activeMeta.docsFolderName, activeMeta.steamAppId, activeMeta.scriptDocsSubdir);
+  }
+  if (activeMeta.tiger === undefined) tigerPath = null;
 
   const tigerRunOn = cfg.get<string>("tigerRunOn") === "manual" ? "manual" : "save";
   const enableForWorkspace = cfg.get<boolean>("enableForWorkspace") ?? true;

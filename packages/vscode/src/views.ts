@@ -1,5 +1,5 @@
 /**
- * The CK3 activity-bar container (rework plan AD-7): native tree views —
+ * The Paradox Toolkit activity-bar container (rework plan AD-7): native tree views —
  * Tools, Mod Overview, Problems by Type, Localization Coverage, Overrides &
  * Conflicts. All data comes from the language server via paradox/* requests
  * (except Problems, which slices the editor's own diagnostics); views refresh
@@ -21,7 +21,10 @@ import {
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
 import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import type { GameMeta } from "@px-lsp/server/games/profile";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
+import { metaFor } from "./meta";
 
 /**
  * Which mod the mod-scoped views (Overview, Loc Coverage, Overrides, event
@@ -411,8 +414,14 @@ class DependenciesProvider extends BaseProvider {
 
 // ---- Tools -----------------------------------------------------------------------------
 
-/** One-click launcher for the extension's commands, grouped by workflow. */
-const TOOL_GROUPS: Array<[group: string, items: Array<[label: string, command: string, icon: string]>]> = [
+type ToolGroup = [group: string, items: Array<[label: string, command: string, icon: string]>];
+
+/**
+ * One-click launcher for the extension's commands, grouped by workflow. Built
+ * per game: labels carry the active game's name, and the tiger entry is absent
+ * for games with no tiger (EU5) so no dead command is offered.
+ */
+const toolGroups = (meta: GameMeta): ToolGroup[] => [
   ["Create", [["New Content (event, decision, …)", "px.newContent", "new-file"]]],
   [
     "Localization",
@@ -442,13 +451,18 @@ const TOOL_GROUPS: Array<[group: string, items: Array<[label: string, command: s
   [
     "Validate & Test",
     [
-      ["Run Tiger Validation", "px.runTiger", "bug"],
-      ["Launch CK3 (debug mode)", "px.launchGame", "play"],
+      ...(meta.tiger
+        ? ([[`Run ${meta.tiger.binaryName} Validation`, "px.runTiger", "bug"]] as ToolGroup[1])
+        : []),
+      [`Launch ${meta.shortName} (debug mode)`, "px.launchGame", "play"],
       ["Toggle error.log Watcher", "px.watchErrorLog", "eye"],
       ["Run Setup & Health Check", "px.setup", "tools"],
     ],
   ],
-  ["Learn", [["Tutorial: CK3 Modding from Zero", "px.tutorial", "mortar-board"]]],
+  // The tutorial is CK3-specific content bundled with the extension.
+  ...(meta.id === ck3Meta.id
+    ? ([["Learn", [["Tutorial: CK3 Modding from Zero", "px.tutorial", "mortar-board"]]]] as ToolGroup[])
+    : []),
 ];
 
 class ToolsProvider extends BaseProvider {
@@ -460,7 +474,7 @@ class ToolsProvider extends BaseProvider {
   }
 
   protected async roots(): Promise<Node[]> {
-    const groups = TOOL_GROUPS.map(([group, items]) => {
+    const groups = toolGroups(metaFor(this.getCfg().gameId)).map(([group, items]) => {
       const g = new Node(group, vscode.TreeItemCollapsibleState.Expanded);
       g.children = items.map(([label, command, icon]) => {
         const item = new Node(label);
@@ -597,7 +611,7 @@ export function registerPxViews(
         })),
       ];
       const picked = await vscode.window.showQuickPick(items, {
-        title: "Focus mod for the CK3 sidebar views",
+        title: "Focus mod for the Paradox Toolkit sidebar views",
         placeHolder: "Which mod should Mod Overview, Localization Coverage and Overrides show?",
       });
       if (!picked) return;

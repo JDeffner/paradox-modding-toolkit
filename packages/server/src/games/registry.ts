@@ -6,10 +6,12 @@
 import type { GameProfile } from "./profile";
 import { ck3Profile } from "./ck3";
 import { vic3Profile } from "./vic3";
+import { eu5Profile } from "./eu5";
 
 const profiles = new Map<string, GameProfile>([
   [ck3Profile.id, ck3Profile],
   [vic3Profile.id, vic3Profile],
+  [eu5Profile.id, eu5Profile],
 ]);
 
 export const defaultProfile: GameProfile = ck3Profile;

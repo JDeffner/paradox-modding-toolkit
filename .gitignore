@@ -16,4 +16,6 @@ docs/*
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).
 packages/vscode/data/
+packages/vscode/THIRD-PARTY-NOTICES.md
 *.tar.gz
+scripts/nvim-parity/results.json

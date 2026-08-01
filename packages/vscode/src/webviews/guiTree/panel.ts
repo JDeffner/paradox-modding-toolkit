@@ -35,7 +35,7 @@ export class GuiTreePanel {
 
     this.panel = vscode.window.createWebviewPanel(
       GuiTreePanel.viewType,
-      "CK3 GUI Tree",
+      "Paradox GUI Tree",
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
@@ -96,7 +96,7 @@ export class GuiTreePanel {
 
   private async load(source: vscode.TextDocument): Promise<void> {
     this.post({ type: "loading" });
-    this.panel.title = `CK3 GUI Tree — ${source.uri.path.split("/").pop() ?? "gui"}`;
+    this.panel.title = `Paradox GUI Tree — ${source.uri.path.split("/").pop() ?? "gui"}`;
     try {
       const tree = await this.fetchTree(source.uri, source.getText());
       if (this.disposed) return;
@@ -126,7 +126,7 @@ export class GuiTreePanel {
         });
       } catch (err) {
         void vscode.window.showErrorMessage(
-          `CK3 GUI Tree: cannot open source: ${err instanceof Error ? err.message : String(err)}`
+          `Paradox GUI Tree: cannot open source: ${err instanceof Error ? err.message : String(err)}`
         );
       }
       return;
@@ -157,7 +157,7 @@ function buildHtml(webview: vscode.Webview): string {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CK3 GUI Tree</title>
+<title>Paradox GUI Tree</title>
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }

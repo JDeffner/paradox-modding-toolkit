@@ -31,3 +31,12 @@ jobs:
         run: npx vsce package --allow-missing-repository --no-dependencies
       - name: Build server tarball
         run: node scripts/build-server-tarball.mjs
+      # Prove the SHIPPED artifact, not just dist/: extract the tarball and run
+      # the stdio smoke against it (guards the bundled-data layout — a flat
+      # extraction or a missing data/<game>/ dir fails here, not at a user).
+      - name: Smoke the extracted tarball
+        shell: bash
+        run: |
+          mkdir -p /tmp/px-tarball && tar -xzf px-lsp-server-*.tar.gz -C /tmp/px-tarball
+          PX_LSP_SERVER="$(echo /tmp/px-tarball/px-lsp-server-*/dist/server.js)" \
+            npx vitest run packages/server/test/stdioSmoke.test.ts

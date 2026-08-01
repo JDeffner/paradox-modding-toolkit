@@ -14,6 +14,7 @@ import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { parseDescriptor, readDescriptorName } from "@px-lsp/protocol/descriptorMod";
 import { LOC_LANGUAGES, detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
 import { buildTranslationMod, type SourceLocFile } from "./translationBuild";
+import { metaFor } from "./meta";
 
 function uniqueRoots(cfg: PxConfig): string[] {
   const out: string[] = [];
@@ -123,7 +124,12 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
       log(`translation mod: unreadable, skipped: ${f}`);
     }
   }
+  const meta = metaFor(cfg.gameId);
   const result = buildTranslationMod({
+    gameName: meta.name,
+    gameShortName: meta.shortName,
+    tigerName: meta.tiger?.binaryName ?? null,
+    configDirName: meta.configDirName,
     sourceName,
     supportedVersion: supportedVersionOf(sourceRoot),
     sourceLang,

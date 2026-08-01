@@ -10,4 +10,4 @@ media/banner.png
 # Harvest/eval bundles land in dist/ and everything in dist/ ships otherwise.
 dist/*.cjs
 # Build-time input for dataTypes.json (bundled into dist/server.js).
-data/ck3/wikidocs/Data_types.md
+data/*/wikidocs/Data_types.md

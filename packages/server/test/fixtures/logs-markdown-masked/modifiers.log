@@ -1,0 +1,20 @@
+--- Static modifier types ---
+battle_casualties_mult:
+  Mask: battle
+  Name: Casualties Taken
+  Description: A bonus or penalty to the number of Casualties this side takes in Battle
+military_formation_organization_gain_add:
+  Mask: military_formation
+  Name: Daily Organization Gain
+  Description: How much Organization the Formation gains each day.
+
+A Formation with low Organization will be less effective in Battle.
+-75% Offense
+--- Dynamic modifier types ---
+building_academics_shares_add:
+  Mask: building
+  Name: academics! Academics Pop Ownership Shares
+  Description: An increase or decrease in an academics! Academics Pop Ownership Shares
+--- Potential dynamic modifier types ---
+building_academics_fertility_mult:
+  Mask: building

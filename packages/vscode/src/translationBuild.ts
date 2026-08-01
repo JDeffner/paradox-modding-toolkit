@@ -23,6 +23,14 @@ export interface SourceLocFile {
 }
 
 export interface TranslationModOptions {
+  /** Active game display name ("Victoria 3"), for the guide and AI prompt. */
+  gameName: string;
+  /** Active game short name ("Vic3"), for the guide and AI prompt. */
+  gameShortName: string;
+  /** The game's tiger validator binary, or null when it has none (EU5). */
+  tigerName: string | null;
+  /** Per-game config dir (".ck3modding") the playset overlay goes into. */
+  configDirName: string;
   /** The source mod's launcher name (descriptor `name=`), used for the new
    * mod's name and its `dependencies` entry. */
   sourceName: string;
@@ -83,16 +91,16 @@ function translateGuide(
   opts: TranslationModOptions,
   generated: Array<{ relPath: string; entries: number }>
 ): string {
-  const { sourceLang, targetLang, sourceName } = opts;
+  const { sourceLang, targetLang, sourceName, gameName, gameShortName, tigerName } = opts;
   const totalEntries = generated.reduce((n, f) => n + f.entries, 0);
   const checklist = generated
     .map((f) => `- [ ] \`${f.relPath}\` (${f.entries} entr${f.entries === 1 ? "y" : "ies"})`)
     .join("\n");
 
   const prompt = [
-    `You are translating Crusader Kings III mod localization from ${sourceLang} to ${targetLang}.`,
+    `You are translating ${gameName} mod localization from ${sourceLang} to ${targetLang}.`,
     ``,
-    `INPUT FORMAT: a CK3 localization yml file. The first line is the language header`,
+    `INPUT FORMAT: a ${gameShortName} localization yml file. The first line is the language header`,
     `(l_${targetLang}:). Each entry is one line:`,
     ``,
     `  some_key:0 "" # ${sourceLang}: The original text`,
@@ -110,9 +118,9 @@ function translateGuide(
     `   - escapes \\n and \\" (keep them at sensible positions in the translation)`,
     `3. Formatting tags like #P ... #! or #bold ... #!: keep the tags, translate only`,
     `   the words between them.`,
-    `4. Match the official CK3 ${targetLang} localization: same register/form of address,`,
-    `   same terms for game concepts (claims, liege, vassal, schemes, ...). When unsure`,
-    `   about a term, prefer what the vanilla game's ${targetLang} files use.`,
+    `4. Match the official ${gameShortName} ${targetLang} localization: same register/form of`,
+    `   address, same terms for the game's own concepts and mechanics. When unsure about`,
+    `   a term, prefer what the vanilla game's ${targetLang} files use.`,
     `5. Character, dynasty and place names stay unless an established ${targetLang} exonym exists.`,
     `6. Keep translations roughly as long as the ${sourceLang} text; UI space is limited.`,
     `7. Entries with no "# ${sourceLang}:" comment, or whose value is already filled in,`,
@@ -135,10 +143,10 @@ untranslated so you can track progress.
 1. Open this folder (or add it to the workspace next to the source mod).
 2. Translate file by file: fill each \`""\` using the comment beside it (by hand,
    with **Paradox Localization: Translate Missing Keys**, or with the AI prompt below).
-3. Track progress in the CK3 sidebar: **Localization Coverage** lists every
-   still-untranslated key of this mod.
+3. Track progress in the Paradox Toolkit sidebar: **Localization Coverage** lists
+   every still-untranslated key of this mod.
 4. Before testing, sanity-check the format: the extension flags encoding/header
-   mistakes, and ck3-tiger validates the mod.
+   mistakes${tigerName ? `, and ${tigerName} validates the mod` : ""}.
 5. In the launcher, enable both mods; the dependency in descriptor.mod makes
    this mod load after ${sourceName}.
 
@@ -187,7 +195,7 @@ export function buildTranslationMod(opts: TranslationModOptions): {
   out.unshift({ relPath: "descriptor.mod", content: descriptor(opts) });
   if (opts.sourceRootRelative) {
     out.push({
-      relPath: ".ck3modding/playset.json",
+      relPath: `${opts.configDirName}/playset.json`,
       content: JSON.stringify({ parents: [opts.sourceRootRelative.replace(/\\/g, "/")] }, null, 2) + "\n",
     });
   }

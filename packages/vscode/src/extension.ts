@@ -1,5 +1,5 @@
 /**
- * Client entry point: starts the CK3 language server and keeps for itself only
+ * Client entry point: starts the Paradox language server and keeps for itself only
  * what must live in the editor process — language-mode switching, tiger process
  * management and downloads, setup/Steam detection, the status bar, and commands
  * that touch the VS Code UI. All parsing/indexing/analysis lives in the server.
@@ -16,6 +16,7 @@ import {
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
+import { isCk3, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -112,10 +113,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const storageDir = context.globalStorageUri.fsPath;
 
   // Effective tiger: explicit setting wins, else the copy we downloaded
-  // ourselves (per-game flavor; Vic3 never uses the px.tigerPath setting).
+  // ourselves (per-game flavor). Games with no tiger (EU5) have no flavor and
+  // stay at tigerPath=null, which switches every tiger surface off.
   const resolveConfig = () => {
     const c = readConfig();
-    if (!c.tigerPath) c.tigerPath = findDownloadedTiger(storageDir, tigerFlavorFor(c.gameId));
+    const flavor = tigerFlavorFor(c.gameId);
+    if (!flavor) c.tigerPath = null;
+    else if (!c.tigerPath) c.tigerPath = findDownloadedTiger(storageDir, flavor);
     return c;
   };
 
@@ -123,6 +127,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (cfg.warnings.length > 0) {
     // Fail soft: features degrade, extension still activates.
     void vscode.window.showWarningMessage(`Paradox Toolkit: ${cfg.warnings.join(" — ")}`);
+  }
+  // One-time honesty note for EU5: the schema is community-sourced and not
+  // yet verified against a live install.
+  if (cfg.gameId === "eu5" && !context.globalState.get<boolean>("px.eu5Notice")) {
+    void context.globalState.update("px.eu5Notice", true);
+    void vscode.window.showInformationMessage(
+      "EU5 support is community-sourced (folder mappings imported from cwtools-eu5-config) and not yet " +
+        "verified against a live install. Wrong or missing mappings degrade navigation, never diagnostics. " +
+        "Please report gaps; a .eu5modding/schema.json overlay in your mod fixes them immediately."
+    );
   }
   log(
     `activated. gamePath=${cfg.gamePath ?? "(none)"} logsPath=${cfg.logsPath ?? "(none)"} ` +
@@ -151,10 +165,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   const updateStatus = () => {
     // The visible surface (status bar, sidebar views, palette commands) follows
-    // the workspace: present in CK3 workspaces, absent elsewhere. Both change
+    // the workspace: present in mod/game workspaces, absent elsewhere. Both change
     // handlers below run through here, so this tracks folder/setting changes.
     statusBar.setVisible(cfg.isCk3Workspace);
     void vscode.commands.executeCommand("setContext", "px.isCk3Workspace", cfg.isCk3Workspace);
+    // Context keys for anything a `when` clause may want to gate on later.
+    void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
+    void vscode.commands.executeCommand("setContext", "px.guiPreviewSupported", isCk3(cfg.gameId));
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -163,14 +180,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       gameOk: cfg.gamePath !== null,
       modOk: cfg.modPath !== null,
       tigerOk: cfg.tigerPath !== null,
+      tigerName: metaFor(cfg.gameId).tiger?.binaryName ?? null,
     });
   };
   updateStatus();
 
   // Baselines are per mod (multi-mod workspaces): each run suppresses the
-  // baseline of the mod it validates, not one global file.
+  // baseline of the mod it validates, not one global file. The config dir is
+  // the active game's (.ck3modding / .vic3modding / …).
   const baselineFileFor = (root: string | null) =>
-    root ? path.join(root, ".ck3modding", "tiger-baseline.json") : null;
+    root ? path.join(root, metaFor(cfg.gameId).configDirName, "tiger-baseline.json") : null;
   let tigerUnusedOnce = false;
   const tigerExtraArgs = (modRoot: string): string[] => {
     const args: string[] = [];
@@ -185,6 +204,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return args;
   };
   const tiger = new TigerRunner(() => cfg, log, tigerExtraArgs);
+  // Games with no tiger (EU5) get a clear no-op instead of a broken command.
+  // TigerRunner.run / createBaseline and generateTigerConfCommand say it
+  // themselves; this covers the commands that only toggle state.
+  const requireTiger = (): boolean => {
+    const meta = metaFor(cfg.gameId);
+    if (meta.tiger) return true;
+    void vscode.window.showInformationMessage(
+      `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — tiger commands do nothing here.`
+    );
+    return false;
+  };
   context.subscriptions.push(tiger);
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => tiger.onDidSaveDocument(doc)));
 
@@ -209,6 +239,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // bundled wiki/freqs profile-correct even when the game changes.
   const initOptions: ParadoxInitOptions = {
     storageDir,
+    // This client registers the px.* commands and renders the sanitized hover
+    // HTML; the server keeps rich markup + command actions for us and degrades
+    // to plain markdown + WorkspaceEdits for every other client.
+    clientCommands: true,
     settings: toSettings(cfg),
   };
   const clientOptions: LanguageClientOptions = {
@@ -495,6 +529,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("px.guiTreeToggleParents", () => GuiTreePanel.toggleParents()),
     vscode.commands.registerCommand("px.showGuiPreview", () => {
+      // The preview's pixel engine (fonts, sprite lookup, widget defaults) is
+      // calibrated against CK3 only. The .gui LANGUAGE features — completion,
+      // hovers, diagnostics, the widget tree — stay on for every game.
+      if (!isCk3(cfg.gameId)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Toolkit: the GUI layout preview is CK3 only for now — its pixel layout is calibrated against CK3. ` +
+            `.gui editing and the GUI Widget Tree work for ${metaFor(cfg.gameId).name}.`
+        );
+        return;
+      }
       const editor = vscode.window.activeTextEditor;
       if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
         void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
@@ -538,6 +582,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand("px.tigerToggleBaseline", async () => {
+      if (!requireTiger()) return;
       const enabled = !context.workspaceState.get<boolean>("px.tigerBaselineEnabled");
       await context.workspaceState.update("px.tigerBaselineEnabled", enabled);
       void vscode.window.showInformationMessage(
@@ -548,6 +593,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tiger.run(false);
     }),
     vscode.commands.registerCommand("px.tigerUnused", () => {
+      if (!requireTiger()) return;
       tigerUnusedOnce = true;
       tiger.run(true);
     })
@@ -559,7 +605,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(errorLog);
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
-    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand()),
+    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg)),
     vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),

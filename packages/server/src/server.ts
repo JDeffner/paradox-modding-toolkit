@@ -9,6 +9,7 @@
  */
 import {
   createConnection,
+  DidChangeWatchedFilesNotification,
   MarkupKind,
   ProposedFeatures,
   TextDocuments,
@@ -113,6 +114,7 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
+import { setCommandCapableClient } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
@@ -282,6 +284,8 @@ function log(msg: string): void {
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+let lastLoggedStatus = "";
+
 function sendStatus(): void {
   const payload: StatusPayload = {
     tokens: data.tokens.length,
@@ -290,6 +294,17 @@ function sendStatus(): void {
     indexing,
   };
   void connection.sendNotification(statusNotification, payload);
+  // Mirror into window/logMessage so bare clients (no paradox/status handler)
+  // can tell an empty index from a cold one. Only on transitions: scans fire
+  // many status updates, but the interesting line is start/end of indexing.
+  const line = `status: ${payload.tokens} tokens (${payload.tokensFromScriptDocs ? "script_docs" : "bundled"}), ${
+    payload.definitions
+  } definitions${payload.indexing ? ", indexing…" : ""}`;
+  const key = `${payload.indexing}|${payload.tokens === 0}|${payload.definitions === 0}`;
+  if (key !== lastLoggedStatus) {
+    lastLoggedStatus = key;
+    log(line);
+  }
 }
 
 data.onDidChange(() => {
@@ -683,25 +698,39 @@ function rescanModFile(fsPath: string): void {
 
 /**
  * Bundled-data locations for the ACTIVE profile: an explicit client override
- * wins, else data/<gameId>/wikidocs next to the bundle (dist/server.js sits
- * next to data/ in the repo checkout, the .vsix and the release tarball
- * alike). freqs.json ships next to wikidocs/; both fail soft when the game
- * bundles no data. Re-derived whenever the game profile changes.
+ * wins, else data/<gameId>/ next to the bundle (dist/server.js sits next to
+ * data/ in the repo checkout, the .vsix and the release tarball alike).
+ * wikidocs/ and freqs.json are derived independently: a game may ship freqs
+ * without a wiki mirror. Both fail soft when the game bundles no data.
+ * Re-derived whenever the game profile changes.
  */
 function deriveBundledDataDirs(): void {
+  const dataDir = path.resolve(__dirname, "..", "data", activeProfile().id);
   wikidocsDir = clientWikidocsDir;
   if (!wikidocsDir) {
-    const bundled = path.resolve(__dirname, "..", "data", activeProfile().id, "wikidocs");
+    const bundled = path.join(dataDir, "wikidocs");
     if (fs.existsSync(bundled)) wikidocsDir = bundled;
   }
-  freqsDir = wikidocsDir ? path.dirname(wikidocsDir) : "";
+  if (wikidocsDir) {
+    freqsDir = path.dirname(wikidocsDir);
+  } else {
+    freqsDir = fs.existsSync(path.join(dataDir, "freqs.json")) ? dataDir : "";
+  }
 }
 let clientWikidocsDir = "";
+let clientCommandsDeclared = false;
+let clientWatchedFilesDynamic = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const init = (params.initializationOptions ?? {}) as Partial<ParadoxInitOptions>;
   storageDir = init.storageDir ?? "";
   clientWikidocsDir = init.wikidocsDir ?? "";
+  // Client mode (PROTOCOL.md §Initialization): only a client declaring
+  // clientCommands gets rich hover markup, command links and command actions.
+  setCommandCapableClient(init.clientCommands === true);
+  clientCommandsDeclared = init.clientCommands === true;
+  clientWatchedFilesDynamic =
+    params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
   // Merge onto the defaults: bare clients may send partial settings (e.g.
   // only gameId), and every downstream consumer assumes the full shape.
   if (init.settings) settings = { ...defaultSettings(), ...init.settings };
@@ -749,11 +778,35 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(() => {
+  // Self-diagnosis for bare clients: the resolved bundled-data locations are
+  // the difference between "knows the engine" and silent degraded mode.
+  if (wikidocsDir || freqsDir) {
+    log(`bundled data for '${activeProfile().id}': ${wikidocsDir || freqsDir}`);
+  } else {
+    log(
+      `no bundled data found for '${activeProfile().id}' (looked next to the server bundle); ` +
+        `engine tokens come from script_docs logs only`
+    );
+  }
+  // The VSCode client runs its own tuned watcher and pushes paradox/modFileChanged;
+  // for every other client, watch the workspace ourselves when the client can.
+  if (!clientCommandsDeclared && clientWatchedFilesDynamic) {
+    void connection.client.register(DidChangeWatchedFilesNotification.type, {
+      watchers: [{ globPattern: "**/*.{txt,yml,gui,mod}" }, { globPattern: "**/metadata.json" }],
+    });
+  }
   // Bundled frequency tables for completion ranking (§C3); fail-soft to empty.
   completion.setFreqs(loadFreqs(freqsDir));
   completion.setSettings(settings);
   loadDocs(false);
   void buildIndex();
+});
+
+connection.onDidChangeWatchedFiles((params) => {
+  for (const change of params.changes) {
+    if (!change.uri.startsWith("file:")) continue;
+    handleModFileChange(URI.parse(change.uri).fsPath);
+  }
 });
 
 // ---- custom protocol ----------------------------------------------------------
@@ -793,13 +846,17 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
   }
 });
 
-connection.onNotification(modFileChangedNotification, (params: ModFileChangeParams) => {
-  rescanModFile(params.fsPath);
-  const lower = params.fsPath.toLowerCase();
+function handleModFileChange(fsPath: string): void {
+  rescanModFile(fsPath);
+  const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
   if (lower.endsWith(".gui")) invalidateGuiDefsCache();
   // Cheap full re-harvest when a mod defines file or a gui textformatting file changed.
   if (lower.replace(/\\/g, "/").includes("common/defines/") || lower.endsWith(".gui")) harvestEngineData();
+}
+
+connection.onNotification(modFileChangedNotification, (params: ModFileChangeParams) => {
+  handleModFileChange(params.fsPath);
 });
 
 connection.onRequest(reloadDocsRequest, (params: ReloadDocsParams): ReloadDocsResult => {
@@ -979,7 +1036,11 @@ connection.onSignatureHelp((params) => {
 connection.onCodeAction((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc || doc.languageId !== "paradox") return [];
-  return provideCodeActions(data, doc, params.range, params.context.diagnostics);
+  return provideCodeActions(data, doc, params.range, params.context.diagnostics, {
+    locLanguage: settings.locLanguage,
+    modRootOf: workspaceRootOf,
+    locRoots: schema.entries.filter((e) => e.kind === "loc_key").map((e) => e.path),
+  });
 });
 
 connection.languages.inlayHint.on((params) => {

@@ -9,8 +9,9 @@ import * as path from "path";
 import type { PxConfig } from "./config";
 import { LOG_FILES } from "@px-lsp/protocol/constants";
 import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
-import { findCk3GamePath } from "./steamDetect";
+import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
+import { isCk3, metaFor, scriptDocsDir } from "./meta";
 
 export interface SetupDeps {
   storageDir: string;
@@ -26,10 +27,18 @@ function scriptDocsPresent(logsPath: string | null): boolean {
 }
 
 export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): Promise<string | null> {
-  const flavor = tigerFlavorFor(deps.getConfig().gameId);
+  const meta = metaFor(deps.getConfig().gameId);
+  const flavor = tigerFlavorFor(meta.id);
+  if (!flavor) {
+    // No tiger exists for this game: never prompt, never download.
+    void vscode.window.showInformationMessage(
+      `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — nothing to download.`
+    );
+    return null;
+  }
   if (askFirst) {
     const choice = await vscode.window.showInformationMessage(
-      `Download ${flavor.prefix} (mod validator, ~15 MB) from github.com/amtep/tiger into the extension's storage?`,
+      `Download ${flavor.prefix} (mod validator, ~15 MB) from github.com/${flavor.repoSlug} into the extension's storage?`,
       "Download",
       "Not now"
     );
@@ -65,18 +74,20 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   const report: string[] = [];
   const config = vscode.workspace.getConfiguration("px");
   let cfg = deps.getConfig();
+  const meta = metaFor(cfg.gameId);
+  const docsDir = scriptDocsDir(meta);
 
   // 1. Game path: detect via Steam when unset/invalid.
   if (cfg.gamePath) {
     report.push(`✓ game: ${cfg.gamePath}`);
   } else {
-    const detected = findCk3GamePath();
+    const detected = findGameFolder(meta.name);
     if (detected) {
       await config.update("gamePath", detected, vscode.ConfigurationTarget.Global);
       report.push(`✓ game: found via Steam and saved to settings — ${detected}`);
     } else {
       report.push(
-        "✗ game: not found in any Steam library. Set px.gamePath to .../steamapps/common/Crusader Kings III/game"
+        `✗ game: not found in any Steam library. Set px.gamePath to .../steamapps/common/${meta.name}/game`
       );
     }
   }
@@ -86,8 +97,9 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   const editedMods = [cfg.modPath, ...cfg.workspaceMods].filter((p): p is string => p !== null);
   report.push(
     editedMods.length > 0
-      ? `✓ ${editedMods.length} mod${editedMods.length === 1 ? "" : "s"} (fully indexed and editable; ` +
-          `tiger validates the mod of the file you save): ${editedMods.map(modLabel).join(", ")}`
+      ? `✓ ${editedMods.length} mod${editedMods.length === 1 ? "" : "s"} (fully indexed and editable` +
+          `${meta.tiger ? "; tiger validates the mod of the file you save" : ""}): ` +
+          `${editedMods.map(modLabel).join(", ")}`
       : "✗ mods: open your mod folder(s) — or one folder containing them — as the workspace"
   );
   const depParents = cfg.parentPaths.filter((p) => !cfg.workspaceMods.includes(p));
@@ -95,45 +107,66 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     report.push(`• parent mods indexed read-only: ${depParents.map(modLabel).join(", ")}`);
   }
 
-  // 3. Logs / script_docs.
+  // 3. Logs / script_docs. Outside CK3 the how-to moves to the top action item
+  // below, so it is not repeated here.
   cfg = deps.getConfig();
-  if (scriptDocsPresent(cfg.logsPath)) {
-    report.push(`✓ script_docs logs: ${cfg.logsPath}`);
+  const docsOk = scriptDocsPresent(cfg.logsPath);
+  if (docsOk) {
+    report.push(`✓ script_docs ${docsDir}: ${cfg.logsPath}`);
   } else if (cfg.logsPath) {
     report.push(
-      `• script_docs logs: not generated yet (bundled wiki data is used meanwhile). ` +
-        `Launch CK3 with -debug_mode, open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)".`
+      `• script_docs ${docsDir}: not generated yet` +
+        (isCk3(meta.id)
+          ? ` (bundled wiki data is used meanwhile). Launch ${meta.shortName} with -debug_mode, ` +
+            `open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)".`
+          : ".")
     );
   } else {
     report.push(
-      "✗ logs folder: not found — set px.logsPath to Documents/Paradox Interactive/Crusader Kings III/logs"
+      `✗ ${docsDir} folder: not found — set px.logsPath to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}`
     );
   }
   if (cfg.logsPath && !fs.existsSync(path.join(cfg.logsPath, "data_types.log"))) {
     report.push(
-      `• data types: data_types.log not generated yet (bundled wiki tables are used meanwhile). ` +
+      `• data types: data_types.log not generated yet` +
+        `${isCk3(meta.id) ? " (bundled wiki tables are used meanwhile)" : ""}. ` +
         `Run "DumpDataTypes" in the game console for complete [datafunction] completion in gui/localization files.`
     );
   }
 
-  // 4. Tiger.
-  const effectiveTiger = cfg.tigerPath ?? findDownloadedTiger(deps.storageDir, tigerFlavorFor(cfg.gameId));
-  if (effectiveTiger) {
-    report.push(`✓ ck3-tiger: ${effectiveTiger}`);
-  } else {
-    const bin = await downloadTigerCommand(deps, true);
-    report.push(
-      bin
-        ? `✓ ck3-tiger: downloaded — ${bin}`
-        : "• ck3-tiger: skipped (diagnostics disabled). Run 'Paradox Tiger: Download or Update Binary' anytime."
+  // 4. Tiger — only for games one exists for (EU5 has none; skip silently).
+  const flavor = tigerFlavorFor(cfg.gameId);
+  if (flavor) {
+    const effectiveTiger = cfg.tigerPath ?? findDownloadedTiger(deps.storageDir, flavor);
+    if (effectiveTiger) {
+      report.push(`✓ ${flavor.prefix}: ${effectiveTiger}`);
+    } else {
+      const bin = await downloadTigerCommand(deps, true);
+      report.push(
+        bin
+          ? `✓ ${flavor.prefix}: downloaded — ${bin}`
+          : `• ${flavor.prefix}: skipped (external diagnostics disabled). Run 'Paradox Tiger: Download or Update Binary' anytime.`
+      );
+    }
+  }
+
+  // First-run guidance: outside CK3 there is no bundled wiki fallback, so the
+  // script_docs dump is what makes completion/hovers useful. Say so first.
+  if (!isCk3(meta.id) && !docsOk) {
+    report.unshift(
+      `➜ FIRST: run script_docs in ${meta.name}. Launch it with -debug_mode, open the console (\`), ` +
+        `type "script_docs"; the dumps land in Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}. ` +
+        `${meta.shortName} ships no bundled fallback data, so until then completion and hovers stay thin. ` +
+        `Afterwards run "Paradox: Reload Game Data (script_docs)".`
     );
   }
 
   deps.refresh();
 
   deps.log("setup report:\n  " + report.join("\n  "));
-  const ok = report.filter((l) => l.startsWith("✓")).length;
-  const summary = `CK3 setup: ${ok}/4 ready. ${report.some((l) => l.startsWith("✗") || l.startsWith("•")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
+  const checks = flavor ? 4 : 3;
+  const ok = Math.min(report.filter((l) => l.startsWith("✓")).length, checks);
+  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${report.some((l) => l.startsWith("✗") || l.startsWith("•") || l.startsWith("➜")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
   const action = await vscode.window.showInformationMessage(summary, "Show details");
   if (action === "Show details") {
     await vscode.commands.executeCommand("workbench.action.output.toggleOutput");
@@ -141,16 +174,17 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
 }
 
 /** One-time nudge on first activation without a configured game path. Only in
- * actual CK3 workspaces — fresh installs must not be nagged in unrelated
+ * actual mod workspaces — fresh installs must not be nagged in unrelated
  * projects. */
 export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: PxConfig): void {
   if (!cfg.isCk3Workspace) return;
   if (cfg.gamePath) return;
   if (context.globalState.get<boolean>("px.setupNudged")) return;
   void context.globalState.update("px.setupNudged", true);
+  const meta = metaFor(cfg.gameId);
   void vscode.window
     .showInformationMessage(
-      "The Paradox Toolkit can configure itself (find the game, set up tiger).",
+      `The Paradox Toolkit can configure itself (find ${meta.name}${meta.tiger ? ", set up tiger" : ""}).`,
       "Run Setup & Health Check",
       "Later"
     )

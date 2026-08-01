@@ -22,23 +22,35 @@ interface LocEntrySite {
   line: number;
 }
 
+/** The mod-relative localization roots, from the profile's loc_key schema entries
+ * (some games nest localization under a load-stage folder rather than the top level). */
+function locRoots(schemaEntries: SchemaEntry[]): string[] {
+  const roots = schemaEntries.filter((e) => e.kind === "loc_key").map((e) => e.path);
+  return roots.length > 0 ? [...new Set(roots)] : ["localization"];
+}
+
 /** All loc entries in the mod, grouped per language (read fresh — mods are small). */
-function modLocByLanguage(modPath: string): Map<string, Map<string, LocEntrySite>> {
+function modLocByLanguage(
+  modPath: string,
+  schemaEntries: SchemaEntry[]
+): Map<string, Map<string, LocEntrySite>> {
   const byLang = new Map<string, Map<string, LocEntrySite>>();
-  const locDir = path.join(modPath, "localization");
-  for (const file of listFiles(locDir, ".yml")) {
-    const lang = detectLocFileLanguage(file);
-    if (!lang) continue;
-    let content: string;
-    try {
-      content = fs.readFileSync(file, "utf8");
-    } catch {
-      continue;
-    }
-    let entries = byLang.get(lang);
-    if (!entries) byLang.set(lang, (entries = new Map()));
-    for (const e of parseLoc(content).entries) {
-      entries.set(e.key, { key: e.key, value: e.value, file, line: e.line });
+  for (const root of locRoots(schemaEntries)) {
+    const locDir = path.join(modPath, root);
+    for (const file of listFiles(locDir, ".yml")) {
+      const lang = detectLocFileLanguage(file);
+      if (!lang) continue;
+      let content: string;
+      try {
+        content = fs.readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
+      let entries = byLang.get(lang);
+      if (!entries) byLang.set(lang, (entries = new Map()));
+      for (const e of parseLoc(content).entries) {
+        entries.set(e.key, { key: e.key, value: e.value, file, line: e.line });
+      }
     }
   }
   return byLang;
@@ -52,7 +64,7 @@ export function computeLocCoverage(
   inFocus: (file: string) => boolean = () => true
 ): LocCoverage[] {
   if (!modPath) return [];
-  const byLang = modLocByLanguage(modPath);
+  const byLang = modLocByLanguage(modPath, schemaEntries);
   if (byLang.size === 0) return [];
 
   // Keys this mod's script uses (recorded loc references), plus schema-required

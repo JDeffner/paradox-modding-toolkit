@@ -3,18 +3,20 @@
  * which keys are used as widget/container blocks, and which properties each
  * carries (with usage counts for ranking). `type X = base { }` declarations
  * fold their property stats into the base type, so derived types enrich the
- * base vocabulary. Output: packages/server/data/ck3/guiSchema.json (bundled).
+ * base vocabulary. Output: packages/server/data/<gameId>/guiSchema.json (bundled).
  *
  * Run:
  *   npx esbuild scripts/build-gui-schema.ts --bundle --platform=node \
- *     --outfile=dist/build-gui-schema.cjs && node dist/build-gui-schema.cjs [gamePath]
+ *     --outfile=dist/build-gui-schema.cjs && node dist/build-gui-schema.cjs [--game <id>] [gamePath]
+ *   (--game defaults to ck3; gamePath falls back to dev-paths.json / PX_<GAME>_GAME_PATH)
  */
 import * as fs from "fs";
 import * as path from "path";
 import { decode, parseScript, type BlockNode, type Statement } from "../packages/server/src/parser";
-import { requireDevPath } from "./devPaths";
+import { parseGameArg, requireDevPath } from "./devPaths";
 
-const gamePath = process.argv[2] ?? requireDevPath("gamePath", "build-gui-schema");
+const { gameId, rest } = parseGameArg(process.argv.slice(2));
+const gamePath = rest[0] ?? requireDevPath("gamePath", "build-gui-schema", gameId);
 
 const NAME_OK = /^[a-z][a-z0-9_]*$/;
 const MAX_PROPS_PER_TYPE = 100;
@@ -221,7 +223,8 @@ const out = {
   enums,
   enumCombinable,
 };
-const target = path.join(__dirname, "..", "packages", "server", "data", "ck3", "guiSchema.json");
+const target = path.join(__dirname, "..", "packages", "server", "data", gameId, "guiSchema.json");
+fs.mkdirSync(path.dirname(target), { recursive: true });
 fs.writeFileSync(target, JSON.stringify(out, null, 1), "utf8");
 console.log(
   `wrote ${target}: ${Object.keys(types).length} widget types, ` +

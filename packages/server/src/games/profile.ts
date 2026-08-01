@@ -30,9 +30,34 @@ export interface GameMeta {
   configDirName: string;
   /** Game folder under `Documents/Paradox Interactive/` (script_docs logs live in its logs/). */
   docsFolderName: string;
+  /**
+   * Subfolder of docsFolderName holding the script_docs dumps. Absent =
+   * "logs" (the classic location); newer titles may write to "docs".
+   */
+  scriptDocsSubdir?: string;
   steamAppId: number;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
+  /**
+   * Load-stage folders at the mod root under which all content lives (EU5's
+   * `in_game/` etc.). Schema paths carry the prefix explicitly; this list is
+   * for mod detection. Absent = content sits directly at the mod root.
+   */
+  stageRoots?: string[];
+  /**
+   * Database entry-mode prefixes legal on top-level definition keys
+   * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before
+   * treating the rest as the definition name. Absent = no such syntax.
+   */
+  entryModes?: string[];
+  /**
+   * script_docs dump dialect. Absent = the classic plain-text format
+   * (`name - doc` entries with `----` separators). Newer Jomini titles emit
+   * markdown (`## name`, `**Supported Scopes**`) and per-game modifier shapes:
+   * "masked-block" (`tag:` + indented Mask/Name/Description) or "tag-line"
+   * (`Tag: name, Categories: ...` lines).
+   */
+  scriptDocs?: { format: "classic" | "markdown"; modifiers: "classic" | "masked-block" | "tag-line" };
   /** External deep-validation tool (the tiger family), when one exists. */
   tiger?: { binaryName: string; repoSlug: string; confName: string };
   /**

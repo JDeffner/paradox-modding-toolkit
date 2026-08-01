@@ -13,6 +13,9 @@ export interface PxStatus {
   gameOk: boolean;
   modOk: boolean;
   tigerOk: boolean;
+  /** The active game's tiger binary name, or null when it has none (EU5) —
+   * then the tiger line is dropped and never counts against health. */
+  tigerName: string | null;
 }
 
 export class PxStatusBar implements vscode.Disposable {
@@ -25,7 +28,7 @@ export class PxStatusBar implements vscode.Disposable {
     this.item.text = "$(loading~spin) PX";
   }
 
-  /** Shown only in CK3 workspaces; hidden (not disposed) elsewhere so it can
+  /** Shown only in mod/game workspaces; hidden (not disposed) elsewhere so it can
    * reappear when a mod folder is added to the workspace. */
   setVisible(visible: boolean): void {
     if (visible) this.item.show();
@@ -33,7 +36,7 @@ export class PxStatusBar implements vscode.Disposable {
   }
 
   update(s: PxStatus): void {
-    const healthy = s.gameOk && s.modOk && s.tigerOk && s.tokens > 0;
+    const healthy = s.gameOk && s.modOk && (s.tigerName === null || s.tigerOk) && s.tokens > 0;
     this.item.text = s.indexing ? "$(loading~spin) PX" : healthy ? "$(check) PX" : "$(warning) PX";
     const lines = [
       `**Paradox Toolkit** — click to run setup & health check`,
@@ -42,8 +45,10 @@ export class PxStatusBar implements vscode.Disposable {
       `${s.definitions > 0 ? "✓" : "✗"} indexed definitions: ${s.definitions}`,
       `${s.gameOk ? "✓" : "✗"} game path ${s.gameOk ? "configured" : "missing"}`,
       `${s.modOk ? "✓" : "✗"} mod folder ${s.modOk ? "found" : "missing"}`,
-      `${s.tigerOk ? "✓" : "✗"} ck3-tiger ${s.tigerOk ? "available" : "not set up"}`,
     ];
+    if (s.tigerName !== null) {
+      lines.push(`${s.tigerOk ? "✓" : "✗"} ${s.tigerName} ${s.tigerOk ? "available" : "not set up"}`);
+    }
     const md = new vscode.MarkdownString(lines.join("\n\n"));
     this.item.tooltip = md;
   }

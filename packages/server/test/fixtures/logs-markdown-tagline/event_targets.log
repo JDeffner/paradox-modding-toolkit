@@ -1,0 +1,17 @@
+# Event Target Documentation
+### province_definition
+Unknown, add something in code registration
+Input Scopes: location, colonial_charter, province
+Output Scopes: province_definition
+
+### advance_type
+Unknown, add something in code registration
+Requires Data: yes
+Global Link: yes
+Output Scopes: advance_type
+
+### array_define
+Reference the value of a numeric value in an array define: array_define:Namespace|Name|Index. Index is 0-based.
+Requires Data: yes
+Global Link: yes
+Output Scopes: value

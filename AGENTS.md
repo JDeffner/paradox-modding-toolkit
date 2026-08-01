@@ -86,11 +86,22 @@ event graph/inspector →
 
 ## Local machine paths (dev-paths.json)
 
-Machine-specific paths (game folder, logs, your mod, an eval corpus mod,
-ck3-tiger) live in ONE central place: `dev-paths.json` at the repo root,
-gitignored — copy `dev-paths.example.json` and fill it in. Environment
-variables override per key (`CK3_GAME_PATH`, `CK3_LOGS_PATH`, `CK3_MOD_PATH`,
-`CK3_MOD_CORPUS`); the loader is `scripts/devPaths.ts`.
+Machine-specific paths (game folder, logs, your mod, an eval corpus mod, the
+tiger binary) live in ONE central place: `dev-paths.json` at the repo root,
+gitignored — copy `dev-paths.example.json` and fill it in. Slots are per game:
+
+```json
+{ "games": { "ck3": { "gamePath": "…", "logsPath": "…", "modPath": "…",
+                      "modCorpus": "…", "tigerPath": "…" },
+             "vic3": { "gamePath": "…" } } }
+```
+
+Environment variables override per game and key:
+`PX_<GAMEID>_GAME_PATH`, `PX_<GAMEID>_LOGS_PATH`, `PX_<GAMEID>_MOD_PATH`,
+`PX_<GAMEID>_MOD_CORPUS`, `PX_<GAMEID>_TIGER_PATH` (e.g. `PX_VIC3_GAME_PATH`).
+The loader is `scripts/devPaths.ts`; every accessor defaults to game `ck3`.
+Back-compat for ck3 only: the old flat `dev-paths.json` shape (`gamePath`,
+`corpusPath`, …) and the old `CK3_*` env var names keep working.
 Corpus-gated tests skip when a path is unset; scripts print usage and exit.
 Never hardcode a personal path in a tracked file. (The shipped extension does
 not read any of this: at runtime, paths come from VS Code settings with
@@ -111,7 +122,7 @@ pnpm run lint           # eslint + prettier --check (both gate CI)
 pnpm run lint:fix       # autofix what is autofixable
 npx vitest run          # fast suite (corpus-gated tests skip without env)
 
-# Full gated suite (needs gamePath + corpusPath in dev-paths.json, or the env vars):
+# Full gated suite (needs games.ck3.gamePath + games.ck3.modCorpus in dev-paths.json, or the env vars):
 npx vitest run          # (rank eval alone takes ~4 min; exclude packages/server/test/rankEval.test.ts when iterating)
 
 # Package (vsce runs in the extension package):
@@ -159,12 +170,17 @@ All are esbuild-bundled scripts: `npx esbuild scripts/<name>.ts --bundle
 --platform=node --outfile=dist/<name>.cjs && node dist/<name>.cjs` (then
 delete the .cjs).
 
+The per-game scripts take `--game <id>` and default to `ck3`, reading their
+paths from that game's `dev-paths.json` slots:
+`node dist/build-freqs.cjs --game vic3`.
+
 | Script | Output | What it does |
 |---|---|---|
-| `build-structures-json.ts` | `packages/server/data/ck3/structures.json` | Harvests every `_*.info` schema doc, validates keys against vanilla usage counts |
-| `build-gui-schema.ts` | `packages/server/data/ck3/guiSchema.json` | Widget types + per-type property counts from the vanilla `gui/` tree |
-| `build-freqs.ts` | `packages/server/data/ck3/freqs.json` | Per-context token/def usage counts (vanilla + corpus) |
-| `audit-schema-coverage.ts` | stdout | Compares CK3_SCHEMA + structures.json against every game `_*.info` and common/ folder; run per patch, gaps should be 0 or documented |
+| `build-structures-json.ts` | `packages/server/data/ck3/structures.json` | Harvests every `_*.info` schema doc, validates keys against vanilla usage counts. CK3-only by design (only CK3 ships `_*.info` docs) |
+| `build-gui-schema.ts [--game <id>]` | `packages/server/data/<id>/guiSchema.json` | Widget types + per-type property counts from the vanilla `gui/` tree |
+| `build-freqs.ts [--game <id>]` | `packages/server/data/<id>/freqs.json` | Per-context token/def usage counts (vanilla + corpus). The context set is CK3-shaped; for other games the CK3-only contexts stay empty |
+| `import-cwt-types.ts <clone>` | `packages/server/src/games/eu5/schema.generated.ts` | Projects the `types = { ... }` blocks of a pinned kaiser-chris/cwtools-eu5-config clone onto the EU5 schema table. NOT a build step: run by hand when re-pinning upstream, then update the pinned commit in the file header AND `THIRD-PARTY-NOTICES.md`, and read the "Not covered" block for newly dropped types |
+| `audit-schema-coverage.ts [--game <id>]` | stdout | Compares the profile's schema table + `data/<id>/structures.json` against every game `_*.info` and common/ folder; run per patch, gaps should be 0 or documented |
 | `gen-brand.ts` | `packages/vscode/media/icon.{png,svg}`, `media/px-view.svg`, `packages/server/media/px-lsp.svg` | The PX lockup. Geometry lives in `brandGeometry.ts` so the raster and the vector cannot drift; it asserts the ink is centred, so an off-centre icon fails the build rather than shipping |
 | `gen-icons.mjs` | `packages/vscode/media/fileicons/*.svg` | The per-language file icons (unrelated to the brand lockup) |
 | `rank-eval.ts` / `fuzzy-diag.ts` | stdout | Completion-quality measurement: rank-eval replays real corpus positions; fuzzy-diag replays typed prefixes through VS Code's own scoring — run BEFORE and AFTER any ranking change |

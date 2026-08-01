@@ -1,31 +1,45 @@
 /**
- * ck3-tiger acquisition: download a release from GitHub into the extension's
+ * tiger acquisition: download a release from GitHub into the extension's
  * global storage so diagnostics work without the user hunting for a binary.
  *
  * The extension never bundles tiger (it tracks game patches faster than the
  * extension releases); instead the effective tiger path resolves as:
  * px.tigerPath setting → most recent downloaded copy → none.
+ *
+ * Which tiger — and whether one exists at all — comes from the active game's
+ * meta (GameMeta.tiger). Games without a tiger (EU5) have no flavor, and every
+ * caller must treat that as "skip tiger entirely".
  */
 import * as fs from "fs";
 import * as path from "path";
 import { execFileSync } from "child_process";
+import type { GameMeta } from "@px-lsp/server/games/profile";
+import { isCk3, metaFor } from "./meta";
 
-const RELEASES_API = "https://api.github.com/repos/amtep/tiger/releases/latest";
-
-/** Which tiger to fetch/run. The amtep/tiger releases ship one archive per
- * game (ck3-tiger-*, vic3-tiger-*); flavors keep the downloads apart. */
+/** Which tiger to fetch/run. The tiger releases ship one archive per game
+ * (ck3-tiger-*, vic3-tiger-*); flavors keep the downloads apart. */
 export interface TigerFlavor {
-  /** Asset/binary name prefix ("ck3-tiger", "vic3-tiger"). */
+  /** Asset/binary name prefix, from `GameMeta.tiger.binaryName`. */
   prefix: string;
+  /** GitHub `owner/repo` shipping the releases, from `GameMeta.tiger.repoSlug`. */
+  repoSlug: string;
   /** Storage subfolder under global storage ("tiger" is the legacy CK3 spot). */
   subdir: string;
 }
 
-export const CK3_TIGER: TigerFlavor = { prefix: "ck3-tiger", subdir: "tiger" };
-export const VIC3_TIGER: TigerFlavor = { prefix: "vic3-tiger", subdir: "tiger-vic3" };
-
-export function tigerFlavorFor(gameId: string): TigerFlavor {
-  return gameId === "vic3" ? VIC3_TIGER : CK3_TIGER;
+/**
+ * The tiger flavor for a game, or null when the game has no tiger (EU5 — no
+ * eu5-tiger exists). A null flavor is the single signal callers gate on.
+ */
+export function tigerFlavorFor(gameId: string): TigerFlavor | null {
+  const meta: GameMeta = metaFor(gameId);
+  if (!meta.tiger) return null;
+  // CK3 keeps the pre-multi-game folder name so existing downloads survive.
+  return {
+    prefix: meta.tiger.binaryName,
+    repoSlug: meta.tiger.repoSlug,
+    subdir: isCk3(meta.id) ? "tiger" : `tiger-${meta.id}`,
+  };
 }
 
 export interface ReleaseAsset {
@@ -37,7 +51,7 @@ export interface ReleaseAsset {
 export function pickTigerAsset(
   assets: ReleaseAsset[],
   platform: NodeJS.Platform,
-  flavor: TigerFlavor = CK3_TIGER
+  flavor: TigerFlavor
 ): ReleaseAsset | null {
   const pattern =
     platform === "win32"
@@ -80,9 +94,9 @@ function findBinaries(dir: string, flavor: TigerFlavor): string[] {
 }
 
 /**
- * Choose the ck3-tiger binary to use, preferring the plain validator over the
- * `-auto` variant. The Windows/Linux archive ships both `ck3-tiger` and
- * `ck3-tiger-auto`; the latter guesses the mod from the launcher and needs the
+ * Choose the tiger binary to use, preferring the plain validator over the
+ * `-auto` variant. The Windows/Linux archive ships both `<game>-tiger` and
+ * `<game>-tiger-auto`; the latter guesses the mod from the launcher and needs the
  * Paradox user directory (and fails with "Cannot find the Paradox directory"
  * when Documents is redirected). We always invoke tiger with an explicit mod
  * path, so the plain binary is the correct one — and the only one that answers
@@ -100,7 +114,7 @@ function locateBinary(dir: string, flavor: TigerFlavor): string | null {
 }
 
 /** The most recently downloaded tiger binary in global storage, or null. */
-export function findDownloadedTiger(storageDir: string, flavor: TigerFlavor = CK3_TIGER): string | null {
+export function findDownloadedTiger(storageDir: string, flavor: TigerFlavor): string | null {
   const base = tigerStorageDir(storageDir, flavor);
   let versions: string[];
   try {
@@ -121,16 +135,16 @@ export interface TigerDownloadResult {
 }
 
 /**
- * Download and unpack the latest ck3-tiger release. Throws with a
+ * Download and unpack the latest tiger release of `flavor`. Throws with a
  * user-presentable message on any failure. `report` receives progress text.
  */
 export async function downloadLatestTiger(
   storageDir: string,
   report: (msg: string) => void,
-  flavor: TigerFlavor = CK3_TIGER
+  flavor: TigerFlavor
 ): Promise<TigerDownloadResult> {
   report("querying latest release...");
-  const apiRes = await fetch(RELEASES_API, {
+  const apiRes = await fetch(`https://api.github.com/repos/${flavor.repoSlug}/releases/latest`, {
     headers: { "User-Agent": "ck3-modding-vscode", Accept: "application/vnd.github+json" },
   });
   if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status} for the tiger releases feed.`);
@@ -140,7 +154,7 @@ export async function downloadLatestTiger(
   if (!asset) {
     throw new Error(
       process.platform === "darwin"
-        ? "tiger has no prebuilt macOS binary; build it from source (github.com/amtep/tiger) and set px.tigerPath."
+        ? `${flavor.prefix} has no prebuilt macOS binary; build it from source (github.com/${flavor.repoSlug}) and set px.tigerPath.`
         : `no ${flavor.prefix} asset found for this platform in release ${tag}.`
     );
   }

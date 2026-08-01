@@ -7,12 +7,21 @@
  * usually `name - description`; known metadata lines (`Supported Scopes:` etc.) are
  * extracted; anything unrecognized is appended to `doc` or `traits` instead of failing.
  *
+ * Newer Jomini titles dump the same information in different shapes; which one a
+ * game uses is declared by its profile (GameMeta.scriptDocs, absent = classic):
+ *   - "markdown" logs: `## name` / `### name` headings, `**Supported Scopes**: …`.
+ *   - "masked-block" modifiers: `name:` + indented Mask/Name/Description lines.
+ *   - "tag-line" modifiers: one `Tag: name, Categories: …` line per modifier.
+ * All of them produce the same TokenData shape, so everything downstream (hover,
+ * completion, the docs cache) is format-agnostic.
+ *
  * No `vscode` imports here: this module is unit-tested in plain Node.
  */
 import * as fs from "fs";
 import * as path from "path";
 import type { TokenData, TokenKind } from "@px-lsp/protocol/types";
 import { LOG_FILES } from "@px-lsp/protocol/constants";
+import { activeProfile } from "../games/active";
 
 export { LOG_FILES };
 
@@ -148,6 +157,161 @@ function applyMetaLine(token: TokenData, line: string): boolean {
   return false;
 }
 
+// --- Newer dump dialects ------------------------------------------------
+
+// `## effect_name` / `### event_target_name`. Level 1 is the file title
+// ("# Effect Documentation") and starts no entry.
+const MD_HEADING = /^(#{1,6})\s+(.+?)$/;
+// `**Supported Scopes**: state` — the bold wrapper is the only difference from
+// the classic metadata lines, so it is unwrapped and fed to applyMetaLine.
+const MD_BOLD_LABEL = /^\*\*([^*]+)\*\*\s*:/;
+// `battle_casualties_mult:` opens a masked-block entry; its Mask/Name/Description
+// lines are indented underneath it.
+const MASKED_NAME = /^([A-Za-z0-9_.$]+):\s*$/;
+const MASKED_FIELD = /^(Mask|Name|Description):\s*(.*)$/;
+// `--- Static modifier types ---` and friends: section banners, not entries.
+const SECTION_BANNER = /^-{3,}/;
+
+const braceDelta = (s: string): number => (s.match(/\{/g) ?? []).length - (s.match(/\}/g) ?? []).length;
+
+/**
+ * Markdown dump dialect (effects.log, triggers.log, event_targets.log of newer
+ * titles): entries open at a `##`/`###` heading and run until the next one.
+ * Metadata lines are the classic ones, optionally bold-wrapped; the remaining
+ * body is prose, except a leading `name = { … }` example which is lifted into
+ * `usage` (multi-line examples are followed until the braces balance).
+ */
+export function parseMarkdownLog(content: string, kind: TokenKind): TokenData[] {
+  const tokens: TokenData[] = [];
+  const seen = new Set<string>();
+
+  let current: TokenData | null = null;
+  // >0 while a multi-line usage example is still open.
+  let openBraces = 0;
+  const flush = () => {
+    if (current && current.name && !seen.has(current.name)) {
+      current.doc = current.doc.trim();
+      if (current.traits) current.traits = current.traits.trim();
+      if (current.usage) current.usage = current.usage.trim();
+      if (!current.usage) delete current.usage;
+      seen.add(current.name);
+      tokens.push(current);
+    }
+    current = null;
+    openBraces = 0;
+  };
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    // Markdown hard line breaks are trailing double spaces; they are noise here.
+    const line = rawLine.trimEnd();
+    const heading = MD_HEADING.exec(line);
+    if (heading) {
+      flush();
+      if (heading[1].length > 1) current = { name: heading[2].trim(), kind, doc: "", scopes: [] };
+      continue;
+    }
+    const trimmed = line.trim();
+    // A trailing `------` appendix (bare lists of code-saved scope names) is not
+    // part of any entry.
+    if (SEPARATOR.test(trimmed)) {
+      flush();
+      continue;
+    }
+    if (!current) continue;
+    const meta = trimmed.replace(MD_BOLD_LABEL, "$1:");
+    if (openBraces > 0) {
+      // Some dumped examples never close their braces (`switch = { … ` has no
+      // final `}`); a metadata line always ends the entry's body, so it wins.
+      if (applyMetaLine(current, meta)) {
+        openBraces = 0;
+        continue;
+      }
+      current.usage += "\n" + line;
+      openBraces += braceDelta(line);
+      continue;
+    }
+    if (trimmed === "") continue;
+    if (applyMetaLine(current, meta)) continue;
+    if (current.usage === undefined && SYNTAX_LINE.test(trimmed)) {
+      current.usage = trimmed;
+      openBraces = Math.max(0, braceDelta(trimmed));
+      continue;
+    }
+    current.doc = current.doc === "" ? trimmed : current.doc + "\n" + trimmed;
+  }
+  flush();
+  return tokens;
+}
+
+/**
+ * "masked-block" modifiers.log: `name:` followed by indented `Mask:`, `Name:`
+ * and `Description:` lines (the display name and description become the doc,
+ * the mask is metadata). Descriptions may continue on later unindented lines.
+ */
+export function parseMaskedBlockModifiers(content: string, kind: TokenKind): TokenData[] {
+  const tokens: TokenData[] = [];
+  const seen = new Set<string>();
+  let current: TokenData | null = null;
+  const flush = () => {
+    if (current && !seen.has(current.name)) {
+      current.doc = current.doc.trim();
+      seen.add(current.name);
+      tokens.push(current);
+    }
+    current = null;
+  };
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (SECTION_BANNER.test(trimmed)) {
+      flush();
+      continue;
+    }
+    const name = MASKED_NAME.exec(line);
+    if (name) {
+      flush();
+      current = { name: name[1], kind, doc: "", scopes: [] };
+      continue;
+    }
+    if (!current || trimmed === "") continue;
+    const field = MASKED_FIELD.exec(trimmed);
+    if (field && field[1] === "Mask") {
+      current.traits = current.traits ? current.traits + "\n" + trimmed : trimmed;
+      continue;
+    }
+    // Name/Description text, plus any unindented continuation of it.
+    const text = field ? field[2] : trimmed;
+    if (text !== "") current.doc = current.doc === "" ? text : current.doc + "\n" + text;
+  }
+  flush();
+  return tokens;
+}
+
+/**
+ * "tag-line" modifiers.log: one `Tag: name, Categories: Country, , All,` line
+ * per modifier (the category list is padded with empty entries). No description
+ * is dumped, so the categories are all the metadata there is.
+ */
+export function parseTagLineModifiers(content: string, kind: TokenKind): TokenData[] {
+  const tokens: TokenData[] = [];
+  const seen = new Set<string>();
+  for (const rawLine of content.split(/\r?\n/)) {
+    const m = TAG_LINE.exec(rawLine.trim());
+    if (!m || seen.has(m[1])) continue;
+    seen.add(m[1]);
+    const token: TokenData = { name: m[1], kind, doc: "", scopes: [] };
+    const categories = (m[2] ?? "")
+      .replace(/^Categories:\s*/i, "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+    if (categories.length > 0) token.traits = `Categories: ${categories.join(", ")}`;
+    tokens.push(token);
+  }
+  return tokens;
+}
+
 export interface DocsLoadResult {
   tokens: TokenData[];
   /** Templated modifier tags ($CULTURE$_opinion), for lazy expansion. */
@@ -181,6 +345,17 @@ export function parseOnActionsLog(logsDir: string): Map<string, string> {
   return scopes;
 }
 
+/** The parser for one log, per the active profile's dump dialect. */
+function parserFor(kind: TokenKind): (content: string, kind: TokenKind) => TokenData[] {
+  const dialect = activeProfile().scriptDocs;
+  if (kind === "modifier") {
+    if (dialect?.modifiers === "masked-block") return parseMaskedBlockModifiers;
+    if (dialect?.modifiers === "tag-line") return parseTagLineModifiers;
+    return parseLog;
+  }
+  return dialect?.format === "markdown" ? parseMarkdownLog : parseLog;
+}
+
 /** Parse the four script_docs logs found in `logsDir`. Missing files are reported, not fatal. */
 export function loadTokenDataFromLogs(logsDir: string): DocsLoadResult {
   const tokens: TokenData[] = [];
@@ -198,7 +373,7 @@ export function loadTokenDataFromLogs(logsDir: string): DocsLoadResult {
     }
     mtimes[file] = stat.mtimeMs;
     try {
-      for (const t of parseLog(fs.readFileSync(full, "utf8"), kind)) {
+      for (const t of parserFor(kind)(fs.readFileSync(full, "utf8"), kind)) {
         (t.name.includes("$") ? templates : tokens).push(t);
       }
     } catch {
@@ -218,7 +393,9 @@ interface DocsCacheFile {
 // Bump when the parsed TokenData shape changes (a stale mtime-keyed cache would
 // otherwise serve old parses). 3: templated modifier tags ($CULTURE$_opinion).
 // 4: added the `usage` field (syntax examples).
-const DOCS_CACHE_FORMAT = 4;
+// 5: per-profile dump dialects (markdown / masked-block / tag-line), which the
+// classic parser had mangled into near-empty caches for the newer titles.
+const DOCS_CACHE_FORMAT = 5;
 
 /** Load token data, using the JSON cache when log mtimes are unchanged. */
 export function loadTokenData(logsDir: string, cacheFile: string, forceReparse = false): DocsLoadResult {

@@ -32,13 +32,14 @@ fallbacks for bare clients):
 
 ```ts
 interface ParadoxInitOptions {
-  storageDir: string;    // server-side cache dir; default: <os tmp>/px-lsp
-  wikidocsDir: string;   // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
+  storageDir: string;      // server-side cache dir; default: <os tmp>/px-lsp
+  wikidocsDir: string;     // bundled wikidocs folder; default: data/<gameId>/wikidocs next to dist/server.js
+  clientCommands: boolean; // true ONLY for a client that registers the px.* command ids (the VSCode extension)
   settings: ParadoxSettings;
 }
 
 interface ParadoxSettings {
-  gameId?: string;             // game profile ("ck3" today; more later); unknown/absent -> default game
+  gameId?: string;             // game profile: "ck3" | "vic3" | "eu5"; unknown/absent -> default game ("ck3")
   gamePath: string | null;     // the game's data folder ("<install>/game")
   logsPath: string | null;     // folder with script_docs logs
   modPath: string | null;      // default: first workspace folder
@@ -56,6 +57,12 @@ One server instance serves one game at a time. The client detects the game
 per workspace (descriptor file, else configuration) and sends it as
 `settings.gameId` at initialize and in `paradox/configChanged`; changing it
 triggers a full reload.
+
+Bundled data is per-game: everything the server loads from disk lives under
+`data/<gameId>/` next to `dist/server.js`. Only `ck3` ships a `wikidocs/`
+bundle today, so `vic3` and `eu5` report `tokens: 0` in `paradox/status` and
+never render wiki-token hovers — a missing `data/<gameId>/` folder is a
+supported state, not an error.
 
 ## Custom methods: client → server
 
@@ -105,7 +112,20 @@ Paradox Toolkit rebrand; clients registering the old ids get no fallback:
 ## Degraded modes (bare LSP clients)
 
 Documented behavior without the VSCode client: no tiger diagnostics (tiger
-runs client-side), no overview webview UIs, and no external-file-change
-re-indexing unless the client sends `paradox/modFileChanged`. Completion,
-hover, definition, references, rename, symbols, formatting, folding, inlay
-hints, semantic tokens and structural diagnostics all work over plain LSP.
+runs client-side) and no overview webview UIs. Completion, hover, definition,
+references, rename, symbols, formatting, folding, inlay hints, semantic
+tokens and structural diagnostics all work over plain LSP.
+
+The `clientCommands` init flag switches the remaining surface automatically.
+When it is absent (every non-VSCode client):
+
+- hover markdown is plain (no sanitized HTML spans, no `command:` links);
+- the "create localization key" quick fix carries a real `WorkspaceEdit`
+  (appending to `<locRoot>/<lang>/zzz_px_lsp_edits_l_<lang>.yml`, creating it
+  BOM-first when absent), and the two editor-command actions are omitted;
+- the server dynamically registers `workspace/didChangeWatchedFiles` when the
+  client supports it, so external edits re-index without a restart
+  (`paradox/modFileChanged` remains the push path for clients that watch);
+- index health is mirrored to `window/logMessage`: a startup line naming the
+  resolved bundled-data folders (or their absence) and `status:` lines with
+  token/definition counts on indexing transitions.

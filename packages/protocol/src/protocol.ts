@@ -43,6 +43,15 @@ export interface ParadoxSettings {
 export interface ParadoxInitOptions {
   /** Server-side cache directory (the extension's global storage path). */
   storageDir?: string;
+  /**
+   * Declares that the client registers the `clientCommands` command ids (and
+   * renders the sanitized HTML spans in hover markdown). Sent by the VSCode
+   * extension only. When absent, the server emits plain markdown, drops
+   * `command:` links, replaces command-carrying code actions with real
+   * WorkspaceEdits where possible, and registers its own file watching if the
+   * client supports dynamic `workspace/didChangeWatchedFiles` registration.
+   */
+  clientCommands?: boolean;
   /** Override for the bundled wikidocs/ folder. Normally omitted: the server
    * derives data/<gameId>/wikidocs next to its own bundle, which stays
    * correct across game profiles. */

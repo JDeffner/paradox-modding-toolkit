@@ -46,6 +46,15 @@ describe.each(allProfiles().map((p) => [p.id, p] as const))("profile %s", (_id, 
     expect(profile.steamAppId).toBeGreaterThan(0);
     // Non-default profiles must namespace their caches (shared storageDir).
     if (profile !== defaultProfile) expect(profile.cacheSuffix).toMatch(/^-[a-z0-9]/);
+    // Load-stage folders (EU5): plain folder names, no separators.
+    for (const stage of profile.stageRoots ?? []) expect(stage).toMatch(/^[a-z_]+$/);
+    if (profile.scriptDocsSubdir) expect(profile.scriptDocsSubdir).toMatch(/^[a-z_]+$/);
+    // Database entry modes (EU5's `REPLACE:key`): SHOUTY prefixes only.
+    for (const mode of profile.entryModes ?? []) expect(mode).toMatch(/^[A-Z_]+$/);
+    if (profile.scriptDocs) {
+      expect(["classic", "markdown"]).toContain(profile.scriptDocs.format);
+      expect(["classic", "masked-block", "tag-line"]).toContain(profile.scriptDocs.modifiers);
+    }
   });
 
   it("declares a well-formed schema table", () => {

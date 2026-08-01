@@ -1,8 +1,8 @@
 {
   "name": "px-toolkit",
   "displayName": "Paradox Toolkit",
-  "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3 preview): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and GUI preview.",
-  "version": "0.2.0",
+  "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and GUI preview.",
+  "version": "0.3.0",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -158,12 +158,12 @@
     "commands": [
       {
         "command": "px.reloadScriptDocs",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Reload Game Data (script_docs)"
       },
       {
         "command": "px.dumpIndexStats",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show Index Statistics"
       },
       {
@@ -199,19 +199,19 @@
       },
       {
         "command": "px.pickFocusMod",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Pick Focus Mod (for the sidebar views)",
         "icon": "$(folder-library)"
       },
       {
         "command": "px.excludeMods",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Exclude Workspace Mods from Indexing",
         "icon": "$(eye-closed)"
       },
       {
         "command": "px.setup",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Run Setup & Health Check"
       },
       {
@@ -221,55 +221,55 @@
       },
       {
         "command": "px.openInfoDocs",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Open Format Docs (.info) for This File",
         "icon": "$(book)"
       },
       {
         "command": "px.openVanillaExamples",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Open Vanilla Examples",
         "icon": "$(go-to-file)"
       },
       {
         "command": "px.refreshViews",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Refresh Views",
         "icon": "$(refresh)"
       },
       {
         "command": "px.showEventGraph",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show Event Graph",
         "icon": "$(type-hierarchy)"
       },
       {
         "command": "px.showDependencies",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show Dependencies of Definition at Cursor",
         "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "px.showGuiTree",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show GUI Widget Tree",
         "icon": "$(list-tree)"
       },
       {
         "command": "px.guiTreeToggleParents",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "GUI Tree: Toggle Ancestors / Subtree Focus",
         "enablement": "activeWebviewPanelId == px.guiTree"
       },
       {
         "command": "px.showGuiPreview",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Preview GUI Layout",
         "icon": "$(preview)"
       },
       {
         "command": "px.modReport",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show Mod Report"
       },
       {
@@ -294,13 +294,13 @@
       },
       {
         "command": "px.watchErrorLog",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Toggle error.log Watcher"
       },
       {
         "command": "px.launchGame",
-        "category": "CK3",
-        "title": "Launch CK3 (debug mode)"
+        "category": "Paradox",
+        "title": "Launch Game (debug mode)"
       },
       {
         "command": "px.translateNext",
@@ -309,18 +309,18 @@
       },
       {
         "command": "px.newContent",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "New Content (event, decision, …)"
       },
       {
         "command": "px.convertToDds",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Convert Image to DDS",
         "icon": "$(file-media)"
       },
       {
         "command": "px.imageGuidelines",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Show Image Guidelines (sizes & formats)",
         "icon": "$(book)"
       },
@@ -332,13 +332,13 @@
       },
       {
         "command": "px.tutorial",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Open Tutorial (learn CK3 modding)",
         "icon": "$(mortar-board)"
       },
       {
         "command": "px.createDescriptor",
-        "category": "CK3",
+        "category": "Paradox",
         "title": "Create descriptor.mod"
       }
     ],
@@ -558,11 +558,23 @@
             "order": 2,
             "markdownDescription": "Escape hatch: set to false to stop this workspace's txt/yml files from being switched to the CK3 language modes."
           },
-          "px.vic3Preview": {
-            "type": "boolean",
-            "default": false,
+          "px.gameId": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ck3",
+              "vic3",
+              "eu5"
+            ],
+            "default": "auto",
             "order": 3,
-            "markdownDescription": "**Preview**: enable Victoria 3 support. A workspace mod carrying a `.metadata/metadata.json` descriptor (and no `descriptor.mod`) is treated as a Vic3 mod: game and script_docs logs are auto-detected (Steam / Documents — the `px.gamePath`/`px.logsPath`/`px.tigerPath` settings are ignored for Vic3), vic3-tiger is downloaded on demand, and the language server uses its Vic3 profile (completion/hover/navigation/diagnostics; no GUI preview or data-type chains yet)."
+            "enumDescriptions": [
+              "Detect from the mod's descriptor shape: descriptor.mod → CK3; .metadata/ plus in_game|main_menu|loading_screen stage folders → EU5; .metadata/ alone → Victoria 3; otherwise CK3.",
+              "Crusader Kings III",
+              "Victoria 3",
+              "Europa Universalis V (community-sourced schema; not yet verified against a live install)"
+            ],
+            "markdownDescription": "Which game this workspace mods. `auto` detects from the mod's descriptor shape and is right for almost everyone; set explicitly when detection guesses wrong. `px.gamePath`/`px.logsPath`/`px.tigerPath` always describe the ACTIVE game and are honored when set; unset paths are auto-detected per game (Steam library / Documents). Games without a tiger build (EU5) skip tiger integration."
           },
           "px.trace.server": {
             "type": "string",
@@ -903,11 +915,13 @@
     "crusader kings",
     "vic3",
     "victoria 3",
+    "eu5",
+    "europa universalis",
     "paradox",
     "paradox toolkit",
     "modding",
     "language server",
-    "ck3-tiger"
+    "tiger"
   ],
   "repository": {
     "type": "git",

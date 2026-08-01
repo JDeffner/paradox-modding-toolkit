@@ -145,6 +145,9 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-storage-")),
         wikidocsDir: WIKIDOCS,
+        // This suite simulates the VSCode client, which registers the px.*
+        // commands and renders rich hover markup (PROTOCOL.md §Initialization).
+        clientCommands: true,
         settings: {
           gamePath: null, // vanilla scan skipped: keep the smoke fast
           logsPath: null,

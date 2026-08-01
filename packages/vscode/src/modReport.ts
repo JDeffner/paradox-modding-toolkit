@@ -40,7 +40,7 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
   ]);
 
   const lines: string[] = [];
-  lines.push(`# CK3 Mod Report`, "", `*Generated ${new Date().toLocaleString()}*`, "");
+  lines.push(`# Mod Report`, "", `*Generated ${new Date().toLocaleString()}*`, "");
   if (modRoot) lines.push(`*Mod: ${modRoot}*`, "");
 
   lines.push(`## Content`, "");

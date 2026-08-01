@@ -1,36 +1,45 @@
 /**
- * Frequency-table builder (update plan v1.1 §C3). Scans the vanilla tree
- * (CK3_GAME_PATH) and optionally a mod corpus dir, counting how often each key
- * appears per completion context — reusing the server's own parser and the same
- * context detection completion uses, so the counts reflect what the ranker sees.
- * Emits packages/server/data/ck3/freqs.json (top ~500 names per context + a global token table).
+ * Frequency-table builder (update plan v1.1 §C3). Scans the vanilla tree and
+ * optionally a mod corpus dir, counting how often each key appears per
+ * completion context — reusing the server's own parser and the same context
+ * detection completion uses, so the counts reflect what the ranker sees.
+ * Emits packages/server/data/<gameId>/freqs.json (top ~500 names per context +
+ * a global token table).
+ *
+ * The context set (schema/freqs.ts) and classifyPosition()'s file kinds are
+ * CK3-shaped by design: for other games the CK3-only contexts simply stay
+ * empty and only the global token table and trigger/effect blocks fill in.
  *
  * SHIPPED ARTIFACT: unlike build-structure.ts, this output IS committed and ships
  * with the extension (loaded fail-soft by packages/server/src/schema/freqs.ts).
  *
  * Run:
  *   npx esbuild scripts/build-freqs.ts --bundle --platform=node --outfile=dist/build-freqs.cjs \
- *     && node dist/build-freqs.cjs [modCorpusDir]
- *   (vanilla path from CK3_GAME_PATH; mod corpus from argv[2] or CK3_MOD_CORPUS)
+ *     && node dist/build-freqs.cjs [--game <id>] [modCorpusDir]
+ *   (vanilla path and mod corpus from dev-paths.json / PX_<GAME>_GAME_PATH,
+ *    PX_<GAME>_MOD_CORPUS; --game defaults to ck3)
  */
 import * as fs from "fs";
 import * as path from "path";
 import { classifyFile } from "../packages/server/src/index/indexer";
 import { walkStatements, parseScript, decode, type Statement } from "../packages/server/src/parser";
 import { classifyKeyword } from "../packages/server/src/contextKeywords";
-import { CK3_SCHEMA } from "../packages/server/src/games/ck3/schema";
+import { resolveProfile } from "../packages/server/src/games/registry";
 import { FREQ_CONTEXTS, type FreqContext, type FreqData } from "../packages/server/src/schema/freqs";
-import { devPath } from "./devPaths";
+import { devPath, parseGameArg } from "./devPaths";
 
 const TOP_PER_CONTEXT = 500;
 const TOP_GLOBAL = 2000;
 const NAME_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const gamePath = devPath("gamePath");
-const modPath = process.argv[2] ?? devPath("corpusPath");
+const { gameId, rest } = parseGameArg(process.argv.slice(2));
+const schema = resolveProfile(gameId).schema;
+const gamePath = devPath("gamePath", gameId);
+const modPath = rest[0] ?? devPath("corpusPath", gameId);
 if (!gamePath && !modPath) {
   console.error(
-    "usage: build-freqs [modCorpusDir]  (needs gamePath and/or corpusPath — see dev-paths.example.json)"
+    `usage: build-freqs [--game <id>] [modCorpusDir]  ` +
+      `(needs gamePath and/or modCorpus for ${gameId} — see dev-paths.example.json)`
   );
   process.exit(1);
 }
@@ -91,7 +100,7 @@ function scanTree(root: string): number {
       continue;
     }
     const { text } = decode(buf);
-    const entry = classifyFile(root, file, CK3_SCHEMA);
+    const entry = classifyFile(root, file, schema);
     let root2;
     try {
       root2 = parseScript(text).root;
@@ -145,7 +154,7 @@ const data: FreqData = {
 };
 for (const c of FREQ_CONTEXTS) data.contexts[c] = topN(contexts.get(c)!, TOP_PER_CONTEXT);
 
-const outFile = path.join(__dirname, "..", "packages", "server", "data", "ck3", "freqs.json");
+const outFile = path.join(__dirname, "..", "packages", "server", "data", gameId, "freqs.json");
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify(data));
 console.error(`wrote ${outFile} (${(fs.statSync(outFile).size / 1024).toFixed(0)} KB)`);

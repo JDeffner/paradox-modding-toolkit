@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseLibraryFoldersVdf } from "../src/steamDetect";
-import { pickTigerAsset, preferPlainBinary } from "../src/tigerDownload";
+import { pickTigerAsset, preferPlainBinary, tigerFlavorFor } from "../src/tigerDownload";
 
 describe("parseLibraryFoldersVdf", () => {
   it("extracts every library path with unescaped backslashes", () => {
@@ -25,7 +25,27 @@ describe("parseLibraryFoldersVdf", () => {
   });
 });
 
+describe("tigerFlavorFor", () => {
+  it("derives the flavor from the game meta, keeping CK3's legacy storage folder", () => {
+    expect(tigerFlavorFor("ck3")).toEqual({
+      prefix: "ck3-tiger",
+      repoSlug: "amtep/tiger",
+      subdir: "tiger",
+    });
+    expect(tigerFlavorFor("vic3")).toEqual({
+      prefix: "vic3-tiger",
+      repoSlug: "amtep/tiger",
+      subdir: "tiger-vic3",
+    });
+  });
+
+  it("is null for a game whose meta has no tiger", () => {
+    expect(tigerFlavorFor("eu5")).toBeNull();
+  });
+});
+
 describe("pickTigerAsset", () => {
+  const ck3 = tigerFlavorFor("ck3")!;
   const assets = [
     { name: "ck3-tiger-linux-v1.19.0.tar.gz", browser_download_url: "u1" },
     { name: "ck3-tiger-windows-v1.19.0.zip", browser_download_url: "u2" },
@@ -34,13 +54,13 @@ describe("pickTigerAsset", () => {
   ];
 
   it("picks the ck3 asset for the platform, never another game's", () => {
-    expect(pickTigerAsset(assets, "win32")?.name).toBe("ck3-tiger-windows-v1.19.0.zip");
-    expect(pickTigerAsset(assets, "linux")?.name).toBe("ck3-tiger-linux-v1.19.0.tar.gz");
+    expect(pickTigerAsset(assets, "win32", ck3)?.name).toBe("ck3-tiger-windows-v1.19.0.zip");
+    expect(pickTigerAsset(assets, "linux", ck3)?.name).toBe("ck3-tiger-linux-v1.19.0.tar.gz");
   });
 
   it("returns null for macOS (no prebuilt) and when nothing matches", () => {
-    expect(pickTigerAsset(assets, "darwin")).toBeNull();
-    expect(pickTigerAsset([], "win32")).toBeNull();
+    expect(pickTigerAsset(assets, "darwin", ck3)).toBeNull();
+    expect(pickTigerAsset([], "win32", ck3)).toBeNull();
   });
 });
 

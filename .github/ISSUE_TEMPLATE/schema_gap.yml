@@ -1,0 +1,87 @@
+name: Schema gap
+description: A game folder maps to the wrong definition kind, or is not recognised at all
+labels: ["schema"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The folder→kind table is what tells the extension that
+        `common/traits/` holds traits. When it is wrong or missing, definitions
+        in that folder go unindexed (no completion, no go-to-definition).
+
+        **Immediate workaround:** drop a schema overlay in your mod at
+        `<mod>/<config-dir>/schema.json` — `.ck3modding/` for CK3,
+        `.vic3modding/` for Victoria 3, `.eu5modding/` for EU5 — and add the
+        entry yourself. It takes effect on reload, no release needed:
+
+        ```json
+        { "entries": [{ "path": "in_game/common/my_folder", "kind": "my_thing" }] }
+        ```
+
+        Please still file this so the bundled table gets fixed for everyone.
+        The Victoria 3 and EU5 tables are community-sourced and unverified
+        against a live install, so gaps there are expected.
+
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - Crusader Kings III (ck3)
+        - Victoria 3 (vic3)
+        - Europa Universalis V (eu5)
+    validations:
+      required: true
+
+  - type: input
+    id: folder
+    attributes:
+      label: Folder path
+      description: Relative to the mod root, forward slashes, no trailing slash. Include the load-stage prefix for EU5.
+      placeholder: e.g. in_game/common/great_projects
+    validations:
+      required: true
+
+  - type: input
+    id: expected-kind
+    attributes:
+      label: Expected definition kind
+      description: Singular snake_case, as you would want it to read in hovers and the Tools panel.
+      placeholder: e.g. great_project
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What goes wrong today
+      options:
+        - Folder is not recognised at all (nothing indexed)
+        - Folder maps to the wrong kind
+        - Definition names come out wrong (extraction mode)
+        - Wrong or missing required localization keys
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Example file
+      description: The smallest real file from that folder, so the definition names and nesting are visible. Say which file it came from.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: game-version
+    attributes:
+      label: Game version
+      description: Matters — folders come and go between patches.
+      placeholder: e.g. 1.3.4
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Wiki or CWT-config links backing the mapping, the overlay you are using as a workaround, or other context.

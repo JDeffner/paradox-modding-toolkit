@@ -52,6 +52,12 @@ export interface Definition {
   doc?: string;
   /** PdxDoc structured tags (@scope, @param, @saves, @returns, @example, @deprecated, …). */
   tags?: DocTag[];
+  /**
+   * Database entry mode stripped from the declaration key (`REPLACE:name`),
+   * for games whose profile declares entryModes. The definition is indexed
+   * under the bare name; the mode is kept for override analysis.
+   */
+  entryMode?: string;
 }
 
 /** One structured PdxDoc tag line (§E1). Unknown tags render as prose, not stored here. */

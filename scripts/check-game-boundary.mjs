@@ -13,7 +13,7 @@ import process from "node:process";
 
 const ROOTS = ["packages/protocol/src", "packages/server/src"];
 const EXCLUDED_DIRS = [path.join("packages", "server", "src", "games")];
-const PATTERN = /ck3|crusader|vic3|victoria|hoi4|stellaris/i;
+const PATTERN = /ck3|crusader|vic3|victoria|eu5|europa|hoi4|stellaris/i;
 
 /** file (repo-relative, forward slashes) -> line-level allow pattern. */
 const ALLOW = new Map();

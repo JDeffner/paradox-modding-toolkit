@@ -1,0 +1,5578 @@
+{
+ "meta": {
+  "generated": "2026-08-01",
+  "files": 204
+ },
+ "types": {
+  "textbox": {
+   "count": 3333,
+   "props": {
+    "align": 2938,
+    "autoresize": 2302,
+    "text": 2182,
+    "parentanchor": 1547,
+    "using": 1429,
+    "elide": 924,
+    "visible": 893,
+    "raw_text": 746,
+    "size": 679,
+    "fontsize_min": 664,
+    "max_width": 605,
+    "multiline": 486,
+    "maximumsize": 433,
+    "default_format": 409,
+    "layoutpolicy_horizontal": 397,
+    "tooltip": 385,
+    "minimumsize": 358,
+    "margin_left": 351,
+    "position": 339,
+    "margin": 333,
+    "margin_right": 326,
+    "alpha": 200,
+    "layoutpolicy_vertical": 131,
+    "margin_bottom": 126,
+    "background": 110,
+    "datacontext": 102,
+    "margin_top": 101,
+    "name": 98,
+    "min_width": 89,
+    "state": 62,
+    "widgetanchor": 51,
+    "fontsize": 50,
+    "layoutstretchfactor_horizontal": 40,
+    "alwaystransparent": 39,
+    "fonttintcolor": 26,
+    "tooltipwidget": 24,
+    "resizeparent": 14,
+    "fontcolor": 5,
+    "scissor": 3,
+    "font": 3,
+    "icon": 2,
+    "text_selectable": 2,
+    "flowcontainer": 2
+   }
+  },
+  "flowcontainer": {
+   "count": 3183,
+   "props": {
+    "direction": 1656,
+    "flowcontainer": 1528,
+    "spacing": 1524,
+    "parentanchor": 1410,
+    "textbox": 1405,
+    "visible": 763,
+    "widget": 591,
+    "icon": 411,
+    "using": 403,
+    "item": 395,
+    "datamodel": 374,
+    "button": 342,
+    "margin": 317,
+    "datacontext": 314,
+    "minimumsize": 309,
+    "background": 306,
+    "margin_top": 275,
+    "margin_bottom": 248,
+    "sort_button": 201,
+    "margin_left": 193,
+    "position": 186,
+    "custom_tooltip_textbox": 180,
+    "container": 143,
+    "dynamicgridbox": 133,
+    "tooltip": 133,
+    "divider_clean": 106,
+    "default_header": 104,
+    "margin_right": 97,
+    "name": 97,
+    "maximumsize": 88,
+    "vertical_divider": 88,
+    "section_header_button": 87,
+    "empty_state": 64,
+    "right_click_menu_item": 57,
+    "resizeparent": 53,
+    "debug_menu_button": 50,
+    "wrap_count": 49,
+    "tooltipwidget": 48,
+    "alpha": 48,
+    "fixedgridbox": 46,
+    "button_icon_goto": 37,
+    "state_panel_status_item_small": 35,
+    "min_width": 34,
+    "custom_tooltip_textbox_fixed_width": 34,
+    "state": 31,
+    "tiny_flag_no_interact": 29,
+    "default_header_2texts": 29,
+    "ignoreinvisible": 29,
+    "tax_exp_frame": 28,
+    "onmousehierarchyenter": 27,
+    "onmousehierarchyleave": 27,
+    "overlappingitembox": 27,
+    "filter_button": 27,
+    "small_header_grid_item": 27,
+    "alwaystransparent": 25,
+    "filter_background_selected": 24,
+    "editbox": 23,
+    "custom_tooltip_textbox_with_empty_line": 23,
+    "text_single": 22,
+    "tiny_flag": 21,
+    "building_browser_filter_line": 21,
+    "max_width": 21,
+    "defaulttooltiptextbox": 21,
+    "set_level_bar_item": 19,
+    "divider_decorative": 19,
+    "bar_horizontal_with_background": 19,
+    "power_bloc_header_grid_item": 19,
+    "state_panel_status_item_condensed": 19,
+    "console_button": 18,
+    "custom_tooltip_newline": 18,
+    "button_icon_round_map_interaction": 18,
+    "country_stats_entry": 17,
+    "button_icon_round_action": 17,
+    "vertical_divider_full": 17,
+    "layoutpolicy_horizontal": 16,
+    "pop_details_side_stats_item": 16,
+    "scrollarea": 15,
+    "debug_menu_sub_button": 15,
+    "treaty_draft_input_acceptance_icon": 15,
+    "building_process_entry": 14,
+    "button_select_arrow": 14,
+    "small_flag": 14,
+    "widgetanchor": 14,
+    "manpower_bar": 13,
+    "button_icon_round": 12,
+    "building_process_entry_small": 12,
+    "diplo_actions_button": 12,
+    "header_textbox": 12,
+    "layoutpolicy_vertical": 12,
+    "character_stats_entry": 11,
+    "max_update_rate": 11,
+    "double_direction_progressbar_gold": 11,
+    "state_panel_status_item_condensed_icon": 11,
+    "setting_bar_item": 11,
+    "ship_type_silhouette": 10,
+    "culture_or_religion_labeled_value_flowcontainer": 10,
+    "default_header_clean_faded": 10,
+    "header_grid_item": 10,
+    "checkbutton": 10,
+    "morale_bar": 9
+   }
+  },
+  "widget": {
+   "count": 2640,
+   "props": {
+    "size": 1967,
+    "icon": 690,
+    "parentanchor": 589,
+    "visible": 505,
+    "background": 400,
+    "textbox": 324,
+    "widget": 300,
+    "flowcontainer": 246,
+    "position": 234,
+    "using": 229,
+    "state": 226,
+    "button": 196,
+    "tooltip": 188,
+    "hbox": 184,
+    "datacontext": 155,
+    "name": 149,
+    "layoutpolicy_horizontal": 148,
+    "layoutpolicy_vertical": 110,
+    "tooltipwidget": 79,
+    "vbox": 72,
+    "alwaystransparent": 48,
+    "alpha": 48,
+    "vfx": 48,
+    "button_icon_round_action": 39,
+    "scissor": 38,
+    "container": 35,
+    "allow_outside": 33,
+    "divider_clean": 33,
+    "onmousehierarchyenter": 27,
+    "onmousehierarchyleave": 26,
+    "military_formation_right_click_item": 23,
+    "button_icon_round": 20,
+    "tiny_flag": 17,
+    "input_action": 16,
+    "tiny_flag_no_interact": 16,
+    "gold_progressbar_horizontal": 15,
+    "default_progressbar_horizontal": 15,
+    "checkbutton": 15,
+    "military_formation_right_click_item_selected": 14,
+    "enabled": 13,
+    "minimumsize": 12,
+    "layer": 11,
+    "changed_value_decreased_progressbar_horizontal": 10,
+    "changed_value_increased_progressbar_horizontal": 10,
+    "max_update_rate": 10,
+    "progressbar": 10,
+    "character_portrait_base_no_mask": 9,
+    "rank_badge": 9,
+    "ig_button": 9,
+    "treaty_textbox": 9,
+    "is_player_glow": 9,
+    "tutorial_diagram": 9,
+    "button_icon_goto": 8,
+    "editor_editbox": 8,
+    "widgetid": 8,
+    "ignore_in_debug_draw": 8,
+    "ep2_meiji_restoration_faction_button_base": 8,
+    "goods_filter_button": 8,
+    "world_market_goods_filter_button": 8,
+    "bad_progressbar_horizontal": 7,
+    "small_flag": 7,
+    "miniature_flag_no_interact": 7,
+    "sidepanel_button_small": 7,
+    "min_width": 7,
+    "treaty_draft_input_acceptance_icon": 7,
+    "has_new_pm_icon": 6,
+    "pop_portraits_datamodel": 6,
+    "autonomy_button": 6,
+    "scale": 6,
+    "button_select_arrow": 6,
+    "sidepanel_button_big": 6,
+    "maximumsize": 6,
+    "button_icon_round_toggle": 6,
+    "layoutstretchfactor_horizontal": 6,
+    "button_icon_zoom": 5,
+    "close_button": 5,
+    "vertical_divider": 5,
+    "animated_progresspie": 5,
+    "large_flag": 5,
+    "flag": 5,
+    "character_portrait_medium": 5,
+    "overlappingitembox": 5,
+    "round_progress_bad": 5,
+    "dropdown_menu_standard": 5,
+    "section_header_button": 5,
+    "icon_with_background_big": 5,
+    "button_icon_cancel": 5,
+    "default_header_clean": 5,
+    "privately_owned_filter_right_click_menu_item": 5,
+    "privately_owned_filter_right_click_menu_item_selected": 5,
+    "ship_item": 4,
+    "button_icon_round_privatize_or_monopolize_button": 4,
+    "plotline": 4,
+    "fancy_flag_ui": 4,
+    "country_involvement_bar_with_label": 4,
+    "total_influence_cost": 4,
+    "button_icon_round_big_action": 4,
+    "video_icon": 4,
+    "text_single": 4,
+    "character_portrait_small": 4
+   }
+  },
+  "icon": {
+   "count": 2317,
+   "props": {
+    "size": 1918,
+    "texture": 1672,
+    "parentanchor": 1146,
+    "visible": 743,
+    "using": 725,
+    "state": 357,
+    "position": 321,
+    "tooltip": 236,
+    "alwaystransparent": 154,
+    "alpha": 148,
+    "modify_texture": 129,
+    "icon": 112,
+    "name": 94,
+    "tooltipwidget": 80,
+    "datacontext": 75,
+    "spritetype": 52,
+    "texture_density": 51,
+    "color": 49,
+    "spriteborder": 45,
+    "framesize": 38,
+    "textbox": 37,
+    "widgetanchor": 36,
+    "scale": 34,
+    "frame": 32,
+    "mirror": 21,
+    "layoutpolicy_horizontal": 15,
+    "onmousehierarchyenter": 14,
+    "onmousehierarchyleave": 14,
+    "shaderfile": 14,
+    "background": 13,
+    "effectname": 8,
+    "enabled": 8,
+    "spriteborder_bottom": 8,
+    "flowcontainer": 8,
+    "round_progress_bad": 7,
+    "spriteborder_right": 7,
+    "gfxtype": 7,
+    "round_progress_default": 6,
+    "layoutpolicy_vertical": 5,
+    "entity_instance": 5,
+    "gfx_environment_file": 5,
+    "camera_position": 5,
+    "camera_look_at": 5,
+    "camera_fov_y_degrees": 5,
+    "camera_near_far": 5,
+    "layoutstretchfactor_horizontal": 5,
+    "law_icon": 4,
+    "spriteborder_top": 4,
+    "tintcolor": 4,
+    "offense_defense_info_small": 3,
+    "paused_icon_bad": 3,
+    "spriteborder_left": 3,
+    "entity_enable_sound": 3,
+    "realtime": 3,
+    "coat_of_arms_slot": 3,
+    "mobilization_icon": 3,
+    "block": 3,
+    "alert_icon": 3,
+    "video": 3,
+    "offense_defense_info": 2,
+    "button": 2,
+    "white_progressbar_vertical": 2,
+    "tiny_flag_no_interact": 2,
+    "tiny_flag": 2,
+    "bolster_icon": 2,
+    "suppress_icon": 2,
+    "render_pass": 2,
+    "enabled_post_effects": 2,
+    "widget": 2
+   }
+  },
+  "button": {
+   "count": 1629,
+   "props": {
+    "using": 1333,
+    "size": 1134,
+    "onclick": 1062,
+    "visible": 473,
+    "parentanchor": 401,
+    "tooltip": 371,
+    "enabled": 265,
+    "text": 261,
+    "texture": 257,
+    "raw_text": 233,
+    "icon": 231,
+    "textbox": 213,
+    "alwaystransparent": 195,
+    "position": 147,
+    "onrightclick": 121,
+    "state": 118,
+    "name": 102,
+    "datacontext": 101,
+    "flowcontainer": 95,
+    "tooltipwidget": 92,
+    "button": 92,
+    "blockoverride": 77,
+    "raw_tooltip": 73,
+    "layoutpolicy_horizontal": 65,
+    "fontsize": 62,
+    "framesize": 59,
+    "align": 55,
+    "input_action": 47,
+    "onmousehierarchyenter": 46,
+    "onmousehierarchyleave": 45,
+    "font": 45,
+    "hbox": 42,
+    "frame": 39,
+    "alpha": 37,
+    "tintcolor": 32,
+    "effectname": 27,
+    "widget": 26,
+    "shortcut": 25,
+    "clicksound": 24,
+    "background": 20,
+    "gfxtype": 19,
+    "container": 18,
+    "color": 18,
+    "distribute_visual_state": 17,
+    "inherit_visual_state": 15,
+    "default_format": 15,
+    "rightclicksound": 15,
+    "modify_texture": 11,
+    "minimumsize": 11,
+    "down": 11,
+    "margin_right": 11,
+    "layoutpolicy_vertical": 9,
+    "widgetanchor": 9,
+    "click_modifiers": 8,
+    "spritetype": 8,
+    "spriteborder": 8,
+    "layer": 8,
+    "max_update_rate": 8,
+    "elide": 8,
+    "vfx": 7,
+    "button_trigger": 7,
+    "action_selection_number": 6,
+    "vbox": 6,
+    "margin_left": 6,
+    "upframe": 5,
+    "downframe": 5,
+    "allow_outside": 5,
+    "mobilization_icon": 5,
+    "layoutstretchfactor_horizontal": 5,
+    "overframe": 4,
+    "icon_online_offline": 4,
+    "small_flag": 4,
+    "button_radio": 4,
+    "map_modes_fake_static_filled_radiobutton": 4,
+    "treaty_draft_input_acceptance_button_icon": 4,
+    "double_direction_progressbar": 4,
+    "character_portrait_small": 3,
+    "cannot_be_trade_icon": 3,
+    "tiny_flag_no_interact": 3,
+    "intersectionmask": 3,
+    "diplomatic_action_acceptance_icon": 3,
+    "tiny_flag": 3,
+    "button_icon": 3,
+    "mirror": 3,
+    "default_progressbar_horizontal": 3,
+    "rightclick_modifiers": 3,
+    "available_options_number": 3,
+    "buttontext": 3,
+    "min_width": 2,
+    "text_single": 2,
+    "small_flag_no_interact": 2,
+    "highlight_tutorial_ui": 2,
+    "margin": 2,
+    "text_multi": 2,
+    "filter_mouse": 2,
+    "highlight_tutorial": 2,
+    "disableframe": 2,
+    "pop_portrait_simple": 2,
+    "ship_type_silhouette": 2,
+    "maximumsize": 2
+   }
+  },
+  "background": {
+   "count": 1286,
+   "props": {
+    "using": 1202,
+    "alpha": 251,
+    "margin": 235,
+    "modify_texture": 200,
+    "texture": 195,
+    "visible": 129,
+    "color": 126,
+    "spritetype": 71,
+    "margin_left": 69,
+    "spriteborder": 68,
+    "margin_right": 66,
+    "fittype": 56,
+    "texture_density": 51,
+    "margin_bottom": 42,
+    "margin_top": 42,
+    "shaderfile": 19,
+    "mirror": 16,
+    "spriteborder_right": 8,
+    "name": 8,
+    "spriteborder_bottom": 7,
+    "spriteborder_top": 4,
+    "size": 3,
+    "spriteborder_left": 3,
+    "alwaystransparent": 2,
+    "tintcolor": 2
+   }
+  },
+  "state": {
+   "count": 1281,
+   "props": {
+    "name": 1256,
+    "using": 754,
+    "duration": 701,
+    "alpha": 541,
+    "next": 375,
+    "on_start": 308,
+    "modify_texture": 255,
+    "size": 161,
+    "scale": 138,
+    "frame": 135,
+    "position": 118,
+    "start_sound": 96,
+    "trigger_on_create": 89,
+    "position_x": 60,
+    "delay": 54,
+    "trigger_when": 52,
+    "on_finish": 50,
+    "position_y": 41,
+    "bezier": 10,
+    "animation": 4
+   }
+  },
+  "item": {
+   "count": 850,
+   "props": {
+    "widget": 154,
+    "flowcontainer": 131,
+    "container": 97,
+    "icon": 53,
+    "button": 34,
+    "small_market_flag": 15,
+    "ig_button": 14,
+    "textbox": 13,
+    "hbox": 12,
+    "map_list_panel_item_interaction": 11,
+    "battle_item": 9,
+    "vbox": 9,
+    "compact_ship_template": 8,
+    "diplomatic_action_grid_button": 8,
+    "article_icon_all_items": 7,
+    "invasion_formation": 7,
+    "right_click_menu_item": 6,
+    "small_goods_button": 6,
+    "military_formation_commander": 6,
+    "tiny_flag": 5,
+    "text_single": 5,
+    "button_icon_round": 4,
+    "custom_tooltip_textbox": 4,
+    "harvest_condition_tooltip_item": 4,
+    "ended_battle_item": 4,
+    "goods_prestige_goods_breakdown_list_item": 4,
+    "production_method_item": 4,
+    "map_list_panel_item": 4,
+    "pieslice": 4,
+    "event_item": 4,
+    "building_item_condensed": 4,
+    "building_item": 4,
+    "war_participant_item": 4,
+    "construction_queue_item": 3,
+    "politics_panel_political_movement_item": 3,
+    "political_lobby_list_item": 3,
+    "button_saved_games": 3,
+    "journal_entry": 3,
+    "ig_item_details": 3,
+    "condensed_building_information": 3,
+    "invasion_list_item": 3,
+    "article_draft": 3,
+    "article": 3,
+    "casualty_item": 2,
+    "building_imports_exports_item": 2,
+    "military_building_combat_unit_summary_list_item": 2,
+    "ship_construction_queue_item": 2,
+    "diplomatic_play_item": 2,
+    "movement_affected_by_law_enactment_tooltip_item": 2,
+    "movement_affected_by_cancel_law_enactment_tooltip_item": 2,
+    "company_type_building_item": 2,
+    "formable_country_button": 2,
+    "goods_state_panel_input_output_item": 2,
+    "market_world_market_goods_list_item": 2,
+    "naval_battle_item": 2,
+    "fleet_formation_entry": 2,
+    "event_item_hbox": 2,
+    "outliner_journal_entry": 2,
+    "appeasement_factor_item": 2,
+    "interest_group_in_movement_info": 2,
+    "ig_item_bar": 2,
+    "treemapslice": 2,
+    "plotline": 2,
+    "character_panel_item": 2,
+    "small_wargoal_item": 2,
+    "customization_option": 2,
+    "principle_group": 2,
+    "military_formation_marker_right_click_menu_item": 2,
+    "available_ship_template": 2,
+    "country_with_strategic_region_locality_item": 2,
+    "small_combat_unit_with_checkbox": 2
+   }
+  },
+  "hbox": {
+   "count": 785,
+   "props": {
+    "layoutpolicy_horizontal": 533,
+    "textbox": 453,
+    "spacing": 389,
+    "layoutpolicy_vertical": 244,
+    "expand": 212,
+    "widget": 209,
+    "icon": 200,
+    "margin": 190,
+    "vbox": 151,
+    "hbox": 104,
+    "visible": 94,
+    "button": 85,
+    "background": 80,
+    "margin_left": 78,
+    "margin_right": 61,
+    "tooltip": 60,
+    "text_single": 59,
+    "using": 43,
+    "sort_button": 36,
+    "name": 36,
+    "flowcontainer": 34,
+    "datacontext": 30,
+    "item": 28,
+    "datamodel": 27,
+    "margin_bottom": 26,
+    "margin_top": 24,
+    "button_tab": 21,
+    "minimumsize": 19,
+    "layoutstretchfactor_horizontal": 18,
+    "custom_tooltip_textbox": 17,
+    "maximumsize": 16,
+    "enactment_setback": 15,
+    "container": 14,
+    "button_radio": 14,
+    "alpha": 14,
+    "button_standard": 13,
+    "tooltipwidget": 12,
+    "overlappingitembox": 11,
+    "ticktask_list_textbox": 11,
+    "text_multi": 10,
+    "achievements_disabled_icon": 10,
+    "button_standard_list": 9,
+    "vertical_divider": 9,
+    "enactment_phase": 9,
+    "ticktask_button": 9,
+    "law_icon": 8,
+    "ticktask_list_numberbox": 8,
+    "treaty_textbox": 8,
+    "button_icon_round": 7,
+    "button_checkbox": 7,
+    "box_vertical_divider": 7,
+    "button_primary": 6,
+    "section_header_button": 6,
+    "button_icon_cancel": 6,
+    "tiny_flag": 6,
+    "button_checkbox_label": 6,
+    "button_group": 6,
+    "editbox": 6,
+    "modifier_button": 6,
+    "modifier_list_textbox": 6,
+    "reform_government_option": 6,
+    "dynamicgridbox": 5,
+    "vertical_divider_full": 5,
+    "max_width": 5,
+    "alwaystransparent": 5,
+    "button_standard_back": 5,
+    "small_flag": 5,
+    "fixedgridbox": 5,
+    "enabled": 5,
+    "tab_button": 5,
+    "checkbutton": 4,
+    "margin_widget": 4,
+    "button_icon_round_action": 4,
+    "size": 4,
+    "ironman_save_icon": 4,
+    "parentanchor": 4,
+    "invalid_save_icon": 4,
+    "achievements_enabled_icon": 4,
+    "editor_button": 4,
+    "add_character_button_long": 4,
+    "modifier_list_numberbox": 4,
+    "message_feed_go_to_button": 4,
+    "message_feed_go_to_text_area_button": 4,
+    "divider_light": 4,
+    "laws_list": 4,
+    "seal_and_signature": 4,
+    "white_progressbar_vertical": 3,
+    "scrollarea": 3,
+    "culture_info_pop_portrait": 3,
+    "ig_button": 3,
+    "button_copy": 3,
+    "cloud_save_icon": 3,
+    "spacer": 3,
+    "editbox_standard": 3,
+    "close_button": 3,
+    "employment_indicator_icon": 3,
+    "jominimultiplayercheckbutton": 3,
+    "jominimultiplayersetuptextbox": 3,
+    "editbox_standard_with_label": 3,
+    "state": 3
+   }
+  },
+  "container": {
+   "count": 674,
+   "props": {
+    "flowcontainer": 256,
+    "parentanchor": 226,
+    "minimumsize": 157,
+    "widget": 150,
+    "icon": 130,
+    "visible": 124,
+    "button": 102,
+    "datacontext": 100,
+    "name": 92,
+    "textbox": 91,
+    "background": 76,
+    "using": 64,
+    "container": 63,
+    "maximumsize": 55,
+    "position": 55,
+    "onmousehierarchyenter": 46,
+    "onmousehierarchyleave": 46,
+    "alwaystransparent": 44,
+    "layer": 44,
+    "tooltip": 40,
+    "max_update_rate": 38,
+    "state": 34,
+    "resizeparent": 20,
+    "tooltipwidget": 17,
+    "divider_clean": 13,
+    "ignoreinvisible": 13,
+    "button_icon_minus_action": 12,
+    "market_price_card": 12,
+    "treaty_tooltip_article": 11,
+    "default_progressbar_horizontal": 10,
+    "country_interest_item": 10,
+    "small_flag": 9,
+    "compact_treaty_item": 9,
+    "compact_war_reparation_treaty_item": 9,
+    "vertical_divider": 9,
+    "right_click_menu_item": 9,
+    "character_portrait_base": 8,
+    "movement_marker_knob_button": 8,
+    "button_icon_round_action": 8,
+    "alpha": 7,
+    "fixedgridbox": 7,
+    "article_icon_item": 7,
+    "sidebar_label_button": 7,
+    "sidebar_label_button_small": 7,
+    "sidebar_label_text_small": 7,
+    "sidebar_tooltip_area_small": 7,
+    "scrollbar": 7,
+    "dynamicgridbox": 6,
+    "sidebar_label_text": 6,
+    "sidebar_tooltip_area": 6,
+    "item": 6,
+    "line": 6,
+    "direct_support_button": 6,
+    "widgetanchor": 5,
+    "grid_button": 5,
+    "text_single": 5,
+    "techtree_spline": 5,
+    "time_animation": 5,
+    "small_wargoal_item": 4,
+    "scissor": 4,
+    "war_goal_item": 4,
+    "button_icon_round": 4,
+    "rank_badge": 4,
+    "button_icon_goto": 4,
+    "bad_progressbar_horizontal": 4,
+    "lens_buttons": 4,
+    "allow_outside": 4,
+    "small_wargoal_item_with_executed_checkmark": 4,
+    "sway_offer_item": 4,
+    "diplo_play_sway_approval": 4,
+    "diplo_play_sway_disapproval": 4,
+    "producing_building_button": 3,
+    "modifier_list": 3,
+    "margin_widget": 3,
+    "building_size_with_ownership": 3,
+    "character_portrait_situation_1char": 3,
+    "ig_button": 3,
+    "good_icon_and_prize": 3,
+    "expand_building_button": 3,
+    "diplomatic_action_acceptance_icon": 3,
+    "movement_marker_hover_vfx": 3,
+    "movement_marker_click_vfx": 3,
+    "wargoal_item": 3,
+    "front_marker_icon": 3,
+    "front_movement_marker_icon": 3,
+    "active_charter_right_click_item": 3,
+    "button_icon_reset": 3,
+    "wargoal_checkmark": 2,
+    "character_portrait_front_vs_left": 2,
+    "character_portrait_front_vs_right": 2,
+    "battle_side_content": 2,
+    "vertical_divider_stronger_full": 2,
+    "back_button_large": 2,
+    "buildings_production_method_item": 2,
+    "ownership_list_name": 2,
+    "company_charter_button_horizontal": 2,
+    "company_charter_button": 2,
+    "scrollarea": 2,
+    "flag_icon": 2,
+    "pop_list": 2
+   }
+  },
+  "tooltipwidget": {
+   "count": 670,
+   "props": {
+    "fancytooltip_militaryformation": 50,
+    "fancytooltip_building": 44,
+    "fancytooltip_goods": 33,
+    "fancytooltip_country": 26,
+    "fancytooltip_ideology": 20,
+    "using": 20,
+    "fancytooltip_ig": 19,
+    "tooltipwidgettype": 19,
+    "fancytooltip_buildingtype": 18,
+    "fancytooltip_state": 17,
+    "fancytooltip_navalmissiontype": 15,
+    "fancytooltip_law": 14,
+    "fancytooltip_commanderordertype": 12,
+    "fancytooltip_combatunittypewithculture": 10,
+    "fancytooltip_company": 10,
+    "fancytooltip_character": 10,
+    "fancytooltip_interesttiertypewithcountryandstrategicregioncontext": 10,
+    "fancytooltip_shiptemplate": 10,
+    "fancytooltip_politicalmovement": 9,
+    "fancytooltip_charactertrait": 9,
+    "fancytooltip_ship": 9,
+    "fancytooltip_shipmodificationtype": 8,
+    "fancytooltip_culture": 7,
+    "fancytooltip_strategicregion": 7,
+    "fancytooltip_pop": 7,
+    "fancytooltip_poptype": 6,
+    "fancytooltip_religion": 6,
+    "fancytooltip_companychartertype": 6,
+    "fancytooltip_market": 6,
+    "regulartooltip": 6,
+    "fancytooltip_goods_pop_consumption": 6,
+    "fancytooltip_powerblocidentity": 6,
+    "fancytooltip_shiptype": 5,
+    "fancytooltip_diplomaticactionwithtargetcountry": 5,
+    "regulartooltip_leverage": 5,
+    "fancytooltip_lawwithcountrycontext": 5,
+    "fancytooltip_interestgrouptrait": 5,
+    "fancytooltip_aistrategicregionstancetype": 5,
+    "fancytooltip_party": 5,
+    "fancytooltip_powerblocprincipleslot": 5,
+    "fancytooltip_wargoal": 4,
+    "fancytooltip_commanderrank": 4,
+    "regulartooltip_additionalshiptypes": 4,
+    "fancytooltip_powerbloc": 4,
+    "graphtooltip_productivity": 4,
+    "fancytooltip_harvestconditionarea": 4,
+    "regulartooltip_cancellawenactment": 4,
+    "fancytooltip_diplomaticactiontype": 3,
+    "fancytooltip_articlewithcountrycontext": 3,
+    "fancytooltip_lawtype": 3,
+    "fancytooltip_powerblocprinciplegroup": 3,
+    "fancytooltip_wargoalarticle": 3,
+    "fancytooltip_powerblocprinciple": 3,
+    "fancytooltip_politicallobby": 3,
+    "fancytooltip_treaty": 3,
+    "regulartooltip_lawenactment": 3,
+    "fancytooltip_politicallyunaligned": 3,
+    "fancytooltip_technology": 3,
+    "fancytooltip_articletype": 3,
+    "fancytooltip_wargoaldraft": 2,
+    "fancytooltip_battlecondition": 2,
+    "fancytooltip_mobilizationoption": 2,
+    "fancytooltip_shipgroup": 2,
+    "fancytooltip_war": 2,
+    "fancytooltip_institution": 2,
+    "regulartooltip_treatyarticlespage": 2,
+    "fancytooltip_harvestcondition": 2,
+    "fancytooltip_companycharter": 2,
+    "regulartooltip_stateworldmarketimportdependence": 2,
+    "regulartooltip_stateworldmarketexportdependence": 2,
+    "graphtooltip_worldprofitability": 2,
+    "graphtooltip_typeprofitability": 2,
+    "fancytooltip_decreetype": 2,
+    "fancytooltip_militaryformation_mapmarker": 2,
+    "fancytooltip_strait": 2,
+    "regulartooltip_marketworldmarketexportsto": 2,
+    "regulartooltip_marketworldmarketimportsfrom": 2,
+    "fancytooltip_amendment": 2,
+    "fancytooltip_stateregion": 2,
+    "regulartooltip_additionalsearegions": 2,
+    "fancytooltip_wargoaldraftarticle": 2
+   }
+  },
+  "vbox": {
+   "count": 594,
+   "props": {
+    "layoutpolicy_horizontal": 419,
+    "hbox": 311,
+    "layoutpolicy_vertical": 277,
+    "vbox": 204,
+    "textbox": 173,
+    "spacing": 167,
+    "ui_guide_component_area": 150,
+    "visible": 137,
+    "widget": 124,
+    "margin": 111,
+    "expand": 89,
+    "background": 73,
+    "button": 67,
+    "item": 62,
+    "using": 56,
+    "name": 50,
+    "datamodel": 49,
+    "margin_top": 47,
+    "text_single": 42,
+    "margin_bottom": 28,
+    "margin_left": 27,
+    "margin_right": 24,
+    "datacontext": 21,
+    "divider_clean": 21,
+    "minimumsize": 21,
+    "text_multi": 21,
+    "ui_guide_title_and_info": 21,
+    "spacer": 19,
+    "scrollbox": 18,
+    "icon": 18,
+    "state": 17,
+    "header_pattern": 16,
+    "flowcontainer": 16,
+    "scrollarea": 14,
+    "treaty_textbox": 14,
+    "layoutstretchfactor_horizontal": 13,
+    "tooltip": 12,
+    "section_header_button": 12,
+    "alwaystransparent": 11,
+    "text_label_center": 11,
+    "maximumsize": 11,
+    "empty_state_dynamic_width": 11,
+    "ui_guide_component_top_info": 10,
+    "default_header_clean_faded": 9,
+    "button_standard": 8,
+    "default_header": 8,
+    "container": 7,
+    "max_width": 7,
+    "filter_mouse": 7,
+    "jominimultiplayersetupcheckbutton": 6,
+    "side_section_articles": 6,
+    "size": 5,
+    "dockable_button": 5,
+    "set_parent_size_to_minimum": 5,
+    "parentanchor": 5,
+    "editbox_standard_with_label": 5,
+    "editor_checkbutton": 5,
+    "fixedgridbox": 5,
+    "jominimultiplayersortbuttonasc": 5,
+    "jominimultiplayersortbuttondesc": 5,
+    "alpha": 5,
+    "dynamicgridbox": 5,
+    "fullscreen_scrollarea": 5,
+    "company_info_item": 4,
+    "onmousehierarchyenter": 4,
+    "onmousehierarchyleave": 4,
+    "consumption_tax_button_toggle": 4,
+    "divider_decorative": 4,
+    "tooltipwidget": 4,
+    "nationalize_effect_divider": 4,
+    "nationalize_effect": 4,
+    "divider_dark_decorative": 4,
+    "resizeparent": 3,
+    "search_bar": 3,
+    "min_width": 3,
+    "default_progressbar_horizontal": 3,
+    "ignoreinvisible": 3,
+    "sdk_textbox_entry": 3,
+    "amendment_list": 3,
+    "default_header_clean": 3,
+    "levels_progressbar": 3,
+    "bar_horizontal": 3,
+    "message_feed_widget": 2,
+    "topbar": 2,
+    "editor_frame": 2,
+    "top_illu": 2,
+    "tab_buttons": 2,
+    "button_primary": 2,
+    "restrictparent_min": 2,
+    "header_standard": 2,
+    "button_icon_check": 2,
+    "jominimultiplayertextbox": 2,
+    "approval_info2": 2,
+    "agitators_movements_endorsement_list": 2,
+    "selected_or_enacting_law_content": 2,
+    "law_enactment_events_vbox": 2,
+    "law_negotiation_events_vbox": 2,
+    "bar_horizontal_with_background": 2,
+    "politics_panel_legitimacy_item": 2,
+    "parties_and_ig_list_details": 2
+   }
+  },
+  "defaulttooltiptextbox": {
+   "count": 503,
+   "props": {
+    "text": 480,
+    "visible": 249,
+    "default_format": 93,
+    "margin_left": 70,
+    "parentanchor": 58,
+    "max_width": 56,
+    "align": 43,
+    "autoresize": 37,
+    "multiline": 24,
+    "using": 22,
+    "elide": 18,
+    "fonttintcolor": 17,
+    "fontsize_min": 17,
+    "alpha": 14,
+    "raw_text": 14,
+    "datacontext": 13,
+    "layoutpolicy_horizontal": 13,
+    "size": 12,
+    "maximumsize": 12,
+    "margin_bottom": 11,
+    "tooltip": 8,
+    "min_width": 7,
+    "tooltipwidget": 6,
+    "margin_top": 5,
+    "minimumsize": 4
+   }
+  },
+  "texticon": {
+   "count": 431,
+   "props": {
+    "icon": 431,
+    "iconsize": 431
+   }
+  },
+  "iconsize": {
+   "count": 431,
+   "props": {
+    "texture": 431,
+    "offset": 431,
+    "fontsize": 431,
+    "size": 122
+   }
+  },
+  "sort_button": {
+   "count": 301,
+   "props": {
+    "size": 299,
+    "onclick": 299,
+    "align": 222,
+    "text": 216,
+    "tooltip": 197,
+    "visible": 42,
+    "button": 40,
+    "icon": 35,
+    "layoutpolicy_horizontal": 27,
+    "elide": 27,
+    "margin_right": 13,
+    "layoutstretchfactor_horizontal": 11,
+    "raw_text": 5,
+    "enabled": 5,
+    "margin": 4,
+    "raw_tooltip": 3,
+    "name": 3,
+    "datacontext": 2
+   }
+  },
+  "fancytooltipwidgettype": {
+   "count": 244,
+   "props": {
+    "datacontext": 28
+   }
+  },
+  "custom_tooltip_textbox": {
+   "count": 214,
+   "props": {
+    "text": 201,
+    "visible": 127,
+    "datacontext": 23,
+    "margin_left": 12,
+    "raw_text": 7,
+    "max_width": 6,
+    "alpha": 5,
+    "tooltip": 4,
+    "using": 2,
+    "default_format": 2,
+    "maximumsize": 2
+   }
+  },
+  "dynamicgridbox": {
+   "count": 208,
+   "props": {
+    "item": 198,
+    "datamodel": 184,
+    "flipdirection": 105,
+    "datamodel_wrap": 86,
+    "visible": 63,
+    "parentanchor": 61,
+    "name": 17,
+    "using": 12,
+    "layoutanchor": 6,
+    "minimumsize": 4,
+    "alwaystransparent": 3,
+    "datacontext": 2,
+    "position": 2,
+    "allow_outside": 2,
+    "layoutpolicy_vertical": 2
+   }
+  },
+  "button_icon_round": {
+   "count": 192,
+   "props": {
+    "onclick": 122,
+    "tooltip": 101,
+    "size": 95,
+    "visible": 79,
+    "parentanchor": 53,
+    "using": 40,
+    "datacontext": 34,
+    "enabled": 18,
+    "onrightclick": 13,
+    "position": 12,
+    "input_action": 7,
+    "tooltipwidget": 4,
+    "animated_progresspie": 3,
+    "state": 3,
+    "action_selection_number": 2,
+    "name": 2,
+    "onmousehierarchyenter": 2,
+    "onmousehierarchyleave": 2
+   }
+  },
+  "ui_guide_component_area": {
+   "count": 150,
+   "props": {}
+  },
+  "divider_clean": {
+   "count": 137,
+   "props": {
+    "parentanchor": 57,
+    "size": 55,
+    "visible": 26,
+    "position": 7,
+    "maximumsize": 4,
+    "layoutpolicy_vertical": 4,
+    "layoutpolicy_horizontal": 4,
+    "alpha": 3,
+    "datacontext": 3
+   }
+  },
+  "start_sound": {
+   "count": 121,
+   "props": {
+    "soundeffect": 115,
+    "using": 6
+   }
+  },
+  "format": {
+   "count": 120,
+   "props": {
+    "name": 120,
+    "format": 120
+   }
+  },
+  "default_header": {
+   "count": 111,
+   "props": {
+    "parentanchor": 30,
+    "using": 20,
+    "visible": 13,
+    "blockoverride": 11,
+    "size": 5
+   }
+  },
+  "blockoverride": {
+   "count": 105,
+   "props": {
+    "text": 83,
+    "size": 8,
+    "visible": 5,
+    "texture": 3,
+    "raw_text": 3
+   }
+  },
+  "button_icon_round_action": {
+   "count": 103,
+   "props": {
+    "size": 85,
+    "tooltip": 79,
+    "using": 76,
+    "onclick": 74,
+    "visible": 63,
+    "enabled": 62,
+    "parentanchor": 44,
+    "icon": 17,
+    "position": 17,
+    "clicksound": 6,
+    "click_modifiers": 4,
+    "allow_outside": 3,
+    "name": 2,
+    "highlight_icon": 2,
+    "datacontext": 2
+   }
+  },
+  "section_header_button": {
+   "count": 93,
+   "props": {
+    "visible": 23,
+    "size": 18,
+    "parentanchor": 16,
+    "textbox": 15,
+    "tooltip": 10,
+    "flowcontainer": 6,
+    "using": 5,
+    "background": 3,
+    "position": 3,
+    "widget": 3,
+    "datacontext": 2,
+    "enabled": 2,
+    "icon": 2,
+    "name": 2
+   }
+  },
+  "text_single": {
+   "count": 83,
+   "props": {
+    "text": 63,
+    "align": 54,
+    "default_format": 45,
+    "layoutpolicy_horizontal": 31,
+    "parentanchor": 22,
+    "margin": 18,
+    "autoresize": 16,
+    "max_width": 14,
+    "using": 14,
+    "min_width": 12,
+    "size": 12,
+    "visible": 11,
+    "state": 10,
+    "name": 7,
+    "tooltip": 6,
+    "margin_left": 6,
+    "position": 6,
+    "margin_right": 4,
+    "alpha": 2,
+    "fontsize_min": 2,
+    "background": 2
+   }
+  },
+  "fixedgridbox": {
+   "count": 81,
+   "props": {
+    "addrow": 77,
+    "item": 77,
+    "addcolumn": 75,
+    "datamodel": 63,
+    "flipdirection": 47,
+    "datamodel_wrap": 37,
+    "parentanchor": 35,
+    "visible": 26,
+    "name": 9,
+    "background": 5,
+    "using": 5,
+    "alwaystransparent": 5,
+    "setitemsizefromcell": 5,
+    "minimumsize": 5,
+    "maxhorizontalslots": 4,
+    "maximumsize": 3,
+    "position": 2,
+    "datamodel_reuse_widgets": 2,
+    "datacontext": 2,
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2
+   }
+  },
+  "button_icon_goto": {
+   "count": 79,
+   "props": {
+    "onclick": 85,
+    "size": 79,
+    "tooltip": 76,
+    "parentanchor": 35,
+    "input_action": 33,
+    "datacontext": 24,
+    "visible": 19,
+    "using": 18,
+    "position": 6,
+    "state": 4,
+    "alpha": 2,
+    "name": 2
+   }
+  },
+  "scrollarea": {
+   "count": 76,
+   "props": {
+    "scrollwidget": 52,
+    "scrollbar_vertical": 50,
+    "scrollbarpolicy_horizontal": 41,
+    "layoutpolicy_vertical": 40,
+    "layoutpolicy_horizontal": 36,
+    "size": 23,
+    "scrollbar_horizontal": 20,
+    "background": 11,
+    "name": 10,
+    "scrollbaralign_vertical": 10,
+    "using": 8,
+    "maximumsize": 8,
+    "autoresizescrollarea": 8,
+    "position": 7,
+    "visible": 7,
+    "parentanchor": 6,
+    "scrollbaralign_horizontal": 5,
+    "alwaystransparent": 5,
+    "scrollbarpolicy_vertical": 4,
+    "widgetanchor": 2
+   }
+  },
+  "v3_plotline": {
+   "count": 73,
+   "props": {
+    "using": 63,
+    "visible": 7,
+    "parentanchor": 3,
+    "margin_top": 3
+   }
+  },
+  "right_click_menu_widget": {
+   "count": 73,
+   "props": {
+    "name": 72,
+    "parentanchor": 40,
+    "widgetanchor": 17,
+    "datacontext": 16,
+    "background": 2,
+    "close_on_click_outside": 2
+   }
+  },
+  "button_normal": {
+   "count": 72,
+   "props": {
+    "onclick": 63,
+    "text": 38,
+    "layoutpolicy_horizontal": 34,
+    "size": 29,
+    "using": 24,
+    "down": 22,
+    "raw_text": 17,
+    "name": 14,
+    "visible": 11,
+    "buttontext": 9,
+    "tooltip": 6,
+    "button_trigger": 5,
+    "default_format": 5,
+    "shortcut": 5,
+    "enabled": 5,
+    "hbox": 3,
+    "upframe": 3,
+    "gfxtype": 2,
+    "effectname": 2,
+    "uphoverframe": 2,
+    "uppressedframe": 2,
+    "downframe": 2,
+    "downhoverframe": 2,
+    "downpressedframe": 2,
+    "texture": 2,
+    "spritetype": 2,
+    "spriteborder": 2,
+    "framesize": 2,
+    "text_single": 2,
+    "button_rules": 2,
+    "datacontext": 2,
+    "raw_tooltip": 2
+   }
+  },
+  "window": {
+   "count": 70,
+   "props": {
+    "name": 64,
+    "position": 30,
+    "using": 23,
+    "size": 22,
+    "movable": 21,
+    "layer": 21,
+    "state": 19,
+    "widget": 16,
+    "parentanchor": 12,
+    "button_normal": 8,
+    "vbox": 8,
+    "alwaystransparent": 5,
+    "resizable": 5,
+    "background": 4,
+    "visible": 4,
+    "flowcontainer": 3,
+    "container": 3,
+    "button": 3,
+    "widgetanchor": 3,
+    "filter_mouse": 2,
+    "widget_load_game": 2,
+    "gfxtype": 2,
+    "container_saving_indicator": 2,
+    "visible_at_creation": 2
+   }
+  },
+  "tooltipwidgettype": {
+   "count": 67,
+   "props": {}
+  },
+  "building_browser_filter_line_button": {
+   "count": 56,
+   "props": {}
+  },
+  "tiny_flag_no_interact": {
+   "count": 55,
+   "props": {
+    "parentanchor": 45,
+    "datacontext": 42,
+    "position": 11,
+    "visible": 5,
+    "name": 2,
+    "mobilization_icon_flag": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "scrollwidget": {
+   "count": 52,
+   "props": {
+    "flowcontainer": 13,
+    "vbox": 11,
+    "fixedgridbox": 8,
+    "dynamicgridbox": 6,
+    "container": 5
+   }
+  },
+  "scrollbar_vertical": {
+   "count": 50,
+   "props": {
+    "using": 49
+   }
+  },
+  "tiny_flag": {
+   "count": 49,
+   "props": {
+    "parentanchor": 41,
+    "datacontext": 28,
+    "position": 13,
+    "visible": 10,
+    "using": 5,
+    "mobilization_icon_flag": 4,
+    "tooltip": 2,
+    "scale": 2
+   }
+  },
+  "margin_widget": {
+   "count": 48,
+   "props": {
+    "size": 26,
+    "position": 15,
+    "state": 14,
+    "margin": 12,
+    "icon": 10,
+    "textbox": 9,
+    "margin_left": 7,
+    "using": 7,
+    "enabled": 7,
+    "margin_right": 6,
+    "name": 6,
+    "layoutpolicy_horizontal": 5,
+    "visible": 5,
+    "background": 4,
+    "parentanchor": 4,
+    "alpha": 4,
+    "layoutpolicy_vertical": 3,
+    "margin_widget": 3,
+    "default_progressbar_horizontal": 3,
+    "button": 3,
+    "hbox": 3,
+    "alwaystransparent": 2,
+    "editbox": 2,
+    "tooltip": 2,
+    "morale_bar": 2
+   }
+  },
+  "checkbutton": {
+   "count": 45,
+   "props": {
+    "using": 40,
+    "size": 37,
+    "checked": 32,
+    "onclick": 29,
+    "name": 15,
+    "parentanchor": 13,
+    "tooltip": 12,
+    "enabled": 7,
+    "texture": 4,
+    "framesize": 4,
+    "position": 2,
+    "gfxtype": 2,
+    "shaderfile": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "overlappingitembox": {
+   "count": 44,
+   "props": {
+    "item": 44,
+    "datamodel": 40,
+    "size": 24,
+    "spacing": 17,
+    "parentanchor": 16,
+    "righttoleft": 8,
+    "visible": 8,
+    "maximumsize": 8,
+    "autoresize": 7,
+    "layoutpolicy_horizontal": 7,
+    "layoutpolicy_vertical": 6,
+    "alpha": 2,
+    "margin": 2,
+    "background": 2
+   }
+  },
+  "ship_stat": {
+   "count": 44,
+   "props": {
+    "size": 22
+   }
+  },
+  "white_progressbar_vertical": {
+   "count": 43,
+   "props": {
+    "size": 28,
+    "parentanchor": 23,
+    "tooltip": 19,
+    "using": 11,
+    "visible": 8,
+    "alpha": 7,
+    "position": 5
+   }
+  },
+  "progressbar_properties": {
+   "count": 43,
+   "props": {
+    "size": 33,
+    "visible": 13,
+    "parentanchor": 6,
+    "tooltip": 3,
+    "alpha": 3,
+    "textbox": 3,
+    "position": 2,
+    "name": 2
+   }
+  },
+  "default_progressbar_horizontal": {
+   "count": 37,
+   "props": {
+    "size": 31,
+    "parentanchor": 17,
+    "tooltip": 15,
+    "visible": 14,
+    "textbox": 6,
+    "alpha": 4,
+    "position": 4,
+    "state": 3,
+    "flowcontainer": 2,
+    "hbox": 2,
+    "construction_queue_item_texts": 2,
+    "using": 2,
+    "container": 2,
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "state_panel_status_item_small": {
+   "count": 37,
+   "props": {
+    "tooltip": 31,
+    "visible": 31,
+    "alwaystransparent": 11,
+    "onmousehierarchyenter": 7,
+    "onmousehierarchyleave": 7,
+    "datacontext": 5
+   }
+  },
+  "editbox": {
+   "count": 37,
+   "props": {
+    "align": 34,
+    "size": 33,
+    "alwaystransparent": 30,
+    "background": 28,
+    "name": 26,
+    "focuspolicy": 26,
+    "margin_left": 24,
+    "maxcharacters": 23,
+    "ontextedited": 21,
+    "focus_on_visible": 21,
+    "visible": 16,
+    "text": 16,
+    "using": 9,
+    "textbox": 9,
+    "layoutpolicy_horizontal": 8,
+    "parentanchor": 7,
+    "raw_text": 4,
+    "layoutpolicy_vertical": 3,
+    "max_width": 3,
+    "text_validator": 3,
+    "enabled": 3,
+    "icon": 3,
+    "default_format": 2,
+    "minimumsize": 2,
+    "onreturnpressed": 2,
+    "margin": 2,
+    "tooltip": 2,
+    "ontextchanged": 2
+   }
+  },
+  "small_flag": {
+   "count": 36,
+   "props": {
+    "parentanchor": 29,
+    "datacontext": 26,
+    "position": 9,
+    "visible": 8,
+    "using": 5
+   }
+  },
+  "tab_buttons": {
+   "count": 35,
+   "props": {
+    "datacontext": 4,
+    "visible": 3
+   }
+  },
+  "regulartooltip": {
+   "count": 35,
+   "props": {}
+  },
+  "default_block_window_two_lines": {
+   "count": 33,
+   "props": {
+    "name": 33,
+    "datacontext": 25,
+    "enabled": 2
+   }
+  },
+  "progressbar": {
+   "count": 33,
+   "props": {
+    "using": 42,
+    "size": 30,
+    "spritetype": 26,
+    "spriteborder": 26,
+    "texture_density": 26,
+    "noprogresstexture": 23,
+    "progresstexture": 23,
+    "skip_initial_animation": 22,
+    "marker": 16,
+    "direction": 16,
+    "min": 8,
+    "max": 8,
+    "animate_negative_changes": 8,
+    "visible": 4,
+    "value": 4,
+    "parentanchor": 4,
+    "state": 4,
+    "gfxtype": 3,
+    "shaderfile": 3,
+    "alwaystransparent": 2,
+    "name": 2,
+    "position": 2,
+    "tintcolor": 2,
+    "texture": 2,
+    "framesize": 2,
+    "frame": 2
+   }
+  },
+  "button_icon": {
+   "count": 32,
+   "props": {
+    "size": 20,
+    "texture": 19,
+    "parentanchor": 8,
+    "position": 8,
+    "onclick": 8,
+    "tooltip": 7,
+    "name": 6,
+    "state": 6,
+    "alwaystransparent": 4,
+    "widgetanchor": 4,
+    "alpha": 3,
+    "using": 3
+   }
+  },
+  "header_grid_item": {
+   "count": 30,
+   "props": {
+    "tooltip": 25,
+    "using": 21,
+    "visible": 8,
+    "background": 6,
+    "size": 5,
+    "tooltipwidget": 2
+   }
+  },
+  "default_header_2texts": {
+   "count": 29,
+   "props": {
+    "using": 5,
+    "visible": 5,
+    "parentanchor": 2
+   }
+  },
+  "section_header_right_text": {
+   "count": 29,
+   "props": {
+    "raw_text": 17,
+    "text": 9,
+    "visible": 2,
+    "tooltip": 2
+   }
+  },
+  "vertical_divider": {
+   "count": 29,
+   "props": {
+    "visible": 12,
+    "parentanchor": 7,
+    "size": 3
+   }
+  },
+  "tax_exp_frame": {
+   "count": 28,
+   "props": {
+    "visible": 7
+   }
+  },
+  "chart": {
+   "count": 26,
+   "props": {
+    "visible": 12,
+    "empty_state": 10,
+    "blockoverride": 4,
+    "datacontext": 2
+   }
+  },
+  "map_list_panel": {
+   "count": 26,
+   "props": {
+    "name": 23
+   }
+  },
+  "custom_tooltip_textbox_with_empty_line": {
+   "count": 23,
+   "props": {
+    "text": 22,
+    "visible": 12,
+    "datacontext": 6
+   }
+  },
+  "empty_state": {
+   "count": 23,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "button_icon_round_map_interaction": {
+   "count": 23,
+   "props": {
+    "size": 23,
+    "onclick": 23,
+    "using": 23,
+    "tooltip": 23,
+    "enabled": 16,
+    "parentanchor": 15,
+    "visible": 12,
+    "action_selection_number": 10,
+    "name": 2,
+    "datacontext": 2
+   }
+  },
+  "button_toggle": {
+   "count": 22,
+   "props": {
+    "size": 15,
+    "frame": 13,
+    "visible": 12,
+    "parentanchor": 11,
+    "onclick": 9,
+    "using": 6,
+    "alwaystransparent": 5,
+    "enabled": 5,
+    "position": 4,
+    "name": 2,
+    "texture": 2,
+    "framesize": 2
+   }
+  },
+  "ig_button": {
+   "count": 22,
+   "props": {
+    "size": 16,
+    "parentanchor": 7,
+    "visible": 4,
+    "using": 3,
+    "datacontext": 2,
+    "state": 2
+   }
+  },
+  "default_popup": {
+   "count": 21,
+   "props": {
+    "datacontext": 11,
+    "name": 10,
+    "icon": 6,
+    "layer": 3,
+    "using": 3,
+    "state": 3,
+    "parentanchor": 2,
+    "container": 2
+   }
+  },
+  "bar_horizontal_with_background": {
+   "count": 21,
+   "props": {
+    "size": 18,
+    "textbox": 17,
+    "parentanchor": 7,
+    "state": 4,
+    "name": 2,
+    "layoutpolicy_horizontal": 2,
+    "using": 2
+   }
+  },
+  "pinnable_outliner_group": {
+   "count": 21,
+   "props": {
+    "datacontext": 19
+   }
+  },
+  "default_header_properties": {
+   "count": 21,
+   "props": {
+    "parentanchor": 5,
+    "visible": 4,
+    "using": 2,
+    "button_icon_round_toggle": 2
+   }
+  },
+  "ui_guide_title_and_info": {
+   "count": 21,
+   "props": {}
+  },
+  "scrollbar_horizontal": {
+   "count": 20,
+   "props": {
+    "using": 20
+   }
+  },
+  "filter_button": {
+   "count": 20,
+   "props": {
+    "visible": 19,
+    "tooltip": 12,
+    "size": 12,
+    "using": 6
+   }
+  },
+  "scrollbar": {
+   "count": 20,
+   "props": {
+    "direction": 19,
+    "slider": 19,
+    "size": 18,
+    "track": 18,
+    "dec_button": 18,
+    "inc_button": 18,
+    "value": 16,
+    "min": 16,
+    "max": 16,
+    "step": 16,
+    "wheelstep": 14,
+    "onvaluechanged": 13,
+    "name": 10,
+    "parentanchor": 7,
+    "minimumsize": 5,
+    "enabled": 3
+   }
+  },
+  "ig_icon": {
+   "count": 20,
+   "props": {
+    "size": 14,
+    "parentanchor": 9,
+    "using": 9,
+    "visible": 4,
+    "icon": 4,
+    "datacontext": 4,
+    "texture": 4,
+    "tooltip": 4,
+    "position": 2
+   }
+  },
+  "pinnable_expandable_outliner_entry": {
+   "count": 20,
+   "props": {
+    "datacontext": 8,
+    "icon": 3,
+    "tooltipwidget": 2
+   }
+  },
+  "filter_background_selected": {
+   "count": 19,
+   "props": {
+    "visible": 19,
+    "size": 11,
+    "tooltip": 6
+   }
+  },
+  "slider": {
+   "count": 19,
+   "props": {
+    "using": 14,
+    "button": 4
+   }
+  },
+  "treaty_textbox": {
+   "count": 19,
+   "props": {
+    "align": 19,
+    "using": 18,
+    "autoresize": 17,
+    "text": 15,
+    "parentanchor": 10,
+    "max_width": 10,
+    "visible": 7,
+    "maximumsize": 6,
+    "multiline": 6,
+    "margin_left": 6,
+    "raw_text": 4,
+    "minimumsize": 2,
+    "layoutpolicy_horizontal": 2,
+    "size": 2,
+    "alpha": 2
+   }
+  },
+  "button_group": {
+   "count": 19,
+   "props": {
+    "onclick": 16,
+    "using": 10,
+    "flowcontainer": 7,
+    "tooltip": 4,
+    "enabled": 3,
+    "name": 2,
+    "textbox": 2,
+    "icon": 2,
+    "parentanchor": 2,
+    "position": 2,
+    "visible": 2
+   }
+  },
+  "marker": {
+   "count": 19,
+   "props": {
+    "icon": 13,
+    "widget": 6
+   }
+  },
+  "default_block_window": {
+   "count": 18,
+   "props": {
+    "name": 16,
+    "datacontext": 7
+   }
+  },
+  "track": {
+   "count": 18,
+   "props": {
+    "using": 15,
+    "button": 3
+   }
+  },
+  "dec_button": {
+   "count": 18,
+   "props": {
+    "using": 15,
+    "button": 3
+   }
+  },
+  "inc_button": {
+   "count": 18,
+   "props": {
+    "using": 15,
+    "button": 3
+   }
+  },
+  "button_standard": {
+   "count": 18,
+   "props": {
+    "size": 14,
+    "onclick": 12,
+    "using": 8,
+    "tooltip": 7,
+    "hbox": 5,
+    "shortcut": 4,
+    "text": 3,
+    "parentanchor": 2,
+    "widgetanchor": 2,
+    "visible": 2,
+    "name": 2,
+    "oversound": 2,
+    "clicksound": 2
+   }
+  },
+  "building_browser_filter_line": {
+   "count": 17,
+   "props": {
+    "parentanchor": 5,
+    "visible": 2
+   }
+  },
+  "small_header_grid_item": {
+   "count": 17,
+   "props": {
+    "tooltip": 17,
+    "size": 4,
+    "using": 4
+   }
+  },
+  "plotline": {
+   "count": 17,
+   "props": {
+    "using": 17,
+    "width": 17,
+    "size": 16,
+    "color": 13,
+    "plotpoints": 12,
+    "visible": 6,
+    "parentanchor": 4
+   }
+  },
+  "country_stats_entry": {
+   "count": 17,
+   "props": {
+    "visible": 8,
+    "onmousehierarchyenter": 5,
+    "onmousehierarchyleave": 5,
+    "alwaystransparent": 5,
+    "datacontext": 3,
+    "alpha": 3
+   }
+  },
+  "button_icon_custom": {
+   "count": 17,
+   "props": {
+    "using": 18,
+    "size": 17,
+    "parentanchor": 12,
+    "onclick": 10,
+    "mirror": 8,
+    "tooltip": 6,
+    "enabled": 4,
+    "align": 4,
+    "visible": 2
+   }
+  },
+  "top_illu": {
+   "count": 16,
+   "props": {
+    "flowcontainer": 10,
+    "datacontext": 7,
+    "size": 7,
+    "ig_heading_pop_portrait": 4,
+    "visible": 4,
+    "background": 3
+   }
+  },
+  "gold_progressbar_horizontal": {
+   "count": 16,
+   "props": {
+    "size": 14,
+    "visible": 8,
+    "alpha": 6,
+    "parentanchor": 5,
+    "progressbar_highlight": 2,
+    "tooltip": 2,
+    "textbox": 2
+   }
+  },
+  "click_modifiers": {
+   "count": 16,
+   "props": {
+    "ondefault": 15,
+    "onshift": 12,
+    "onalt": 4,
+    "onctrl": 3
+   }
+  },
+  "pop_details_side_stats_item": {
+   "count": 16,
+   "props": {
+    "visible": 6,
+    "container": 2
+   }
+  },
+  "button_icon_zoom": {
+   "count": 15,
+   "props": {
+    "size": 15,
+    "onclick": 8,
+    "tooltip": 8,
+    "input_action": 5,
+    "parentanchor": 5,
+    "onrightclick": 4,
+    "visible": 4,
+    "enabled": 4
+   }
+  },
+  "character_portrait_base": {
+   "count": 15,
+   "props": {
+    "size": 13,
+    "parentanchor": 8,
+    "datacontext": 6,
+    "position": 2
+   }
+  },
+  "default_header_clean_faded": {
+   "count": 14,
+   "props": {
+    "size": 11,
+    "layoutpolicy_horizontal": 8
+   }
+  },
+  "building_process_entry": {
+   "count": 14,
+   "props": {
+    "tooltip": 6
+   }
+  },
+  "rank_badge": {
+   "count": 14,
+   "props": {
+    "size": 14,
+    "position": 10,
+    "parentanchor": 6
+   }
+  },
+  "dropdown": {
+   "count": 14,
+   "props": {
+    "parentanchor": 6,
+    "active_item": 4,
+    "item": 4,
+    "list": 4,
+    "datamodel": 3,
+    "onselectionchanged": 3,
+    "state": 3,
+    "selectedindex": 2,
+    "size": 2,
+    "focuspolicy": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "state_map_list_one_value": {
+   "count": 14,
+   "props": {
+    "name": 14
+   }
+  },
+  "morale_bar": {
+   "count": 13,
+   "props": {
+    "parentanchor": 12,
+    "tooltip": 10,
+    "size": 6,
+    "visible": 2,
+    "alpha": 2,
+    "position": 2
+   }
+  },
+  "character_stats_entry": {
+   "count": 13,
+   "props": {
+    "datacontext": 6,
+    "tooltipwidget": 6,
+    "tooltip": 4,
+    "visible": 2
+   }
+  },
+  "buttontext": {
+   "count": 13,
+   "props": {
+    "text_single": 10,
+    "textbox": 3
+   }
+  },
+  "bad_progressbar_horizontal": {
+   "count": 12,
+   "props": {
+    "tooltip": 7,
+    "parentanchor": 6,
+    "size": 6,
+    "visible": 5,
+    "textbox": 5,
+    "state": 3,
+    "name": 2,
+    "flowcontainer": 2
+   }
+  },
+  "round_progress_bad": {
+   "count": 12,
+   "props": {
+    "size": 12,
+    "parentanchor": 12,
+    "value": 8,
+    "visible": 4,
+    "datacontext": 3,
+    "position": 3
+   }
+  },
+  "treaty_tooltip_article": {
+   "count": 12,
+   "props": {
+    "visible": 11,
+    "size": 6
+   }
+  },
+  "animated_progresspie": {
+   "count": 12,
+   "props": {
+    "texture": 10,
+    "size": 10,
+    "framesize": 10,
+    "frame": 10,
+    "value": 10,
+    "parentanchor": 8,
+    "visible": 3,
+    "alwaystransparent": 3,
+    "tooltip": 3,
+    "datacontext": 2
+   }
+  },
+  "button_icon_square_action": {
+   "count": 12,
+   "props": {
+    "onclick": 21,
+    "size": 10,
+    "parentanchor": 9,
+    "tooltip": 9,
+    "using": 9,
+    "enabled": 6,
+    "name": 3,
+    "input_action": 3,
+    "visible": 2,
+    "icon": 2
+   }
+  },
+  "ticktask_list_textbox": {
+   "count": 12,
+   "props": {
+    "text": 11,
+    "maximumsize": 7,
+    "tooltip": 6,
+    "layoutpolicy_horizontal": 3
+   }
+  },
+  "spacer": {
+   "count": 11,
+   "props": {
+    "size": 11
+   }
+  },
+  "flag_icon": {
+   "count": 11,
+   "props": {
+    "framesize": 11,
+    "parentanchor": 9,
+    "size": 8,
+    "frame": 7,
+    "texture": 7,
+    "visible": 6,
+    "position": 3
+   }
+  },
+  "changed_value_increased_progressbar_horizontal": {
+   "count": 11,
+   "props": {
+    "size": 11,
+    "visible": 10
+   }
+  },
+  "character_portrait_base_no_mask": {
+   "count": 11,
+   "props": {
+    "ignore_in_debug_draw": 9,
+    "visible": 8,
+    "parentanchor": 8,
+    "size": 3
+   }
+  },
+  "editor_button": {
+   "count": 11,
+   "props": {
+    "size": 8,
+    "fontsize": 8,
+    "align": 8,
+    "onclick": 8,
+    "layoutpolicy_horizontal": 6,
+    "raw_text": 6,
+    "raw_tooltip": 6,
+    "tooltipwidget": 6,
+    "text": 2,
+    "tooltip": 2,
+    "font": 2,
+    "fontcolor": 2,
+    "margin": 2
+   }
+  },
+  "icon_flat_standard": {
+   "count": 11,
+   "props": {
+    "size": 9,
+    "texture": 6,
+    "parentanchor": 4,
+    "tooltip": 3,
+    "name": 2,
+    "position": 2,
+    "visible": 2
+   }
+  },
+  "pinnable_outliner_entry": {
+   "count": 11,
+   "props": {
+    "datacontext": 7,
+    "tooltipwidget": 4
+   }
+  },
+  "setting_bar_item": {
+   "count": 11,
+   "props": {
+    "tooltip": 11,
+    "visible": 2
+   }
+  },
+  "back_button_large": {
+   "count": 10,
+   "props": {
+    "position": 9,
+    "onclick": 7,
+    "input_action": 7,
+    "visible": 6,
+    "parentanchor": 5
+   }
+  },
+  "manpower_bar": {
+   "count": 10,
+   "props": {
+    "parentanchor": 10,
+    "size": 9,
+    "alpha": 3
+   }
+  },
+  "search_bar": {
+   "count": 10,
+   "props": {
+    "datacontext": 10,
+    "parentanchor": 7
+   }
+  },
+  "changed_value_decreased_progressbar_horizontal": {
+   "count": 10,
+   "props": {
+    "size": 10,
+    "visible": 9
+   }
+  },
+  "editor_editbox": {
+   "count": 10,
+   "props": {
+    "name": 8,
+    "layoutpolicy_horizontal": 2,
+    "using": 2,
+    "alwaystransparent": 2,
+    "size": 2
+   }
+  },
+  "close_button": {
+   "count": 10,
+   "props": {
+    "onclick": 6,
+    "using": 6,
+    "visible": 4,
+    "parentanchor": 4,
+    "position": 4,
+    "enabled": 4,
+    "shortcut": 3,
+    "size": 3,
+    "name": 2,
+    "tooltip": 2
+   }
+  },
+  "round_progress_default": {
+   "count": 10,
+   "props": {
+    "size": 10,
+    "parentanchor": 10,
+    "value": 10,
+    "visible": 7,
+    "datacontext": 5,
+    "tooltip": 2
+   }
+  },
+  "pop_portrait_base": {
+   "count": 10,
+   "props": {
+    "size": 6,
+    "tooltipwidget": 3,
+    "datacontext": 3,
+    "visible": 2
+   }
+  },
+  "culture_or_religion_labeled_value_flowcontainer": {
+   "count": 10,
+   "props": {
+    "tooltip": 2
+   }
+  },
+  "large_flag": {
+   "count": 10,
+   "props": {
+    "datacontext": 5,
+    "parentanchor": 3,
+    "mobilization_icon_flag": 2,
+    "visible": 2
+   }
+  },
+  "default_popup_two_lines": {
+   "count": 10,
+   "props": {
+    "name": 8
+   }
+  },
+  "editor_checkbutton": {
+   "count": 10,
+   "props": {
+    "layoutpolicy_horizontal": 7,
+    "layoutpolicy_vertical": 2,
+    "raw_tooltip": 2,
+    "tooltipwidget": 2
+   }
+  },
+  "character_portrait_base_head": {
+   "count": 10,
+   "props": {
+    "size": 6,
+    "datacontext": 4
+   }
+  },
+  "country_interest_item": {
+   "count": 10,
+   "props": {
+    "visible": 10,
+    "minimumsize": 5
+   }
+  },
+  "ui_guide_component_top_info": {
+   "count": 10,
+   "props": {}
+  },
+  "text_multi": {
+   "count": 9,
+   "props": {
+    "text": 9,
+    "autoresize": 9,
+    "max_width": 7,
+    "default_format": 6,
+    "align": 3,
+    "min_width": 3,
+    "layoutpolicy_horizontal": 2,
+    "margin": 2,
+    "name": 2
+   }
+  },
+  "v3_stacked_barchart": {
+   "count": 9,
+   "props": {}
+  },
+  "action_selection_number": {
+   "count": 9,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "divider_decorative": {
+   "count": 9,
+   "props": {
+    "layoutpolicy_horizontal": 4,
+    "size": 3,
+    "visible": 2,
+    "parentanchor": 2
+   }
+  },
+  "button_icon_cancel": {
+   "count": 9,
+   "props": {
+    "enabled": 9,
+    "onclick": 9,
+    "size": 8,
+    "using": 8,
+    "tooltip": 7,
+    "visible": 4,
+    "parentanchor": 2,
+    "tooltipwidget": 2
+   }
+  },
+  "button_icon_toggle_pin": {
+   "count": 9,
+   "props": {
+    "parentanchor": 9,
+    "size": 6,
+    "name": 3
+   }
+  },
+  "law_icon": {
+   "count": 9,
+   "props": {
+    "size": 9,
+    "parentanchor": 5,
+    "alpha": 4
+   }
+  },
+  "vertical_divider_full": {
+   "count": 9,
+   "props": {
+    "layoutpolicy_vertical": 2,
+    "alpha": 2,
+    "state": 2
+   }
+  },
+  "flag": {
+   "count": 9,
+   "props": {
+    "datacontext": 7,
+    "parentanchor": 5,
+    "position": 4,
+    "mobilization_icon_flag": 2
+   }
+  },
+  "button_icon_round_big_action": {
+   "count": 9,
+   "props": {
+    "using": 14,
+    "parentanchor": 9,
+    "tooltip": 8,
+    "onclick": 8,
+    "size": 8,
+    "visible": 4,
+    "enabled": 4,
+    "icon": 3,
+    "state": 2
+   }
+  },
+  "goods_prestige_goods_breakdown_list_item": {
+   "count": 9,
+   "props": {
+    "parentanchor": 3,
+    "size": 3,
+    "visible": 2
+   }
+  },
+  "button_icon_square": {
+   "count": 9,
+   "props": {
+    "size": 6,
+    "enabled": 3,
+    "tooltip": 3,
+    "onclick": 3,
+    "icon": 2,
+    "visible": 2,
+    "textbox": 2
+   }
+  },
+  "building_type_ownership_button": {
+   "count": 9,
+   "props": {
+    "onclick": 21,
+    "visible": 9,
+    "tooltip": 9,
+    "using": 9,
+    "enabled": 8
+   }
+  },
+  "build_ship_type_flowcontainer": {
+   "count": 9,
+   "props": {
+    "datacontext": 12,
+    "visible": 6
+   }
+  },
+  "ticktask_button": {
+   "count": 9,
+   "props": {
+    "size": 8,
+    "onclick": 8,
+    "text": 7,
+    "tooltip": 7
+   }
+  },
+  "right_click_menu_item": {
+   "count": 8,
+   "props": {
+    "blockoverride": 5,
+    "state": 4,
+    "tooltipwidget": 2
+   }
+  },
+  "button_icon_minus_action": {
+   "count": 8,
+   "props": {
+    "using": 9,
+    "tooltip": 7,
+    "onclick": 7,
+    "parentanchor": 6,
+    "enabled": 5,
+    "size": 5,
+    "visible": 3
+   }
+  },
+  "property_portfolio_stacked_bar_chart_base": {
+   "count": 8,
+   "props": {
+    "visible": 2
+   }
+  },
+  "button_select_arrow": {
+   "count": 8,
+   "props": {
+    "using": 16,
+    "size": 8,
+    "parentanchor": 8,
+    "mirror": 4,
+    "tooltip": 4,
+    "onclick": 4
+   }
+  },
+  "panel_dropdown": {
+   "count": 8,
+   "props": {
+    "visible": 4
+   }
+  },
+  "acceptance_status_small_icon": {
+   "count": 8,
+   "props": {
+    "parentanchor": 7,
+    "size": 3,
+    "visible": 2,
+    "alpha": 2
+   }
+  },
+  "sidebar_label_text": {
+   "count": 8,
+   "props": {
+    "position": 7,
+    "text": 7
+   }
+  },
+  "goods_filter_button": {
+   "count": 8,
+   "props": {
+    "using": 8,
+    "tooltip": 8
+   }
+  },
+  "bar_horizontal": {
+   "count": 8,
+   "props": {
+    "size": 3
+   }
+  },
+  "axis_label": {
+   "count": 8,
+   "props": {
+    "textbox": 8
+   }
+  },
+  "article_market_goods_balance_number": {
+   "count": 8,
+   "props": {
+    "datacontext": 6,
+    "visible": 4,
+    "alpha": 2
+   }
+  },
+  "building_item_condensed": {
+   "count": 8,
+   "props": {
+    "datacontext": 8,
+    "tooltipwidget": 8,
+    "visible": 3
+   }
+  },
+  "ticktask_list_numberbox": {
+   "count": 8,
+   "props": {
+    "text": 8,
+    "maximumsize": 4,
+    "layoutpolicy_horizontal": 4
+   }
+  },
+  "peace_deal_war_goals_list": {
+   "count": 8,
+   "props": {
+    "name": 8
+   }
+  },
+  "world_market_goods_filter_button": {
+   "count": 8,
+   "props": {
+    "tooltip": 8
+   }
+  },
+  "browser_chart": {
+   "count": 7,
+   "props": {}
+  },
+  "fancytooltip_companychartertype": {
+   "count": 7,
+   "props": {}
+  },
+  "small_flag_no_interact": {
+   "count": 7,
+   "props": {
+    "datacontext": 5,
+    "parentanchor": 5,
+    "position": 5,
+    "visible": 2,
+    "mobilization_icon_flag": 2
+   }
+  },
+  "small_market_flag": {
+   "count": 7,
+   "props": {
+    "parentanchor": 7
+   }
+  },
+  "building_controls": {
+   "count": 7,
+   "props": {
+    "datacontext": 7,
+    "parentanchor": 4
+   }
+  },
+  "dockable_button": {
+   "count": 7,
+   "props": {
+    "size": 7,
+    "tintcolor": 7,
+    "raw_text": 6,
+    "onclick": 2,
+    "raw_tooltip": 2
+   }
+  },
+  "button_radio": {
+   "count": 7,
+   "props": {
+    "visible": 6,
+    "onclick": 3,
+    "frame": 3
+   }
+  },
+  "character_ig_button": {
+   "count": 7,
+   "props": {
+    "size": 7,
+    "parentanchor": 4,
+    "position": 4
+   }
+  },
+  "modifier_list_textbox": {
+   "count": 7,
+   "props": {
+    "text": 6,
+    "maximumsize": 4,
+    "tooltip": 3
+   }
+  },
+  "debug_text": {
+   "count": 7,
+   "props": {
+    "raw_text": 7
+   }
+  },
+  "scrollbox": {
+   "count": 6,
+   "props": {
+    "layoutpolicy_horizontal": 6,
+    "layoutpolicy_vertical": 6,
+    "name": 2,
+    "minimumsize": 2,
+    "background": 2
+   }
+  },
+  "fancytooltip_wargoaldraft": {
+   "count": 6,
+   "props": {}
+  },
+  "vertical_divider_stronger_full": {
+   "count": 6,
+   "props": {
+    "parentanchor": 5
+   }
+  },
+  "map_modes_single_button_minimized": {
+   "count": 6,
+   "props": {
+    "datacontext": 6,
+    "using": 6
+   }
+  },
+  "button_icon_round_toggle": {
+   "count": 6,
+   "props": {
+    "size": 6,
+    "parentanchor": 5
+   }
+  },
+  "employment_indicator_icon": {
+   "count": 6,
+   "props": {
+    "parentanchor": 2,
+    "position": 2,
+    "visible": 2
+   }
+  },
+  "small_goods_button": {
+   "count": 6,
+   "props": {}
+  },
+  "pop_portraits_datamodel": {
+   "count": 6,
+   "props": {
+    "parentanchor": 6
+   }
+  },
+  "compact_ship_template": {
+   "count": 6,
+   "props": {
+    "size": 6,
+    "background": 6
+   }
+  },
+  "autonomy_button": {
+   "count": 6,
+   "props": {
+    "parentanchor": 6,
+    "visible": 6
+   }
+  },
+  "total_influence_cost": {
+   "count": 6,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "ship_modifier_battle_against_torpedo_boat_accuracy": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_torpedo_boat_destroyer_accuracy": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_submarine_accuracy": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_destroyer_accuracy": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_modern_ironclad_hull_damage": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_pre_dreadnought_hull_damage": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_dreadnought_hull_damage": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "ship_modifier_battle_against_super_dreadnought_hull_damage": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "character_portrait_small": {
+   "count": 6,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "miniature_flag_no_interact": {
+   "count": 6,
+   "props": {
+    "parentanchor": 6,
+    "datacontext": 6,
+    "position": 4,
+    "visible": 2
+   }
+  },
+  "character_portrait_medium": {
+   "count": 6,
+   "props": {
+    "parentanchor": 5,
+    "datacontext": 4,
+    "using": 4,
+    "position": 2
+   }
+  },
+  "text_label_center": {
+   "count": 6,
+   "props": {
+    "text": 6,
+    "default_format": 6,
+    "layoutpolicy_horizontal": 5,
+    "align": 3,
+    "margin": 3
+   }
+  },
+  "active_item": {
+   "count": 6,
+   "props": {
+    "container": 2,
+    "button": 2,
+    "widget": 2
+   }
+  },
+  "list": {
+   "count": 6,
+   "props": {
+    "scrollarea": 6
+   }
+  },
+  "double_direction_progressbar_gold": {
+   "count": 6,
+   "props": {
+    "size": 6,
+    "parentanchor": 6
+   }
+  },
+  "highlight_tutorial": {
+   "count": 6,
+   "props": {
+    "visible": 4,
+    "size": 2
+   }
+  },
+  "modifier_button": {
+   "count": 6,
+   "props": {
+    "size": 5,
+    "onclick": 5,
+    "text": 4,
+    "tooltip": 4
+   }
+  },
+  "line": {
+   "count": 6,
+   "props": {
+    "position": 6,
+    "gfxtype": 6,
+    "line_type": 6,
+    "mask": 6,
+    "width": 6,
+    "alpha": 6,
+    "points": 6,
+    "texture": 4
+   }
+  },
+  "default_header_clean": {
+   "count": 6,
+   "props": {}
+  },
+  "outliner_formations": {
+   "count": 6,
+   "props": {
+    "datacontext": 6
+   }
+  },
+  "outliner_commanders": {
+   "count": 6,
+   "props": {
+    "datacontext": 6
+   }
+  },
+  "enactment_setback": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "pop_portrait_simple": {
+   "count": 6,
+   "props": {
+    "size": 2,
+    "background": 2,
+    "position": 2,
+    "parentanchor": 2
+   }
+  },
+  "reform_government_option": {
+   "count": 6,
+   "props": {
+    "visible": 6,
+    "tooltip": 6
+   }
+  },
+  "binding_period_button": {
+   "count": 6,
+   "props": {}
+  },
+  "grid_button": {
+   "count": 6,
+   "props": {
+    "visible": 5,
+    "tooltipwidget": 5,
+    "datacontext": 3
+   }
+  },
+  "character_portrait_base_torso": {
+   "count": 6,
+   "props": {
+    "size": 3,
+    "datacontext": 3
+   }
+  },
+  "buildings_list_item": {
+   "count": 6,
+   "props": {
+    "datacontext": 6,
+    "visible": 3
+   }
+  },
+  "direct_support_button": {
+   "count": 6,
+   "props": {
+    "visible": 6
+   }
+  },
+  "side_section_articles": {
+   "count": 6,
+   "props": {
+    "visible": 6,
+    "spacing": 6,
+    "datacontext": 6
+   }
+  },
+  "button_icon_edit": {
+   "count": 5,
+   "props": {
+    "size": 5,
+    "onclick": 5,
+    "tooltip": 4,
+    "using": 4,
+    "visible": 3
+   }
+  },
+  "fullscreen_block_window": {
+   "count": 5,
+   "props": {
+    "name": 5,
+    "datacontext": 2,
+    "search_bar_results": 2
+   }
+  },
+  "modifier_list": {
+   "count": 5,
+   "props": {
+    "visible": 4,
+    "using": 4
+   }
+  },
+  "expand": {
+   "count": 5,
+   "props": {
+    "visible": 3,
+    "layoutpolicy_vertical": 3
+   }
+  },
+  "button_icon_plus_action": {
+   "count": 5,
+   "props": {
+    "onclick": 4,
+    "enabled": 4,
+    "size": 3,
+    "visible": 2,
+    "using": 2
+   }
+  },
+  "building_ownership_stacked_barchart_base": {
+   "count": 5,
+   "props": {
+    "using": 2
+   }
+  },
+  "datacontext_from_model": {
+   "count": 5,
+   "props": {
+    "datamodel": 5,
+    "index": 5
+   }
+  },
+  "pop_list": {
+   "count": 5,
+   "props": {
+    "using": 4
+   }
+  },
+  "character_portrait_large": {
+   "count": 5,
+   "props": {
+    "character_ig_button": 4,
+    "icon": 4,
+    "using": 3,
+    "parentanchor": 2
+   }
+  },
+  "textformatting": {
+   "count": 5,
+   "props": {
+    "format": 120,
+    "color_blind_mode": 3
+   }
+  },
+  "fancy_flag_ui": {
+   "count": 5,
+   "props": {
+    "parentanchor": 4,
+    "size": 4,
+    "position": 2
+   }
+  },
+  "fancytooltip_wargoal": {
+   "count": 5,
+   "props": {
+    "datacontext": 4
+   }
+  },
+  "country_involvement_bar_with_label": {
+   "count": 5,
+   "props": {
+    "margin_right": 3
+   }
+  },
+  "character_portrait_large_torso": {
+   "count": 5,
+   "props": {
+    "parentanchor": 4,
+    "datacontext": 3,
+    "position": 2
+   }
+  },
+  "pop_list_summary_section_item_vbox": {
+   "count": 5,
+   "props": {
+    "visible": 2
+   }
+  },
+  "law_item_small": {
+   "count": 5,
+   "props": {
+    "datacontext": 4
+   }
+  },
+  "acceptance_group_with_law_status": {
+   "count": 5,
+   "props": {
+    "visible": 5,
+    "datacontext": 3
+   }
+  },
+  "pop_portrait_small": {
+   "count": 5,
+   "props": {
+    "size": 3
+   }
+  },
+  "organization_bar": {
+   "count": 5,
+   "props": {
+    "parentanchor": 5,
+    "tooltip": 4,
+    "size": 4,
+    "alpha": 3,
+    "visible": 2
+   }
+  },
+  "achievements_disabled_icon": {
+   "count": 5,
+   "props": {
+    "visible": 5,
+    "size": 5,
+    "tooltip": 5
+   }
+  },
+  "back_button": {
+   "count": 5,
+   "props": {
+    "onclick": 3,
+    "input_action": 3,
+    "position": 2,
+    "visible": 2
+   }
+  },
+  "button_icon_round_big": {
+   "count": 5,
+   "props": {
+    "size": 5,
+    "parentanchor": 4,
+    "using": 4
+   }
+  },
+  "editor_toolbar_button": {
+   "count": 5,
+   "props": {
+    "size": 5,
+    "raw_text": 5,
+    "onclick": 5,
+    "raw_tooltip": 5,
+    "layoutpolicy_horizontal": 4,
+    "layoutpolicy_vertical": 4,
+    "elide": 4,
+    "tooltipwidget": 4
+   }
+  },
+  "power_bloc_icon": {
+   "count": 5,
+   "props": {
+    "parentanchor": 5,
+    "size": 4,
+    "visible": 2,
+    "button": 2,
+    "tooltip": 2
+   }
+  },
+  "formation_bulk_action_button": {
+   "count": 5,
+   "props": {
+    "visible": 2
+   }
+  },
+  "block": {
+   "count": 5,
+   "props": {
+    "size": 5
+   }
+  },
+  "jominimultiplayersortbuttonasc": {
+   "count": 5,
+   "props": {
+    "visible": 5
+   }
+  },
+  "jominimultiplayersortbuttondesc": {
+   "count": 5,
+   "props": {
+    "visible": 5
+   }
+  },
+  "piechart": {
+   "count": 5,
+   "props": {
+    "item": 4,
+    "size": 3,
+    "texture": 3,
+    "parentanchor": 3,
+    "datamodel": 2
+   }
+  },
+  "pieslice": {
+   "count": 5,
+   "props": {
+    "value": 3,
+    "color": 3,
+    "using": 2
+   }
+  },
+  "outliner_states": {
+   "count": 5,
+   "props": {
+    "datacontext": 4
+   }
+  },
+  "customization_option": {
+   "count": 5,
+   "props": {}
+  },
+  "techtree_spline": {
+   "count": 5,
+   "props": {
+    "visible": 5
+   }
+  },
+  "header_pattern": {
+   "count": 4,
+   "props": {
+    "layoutpolicy_horizontal": 4
+   }
+  },
+  "button_standard_list": {
+   "count": 4,
+   "props": {
+    "size": 4,
+    "text": 4,
+    "tooltip": 4,
+    "down": 4,
+    "onclick": 4,
+    "using": 4,
+    "visible": 2
+   }
+  },
+  "right_click_menu": {
+   "count": 4,
+   "props": {
+    "name": 4,
+    "parentanchor": 4,
+    "widgetanchor": 4,
+    "visible": 2,
+    "onmousehierarchyenter": 2,
+    "onmousehierarchyleave": 2
+   }
+  },
+  "battle_progressbar": {
+   "count": 4,
+   "props": {
+    "position": 4,
+    "parentanchor": 4,
+    "visible": 2,
+    "tooltip": 2,
+    "using": 2
+   }
+  },
+  "close_button_large": {
+   "count": 4,
+   "props": {
+    "parentanchor": 4,
+    "shortcut": 4,
+    "position": 2
+   }
+  },
+  "tax_exp_frame_coin": {
+   "count": 4,
+   "props": {}
+  },
+  "mini_construction_queue": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "building_level_controls": {
+   "count": 4,
+   "props": {}
+  },
+  "button_icon_round_privatize_or_monopolize_button": {
+   "count": 4,
+   "props": {
+    "visible": 4,
+    "using": 4,
+    "tooltip": 4
+   }
+  },
+  "building_privatize_toggle_base": {
+   "count": 4,
+   "props": {
+    "visible": 2,
+    "size": 2
+   }
+  },
+  "military_formation_right_click_item": {
+   "count": 4,
+   "props": {}
+  },
+  "fancytooltip_commanderordertype": {
+   "count": 4,
+   "props": {}
+  },
+  "button_checkbox_label": {
+   "count": 4,
+   "props": {
+    "onclick": 3,
+    "parentanchor": 2,
+    "enabled": 2
+   }
+  },
+  "levels_progressbar": {
+   "count": 4,
+   "props": {
+    "datamodel": 4
+   }
+  },
+  "compact_treaty_item": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "compact_war_reparation_treaty_item": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "poplist_filter_button": {
+   "count": 4,
+   "props": {}
+  },
+  "consumption_tax_button_toggle": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "principle_icon_with_bg": {
+   "count": 4,
+   "props": {
+    "parentanchor": 4,
+    "size": 3
+   }
+  },
+  "war_goal_item": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "animation": {
+   "count": 4,
+   "props": {
+    "bezier": 4,
+    "alpha": 2,
+    "modify_texture": 2
+   }
+  },
+  "map_modes_fake_static_filled_radiobutton": {
+   "count": 4,
+   "props": {}
+  },
+  "v3_plotline_clout": {
+   "count": 4,
+   "props": {
+    "using": 4
+   }
+  },
+  "ig_heading_pop_portrait": {
+   "count": 4,
+   "props": {
+    "parentanchor": 4,
+    "position": 4,
+    "visible": 4,
+    "datacontext": 4
+   }
+  },
+  "ruler_stats_entry": {
+   "count": 4,
+   "props": {
+    "tooltip": 2,
+    "datacontext": 2,
+    "tooltipwidget": 2
+   }
+  },
+  "lens_buttons": {
+   "count": 4,
+   "props": {}
+  },
+  "editor_frame": {
+   "count": 4,
+   "props": {
+    "layoutpolicy_horizontal": 4
+   }
+  },
+  "box_vertical_divider": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "country_map_list_one_value": {
+   "count": 4,
+   "props": {
+    "name": 4
+   }
+  },
+  "add_character_button_long": {
+   "count": 4,
+   "props": {
+    "visible": 4,
+    "size": 2
+   }
+  },
+  "unit_group_default_unit_button": {
+   "count": 4,
+   "props": {
+    "parentanchor": 3
+   }
+  },
+  "modifier_list_numberbox": {
+   "count": 4,
+   "props": {
+    "text": 4,
+    "maximumsize": 2,
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "jominimultiplayertextbox": {
+   "count": 4,
+   "props": {
+    "text": 4,
+    "autoresize": 2,
+    "minimumsize": 2
+   }
+  },
+  "jominimultiplayerfrontendbutton": {
+   "count": 4,
+   "props": {
+    "onclick": 4,
+    "text": 4
+   }
+  },
+  "outliner_countries": {
+   "count": 4,
+   "props": {
+    "datacontext": 3
+   }
+  },
+  "outliner_interest_groups": {
+   "count": 4,
+   "props": {
+    "datacontext": 3
+   }
+  },
+  "cogwheel_animation_small": {
+   "count": 4,
+   "props": {
+    "size": 2
+   }
+  },
+  "laws_list": {
+   "count": 4,
+   "props": {}
+  },
+  "axis": {
+   "count": 4,
+   "props": {
+    "axis_label": 8,
+    "size": 4,
+    "direction": 4
+   }
+  },
+  "approval_info_small": {
+   "count": 4,
+   "props": {
+    "name": 3
+   }
+  },
+  "nationalize_effect": {
+   "count": 4,
+   "props": {
+    "layoutpolicy_horizontal": 4,
+    "visible": 3
+   }
+  },
+  "power_bloc_identity_icon": {
+   "count": 4,
+   "props": {
+    "position": 2,
+    "datacontext": 2,
+    "size": 2,
+    "parentanchor": 2
+   }
+  },
+  "principle_slot_formation": {
+   "count": 4,
+   "props": {
+    "datacontext": 4,
+    "visible": 3
+   }
+  },
+  "principle_slot": {
+   "count": 4,
+   "props": {
+    "datacontext": 4,
+    "visible": 3
+   }
+  },
+  "naval_mission_right_click_item": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "article_market_goods_numbers": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "is_player_glow": {
+   "count": 4,
+   "props": {}
+  },
+  "buildings_list": {
+   "count": 4,
+   "props": {}
+  },
+  "strait_state_and_fortification": {
+   "count": 4,
+   "props": {
+    "datacontext": 8,
+    "visible": 4
+   }
+  },
+  "strait_state_info": {
+   "count": 4,
+   "props": {
+    "datacontext": 8,
+    "visible": 4
+   }
+  },
+  "sway_offer_item": {
+   "count": 4,
+   "props": {
+    "onclick": 7,
+    "visible": 4
+   }
+  },
+  "technology": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "expected_formation_size": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "article_influence_cost": {
+   "count": 4,
+   "props": {
+    "datacontext": 3
+   }
+  },
+  "war_participant_item": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "highlight_icon": {
+   "count": 3,
+   "props": {
+    "texture": 3,
+    "size": 3,
+    "visible": 2,
+    "alpha": 2,
+    "tooltip": 2,
+    "effectname": 2
+   }
+  },
+  "add_wargoal_item": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "offense_defense_info": {
+   "count": 3,
+   "props": {
+    "position": 2
+   }
+  },
+  "set_level_bar": {
+   "count": 3,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "building_panel_potential_buildings": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "building_country_monopoly_icon": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "datacontext": 3
+   }
+  },
+  "has_new_pm_icon": {
+   "count": 3,
+   "props": {
+    "position": 3,
+    "parentanchor": 3
+   }
+  },
+  "ownership_list_name": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "building_nationalize_button_base": {
+   "count": 3,
+   "props": {}
+  },
+  "commander_order_button": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "size": 3
+   }
+  },
+  "company_info_item": {
+   "count": 3,
+   "props": {}
+  },
+  "fancytooltip_buildingtype": {
+   "count": 3,
+   "props": {}
+  },
+  "fancytooltip_diplomaticactiontype": {
+   "count": 3,
+   "props": {}
+  },
+  "retrofit_all_ships": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "fancytooltip_market": {
+   "count": 3,
+   "props": {
+    "state": 2
+   }
+  },
+  "attitude_info": {
+   "count": 3,
+   "props": {
+    "size": 2,
+    "parentanchor": 2
+   }
+  },
+  "overlord": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "country_panel_law_item": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "enabled": 3
+   }
+  },
+  "country_panel_law_item_is_enacting": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "social_class_strata_column_flowcontainer": {
+   "count": 3,
+   "props": {
+    "name": 3
+   }
+  },
+  "character_ig_icon": {
+   "count": 3,
+   "props": {
+    "size": 3,
+    "parentanchor": 2
+   }
+  },
+  "involved_countries_summary_gridbox": {
+   "count": 3,
+   "props": {}
+  },
+  "character_portrait_situation_1char": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "datacontext": 3
+   }
+  },
+  "icon_online_offline": {
+   "count": 3,
+   "props": {
+    "parentanchor": 3,
+    "position": 3,
+    "frame": 3
+   }
+  },
+  "ironman_save_icon": {
+   "count": 3,
+   "props": {
+    "size": 3,
+    "tooltip": 3,
+    "visible": 2
+   }
+  },
+  "button_checkbox": {
+   "count": 3,
+   "props": {}
+  },
+  "button_standard_hover": {
+   "count": 3,
+   "props": {
+    "icon": 2,
+    "size": 2
+   }
+  },
+  "invalid_save_icon": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "tooltip": 3,
+    "size": 3
+   }
+  },
+  "generate_character_type": {
+   "count": 3,
+   "props": {
+    "name": 3
+   }
+  },
+  "button_icon_round_toggle_action": {
+   "count": 3,
+   "props": {
+    "visible": 2
+   }
+  },
+  "button_cancel": {
+   "count": 3,
+   "props": {
+    "state": 6,
+    "name": 3,
+    "onclick": 3,
+    "alpha": 3,
+    "size": 3,
+    "using": 3,
+    "parentanchor": 3
+   }
+  },
+  "ig_overview_value_box": {
+   "count": 3,
+   "props": {
+    "name": 3,
+    "size": 3
+   }
+  },
+  "ig_panel_clout_rating": {
+   "count": 3,
+   "props": {}
+  },
+  "ig_panel_icon_label": {
+   "count": 3,
+   "props": {
+    "name": 3,
+    "visible": 3
+   }
+  },
+  "ig_trait_glow": {
+   "count": 3,
+   "props": {
+    "name": 3,
+    "visible": 3
+   }
+  },
+  "ig_trait_icon": {
+   "count": 3,
+   "props": {
+    "position": 2
+   }
+  },
+  "character_portrait_medium_torso": {
+   "count": 3,
+   "props": {
+    "using": 2
+   }
+  },
+  "journal_entry": {
+   "count": 3,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "highlight_tutorial_ui": {
+   "count": 3,
+   "props": {
+    "visible": 2
+   }
+  },
+  "button_icon_check": {
+   "count": 3,
+   "props": {
+    "size": 3,
+    "tooltip": 3,
+    "onclick": 3,
+    "visible": 2
+   }
+  },
+  "lens_option_button": {
+   "count": 3,
+   "props": {
+    "datacontext": 6,
+    "visible": 3
+   }
+  },
+  "movement_marker_hover_vfx": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "rightclick_modifiers": {
+   "count": 3,
+   "props": {
+    "ondefault": 3,
+    "onctrl": 2
+   }
+  },
+  "zoomarea": {
+   "count": 3,
+   "props": {
+    "name": 3,
+    "size": 3,
+    "background": 3,
+    "state": 3,
+    "zoom": 3,
+    "zoom_step": 3,
+    "zoom_min": 3,
+    "zoom_max": 3,
+    "draggable_by": 3,
+    "zoomwidget": 3
+   }
+  },
+  "zoomwidget": {
+   "count": 3,
+   "props": {
+    "container": 3
+   }
+  },
+  "jominimultiplayercheckbutton": {
+   "count": 3,
+   "props": {}
+  },
+  "filter_button_battle_log": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "filter_background_selected_battle_log": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "ship_viewer": {
+   "count": 3,
+   "props": {
+    "datacontext": 3,
+    "size": 3,
+    "flowcontainer": 3,
+    "visible": 2,
+    "name": 2,
+    "console_button": 2
+   }
+  },
+  "outliner_group": {
+   "count": 3,
+   "props": {}
+  },
+  "outliner_entry": {
+   "count": 3,
+   "props": {}
+  },
+  "available_options_number": {
+   "count": 3,
+   "props": {}
+  },
+  "enactment_phase": {
+   "count": 3,
+   "props": {}
+  },
+  "editor_textbox": {
+   "count": 3,
+   "props": {
+    "position": 3
+   }
+  },
+  "ideology_laws_list": {
+   "count": 3,
+   "props": {
+    "background": 3
+   }
+  },
+  "treemapslice": {
+   "count": 3,
+   "props": {
+    "texture": 3,
+    "using": 2
+   }
+  },
+  "add_character_button": {
+   "count": 3,
+   "props": {
+    "parentanchor": 3,
+    "size": 2
+   }
+  },
+  "pop_strata_summary": {
+   "count": 3,
+   "props": {
+    "using": 3
+   }
+  },
+  "nationalize_effect_divider": {
+   "count": 3,
+   "props": {
+    "visible": 3
+   }
+  },
+  "start_diplo_play_table": {
+   "count": 3,
+   "props": {}
+  },
+  "expanded_list": {
+   "count": 3,
+   "props": {
+    "using": 3,
+    "datamodel": 3,
+    "item": 3,
+    "visible": 2
+   }
+  },
+  "active_charter_right_click_item": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "datacontext": 3
+   }
+  },
+  "building_type_ownership_active_widget": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "tooltip": 3
+   }
+  },
+  "article_input_law_group_list": {
+   "count": 3,
+   "props": {
+    "parentanchor": 3,
+    "datamodel": 3
+   }
+  },
+  "ship_stat_base_armor": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_carrying_capacity": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_crew_damage": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_critical_hit_chance": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_critical_hit_multiplier": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_detection": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_hull_damage": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_marine_capacity": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_screening": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_blockade_strength": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_movement_speed": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_supply_capacity": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_supply_efficiency": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_visibility": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_vulnerability": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_accuracy": {
+   "count": 3,
+   "props": {}
+  },
+  "ship_stat_base_readiness_gain": {
+   "count": 3,
+   "props": {}
+  },
+  "state_pop_type_piechart": {
+   "count": 3,
+   "props": {
+    "visible": 2
+   }
+  },
+  "state_ig_piechart": {
+   "count": 3,
+   "props": {
+    "visible": 2
+   }
+  },
+  "tech_tree_graph": {
+   "count": 3,
+   "props": {
+    "name": 3,
+    "visible": 3,
+    "using": 3
+   }
+  },
+  "editor_icon": {
+   "count": 3,
+   "props": {
+    "size": 3,
+    "texture": 3,
+    "tooltip": 3,
+    "framesize": 2,
+    "frame": 2
+   }
+  },
+  "alert_icon": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "size": 2
+   }
+  },
+  "article_draft": {
+   "count": 3,
+   "props": {
+    "datacontext": 3,
+    "state": 3
+   }
+  },
+  "button_expand": {
+   "count": 2,
+   "props": {}
+  },
+  "button_primary": {
+   "count": 2,
+   "props": {
+    "text": 2,
+    "onclick": 2
+   }
+  },
+  "character_portrait_front_vs_left": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "datacontext": 2
+   }
+  },
+  "character_portrait_front_vs_right": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "parentanchor": 2,
+    "datacontext": 2
+   }
+  },
+  "battle_side_content": {
+   "count": 2,
+   "props": {
+    "datacontext": 2,
+    "parentanchor": 2
+   }
+  },
+  "button_icon_pin": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "button_icon_unpin": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "template": {
+   "count": 2,
+   "props": {
+    "position": 2,
+    "state": 2
+   }
+  },
+  "condensed_building_information_pms": {
+   "count": 2,
+   "props": {}
+  },
+  "progressbar_highlight": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "ship_item": {
+   "count": 2,
+   "props": {}
+  },
+  "combat_units_list": {
+   "count": 2,
+   "props": {
+    "datacontext": 2,
+    "datamodel": 2
+   }
+  },
+  "fancytooltip_poptype": {
+   "count": 2,
+   "props": {}
+  },
+  "character_interactions_button": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
+  "colorpicker": {
+   "count": 2,
+   "props": {}
+  },
+  "button_all_ships_filter": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "datacontext": 2
+   }
+  },
+  "button_edit_ships": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "ship_bulk_change_buttons": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "datacontext": 2
+   }
+  },
+  "character_portrait_small2": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "fancytooltip_companytype": {
+   "count": 2,
+   "props": {}
+  },
+  "company_charter_button_horizontal": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "company_charter_button": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "default_header_hbox": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_construction_sector_actions": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2
+   }
+  },
+  "ship_construction_queue_item": {
+   "count": 2,
+   "props": {}
+  },
+  "draggable_behavior": {
+   "count": 2,
+   "props": {
+    "draggable_id": 2,
+    "drag_widget": 2
+   }
+  },
+  "drag_widget": {
+   "count": 2,
+   "props": {
+    "widget": 2
+   }
+  },
+  "drop_target": {
+   "count": 2,
+   "props": {
+    "accept_draggable_id": 2,
+    "on_receive_drop": 2
+   }
+  },
+  "ship_construction_queue_item_texts": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "construction_queue_sector_actions": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2
+   }
+  },
+  "construction_queue_item": {
+   "count": 2,
+   "props": {}
+  },
+  "construction_queue_goto_building": {
+   "count": 2,
+   "props": {
+    "name": 2,
+    "datacontext": 2
+   }
+  },
+  "construction_queue_item_texts": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "fancytooltip_building": {
+   "count": 2,
+   "props": {}
+  },
+  "fancytooltip_combatunittypewithculture": {
+   "count": 2,
+   "props": {}
+  },
+  "fancytooltip_powerblocprinciplegroup": {
+   "count": 2,
+   "props": {}
+  },
+  "regulartooltip_leverage": {
+   "count": 2,
+   "props": {}
+  },
+  "fancytooltip_militaryformation": {
+   "count": 2,
+   "props": {
+    "state": 2
+   }
+  },
+  "changed_value_decreased_progressbar_horizontal_green": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "size": 2
+   }
+  },
+  "changed_value_increased_progressbar_horizontal_bad": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "size": 2
+   }
+  },
+  "diplomatic_play_button_state": {
+   "count": 2,
+   "props": {}
+  },
+  "mobilization_icon": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "diplomatic_play_item": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "political_lobby_list_item": {
+   "count": 2,
+   "props": {}
+  },
+  "population_acceptance_status_chart_with_label_flowcontainer": {
+   "count": 2,
+   "props": {}
+  },
+  "fancytooltip_lawwithcountrycontext": {
+   "count": 2,
+   "props": {}
+  },
+  "pop_list_summary_widget": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "datacontext": 2
+   }
+  },
+  "culture_or_religion_sort_buttons_widget": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "culture_or_religion_list_dynamicgridbox": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
+  "acceptance_status_large_icon": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "state": 2
+   }
+  },
+  "regulartooltip_treatyarticlespage": {
+   "count": 2,
+   "props": {}
+  },
+  "treaty_draft_acceptance_icon": {
+   "count": 2,
+   "props": {}
+  },
+  "rank_icon": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "parentanchor": 2
+   }
+  },
+  "ship_template_stat_vulnerability": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_screening": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_supply_efficiency": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_critical_hit_chance": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_critical_hit_damage": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_carrying_capacity": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_visibility": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_marine_capacity": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_detection": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_readiness_gain": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_accuracy": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_template_stat_blockade_strength": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "ship_modifier_stat_armor": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_vulnerability": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_crew_damage": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_screening": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_hull_damage": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_movement_speed": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_critical_hit_chance": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_supply_efficiency": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_critical_hit_damage": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_supply_capacity": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_visibility": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_carrying_capacity": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_detection": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_marine_capacity": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_readiness_gain": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_accuracy": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_modifier_stat_blockade_strength": {
+   "count": 2,
+   "props": {}
+  },
+  "locked_active_principle_slot": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "alpha": 2
+   }
+  },
+  "principle_group_no_interact": {
+   "count": 2,
+   "props": {}
+  },
+  "principle_icon": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "hit_points_bar": {
+   "count": 2,
+   "props": {
+    "size": 2,
+    "parentanchor": 2
+   }
+  },
+  "offense_defense_info_small": {
+   "count": 2,
+   "props": {
+    "background": 2
+   }
+  },
+  "military_formation_mobilize_button": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "subject_list": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "diplo_play_side": {
+   "count": 2,
+   "props": {
+    "position": 2
+   }
+  },
+  "diplo_play_side_sway_tab": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "position": 2
+   }
+  },
+  "diplomatic_play_stance_lane_backer": {
+   "count": 2,
+   "props": {
+    "background": 2
+   }
+  },
+  "war_goal_article_inputs": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "video_icon": {
+   "count": 2,
+   "props": {
+    "video": 2,
+    "size": 2,
+    "alwaystransparent": 2,
+    "loop": 2,
+    "modify_texture": 2
+   }
+  },
+  "character_portrait_duel_01": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "datacontext": 2
+   }
+  },
+  "character_portrait_duel_02": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "datacontext": 2
+   }
+  },
+  "v3_logo_animation": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "sdk_login_accountwidget": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "button_settings": {
+   "count": 2,
+   "props": {
+    "name": 2,
+    "size": 2
+   }
+  },
+  "button_achievements": {
+   "count": 2,
+   "props": {
+    "name": 2,
+    "enabled": 2,
+    "size": 2
+   }
+  },
+  "button_theme_selector": {
+   "count": 2,
+   "props": {
+    "onclick": 3,
+    "name": 2,
+    "size": 2
+   }
+  },
+  "clickable_version_number": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_load_game": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "button_standard_back": {
+   "count": 2,
+   "props": {
+    "shortcut": 2,
+    "size": 2
+   }
+  },
+  "button_tab": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2,
+    "onclick": 2,
+    "down": 2,
+    "text": 2,
+    "default_format": 2
+   }
+  },
+  "editbox_standard_with_label": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "minimize_button": {
+   "count": 2,
+   "props": {}
+  },
+  "editbox_standard": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "country_participant_side": {
+   "count": 2,
+   "props": {}
+  },
+  "present_countries_side": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "casualties_list": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "important_actions_list_item": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "important_actions_list_expandable_item": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "power_bloc_icon_button_widget": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "message_feed_widget": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "topbar": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "ig_loyal_radical_bar": {
+   "count": 2,
+   "props": {}
+  },
+  "politics_panel_political_movement_item": {
+   "count": 2,
+   "props": {}
+  },
+  "music_category_button": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "green_progressbar_horizontal": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "tooltip": 2,
+    "textbox": 2
+   }
+  },
+  "editor_textinput": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2,
+    "size": 2,
+    "align": 2
+   }
+  },
+  "productivity_or_other_information": {
+   "count": 2,
+   "props": {}
+  },
+  "countries_map_list_panel_full": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
+  "movement_marker_knob": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "is_mobilizing_progressbar": {
+   "count": 2,
+   "props": {}
+  },
+  "movement_marker_click_vfx": {
+   "count": 2,
+   "props": {}
+  },
+  "sort_button_with_textbox": {
+   "count": 2,
+   "props": {
+    "onclick": 4,
+    "size": 2
+   }
+  },
+  "compact_chart": {
+   "count": 2,
+   "props": {}
+  },
+  "military_formation_commander": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "size": 2
+   }
+  },
+  "naval_mission_button": {
+   "count": 2,
+   "props": {}
+  },
+  "combat_unit_type_group_summary": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "margin_right": 2
+   }
+  },
+  "icon_with_background_big": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "enabled": 2
+   }
+  },
+  "military_formation_supply_ships": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "blockoverride": 2
+   }
+  },
+  "minimap_window": {
+   "count": 2,
+   "props": {
+    "state": 2
+   }
+  },
+  "minimap": {
+   "count": 2,
+   "props": {}
+  },
+  "modifier_list_plotline": {
+   "count": 2,
+   "props": {
+    "plotpoints": 2
+   }
+  },
+  "attacker_progress": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "defender_progress": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "diorama_stats": {
+   "count": 2,
+   "props": {
+    "datacontext": 6,
+    "position": 2,
+    "visible": 2
+   }
+  },
+  "message_feed_widget_inner": {
+   "count": 2,
+   "props": {
+    "using": 2,
+    "onmousehierarchyenter": 2
+   }
+  },
+  "recommended_country": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "diplomatic_play_item_impl": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "event_item": {
+   "count": 2,
+   "props": {}
+  },
+  "event_item_hbox": {
+   "count": 2,
+   "props": {}
+  },
+  "character_portrait_mini": {
+   "count": 2,
+   "props": {}
+  },
+  "politics_panel_top": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "amendment_list": {
+   "count": 2,
+   "props": {
+    "margin": 2
+   }
+  },
+  "enactable_generic_law2": {
+   "count": 2,
+   "props": {}
+  },
+  "selected_or_enacting_law_content": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "treemapchart": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "item": 2
+   }
+  },
+  "v3_plotline_hbox": {
+   "count": 2,
+   "props": {}
+  },
+  "parties_and_ig_list_details": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
+  "laws_support_list": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "button_icon_move_left": {
+   "count": 2,
+   "props": {
+    "enabled": 2,
+    "visible": 2,
+    "layoutpolicy_vertical": 2,
+    "size": 2,
+    "onclick": 2,
+    "tooltip": 2
+   }
+  },
+  "button_icon_move_right": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "layoutpolicy_vertical": 2,
+    "size": 2,
+    "onclick": 2
+   }
+  },
+  "v3_piechart": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "v3_treemapchart": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "endorsement_info_bar": {
+   "count": 2,
+   "props": {}
+  },
+  "notification_popup": {
+   "count": 2,
+   "props": {}
+  },
+  "treaty": {
+   "count": 2,
+   "props": {
+    "name": 2,
+    "background": 2
+   }
+  },
+  "framed_customize_button": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "power_bloc_rank_badge": {
+   "count": 2,
+   "props": {
+    "size": 2,
+    "position": 2
+   }
+  },
+  "new_army_button": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "new_fleet_button": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "negotiate_interest_group_button": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "negotiate_interest_group_active_widget": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "current_ship_template": {
+   "count": 2,
+   "props": {}
+  },
+  "military_formation_shipping_lane_button": {
+   "count": 2,
+   "props": {}
+  },
+  "portrait_button": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "using": 2
+   }
+  },
+  "pop_portrait_big": {
+   "count": 2,
+   "props": {}
+  },
+  "pop_portrait_medium": {
+   "count": 2,
+   "props": {}
+  },
+  "utility_modification_slot_button": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "ship_designer_grid_stat": {
+   "count": 2,
+   "props": {}
+  },
+  "ship_stat_base_hit_points": {
+   "count": 2,
+   "props": {}
+  },
+  "state_culture_piechart": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "state_religion_piechart": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "strait_state_info_item": {
+   "count": 2,
+   "props": {}
+  },
+  "ticktask_list_widget": {
+   "count": 2,
+   "props": {
+    "maximumsize": 2,
+    "tooltip": 2,
+    "icon": 2
+   }
+  },
+  "caligula_table": {
+   "count": 2,
+   "props": {}
+  },
+  "current_situation_button": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "tooltip": 2,
+    "using": 2,
+    "input_action": 2
+   }
+  },
+  "unit_type_selection_with_arrow_button": {
+   "count": 2,
+   "props": {
+    "datacontext": 4,
+    "visible": 2
+   }
+  },
+  "ship_type_selection_with_arrow_button": {
+   "count": 2,
+   "props": {
+    "datacontext": 4,
+    "visible": 2
+   }
+  },
+  "seal_and_signature": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "article": {
+   "count": 2,
+   "props": {}
+  },
+  "war_participant_side": {
+   "count": 2,
+   "props": {
+    "position": 2
+   }
+  },
+  "war_present_countries_side": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  }
+ },
+ "globalProps": {
+  "size": 7799,
+  "using": 7219,
+  "parentanchor": 6600,
+  "visible": 5704,
+  "text": 3672,
+  "align": 3392,
+  "textbox": 2799,
+  "name": 2779,
+  "texture": 2637,
+  "icon": 2400,
+  "autoresize": 2391,
+  "flowcontainer": 2369,
+  "tooltip": 2342,
+  "spacing": 2104,
+  "onclick": 2016,
+  "layoutpolicy_horizontal": 1864,
+  "position": 1729,
+  "direction": 1697,
+  "widget": 1592,
+  "datacontext": 1586,
+  "alpha": 1414,
+  "margin": 1241,
+  "background": 1177,
+  "raw_text": 1079,
+  "button": 988,
+  "state": 983,
+  "elide": 983,
+  "minimumsize": 926,
+  "layoutpolicy_vertical": 889,
+  "margin_left": 852,
+  "item": 824,
+  "datamodel": 767,
+  "max_width": 737,
+  "duration": 701,
+  "fontsize_min": 685,
+  "maximumsize": 678,
+  "hbox": 667,
+  "alwaystransparent": 628,
+  "margin_right": 614,
+  "modify_texture": 599,
+  "default_format": 587,
+  "fontsize": 553,
+  "multiline": 518,
+  "enabled": 512,
+  "margin_top": 504,
+  "margin_bottom": 488,
+  "vbox": 465,
+  "iconsize": 431,
+  "offset": 431,
+  "tooltipwidget": 425,
+  "container": 398,
+  "next": 375,
+  "on_start": 308,
+  "expand": 304,
+  "frame": 250,
+  "sort_button": 241,
+  "format": 240,
+  "color": 213,
+  "custom_tooltip_textbox": 202,
+  "onmousehierarchyenter": 195,
+  "scale": 192,
+  "onmousehierarchyleave": 191,
+  "divider_clean": 173,
+  "min_width": 165,
+  "spritetype": 160,
+  "widgetanchor": 159,
+  "text_single": 157,
+  "dynamicgridbox": 155,
+  "flipdirection": 152,
+  "spriteborder": 150,
+  "ui_guide_component_area": 150,
+  "onrightclick": 140,
+  "framesize": 133,
+  "texture_density": 128,
+  "input_action": 127,
+  "datamodel_wrap": 126,
+  "soundeffect": 116,
+  "default_header": 112,
+  "vertical_divider": 112,
+  "section_header_button": 110,
+  "blockoverride": 107,
+  "layoutstretchfactor_horizontal": 99,
+  "layer": 98,
+  "resizeparent": 96,
+  "start_sound": 96,
+  "raw_tooltip": 96,
+  "trigger_on_create": 89,
+  "empty_state": 82,
+  "addrow": 77,
+  "addcolumn": 75,
+  "right_click_menu_item": 74,
+  "button_icon_round_action": 72,
+  "fixedgridbox": 72,
+  "max_update_rate": 70,
+  "allow_outside": 64,
+  "position_x": 60,
+  "vfx": 57,
+  "tiny_flag": 56,
+  "fittype": 56,
+  "delay": 54,
+  "scissor": 53,
+  "tiny_flag_no_interact": 52,
+  "scrollwidget": 52,
+  "mirror": 52,
+  "trigger_when": 52,
+  "value": 52,
+  "button_icon_goto": 51,
+  "font": 51,
+  "on_finish": 50,
+  "button_icon_round": 50,
+  "fancytooltip_militaryformation": 50,
+  "gfxtype": 50,
+  "scrollbar_vertical": 50,
+  "debug_menu_button": 50,
+  "wrap_count": 49,
+  "tintcolor": 48,
+  "shaderfile": 48,
+  "shortcut": 47,
+  "ignoreinvisible": 46,
+  "fancytooltip_building": 44,
+  "default_progressbar_horizontal": 44,
+  "overlappingitembox": 44,
+  "fonttintcolor": 43,
+  "down": 42,
+  "scrollarea": 42,
+  "effectname": 41,
+  "scrollbarpolicy_horizontal": 41,
+  "position_y": 41,
+  "small_flag": 40,
+  "text_multi": 38,
+  "state_panel_status_item_small": 37,
+  "ig_button": 35,
+  "treaty_textbox": 35,
+  "custom_tooltip_textbox_fixed_width": 34,
+  "fancytooltip_goods": 33,
+  "checked": 33,
+  "editbox": 33,
+  "clicksound": 33,
+  "focuspolicy": 32,
+  "checkbutton": 30,
+  "default_header_2texts": 29,
+  "tax_exp_frame": 28,
+  "filter_button": 27,
+  "small_header_grid_item": 27,
+  "fancytooltip_country": 26,
+  "button_radio": 26,
+  "spacer": 25,
+  "movable": 25,
+  "military_formation_right_click_item": 25,
+  "button_icon_round_map_interaction": 24,
+  "divider_decorative": 24,
+  "maxcharacters": 24,
+  "filter_background_selected": 24,
+  "vertical_divider_full": 24,
+  "min": 24,
+  "max": 24,
+  "priority": 24,
+  "set_level_bar_item": 23,
+  "width": 23,
+  "custom_tooltip_textbox_with_empty_line": 23,
+  "button_standard": 23,
+  "noprogresstexture": 23,
+  "progresstexture": 23,
+  "building_browser_filter_line": 22,
+  "button_select_arrow": 22,
+  "skip_initial_animation": 22,
+  "treaty_draft_input_acceptance_icon": 22,
+  "bar_horizontal_with_background": 21,
+  "ontextedited": 21,
+  "focus_on_visible": 21,
+  "console_button": 21,
+  "defaulttooltiptextbox": 21,
+  "button_tab": 21,
+  "ui_guide_title_and_info": 21,
+  "scrollbox": 20,
+  "ignore_in_debug_draw": 20,
+  "scrollbar_horizontal": 20,
+  "default_header_clean_faded": 20,
+  "margin_widget": 20,
+  "fancytooltip_ideology": 20,
+  "state_panel_status_item_condensed": 20,
+  "fancytooltip_ig": 19,
+  "action_selection_number": 19,
+  "slider": 19,
+  "tooltipwidgettype": 19,
+  "power_bloc_header_grid_item": 19,
+  "fancytooltip_buildingtype": 18,
+  "distribute_visual_state": 18,
+  "small_market_flag": 18,
+  "button_icon_minus_action": 18,
+  "ondefault": 18,
+  "track": 18,
+  "dec_button": 18,
+  "inc_button": 18,
+  "custom_tooltip_newline": 18,
+  "fancytooltip_state": 17,
+  "spriteborder_bottom": 17,
+  "country_stats_entry": 17,
+  "scrollbar": 17,
+  "text_label_center": 17
+ },
+ "enums": {
+  "align": [
+   "center",
+   "hcenter",
+   "left",
+   "nobaseline",
+   "right",
+   "top",
+   "vcenter"
+  ],
+  "alwaystransparent": [
+   "no",
+   "yes"
+  ],
+  "autoresize": [
+   "no",
+   "yes"
+  ],
+  "direction": [
+   "horizontal",
+   "vertical"
+  ],
+  "effectname": [
+   "nohighlight",
+   "pdxguidefault",
+   "pdxguipremultipliedalpha"
+  ],
+  "elide": [
+   "left",
+   "middle",
+   "right"
+  ],
+  "filter_mouse": [
+   "left",
+   "right"
+  ],
+  "fittype": [
+   "center",
+   "centercrop",
+   "start"
+  ],
+  "focus_on_visible": [
+   "no",
+   "yes"
+  ],
+  "focuspolicy": [
+   "all",
+   "click"
+  ],
+  "font": [
+   "standard_font",
+   "tools_font"
+  ],
+  "gfxtype": [
+   "buttongfx",
+   "flag3dwidgetgfx",
+   "framedbuttongfx",
+   "linegfx",
+   "togglepushbuttongfx",
+   "windowgfx"
+  ],
+  "icon": [
+   "battalions",
+   "conscripts",
+   "ships"
+  ],
+  "input_action": [
+   "back",
+   "confirm",
+   "construction_queue",
+   "go_to_details",
+   "toggle_construction_queue_pause",
+   "zoom_to"
+  ],
+  "layer": [
+   "confirmation",
+   "layer_map_markers",
+   "layer_map_notifications",
+   "top",
+   "windows_layer"
+  ],
+  "layoutpolicy_horizontal": [
+   "expanding",
+   "fixed",
+   "growing",
+   "preferred"
+  ],
+  "layoutpolicy_vertical": [
+   "expanding",
+   "fixed",
+   "growing",
+   "preferred"
+  ],
+  "mirror": [
+   "horizontal",
+   "vertical"
+  ],
+  "movable": [
+   "no",
+   "yes"
+  ],
+  "multiline": [
+   "no",
+   "yes"
+  ],
+  "parentanchor": [
+   "bottom",
+   "center",
+   "hcenter",
+   "left",
+   "right",
+   "top",
+   "vcenter"
+  ],
+  "scrollbarpolicy_horizontal": [
+   "always_off",
+   "as_needed"
+  ],
+  "spritetype": [
+   "corneredstretched",
+   "corneredtiled"
+  ],
+  "widgetanchor": [
+   "bottom",
+   "center",
+   "hcenter",
+   "left",
+   "right",
+   "top",
+   "vcenter"
+  ]
+ },
+ "enumCombinable": [
+  "align",
+  "filter_mouse",
+  "parentanchor",
+  "widgetanchor"
+ ]
+}

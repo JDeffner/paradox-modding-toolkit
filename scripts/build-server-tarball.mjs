@@ -47,6 +47,7 @@ for (const gameId of readdirSync(dataRoot)) {
 }
 cpSync(join(root, "LICENSE"), join(pkgDir, "LICENSE"));
 cpSync(join(server, "README.md"), join(pkgDir, "README.md"));
+cpSync(join(root, "THIRD-PARTY-NOTICES.md"), join(pkgDir, "THIRD-PARTY-NOTICES.md"));
 
 // Relative paths + cwd: GNU tar on Windows reads "F:" in an absolute path as
 // a remote host. The staged tarball is copied over (temp may be another drive).

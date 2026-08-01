@@ -1,6 +1,10 @@
 ﻿/**
- * ck3-tiger integration: runs the external binary against the mod (on save,
+ * tiger integration: runs the external binary against the mod (on save,
  * debounced, or manually) and maps its JSON report to VS Code diagnostics.
+ *
+ * Which binary and whether one exists at all comes from the active game's meta
+ * (`GameMeta.tiger`). A game without a tiger (EU5) never spawns a process,
+ * never publishes diagnostics, and never shows the tiger status segment.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -8,6 +12,7 @@ import * as path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import type { PxConfig } from "../config";
 import { isUnder, modRootFor } from "../config";
+import { metaFor } from "../meta";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { parseTigerJson, type TigerReport } from "@px-lsp/protocol/tigerParser";
 import {
@@ -54,15 +59,27 @@ export class TigerRunner implements vscode.Disposable {
     /** Extra CLI args per run (per-mod baseline --suppress, one-shot --unused). */
     private readonly extraArgs: (modRoot: string) => string[] = () => []
   ) {
-    this.diagnostics = vscode.languages.createDiagnosticCollection("ck3-tiger");
+    // Diagnostic source/collection carry the active game's binary name, so
+    // Problems entries read "vic3-tiger" in a Vic3 workspace.
+    this.diagnostics = vscode.languages.createDiagnosticCollection(this.tigerName());
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
-    this.status.name = "ck3-tiger";
+    this.status.name = this.tigerName();
+  }
+
+  /** The active game's tiger binary name, or "tiger" when it has none. */
+  private tigerName(): string {
+    return metaFor(this.getConfig().gameId).tiger?.binaryName ?? "tiger";
+  }
+
+  /** False when the active game ships no tiger (EU5): every entry point bails. */
+  private tigerExists(): boolean {
+    return metaFor(this.getConfig().gameId).tiger !== undefined;
   }
 
   private showRunning(): void {
     if (this.statusHideTimer) clearTimeout(this.statusHideTimer);
     this.status.text = "$(sync~spin) tiger";
-    this.status.tooltip = "ck3-tiger is validating the mod…";
+    this.status.tooltip = `${this.tigerName()} is validating the mod…`;
     this.status.show();
   }
 
@@ -75,7 +92,9 @@ export class TigerRunner implements vscode.Disposable {
     }
     this.status.text = problemCount === 0 ? "$(check) tiger" : `$(warning) tiger: ${problemCount}`;
     this.status.tooltip =
-      problemCount === 0 ? "ck3-tiger: no problems" : `ck3-tiger: ${problemCount} report(s)`;
+      problemCount === 0
+        ? `${this.tigerName()}: no problems`
+        : `${this.tigerName()}: ${problemCount} report(s)`;
     this.statusHideTimer = setTimeout(() => this.status.hide(), 5000);
   }
 
@@ -98,6 +117,7 @@ export class TigerRunner implements vscode.Disposable {
 
   onDidSaveDocument(doc: vscode.TextDocument): void {
     const cfg = this.getConfig();
+    if (!this.tigerExists()) return;
     if (cfg.tigerRunOn !== "save") return;
     if (!cfg.tigerPath) return;
     // Multi-mod workspaces: validate the mod the saved file belongs to.
@@ -111,10 +131,20 @@ export class TigerRunner implements vscode.Disposable {
 
   run(manual: boolean, rootOverride?: string): void {
     const cfg = this.getConfig();
+    const meta = metaFor(cfg.gameId);
+    if (!meta.tiger) {
+      // No tiger exists for this game: never spawn, never nag on save.
+      if (manual) {
+        void vscode.window.showInformationMessage(
+          `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — the extension's own diagnostics still run.`
+        );
+      }
+      return;
+    }
     if (!cfg.tigerPath) {
       if (manual) {
         void vscode.window.showWarningMessage(
-          "Paradox Toolkit: set px.tigerPath to a ck3-tiger binary to enable diagnostics."
+          `Paradox Toolkit: set px.tigerPath to a ${meta.tiger.binaryName} binary to enable diagnostics.`
         );
       }
       return;
@@ -152,8 +182,8 @@ export class TigerRunner implements vscode.Disposable {
     const args = ["--json", ...this.extraArgs(modRoot)];
     if (cfg.gamePath) {
       // tiger's game flag (--ck3 / --vic3, matching the profile id) wants the
-      // install root (".../Crusader Kings III"), while the resolved gamePath
-      // points at its game/ data subfolder.
+      // install root (".../<game name>"), while the resolved gamePath points at
+      // its game/ data subfolder.
       const gameDir =
         path.basename(cfg.gamePath).toLowerCase() === "game" ? path.dirname(cfg.gamePath) : cfg.gamePath;
       args.push(`--${cfg.gameId}`, gameDir);
@@ -167,7 +197,7 @@ export class TigerRunner implements vscode.Disposable {
     try {
       child = spawn(cfg.tigerPath, args, { windowsHide: true });
     } catch (err) {
-      this.notifyError(`Paradox Toolkit: failed to start ck3-tiger: ${String(err)}`);
+      this.notifyError(`Paradox Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
       return;
     }
     this.child = child;
@@ -177,7 +207,9 @@ export class TigerRunner implements vscode.Disposable {
     child.on("error", (err) => {
       this.child = null;
       this.showDone(null);
-      this.notifyError(`Paradox Toolkit: could not run ck3-tiger (${err.message}). Check px.tigerPath.`);
+      this.notifyError(
+        `Paradox Toolkit: could not run ${meta.tiger?.binaryName ?? "tiger"} (${err.message}). Check px.tigerPath.`
+      );
     });
     child.on("close", (code, signal) => {
       this.child = null;
@@ -195,7 +227,7 @@ export class TigerRunner implements vscode.Disposable {
         // Non-zero exit with no JSON = broken invocation; parse failures degrade to
         // a notification, never a crash.
         this.notifyError(
-          `Paradox Toolkit: ck3-tiger produced no readable JSON report (exit code ${code}).` +
+          `Paradox Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced no readable JSON report (exit code ${code}).` +
             (stderr ? ` stderr: ${stderr.slice(0, 300)}` : "")
         );
         return;
@@ -213,6 +245,14 @@ export class TigerRunner implements vscode.Disposable {
   createBaseline(outFile: string): Promise<number | null> {
     return new Promise((resolve) => {
       const cfg = this.getConfig();
+      const meta = metaFor(cfg.gameId);
+      if (!meta.tiger) {
+        void vscode.window.showInformationMessage(
+          `Paradox Toolkit: no tiger validator exists for ${meta.name} yet, so there is no baseline to create.`
+        );
+        resolve(null);
+        return;
+      }
       if (!cfg.tigerPath || !cfg.modPath) {
         void vscode.window.showWarningMessage(
           "Paradox Toolkit: tiger and a mod folder are required for a baseline."
@@ -233,7 +273,7 @@ export class TigerRunner implements vscode.Disposable {
       try {
         child = spawn(cfg.tigerPath, args, { windowsHide: true });
       } catch (err) {
-        this.notifyError(`Paradox Toolkit: failed to start ck3-tiger: ${String(err)}`);
+        this.notifyError(`Paradox Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
         resolve(null);
         return;
       }
@@ -301,7 +341,7 @@ export class TigerRunner implements vscode.Disposable {
         message += ` (confidence: ${report.confidence})`;
       }
       const diag = new vscode.Diagnostic(new vscode.Range(line, colStart, line, colEnd), message, severity);
-      diag.source = "ck3-tiger";
+      diag.source = this.tigerName();
       diag.code = report.key;
       if (report.locations.length > 1) {
         diag.relatedInformation = report.locations.slice(1).map((rel) => {

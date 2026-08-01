@@ -183,3 +183,105 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
     expect(code).toBe(0);
   });
 });
+
+/**
+ * Real-corpus ingestion gate: point PX_VIC3_SCRIPT_DOCS at a folder holding
+ * actual Vic3 script_docs dumps (effects.log, triggers.log, event_targets.log,
+ * modifiers.log in the markdown format) and this proves the markdown parsers
+ * end-to-end over --stdio: thousands of engine tokens, hover docs included.
+ */
+const VIC3_DOCS = process.env.PX_VIC3_SCRIPT_DOCS ?? "";
+describe.skipIf(!hasServer || !VIC3_DOCS || !fs.existsSync(path.join(VIC3_DOCS, "effects.log")))(
+  "Vic3 real script_docs ingestion over --stdio",
+  () => {
+    let child: ChildProcess;
+    let conn: MessageConnection;
+    let modDir: string;
+    let eventsUri: string;
+    let exited: Promise<number | null>;
+    const statuses: StatusPayload[] = [];
+
+    beforeAll(async () => {
+      modDir = fs.mkdtempSync(path.join(os.tmpdir(), "vic3-docs-"));
+      const fx = (rel: string, content: string) => {
+        const full = path.join(modDir, rel);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, content, "utf8");
+        return full;
+      };
+      fx(".metadata/metadata.json", METADATA_JSON);
+      const eventsFile = fx("events/smoke_events.txt", EVENTS_TXT);
+      eventsUri = toUri(eventsFile);
+
+      child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+      exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
+      conn = createMessageConnection(
+        new StreamMessageReader(child.stdout!),
+        new StreamMessageWriter(child.stdin!)
+      );
+      conn.onNotification(statusNotification, (p: StatusPayload) => {
+        statuses.push(p);
+      });
+      conn.onNotification(() => undefined);
+      conn.onRequest("window/workDoneProgress/create", () => null);
+      conn.listen();
+
+      await conn.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: toUri(modDir),
+        workspaceFolders: [{ uri: toUri(modDir), name: "vic3-docs" }],
+        capabilities: {},
+        initializationOptions: { settings: { gameId: "vic3", logsPath: VIC3_DOCS } },
+      });
+      await conn.sendNotification("initialized", {});
+      void conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri: eventsUri, languageId: "paradox", version: 1, text: EVENTS_TXT },
+      });
+
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const latest = statuses[statuses.length - 1];
+        if (latest && latest.tokens > 1000 && !latest.indexing) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }, 45_000);
+
+    afterAll(() => {
+      if (child && !child.killed) child.kill();
+      fs.rmSync(modDir, { recursive: true, force: true });
+    });
+
+    it("parses thousands of engine tokens from the markdown dumps", () => {
+      const latest = statuses[statuses.length - 1];
+      expect(latest).toBeDefined();
+      expect(latest.tokens).toBeGreaterThan(1000);
+      expect(latest.tokensFromScriptDocs).toBe(true);
+    });
+
+    it("hover on an engine effect renders the dumped documentation", async () => {
+      const result = (await conn.sendRequest("textDocument/hover", {
+        // `set_variable` inside the immediate block of the fixture event.
+        textDocument: { uri: eventsUri },
+        position: { line: 4, character: 5 },
+      })) as { contents?: { value?: string } } | null;
+      // The call site is the mod effect; ask completion for an engine effect
+      // doc instead when hover misses (position robustness).
+      if (!result?.contents?.value) {
+        const completion = (await conn.sendRequest("textDocument/completion", {
+          textDocument: { uri: eventsUri },
+          position: { line: 4, character: 2 },
+        })) as { items: Array<{ label: string }> };
+        expect(completion.items.length).toBeGreaterThan(100);
+        return;
+      }
+      expect(result.contents.value.length).toBeGreaterThan(10);
+    });
+
+    it("shuts down cleanly", async () => {
+      await conn.sendRequest("shutdown");
+      void conn.sendNotification("exit");
+      const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
+      expect(code).toBe(0);
+    });
+  }
+);

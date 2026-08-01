@@ -56,7 +56,7 @@ export class EventGraphPanel {
 
     this.panel = vscode.window.createWebviewPanel(
       EventGraphPanel.viewType,
-      "CK3 Event Graph",
+      "Paradox Event Graph",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -199,7 +199,7 @@ export class EventGraphPanel {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`CK3 Event Graph: cannot open ${file}: ${message}`);
+      void vscode.window.showErrorMessage(`Paradox Event Graph: cannot open ${file}: ${message}`);
     }
   }
 
@@ -215,7 +215,7 @@ export class EventGraphPanel {
       void vscode.window.showInformationMessage(`Event graph exported to ${target.fsPath}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`CK3 Event Graph: export failed: ${message}`);
+      void vscode.window.showErrorMessage(`Paradox Event Graph: export failed: ${message}`);
     }
   }
 
@@ -242,7 +242,7 @@ export class EventGraphPanel {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CK3 Event Graph</title>
+<title>Paradox Event Graph</title>
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }

@@ -1,0 +1,20 @@
+# Trigger Documentation
+## age
+Compares the character age  
+age > 20
+Traits: <, <=, =, !=, >, >=
+Reads gamestate for all scopes.
+**Supported Scopes**: character  
+
+## always
+checks if the assigned yes/no value is true  
+always = yes # always succeeds  
+always = no  # always fails  
+Traits: yes/no  
+**Supported Scopes**: none  
+
+## any_combat_unit
+Iterate through all combat units of input scope  
+Supported scopes: building, front, battle  
+**Supported Scopes**: battle, building, front  
+**Supported Targets**: new_combat_unit  

@@ -18,13 +18,14 @@ import {
   validateDescriptor,
   wildcardVersion,
 } from "@px-lsp/protocol/descriptorMod";
+import { metaFor } from "./meta";
 
 const MOD_SELECTOR: vscode.DocumentSelector = { language: "paradox-mod", scheme: "file" };
 const SEVERITY = {
   error: vscode.DiagnosticSeverity.Error,
   warning: vscode.DiagnosticSeverity.Warning,
 } as const;
-/** Content folders that mark a workspace as a CK3 mod even without a descriptor. */
+/** Content folders that mark a workspace as a mod even without a descriptor. */
 const MOD_CONTENT_DIRS = ["common", "events", "localization", "gui", "history", "gfx", "map_data", "music"];
 
 function isDescriptorFile(fsPath: string): boolean {
@@ -230,8 +231,8 @@ export function registerDescriptorMod(
     validateText(doc.uri, doc.getText());
   };
 
-  /** The workspace clearly holds CK3 mod content (so a missing descriptor is a real error). */
-  const looksLikeCk3Content = (dir: string): boolean =>
+  /** The workspace clearly holds mod content (so a missing descriptor is a real error). */
+  const looksLikeModContent = (dir: string): boolean =>
     MOD_CONTENT_DIRS.some((d) => {
       try {
         return fs.statSync(path.join(dir, d)).isDirectory();
@@ -269,6 +270,14 @@ export function registerDescriptorMod(
     const descriptorPath = path.join(modPath, "descriptor.mod");
     const descriptorUri = vscode.Uri.file(descriptorPath);
 
+    // descriptor.mod is the launcher convention of `descriptor: "mod"` games.
+    // Vic3/EU5 mods carry .metadata/metadata.json instead, so demanding a .mod
+    // there would be a false error.
+    if (metaFor(cfg.gameId).descriptor !== "mod") {
+      diagnostics.delete(descriptorUri);
+      return;
+    }
+
     // A game install shares the mod content dirs but is not a mod: never demand
     // a descriptor for it, even if it slipped through as modPath.
     if (looksLikeGameDir(modPath)) {
@@ -290,7 +299,7 @@ export function registerDescriptorMod(
       return;
     }
 
-    if (!looksLikeCk3Content(modPath)) {
+    if (!looksLikeModContent(modPath)) {
       // Not a CK3 workspace: no descriptor is expected, stay silent.
       diagnostics.delete(descriptorUri);
       return;
@@ -300,7 +309,7 @@ export function registerDescriptorMod(
     const d = new vscode.Diagnostic(
       new vscode.Range(0, 0, 0, 1),
       "descriptor.mod is missing from the mod root. Every mod needs one: the launcher, " +
-        "Steam Workshop uploads and ck3-tiger all read it.",
+        `Steam Workshop uploads${metaFor(cfg.gameId).tiger ? ` and ${metaFor(cfg.gameId).tiger?.binaryName}` : ""} all read it.`,
       vscode.DiagnosticSeverity.Error
     );
     d.source = "px-descriptor";

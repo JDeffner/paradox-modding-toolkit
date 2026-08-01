@@ -9,6 +9,7 @@ import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import { LineIndex, parseLoc, parseScript, walkStatements, type Statement } from "../parser";
 import { docForDefinition } from "./docComments";
+import { activeProfile } from "../games/active";
 
 /** Max loc value length kept in memory; the edit flow re-reads the yml from disk. */
 export const LOC_VALUE_LIMIT = 200;
@@ -56,14 +57,26 @@ export function extractDefinitions(
   // `alias = { a b }` (loc [Concept] links). Deduped per file.
   const seenInnerNames = new Set<string>();
 
+  // Database entry modes (`REPLACE:key = { ... }`), for games whose profile
+  // declares them: index under the bare name, keep the mode on the Definition.
+  const entryModes = activeProfile().entryModes;
+  const modePrefix = entryModes?.length ? new RegExp(`^(${entryModes.join("|")}):`) : null;
+
   switch (extraction) {
     case "top-level-key":
       for (const stmt of root.statements) {
         if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
         if (stmt.op !== "=" && stmt.op !== "?=") continue;
-        const name = stmt.key.text;
+        let name = stmt.key.text;
+        let entryMode: string | undefined;
+        const mode = modePrefix?.exec(name);
+        if (mode) {
+          entryMode = mode[1];
+          name = name.slice(mode[0].length);
+        }
         if (!DEF_NAME.test(name) || name === "namespace") continue;
         push(name, stmt.key.range.start);
+        if (entryMode) defs[defs.length - 1].entryMode = entryMode;
         if (harvestParams) {
           const body = content.slice(stmt.range.start, stmt.range.end);
           const params: string[] = [];
