@@ -21,6 +21,9 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+// Named import: the bundler inlines just the version string (not the whole
+// manifest), and the same source works when tests import from src.
+import { version as SERVER_VERSION } from "../package.json";
 import type { Definition } from "@px-lsp/protocol/types";
 import {
   configChangedNotification,
@@ -750,6 +753,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   }
 
   return {
+    serverInfo: { name: "px-lsp", version: SERVER_VERSION },
     capabilities: {
       textDocumentSync: {
         openClose: true,

@@ -32,6 +32,9 @@ import {
 const SERVER = path.join(__dirname, "..", "dist", "server.js");
 const WIKIDOCS = path.join(__dirname, "..", "data", "ck3", "wikidocs");
 const hasServer = fs.existsSync(SERVER);
+// Read from disk, not imported: this must catch a bundle whose inlined version
+// drifted from the manifest the package publishes.
+const PKG_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version;
 
 const EFFECTS_TXT = `# Gives gold to the character.
 my_smoke_effect = {
@@ -107,6 +110,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let eventsUri: string;
   let locFile: string;
   let locUri: string;
+  let initResult: { serverInfo?: { name: string; version: string } };
   const statuses: StatusPayload[] = [];
 
   beforeAll(async () => {
@@ -162,6 +166,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
         },
       },
     });
+    initResult = init as typeof initResult;
     expect(
       (init as { capabilities: { completionProvider: { resolveProvider: boolean } } }).capabilities
         .completionProvider.resolveProvider
@@ -192,6 +197,10 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     if (child && !child.killed) child.kill();
     fs.rmSync(modDir, { recursive: true, force: true });
     fs.rmSync(parentDir, { recursive: true, force: true });
+  });
+
+  it("initialize announces serverInfo (PROTOCOL.md §Initialization)", () => {
+    expect(initResult.serverInfo).toEqual({ name: "px-lsp", version: PKG_VERSION });
   });
 
   it("reported status and indexed the fixture mod and parent mod", () => {

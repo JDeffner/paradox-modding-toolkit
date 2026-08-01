@@ -27,6 +27,10 @@ Current as of 0.1.2 (the M2 `paradox/*` rename).
 
 ## Initialization
 
+The `initialize` result carries standard LSP `serverInfo`:
+`{ name: "px-lsp", version }`, where `version` is the `@px-lsp/server`
+package version. Clients can use it for compatibility checks.
+
 `initializationOptions` (all fields optional; the server has fail-soft
 fallbacks for bare clients):
 
