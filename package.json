@@ -8,7 +8,7 @@
   },
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",

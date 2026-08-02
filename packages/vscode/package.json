@@ -274,6 +274,12 @@
         "icon": "$(preview)"
       },
       {
+        "command": "px.openGuiEditor",
+        "category": "Paradox",
+        "title": "Open GUI Editor",
+        "icon": "$(edit)"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report"
@@ -734,6 +740,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openGuiEditor",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.modReport",
           "when": "px.isCk3Workspace"
         },
@@ -823,6 +833,11 @@
           "group": "navigation"
         },
         {
+          "command": "px.openGuiEditor",
+          "when": "resourceExtname == .gui && px.isCk3Workspace",
+          "group": "navigation"
+        },
+        {
           "command": "px.showEventGraph",
           "when": "resourceExtname == .txt && resourcePath =~ /events|on_action|decisions/ && px.isCk3Workspace",
           "group": "navigation"
@@ -906,8 +921,9 @@
     ]
   },
   "scripts": {
-    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && node ../../scripts/copy-server.mjs",
+    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --allow-missing-repository --no-dependencies",

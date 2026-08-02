@@ -37,6 +37,7 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiPreviewPanel } from "./webviews/guiPreview/panel";
+import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
@@ -568,6 +569,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           } satisfies GuiWidgetEditParams),
         editor.document,
         // Textures resolve against the mod that owns the previewed .gui file.
+        { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
+      );
+    }),
+    vscode.commands.registerCommand("px.openGuiEditor", () => {
+      // Same gate as the preview: the editor draws the same calibrated pixel
+      // engine, which is measured against CK3 only.
+      if (!isCk3(cfg.gameId)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Toolkit: the GUI editor is CK3 only for now — its pixel layout is calibrated against CK3. ` +
+            `.gui editing and the GUI Widget Tree work for ${metaFor(cfg.gameId).name}.`
+        );
+        return;
+      }
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
+        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
+        return;
+      }
+      GuiEditorPanel.show(
+        context,
+        (uri, text) =>
+          lc.sendRequest<GuiLayoutResult>(guiLayoutRequest, {
+            uri: uri.toString(),
+            text,
+          } satisfies GuiLayoutParams),
+        editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
       );
     }),

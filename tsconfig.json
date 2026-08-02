@@ -22,5 +22,10 @@
     "packages/vscode/test",
     "scripts",
     "vitest.config.ts"
-  ]
+  ],
+  // The GUI editor's webview app is browser code with its own project (DOM
+  // lib, no node/vscode types); `pnpm run typecheck` runs that project too.
+  // Its PURE modules still land here through the test imports, which is what
+  // keeps them free of DOM types.
+  "exclude": ["packages/vscode/src/webviews/guiEditor/app"]
 }
