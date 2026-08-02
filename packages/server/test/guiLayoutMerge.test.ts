@@ -8,10 +8,10 @@
  * not one number.
  *
  * guiLayout.test.ts keeps the batch 01-04 calibration goldens; nothing here
- * changes one. Three checklist rows are DISPUTED between the two engines
- * (L07c, L13e, L23) and are deliberately NOT asserted in either direction:
- * each needs one in-game probe, and the fixture that carries it is named below
- * so the probe has a subject.
+ * changes one. The three once-DISPUTED rows (L07c, L13e, L23) and the L25
+ * owner decision were settled by ONE in-game probe on 2026-08-02 (a probe
+ * window in the owner's mod, summoned via GUI.CreateWidget) and are asserted
+ * in the "probe 2026-08-02" describe below.
  */
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
@@ -496,6 +496,48 @@ describe("datamodel items are nodes now (L10 consequence)", () => {
  *   PX_WRITE_GUI_RECT_BASELINE=1 npx vitest run packages/server/test/guiLayoutMerge.test.ts
  * and the diff in review shows exactly which rects moved.
  */
+describe("probe 2026-08-02: the three disputed rows and L25, settled in-game", () => {
+  it("L23: a box drops a child's position, the child sits exactly where a plain sibling does", () => {
+    const nodes = layoutFile("box-child-ignored.gui");
+    const plain = named(nodes, "px_plain");
+    const positioned = named(nodes, "px_positioned");
+    // position = { 200 0 } went nowhere: same cross-axis coordinate, same size.
+    expect(positioned.rect.x).toBe(plain.rect.x);
+    expect(positioned.rect.w).toBe(plain.rect.w);
+    expect(positioned.rect.h).toBe(plain.rect.h);
+    // The main-axis slot is still the box's own, below the plain sibling.
+    expect(positioned.rect.y).toBeGreaterThan(plain.rect.y);
+  });
+
+  it("L13e: a flowcontainer KEEPS its authored size (the engine warns yet applies it)", () => {
+    // The fixture authors size = { 200 120 }; the probe confirmed the rule at
+    // 300x150 in-game, and the engine renders the authored size either way.
+    const flow = named(layoutFile("flow-container.gui"), "px_flow_sized");
+    expect(flow.rect.w).toBe(200);
+    expect(flow.rect.h).toBe(120);
+  });
+
+  it("L07c: a state block does NOT supply a resting position", () => {
+    const nodes = layoutFile("state-blocks.gui");
+    const frame = named(nodes, "px_state_frame");
+    const only = named(nodes, "px_state_only");
+    const stat = named(nodes, "px_state_static");
+    // px_state_only's one position lives in its state: it renders at the
+    // parent's origin, not at { 10 20 }.
+    expect(only.rect.x).toBe(frame.rect.x);
+    expect(only.rect.y).toBe(frame.rect.y);
+    // The sanity row: an own position wins and the state's 999,999 never leaks.
+    expect(stat.rect.x).toBe(frame.rect.x + 10);
+    expect(stat.rect.y).toBe(frame.rect.y + 10);
+  });
+
+  it("L25 narrow: a NON-empty container keeps an authored size", () => {
+    const c = named(layoutFile("container-measurability.gui"), "px_container_sized_kept");
+    expect(c.rect.w).toBe(250);
+    expect(c.rect.h).toBe(120);
+  });
+});
+
 describe("S07: rect dump over the fixture corpus", () => {
   it("every fixture's rects match the recorded baseline", () => {
     const files = fs

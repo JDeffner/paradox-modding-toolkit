@@ -5,9 +5,10 @@
 # own properties win and nothing inside a state leaks into the rect, so a state
 # is never a child widget either.
 #
-# The one thing a state DOES supply is a resting position for a widget that has
-# none of its own: px_state_only carries its offset in the state block, while
-# px_state_static must keep its static position untouched.
+# In-game probe 2026-08-02 settled the once-disputed half (L07c): a state does
+# NOT supply a resting position either. px_state_only, whose only position
+# lives in its state block, renders at its parent's origin; px_state_static
+# keeps its static position untouched.
 
 widget = {
 	name = "px_state_frame"

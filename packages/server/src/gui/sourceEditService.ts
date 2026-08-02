@@ -83,16 +83,17 @@ export interface SizeGuard {
 }
 
 /**
- * Whether a `size` write lands (W10, S09). A content-sized type sizes to its
- * children whatever the file says; a child expanding on BOTH axes inside a
- * layout container has both taken from it; one expanding axis writes and says
- * which axis the container owns. Outside a layout container the policy means
- * nothing and the guard must NOT fire, or it starts refusing resizes the engine
- * would have honoured.
+ * Whether a `size` write lands (W10, S09). An hbox/vbox sizes to its children
+ * whatever the file says; a flowcontainer KEEPS an authored size (in-game
+ * probe 2026-08-02, L13e), so it is NOT refused here; a child expanding on
+ * BOTH axes inside a layout container has both taken from it; one expanding
+ * axis writes and says which axis the container owns. Outside a layout
+ * container the policy means nothing and the guard must NOT fire, or it
+ * starts refusing resizes the engine would have honoured.
  */
 export function sizeIgnoredReason(entry: GuiEntry, defs: GuiDefs): SizeGuard {
   const cls = classOf(entry.keyLower, defs);
-  if (isLayoutContainer(cls)) {
+  if (cls === "box") {
     return {
       refused: `${entry.key} is content-sized: it takes its size from its children and ignores an explicit size.`,
     };

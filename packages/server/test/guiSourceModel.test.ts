@@ -388,7 +388,7 @@ describe("gui source model: sweeps (S01, S06)", () => {
     const counts = sweep(files.map((name) => ({ name, text: read(name) })));
     expect(counts.mismatches).toEqual([]);
     // Baseline recorded 2026-08-01; see docs/gui-designer/parity-checklist.md §G.
-    expect(counts).toMatchObject({ files: 39, entries: 1298, widgets: 399, bodies: 779 });
+    expect(counts).toMatchObject({ files: 39, entries: 1308, widgets: 402, bodies: 788 });
   });
 
   it("every fixture parses cleanly, so every span is trustworthy", () => {

@@ -215,9 +215,10 @@ toolkit's own coverage of each is tracked in
   vcenter that staggers variable-height columns in an hbox. (Studio §H,
   in-game 2026-07-17)
 - A box places its children itself and ignores their `position`. (Studio, §H
-  session, 2026-07-17. CONFLICT: this repo's layout engine applies a box
-  child's `position` as an extra offset and labels the choice unmeasured; see
-  parity-checklist.md §G "Open conflicts".)
+  session, 2026-07-17. CONFLICT SETTLED by the in-game probe of 2026-08-02:
+  the positioned child sat exactly on a plain sibling's coordinate, and the
+  engine logs "Widget cannot have a position in a layout". This repo's engine
+  dropped its offset the same day; L23 done.)
 - `layoutpolicy_horizontal/vertical = expanding` makes a child fill the
   remaining space on that axis, shared among expanding siblings. An expanding
   child must NOT define the box's cross size; only fixed children do.
@@ -239,12 +240,19 @@ toolkit's own coverage of each is tracked in
 
 ### Container sizing
 
-- Only `widget` holds a fixed pixel `size`. `hbox`/`vbox`/`flowcontainer`
-  size to their content and silently drop an explicit pixel `size` (a vbox
-  with `size = { 210 850 }` renders at content height, not 850). For a
-  fixed-size box, wrap in a `widget`. (Studio, encoded rule. For
-  `flowcontainer` this CONFLICTS with B3-Q1 above, which measured the size as
-  setting the container's own rect; see parity-checklist.md §G.)
+- Only `widget` holds a fixed pixel `size`. `hbox`/`vbox` size to their
+  content and silently drop an explicit pixel `size` (a vbox with
+  `size = { 210 850 }` renders at content height, not 850). For a fixed-size
+  box, wrap in a `widget`. (Studio, encoded rule. The Studio grouped
+  `flowcontainer` here too; the in-game probe of 2026-08-02 settled that the
+  OTHER way: a flowcontainer KEEPS an authored `size` as its own rect, exactly
+  as B3-Q1 measured, while the engine logs "You should not set a size on a
+  container" and applies it anyway. L13e done.)
+- A NON-empty `container` KEEPS an authored `size` as its rect; only an EMPTY
+  one collapses to 0, where a fixed size will not hold it open. Same
+  warn-yet-apply engine behavior as the flowcontainer. (In-game probe
+  2026-08-02; settles the L25 owner question on the NARROW side, and the
+  engine's broad G2 implementation was corrected the same day.)
 - A percentage WIDTH inside a `vbox` CRASHES the game: the vbox's width is
   content-derived and therefore indeterminate, so the `%` has nothing to
   resolve against. A percentage HEIGHT is the milder case. This is the
@@ -377,21 +385,19 @@ computed rect.
   scales the border is still unmeasured.
 - `mirror`, overlappingitembox, scrollbar chrome metrics,
   `alwaystransparent`/input behavior (irrelevant to static rendering).
-- The three open CONFLICTS between this spec and the Studio measurements,
-  each of which needs one in-game probe to settle:
-  - a `flowcontainer` with an explicit `size` (B3-Q1 says it sets the
-    container's own rect; the Studio treats it as ignored);
-  - `position` on a box child (this spec is silent, this repo's engine adds
-    it as an offset, the Studio drops it per §H);
-  - a `state` block supplying the resting position of a widget that has none
-    (the phase-2 section above says nothing inside a `state` leaks into the
-    rect, which is what the engine does; the Studio's engine substitutes the
-    state's position. Neither is in-game dated. Surfaced by the G2 merge,
-    2026-08-01).
-  Fixtures for all three are waiting in
-  `packages/server/test/fixtures/gui/layout/`; see
-  `docs/gui-designer/parity-checklist.md` §G. G2 implemented nothing for any
-  of them, so no measured golden was overwritten by the other engine's rule.
+- The three CONFLICTS between this spec and the Studio measurements were ALL
+  SETTLED by one in-game probe on 2026-08-02 (a four-case probe window in the
+  owner's mod, summoned via GUI.CreateWidget; the engine's own error log
+  corroborated two of the answers):
+  - a `flowcontainer` with an explicit `size` KEEPS it (B3-Q1 was right, the
+    Studio's GUI009 grouping was wrong for flowcontainer);
+  - `position` on a box child is DROPPED (the Studio's §H was right; this
+    repo's offset was removed);
+  - a `state` block does NOT supply a resting position (the phase-2 section
+    was right; the Studio's engine rule was wrong).
+  Goldens for all three (plus the L25 narrow rule) live in
+  `guiLayoutMerge.test.ts` "probe 2026-08-02"; see
+  `docs/gui-designer/parity-checklist.md` §G.
 
 CLOSED since batch 04, by the Studio §J/§K/§L in-game session recorded above:
 sprite frames (`framesize` grids), fixedgridbox cell math, dynamicgridbox

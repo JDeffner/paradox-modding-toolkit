@@ -953,15 +953,17 @@ describe("sourceEdit: S03-S05 inverse round trips", () => {
       null
     );
     expect(counts.bad).toEqual([]);
-    // Baseline recorded 2026-08-02; see docs/gui-designer/parity-checklist.md §G.
+    // Baseline recorded 2026-08-02; re-recorded the same day after the L25
+    // probe added px_container_sized_kept (+1 widget, +2 children) to
+    // container-measurability.gui. See docs/gui-designer/parity-checklist.md §G.
     expect(counts).toMatchObject({
       files: 39,
-      reorders: 59,
+      reorders: 60,
       skipped: 2,
-      inserts: 399,
+      inserts: 402,
       normalized: 4,
-      duplicates: 394,
-      pastes: 227,
+      duplicates: 397,
+      pastes: 228,
     });
   });
 });
@@ -1025,7 +1027,7 @@ describe("sourceEdit: S02 single-entry rewrite byte-identity", () => {
     );
     expect(counts.bad).toEqual([]);
     // Baseline recorded 2026-08-02; see docs/gui-designer/parity-checklist.md §G.
-    expect(counts).toMatchObject({ files: 39, rewrites: 367, parseChecks: 367 });
+    expect(counts).toMatchObject({ files: 39, rewrites: 370, parseChecks: 370 });
   });
 });
 

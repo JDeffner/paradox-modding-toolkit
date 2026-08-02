@@ -909,14 +909,12 @@ function resizeParentSource(node: WNode): WNode | undefined {
 }
 
 /**
- * Classes that size to their content and drop an explicit `size` (spec.md
- * "Container sizing", L25 and L10). BROADER than the bullet, which measured
- * the EMPTY container only: a non-empty one drops its `size` here too, which
- * is what "it sizes to content" says but not what was measured. It costs
- * nothing in vanilla, where no `container = { … }` writes its own top-level
- * `size` (431 blocks, checked 2026-08-01); the narrow reading (keep an
- * explicit size once there are children) is the alternative if a probe ever
- * says so. See parity-checklist.md L25.
+ * Classes whose size flows through naturalSize (spec.md "Container sizing",
+ * L25 and L10). The probe DID say so (in-game 2026-08-02): a NON-empty
+ * container KEEPS an authored `size` (the engine warns "you should not set a
+ * size on a container" yet applies it), so naturalSize implements the narrow
+ * reading and this predicate only routes containers/items through it. See
+ * parity-checklist.md L25.
  */
 function contentSized(cls: WidgetClass): boolean {
   return cls === "container" || cls === "item";
@@ -986,12 +984,19 @@ function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: numbe
       });
       return node.vertical ? { w: cross, h: main } : { w: main, h: cross };
     }
-    case "container":
+    case "container": {
+      // NARROW rule, measured in-game 2026-08-02 (L25): a container WITH
+      // children keeps an authored `size` (the engine warns yet applies it);
+      // an EMPTY one collapses, a fixed size will not hold it open. Without
+      // an authored size it hugs the children's extent at their positions
+      // (B2-I4).
+      const explicit = explicitSize(node);
+      if (explicit && node.children.length > 0) return explicit;
+      return hugChildren(node, measurer);
+    }
     case "item":
-      // Hug the extent of the children at their positions (B2-I4), ALWAYS: an
-      // explicit `size` does not hold an empty container open, it collapses to
-      // 0 (L25), and a datamodel `item` sizes to its content the same way
-      // rather than taking a generic widget default (L10).
+      // A datamodel `item` sizes to its content unconditionally, rather than
+      // taking a generic widget default (L10).
       return hugChildren(node, measurer);
     case "marginwidget": {
       const explicit = explicitSize(node);
@@ -1158,7 +1163,8 @@ function placeInParent(node: WNode, content: LayoutRect, measurer: TextMeasurer)
     w = s.w;
     h = s.h;
   } else if (contentSized(node.cls)) {
-    // container / datamodel item: content, never the authored size (L25, L10).
+    // container / datamodel item: naturalSize owns the rule (narrow L25: a
+    // non-empty container keeps an authored size; item always content, L10).
     const s = naturalSize(node, measurer);
     w = s.w;
     h = s.h;
@@ -1297,12 +1303,13 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
     const cross = stretchCross ? contentCross : Math.min(crosses[i], Number.POSITIVE_INFINITY);
     const crossOffset =
       (vertical ? rect.x + ml : rect.y + mt) + (stretchCross ? 0 : (contentCross - cross) / 2);
-    // `position` on a box child is applied as an extra offset (unmeasured;
-    // vanilla advice is to never anchor/position inside boxes).
-    const pos = child.pairs.get("position") ?? [0, 0];
+    // `position` on a box child is DROPPED: the box places its children.
+    // In-game probe 2026-08-02 (px_positioned sat exactly where a plain
+    // sibling does), and the engine logs "Widget cannot have a position in a
+    // layout". Settles L23; the writer's positionIgnoredReason guard matches.
     const forced: LayoutRect = vertical
-      ? { x: crossOffset + (pos[0] ?? 0), y: cursor + (pos[1] ?? 0), w: cross, h: main }
-      : { x: cursor + (pos[0] ?? 0), y: crossOffset + (pos[1] ?? 0), w: main, h: cross };
+      ? { x: crossOffset, y: cursor, w: cross, h: main }
+      : { x: cursor, y: crossOffset, w: main, h: cross };
     out.push(arrange(child, forced, "box", measurer, forced));
     cursor += main + 2 * side + spacing;
   }

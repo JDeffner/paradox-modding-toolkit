@@ -87,4 +87,14 @@ widget = {
 			widget = { name = "px_item_offset" position = { 30 10 } size = { 20 20 } }
 		}
 	}
+
+	# In-game probe 2026-08-02 (L25 narrow): a NON-empty container KEEPS an
+	# authored size; the engine warns about it yet applies it.
+	container = {
+		name = "px_container_sized_kept"
+		position = { 200 460 }
+		size = { 250 120 }
+		widget = { position = { 0 0 } size = { 40 30 } }
+		widget = { position = { 50 0 } size = { 40 30 } }
+	}
 }

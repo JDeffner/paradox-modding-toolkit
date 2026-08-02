@@ -18,7 +18,7 @@ box-child-ignored.gui
   widget#px_ignored_frame 0 0 420 300
     vbox#px_ignored_column 0 0 420 300
       widget#px_plain 160 15 100 30
-      widget#px_positioned 200 115 100 30
+      widget#px_positioned 160 75 100 30
       widget#px_anchored 160 135 100 30
       widget#px_align_left 160 195 100 30
       widget#px_align_right 160 255 100 30
@@ -145,6 +145,9 @@ container-measurability.gui
         widget#px_item_offset 230 438 20 20 [ghost]
       item 200 476 50 30 [ghost]
         widget#px_item_offset 230 486 20 20 [ghost]
+    container#px_container_sized_kept 200 460 250 120
+      widget 200 460 40 30
+      widget 250 460 40 30
 datamodel-ghosts.gui
   widget#px_ghost_frame 0 0 200 400
     vbox#px_ghost_column 0 0 200 400

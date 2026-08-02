@@ -68,11 +68,14 @@ describe("guiSourceEdit: position and size guards (W10, S09)", () => {
     );
   });
 
-  it("refuses a size on a content-sized container", () => {
+  it("refuses a size on an hbox/vbox but WRITES one on a flowcontainer", () => {
     const box = run(REFUSALS, setSize("px_refuse_size_box"));
     expect(box!.refused).toContain("content-sized");
+    // In-game probe 2026-08-02 (L13e): a flowcontainer keeps an authored
+    // size, so refusing the write would block something the engine honors.
     const flow = run(REFUSALS, setSize("px_refuse_size_flow"));
-    expect(flow!.refused).toContain("content-sized");
+    expect(flow!.refused).toBeUndefined();
+    expect(flow!.edits).toBeDefined();
   });
 
   it("refuses a size on a child expanding on BOTH axes inside a container", () => {
