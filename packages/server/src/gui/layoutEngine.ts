@@ -332,7 +332,7 @@ function collectConstants(statements: Statement[]): Map<string, number> {
 // CST -> raw widget nodes
 // ---------------------------------------------------------------------------
 
-type WidgetClass =
+export type WidgetClass =
   | "plain" // widget, window, button, icon, ... : explicit size or ZERO (B4-T1)
   | "box" // hbox, vbox
   | "flow" // flowcontainer
@@ -421,6 +421,17 @@ const CLASS_BY_KEY: Record<string, WidgetClass> = {
 
 function classify(key: string): WidgetClass {
   return CLASS_BY_KEY[key] ?? "plain";
+}
+
+/**
+ * The engine's own key -> class mapping, for the WRITER's refusal guards: a
+ * resize is refused on a content-sized class, a drag on a child of a layout
+ * container. Exported rather than copied so a guard can never claim a rule the
+ * engine does not apply. The caller resolves a type instance to its base key
+ * first (`typeBaseChain`), the way `buildWNode` does.
+ */
+export function widgetClassOf(baseKey: string): WidgetClass {
+  return classify(baseKey.toLowerCase());
 }
 
 function blockOf(stmt: Statement): BlockNode | null {

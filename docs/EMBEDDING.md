@@ -327,12 +327,39 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 | Mod-wide reports | `paradox/modOverview` (content inventory), `paradox/overrides` (what shadows vanilla, with the LIOS/FIOS winner) |
 | An impact view for one definition | `paradox/dependencies` (dependents and dependencies, by cursor or by name) |
 | An event browser or graph | `paradox/eventGraph`, `paradox/eventDetail` |
-| A `.gui` designer | `paradox/guiTree`, `paradox/guiLayout`, `paradox/guiWidgetEdit` |
+| A `.gui` designer | `paradox/guiTree`, `paradox/guiLayout`, `paradox/guiSourceEdit` (`paradox/guiWidgetEdit` is the deprecated position/size half of the last one) |
 | Your own file watcher | declare `client.ownFileWatcher` and push `paradox/modFileChanged` per changed file |
 
 The mod-scoped requests (`modOverview`, `locCoverage`, `overrides`) take
 `{ modRoot?: string | null }`: one workspace mod by absolute root path, or
 absent for all of them.
+
+### paradox/guiSourceEdit
+
+The server never writes a file. A designer gesture goes out as an op and comes
+back as offsets into the text you sent, which YOU apply: your editor keeps
+undo, dirty state and the live preview loop. Send the buffer's current text
+with every request and apply the edits to that same text, end-first.
+
+```jsonc
+// -> paradox/guiSourceEdit
+{ "uri": "file:///d%3A/mods/my_mod/gui/window_my.gui",
+  "text": "window = {\n\tname = \"my_window\"\n}\n",
+  "op": { "kind": "setProperties", "line": 0,
+          "properties": [{ "key": "size", "value": "{ 320 200 }" }] } }
+// <- { "edits": [{ "start": 31, "end": 31, "newText": "\tsize = { 320 200 }\n" }] }
+```
+
+The other ops are `reorder`, `insert`, `insertRaw` (paste), `delete`,
+`duplicate`, `wrap` and `blockText` (read-only, for a clipboard); a widget is
+addressed by the 0-based line of its own statement, the `line` that
+`paradox/guiLayout` reports for it.
+
+Expect `{ "refused": "…" }` instead of edits and show the string: it is the
+server saying the gesture would not do what it looks like it does (a box owns
+its children's slots, a content-sized container ignores an explicit size, a
+type definition is used by other files). A write that lands but is only half
+honoured returns `edits` plus a `warning`.
 
 ### paradox/scopeAt
 

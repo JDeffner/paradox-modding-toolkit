@@ -25,6 +25,24 @@
   in, and the plural `common/on_actions` folder resolves. The **Simulate
   Event** command was never CK3-gated and is now also listed in the sidebar's
   Tools view for every supported game.
+- **`paradox/guiSourceEdit`: the `.gui` source writer a designer needs, and the
+  honesty to turn a gesture down.** One request takes a gesture (set or remove
+  properties, reorder, insert, paste, delete, duplicate, wrap, or copy a block
+  out) and answers with surgical text edits the host applies, or with a refusal
+  that says why. Every edit is a replace over the exact span the entry occupies,
+  so a hand-authored file keeps its comments, its CRLF, its tabs-or-spaces and
+  its single-line bodies byte for byte; blank separators and attached comments
+  travel with the widget they belong to, so a reorder is a pure permutation and
+  an insert and a delete are exact inverses. Verified by round trips over the
+  373 vanilla `.gui` files, not just fixtures. A refusal is an answer rather than
+  an error: an hbox/vbox places its children itself, so a drag inside one is
+  refused instead of writing a `position` the game drops; a content-sized
+  container ignores an explicit `size`; a child expanding on both axes inside a
+  container has both taken from it, and one expanding axis writes with a warning
+  naming the axis the container owns. `paradox/guiWidgetEdit` still works and is
+  now a deprecated alias over the same core, with one behavior change: a
+  property it has to insert lands on its own line before the closing brace,
+  where the writer puts every new property, instead of first in the body.
 - `paradox/eventDetail` now carries what that walkthrough needs, additively:
   every section and option gains `lines` / `totalLines` (the block rendered as
   pseudo-script, capped, with the honest total) and `targets` / `targetsTotal`

@@ -23,13 +23,24 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   guiLayoutRequest,
+  guiSourceEditRequest,
   guiTreeRequest,
   guiWidgetEditRequest,
   scopeAtRequest,
   statusNotification,
+  type GuiSourceEditResult,
+  type GuiTextEdit,
   type ScopeAtResult,
   type StatusPayload,
 } from "@px-lsp/protocol/protocol";
+
+/** Apply a guiSourceEdit batch the way a host would: end-first, same text. */
+function applyEdits(text: string, edits: GuiTextEdit[]): string {
+  for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
+    text = text.slice(0, edit.start) + edit.newText + text.slice(edit.end);
+  }
+  return text;
+}
 
 const SERVER = path.join(__dirname, "..", "dist", "server.js");
 const WIKIDOCS = path.join(__dirname, "..", "data", "ck3", "wikidocs");
@@ -440,6 +451,55 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(result.nodes[0].children[0].rect).toEqual({ x: 0, y: 0, w: 200, h: 100 });
     expect(result.nodes[0].children[0].children[0].rect).toEqual({ x: 80, y: 30, w: 40, h: 40 });
     expect(result.textures).toEqual(["gfx/interface/colors/white.dds"]);
+  });
+
+  it("paradox/guiSourceEdit applies a property batch and refuses a box child's position", async () => {
+    const text =
+      'widget = {\n\tname = "smoke_root"\n\tvbox = {\n\t\tname = "smoke_box"\n\t\twidget = {\n\t\t\tname = "smoke_child"\n\t\t}\n\t}\n}\n';
+    const set = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke.gui",
+      text,
+      op: {
+        kind: "setProperties",
+        line: 0,
+        properties: [
+          { key: "size", value: "{ 320 200 }" },
+          { key: "alpha", value: "0.5" },
+        ],
+      },
+    })) as GuiSourceEditResult;
+    expect(set.refused).toBeUndefined();
+    const applied = applyEdits(text, set.edits!);
+    expect(applied).toContain("\tsize = { 320 200 }\n\talpha = 0.5\n}\n");
+    expect(applied).toContain('\t\t\tname = "smoke_child"\n'); // untouched
+
+    // The vbox owns its child's slot, so the drag is refused WITH a reason
+    // rather than writing a property the game drops.
+    const refused = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke.gui",
+      text,
+      op: { kind: "setProperties", line: 4, properties: [{ key: "position", value: "{ 5 5 }" }] },
+    })) as GuiSourceEditResult;
+    expect(refused.edits).toBeUndefined();
+    expect(refused.refused).toContain("places its children itself");
+  });
+
+  it("paradox/guiSourceEdit round-trips a block through blockText and insertRaw", async () => {
+    const text =
+      'window = {\n\tname = "smoke_paste_root"\n\t# the child\n\twidget = {\n\t\tname = "smoke_copy_me"\n\t}\n}\n';
+    const copied = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke.gui",
+      text,
+      op: { kind: "blockText", line: 3 },
+    })) as GuiSourceEditResult;
+    expect(copied.blockText).toBe('\t# the child\n\twidget = {\n\t\tname = "smoke_copy_me"\n\t}\n');
+
+    const pasted = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke.gui",
+      text,
+      op: { kind: "insertRaw", line: 0, fragment: copied.blockText! },
+    })) as GuiSourceEditResult;
+    expect(applyEdits(text, pasted.edits!)).toBe(text.replace(/\}\n$/, copied.blockText! + "}\n"));
   });
 
   it("paradox/guiWidgetEdit produces an applicable position edit", async () => {

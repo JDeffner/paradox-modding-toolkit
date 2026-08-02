@@ -55,6 +55,8 @@ import {
   type GuiLayoutParams,
   guiWidgetEditRequest,
   type GuiWidgetEditParams,
+  guiSourceEditRequest,
+  type GuiSourceEditParams,
   dependenciesRequest,
   type DependenciesParams,
   scopeAtRequest,
@@ -62,8 +64,9 @@ import {
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
-import { computeGuiLayoutResult, invalidateGuiDefsCache } from "./gui/layoutService";
+import { computeGuiLayoutResult, getGuiDefs, invalidateGuiDefsCache } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
+import { computeGuiSourceEdit } from "./gui/sourceEditService";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
 import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
@@ -907,8 +910,18 @@ connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
   )
 );
 
+/** The type chain a size guard resolves through is the same store the preview lays out with. */
+function guiDefsForEdits() {
+  return getGuiDefs(settings.gamePath, settings.modPath, settings.parentPaths, engineRoots());
+}
+
+connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) =>
+  computeGuiSourceEdit(params.text ?? "", params.op, guiDefsForEdits())
+);
+
+// Deprecated: the narrow position/size shape, over the same core.
 connection.onRequest(guiWidgetEditRequest, (params: GuiWidgetEditParams) =>
-  computeGuiWidgetEdit(params.text ?? "", params.line, params.property, params.values)
+  computeGuiWidgetEdit(params.text ?? "", params.line, params.property, params.values, guiDefsForEdits())
 );
 
 connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>

@@ -135,7 +135,8 @@ instead.
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text }` → `GuiLayoutResult` — measured layout rectangles for a .gui document |
-| `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — text edit for a preview drag/property change |
+| `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture, or a refusal with a reason |
+| `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
 `ModScopedParams` is `{ modRoot?: string | null }`: restrict a mod-scoped
 request to one workspace mod (absolute root path); absent = all workspace
@@ -177,6 +178,33 @@ resolved exactly one level deep: absent when there was nothing to read
 (including a target that is itself already one level deep), `[]` when the
 definition names no events, capped at 24 with `firesTotal` giving the true
 count.
+
+`paradox/guiSourceEdit` takes `{ uri, text, op }` and answers
+`{ edits }` or `{ refused }`, never both, and `null` only for an op it does not
+know. The server never writes: `edits` are `{ start, end, newText }` offsets
+into the text of the REQUEST, computed against that one text and applied
+end-first, so the host keeps undo, dirty state and the live preview
+(host-owns-text). Every edit is surgical, over the exact span of the entry it
+changes, so comments, CRLF, tabs-vs-spaces and single-line bodies survive a
+write byte for byte.
+
+The op is a discriminated union on `kind`: `setProperties` (a batch; a null
+value removes), `reorder`, `insert`, `insertRaw` (paste), `delete`,
+`duplicate`, `wrap` and the read-only `blockText`. A widget is addressed by the
+0-based `line` its own statement starts on, the same `line` `GuiLayoutNode`
+reports; a node spliced in from a template or a type has no line of its own and
+resolves to nothing. An `index` counts SOURCE children, not the
+template-expanded ones the preview shows, and out of range appends.
+
+`refused` is an ANSWER, not an error: it is what the server says when a gesture
+would not do what it looks like it does. A layout container places its children
+itself, so a `position` on one of its children is dropped by the game; an
+hbox/vbox/flowcontainer takes its size from its children, so an explicit `size`
+does nothing; a child expanding on both axes inside a container has both taken
+from it (one axis writes and sets `warning` naming the other); a `type`
+definition is not restructured through one instance's preview; the only root
+widget is not deleted; and a document that does not parse is not edited at all.
+Render the string.
 
 Full payload shapes: see `packages/protocol/src/protocol.ts` — every
 interface there is part of this contract.

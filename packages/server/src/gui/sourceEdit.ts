@@ -172,18 +172,38 @@ export function dropNested(entries: readonly GuiEntry[]): GuiEntry[] {
  * empty `{}` gets a spaced entry (W06, W25).
  */
 function insertProperty(file: GuiSourceFile, node: GuiEntry, key: string, value: string): GuiEdit | null {
-  const body = node.body!;
-  value = value.trim();
-  if (value.length === 0) return null;
+  return insertProperties(file, node, [[key, value]]);
+}
 
-  const entry = `${key} = ${value}`;
+/**
+ * Adds several properties to one body as ONE edit. A batch computed against the
+ * same text would otherwise produce two edits at the same point in an empty
+ * single-line body, where each is a REPLACE of the interior and the second is
+ * dropped as an overlap; writing them together is both correct and what the
+ * author would have typed.
+ */
+export function insertProperties(
+  file: GuiSourceFile,
+  node: GuiEntry,
+  properties: readonly (readonly [string, string])[]
+): GuiEdit | null {
+  const body = node.body;
+  if (!body || body.close === null) return null;
+  const entries: string[] = [];
+  for (const [key, raw] of properties) {
+    const value = raw.trim();
+    if (key.trim().length === 0 || value.length === 0) continue;
+    entries.push(`${key} = ${value}`);
+  }
+  if (entries.length === 0) return null;
+
   // Single-line body: keep it on one line rather than exploding it into a block
   // the author never wrote.
-  if (body.singleLine) return insertInline(file, body, entry);
+  if (body.singleLine) return insertInline(file, body, entries.join(" "));
 
-  const closeLineStart = closeLine(file, body);
+  const at = closeLine(file, body);
   const indent = childIndent(file, node);
-  return { start: closeLineStart, end: closeLineStart, newText: `${indent}${entry}${file.newline}` };
+  return { start: at, end: at, newText: entries.map((e) => `${indent}${e}${file.newline}`).join("") };
 }
 
 /**

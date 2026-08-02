@@ -478,10 +478,88 @@ export interface GuiLayoutResult {
 }
 
 /**
+ * Request: source edits for a `.gui` designer gesture;
+ * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
+ * request itself makes no sense (an unknown op). The server never writes: it
+ * returns offsets into the text it was handed and the host applies them, which
+ * keeps undo, dirty state and the live preview in the editor (EMBEDDING.md,
+ * host-owns-text).
+ *
+ * Every edit is surgical, over the exact span the source model recorded, so
+ * untouched bytes stay byte-identical: comments, CRLF, tabs-vs-spaces and
+ * single-line bodies all survive a write.
+ */
+export const guiSourceEditRequest = "paradox/guiSourceEdit";
+export interface GuiSourceEditParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  /** Authoritative document text every offset refers to. */
+  text: string;
+  op: GuiSourceOp;
+}
+
+/** One surgical replacement: replace `[start, end)` with `newText`. */
+export interface GuiTextEdit {
+  /** UTF-16 offsets into the request text. */
+  start: number;
+  end: number;
+  newText: string;
+}
+
+/**
+ * What to do. `line` is the 0-based line of the target widget's own statement,
+ * the same `line` {@link GuiLayoutNode} reports; a node with no line of its own
+ * (spliced in from a template or a type) has no source to edit and is refused.
+ * `index` counts SOURCE children, not the template-expanded ones a preview
+ * shows; out of range appends.
+ */
+export type GuiSourceOp =
+  /** Set or (with a null value) remove properties on one widget. */
+  | { kind: "setProperties"; line: number; properties: { key: string; value: string | null }[] }
+  /** Move a source child of the widget on `line` from one index to another. */
+  | { kind: "reorder"; line: number; from: number; to: number }
+  | { kind: "insert"; line: number; widget: GuiNewWidget; index?: number }
+  /** Paste `.gui` text as a child, re-indented for the destination. */
+  | { kind: "insertRaw"; line: number; fragment: string; index?: number }
+  | { kind: "delete"; line: number }
+  /** Copy the widget in as its own next sibling, optionally renamed. */
+  | { kind: "duplicate"; line: number; name?: string }
+  /** Wrap the widgets on `lines` (siblings) in a fresh container. */
+  | { kind: "wrap"; lines: number[]; container: GuiNewWidget }
+  /** Read-only: the widget's block, verbatim, for a clipboard. */
+  | { kind: "blockText"; line: number };
+
+/** A declaration to write: `type = { properties }`, properties in order. */
+export interface GuiNewWidget {
+  type: string;
+  properties?: [string, string][];
+}
+
+/**
+ * Exactly one of `edits` and `refused` is present. A refusal is an ANSWER, not
+ * an error: it names why the gesture would not do what it looks like it does
+ * (a box owns its children's slots, a content-sized type ignores an explicit
+ * size, a type definition other files use). `warning` rides along with a write
+ * that went ahead but is only half honoured.
+ */
+export interface GuiSourceEditResult {
+  edits?: GuiTextEdit[];
+  refused?: string;
+  warning?: string;
+  /** `blockText` only: the copied block. */
+  blockText?: string;
+}
+
+/**
  * Request: text edit for a preview interaction (drag / property change);
  * {@link GuiWidgetEditParams} -> {@link GuiWidgetEditResult} (null when the
  * widget or property cannot be edited). The client applies the offsets via
  * WorkspaceEdit so undo and the live preview loop stay in the editor.
+ *
+ * @deprecated Use {@link guiSourceEditRequest} with a `setProperties` op. This
+ * is a thin alias over the same core, kept for hosts already wired to it: it
+ * can only write the `position`/`size` pair and returns one edit or null, so a
+ * refusal reaches the caller as a bare null with no reason attached.
  */
 export const guiWidgetEditRequest = "paradox/guiWidgetEdit";
 export interface GuiWidgetEditParams {

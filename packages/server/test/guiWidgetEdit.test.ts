@@ -49,7 +49,10 @@ describe("computeGuiWidgetEdit", () => {
   it("inserts into a widget that has children, matching their indent", () => {
     const doc = `window = {\n    vbox = {\n        spacing = 4\n    }\n}`;
     const out = apply(doc, computeGuiWidgetEdit(doc, 0, "size", [400, 300]));
-    expect(out).toContain("window = {\n    size = { 400 300 }\n    vbox = {");
+    // The insert lands on its own line before the closing brace (W03), which is
+    // where the G1 writer puts a new property; this request used to put it
+    // first in the body instead. The indent is still the body's own.
+    expect(out).toContain("    }\n    size = { 400 300 }\n}");
   });
 
   it("rounds near-integers and keeps one decimal otherwise", () => {
