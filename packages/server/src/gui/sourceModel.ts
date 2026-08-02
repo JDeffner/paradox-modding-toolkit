@@ -115,6 +115,13 @@ export interface GuiEntry {
   blockSpan: GuiSpan;
   /** Present when the value is a block (attribute blocks included). */
   body: GuiBody | null;
+  /**
+   * The CST block `body` was built from. The model is a second VIEW of the
+   * toolkit's CST, so keeping the node costs nothing and lets a reader that
+   * needs the parser's own shape (template/type expansion) start from the same
+   * entry the writer addresses, instead of re-finding the widget its own way.
+   */
+  block: BlockNode | null;
   parent: GuiEntry | null;
 }
 
@@ -405,6 +412,7 @@ function buildEntry(
     lineSpan: span,
     blockSpan: span,
     body: null,
+    block,
     parent,
   };
 

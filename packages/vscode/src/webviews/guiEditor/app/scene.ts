@@ -67,6 +67,12 @@ export interface SceneItem {
   rect: SceneRect;
   /** Depth in the layout tree (0 = top level). */
   depth: number;
+  /**
+   * Child indices from the root list down to this widget: the selection's
+   * identity across a re-parse. The draw index is only valid inside ONE scene;
+   * the path names the same widget in the next one (selection.ts).
+   */
+  path: number[];
   /** Intersected rect of every clipping ancestor; absent when unclipped. */
   clip?: SceneRect;
   bg?: GuiLayoutFill;
@@ -151,13 +157,14 @@ function ghostBoxOf(node: GuiLayoutNode): SceneRect | undefined {
  */
 export function buildScene(nodes: GuiLayoutNode[]): Scene {
   const items: SceneItem[] = [];
-  const visit = (node: GuiLayoutNode, depth: number, clip: SceneRect | undefined, ghost: boolean): void => {
+  const visit = (node: GuiLayoutNode, path: number[], clip: SceneRect | undefined, ghost: boolean): void => {
     const isGhost = ghost || node.ghost === true;
     items.push({
       key: node.key,
       name: node.name,
       rect: node.rect,
-      depth,
+      depth: path.length - 1,
+      path,
       clip,
       bg: node.bg,
       fill: node.fill,
@@ -173,9 +180,9 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
     // clip it inherited (the engine keeps true geometry and flags the clip,
     // parity-checklist.md L17c).
     const childClip = node.clip ? (clip ? intersect(clip, node.rect) : node.rect) : clip;
-    for (const child of node.children) visit(child, depth + 1, childClip, isGhost);
+    node.children.forEach((child, i) => visit(child, [...path, i], childClip, isGhost));
   };
-  for (const node of nodes) visit(node, 0, undefined, false);
+  nodes.forEach((node, i) => visit(node, [i], undefined, false));
   return { items, count: items.length };
 }
 

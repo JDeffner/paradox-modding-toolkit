@@ -2,10 +2,11 @@
  * The GUI editor's VS Code host (px.openGuiEditor).
  *
  * It implements messages.ts and does nothing the contract does not name: fetch
- * layout from the server, resolve textures to webview URLs, push the result
- * down. The document is the source of truth and stays the editor's — the host
- * re-requests layout on every change (debounced) and on save, so the canvas
- * follows typing, formatters and reverts alike.
+ * layout and widget info from the server, resolve textures to webview URLs,
+ * push results down, reveal a line in the text editor. The document is the
+ * source of truth and stays the editor's — the host re-requests layout on every
+ * change (debounced) and on save, so the canvas follows typing, formatters and
+ * reverts alike.
  *
  * The webview loads dist/webview/guiEditor.js under the house nonce CSP: the
  * app is a real bundle, not a serialized function, because an editor does not
@@ -14,11 +15,13 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { GuiLayoutResult } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
 import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp } from "./messages";
+import { guiEditorHtml } from "./html";
 import { GuiTextureCache, type TextureRoots } from "./textureCache";
 
 export type FetchLayout = (uri: vscode.Uri, text: string) => Promise<GuiLayoutResult>;
+export type FetchWidgetInfo = (uri: vscode.Uri, text: string, line: number) => Promise<GuiWidgetInfo | null>;
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -26,6 +29,7 @@ export class GuiEditorPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly fetchLayout: FetchLayout;
+  private readonly fetchWidgetInfo: FetchWidgetInfo;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
   private disposables: vscode.Disposable[] = [];
@@ -37,10 +41,12 @@ export class GuiEditorPanel {
   private constructor(
     context: vscode.ExtensionContext,
     fetchLayout: FetchLayout,
+    fetchWidgetInfo: FetchWidgetInfo,
     source: vscode.TextDocument,
     roots: TextureRoots
   ) {
     this.fetchLayout = fetchLayout;
+    this.fetchWidgetInfo = fetchWidgetInfo;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
     this.textures = new GuiTextureCache(this.storageDir, roots);
@@ -94,6 +100,7 @@ export class GuiEditorPanel {
   static show(
     context: vscode.ExtensionContext,
     fetchLayout: FetchLayout,
+    fetchWidgetInfo: FetchWidgetInfo,
     source: vscode.TextDocument,
     roots: TextureRoots
   ): void {
@@ -110,7 +117,7 @@ export class GuiEditorPanel {
       void existing.load(source);
       return;
     }
-    GuiEditorPanel.instance = new GuiEditorPanel(context, fetchLayout, source, roots);
+    GuiEditorPanel.instance = new GuiEditorPanel(context, fetchLayout, fetchWidgetInfo, source, roots);
   }
 
   private dispose(): void {
@@ -162,6 +169,39 @@ export class GuiEditorPanel {
         await this.load(doc);
         return;
       }
+      case "requestWidgetInfo": {
+        const line = message.line;
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        try {
+          const info = await this.fetchWidgetInfo(doc.uri, doc.getText(), line);
+          this.post({ type: "widgetInfo", line, info });
+        } catch {
+          // A failed inspector read is not worth an error banner over the
+          // canvas: the app shows the selection with no rows.
+          this.post({ type: "widgetInfo", line, info: null });
+        }
+        return;
+      }
+      case "reveal": {
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const line = Math.max(0, Math.min(message.line, doc.lineCount - 1));
+        const range = doc.lineAt(line).range;
+        // The document's own column, never the ACTIVE one: the active column is
+        // the panel's while the canvas has focus, and opening the text there
+        // would shove the editor the reveal was meant to point at. Focus stays
+        // on the canvas, so the gesture is not interrupted either.
+        const visible = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === this.sourceUri.toString()
+        );
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: visible?.viewColumn ?? vscode.ViewColumn.One,
+          preserveFocus: true,
+          preview: false,
+        });
+        editor.selection = new vscode.Selection(range.start, range.start);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        return;
+      }
     }
   }
 }
@@ -179,77 +219,18 @@ function loadGameFont(gamePath: string | null): string | null {
 
 function buildHtml(webview: vscode.Webview, script: vscode.Uri, fontDataUri: string | null): string {
   const nonce = makeNonce();
-  const csp = [
-    `default-src 'none'`,
-    `img-src ${webview.cspSource}`,
-    `font-src data:`,
-    `style-src 'unsafe-inline'`,
-    `script-src 'nonce-${nonce}'`,
-  ].join("; ");
-  const fontFace = fontDataUri
-    ? `@font-face { font-family: "PxGuiGameFont"; src: url("${fontDataUri}") format("opentype"); }`
-    : "";
-
-  return /* html */ `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="${csp}" />
-<title>GUI Editor</title>
-<style>
-  ${fontFace}
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    font-family: var(--vscode-font-family, sans-serif);
-    font-size: var(--vscode-font-size, 13px);
-    color: var(--vscode-editor-foreground);
-    background: var(--vscode-editor-background);
-  }
-  #app { display: flex; flex-direction: column; height: 100%; }
-  #toolbar {
-    display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap;
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
-  }
-  button {
-    padding: 3px 10px; border-radius: 2px; cursor: pointer;
-    color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-    background: var(--vscode-button-secondaryBackground, transparent);
-    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
-  }
-  #toolbar label { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-  #zoomLabel { min-width: 46px; text-align: center; }
-  .sep { width: 1px; align-self: stretch; background: var(--vscode-panel-border, rgba(128,128,128,0.35)); }
-  #stage { flex: 1 1 auto; overflow: hidden; background: #101010; position: relative; }
-  #canvas { display: block; }
-  #status {
-    flex: 0 0 auto; padding: 4px 8px; font-size: 0.9em;
-    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
-    color: var(--vscode-descriptionForeground);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-</style>
-</head>
-<body data-font="${fontDataUri ? "game" : "fallback"}">
-<div id="app">
-  <div id="toolbar">
-    <button id="zoomOut" title="Zoom out">-</button>
-    <span id="zoomLabel">100%</span>
-    <button id="zoomIn" title="Zoom in">+</button>
-    <button id="zoomFit" title="Fit the 1920x1080 reference viewport">Fit</button>
-    <span class="sep"></span>
-    <label><input id="outlines" type="checkbox" /> Outlines</label>
-    <button id="refresh">Refresh</button>
-    <span id="meta" style="margin-left:auto;color:var(--vscode-descriptionForeground)"></span>
-  </div>
-  <div id="stage"><canvas id="canvas"></canvas></div>
-  <div id="status">Loading…</div>
-</div>
-<script nonce="${nonce}" src="${webview.asWebviewUri(script).toString()}"></script>
-</body>
-</html>`;
+  return guiEditorHtml({
+    scriptSrc: webview.asWebviewUri(script).toString(),
+    nonce,
+    csp: [
+      `default-src 'none'`,
+      `img-src ${webview.cspSource}`,
+      `font-src data:`,
+      `style-src 'unsafe-inline'`,
+      `script-src 'nonce-${nonce}'`,
+    ].join("; "),
+    fontDataUri,
+  });
 }
 
 function makeNonce(): string {

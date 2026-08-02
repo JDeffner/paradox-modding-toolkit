@@ -28,6 +28,8 @@ const CANVAS_BG = "#101010";
 const WORLD_BG = "#181818";
 const OUTLINE = "rgba(120,180,255,0.35)";
 const GHOST_BOX_STROKE = "#ff9f43";
+const SELECT_STROKE = "#4fc1ff";
+const SELECT_SHADOW = "rgba(0,0,0,0.65)";
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -221,6 +223,28 @@ export interface DrawOptions {
   outlines: boolean;
   /** CSS font stack for widget text (the game font when the host supplied it). */
   fontFamily: string;
+  /**
+   * The selected widget's clickable rect, in world coordinates (the hit rect,
+   * so an unmeasurable widget is marked on the estimate box that is drawn).
+   */
+  selected?: SceneRect;
+}
+
+/**
+ * The selection marquee, drawn over the finished scene so no later widget can
+ * paint on top of it. Two strokes: a dark one for contrast against a bright
+ * sprite, the accent over it. Widths divide by zoom, so the marquee is one
+ * screen pixel at every zoom instead of growing with the world.
+ */
+function paintSelection(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: number): void {
+  ctx.save();
+  ctx.lineWidth = 3 / zoom;
+  ctx.strokeStyle = SELECT_SHADOW;
+  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
 }
 
 /** Repaint the whole canvas: viewport clear, world backdrop, then the scene. */
@@ -241,6 +265,7 @@ export function drawScene(
   for (const item of scene.items) {
     paintItem(ctx, item, images, camera.zoom, options.outlines, options.fontFamily);
   }
+  if (options.selected) paintSelection(ctx, options.selected, camera.zoom);
 }
 
 /** Drop the tint/cell caches: a fresh layout may re-color the same sprites. */

@@ -135,6 +135,18 @@ export function mergeGuiDefs(target: GuiDefs, source: GuiDefs): void {
 /** Guards recursive templates/types (a self-referencing type hard-crashes the game). */
 const MAX_DEPTH = 32;
 
+/** One step of the chain a statement was spliced through (innermost first). */
+export interface GuiOriginStep {
+  kind: "type" | "template";
+  name: string;
+}
+
+/** An expanded statement plus where it came from ([] = the instance's own body). */
+export interface OriginedStatement {
+  stmt: Statement;
+  origin: GuiOriginStep[];
+}
+
 /**
  * Resolve a widget key's type chain and produce the effective statement list:
  * base-most type first, derived types after, instance statements last (so
@@ -148,22 +160,45 @@ export function expandWidget(
   /** Skip the type chain (recursion guard) but still splice templates. */
   skipChain = false
 ): { baseKey: string; statements: Statement[] } {
-  const chain: BlockNode[] = [];
+  const expanded = expandWidgetWithOrigins(key, instance, defs, skipChain);
+  return { baseKey: expanded.baseKey, statements: expanded.statements.map((s) => s.stmt) };
+}
+
+/**
+ * {@link expandWidget} with provenance: the same expansion, each statement
+ * labelled with the definitions it was spliced through. The inspector reads
+ * this so a property row can say where its value came from, and it goes through
+ * the one expansion the engine itself uses rather than a second walk that could
+ * disagree with the rendering.
+ */
+export function expandWidgetWithOrigins(
+  key: string,
+  instance: BlockNode,
+  defs: GuiDefs,
+  skipChain = false
+): { baseKey: string; statements: OriginedStatement[] } {
+  const chain: { block: BlockNode; origin: GuiOriginStep[] }[] = [];
   let base = key.toLowerCase();
   const seen = new Set<string>();
   while (!skipChain && defs.types.has(base) && !seen.has(base)) {
     seen.add(base);
     const def = defs.types.get(base)!;
-    chain.unshift(def.block);
+    chain.unshift({ block: def.block, origin: [{ kind: "type", name: base }] });
     base = def.base.toLowerCase();
   }
-  const statements: Statement[] = [];
-  for (const block of chain) spliceTemplates(block.statements, defs, statements, 0);
-  spliceTemplates(instance.statements, defs, statements, 0);
+  const statements: OriginedStatement[] = [];
+  for (const entry of chain) spliceTemplates(entry.block.statements, defs, statements, 0, entry.origin);
+  spliceTemplates(instance.statements, defs, statements, 0, []);
   return { baseKey: base, statements };
 }
 
-function spliceTemplates(statements: Statement[], defs: GuiDefs, out: Statement[], depth: number): void {
+function spliceTemplates(
+  statements: Statement[],
+  defs: GuiDefs,
+  out: OriginedStatement[],
+  depth: number,
+  origin: GuiOriginStep[]
+): void {
   if (depth > MAX_DEPTH) return;
   for (const stmt of statements) {
     if (
@@ -171,15 +206,16 @@ function spliceTemplates(statements: Statement[], defs: GuiDefs, out: Statement[
       stmt.key.text.toLowerCase() === "using" &&
       stmt.value?.kind === "scalar"
     ) {
-      const tpl = defs.templates.get(stmt.value.text);
+      const name = stmt.value.text;
+      const tpl = defs.templates.get(name);
       if (tpl) {
-        spliceTemplates(tpl.block.statements, defs, out, depth + 1);
+        spliceTemplates(tpl.block.statements, defs, out, depth + 1, [{ kind: "template", name }, ...origin]);
         continue;
       }
       // Unknown template: keep the statement (the game logs one error and
       // renders nothing for it; downstream treats it as an inert property).
     }
-    out.push(stmt);
+    out.push({ stmt, origin });
   }
 }
 

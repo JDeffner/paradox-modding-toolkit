@@ -135,6 +135,7 @@ instead.
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text }` → `GuiLayoutResult` — measured layout rectangles for a .gui document |
+| `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from |
 | `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture, or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
@@ -178,6 +179,24 @@ resolved exactly one level deep: absent when there was nothing to read
 (including a target that is itself already one level deep), `[]` when the
 definition names no events, capped at 24 with `firesTotal` giving the true
 count.
+
+`paradox/guiWidgetInfo` is the designer inspector's read side: `{ uri, text,
+line }` in, the widget's effective properties out, or `null` when that line
+carries no widget of its own (the same answer `guiSourceEdit` refuses with). It
+addresses the widget the way the WRITER does and resolves it the way the ENGINE
+does, so a row it lists is a value the canvas laid the widget out with and a
+line a `setProperties` op would rewrite. Properties are last-in-wins per key in
+expansion order, and each carries an `origin`: the chain of definitions it was
+spliced through, innermost first (`[template PxDeco, type px_card]`). An EMPTY
+origin means the property is authored in the widget's own body, which is the
+only case a write rewrites in place. Values are rendered from the parser's
+tokens, not sliced from a file: an inherited block lives in a document this
+request was not handed.
+
+It is a per-selection request rather than a field on `GuiLayoutNode` on
+purpose: a vanilla window lays out 500+ widgets, and every layout push would
+carry every widget's expanded property list for rows one widget at a time is
+ever shown.
 
 `paradox/guiSourceEdit` takes `{ uri, text, op }` and answers
 `{ edits }` or `{ refused }`, never both, and `null` only for an op it does not

@@ -57,6 +57,8 @@ import {
   type GuiWidgetEditParams,
   guiSourceEditRequest,
   type GuiSourceEditParams,
+  guiWidgetInfoRequest,
+  type GuiWidgetInfoParams,
   dependenciesRequest,
   type DependenciesParams,
   scopeAtRequest,
@@ -67,6 +69,7 @@ import { buildGuiTree } from "./features/guiTree";
 import { computeGuiLayoutResult, getGuiDefs, invalidateGuiDefsCache } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
 import { computeGuiSourceEdit } from "./gui/sourceEditService";
+import { computeGuiWidgetInfo } from "./gui/widgetInfo";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
 import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
@@ -917,6 +920,12 @@ function guiDefsForEdits() {
 
 connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) =>
   computeGuiSourceEdit(params.text ?? "", params.op, guiDefsForEdits())
+);
+
+// The inspector reads through the same store the preview lays out with, so a
+// row it shows is a value the canvas used.
+connection.onRequest(guiWidgetInfoRequest, (params: GuiWidgetInfoParams) =>
+  computeGuiWidgetInfo(params.text ?? "", params.line, guiDefsForEdits())
 );
 
 // Deprecated: the narrow position/size shape, over the same core.

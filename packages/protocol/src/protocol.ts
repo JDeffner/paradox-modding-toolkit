@@ -478,6 +478,61 @@ export interface GuiLayoutResult {
 }
 
 /**
+ * Request: the properties of ONE widget, as the layout engine resolved them;
+ * {@link GuiWidgetInfoParams} -> {@link GuiWidgetInfo}, null when the line
+ * carries no widget of its own (a node spliced in from a template or a type has
+ * no source here, the same answer `guiSourceEdit` refuses with).
+ *
+ * This is the designer inspector's READ side. It is a separate request rather
+ * than a field on {@link GuiLayoutNode} because it is per-SELECTION data: a
+ * vanilla window lays out 500+ widgets and carrying every widget's expanded
+ * property list on every layout push would multiply the payload for rows one
+ * widget at a time is ever shown.
+ */
+export const guiWidgetInfoRequest = "paradox/guiWidgetInfo";
+export interface GuiWidgetInfoParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  text: string;
+  /** 0-based line of the widget's own statement (`GuiLayoutNode.line`). */
+  line: number;
+}
+/** One step of the chain a property was spliced through. */
+export interface GuiWidgetOrigin {
+  kind: "type" | "template";
+  /** The type or template name, as `expandWidget` resolved it. */
+  name: string;
+}
+export interface GuiWidgetProperty {
+  key: string;
+  /**
+   * The value as authored, rendered from the tokens: a quoted scalar keeps its
+   * quotes, a block reads `{ a b }`. Blocks come from other files whose text
+   * the store does not keep, so this is a rendering, not a byte copy.
+   */
+  value: string;
+  /**
+   * Definitions the entry was spliced through, INNERMOST first (`[template
+   * PxDeco, type px_card]` = a template used inside a type). Empty means the
+   * property is authored in the widget's own body, which is the only case
+   * `setProperties` rewrites in place.
+   */
+  origin: GuiWidgetOrigin[];
+}
+export interface GuiWidgetInfo {
+  key: string;
+  name?: string;
+  /** The base-type chain the key resolves through, derived-most first. */
+  typeChain: string[];
+  /**
+   * Effective properties in expansion order, last-in-wins per key: exactly the
+   * values the engine laid the widget out with, so the inspector cannot show a
+   * row the canvas did not use.
+   */
+  properties: GuiWidgetProperty[];
+}
+
+/**
  * Request: source edits for a `.gui` designer gesture;
  * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
  * request itself makes no sense (an unknown op). The server never writes: it

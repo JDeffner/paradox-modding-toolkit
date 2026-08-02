@@ -16,17 +16,24 @@
  * - TEXTURES ARE OPAQUE. The app receives URL strings it can hand to an
  *   `Image`, and knows nothing about DDS, decoding or caches.
  *
- * G3.1 is the render stage, so the contract carries only what rendering needs.
+ * G3.1 added what rendering needs, G3.2 what selecting and inspecting need.
  * Later stages add message kinds here first and implement them on both sides.
  */
-import type { GuiLayoutResult } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
 
 /** Messages the editor app sends UP to its host. */
 export type AppToHost =
   /** The app finished booting and can receive pushes (the host answers with a layout). */
   | { type: "ready" }
   /** Re-run layout over the document's current text. */
-  | { type: "requestLayout" };
+  | { type: "requestLayout" }
+  /**
+   * The selection moved to the widget declared on `line` (the layout node's own
+   * 0-based line). The host answers with `widgetInfo` for the same line.
+   */
+  | { type: "requestWidgetInfo"; line: number }
+  /** Show the widget's declaration in the host's text editor. */
+  | { type: "reveal"; line: number };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =
@@ -43,6 +50,12 @@ export type HostToApp =
        */
       textures: Record<string, string | null>;
     }
+  /**
+   * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an
+   * answer the selection has already moved past; `info` is null when that line
+   * has no widget source of its own.
+   */
+  | { type: "widgetInfo"; line: number; info: GuiWidgetInfo | null }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 

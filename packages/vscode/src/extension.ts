@@ -77,6 +77,9 @@ import {
   guiWidgetEditRequest,
   type GuiWidgetEditParams,
   type GuiWidgetEditResult,
+  guiWidgetInfoRequest,
+  type GuiWidgetInfo,
+  type GuiWidgetInfoParams,
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
@@ -594,6 +597,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             uri: uri.toString(),
             text,
           } satisfies GuiLayoutParams),
+        (uri, text, line) =>
+          lc.sendRequest<GuiWidgetInfo | null>(guiWidgetInfoRequest, {
+            uri: uri.toString(),
+            text,
+            line,
+          } satisfies GuiWidgetInfoParams),
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
       );

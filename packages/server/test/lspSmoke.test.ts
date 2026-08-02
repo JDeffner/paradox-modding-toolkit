@@ -26,6 +26,7 @@ import {
   guiSourceEditRequest,
   guiTreeRequest,
   guiWidgetEditRequest,
+  guiWidgetInfoRequest,
   scopeAtRequest,
   statusNotification,
   type GuiSourceEditResult,
@@ -500,6 +501,28 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       op: { kind: "insertRaw", line: 0, fragment: copied.blockText! },
     })) as GuiSourceEditResult;
     expect(applyEdits(text, pasted.edits!)).toBe(text.replace(/\}\n$/, copied.blockText! + "}\n"));
+  });
+
+  it("paradox/guiWidgetInfo reports a widget's properties with their origins", async () => {
+    const text =
+      'types PxSmokeTypes {\n\ttype px_smoke_card = widget { size = { 100 50 } }\n}\n\npx_smoke_card = {\n\tname = "smoke_card"\n\tposition = { 10 10 }\n}\n';
+    const info = (await conn.sendRequest(guiWidgetInfoRequest, {
+      uri: "file:///smoke.gui",
+      text,
+      line: 4,
+    })) as import("@px-lsp/protocol/protocol").GuiWidgetInfo | null;
+    expect(info).not.toBeNull();
+    expect(info!.name).toBe("smoke_card");
+    expect(info!.typeChain).toEqual(["widget"]);
+    const size = info!.properties.find((p) => p.key === "size")!;
+    expect(size.value).toBe("{ 100 50 }");
+    expect(size.origin).toEqual([{ kind: "type", name: "px_smoke_card" }]);
+    expect(info!.properties.find((p) => p.key === "position")!.origin).toEqual([]);
+
+    // A line spliced in from elsewhere has no widget of its own here.
+    expect(
+      await conn.sendRequest(guiWidgetInfoRequest, { uri: "file:///smoke.gui", text, line: 3 })
+    ).toBeNull();
   });
 
   it("paradox/guiWidgetEdit produces an applicable position edit", async () => {

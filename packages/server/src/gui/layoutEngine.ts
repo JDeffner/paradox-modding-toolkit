@@ -224,7 +224,13 @@ export function computeGuiLayout(text: string, options?: LayoutOptions): LayoutN
   return widgets.map((w) => arrange(w, root, "plain", measurer));
 }
 
-function effectiveDefs(text: string, store?: GuiDefs): GuiDefs {
+/**
+ * The def store a document is laid out against: the cross-file store with the
+ * document's OWN declarations layered in (its local_templates always win, other
+ * names only when the store has none, FIOS). Exported so a reader about the
+ * same document resolves the same names the rendering did.
+ */
+export function effectiveDefs(text: string, store?: GuiDefs): GuiDefs {
   const own = collectGuiDefs(text);
   if (!store) return own;
   const merged = emptyGuiDefs();
