@@ -4,6 +4,37 @@
 
 ### Added
 
+- **GUI editor** (**Open GUI Editor**, CK3): a `.gui` file, drawn by the
+  measured layout engine and editable with a mouse. Click to select the widget
+  you meant (the smallest rect under the cursor, not the anchored box filling
+  the window behind it), Alt+click to step outward through the stack,
+  Ctrl+Shift+click to jump to the declaration. The tree lists source children in
+  source order and marks the ones a template or type spliced in. The inspector
+  shows every property with the template or type it came from, and editing a row
+  writes an override at the use site. Drag and the resize grips move and size the
+  widget on the canvas, and a `window_character`-sized document opens with its
+  tree collapsed rather than listing 13,702 rows.
+  Three things it deliberately does that a preview cannot:
+  - **It writes your file, not a copy of it.** Every gesture is ONE surgical
+    edit through the same `paradox/guiSourceEdit` writer the API exposes, so
+    comments, tabs, CRLF and single-line bodies come back byte for byte, and it
+    is ONE Ctrl+Z in the text editor, because the editor keeps no undo history
+    of its own.
+  - **It writes the value, not the cursor.** A drag commits the widget's own
+    effective position plus the drag delta, never the world coordinate under the
+    pointer, so a widget positioned through anchors, margins or a parent's
+    content box lands where you dropped it instead of jumping.
+  - **It turns a gesture down before it moves.** The guards are asked when the
+    mouse goes down, so dragging a child of an hbox or vbox is refused in the
+    server's own words ("places its children itself") with nothing having moved
+    and nothing to snap back, a child expanding on both axes refuses resize, and
+    one expanding axis writes the other with a warning naming the axis the
+    container owns. A drag that rounds to less than a pixel says so rather than
+    silently doing nothing.
+  A container whose content the engine cannot statically measure is drawn as a
+  dashed estimate box and counted in the status line, because the engine invents
+  no pixels and the canvas should not pretend it did. Creation, deletion,
+  multi-select, layers and guides are not in this version.
 - **Simulate Event** (command palette, or right-click in a script file) opens a
   static walkthrough of an event: its blocks laid out in firing order (trigger,
   immediate, every option, after), the title, description and option names

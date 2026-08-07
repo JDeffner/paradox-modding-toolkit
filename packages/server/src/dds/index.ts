@@ -7,7 +7,7 @@ export { encodeDds, hasTransparency, type DdsEncodeFormat } from "./encode";
 export type { DecodedImage } from "./decoder";
 
 /** Nearest-neighbour downscale so max(width, height) <= maxDim. Returns the image unchanged if already small enough. */
-function downscale(img: DecodedImage, maxDim: number): DecodedImage {
+export function downscale(img: DecodedImage, maxDim: number): DecodedImage {
   const { width, height, pixels } = img;
   const longest = Math.max(width, height);
   if (longest <= maxDim || maxDim <= 0) return img;

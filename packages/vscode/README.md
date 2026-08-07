@@ -35,6 +35,7 @@ stop.
 | Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
 | `.gui` pixel-accurate layout preview | yes | no (calibrated against CK3 only) | no |
+| `.gui` visual editor (drag, resize, inspector writes) | yes | no (same calibration) | no |
 | Bundled tutorial and AI modding skill | yes | no (CK3 content) | no (CK3 content) |
 
 **Existing CK3 users need to change nothing.** `px.gameId` defaults to `auto`
@@ -97,6 +98,13 @@ reports are very welcome.
   `[Character.GetFather...]` data-type chains that resolve through return types.
   The pixel-accurate layout preview is CK3-only, since its layout engine was
   calibrated against CK3 in-game screenshots.
+- **GUI editor** (**Open GUI Editor**): the same measured layout, but you can
+  work in it. Click to select the widget you meant, read its properties with the
+  template or type each one came from, drag and resize on the canvas, and edit a
+  property row. Every change is one surgical edit to your file (comments, tabs
+  and single-line bodies survive), and one Ctrl+Z. When the engine would ignore
+  what a gesture asks for, the editor says so before the widget moves instead of
+  writing a line the game drops.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
 - **Bundled 10-chapter CK3 tutorial** (**Open Tutorial**) with every

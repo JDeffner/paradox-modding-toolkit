@@ -31,7 +31,11 @@ const REFUSALS = guiFixture("refusal-shapes.gui", "writer");
 const CARD_CENTER = { x: 60, y: 35 };
 const CARD_LINE = TEXT.split(/\r?\n/).findIndex((l) => l.includes('name = "px_card_positioned"'));
 
+/** Layouts the stub host has computed, so a commit can be shown to cost exactly one. */
+let layoutRuns = 0;
+
 function layoutOf(text: string) {
+  layoutRuns++;
   return computeGuiLayoutResult(text, null, null);
 }
 
@@ -70,6 +74,7 @@ beforeEach(() => {
   doc = "";
   docFile = "";
   served = 0;
+  layoutRuns = 0;
 });
 afterEach(() => editor.close());
 
@@ -503,5 +508,62 @@ describe("editing an inspector row", () => {
     expect(input.value).toBe("{ 5 5 }");
     expect(editor.toast()).toContain("places its children itself");
     expect(doc).toBe(REFUSALS);
+  });
+});
+
+describe("the commit round trip", () => {
+  /**
+   * The nudge budget (G3.4). What is timed is everything between the press and
+   * the redrawn canvas: the gesture-start guard check, the `setProperties` op,
+   * the edit applied to the document, the fresh layout, the scene rebuild and
+   * the tree and inspector that follow it. Only two costs of the real thing are
+   * missing and both are outside this repository's control: the postMessage
+   * hop, and VS Code applying the `WorkspaceEdit`.
+   *
+   * The Studio's lesson behind the number: a nudge that takes ~150 ms stops
+   * feeling like dragging a widget and starts feeling like submitting a form.
+   */
+  it("a nudge is ONE op, ONE layout of ONE document, inside the nudge budget", () => {
+    openDoc(TEXT, "templates-types.gui");
+    const taken: number[] = [];
+
+    // Three in a row, following the widget as it moves: the first pays for
+    // whatever the JIT has not warmed yet, and a nudge is something a user does
+    // repeatedly, so the median is the honest number.
+    for (let i = 0; i < 3; i++) {
+      const from = { x: CARD_CENTER.x + i * 40, y: CARD_CENTER.y + i * 20 };
+      const to = { x: from.x + 40, y: from.y + 20 };
+      const commits = editor.sent.filter((m) => m.type === "applyEdit").length;
+      layoutRuns = 0;
+
+      const t0 = performance.now();
+      editor.press(from.x, from.y);
+      serveEdits();
+      editor.move(to.x, to.y);
+      editor.up(to.x, to.y);
+      serveEdits();
+      taken.push(performance.now() - t0);
+
+      // One gesture is one op is one layout: the write path re-lays out the
+      // document it changed and nothing else, so the cost of a nudge does not
+      // grow with the number of .gui files around it.
+      expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(commits + 1);
+      expect(layoutRuns).toBe(1);
+      expect(doc).toContain(`position = { ${50 + i * 40} ${30 + i * 20} }`);
+    }
+    // The app never asks for a re-layout of its own after a commit; the host
+    // pushes the one it already computed.
+    expect(editor.sent.filter((m) => m.type === "requestLayout")).toHaveLength(0);
+
+    const sorted = [...taken].sort((a, b) => a - b);
+    console.log(`nudge round trip: ${taken.map((t) => `${t.toFixed(1)}ms`).join(", ")}`);
+
+    // Measured on the development machine: 3.7 / 2.7 / 2.5 ms for the three
+    // nudges above, against the ~150 ms that made the Studio's nudge feel like
+    // a form submission. The budget IS that target rather than the measurement
+    // plus headroom: the same gesture on the biggest window the game ships
+    // costs ~65 ms of host work (guiEditorPerf.test.ts measures it against the
+    // real file), and this budget is what says the two together stay under it.
+    expect(sorted[1]).toBeLessThan(150);
   });
 });
