@@ -89,6 +89,14 @@ export interface SceneItem {
   line?: number;
   /** True when `line` is this widget's own statement (safe to edit). */
   editable: boolean;
+  /**
+   * `position` / `size` as the ENGINE resolved them through the template and
+   * type chain, absent when the widget declares neither anywhere. These are the
+   * base an edit gesture adds its delta to (gesture.ts): the rect is where the
+   * engine put the widget, the source values are what a write can change.
+   */
+  srcPosition?: [number, number];
+  srcSize?: [number, number];
 }
 
 export interface SceneTextLine {
@@ -175,6 +183,8 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
       ghostBox: ghostBoxOf(node),
       line: node.line,
       editable: node.editable,
+      srcPosition: node.srcPosition,
+      srcSize: node.srcSize,
     });
     // A clipping widget clips its CHILDREN; its own fill is drawn against the
     // clip it inherited (the engine keeps true geometry and flags the clip,
@@ -184,6 +194,20 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
   };
   nodes.forEach((node, i) => visit(node, [i], undefined, false));
   return { items, count: items.length };
+}
+
+/**
+ * One past the last item of the widget's subtree. A parent is drawn immediately
+ * before its descendants and every descendant is deeper, so a subtree is one
+ * CONTIGUOUS slice of the draw list, which is what lets a drag preview move a
+ * widget and everything inside it with a single canvas translate.
+ */
+export function subtreeEnd(scene: Scene, index: number): number {
+  const depth = scene.items[index]?.depth;
+  if (depth === undefined) return index;
+  let end = index + 1;
+  while (end < scene.items.length && scene.items[end].depth > depth) end++;
+  return end;
 }
 
 function fillToken(fill: GuiLayoutFill | undefined): string | undefined {

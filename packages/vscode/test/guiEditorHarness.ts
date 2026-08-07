@@ -14,9 +14,11 @@
  *   so anything the app tries to do to the outside world shows up as a message
  *   the test can assert on.
  *
- * jsdom has no canvas and no layout engine, so exactly three things are stubbed
- * and they are all browser plumbing, never app behavior: a no-op 2d context, a
- * fixed viewport size, and `scrollIntoView`.
+ * jsdom has no canvas, no layout engine and no pointer capture, so a handful of
+ * things are stubbed and they are all browser plumbing, never app behavior: a
+ * no-op 2d context, a fixed viewport size, `scrollIntoView`, and the pointer
+ * capture calls a drag makes (the app guards those, so their absence changes
+ * nothing about what it commits).
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -50,19 +52,37 @@ export function appBundle(): string {
   return cachedBundle;
 }
 
+/** Modifier keys a click can carry. */
+export interface ClickModifiers {
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+}
+
 export interface EditorHarness {
   /** Everything the app has posted up, in order. */
   sent: AppToHost[];
   /** Push a host message down, the way a webview receives one. */
   push(message: HostToApp): void;
   /**
-   * Click at a point in WORLD (game) coordinates. `init` carries the modifiers:
-   * `{ altKey: true }` cycles, `{ ctrlKey: true, shiftKey: true }` reveals.
+   * Click at a point in WORLD (game) coordinates: press and release, like a
+   * mouse. `init` carries the modifiers: `{ altKey: true }` cycles,
+   * `{ ctrlKey: true, shiftKey: true }` reveals.
    */
-  click(x: number, y: number, init?: { altKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }): void;
+  click(x: number, y: number, init?: ClickModifiers): void;
+  /** Press the left button at a WORLD point, which selects and arms a gesture. */
+  press(x: number, y: number, init?: ClickModifiers): void;
+  /** Move the pointer to a WORLD point with the button still down. */
+  move(x: number, y: number): void;
+  /** Release at a WORLD point, committing whatever the gesture became. */
+  up(x: number, y: number): void;
   key(key: string): void;
   /** Visible text of one of the app's panels. */
   text(id: "tree" | "inspector" | "status"): string;
+  /** The toast currently up, or null when none is. */
+  toast(): string | null;
+  /** The inspector's editable input for a property row, or null when it has none. */
+  rowInput(key: string): HTMLInputElement | null;
   /** The tree row currently marked selected, or null. */
   selectedRow(): string | null;
   /** Every tree row's text, in order. */
@@ -101,29 +121,64 @@ export function bootEditor(): EditorHarness {
 
   const el = (id: string): HTMLElement => doc.getElementById(id)!;
 
+  /** A pointer event at a WORLD point, through the camera the app fitted with. */
+  const pointer = (type: string, x: number, y: number, init: ClickModifiers & { button?: number } = {}) => {
+    el("stage").dispatchEvent(
+      new win.PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        pointerId: 1,
+        clientX: x * zoom + panX,
+        clientY: y * zoom + panY,
+        ...init,
+      })
+    );
+  };
+
   return {
     sent,
     push(message) {
       win.dispatchEvent(new win.MessageEvent("message", { data: message }));
     },
     click(x, y, init = {}) {
-      const stage = el("stage");
-      stage.dispatchEvent(
-        new win.PointerEvent("pointerdown", {
-          bubbles: true,
-          button: 0,
-          pointerId: 1,
-          clientX: x * zoom + panX,
-          clientY: y * zoom + panY,
-          ...init,
-        })
-      );
+      pointer("pointerdown", x, y, init);
+      pointer("pointerup", x, y, init);
+    },
+    press(x, y, init = {}) {
+      pointer("pointerdown", x, y, init);
+    },
+    move(x, y) {
+      pointer("pointermove", x, y);
+    },
+    up(x, y) {
+      pointer("pointerup", x, y);
     },
     key(key) {
       win.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true }));
     },
     text(id) {
-      return el(id).textContent ?? "";
+      // What the panel SHOWS, which since G3.3 includes the inspector's input
+      // values; `textContent` alone cannot see those.
+      const parts: string[] = [];
+      const walk = (node: Node): void => {
+        if (node.nodeType === 3) parts.push(node.nodeValue ?? "");
+        else if ((node as HTMLElement).tagName === "INPUT") parts.push((node as HTMLInputElement).value);
+        else node.childNodes.forEach(walk);
+      };
+      walk(el(id));
+      return parts.join("");
+    },
+    toast() {
+      const toast = el("toast");
+      return toast.hasAttribute("hidden") ? null : (toast.textContent ?? "");
+    },
+    rowInput(key) {
+      for (const prop of doc.querySelectorAll("#inspector .prop")) {
+        if (prop.querySelector(".key")?.textContent !== key) continue;
+        return prop.querySelector("input.val");
+      }
+      return null;
     },
     selectedRow() {
       return el("tree").querySelector(".row.selected")?.textContent ?? null;
@@ -138,12 +193,9 @@ export function bootEditor(): EditorHarness {
   };
 }
 
-/** Read a fixture from the server's layout corpus. */
-export function guiFixture(name: string): string {
-  return fs.readFileSync(
-    path.join(PKG_ROOT, "..", "server", "test", "fixtures", "gui", "layout", name),
-    "utf8"
-  );
+/** Read a fixture from the server's gui corpus (`layout/` unless asked otherwise). */
+export function guiFixture(name: string, dir = "layout"): string {
+  return fs.readFileSync(path.join(PKG_ROOT, "..", "server", "test", "fixtures", "gui", dir, name), "utf8");
 }
 
 function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>): void {
@@ -177,4 +229,8 @@ function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>):
       toJSON: () => ({}),
     }) as DOMRect;
   win.Element.prototype.scrollIntoView = () => undefined;
+  // jsdom implements no pointer capture at all; the app calls it for every drag.
+  const noop = () => undefined;
+  (win.Element.prototype as unknown as Record<string, unknown>).setPointerCapture = noop;
+  (win.Element.prototype as unknown as Record<string, unknown>).releasePointerCapture = noop;
 }

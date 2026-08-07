@@ -9,6 +9,7 @@
  */
 import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeometry";
 import type { GuiLayoutFill } from "@px-lsp/protocol/protocol";
+import { handlePoints, HANDLE_SIZE } from "./gesture";
 import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
 
 export interface Camera {
@@ -219,15 +220,38 @@ function paintItem(
   ctx.restore();
 }
 
+/**
+ * A gesture in progress, drawn WITHOUT re-laying anything out: the dragged
+ * widget's subtree is painted through one extra translate and everything else
+ * stays where the engine put it.
+ *
+ * That is the whole preview, deliberately. A move really does translate the
+ * subtree (every placement rule under it is an additive offset), so this
+ * preview is exact. A resize does not: the children would reflow, and only the
+ * engine knows how, so a resize previews its own marquee and nothing else
+ * pretends to know what the inside will look like until the server answers.
+ */
+export interface DrawPreview {
+  /** Draw-list slice of the subtree, `[from, to)`. */
+  from: number;
+  to: number;
+  dx: number;
+  dy: number;
+}
+
 export interface DrawOptions {
   outlines: boolean;
   /** CSS font stack for widget text (the game font when the host supplied it). */
   fontFamily: string;
   /**
    * The selected widget's clickable rect, in world coordinates (the hit rect,
-   * so an unmeasurable widget is marked on the estimate box that is drawn).
+   * so an unmeasurable widget is marked on the estimate box that is drawn);
+   * during a gesture, the rect the gesture would commit.
    */
   selected?: SceneRect;
+  /** Draw resize handles on `selected` (a widget with a declaration to write to). */
+  handles?: boolean;
+  preview?: DrawPreview;
 }
 
 /**
@@ -247,6 +271,26 @@ function paintSelection(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: nu
   ctx.restore();
 }
 
+/**
+ * The eight resize grips, screen-sized at every zoom like the marquee. Drawn
+ * only on a widget with a declaration in this file: a grip on something that
+ * cannot be written to would promise an edit the writer refuses.
+ */
+function paintHandles(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: number): void {
+  const side = HANDLE_SIZE / zoom;
+  ctx.save();
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = SELECT_SHADOW;
+  ctx.fillStyle = SELECT_STROKE;
+  for (const point of handlePoints(rect)) {
+    const x = point.x - side / 2;
+    const y = point.y - side / 2;
+    ctx.fillRect(x, y, side, side);
+    ctx.strokeRect(x, y, side, side);
+  }
+  ctx.restore();
+}
+
 /** Repaint the whole canvas: viewport clear, world backdrop, then the scene. */
 export function drawScene(
   ctx: CanvasRenderingContext2D,
@@ -262,10 +306,23 @@ export function drawScene(
   ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.panX, camera.panY);
   ctx.fillStyle = WORLD_BG;
   ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-  for (const item of scene.items) {
-    paintItem(ctx, item, images, camera.zoom, options.outlines, options.fontFamily);
+  const preview = options.preview;
+  const shifted = preview && (preview.dx !== 0 || preview.dy !== 0);
+  for (let i = 0; i < scene.items.length; i++) {
+    const inPreview = preview !== undefined && i >= preview.from && i < preview.to;
+    if (shifted && inPreview) {
+      ctx.save();
+      ctx.translate(preview.dx, preview.dy);
+      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily);
+      ctx.restore();
+    } else {
+      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily);
+    }
   }
-  if (options.selected) paintSelection(ctx, options.selected, camera.zoom);
+  if (options.selected) {
+    paintSelection(ctx, options.selected, camera.zoom);
+    if (options.handles) paintHandles(ctx, options.selected, camera.zoom);
+  }
 }
 
 /** Drop the tint/cell caches: a fresh layout may re-color the same sprites. */

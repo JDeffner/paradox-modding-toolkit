@@ -90,7 +90,29 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #inspector .prop { display: flex; flex-direction: column; padding: 3px 8px; }
   #inspector .prop .line { display: flex; gap: 6px; justify-content: space-between; }
   #inspector .prop .val { font-family: var(--vscode-editor-font-family, monospace); overflow: hidden; text-overflow: ellipsis; }
+  #inspector .prop input.val {
+    flex: 1 1 auto; min-width: 0; text-align: right; padding: 0 3px; border-radius: 2px;
+    color: var(--vscode-input-foreground, inherit);
+    background: var(--vscode-input-background, transparent);
+    border: 1px solid transparent;
+  }
+  #inspector .prop input.val:hover { border-color: var(--vscode-panel-border, rgba(128,128,128,0.4)); }
+  #inspector .prop input.val:focus { border-color: var(--vscode-focusBorder, #007fd4); outline: none; }
   #inspector .prop .from { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+  #toast {
+    position: absolute; left: 10px; right: 10px; bottom: 10px;
+    padding: 7px 10px; border-radius: 3px; white-space: normal;
+    color: var(--vscode-notifications-foreground, var(--vscode-editor-foreground));
+    background: var(--vscode-notifications-background, #252526);
+    border: 1px solid var(--vscode-notifications-border, rgba(128,128,128,0.4));
+    border-left-width: 3px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    cursor: pointer;
+  }
+  #toast[hidden] { display: none; }
+  #toast.refused { border-left-color: var(--vscode-editorError-foreground, #f14c4c); }
+  #toast.warned { border-left-color: var(--vscode-editorWarning-foreground, #cca700); }
+  #toast.info { border-left-color: var(--vscode-editorInfo-foreground, #3794ff); }
   #status {
     flex: 0 0 auto; padding: 4px 8px; font-size: 0.9em;
     border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
@@ -113,7 +135,7 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   </div>
   <div id="main">
     <div id="tree"></div>
-    <div id="stage"><canvas id="canvas"></canvas></div>
+    <div id="stage"><canvas id="canvas"></canvas><div id="toast" hidden></div></div>
     <div id="inspector"></div>
   </div>
   <div id="status">Loading…</div>

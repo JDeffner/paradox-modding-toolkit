@@ -485,6 +485,48 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(refused.refused).toContain("places its children itself");
   });
 
+  it("open -> guiLayout -> guiSourceEdit: a drag commits base + delta and the layout moves by it", async () => {
+    // The GUI editor's whole write path over the wire, on an ANCHORED widget:
+    // the one shape where the rect and the `position` disagree, so a host that
+    // committed the canvas coordinate instead of base + delta fails here.
+    const uri = "file:///smoke_editor.gui";
+    const text =
+      'widget = {\n\tname = "smoke_editor_frame"\n\tsize = { 300 200 }\n\twidget = {\n\t\tname = "smoke_editor_child"\n\t\tparentanchor = bottom|right\n\t\tposition = { -30 -30 }\n\t\tsize = { 20 20 }\n\t}\n}\n';
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox-gui", version: 1, text },
+    });
+
+    const before = (await conn.sendRequest(guiLayoutRequest, {
+      uri,
+      text,
+    })) as import("@px-lsp/protocol/protocol").GuiLayoutResult;
+    const child = before.nodes[0].children[0];
+    expect(child.rect).toEqual({ x: 250, y: 150, w: 20, h: 20 });
+    expect(child.srcPosition).toEqual([-30, -30]);
+    expect(child.editable).toBe(true);
+
+    // Dragged 10 right and 5 down: source position plus the delta.
+    const result = (await conn.sendRequest(guiSourceEditRequest, {
+      uri,
+      text,
+      op: {
+        kind: "setProperties",
+        line: child.line!,
+        properties: [{ key: "position", value: "{ -20 -25 }" }],
+      },
+    })) as GuiSourceEditResult;
+    expect(result.refused).toBeUndefined();
+
+    const applied = applyEdits(text, result.edits!);
+    expect(applied).toBe(text.replace("position = { -30 -30 }", "position = { -20 -25 }"));
+
+    const after = (await conn.sendRequest(guiLayoutRequest, {
+      uri,
+      text: applied,
+    })) as import("@px-lsp/protocol/protocol").GuiLayoutResult;
+    expect(after.nodes[0].children[0].rect).toEqual({ x: 260, y: 155, w: 20, h: 20 });
+  });
+
   it("paradox/guiSourceEdit round-trips a block through blockText and insertRaw", async () => {
     const text =
       'window = {\n\tname = "smoke_paste_root"\n\t# the child\n\twidget = {\n\t\tname = "smoke_copy_me"\n\t}\n}\n';

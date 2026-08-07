@@ -3,10 +3,15 @@
  *
  * It implements messages.ts and does nothing the contract does not name: fetch
  * layout and widget info from the server, resolve textures to webview URLs,
- * push results down, reveal a line in the text editor. The document is the
- * source of truth and stays the editor's — the host re-requests layout on every
- * change (debounced) and on save, so the canvas follows typing, formatters and
- * reverts alike.
+ * push results down, reveal a line in the text editor, and turn an edit gesture
+ * into a `WorkspaceEdit`. The document is the source of truth and stays the
+ * editor's: the host re-requests layout on every change (debounced) and on
+ * save, so the canvas follows typing, formatters, undo and reverts alike.
+ *
+ * The write path is deliberately thin: the SERVER decides what a gesture means
+ * (`paradox/guiSourceEdit` returns edits or a refusal), the host only applies
+ * the offsets it is handed. One gesture is one op is one `WorkspaceEdit`, which
+ * is what makes VS Code's own undo the editor's undo.
  *
  * The webview loads dist/webview/guiEditor.js under the house nonce CSP: the
  * app is a real bundle, not a serialized function, because an editor does not
@@ -15,13 +20,23 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
-import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp } from "./messages";
+import type {
+  GuiLayoutResult,
+  GuiSourceEditResult,
+  GuiSourceOp,
+  GuiWidgetInfo,
+} from "@px-lsp/protocol/protocol";
+import { LAYOUT_DEBOUNCE_MS, type AppToHost, type EditProperty, type HostToApp } from "./messages";
 import { guiEditorHtml } from "./html";
 import { GuiTextureCache, type TextureRoots } from "./textureCache";
 
 export type FetchLayout = (uri: vscode.Uri, text: string) => Promise<GuiLayoutResult>;
 export type FetchWidgetInfo = (uri: vscode.Uri, text: string, line: number) => Promise<GuiWidgetInfo | null>;
+export type FetchSourceEdit = (
+  uri: vscode.Uri,
+  text: string,
+  op: GuiSourceOp
+) => Promise<GuiSourceEditResult | null>;
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -30,6 +45,7 @@ export class GuiEditorPanel {
   private readonly panel: vscode.WebviewPanel;
   private readonly fetchLayout: FetchLayout;
   private readonly fetchWidgetInfo: FetchWidgetInfo;
+  private readonly fetchSourceEdit: FetchSourceEdit;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
   private disposables: vscode.Disposable[] = [];
@@ -42,11 +58,13 @@ export class GuiEditorPanel {
     context: vscode.ExtensionContext,
     fetchLayout: FetchLayout,
     fetchWidgetInfo: FetchWidgetInfo,
+    fetchSourceEdit: FetchSourceEdit,
     source: vscode.TextDocument,
     roots: TextureRoots
   ) {
     this.fetchLayout = fetchLayout;
     this.fetchWidgetInfo = fetchWidgetInfo;
+    this.fetchSourceEdit = fetchSourceEdit;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
     this.textures = new GuiTextureCache(this.storageDir, roots);
@@ -101,6 +119,7 @@ export class GuiEditorPanel {
     context: vscode.ExtensionContext,
     fetchLayout: FetchLayout,
     fetchWidgetInfo: FetchWidgetInfo,
+    fetchSourceEdit: FetchSourceEdit,
     source: vscode.TextDocument,
     roots: TextureRoots
   ): void {
@@ -117,7 +136,14 @@ export class GuiEditorPanel {
       void existing.load(source);
       return;
     }
-    GuiEditorPanel.instance = new GuiEditorPanel(context, fetchLayout, fetchWidgetInfo, source, roots);
+    GuiEditorPanel.instance = new GuiEditorPanel(
+      context,
+      fetchLayout,
+      fetchWidgetInfo,
+      fetchSourceEdit,
+      source,
+      roots
+    );
   }
 
   private dispose(): void {
@@ -156,6 +182,58 @@ export class GuiEditorPanel {
     }
   }
 
+  /**
+   * One `setProperties` op against the document's current text. The server
+   * decides everything: which bytes change, whether the gesture is refused and
+   * with what words. The version is captured with the text the offsets were
+   * computed from, so a stale batch can be recognised instead of applied.
+   */
+  private async sourceEdit(
+    line: number,
+    properties: readonly EditProperty[]
+  ): Promise<{ doc: vscode.TextDocument; version: number; result: GuiSourceEditResult }> {
+    const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+    const version = doc.version;
+    const op: GuiSourceOp = {
+      kind: "setProperties",
+      line,
+      properties: properties.map((p) => ({ key: p.key, value: p.value })),
+    };
+    try {
+      const result = await this.fetchSourceEdit(doc.uri, doc.getText(), op);
+      return { doc, version, result: result ?? { refused: "the server had no answer for that edit." } };
+    } catch (err) {
+      return {
+        doc,
+        version,
+        result: { refused: err instanceof Error ? err.message : String(err) },
+      };
+    }
+  }
+
+  /**
+   * The server's offsets applied as ONE `WorkspaceEdit`: one undo step for one
+   * gesture, in the document's own history, which is why this editor has no
+   * undo stack of its own. Returns the reason it did not happen, or undefined.
+   */
+  private async applyEdits(
+    doc: vscode.TextDocument,
+    version: number,
+    edits: readonly { start: number; end: number; newText: string }[]
+  ): Promise<string | undefined> {
+    if (doc.version !== version) {
+      return "the document changed while that edit was being computed, so its offsets no longer point where they did.";
+    }
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    for (const edit of edits) {
+      const range = new vscode.Range(doc.positionAt(edit.start), doc.positionAt(edit.end));
+      workspaceEdit.replace(doc.uri, range, edit.newText);
+    }
+    return (await vscode.workspace.applyEdit(workspaceEdit))
+      ? undefined
+      : "the editor did not apply that edit.";
+  }
+
   private post(message: HostToApp): void {
     if (this.disposed) return;
     void this.panel.webview.postMessage(message);
@@ -179,6 +257,47 @@ export class GuiEditorPanel {
           // A failed inspector read is not worth an error banner over the
           // canvas: the app shows the selection with no rows.
           this.post({ type: "widgetInfo", line, info: null });
+        }
+        return;
+      }
+      case "checkEdit": {
+        // A gesture-start check. Whatever the server returns, the edits are
+        // thrown away: the point of asking early is that the answer arrives
+        // before anything moves, and a check that wrote would be a bug the
+        // user could only discover through undo.
+        const { result } = await this.sourceEdit(message.line, message.properties);
+        this.post({ type: "editVerdict", id: message.id, refused: result.refused, warning: result.warning });
+        return;
+      }
+      case "applyEdit": {
+        const attempt = await this.sourceEdit(message.line, message.properties);
+        const { refused, warning, edits } = attempt.result;
+        if (refused || !edits || edits.length === 0) {
+          // No edits and no refusal is the writer saying the bytes it would
+          // write are already there. Nothing happened, so the app hears it as
+          // a refusal rather than waiting for a layout that will not come.
+          this.post({
+            type: "editVerdict",
+            id: message.id,
+            refused: refused ?? "that edit changes nothing: the file already says exactly that.",
+            warning,
+          });
+          return;
+        }
+        const failure = await this.applyEdits(attempt.doc, attempt.version, edits);
+        this.post({
+          type: "editVerdict",
+          id: message.id,
+          refused: failure,
+          warning: failure ? undefined : warning,
+        });
+        if (!failure) {
+          // Our own single write, not a burst of typing: the debounce exists to
+          // coalesce keystrokes and there is nothing here to coalesce. Skipping
+          // it is what keeps a released drag from hanging on its preview.
+          if (this.debounce) clearTimeout(this.debounce);
+          this.debounce = undefined;
+          await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
         }
         return;
       }
