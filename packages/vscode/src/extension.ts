@@ -8,8 +8,11 @@ import * as vscode from "vscode";
 import * as os from "os";
 import * as path from "path";
 import {
+  CloseAction,
   LanguageClient,
+  State,
   TransportKind,
+  type ErrorHandler,
   type LanguageClientOptions,
   type ServerOptions,
 } from "vscode-languageclient/node";
@@ -112,6 +115,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
     diagnosticsVanilla: c.diagnosticsVanilla,
+    tracePerf: c.tracePerf,
   };
 }
 
@@ -255,7 +259,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     client: { hoverHtml: true, commands: allClientCommandIds, ownFileWatcher: true },
     settings: toSettings(cfg),
   };
+  // Server deaths were invisible: the client restarts silently up to five
+  // times and then stops, leaving every LSP-backed feature dead while TextMate
+  // highlighting keeps working. Log both halves (error and close) and delegate
+  // the actual decision to the default handler, so behaviour is unchanged.
+  let defaultErrorHandler: ErrorHandler | undefined;
+  const fallback = (): ErrorHandler => (defaultErrorHandler ??= lc.createDefaultErrorHandler());
+  const errorHandler: ErrorHandler = {
+    error: (error, message, count) => {
+      log(
+        `language server error (#${count ?? 1}): ${error.message}${message ? ` on ${message.jsonrpc}` : ""}`
+      );
+      return fallback().error(error, message, count);
+    },
+    closed: async () => {
+      const result = await fallback().closed();
+      log(
+        `language server connection closed (the server process exited); ` +
+          `action=${CloseAction[result.action]}`
+      );
+      return result;
+    },
+  };
   const clientOptions: LanguageClientOptions = {
+    errorHandler,
     documentSelector: [
       { language: "paradox", scheme: "file" },
       { language: "paradox-loc", scheme: "file" },
@@ -286,6 +313,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   const lc = new LanguageClient("px", "Paradox Toolkit", serverOptions, clientOptions);
   client = lc;
+  // Every start/stop transition is logged, so a restart loop is visible in the
+  // output channel next to the server's own FATAL line.
+  lc.onDidChangeState((e) => log(`language server: ${State[e.oldState]} -> ${State[e.newState]}`));
 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
     lastServerStatus = payload;

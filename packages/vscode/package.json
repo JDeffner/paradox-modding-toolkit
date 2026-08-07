@@ -598,6 +598,12 @@
             "default": "off",
             "order": 3,
             "markdownDescription": "Trace the communication between VS Code and the CK3 language server (for debugging / bug reports)."
+          },
+          "px.trace.perf": {
+            "type": "boolean",
+            "default": false,
+            "order": 4,
+            "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
           }
         }
       }

@@ -43,6 +43,8 @@ export interface PxConfig {
   diagnosticsIgnorePatterns: string[];
   /** When false (default) tiger/our diagnostics skip files under the game path. */
   diagnosticsVanilla: boolean;
+  /** `px.trace.perf`: server-side wall clock into the output channel. */
+  tracePerf: boolean;
   /** True when this workspace actually holds content of the ACTIVE game (a mod
    * or a game install) and the extension is enabled — the gate for all visible
    * UI (status bar, sidebar views, palette commands). Despite the legacy name
@@ -257,6 +259,7 @@ export function readConfig(): PxConfig {
     diagnosticsIgnore: sanitizeStringList(cfg.get("diagnostics.ignore")),
     diagnosticsIgnorePatterns: sanitizeStringList(cfg.get("diagnostics.ignorePatterns")),
     diagnosticsVanilla: cfg.get<boolean>("diagnostics.vanilla") ?? false,
+    tracePerf: cfg.get<boolean>("trace.perf") ?? false,
     isCk3Workspace,
     warnings,
   };

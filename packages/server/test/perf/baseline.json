@@ -1,0 +1,61 @@
+{
+  "recordedAt": "2026-08-07",
+  "machine": {
+    "platform": "win32 10.0.19045",
+    "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cores": 16,
+    "totalMemGb": 32,
+    "node": "v24.12.0"
+  },
+  "note": "Recorded by `PX_PERF_BENCH=1 npx vitest run packages/server/test/perfBench.test.ts`. Extra roots are directory junctions, not copies; the edited file is always a synthetic mod. Wall clock varies with disk cache and interactive load, so the budgets carry headroom.",
+  "recipes": {
+    "recipe1-vanilla-x3-plus-20-mods": {
+      "recipe": "recipe1-vanilla-x3-plus-20-mods",
+      "roots": 24,
+      "definitions": 1858912,
+      "timeToIndexedMs": 21532,
+      "indexHeapMb": 1392,
+      "indexRssMb": 2245,
+      "duringIndexing": {
+        "completionP95": 1089,
+        "tokensP95": 336,
+        "worstMs": 1547,
+        "samples": 22
+      },
+      "saveRoundTripMs": {
+        "p50": 144,
+        "p95": 183,
+        "max": 183,
+        "samples": 5
+      },
+      "refreshes": {
+        "indexing": 16,
+        "perSave": 2
+      }
+    },
+    "recipe2-game-plus-agot-x2": {
+      "recipe": "recipe2-game-plus-agot-x2",
+      "roots": 4,
+      "definitions": 1358756,
+      "timeToIndexedMs": 580749,
+      "indexHeapMb": 3161,
+      "indexRssMb": 3804,
+      "duringIndexing": {
+        "completionP95": 89597,
+        "tokensP95": 1123,
+        "worstMs": 90272,
+        "samples": 25
+      },
+      "saveRoundTripMs": {
+        "p50": 731,
+        "p95": 1275,
+        "max": 1275,
+        "samples": 5
+      },
+      "refreshes": {
+        "indexing": 10,
+        "perSave": 2
+      }
+    }
+  }
+}

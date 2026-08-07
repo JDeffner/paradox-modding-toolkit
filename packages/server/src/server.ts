@@ -139,6 +139,55 @@ import { wordRangeAt } from "./wordAt";
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
+// ---- crash visibility (perf campaign §A1) -----------------------------------
+
+/**
+ * A throw on the scan path used to kill this process silently: the client
+ * restarts it five times and then everything LSP-backed is dead for the rest
+ * of the session while TextMate highlighting keeps working — the "only syntax
+ * highlighting works" field reports. Both handlers log through the connection
+ * AND raw stderr (the client pipes the server's stderr into the same output
+ * channel), so a death leaves a stack behind instead of silence.
+ */
+function logFatal(what: string, err: unknown): void {
+  const detail = err instanceof Error ? (err.stack ?? `${err.name}: ${err.message}`) : String(err);
+  const line = `FATAL ${what}: ${detail}`;
+  try {
+    connection.console.error(line);
+  } catch {
+    // connection already torn down; stderr below still reaches the channel
+  }
+  try {
+    process.stderr.write(`[px-lsp] ${line}\n`);
+  } catch {
+    /* nothing left to log to */
+  }
+}
+
+process.on("unhandledRejection", (reason) => logFatal("unhandledRejection", reason));
+process.on("uncaughtException", (err) => {
+  logFatal("uncaughtException", err);
+  // The process still dies (the client's restart logic stays the recovery
+  // path); the delay only gives the log line time to reach the client.
+  setTimeout(() => process.exit(1), 250);
+});
+
+/**
+ * Fault injection for the crash-visibility test (§A1), read once at startup:
+ * "sync" throws inside a folder scan, "async" throws from a timer during one
+ * (the process-killing shape). Unset in every real client.
+ */
+const faultScan = process.env.PX_FAULT_SCAN ?? "";
+
+function injectScanFault(): void {
+  const err = new Error(`px fault injection: scan throw (PX_FAULT_SCAN=${faultScan})`);
+  if (faultScan === "async")
+    setImmediate(() => {
+      throw err;
+    });
+  else throw err;
+}
+
 function defaultSettings(): ParadoxSettings {
   return {
     gamePath: null,
@@ -151,6 +200,7 @@ function defaultSettings(): ParadoxSettings {
     diagnosticsIgnore: [],
     diagnosticsIgnorePatterns: [],
     diagnosticsVanilla: false,
+    tracePerf: false,
   };
 }
 let settings: ParadoxSettings = defaultSettings();
@@ -293,6 +343,41 @@ function log(msg: string): void {
   connection.console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
+// ---- perf tracing (§A2) ------------------------------------------------------
+
+/** `px.trace.perf`: wall clock for requests, rescans, index changes and scan
+ * phases into the output channel, so a slow save yields a ms timeline. */
+function perfOn(): boolean {
+  return settings.tracePerf === true;
+}
+
+function perf(msg: string): void {
+  if (perfOn()) log(`perf ${msg}`);
+}
+
+/** Time `fn` and trace `<label> <ms>`; a no-op wrapper when tracing is off. */
+function perfSpan<T>(label: string, fn: () => T): T {
+  if (!perfOn()) return fn();
+  const t0 = performance.now();
+  try {
+    return fn();
+  } finally {
+    log(`perf ${label} ${(performance.now() - t0).toFixed(1)}ms`);
+  }
+}
+
+/** Filename for trace labels, without paying path.basename when tracing is off. */
+function perfName(uriOrPath: string): string {
+  return perfOn()
+    ? uriOrPath.slice(Math.max(uriOrPath.lastIndexOf("/"), uriOrPath.lastIndexOf("\\")) + 1)
+    : "";
+}
+
+/** Every index-change fan-out goes through here so the trace attributes it. */
+function indexChanged(phase: string): void {
+  perfSpan(`indexChanged (${phase})`, () => data.notifyIndexChanged());
+}
+
 // ---- status / refresh plumbing ---------------------------------------------
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -300,10 +385,13 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let lastLoggedStatus = "";
 
 function sendStatus(): void {
+  // stats() walks every definition in the index; it runs on every index change,
+  // so its own cost is part of the trace (§A2).
+  const total = perfSpan("sendStatus stats()", () => data.index.stats().total);
   const payload: StatusPayload = {
     tokens: data.tokens.length,
     tokensFromScriptDocs,
-    definitions: data.index.stats().total,
+    definitions: total,
     indexing,
   };
   void connection.sendNotification(statusNotification, payload);
@@ -325,6 +413,7 @@ data.onDidChange(() => {
   // Debounce editor refreshes and the index-changed signal: scans fire many changes.
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
+    perf(`refresh fired (semanticTokens + inlayHint, indexing=${indexing})`);
     void connection.sendNotification(indexChangedNotification);
     connection.languages.semanticTokens.refresh().catch(() => {});
     connection.languages.inlayHint.refresh().catch(() => {});
@@ -468,6 +557,8 @@ async function scanRootChunked(
   generation: number,
   onProgress?: (percent: number, message: string) => void
 ): Promise<Definition[] | null> {
+  if (faultScan) injectScanFault();
+  const tList = Date.now();
   const defs: Definition[] = [];
   const work: Array<{ entry: SchemaData["entries"][number]; files: string[] }> = [];
   let totalFiles = 0;
@@ -480,6 +571,8 @@ async function scanRootChunked(
     work.push({ entry, files });
     totalFiles += files.length;
   }
+  perf(`scan ${path.basename(root)} listed ${totalFiles} files ${Date.now() - tList}ms`);
+  const tRead = Date.now();
   let done = 0;
   const BATCH = 150;
   for (const { entry, files } of work) {
@@ -495,6 +588,10 @@ async function scanRootChunked(
       await yieldNow();
     }
   }
+  perf(
+    `scan ${path.basename(root)} (${source}) read+extract ${defs.length} defs ` +
+      `from ${totalFiles} files ${Date.now() - tRead}ms`
+  );
   return defs;
 }
 
@@ -564,6 +661,7 @@ function readPlayset(modPath: string): string[] {
 }
 
 async function buildIndex(): Promise<void> {
+  const tBuild = Date.now();
   const generation = ++scanGeneration;
   playsetCache.clear();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
@@ -589,7 +687,7 @@ async function buildIndex(): Promise<void> {
       if (defs === null) return;
       data.index.addAll(defs);
       if (!(await scanModReferences(settings.modPath, "mod", generation))) return;
-      data.notifyIndexChanged();
+      indexChanged("mod scan");
       log(`indexed mod: ${defs.length} definitions (${Date.now() - t0}ms)`);
     }
 
@@ -606,7 +704,7 @@ async function buildIndex(): Promise<void> {
       if (isWorkspaceMod) {
         if (!(await scanModReferences(parent, "mod", generation))) return;
       }
-      data.notifyIndexChanged();
+      indexChanged(`parent scan ${path.basename(parent)}`);
       log(
         `indexed ${isWorkspaceMod ? "workspace mod" : "parent mod"} ${path.basename(parent)}: ` +
           `${parentDefs.length} definitions (${Date.now() - t1}ms)`
@@ -659,14 +757,34 @@ async function buildIndex(): Promise<void> {
       }
       if (generation !== scanGeneration) return;
       data.index.addAll(defs);
-      data.notifyIndexChanged();
+      indexChanged("vanilla scan");
     }
   } finally {
     if (generation === scanGeneration) {
       indexing = false;
       sendStatus();
+      if (perfOn()) {
+        // Post-GC only when the server was started with --expose-gc (the bench
+        // harness does; a normal client does not, and reads a live-heap number).
+        const gc = (globalThis as { gc?: () => void }).gc;
+        gc?.();
+        const mem = process.memoryUsage();
+        perf(
+          `index built: ${data.index.stats().total} definitions, ` +
+            `heap ${(mem.heapUsed / 1048576).toFixed(0)} MB${gc ? " (post-gc)" : ""}, ` +
+            `rss ${(mem.rss / 1048576).toFixed(0)} MB, ${Date.now() - tBuild}ms`
+        );
+      }
     }
   }
+}
+
+/** Fire-and-forget index build whose failure is logged and attributable (§A1):
+ * a throw here used to leave the server alive with an empty index, or dead. */
+function startIndexBuild(reason: string): void {
+  void buildIndex().catch((err) => {
+    logFatal(`index build failed (${reason})`, err);
+  });
 }
 
 function rescanModFile(fsPath: string): void {
@@ -683,6 +801,7 @@ function rescanModFile(fsPath: string): void {
   if (entry?.kind === "loc_key" && !isWantedLocFile(path.relative(root, fsPath), settings.locLanguage))
     return;
 
+  const tParse = Date.now();
   data.index.removeFile(fsPath);
   const content = fs.existsSync(fsPath) ? readFileStripBom(fsPath) : null;
 
@@ -703,7 +822,8 @@ function rescanModFile(fsPath: string): void {
     }
     rebuildModNamespaces();
   }
-  data.notifyIndexChanged();
+  perf(`rescan ${path.basename(fsPath)} parse+extract ${Date.now() - tParse}ms`);
+  indexChanged(`rescan ${path.basename(fsPath)}`);
   log(`re-indexed ${path.basename(fsPath)}`);
 }
 
@@ -815,7 +935,7 @@ connection.onInitialized(() => {
   completion.setFreqs(loadFreqs(freqsDir));
   completion.setSettings(settings);
   loadDocs(false);
-  void buildIndex();
+  startIndexBuild("startup");
 });
 
 connection.onDidChangeWatchedFiles((params) => {
@@ -854,7 +974,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
   if (pathsChanged) {
     log("paths changed; rebuilding data...");
     loadDocs(false);
-    void buildIndex();
+    startIndexBuild("paths changed");
   }
   // Re-validate open documents so suppression/vanilla changes apply immediately.
   if (diagChanged || pathsChanged) {
@@ -863,6 +983,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
 });
 
 function handleModFileChange(fsPath: string): void {
+  perf(`modFileChanged ${path.basename(fsPath)}`);
   rescanModFile(fsPath);
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
@@ -976,98 +1097,104 @@ connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[]
 
 // ---- language features ----------------------------------------------------------
 
-connection.onCompletion((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  if (!doc) return [];
-  if (doc.languageId === "paradox-gui") {
-    const result = provideGuiCompletion(data, doc, doc.offsetAt(params.position), settings);
+connection.onCompletion((params) =>
+  perfSpan(`completion ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    if (doc.languageId === "paradox-gui") {
+      const result = provideGuiCompletion(data, doc, doc.offsetAt(params.position), settings);
+      return { isIncomplete: result.isIncomplete, items: result.items };
+    }
+    if (doc.languageId === "paradox-loc") {
+      // Loc lines complete inside [ ... ] datafunction expressions and #tag formats.
+      const linePrefix = doc.getText({
+        start: { line: params.position.line, character: 0 },
+        end: params.position,
+      });
+      const result =
+        provideDataFnCompletion(data.dataTypes, data.dataFnUsage, linePrefix, data.index, params.position) ??
+        provideFormatTagCompletion(data.textFormatting, linePrefix);
+      return result ? { isIncomplete: result.isIncomplete, items: result.items } : [];
+    }
+    if (doc.languageId !== "paradox") return [];
+    const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+    const result = completion.provide(
+      doc,
+      doc.offsetAt(params.position),
+      entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
+      entry
+    );
     return { isIncomplete: result.isIncomplete, items: result.items };
-  }
-  if (doc.languageId === "paradox-loc") {
-    // Loc lines complete inside [ ... ] datafunction expressions and #tag formats.
-    const linePrefix = doc.getText({
-      start: { line: params.position.line, character: 0 },
-      end: params.position,
-    });
-    const result =
-      provideDataFnCompletion(data.dataTypes, data.dataFnUsage, linePrefix, data.index, params.position) ??
-      provideFormatTagCompletion(data.textFormatting, linePrefix);
-    return result ? { isIncomplete: result.isIncomplete, items: result.items } : [];
-  }
-  if (doc.languageId !== "paradox") return [];
-  const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
-  const result = completion.provide(
-    doc,
-    doc.offsetAt(params.position),
-    entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
-    entry
-  );
-  return { isIncomplete: result.isIncomplete, items: result.items };
-});
+  })
+);
 
 connection.onCompletionResolve((item) => completion.resolve(item));
 
-connection.onHover((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  if (!doc) return null;
-  if (doc.languageId === "paradox-gui") {
-    const texture = provideTextureHover(settings, doc, params.position);
+connection.onHover((params) =>
+  perfSpan(`hover ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+    if (doc.languageId === "paradox-gui") {
+      const texture = provideTextureHover(settings, doc, params.position);
+      if (texture) return texture;
+      return provideGuiHover(data, doc, params.position, guiPaths());
+    }
+    if (doc.languageId === "paradox-loc") {
+      const lineText = doc.getText({
+        start: { line: params.position.line, character: 0 },
+        end: { line: params.position.line + 1, character: 0 },
+      });
+      const flat = lineText.replace(/\r?\n$/, "");
+      const dataFn =
+        provideDataFnHover(
+          data.dataTypes,
+          data.dataFnUsage,
+          flat,
+          params.position.character,
+          settings.gamePath
+        ) ?? provideFormatTagHover(data.textFormatting, flat, params.position.character);
+      if (!dataFn) return null;
+      return {
+        contents: { kind: MarkupKind.Markdown, value: dataFn.markdown },
+        range: {
+          start: { line: params.position.line, character: dataFn.start },
+          end: { line: params.position.line, character: dataFn.end },
+        },
+      };
+    }
+    if (doc.languageId !== "paradox") return null;
+    const fsPath = URI.parse(doc.uri).fsPath;
+    const entry = schemaEntryForFile(fsPath);
+    const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
     if (texture) return texture;
-    return provideGuiHover(data, doc, params.position, guiPaths());
-  }
-  if (doc.languageId === "paradox-loc") {
-    const lineText = doc.getText({
-      start: { line: params.position.line, character: 0 },
-      end: { line: params.position.line + 1, character: 0 },
-    });
-    const flat = lineText.replace(/\r?\n$/, "");
-    const dataFn =
-      provideDataFnHover(
-        data.dataTypes,
-        data.dataFnUsage,
-        flat,
-        params.position.character,
-        settings.gamePath
-      ) ?? provideFormatTagHover(data.textFormatting, flat, params.position.character);
-    if (!dataFn) return null;
-    return {
-      contents: { kind: MarkupKind.Markdown, value: dataFn.markdown },
-      range: {
-        start: { line: params.position.line, character: dataFn.start },
-        end: { line: params.position.line, character: dataFn.end },
-      },
-    };
-  }
-  if (doc.languageId !== "paradox") return null;
-  const fsPath = URI.parse(doc.uri).fsPath;
-  const entry = schemaEntryForFile(fsPath);
-  const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
-  if (texture) return texture;
-  return provideHover(
-    data,
-    doc,
-    params.position,
-    entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
-    entry,
-    () => schema
-  );
-});
+    return provideHover(
+      data,
+      doc,
+      params.position,
+      entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
+      entry,
+      () => schema
+    );
+  })
+);
 
-connection.onDefinition((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  if (!doc) return [];
-  // Loc files: navigate [ ... ] datafunction names (custom loc, saved scopes).
-  // Plain loc-key jumps stay with the client-side script-usage provider.
-  if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position);
-  if (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui") return [];
-  if (doc.languageId === "paradox-gui") {
-    // Types, templates and blockoverride targets resolve through the FIOS
-    // store first (what the game actually uses); loc keys etc. fall through.
-    const gui = provideGuiDefinition(doc, params.position, guiPaths());
-    if (gui) return gui;
-  }
-  return provideDefinition(data, doc, params.position);
-});
+connection.onDefinition((params) =>
+  perfSpan(`definition ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    // Loc files: navigate [ ... ] datafunction names (custom loc, saved scopes).
+    // Plain loc-key jumps stay with the client-side script-usage provider.
+    if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position);
+    if (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui") return [];
+    if (doc.languageId === "paradox-gui") {
+      // Types, templates and blockoverride targets resolve through the FIOS
+      // store first (what the game actually uses); loc keys etc. fall through.
+      const gui = provideGuiDefinition(doc, params.position, guiPaths());
+      if (gui) return gui;
+    }
+    return provideDefinition(data, doc, params.position);
+  })
+);
 
 connection.onSignatureHelp((params) => {
   const doc = documents.get(params.textDocument.uri);
@@ -1090,30 +1217,38 @@ connection.onCodeAction((params) => {
   });
 });
 
-connection.languages.inlayHint.on((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  if (!doc) return [];
-  const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
-  const rootScopes = entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null;
-  return provideInlayHints(data, settings, doc, params.range, rootScopes, entry);
-});
+connection.languages.inlayHint.on((params) =>
+  perfSpan(`inlayHint ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+    const rootScopes = entry?.rootScopes?.length
+      ? new Set(entry.rootScopes.map((s) => s.toLowerCase()))
+      : null;
+    return provideInlayHints(data, settings, doc, params.range, rootScopes, entry);
+  })
+);
 
-connection.languages.semanticTokens.on((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  // gui files benefit too: template/type names classify via the index.
-  if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui")) return { data: [] };
-  const entry = doc.languageId === "paradox" ? schemaEntryForFile(URI.parse(doc.uri).fsPath) : null;
-  return provideSemanticTokens(data, doc, schema.refFields, entry, schema.structures);
-});
+connection.languages.semanticTokens.on((params) =>
+  perfSpan(`semanticTokens ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    // gui files benefit too: template/type names classify via the index.
+    if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui")) return { data: [] };
+    const entry = doc.languageId === "paradox" ? schemaEntryForFile(URI.parse(doc.uri).fsPath) : null;
+    return provideSemanticTokens(data, doc, schema.refFields, entry, schema.structures);
+  })
+);
 
-connection.onReferences((params) => {
-  const doc = documents.get(params.textDocument.uri);
-  // Loc files too: references on a loc key line list its script usage sites.
-  if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-loc")) return [];
-  return provideReferences(data, doc, params.position, params.context.includeDeclaration, (name) =>
-    lazyRefs.lookup(name)
-  );
-});
+connection.onReferences((params) =>
+  perfSpan(`references ${perfName(params.textDocument.uri)}`, () => {
+    const doc = documents.get(params.textDocument.uri);
+    // Loc files too: references on a loc key line list its script usage sites.
+    if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-loc")) return [];
+    return provideReferences(data, doc, params.position, params.context.includeDeclaration, (name) =>
+      lazyRefs.lookup(name)
+    );
+  })
+);
 
 connection.onPrepareRename((params) => {
   const doc = documents.get(params.textDocument.uri);
@@ -1184,6 +1319,10 @@ function relForPatterns(fsPath: string): string {
 }
 
 function validateDocument(doc: TextDocument): void {
+  perfSpan(`validate ${perfName(doc.uri)}`, () => validateDocumentNow(doc));
+}
+
+function validateDocumentNow(doc: TextDocument): void {
   const fsPath = URI.parse(doc.uri).fsPath;
   const ctx: FileContext = {
     fsPath,
@@ -1275,6 +1414,7 @@ documents.onDidChangeContent((e) => {
 });
 
 documents.onDidSave((e) => {
+  perf(`didSave ${perfName(e.document.uri)}`);
   bomByUri.set(e.document.uri, readBomFromDisk(e.document.uri));
   validateDocument(e.document);
 });

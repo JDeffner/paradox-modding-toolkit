@@ -35,6 +35,16 @@
   dashed estimate box and counted in the status line, because the engine invents
   no pixels and the canvas should not pretend it did. Creation, deletion,
   multi-select, layers and guides are not in this version.
+- **`px.trace.perf`**: wall clock for every request, file rescan, index change
+  and indexing phase in the *Paradox Toolkit* output channel, so a slow save or
+  a slow completion can be reported as a millisecond timeline instead of a
+  feeling. Off by default.
+- **A dying language server now says so.** An unhandled error inside the server
+  logs a `FATAL` line with its stack to the output channel before the process
+  goes down, an index build that fails is logged with the phase that failed, and
+  the client logs every server start, stop and restart with the restart decision
+  it took. A scan that died used to leave a silent half-dead session in which
+  only syntax highlighting still worked.
 - **Simulate Event** (command palette, or right-click in a script file) opens a
   static walkthrough of an event: its blocks laid out in firing order (trigger,
   immediate, every option, after), the title, description and option names

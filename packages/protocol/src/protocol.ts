@@ -36,6 +36,9 @@ export interface ParadoxSettings {
   diagnosticsIgnorePatterns: string[];
   /** When false (default) mod-only: never diagnose files under the game path. */
   diagnosticsVanilla: boolean;
+  /** `px.trace.perf`: wall clock for every request, rescan, index change and
+   * scan phase into the output channel. Off by default (perf campaign §A2). */
+  tracePerf?: boolean;
 }
 
 /**
