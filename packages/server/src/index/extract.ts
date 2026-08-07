@@ -9,6 +9,7 @@ import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import { LineIndex, parseLoc, parseScript, walkStatements, type Statement } from "../parser";
 import { docForDefinition } from "./docComments";
+import { shareDefinitionStrings } from "./intern";
 import { activeProfile } from "../games/active";
 
 /** Max loc value length kept in memory; the edit flow re-reads the yml from disk. */
@@ -191,7 +192,9 @@ export function extractDefinitions(
       break;
     }
   }
-  return defs;
+  // Every string above is a slice of `content` and would pin the whole file for
+  // as long as the index holds the definition (§C2).
+  return shareDefinitionStrings(defs);
 }
 
 export function extractLocDefinitions(content: string, file: string, source: DefSource): Definition[] {
@@ -201,5 +204,5 @@ export function extractLocDefinitions(content: string, file: string, source: Def
     if (value.length > LOC_VALUE_LIMIT) value = value.slice(0, LOC_VALUE_LIMIT);
     defs.push({ name: entry.key, kind: "loc_key", file, line: entry.line, source, value });
   }
-  return defs;
+  return shareDefinitionStrings(defs);
 }

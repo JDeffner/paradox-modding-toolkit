@@ -308,7 +308,9 @@ export async function runRecipe(recipe: Recipe, opts: RunOptions = {}): Promise<
     const refreshesPerSave = saves > 0 ? (refreshes - refreshesDuringIndexing) / saves : 0;
 
     const latest = statuses[statuses.length - 1];
-    const built = logs.join("\n").match(/index built: (\d+) definitions, heap (\d+) MB[^,]*, rss (\d+) MB/);
+    const built = logs
+      .join("\n")
+      .match(/index built: (\d+) definitions,[^\n]*? heap (\d+) MB[^,]*, rss (\d+) MB/);
 
     const metrics: BenchMetrics = {
       recipe: recipe.name,

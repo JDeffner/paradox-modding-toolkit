@@ -48,6 +48,7 @@ import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
 import { serverHeapMb } from "./serverHeap";
 import { planWatchRoots } from "./watchRoots";
+import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
@@ -157,6 +158,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       `modPath=${cfg.modPath ?? "(none)"} workspaceMods=${cfg.workspaceMods.length} ` +
       `parents=${cfg.parentPaths.length} tigerPath=${cfg.tigerPath ?? "(none)"}`
   );
+
+  // §C3: a workspace big enough to cost gigabytes per window says so once, and
+  // names the two settings that make it cheaper. Always logged, notified once
+  // per workspace so it cannot become noise.
+  if (cfg.isCk3Workspace) {
+    const bigWorkspace = bigWorkspaceWarning(measureWorkspace(cfg), cfg.tigerRunOn);
+    if (bigWorkspace) {
+      log(bigWorkspace);
+      if (!context.workspaceState.get<boolean>("px.bigWorkspaceNotice")) {
+        void context.workspaceState.update("px.bigWorkspaceNotice", true);
+        void vscode.window
+          .showWarningMessage(`Paradox Toolkit: ${bigWorkspace}`, "Exclude Mods...", "Settings")
+          .then((choice) => {
+            if (choice === "Exclude Mods...") void vscode.commands.executeCommand("px.excludeMods");
+            else if (choice === "Settings")
+              void vscode.commands.executeCommand("workbench.action.openSettings", "px.excludedMods");
+          });
+      }
+    }
+  }
 
   // Multi-mod workspaces: mod-targeted commands act on the mod that owns the
   // active editor's file, falling back to the primary mod folder.

@@ -95,6 +95,7 @@ import {
   loadIndexCache,
   saveIndexCache,
 } from "./index/indexer";
+import { internedCount, resetInternTable } from "./index/intern";
 import { extractDefinitions } from "./index/extract";
 import { extractReferences } from "./index/references";
 import { LazyReferenceScanner, type LazyRefRoot } from "./index/lazyRefs";
@@ -697,6 +698,8 @@ async function buildIndex(): Promise<void> {
     ...VARIABLE_KINDS,
   ]);
   data.index = new DefinitionIndex();
+  // The shared identifiers of the index we are replacing die with it (§C2).
+  resetInternTable();
   data.refIndex.clear();
   namespacesByFile.clear();
   data.modNamespaces.clear();
@@ -807,6 +810,7 @@ async function buildIndex(): Promise<void> {
         const mem = process.memoryUsage();
         perf(
           `index built: ${data.index.stats().total} definitions, ` +
+            `${internedCount()} shared identifiers, ` +
             `heap ${(mem.heapUsed / 1048576).toFixed(0)} MB${gc ? " (post-gc)" : ""}, ` +
             `rss ${(mem.rss / 1048576).toFixed(0)} MB, ${Date.now() - tBuild}ms`
         );

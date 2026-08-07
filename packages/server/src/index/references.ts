@@ -22,6 +22,7 @@ import {
 import { activeProfile } from "../games/active";
 import { isLocProperty } from "@px-lsp/protocol/locProperties";
 import { classifyKeyword } from "../contextKeywords";
+import { intern, shareDefinitionStrings, shareReferenceStrings } from "./intern";
 import type { SchemaData } from "../schema/loader";
 import {
   LineIndex,
@@ -398,6 +399,11 @@ export function extractReferences(
     }
   });
 
+  // Every string above is a slice of `content`, and a SlicedString pins its
+  // parent: without this the index retains a copy of every file it read (§C2).
+  shareReferenceStrings(references);
+  shareDefinitionStrings(implicitDefs);
+  for (let i = 0; i < namespaces.length; i++) namespaces[i] = intern(namespaces[i]);
   return { references, implicitDefs, namespaces };
 }
 
