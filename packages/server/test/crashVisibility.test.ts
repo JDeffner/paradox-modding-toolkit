@@ -47,6 +47,8 @@ interface Session {
   exitCode: number | null;
   exited: boolean;
   statuses: StatusPayload[];
+  /** Temp dirs to remove after the test. */
+  temp: string[];
 }
 
 async function startFaultyServer(mode: string): Promise<Session> {
@@ -63,7 +65,16 @@ async function startFaultyServer(mode: string): Promise<Session> {
     silent: true,
     env: { ...process.env, PX_FAULT_SCAN: mode },
   });
-  const session: Session = { child, conn: null!, output: [], exitCode: null, exited: false, statuses: [] };
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "px-crash-storage-"));
+  const session: Session = {
+    child,
+    conn: null!,
+    output: [],
+    exitCode: null,
+    exited: false,
+    statuses: [],
+    temp: [modDir, storageDir],
+  };
   child.stderr?.on("data", (b: Buffer) => session.output.push(b.toString()));
   child.on("exit", (code) => {
     session.exited = true;
@@ -88,7 +99,7 @@ async function startFaultyServer(mode: string): Promise<Session> {
     workspaceFolders: [{ uri: toUri(modDir), name: "crash" }],
     capabilities: {},
     initializationOptions: {
-      storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "px-crash-storage-")),
+      storageDir,
       wikidocsDir: WIKIDOCS,
       settings: {
         gamePath: null, // the fault fires on the mod scan; no game needed
@@ -121,6 +132,7 @@ let session: Session | undefined;
 
 afterEach(() => {
   if (session?.child && !session.child.killed) session.child.kill();
+  for (const dir of session?.temp ?? []) fs.rmSync(dir, { recursive: true, force: true });
   session = undefined;
 });
 
