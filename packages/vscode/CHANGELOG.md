@@ -118,6 +118,49 @@
   children, and **Show GUI Widget Tree** listed it as a widget row (414
   vanilla widgets carry one).
 
+### Changed (big workspaces)
+
+Measured on the two workspaces the reports describe: the game mounted three
+times plus 20 small mods (1.86M definitions), and the game plus a total
+conversion twice (1.36M definitions, 8.3M references). Numbers are per window,
+because every window still runs its own indexer.
+[`docs/PERFORMANCE.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PERFORMANCE.md)
+is the new page on what a workspace costs and which settings shrink it.
+
+- **The index uses less than half the memory it did.** The parser hands out
+  substrings, and V8 keeps a substring's whole parent string alive, so every
+  indexed name was pinning the entire text of the file it came from: the index
+  carried a second copy of every tree it had scanned. Names are copied and
+  shared once now. The heavy workspace fell from 3161 MB to 1461 MB of retained
+  heap (3804 MB to 2193 MB RSS), a definition from 924 B to 435 B, and mounting
+  the same game several times now costs one set of identifiers instead of one
+  per mount.
+- **Saving is fast again on a large workspace.** Ctrl+S went from 731 ms to
+  24 ms there (and 144 ms to 6 ms on the many-mod workspace). Three things were
+  wrong: the index was walked end to end twice on every change (status counters
+  and the scripted-list scan, both now incremental), dropping a file's
+  references rebuilt a name's whole usage list once per mention instead of once,
+  and one save parsed the same file three times (typing validation, save
+  validation, then the file watcher) where it now parses once.
+- **Semantic highlighting arrives during indexing instead of after it.** Every
+  index change asked every visible editor to re-request its tokens and inlay
+  hints, during the initial build too, so the requests queued behind the scan
+  and editors sat on plain syntax colouring. The build now refreshes once, when
+  it finishes. Trade-off: the sidebar views no longer fill in progressively
+  while indexing.
+- **A very large generated file no longer kills the index silently.** Passing a
+  root's definitions as call arguments threw past ~125,000 of them, which killed
+  the scan; the session then looked alive with an empty index, which is exactly
+  the "only syntax highlighting works" report. A single file with 250,000
+  definitions now indexes cleanly (regression test included).
+- **One file watcher per distinct folder instead of one per mod.** A workspace
+  folder containing 20 mods went from 21 recursive watchers to 1, and nothing
+  under the game folder is watched at all.
+- **A workspace big enough to hurt says so on activation.** Past 6 indexed mod
+  roots or 10,000 script files, one notification names `px.excludedMods` (with
+  a button to the picker) and, if you have switched it on, `px.tigerRunOn`. It
+  is logged to the output channel every time and shown once per workspace.
+
 ### Added (embedding the server)
 
 For applications that run px-lsp inside themselves rather than for editor

@@ -149,6 +149,10 @@ The full docs live in the
 - [Claude Skill](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Claude-Skill)
 - [Credits](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Credits)
 
+Working in a workspace with a total conversion or a dozen mods?
+[`docs/PERFORMANCE.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PERFORMANCE.md)
+has the measured costs and the settings that shrink them.
+
 ## Outside VS Code
 
 The language server runs standalone over `--stdio` from any LSP client
