@@ -21,6 +21,14 @@ export type { IndexStats };
 /** Priority when several sources define the same name (higher shadows lower). */
 const SOURCE_RANK: Record<DefSource, number> = { mod: 2, parent: 1, vanilla: 0 };
 
+/**
+ * The one kind whose names are tracked incrementally (perf campaign §B2): the
+ * scope model is refed every scripted list on EVERY index change, a save
+ * included, and walking all 1.9M names to find the ~50 that are scripted lists
+ * cost 65-85 ms per save (measured, recipe 1).
+ */
+const TRACKED_KIND = "scripted_list";
+
 // Back-compat helpers used by unit tests and older callers.
 export function parseScriptDefinitions(
   content: string,
@@ -48,6 +56,9 @@ function normFile(file: string): string {
 export class DefinitionIndex {
   private byName = new Map<string, Definition[]>();
   private byFile = new Map<string, Definition[]>();
+  /** Names carrying at least one TRACKED_KIND definition, refcounted so
+   *  removeFile drops the name again (§B2). */
+  private trackedNames = new Map<string, number>();
   /** Bumped on every mutation; used by providers to invalidate caches. */
   revision = 0;
 
@@ -56,10 +67,15 @@ export class DefinitionIndex {
       let list = this.byName.get(def.name);
       if (!list) this.byName.set(def.name, (list = []));
       list.push(def);
+      if (def.kind === TRACKED_KIND)
+        this.trackedNames.set(def.name, (this.trackedNames.get(def.name) ?? 0) + 1);
       const fkey = normFile(def.file);
       let flist = this.byFile.get(fkey);
       if (!flist) this.byFile.set(fkey, (flist = []));
       flist.push(def);
+      this.total++;
+      this.bump(this.byKind, def.kind, 1);
+      this.bump(this.bySource, def.source, 1);
     }
     if (defs.length > 0) this.revision++;
   }
@@ -70,11 +86,19 @@ export class DefinitionIndex {
     if (!defs) return;
     this.byFile.delete(fkey);
     for (const def of defs) {
+      this.total--;
+      this.bump(this.byKind, def.kind, -1);
+      this.bump(this.bySource, def.source, -1);
       const list = this.byName.get(def.name);
       if (!list) continue;
       const filtered = list.filter((d) => d !== def);
       if (filtered.length === 0) this.byName.delete(def.name);
       else this.byName.set(def.name, filtered);
+      if (def.kind === TRACKED_KIND) {
+        const left = (this.trackedNames.get(def.name) ?? 0) - 1;
+        if (left <= 0) this.trackedNames.delete(def.name);
+        else this.trackedNames.set(def.name, left);
+      }
     }
     this.revision++;
   }
@@ -110,18 +134,44 @@ export class DefinitionIndex {
     }
   }
 
-  stats(): IndexStats {
-    const byKind: Record<string, number> = {};
-    const bySource: Record<string, number> = {};
-    let total = 0;
-    for (const list of this.byFile.values()) {
-      for (const def of list) {
-        total++;
-        byKind[def.kind] = (byKind[def.kind] ?? 0) + 1;
-        bySource[def.source] = (bySource[def.source] ?? 0) + 1;
-      }
+  /**
+   * Scripted-list definitions, shadow-resolved. Identical to
+   * `entries((d) => d.kind === "scripted_list")` — same shadow resolution over
+   * the full name list, so a mod loc_key still shadows a vanilla scripted list
+   * of the same name — but it only visits the names that carry one (§B2).
+   */
+  *scriptedLists(): IterableIterator<Definition> {
+    for (const name of this.trackedNames.keys()) {
+      const list = this.byName.get(name);
+      if (!list || list.length === 0) continue;
+      const def = this.shadowResolve(list).find((d) => d.kind === TRACKED_KIND);
+      if (def) yield def;
     }
-    return { total, files: this.byFile.size, byKind, bySource };
+  }
+
+  /**
+   * Running totals, maintained by addAll/removeFile. The status notification
+   * asks for stats() on every index change, and one full walk of a 1.9M
+   * definition index cost 61-74 ms per save (§B2). Counters are dropped at
+   * zero so the result equals a full rebuild's, key for key.
+   */
+  private total = 0;
+  private byKind = new Map<string, number>();
+  private bySource = new Map<string, number>();
+
+  private bump(counts: Map<string, number>, key: string, by: number): void {
+    const n = (counts.get(key) ?? 0) + by;
+    if (n <= 0) counts.delete(key);
+    else counts.set(key, n);
+  }
+
+  stats(): IndexStats {
+    return {
+      total: this.total,
+      files: this.byFile.size,
+      byKind: Object.fromEntries(this.byKind),
+      bySource: Object.fromEntries(this.bySource),
+    };
   }
 
   allDefinitions(): Definition[] {

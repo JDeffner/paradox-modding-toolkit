@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as path from "path";
+import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import {
   DefinitionIndex,
   classifyFile,
@@ -118,6 +119,96 @@ describe("DefinitionIndex", () => {
     expect(stats.byKind.scripted_effect).toBeGreaterThanOrEqual(3);
     expect(stats.bySource.mod).toBeGreaterThan(0);
     expect(stats.bySource.vanilla).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * §B2: `scriptedLists()` and the running `stats()` counters replaced two
+ * full-index walks that ran on every save. Both are only allowed to be faster,
+ * never different, so the property under test is equality with the full
+ * rebuild over random add/remove sequences (file removal and shadow resolution
+ * included).
+ */
+describe("incremental scripted-list tracking (§B2)", () => {
+  /** Deterministic PRNG: a failure has to be replayable. */
+  function rng(seed: number): () => number {
+    let s = seed >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  const NAMES = ["alpha", "beta", "gamma", "delta", "epsilon"];
+  const KINDS = ["scripted_list", "scripted_effect", "loc_key"];
+  const SOURCES: DefSource[] = ["mod", "parent", "vanilla"];
+
+  const key = (d: Definition) => `${d.name}|${d.kind}|${d.source}|${d.file}|${d.line}`;
+  const sortedKeys = (defs: Iterable<Definition>) => [...defs].map(key).sort();
+  /** What the old code did: walk every name, shadow-resolve, filter by kind. */
+  const fullWalk = (index: DefinitionIndex) => sortedKeys(index.entries((d) => d.kind === "scripted_list"));
+
+  it("equals the full walk (and a rebuilt index) over 400 random operations", () => {
+    const rand = rng(20260807);
+    const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)];
+    const index = new DefinitionIndex();
+    /** Mirror of what is live, so the comparison index can be rebuilt from it. */
+    const live = new Map<string, Definition[]>();
+
+    for (let step = 0; step < 400; step++) {
+      const file = `f${Math.floor(rand() * 12)}.txt`;
+      if (live.has(file) && rand() < 0.45) {
+        index.removeFile(file);
+        live.delete(file);
+      } else {
+        // Re-adding a live file is what a rescan does: remove, then add.
+        if (live.has(file)) {
+          index.removeFile(file);
+          live.delete(file);
+        }
+        const defs: Definition[] = [];
+        const count = 1 + Math.floor(rand() * 4);
+        for (let i = 0; i < count; i++) {
+          defs.push({
+            name: pick(NAMES),
+            kind: pick(KINDS),
+            file,
+            line: i,
+            source: pick(SOURCES),
+            value: pick(NAMES),
+          });
+        }
+        index.addAll(defs);
+        live.set(file, defs);
+      }
+
+      expect(sortedKeys(index.scriptedLists()), `step ${step}`).toEqual(fullWalk(index));
+
+      // The running counters must equal a full rebuild's, key for key
+      // (a kind that drops to zero has to disappear, not linger as 0).
+      const rebuilt = new DefinitionIndex();
+      for (const defs of live.values()) rebuilt.addAll(defs);
+      expect(index.stats(), `step ${step} stats`).toEqual(rebuilt.stats());
+      expect(sortedKeys(index.scriptedLists()), `step ${step} rebuilt`).toEqual(
+        sortedKeys(rebuilt.scriptedLists())
+      );
+    }
+  });
+
+  it("a higher-ranked non-list definition shadows a vanilla scripted list", () => {
+    const index = new DefinitionIndex();
+    index.addAll([{ name: "shared", kind: "scripted_list", file: "v.txt", line: 0, source: "vanilla" }]);
+    expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));
+    expect([...index.scriptedLists()]).toHaveLength(1);
+    // The mod defines the same name as something else: mod rank wins, so the
+    // vanilla list disappears from BOTH the walk and the tracked iteration.
+    index.addAll([{ name: "shared", kind: "loc_key", file: "m.yml", line: 3, source: "mod" }]);
+    expect([...index.scriptedLists()]).toHaveLength(0);
+    expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));
+    // ...and comes back when the shadowing file goes away.
+    index.removeFile("m.yml");
+    expect([...index.scriptedLists()]).toHaveLength(1);
+    expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));
   });
 });
 

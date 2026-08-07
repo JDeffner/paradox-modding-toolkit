@@ -83,7 +83,10 @@ export class ServerData {
    *  generated every_/any_/random_/ordered_ iterators resolve target scopes. */
   private applyScriptedLists(): void {
     const lists: Array<{ name: string; base?: string }> = [];
-    for (const d of this.index.entries((def) => def.kind === "scripted_list")) {
+    // index.scriptedLists() is the incremental form of
+    // entries(d => d.kind === "scripted_list") — same result, without the
+    // full-name walk this used to pay on every index change (§B2).
+    for (const d of this.index.scriptedLists()) {
       lists.push({ name: d.name, base: d.value });
     }
     this.scopeModel.setScriptedLists(lists);

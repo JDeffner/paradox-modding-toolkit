@@ -47,6 +47,7 @@ import { modReportCommand } from "./modReport";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
 import { serverHeapMb } from "./serverHeap";
+import { planWatchRoots } from "./watchRoots";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
@@ -334,13 +335,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const notifyModFileChanged = (fsPath: string) => {
     void lc.sendNotification(modFileChangedNotification, { fsPath });
   };
-  // One watcher per root: the mod plus every parent mod, so edits in a parent
-  // (multi-mod / compat-patch workspaces) re-index too.
+  // One watcher per DISTINCT TOP-LEVEL root (§B5): the mod plus every parent
+  // mod, so edits in a parent (multi-mod / compat-patch workspaces) re-index
+  // too, minus the nested and under-the-game roots whose recursive watcher
+  // would only report the same file a second time.
   const wireModWatcher = () => {
     for (const w of modWatchers) w.dispose();
     modWatchers = [];
-    for (const root of [cfg.modPath, ...cfg.parentPaths]) {
-      if (!root) continue;
+    const watchRoots = planWatchRoots([cfg.modPath, ...cfg.parentPaths], cfg.gamePath);
+    log(`watching ${watchRoots.length} root(s) for mod file changes`);
+    for (const root of watchRoots) {
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
       const w = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{txt,yml,gui,mod}")

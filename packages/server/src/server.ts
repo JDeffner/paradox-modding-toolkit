@@ -21,6 +21,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { createHash } from "crypto";
 // Named import: the bundler inlines just the version string (not the whole
 // manifest), and the same source works when tests import from src.
 import { version as SERVER_VERSION } from "../package.json";
@@ -409,16 +410,40 @@ function sendStatus(): void {
   }
 }
 
+/**
+ * Idle debounce for the global refresh (§B4). Raised from 300ms: one fire makes
+ * EVERY visible editor re-request full-document semantic tokens and inlay
+ * hints, and every server-backed sidebar view re-query the index.
+ */
+const REFRESH_DEBOUNCE_MS = 500;
+
+function cancelRefreshTimer(): void {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = null;
+}
+
+function fireRefresh(reason: string): void {
+  cancelRefreshTimer();
+  perf(`refresh fired (semanticTokens + inlayHint, ${reason})`);
+  void connection.sendNotification(indexChangedNotification);
+  connection.languages.semanticTokens.refresh().catch(() => {});
+  connection.languages.inlayHint.refresh().catch(() => {});
+}
+
 data.onDidChange(() => {
   sendStatus();
+  // §B4: a scan fires an index change per root, and each refresh puts a
+  // full-document token request per visible editor plus every sidebar view's
+  // index walk behind an already-saturated event loop — the "semantic
+  // highlighting never arrives" reports. buildIndex's finally fires exactly
+  // one refresh when the index is complete instead.
+  if (indexing) return;
   // Debounce editor refreshes and the index-changed signal: scans fire many changes.
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
-    perf(`refresh fired (semanticTokens + inlayHint, indexing=${indexing})`);
-    void connection.sendNotification(indexChangedNotification);
-    connection.languages.semanticTokens.refresh().catch(() => {});
-    connection.languages.inlayHint.refresh().catch(() => {});
-  }, 300);
+    refreshTimer = null;
+    fireRefresh("idle");
+  }, REFRESH_DEBOUNCE_MS);
 });
 
 // ---- data loading -----------------------------------------------------------
@@ -678,7 +703,10 @@ async function buildIndex(): Promise<void> {
   refreshModOrigin();
   refreshLazyRefs();
   harvestEngineData();
+  rescanDigests.clear();
   indexing = true;
+  // A refresh queued before the rebuild would land mid-scan (§B4).
+  cancelRefreshTimer();
   sendStatus();
 
   try {
@@ -767,6 +795,10 @@ async function buildIndex(): Promise<void> {
     if (generation === scanGeneration) {
       indexing = false;
       sendStatus();
+      // §B4: the build's one and only refresh, fired from the finally so a scan
+      // that returned null (superseded root) or threw cannot strand the open
+      // editors on TextMate colours forever.
+      fireRefresh("index built");
       if (perfOn()) {
         // Post-GC only when the server was started with --expose-gc (the bench
         // harness does; a normal client does not, and reads a live-heap number).
@@ -791,6 +823,19 @@ function startIndexBuild(reason: string): void {
   });
 }
 
+/**
+ * Digest of the bytes the index currently holds per rescanned file (§B3).
+ * A save fires the watcher more than once (the write plus its metadata update,
+ * and once per overlapping watcher root), and re-parsing identical bytes only
+ * buys another index-changed fan-out. Cleared whenever the index is rebuilt.
+ */
+const rescanDigests = new Map<string, string>();
+
+function contentDigest(content: string | null): string {
+  if (content === null) return "<deleted>";
+  return `${content.length}:${createHash("sha1").update(content).digest("base64")}`;
+}
+
 function rescanModFile(fsPath: string): void {
   const lower = fsPath.toLowerCase();
   const wsRoot = workspaceRootOf(fsPath);
@@ -806,25 +851,39 @@ function rescanModFile(fsPath: string): void {
     return;
 
   const tParse = Date.now();
-  data.index.removeFile(fsPath);
   const content = fs.existsSync(fsPath) ? readFileStripBom(fsPath) : null;
-
-  if (entry && content !== null) {
-    data.index.addAll(extractDefinitions(content, entry, fsPath, source));
+  const digest = contentDigest(content);
+  if (rescanDigests.get(lower) === digest) {
+    perf(`rescan ${path.basename(fsPath)} unchanged bytes, skipped ${Date.now() - tParse}ms`);
+    return;
   }
+  rescanDigests.set(lower, digest);
+  // Sub-spans: the whole rescan is 3ms on a 1.9M-definition index and ~500ms on
+  // the AGOT-sized one for the SAME file, so a save trace has to say which part
+  // of it scales with the workspace (§B2).
+  perfSpan("rescan defs", () => {
+    data.index.removeFile(fsPath);
+    if (entry && content !== null) {
+      data.index.addAll(extractDefinitions(content, entry, fsPath, source));
+    }
+  });
   // References and namespaces are tracked for every workspace mod (matching
   // buildIndex); read-only dependency parents stay definition-only.
   const isWorkspaceMod = wsRoot !== null;
   if (isWorkspaceMod && isScript) {
-    data.refIndex.removeFile(fsPath);
+    perfSpan("rescan refs remove", () => data.refIndex.removeFile(fsPath));
     namespacesByFile.delete(fsPath.toLowerCase());
     if (content !== null) {
-      const extracted = extractReferences(content, fsPath, source, schema, isEngineToken);
-      data.refIndex.addAll(extracted.references);
-      data.index.addAll(extracted.implicitDefs);
+      const extracted = perfSpan("rescan refs extract", () =>
+        extractReferences(content, fsPath, source, schema, isEngineToken)
+      );
+      perfSpan("rescan refs add", () => {
+        data.refIndex.addAll(extracted.references);
+        data.index.addAll(extracted.implicitDefs);
+      });
       if (extracted.namespaces.length > 0) namespacesByFile.set(fsPath.toLowerCase(), extracted.namespaces);
     }
-    rebuildModNamespaces();
+    perfSpan("rescan namespaces", () => rebuildModNamespaces());
   }
   perf(`rescan ${path.basename(fsPath)} parse+extract ${Date.now() - tParse}ms`);
   indexChanged(`rescan ${path.basename(fsPath)}`);
@@ -986,8 +1045,53 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
   }
 });
 
+/**
+ * Per-path debounce for watcher events (§B3). One Ctrl+S produces several:
+ * the editor's write, the metadata update behind it, and one more per watcher
+ * root that contains the file. ~150ms also keeps a half-written large file
+ * from being parsed into the index and immediately parsed again.
+ */
+const MOD_CHANGE_DEBOUNCE_MS = 150;
+const pendingModChanges = new Map<string, { fsPath: string; timer: ReturnType<typeof setTimeout> }>();
+
 function handleModFileChange(fsPath: string): void {
-  perf(`modFileChanged ${path.basename(fsPath)}`);
+  perf(`modFileChanged ${perfName(fsPath)}`);
+  const key = fsPath.toLowerCase();
+  const pending = pendingModChanges.get(key);
+  if (pending) clearTimeout(pending.timer);
+  pendingModChanges.set(key, {
+    fsPath,
+    timer: setTimeout(() => {
+      pendingModChanges.delete(key);
+      applyModFileChange(fsPath);
+    }, MOD_CHANGE_DEBOUNCE_MS),
+  });
+}
+
+/**
+ * Freshness guard (§B3): a request that reads the index runs the pending
+ * rescans first, so the debounce can never answer out of a stale index. Costs
+ * a map size check except in the ~150ms after a save. The view/webview
+ * requests do not call this: they are refreshed by the index-changed
+ * notification the rescan itself fires.
+ */
+function flushModFileChanges(): void {
+  if (pendingModChanges.size === 0) return;
+  const pending = [...pendingModChanges.values()];
+  pendingModChanges.clear();
+  for (const { fsPath, timer } of pending) {
+    clearTimeout(timer);
+    applyModFileChange(fsPath);
+  }
+}
+
+/** A traced handler that READS the index: pending rescans land first (§B3). */
+function indexRead<T>(label: string, fn: () => T): T {
+  flushModFileChanges();
+  return perfSpan(label, fn);
+}
+
+function applyModFileChange(fsPath: string): void {
   rescanModFile(fsPath);
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
@@ -1102,7 +1206,7 @@ connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[]
 // ---- language features ----------------------------------------------------------
 
 connection.onCompletion((params) =>
-  perfSpan(`completion ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`completion ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
     if (doc.languageId === "paradox-gui") {
@@ -1135,7 +1239,7 @@ connection.onCompletion((params) =>
 connection.onCompletionResolve((item) => completion.resolve(item));
 
 connection.onHover((params) =>
-  perfSpan(`hover ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`hover ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
     if (doc.languageId === "paradox-gui") {
@@ -1183,7 +1287,7 @@ connection.onHover((params) =>
 );
 
 connection.onDefinition((params) =>
-  perfSpan(`definition ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`definition ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
     // Loc files: navigate [ ... ] datafunction names (custom loc, saved scopes).
@@ -1201,6 +1305,7 @@ connection.onDefinition((params) =>
 );
 
 connection.onSignatureHelp((params) => {
+  flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
   if (doc.languageId === "paradox-gui" || doc.languageId === "paradox-loc") {
@@ -1212,6 +1317,7 @@ connection.onSignatureHelp((params) => {
 });
 
 connection.onCodeAction((params) => {
+  flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc || doc.languageId !== "paradox") return [];
   return provideCodeActions(data, doc, params.range, params.context.diagnostics, {
@@ -1222,7 +1328,7 @@ connection.onCodeAction((params) => {
 });
 
 connection.languages.inlayHint.on((params) =>
-  perfSpan(`inlayHint ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`inlayHint ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
     const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
@@ -1234,7 +1340,7 @@ connection.languages.inlayHint.on((params) =>
 );
 
 connection.languages.semanticTokens.on((params) =>
-  perfSpan(`semanticTokens ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`semanticTokens ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     // gui files benefit too: template/type names classify via the index.
     if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui")) return { data: [] };
@@ -1244,7 +1350,7 @@ connection.languages.semanticTokens.on((params) =>
 );
 
 connection.onReferences((params) =>
-  perfSpan(`references ${perfName(params.textDocument.uri)}`, () => {
+  indexRead(`references ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     // Loc files too: references on a loc key line list its script usage sites.
     if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-loc")) return [];
@@ -1255,18 +1361,23 @@ connection.onReferences((params) =>
 );
 
 connection.onPrepareRename((params) => {
+  flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc || doc.languageId !== "paradox") return null;
   return prepareRename(data, doc, params.position);
 });
 
 connection.onRenameRequest((params) => {
+  flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc || doc.languageId !== "paradox") return null;
   return provideRename(data, doc, params.position, params.newName, (uri) => documents.get(uri));
 });
 
-connection.onWorkspaceSymbol((params) => provideWorkspaceSymbols(data, params.query));
+connection.onWorkspaceSymbol((params) => {
+  flushModFileChanges();
+  return provideWorkspaceSymbols(data, params.query);
+});
 
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
@@ -1291,6 +1402,10 @@ connection.onFoldingRanges((params) => {
 /** BOM state per open document, read from disk (editors strip the BOM from the buffer). */
 const bomByUri = new Map<string, boolean | null>();
 const validationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** What the published diagnostics of a document were computed from (§B3): the
+ *  typing debounce and the save that follows it must not parse the same bytes
+ *  against the same index twice. */
+const validatedAt = new Map<string, { version: number; revision: number }>();
 
 function readBomFromDisk(uri: string): boolean | null {
   try {
@@ -1323,10 +1438,11 @@ function relForPatterns(fsPath: string): string {
 }
 
 function validateDocument(doc: TextDocument): void {
-  perfSpan(`validate ${perfName(doc.uri)}`, () => validateDocumentNow(doc));
+  indexRead(`validate ${perfName(doc.uri)}`, () => validateDocumentNow(doc));
 }
 
 function validateDocumentNow(doc: TextDocument): void {
+  validatedAt.set(doc.uri, { version: doc.version, revision: data.index.revision });
   const fsPath = URI.parse(doc.uri).fsPath;
   const ctx: FileContext = {
     fsPath,
@@ -1418,8 +1534,21 @@ documents.onDidChangeContent((e) => {
 });
 
 documents.onDidSave((e) => {
-  perf(`didSave ${perfName(e.document.uri)}`);
-  bomByUri.set(e.document.uri, readBomFromDisk(e.document.uri));
+  const uri = e.document.uri;
+  perf(`didSave ${perfName(uri)}`);
+  // The typing debounce would otherwise validate the same bytes again 300ms
+  // after the save (§B3).
+  const pendingValidation = validationTimers.get(uri);
+  if (pendingValidation) clearTimeout(pendingValidation);
+  validationTimers.delete(uri);
+  const bomBefore = bomByUri.get(uri);
+  const bom = readBomFromDisk(uri);
+  bomByUri.set(uri, bom);
+  const done = validatedAt.get(uri);
+  if (bom === bomBefore && done?.version === e.document.version && done.revision === data.index.revision) {
+    perf(`didSave ${perfName(uri)} already validated at v${e.document.version}`);
+    return;
+  }
   validateDocument(e.document);
 });
 
@@ -1428,6 +1557,7 @@ documents.onDidClose((e) => {
   const timer = validationTimers.get(uri);
   if (timer) clearTimeout(timer);
   validationTimers.delete(uri);
+  validatedAt.delete(uri);
   bomByUri.delete(uri);
   evictParse(uri);
   void connection.sendDiagnostics({ uri, diagnostics: [] });

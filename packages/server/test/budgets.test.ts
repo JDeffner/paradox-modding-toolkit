@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
+import type { Definition, Reference } from "@px-lsp/protocol/types";
 import { loadWikiTokens } from "../src/data/wikiDocs";
 import { ServerData } from "../src/serverData";
 import { CompletionFeature } from "../src/features/completion";
 import { loadSchema } from "../src/schema/loader";
 import { DefinitionIndex, scanRoot } from "../src/index/indexer";
+import { ReferenceIndex } from "../src/index/references";
 import { devPath } from "../../../scripts/devPaths";
 
 const GAME = devPath("gamePath");
@@ -108,5 +110,112 @@ describe("performance budgets", () => {
     // A non-positive reading means the measurement broke, not that the index is free.
     expect(bytesPerDef).toBeGreaterThan(200);
     expect(bytesPerDef).toBeLessThan(2560);
+  });
+
+  /**
+   * §B2: every save fires notifyIndexChanged (scripted lists -> scope model)
+   * and a status notification (stats()). Both used to walk the whole index:
+   * 127-157 ms per save on the 1.9M-definition recipe-1 workspace, of which
+   * 61-74 ms was stats() alone. The property that matters is not the absolute
+   * number but that it does not grow with the index, so the budget is on the
+   * RATIO between a small and a 10x larger index (plus a generous absolute
+   * ceiling, since a regression here reintroduces an O(N) walk).
+   */
+  it("the per-save index fan-out does not scale with the index", () => {
+    const median = (fn: () => void): number => {
+      const samples: number[] = [];
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now();
+        fn();
+        samples.push(performance.now() - t0);
+      }
+      samples.sort((a, b) => a - b);
+      return samples[Math.floor(samples.length * 0.5)];
+    };
+
+    const loaded = (defCount: number): ServerData => {
+      const data = new ServerData();
+      const defs: Definition[] = [];
+      for (let i = 0; i < defCount; i++) {
+        defs.push({
+          name: `def_${i}`,
+          // Vanilla has ~50 scripted lists whatever the index size, so the
+          // ratio below measures the walk and not the list count.
+          kind: i < 50 ? "scripted_list" : "scripted_effect",
+          file: `f${i % 4000}.txt`,
+          line: i,
+          source: "vanilla",
+        });
+      }
+      data.index.addAll(defs);
+      return data;
+    };
+
+    const fanOut = (data: ServerData) =>
+      median(() => {
+        data.notifyIndexChanged();
+        data.index.stats();
+      });
+
+    const small = loaded(50_000);
+    const large = loaded(500_000);
+    const smallMs = fanOut(small);
+    const largeMs = fanOut(large);
+    // What the fan-out used to do on its scripted-list half: walk every name.
+    const fullWalkMs = median(() => {
+      for (const _ of large.index.entries((d) => d.kind === "scripted_list")) void _;
+    });
+    console.log(
+      `index fan-out per save: ${smallMs.toFixed(2)}ms @50k defs, ${largeMs.toFixed(2)}ms @500k ` +
+        `(the full-name walk it replaced: ${fullWalkMs.toFixed(2)}ms @500k)`
+    );
+    // 10x the index must not cost 4x the fan-out (before §B2 it cost ~10x).
+    // The floor keeps a near-zero small sample from making the ratio explode.
+    expect(largeMs).toBeLessThan(Math.max(4 * smallMs, 5));
+    expect(largeMs).toBeLessThan(20);
+    // Revert sensitivity: the whole fan-out must stay far under the single
+    // full-index walk that used to be only one half of it.
+    expect(largeMs).toBeLessThan(fullWalkMs / 4);
+  });
+
+  /**
+   * §B2: after the fan-out was fixed, the entire remaining cost of a save on
+   * the AGOT-sized workspace was ReferenceIndex.removeFile — 490-510 ms for a
+   * small event file, because it rebuilt a name's whole reference list once per
+   * OCCURRENCE in the file. A save must cost the size of the file, not the size
+   * of the workspace.
+   */
+  it("dropping a file's references costs the same however often it names a token", () => {
+    const HOT = 400_000; // the AGOT-sized workspace's usage count for a common token
+    const ref = (file: string, line: number): Reference => ({
+      name: "character_event",
+      kinds: ["event"],
+      file,
+      line,
+      startChar: 0,
+      endChar: 15,
+    });
+    const removeMs = (occurrences: number): number => {
+      const index = new ReferenceIndex();
+      const bulk: Reference[] = [];
+      for (let i = 0; i < HOT; i++) bulk.push(ref(`bulk${i % 4000}.txt`, i));
+      index.addAll(bulk);
+      const mine: Reference[] = [];
+      for (let i = 0; i < occurrences; i++) mine.push(ref("mine.txt", i));
+      index.addAll(mine);
+      const t0 = performance.now();
+      index.removeFile("mine.txt");
+      const elapsed = performance.now() - t0;
+      expect(index.lookup("character_event")).toHaveLength(HOT);
+      return elapsed;
+    };
+
+    const once = removeMs(1);
+    const often = removeMs(25); // one event file's worth of `type = character_event`
+    console.log(`refIndex removeFile @${HOT} refs: ${once.toFixed(2)}ms x1, ${often.toFixed(2)}ms x25`);
+    // One list rebuild per NAME, not per occurrence: 25 occurrences used to
+    // cost 25 rebuilds of a six-figure array (490-510ms on the real workspace).
+    expect(often).toBeLessThan(Math.max(3 * once, 5));
+    expect(often).toBeLessThan(60);
   });
 });

@@ -424,22 +424,37 @@ export class ReferenceIndex {
     if (refs.length > 0) this.revision++;
   }
 
+  /**
+   * Drop every reference a file contributed.
+   *
+   * Grouped by name first (perf campaign §B2): a file that names the same
+   * token 25 times used to rebuild that token's whole reference list 25 times.
+   * On the AGOT-sized workspace one save of a small event file spent 490-510 ms
+   * here — the entire remaining cost of the save — copying and discarding
+   * megabytes of arrays for names with six-figure usage counts.
+   */
   removeFile(file: string): void {
     const fkey = normFile(file);
     const refs = this.byFile.get(fkey);
     if (!refs) return;
     this.byFile.delete(fkey);
+    const dropped = new Map<string, Set<Reference>>();
     for (const ref of refs) {
-      const list = this.byName.get(ref.name);
-      if (!list) continue;
-      const filtered = list.filter((r) => r !== ref);
-      if (filtered.length === 0) this.byName.delete(ref.name);
-      else this.byName.set(ref.name, filtered);
+      let set = dropped.get(ref.name);
+      if (!set) dropped.set(ref.name, (set = new Set()));
+      set.add(ref);
       if (!ref.call) {
         const n = (this.rankCounts.get(ref.name) ?? 0) - 1;
         if (n <= 0) this.rankCounts.delete(ref.name);
         else this.rankCounts.set(ref.name, n);
       }
+    }
+    for (const [name, set] of dropped) {
+      const list = this.byName.get(name);
+      if (!list) continue;
+      const filtered = list.filter((r) => !set.has(r));
+      if (filtered.length === 0) this.byName.delete(name);
+      else this.byName.set(name, filtered);
     }
     this.revision++;
   }

@@ -75,31 +75,48 @@ function record(metrics: BenchMetrics): void {
  * 91.8 s inside ONE run. A phase that improves a number lowers its budget here
  * in the same commit.
  *
- *                       measured  budget
- *  r1 time-to-indexed      21.5s     90s
- *  r1 save p95            183ms      1.5s
- *  r1 heap (post-gc)     1392MB    2000MB
- *  r1 completion p95 while indexing  1089ms / 5s
- *  r2 time-to-indexed     580.7s    20min
- *  r2 save p95            1275ms       4s
- *  r2 heap (post-gc)     3161MB    3900MB  (the client's ceiling is 4096 MB)
- *  r2 completion p95 while indexing  89.6s / 180s
+ *                              measured    budget   was (before §B2-B5)
+ *  r1 time-to-indexed             17.7s       90s   20.8s
+ *  r1 save p50 / p95          13 / 15ms 100/150ms   142 / 164ms
+ *  r1 heap (post-gc)            1391MB    2000MB    1391MB
+ *  r1 completion p95 indexing    1281ms        5s   1101ms
+ *  r1 refreshes while indexing        2         4   16
+ *  r2 time-to-indexed            534.0s     20min   529.6s
+ *  r2 save p50 / p95          27 / 43ms 300/1000ms  1292 / 1306ms
+ *  r2 heap (post-gc)            3160MB    3900MB    3159MB (client cap 4096)
+ *  r2 completion p95 indexing     81.1s      180s   83.7s
+ *  r2 refreshes while indexing        2         4   8
+ *
+ * What §B2-B5 did NOT move: time-to-indexed, heap, and the during-indexing
+ * completion p95 of recipe 2 — those are the reference-index and memory costs
+ * phase C owns, and they are what still starves an interactive request there.
  */
 const BUDGETS: Record<
   string,
-  { timeToIndexedMs: number; saveP95: number; heapMb: number; completionP95: number }
+  {
+    timeToIndexedMs: number;
+    saveP50: number;
+    saveP95: number;
+    heapMb: number;
+    completionP95: number;
+    refreshesWhileIndexing: number;
+  }
 > = {
   "recipe1-vanilla-x3-plus-20-mods": {
     timeToIndexedMs: 90_000,
-    saveP95: 1_500,
+    saveP50: 100,
+    saveP95: 150,
     heapMb: 2000,
     completionP95: 5_000,
+    refreshesWhileIndexing: 4,
   },
   "recipe2-game-plus-agot-x2": {
     timeToIndexedMs: 1_200_000,
-    saveP95: 4_000,
+    saveP50: 300,
+    saveP95: 1_000,
     heapMb: 3900,
     completionP95: 180_000,
+    refreshesWhileIndexing: 4,
   },
 };
 
@@ -113,7 +130,13 @@ describe("perf bench baseline (§A3)", () => {
       const budget = BUDGETS[name];
       expect(m.definitions, `${name} definitions`).toBeGreaterThan(100_000);
       expect(m.timeToIndexedMs, `${name} time-to-indexed`).toBeLessThan(budget.timeToIndexedMs);
+      expect(m.saveRoundTripMs.p50, `${name} save p50`).toBeLessThan(budget.saveP50);
       expect(m.saveRoundTripMs.p95, `${name} save p95`).toBeLessThan(budget.saveP95);
+      // §B4: the only global refresh a build may ask for is its final one
+      // (semanticTokens + inlayHint = 2 requests).
+      expect(m.refreshes.indexing, `${name} refreshes while indexing`).toBeLessThanOrEqual(
+        budget.refreshesWhileIndexing
+      );
       expect(m.duringIndexing.samples, `${name} probe samples`).toBeGreaterThan(5);
       expect(m.duringIndexing.completionP95, `${name} completion p95 while indexing`).toBeLessThan(
         budget.completionP95

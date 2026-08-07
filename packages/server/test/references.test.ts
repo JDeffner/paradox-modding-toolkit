@@ -93,6 +93,34 @@ describe("ReferenceIndex", () => {
     idx.removeFile("C:\\mod\\events\\e.txt");
     expect(idx.lookup("ns.1")).toHaveLength(1);
   });
+
+  /** §B2 grouped removeFile: one rebuild per NAME, not per occurrence. */
+  it("removeFile drops every occurrence of a name it contributed, and only those", () => {
+    const idx = new ReferenceIndex();
+    const mine = extractReferences(
+      "a = { trigger_event = ns.1 }\nb = { trigger_event = ns.1 }\nc = { trigger_event = ns.1 }",
+      "C:\\mod\\events\\mine.txt",
+      "mod",
+      schema
+    ).references;
+    const theirs = extractReferences(
+      "d = { trigger_event = ns.1 }\ne = { trigger_event = ns.1 }",
+      "C:\\mod\\events\\theirs.txt",
+      "mod",
+      schema
+    ).references;
+    idx.addAll(mine);
+    idx.addAll(theirs);
+    expect(idx.lookup("ns.1")).toHaveLength(5);
+    expect(idx.usageCount("ns.1")).toBe(5);
+    idx.removeFile("C:\\mod\\events\\mine.txt");
+    expect(idx.lookup("ns.1")).toHaveLength(2);
+    expect(idx.usageCount("ns.1")).toBe(2);
+    expect(idx.inFile("C:\\mod\\events\\mine.txt")).toHaveLength(0);
+    idx.removeFile("C:\\mod\\events\\theirs.txt");
+    expect(idx.lookup("ns.1")).toHaveLength(0);
+    expect(idx.usageCount("ns.1")).toBe(0);
+  });
 });
 
 describe("DefinitionIndex source priority", () => {
