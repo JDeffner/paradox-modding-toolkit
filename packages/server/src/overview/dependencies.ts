@@ -21,6 +21,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { DependenciesResult, DependencyGroup, DependencyItem } from "@px-lsp/protocol/protocol";
 import type { Definition } from "@px-lsp/protocol/types";
+import { pushAll } from "@px-lsp/protocol/arrays";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { extractReferences } from "../index/references";
@@ -56,7 +57,7 @@ interface Site {
 
 function collectDependents(data: ServerData, def: Definition): DependencyGroup[] {
   const sites: Site[] = data.refIndex.lookup(def.name).map((r) => ({ file: r.file, line: r.line }));
-  if (CALL_KINDS.has(def.kind)) sites.push(...scanCallSites(data, def));
+  if (CALL_KINDS.has(def.kind)) pushAll(sites, scanCallSites(data, def));
 
   const groups = new Map<string, Map<string, DependencyItem>>();
   for (const site of sites) {

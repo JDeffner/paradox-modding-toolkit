@@ -13,19 +13,19 @@
       "recipe": "recipe1-vanilla-x3-plus-20-mods",
       "roots": 24,
       "definitions": 1858912,
-      "timeToIndexedMs": 21532,
-      "indexHeapMb": 1392,
-      "indexRssMb": 2245,
+      "timeToIndexedMs": 21078,
+      "indexHeapMb": 1391,
+      "indexRssMb": 2242,
       "duringIndexing": {
-        "completionP95": 1089,
-        "tokensP95": 336,
-        "worstMs": 1547,
+        "completionP95": 1064,
+        "tokensP95": 162,
+        "worstMs": 1589,
         "samples": 22
       },
       "saveRoundTripMs": {
-        "p50": 144,
-        "p95": 183,
-        "max": 183,
+        "p50": 139,
+        "p95": 149,
+        "max": 149,
         "samples": 5
       },
       "refreshes": {
@@ -37,23 +37,23 @@
       "recipe": "recipe2-game-plus-agot-x2",
       "roots": 4,
       "definitions": 1358756,
-      "timeToIndexedMs": 580749,
-      "indexHeapMb": 3161,
-      "indexRssMb": 3804,
+      "timeToIndexedMs": 529633,
+      "indexHeapMb": 3159,
+      "indexRssMb": 3854,
       "duringIndexing": {
-        "completionP95": 89597,
-        "tokensP95": 1123,
-        "worstMs": 90272,
-        "samples": 25
+        "completionP95": 83650,
+        "tokensP95": 1783,
+        "worstMs": 85073,
+        "samples": 24
       },
       "saveRoundTripMs": {
-        "p50": 731,
-        "p95": 1275,
-        "max": 1275,
+        "p50": 1292,
+        "p95": 1306,
+        "max": 1306,
         "samples": 5
       },
       "refreshes": {
-        "indexing": 10,
+        "indexing": 8,
         "perSave": 2
       }
     }

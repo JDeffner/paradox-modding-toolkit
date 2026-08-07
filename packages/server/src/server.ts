@@ -25,6 +25,7 @@ import * as path from "path";
 // manifest), and the same source works when tests import from src.
 import { version as SERVER_VERSION } from "../package.json";
 import type { Definition } from "@px-lsp/protocol/types";
+import { pushAll } from "@px-lsp/protocol/arrays";
 import {
   configChangedNotification,
   indexChangedNotification,
@@ -581,7 +582,7 @@ async function scanRootChunked(
       const batch = files.slice(i, i + BATCH);
       for (const file of batch) {
         const content = readFileStripBom(file);
-        if (content !== null) defs.push(...extractDefinitions(content, entry, file, source));
+        if (content !== null) pushAll(defs, extractDefinitions(content, entry, file, source));
       }
       done += batch.length;
       onProgress?.(totalFiles === 0 ? 100 : Math.round((done / totalFiles) * 100), entry.path);
@@ -735,14 +736,17 @@ async function buildIndex(): Promise<void> {
           for (const engine of engineRoots()) {
             const d = await scanRootChunked(engine, "vanilla", generation);
             if (d === null) return;
-            engineDefs.push(...d);
+            pushAll(engineDefs, d);
           }
           defs = await scanRootChunked(gamePath, "vanilla", generation, (pct, msg) =>
             progress.report(pct, msg)
           );
           if (defs !== null && engineDefs.length > 0) {
             log(`indexed engine layer (jomini): ${engineDefs.length} definitions`);
-            defs = [...engineDefs, ...defs];
+            // Appended in place (engine first, so game shadows jomini): a third
+            // array of a million definitions is pure heap pressure.
+            pushAll(engineDefs, defs);
+            defs = engineDefs;
           }
         } finally {
           progress.done();
@@ -1358,11 +1362,11 @@ function validateDocumentNow(doc: TextDocument): void {
     if (owner) {
       const text = doc.getText();
       const extracted = extractReferences(text, ctx.fsPath, "mod", schema, isEngineToken);
-      diagnostics.push(...computeReferenceDiagnostics(extracted.references, data));
+      pushAll(diagnostics, computeReferenceDiagnostics(extracted.references, data));
       const entry = classifyFile(owner, ctx.fsPath, schema.entries);
       if (entry?.requiredLoc && entry.kind !== "loc_key") {
         const defs = extractDefinitions(text.replace(/^﻿/, ""), entry, ctx.fsPath, "mod");
-        diagnostics.push(...computeRequiredLocDiagnostics(defs, entry, data));
+        pushAll(diagnostics, computeRequiredLocDiagnostics(defs, entry, data));
       }
     }
   } else {

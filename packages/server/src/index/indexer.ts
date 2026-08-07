@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { DefKind, Definition, DefSource, IndexStats } from "@px-lsp/protocol/types";
 import { listFiles, walkDir } from "@px-lsp/protocol/fsWalk";
+import { pushAll } from "@px-lsp/protocol/arrays";
 import { activeProfile } from "../games/active";
 import type { SchemaEntry } from "../schema/types";
 import { EVENT_ID, extractDefinitions, extractLocDefinitions } from "./extract";
@@ -125,7 +126,7 @@ export class DefinitionIndex {
 
   allDefinitions(): Definition[] {
     const out: Definition[] = [];
-    for (const list of this.byFile.values()) out.push(...list);
+    for (const list of this.byFile.values()) pushAll(out, list);
     return out;
   }
 
@@ -187,7 +188,7 @@ export function scanRoot(root: string, source: DefSource, opts: ScanOptions): De
     walkDir(dir, entry.ext ?? ".txt", files);
     for (const file of files) {
       if (entry.kind === "loc_key" && !isWantedLocFile(path.relative(root, file), opts.locLanguage)) continue;
-      defs.push(...parseFile(file, entry, source));
+      pushAll(defs, parseFile(file, entry, source));
     }
   }
   return defs;

@@ -9,6 +9,7 @@ import type { Location, Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import type { Reference } from "@px-lsp/protocol/types";
+import { pushAll } from "@px-lsp/protocol/arrays";
 import type { ServerData } from "../serverData";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
@@ -37,7 +38,10 @@ export async function provideReferences(
     // scripted_trigger, nested title) from a use: drop hits the definition
     // index already knows, they are appended under includeDeclaration below.
     const defSites = new Set(data.index.lookupAll(name).map((d) => siteKey(d.file, d.line)));
-    refs.push(...(await lazyRefs(name)).filter((r) => !defSites.has(siteKey(r.file, r.line))));
+    pushAll(
+      refs,
+      (await lazyRefs(name)).filter((r) => !defSites.has(siteKey(r.file, r.line)))
+    );
   }
 
   const locations: Location[] = refs.map((r) => ({
