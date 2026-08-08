@@ -4,13 +4,21 @@
  * reference index (mod usage sites); node metadata from the definition index.
  */
 import * as fs from "fs";
-import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
+import type {
+  EventGraph,
+  EventGraphEdge,
+  EventGraphNode,
+  EventGraphParams,
+  EventGraphSuggestions,
+} from "@px-lsp/protocol/protocol";
 import type { Reference } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import { decode, LineIndex, nodeAtOffset, parseScript, type ParseResult } from "../parser";
 
 const DEFAULT_MAX_NODES = 400;
 const GRAPH_KINDS = new Set(["event", "on_action", "decision"]);
+/** A query box lists a page at a time; a whole big mod is enough to type against. */
+const MAX_SUGGESTIONS = 2000;
 
 interface Edge {
   from: string;
@@ -108,12 +116,16 @@ export function computeEventGraph(
   // definition. The focus filter scopes the graph to one workspace mod: edges
   // originate only from focus files (targets may resolve anywhere).
   const defsByFile = new Map<string, Array<{ name: string; kind: string; line: number }>>();
+  // Same pass feeds the query-box catalog: it must list the mod's whole
+  // vocabulary, so it cannot be derived from the selection below.
+  const vocabulary = new Set<string>();
   for (const def of data.index.allDefinitions()) {
     if (def.source !== "mod" || !GRAPH_KINDS.has(def.kind) || !inFocus(def.file)) continue;
     const key = def.file.toLowerCase();
     let list = defsByFile.get(key);
     if (!list) defsByFile.set(key, (list = []));
     list.push({ name: def.name, kind: def.kind, line: def.line });
+    vocabulary.add(def.name);
   }
   for (const list of defsByFile.values()) list.sort((a, b) => a.line - b.line);
 
@@ -223,5 +235,16 @@ export function computeEventGraph(
     });
   }
   nodes.sort((a, b) => a.id.localeCompare(b.id));
-  return { nodes, edges: graphEdges, truncated };
+  return { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
+}
+
+/** The mod's own graph ids and the namespaces they imply, both sorted. */
+function suggestionsOf(vocabulary: Set<string>): EventGraphSuggestions {
+  const ids = [...vocabulary].sort();
+  const namespaces = new Set<string>();
+  for (const id of ids) {
+    const dot = id.indexOf(".");
+    if (dot > 0) namespaces.add(id.slice(0, dot));
+  }
+  return { ids: ids.slice(0, MAX_SUGGESTIONS), namespaces: [...namespaces].sort() };
 }

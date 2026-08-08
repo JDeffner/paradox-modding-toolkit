@@ -424,6 +424,18 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     });
   });
 
+  it("paradox/eventGraph carries the query-box catalog, not just the selected nodes", async () => {
+    const graph = (await conn.sendRequest("paradox/eventGraph", { root: "smoke.1" })) as {
+      nodes: Array<{ id: string }>;
+      suggestions?: { ids: string[]; namespaces: string[] };
+    };
+    // The root selects one chain; the catalog still lists the mod's vocabulary.
+    expect(graph.suggestions?.ids).toContain("smoke.1");
+    expect(graph.suggestions?.ids).toContain("smoke.2");
+    expect(graph.suggestions?.namespaces).toContain("smoke");
+    expect(graph.suggestions?.namespaces).toContain("psmoke");
+  });
+
   it("paradox/dependencies resolves a definition's dependents and dependencies", async () => {
     const result = (await conn.sendRequest("paradox/dependencies", { name: "smoke.1" })) as {
       def: { name: string; kind: string } | null;

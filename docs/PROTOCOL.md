@@ -130,7 +130,7 @@ instead.
 | `paradox/locCoverage` | request | `ModScopedParams` → `LocCoverage[]` — per-language missing/orphaned/untranslated keys |
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
 | `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
-| `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph |
+| `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph, plus the `suggestions` catalog a query box completes against |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -150,6 +150,14 @@ or iterator with several documented outputs stays ambiguous, and an empty
 array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
+
+`paradox/eventGraph` answers `suggestions` alongside the graph: the mod-side
+`ids` (event / on_action / decision, sorted, capped at 2000) and the
+`namespaces` those ids imply. It is the VOCABULARY, not the selection — the
+same list whatever `root` or `namespace` the request asked for — so a client
+completes a query box from the answer it already has instead of asking again.
+`modRoot` scopes it like the graph. The field is optional: a server that
+predates it simply omits it.
 
 `paradox/eventDetail` carries an event's blocks twice over: `keys` /
 `effectKeys` summarize them for an inspector, and `lines` / `totalLines` /

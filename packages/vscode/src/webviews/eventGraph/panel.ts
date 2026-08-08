@@ -261,6 +261,7 @@ export class EventGraphPanel {
     border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
     background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
   }
+  #queryWrap { position: relative; flex: 1 1 auto; min-width: 80px; display: flex; }
   #toolbar input[type="text"] {
     flex: 1 1 auto; min-width: 80px;
     padding: 3px 6px;
@@ -268,6 +269,29 @@ export class EventGraphPanel {
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border, rgba(128,128,128,0.4));
     border-radius: 2px;
+  }
+  #suggest {
+    position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 20;
+    margin: 0; padding: 2px 0; list-style: none; display: none;
+    max-height: 260px; overflow-y: auto;
+    color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-editor-foreground));
+    background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+    border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border, rgba(128,128,128,0.4)));
+    border-radius: 3px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  }
+  #suggest.show { display: block; }
+  #suggest li {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 2px 8px; cursor: pointer; white-space: nowrap;
+  }
+  #suggest li.active {
+    color: var(--vscode-editorSuggestWidget-selectedForeground, var(--vscode-list-activeSelectionForeground, inherit));
+    background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground, rgba(64,128,255,0.35)));
+  }
+  #suggest li .what {
+    margin-left: auto; font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
   }
   #toolbar button {
     padding: 3px 10px;
@@ -378,7 +402,11 @@ export class EventGraphPanel {
 <body>
 <div id="app">
   <div id="toolbar">
-    <input id="query" type="text" placeholder="root id or namespace (e.g. my_event.001 or my_namespace)" />
+    <div id="queryWrap">
+      <input id="query" type="text" autocomplete="off" spellcheck="false"
+             placeholder="root id or namespace (e.g. my_event.001 or my_namespace)" />
+      <ul id="suggest" role="listbox"></ul>
+    </div>
     <button id="go">Go</button>
     <button id="showAll" class="secondary" title="Show every event/on_action/decision node of the mod">All nodes</button>
     <button id="refresh" class="secondary">Refresh</button>
@@ -403,7 +431,7 @@ export class EventGraphPanel {
           <li><b>Dashed borders</b> = vanilla content, solid = your mod, dotted = a parent mod.</li>
           <li><b>Click</b> a box to open the inspector: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option.</li>
           <li><b>Double-click</b> (or Ctrl+click) opens the source file beside the graph. <b>Right-click</b> re-centers the graph on that event.</li>
-          <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go. <b>All nodes</b> shows the whole mod at once. Typing also highlights matching boxes by id or title text.</li>
+          <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go. It completes against your mod's ids and namespaces (up/down to choose, Enter to run, Esc to dismiss). <b>All nodes</b> shows the whole mod at once. Typing also highlights matching boxes by id or title text.</li>
           <li>Drag with the left or middle mouse button to pan, scroll to zoom, Export saves the picture as SVG.</li>
         </ul>
       </div>
@@ -688,25 +716,127 @@ svg.addEventListener("wheel", function (ev) {
 }, { passive: false });
 
 // --- toolbar ---
+// The mod's own graph vocabulary, as the server sends it with every answer.
+let catalog = { ids: [], namespaces: [] };
+let catalogIds = new Set();
+
+function baseParams() {
+  return { maxNodes: currentParams && currentParams.maxNodes };
+}
+function paramsFor(text, kind) {
+  return Object.assign(baseParams(), kind === "namespace" ? { namespace: text } : { root: text });
+}
 function parseQuery() {
   const raw = queryEl.value.trim();
-  const base = { maxNodes: currentParams && currentParams.maxNodes };
-  if (raw === "") return base;
+  if (raw === "") return baseParams();
+  // A known id wins over the dot heuristic: on_action and decision ids carry
+  // no dot, and asking for one as a namespace finds nothing.
+  if (catalogIds.has(raw)) return paramsFor(raw, "id");
   // A '.' in CK3 event ids marks a namespaced id (namespace.number) -> root.
-  if (raw.indexOf(".") >= 0) return Object.assign(base, { root: raw });
-  return Object.assign(base, { namespace: raw });
+  return paramsFor(raw, raw.indexOf(".") >= 0 ? "id" : "namespace");
 }
 let currentParams = {};
-document.getElementById("go").addEventListener("click", function () {
+function submitQuery() {
+  hideSuggest();
   vscode.postMessage({ type: "fetch", params: parseQuery() });
-});
+}
+document.getElementById("go").addEventListener("click", submitQuery);
+
+// --- query completion -------------------------------------------------------
+// A plain dropdown over the catalog: no fetching per keystroke, and picking an
+// entry queries it AS WHAT IT IS, so an on_action name is never mistaken for a
+// namespace.
+const suggestEl = document.getElementById("suggest");
+const MAX_SHOWN = 12;
+let matches = [];
+let activeIndex = -1;
+
+function matchesFor(raw) {
+  const q = raw.trim().toLowerCase();
+  const pool = catalog.namespaces
+    .map(function (n) { return { text: n, kind: "namespace" }; })
+    .concat(catalog.ids.map(function (i) { return { text: i, kind: "id" }; }));
+  if (q === "") return pool.slice(0, MAX_SHOWN);
+  const starts = [], contains = [];
+  for (let i = 0; i < pool.length; i++) {
+    const at = pool[i].text.toLowerCase().indexOf(q);
+    if (at === 0) starts.push(pool[i]);
+    else if (at > 0) contains.push(pool[i]);
+    if (starts.length >= MAX_SHOWN) break;
+  }
+  return starts.concat(contains).slice(0, MAX_SHOWN);
+}
+
+function renderSuggest() {
+  suggestEl.textContent = "";
+  matches.forEach(function (entry, i) {
+    const li = document.createElement("li");
+    li.setAttribute("role", "option");
+    if (i === activeIndex) li.className = "active";
+    li.appendChild(el("span", "", entry.text));
+    if (entry.kind === "namespace") li.appendChild(el("span", "what", "namespace"));
+    // mousedown, not click: the input must not blur before the pick lands.
+    li.addEventListener("mousedown", function (ev) {
+      ev.preventDefault();
+      pick(i);
+    });
+    suggestEl.appendChild(li);
+  });
+  suggestEl.classList.toggle("show", matches.length > 0);
+}
+
+function showSuggest() {
+  matches = matchesFor(queryEl.value);
+  activeIndex = -1;
+  renderSuggest();
+}
+function hideSuggest() {
+  matches = [];
+  activeIndex = -1;
+  // Emptied, not just hidden: a stale list behind a closed panel is one
+  // re-show away from offering entries the box no longer matches.
+  suggestEl.textContent = "";
+  suggestEl.classList.remove("show");
+}
+function moveActive(delta) {
+  if (!suggestEl.classList.contains("show")) showSuggest();
+  if (matches.length === 0) return;
+  activeIndex =
+    activeIndex < 0
+      ? (delta > 0 ? 0 : matches.length - 1)
+      : (activeIndex + delta + matches.length) % matches.length;
+  renderSuggest();
+  const active = suggestEl.children[activeIndex];
+  if (active && active.scrollIntoView) active.scrollIntoView({ block: "nearest" });
+}
+function pick(index) {
+  const entry = matches[index];
+  if (!entry) return;
+  queryEl.value = entry.text;
+  hideSuggest();
+  highlightMatches();
+  vscode.postMessage({ type: "fetch", params: paramsFor(entry.text, entry.kind) });
+}
+
 queryEl.addEventListener("keydown", function (ev) {
-  if (ev.key === "Enter") vscode.postMessage({ type: "fetch", params: parseQuery() });
+  if (ev.key === "ArrowDown") { ev.preventDefault(); moveActive(1); return; }
+  if (ev.key === "ArrowUp") { ev.preventDefault(); moveActive(-1); return; }
+  if (ev.key === "Escape") {
+    if (suggestEl.classList.contains("show")) { ev.preventDefault(); hideSuggest(); }
+    return;
+  }
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    if (activeIndex >= 0) pick(activeIndex);
+    else submitQuery();
+  }
 });
+queryEl.addEventListener("focus", showSuggest);
+queryEl.addEventListener("blur", hideSuggest);
 
 // Live highlight: typing matches loaded nodes by id OR localized title.
 const nodeRects = new Map(); // id -> { rect, node }
-queryEl.addEventListener("input", function () {
+function highlightMatches() {
   const q = queryEl.value.trim().toLowerCase();
   nodeRects.forEach(function (entry) {
     const hit =
@@ -715,6 +845,10 @@ queryEl.addEventListener("input", function () {
         (entry.node.title || "").toLowerCase().indexOf(q) >= 0);
     entry.rect.classList.toggle("search-hit", hit);
   });
+}
+queryEl.addEventListener("input", function () {
+  highlightMatches();
+  showSuggest();
 });
 
 document.getElementById("helpBtn").addEventListener("click", function () {
@@ -722,6 +856,7 @@ document.getElementById("helpBtn").addEventListener("click", function () {
 });
 document.getElementById("showAll").addEventListener("click", function () {
   queryEl.value = "";
+  hideSuggest();
   vscode.postMessage({ type: "fetch", params: { maxNodes: 5000 } });
 });
 document.getElementById("refresh").addEventListener("click", function () {
@@ -916,6 +1051,10 @@ window.addEventListener("message", function (ev) {
   }
   if (msg.type === "graph") {
     currentParams = msg.params || {};
+    if (msg.graph && msg.graph.suggestions) {
+      catalog = msg.graph.suggestions;
+      catalogIds = new Set(catalog.ids);
+    }
     if (currentParams.root) queryEl.value = currentParams.root;
     else if (currentParams.namespace) queryEl.value = currentParams.namespace;
     try {

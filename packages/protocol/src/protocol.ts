@@ -998,10 +998,23 @@ export interface EventGraphEdge {
   /** Where in the source event the reference sits: an option's text, or immediate/after/… */
   label?: string;
 }
+/**
+ * What a query box may offer: the whole mod-side vocabulary of the graph, NOT
+ * the ids this particular query selected. It is the same pass that collects the
+ * mod's graph definitions, so a client gets it without a second request.
+ */
+export interface EventGraphSuggestions {
+  /** Mod-side event / on_action / decision ids, sorted, capped at 2000. */
+  ids: string[];
+  /** The event namespaces those ids belong to, sorted. */
+  namespaces: string[];
+}
 export interface EventGraph {
   nodes: EventGraphNode[];
   edges: EventGraphEdge[];
   truncated: boolean;
+  /** Absent from servers that predate it; a client must tolerate that. */
+  suggestions?: EventGraphSuggestions;
 }
 
 /**
