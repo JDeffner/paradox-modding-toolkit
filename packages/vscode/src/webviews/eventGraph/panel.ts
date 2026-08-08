@@ -687,23 +687,35 @@ function fitToView(pos) {
 // preview use. Middle needs preventDefault on both the press and the auxclick
 // or the browser starts its own autoscroll on top of the pan.
 let dragging = false, dragStart = null;
-svg.addEventListener("mousedown", function (ev) {
+// A MIDDLE drag captures the pointer: a release outside the webview never
+// delivers a window mouseup, which left the pan armed and the cursor stuck.
+// The left button stays uncaptured on purpose — capture retargets the derived
+// click to the svg, which would break clicking a node to open it. Captured
+// events still bubble, so the window-level listeners serve both paths.
+svg.addEventListener("pointerdown", function (ev) {
   if (ev.button !== 0 && ev.button !== 1) return;
-  if (ev.button === 1) ev.preventDefault();
+  if (ev.button === 1) {
+    ev.preventDefault();
+    svg.setPointerCapture(ev.pointerId);
+  }
   dragging = true;
   dragStart = { x: ev.clientX - view.x, y: ev.clientY - view.y };
   svg.classList.add("dragging");
 });
-window.addEventListener("mousemove", function (ev) {
+window.addEventListener("pointermove", function (ev) {
   if (!dragging || !rootGroup) return;
   view.x = ev.clientX - dragStart.x;
   view.y = ev.clientY - dragStart.y;
   applyTransform(rootGroup);
 });
-window.addEventListener("mouseup", function () {
+function endGraphPan(ev) {
+  if (!dragging) return;
   dragging = false;
   svg.classList.remove("dragging");
-});
+  if (svg.hasPointerCapture(ev.pointerId)) svg.releasePointerCapture(ev.pointerId);
+}
+window.addEventListener("pointerup", endGraphPan);
+window.addEventListener("pointercancel", endGraphPan);
 svg.addEventListener("auxclick", function (ev) {
   if (ev.button === 1) ev.preventDefault();
 });

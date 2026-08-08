@@ -400,23 +400,29 @@ function toggleAncestors() {
 // Middle-mouse drag scrolls the tree, which is what panning means here: the
 // same gesture as the event graph and the designer canvas. preventDefault on
 // the press and the auxclick suppresses the browser's own autoscroll.
+// Pointer capture rather than window listeners: a release OUTSIDE the webview
+// never delivers a window mouseup, which left the grabbing cursor stuck.
 let panFrom = null;
-treeEl.addEventListener("mousedown", (ev) => {
+treeEl.addEventListener("pointerdown", (ev) => {
   if (ev.button !== 1) return;
   ev.preventDefault();
   panFrom = { x: ev.clientX, y: ev.clientY, left: treeEl.scrollLeft, top: treeEl.scrollTop };
+  treeEl.setPointerCapture(ev.pointerId);
   treeEl.style.cursor = "grabbing";
 });
-window.addEventListener("mousemove", (ev) => {
+treeEl.addEventListener("pointermove", (ev) => {
   if (!panFrom) return;
   treeEl.scrollLeft = panFrom.left - (ev.clientX - panFrom.x);
   treeEl.scrollTop = panFrom.top - (ev.clientY - panFrom.y);
 });
-window.addEventListener("mouseup", () => {
+const endPan = (ev) => {
   if (!panFrom) return;
   panFrom = null;
   treeEl.style.cursor = "";
-});
+  if (treeEl.hasPointerCapture(ev.pointerId)) treeEl.releasePointerCapture(ev.pointerId);
+};
+treeEl.addEventListener("pointerup", endPan);
+treeEl.addEventListener("pointercancel", endPan);
 treeEl.addEventListener("auxclick", (ev) => {
   if (ev.button === 1) ev.preventDefault();
 });

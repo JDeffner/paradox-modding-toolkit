@@ -340,11 +340,13 @@ export type HostToApp =
       /**
        * The property half of the same answer, forwarded UNCHANGED: widget type
        * -> the harvested property names, and the tree-wide ranking behind them.
-       * A host that dropped these would leave the add-property row offering
-       * nothing, which looks exactly like a game with no harvest.
+       * REQUIRED, unlike the wire type's optional fields, precisely because the
+       * first VS Code host dropped them while typechecking cleanly and shipped
+       * an add-property row that offered nothing. A host with no data sends
+       * `{}` / `[]` and says so with its own eyes open.
        */
-      properties?: Record<string, string[]>;
-      commonProperties?: string[];
+      properties: Record<string, string[]>;
+      commonProperties: string[];
     }
   /**
    * Answer to `requestDependencies`. `line` is echoed (absent for a

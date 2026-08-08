@@ -532,11 +532,20 @@ export class GuiEditorPanel {
         const doc = await vscode.workspace.openTextDocument(this.sourceUri);
         try {
           const result = await this.fetchVocabulary(doc.uri, doc.getText());
-          this.post({ type: "vocabulary", entries: result.entries, total: result.total });
+          this.post({
+            type: "vocabulary",
+            entries: result.entries,
+            total: result.total,
+            // Forwarded UNCHANGED per messages.ts: the add-property row is the
+            // sole consumer, and a host that dropped these would leave it
+            // offering nothing (which is exactly what the first version did).
+            properties: result.properties ?? {},
+            commonProperties: result.commonProperties ?? [],
+          });
         } catch {
           // A palette with no entries says so on its own; an error banner over
           // the canvas would be about the wrong thing.
-          this.post({ type: "vocabulary", entries: [], total: 0 });
+          this.post({ type: "vocabulary", entries: [], total: 0, properties: {}, commonProperties: [] });
         }
         return;
       }

@@ -398,25 +398,31 @@ function render(msg) {
 
 // Middle-mouse drag scrolls the walkthrough: the same gesture that pans the
 // event graph and the designer canvas, applied to the surface this view pans.
+// Pointer capture rather than window listeners: a release OUTSIDE the webview
+// never delivers a window mouseup, which left the grabbing cursor stuck.
 // preventDefault on the press and the auxclick suppresses the browser's own
 // autoscroll, which would fight the drag.
 let panFrom = null;
-bodyEl.addEventListener("mousedown", function (ev) {
+bodyEl.addEventListener("pointerdown", function (ev) {
   if (ev.button !== 1) return;
   ev.preventDefault();
   panFrom = { x: ev.clientX, y: ev.clientY, left: bodyEl.scrollLeft, top: bodyEl.scrollTop };
+  bodyEl.setPointerCapture(ev.pointerId);
   bodyEl.style.cursor = "grabbing";
 });
-window.addEventListener("mousemove", function (ev) {
+bodyEl.addEventListener("pointermove", function (ev) {
   if (!panFrom) return;
   bodyEl.scrollLeft = panFrom.left - (ev.clientX - panFrom.x);
   bodyEl.scrollTop = panFrom.top - (ev.clientY - panFrom.y);
 });
-window.addEventListener("mouseup", function () {
+function endPan(ev) {
   if (!panFrom) return;
   panFrom = null;
   bodyEl.style.cursor = "";
-});
+  if (bodyEl.hasPointerCapture(ev.pointerId)) bodyEl.releasePointerCapture(ev.pointerId);
+}
+bodyEl.addEventListener("pointerup", endPan);
+bodyEl.addEventListener("pointercancel", endPan);
 bodyEl.addEventListener("auxclick", function (ev) {
   if (ev.button === 1) ev.preventDefault();
 });

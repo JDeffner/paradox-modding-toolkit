@@ -200,8 +200,8 @@ function serveEdits(): void {
         type: "vocabulary",
         entries: vocabulary.entries,
         total: vocabulary.total,
-        properties: vocabulary.properties,
-        commonProperties: vocabulary.commonProperties,
+        properties: vocabulary.properties ?? {},
+        commonProperties: vocabulary.commonProperties ?? [],
       });
       continue;
     }
@@ -2309,6 +2309,16 @@ describe("the inspector holds its place across the re-layout a commit causes", (
     expect(editor.scrollOf("inspector")).toBe(120);
     expect(editor.propRow("background")!.querySelectorAll(".block .line").length).toBeGreaterThan(0);
     expect(editor.focusedRow()).toBe("position");
+  });
+
+  it("keeps text typed into a sibling field that was never committed", () => {
+    openInspect();
+    // Half-typed add-property name, then a commit elsewhere rebuilds the rows.
+    editor.typeRow("+name", "vis", false);
+    editor.typeRow("position", "{ 30 30 }");
+    serveEdits();
+    serveWidgetInfo(editor, doc);
+    expect(editor.field("+name")!.value).toBe("vis");
   });
 
   it("goes back to the top for a different widget, whose rows it has never scrolled", () => {

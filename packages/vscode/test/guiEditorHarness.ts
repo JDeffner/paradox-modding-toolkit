@@ -111,6 +111,8 @@ export interface EditorHarness {
   toast(): string | null;
   /** The inspector's editable input for a property row, or null when it has none. */
   rowInput(key: string): HTMLInputElement | null;
+  /** Any inspector field by its data-row name, the add/preset fields included. */
+  field(row: string): HTMLInputElement | null;
   /** The inspector's whole row element for a property, or null when it has none. */
   propRow(key: string): HTMLElement | null;
   /** Type into an inspector field addressed by its `data-row` name, then commit it. */
@@ -284,6 +286,9 @@ export function bootEditor(): EditorHarness {
         return prop.querySelector("input.val");
       }
       return null;
+    },
+    field(row) {
+      return doc.querySelector<HTMLInputElement>(`#inspector [data-row="${row}"]`);
     },
     propRow(key) {
       for (const prop of doc.querySelectorAll<HTMLElement>("#inspector .prop")) {

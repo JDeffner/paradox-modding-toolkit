@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-<!-- The paradox-gui file icon's window frame (scripts/gen-icons.mjs), with its
+<!-- The paradox-gui file icon's window frame (scripts/gen-icons.ts), with its
      second layout block replaced by a pointer: the window you can work in.
      Light-theme ink, matching that icon's light variant. -->
   <rect x="1.75" y="2.55" width="12.5" height="10.9" rx="1.6" fill="none" stroke="#6D4FC2" stroke-width="1.5"/>

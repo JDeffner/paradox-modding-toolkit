@@ -15,10 +15,15 @@
 import * as vscode from "vscode";
 
 class SimulateEventLensProvider implements vscode.CodeLensProvider {
+  constructor(private readonly enabled: () => boolean) {}
+
   async provideCodeLenses(
     document: vscode.TextDocument,
     token: vscode.CancellationToken
   ): Promise<vscode.CodeLens[]> {
+    // Same gate as the command's own menus (px.isCk3Workspace): a lens that
+    // offered a command its menus hide would be the one ungated entry point.
+    if (!this.enabled()) return [];
     const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
       "vscode.executeDocumentSymbolProvider",
       document.uri
@@ -42,9 +47,9 @@ class SimulateEventLensProvider implements vscode.CodeLensProvider {
 }
 
 /** Register the lens for script documents; disposed with the extension. */
-export function registerSimulateEventLens(): vscode.Disposable {
+export function registerSimulateEventLens(enabled: () => boolean): vscode.Disposable {
   return vscode.languages.registerCodeLensProvider(
     { language: "paradox", scheme: "file" },
-    new SimulateEventLensProvider()
+    new SimulateEventLensProvider(enabled)
   );
 }

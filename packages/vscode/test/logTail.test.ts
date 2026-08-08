@@ -109,6 +109,15 @@ describe("LogTail", () => {
     expect(tail.read().lines).toEqual(["first", "second"]);
   });
 
+  it("strips a BOM that arrives split across two reads", () => {
+    const tail = new LogTail(file);
+    expect(tail.seekToEnd()).toBe(false);
+    fs.writeFileSync(file, Buffer.from([0xef, 0xbb]));
+    expect(tail.read().lines).toEqual([]);
+    fs.appendFileSync(file, Buffer.concat([Buffer.from([0xbf]), Buffer.from("first\n")]));
+    expect(tail.read().lines).toEqual(["first"]);
+  });
+
   it("signals reset and rereads from zero when the log is truncated in place", () => {
     fs.writeFileSync(file, "");
     const tail = new LogTail(file);

@@ -434,7 +434,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       LOC_SELECTOR,
       new LocFileDefinitionProvider(tracker, () => cfg)
     ),
-    registerSimulateEventLens()
+    registerSimulateEventLens(() => cfg.isCk3Workspace)
   );
 
   // Title button "Open .info Reference" shows only when the active file maps to

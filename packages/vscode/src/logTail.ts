@@ -40,28 +40,46 @@ export class LogTail {
   private ino = 0;
   private pending = "";
   private decoder = new StringDecoder("utf8");
+  /** A BOM is still owed a strip: reading from offset 0, no text decoded yet. */
+  private stripBom = true;
 
   constructor(readonly file: string) {}
 
   /**
    * Ignore whatever is already in the file: only entries from now on matter.
    * Returns false when the file does not exist yet (the game has not run).
+   *
+   * A read-open can fail with a sharing violation where a stat succeeds (the
+   * game or an AV scanner holding the file); falling back to the stat size
+   * matters, because an offset left at 0 here would make the first successful
+   * read publish the ENTIRE pre-existing log as this session's new entries,
+   * which is the exact issue-#10 symptom this class exists to remove.
    */
   seekToEnd(): boolean {
     this.offset = 0;
     this.ino = 0;
     this.pending = "";
     this.decoder = new StringDecoder("utf8");
+    this.stripBom = true;
     let fd: number;
     try {
       fd = fs.openSync(this.file, "r");
     } catch {
-      return false; // the first read starts from 0 once the game writes it
+      try {
+        const st = fs.statSync(this.file);
+        this.offset = st.size;
+        this.ino = Number(st.ino) || 0;
+        this.stripBom = false;
+        return true;
+      } catch {
+        return false; // no file at all: the first read starts from 0
+      }
     }
     try {
       const st = fs.fstatSync(fd);
       this.offset = st.size;
       this.ino = Number(st.ino) || 0;
+      if (st.size > 0) this.stripBom = false;
       return true;
     } finally {
       fs.closeSync(fd);
@@ -75,8 +93,15 @@ export class LogTail {
     } catch {
       return { lines: [], reset: false, missing: true };
     }
+    let st: fs.Stats;
     try {
-      const st = fs.fstatSync(fd);
+      st = fs.fstatSync(fd);
+    } catch {
+      // Nothing mutated yet, so "missing" is still the honest answer here.
+      fs.closeSync(fd);
+      return { lines: [], reset: false, missing: true };
+    }
+    try {
       const ino = Number(st.ino) || 0;
       // ino is 0 on filesystems that do not report a file index; there the
       // shrink test is the only replacement signal available.
@@ -86,19 +111,30 @@ export class LogTail {
         this.offset = 0;
         this.pending = "";
         this.decoder = new StringDecoder("utf8");
+        this.stripBom = true;
       }
       this.ino = ino;
 
-      const startedAtZero = this.offset === 0;
       let text = this.pending;
+      this.pending = "";
       const buf = Buffer.allocUnsafe(CHUNK_BYTES);
-      for (;;) {
-        const n = fs.readSync(fd, buf, 0, buf.length, this.offset);
-        if (n <= 0) break;
-        this.offset += n;
-        text += this.decoder.write(buf.subarray(0, n));
+      try {
+        for (;;) {
+          const n = fs.readSync(fd, buf, 0, buf.length, this.offset);
+          if (n <= 0) break;
+          this.offset += n;
+          text += this.decoder.write(buf.subarray(0, n));
+        }
+      } catch {
+        // A mid-loop failure keeps what was already consumed: the offset only
+        // ever advanced by bytes actually read, so the rest arrives next poll.
+        // Swallowing it into "missing" here would discard decoded text the
+        // offset has moved past, and bury a reset the caller must act on.
       }
-      if (startedAtZero && text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+      if (this.stripBom && text.length > 0) {
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        this.stripBom = false;
+      }
 
       const parts = text.split("\n");
       this.pending = parts.pop() ?? "";
@@ -107,8 +143,6 @@ export class LogTail {
         reset,
         missing: false,
       };
-    } catch {
-      return { lines: [], reset: false, missing: true };
     } finally {
       fs.closeSync(fd);
     }

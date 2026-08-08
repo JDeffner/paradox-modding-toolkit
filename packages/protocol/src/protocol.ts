@@ -826,7 +826,8 @@ export interface GuiVocabularyResult {
    * types THIS DOCUMENT names are here (the keys it writes blocks under, plus
    * the bases of its own `type X = base` declarations), because the harvest
    * holds hundreds of types and this answer is re-asked after every layout.
-   * Absent for a game with no harvest.
+   * The server always sends it (empty for a game with no harvest); it is
+   * optional only so older recorded responses stay type-valid.
    */
   properties?: Record<string, string[]>;
   /**

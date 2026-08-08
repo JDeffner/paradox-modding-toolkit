@@ -824,7 +824,13 @@ inspectorEl.addEventListener("scroll", () => {
 function previewInspector(write: GestureWrite): void {
   for (const property of write.properties) {
     const input = inspectorInputs.get(property.key);
-    if (input) input.value = property.value;
+    if (input) {
+      input.value = property.value;
+      // A preview is display state, not user intent: move the baseline with
+      // it, or an abandoned gesture's rebuild would "restore" the preview as
+      // if the user had typed it.
+      input.dataset.baseline = property.value;
+    }
     const text = inspectorTexts.get(property.key);
     if (text) text.textContent = abbreviate(property.value);
   }
@@ -848,11 +854,42 @@ interface FocusedRow {
  */
 let pendingFocus: FocusedRow | null = null;
 
+/**
+ * Text typed but not committed when a rebuild hit, keyed by data-row. A commit
+ * of ONE field rebuilds every row, and without this the text sitting in a
+ * sibling field (a half-filled add-property name, the second field of a block
+ * entry) was silently thrown away. Held across placeholder renders exactly
+ * like `pendingFocus`.
+ */
+let pendingTyped: Map<string, string> | null = null;
+
 function capturedFocus(): FocusedRow | null {
   const active = document.activeElement as HTMLElement | null;
   if (!active || !inspectorEl.contains(active) || active.dataset.row === undefined) return null;
   const caret = active instanceof HTMLInputElement ? active.selectionStart : null;
   return { row: active.dataset.row, caret };
+}
+
+/** Every input whose value differs from the baseline it was rendered with. */
+function capturedTyped(): Map<string, string> | null {
+  const dirty = new Map<string, string>();
+  for (const node of Array.from(inspectorEl.querySelectorAll<HTMLInputElement>("input[data-row]"))) {
+    const baseline = node.dataset.baseline ?? "";
+    if (node.value !== baseline) dirty.set(node.dataset.row as string, node.value);
+  }
+  return dirty.size > 0 ? dirty : null;
+}
+
+function restoreTyped(typed: Map<string, string> | null): void {
+  if (!typed) return;
+  for (const node of Array.from(inspectorEl.querySelectorAll<HTMLInputElement>("input[data-row]"))) {
+    const val = typed.get(node.dataset.row as string);
+    if (val === undefined) continue;
+    // The commit landed and the row now RENDERS the typed text: restoring
+    // would only re-arm the change handler for a second, identical write.
+    if ((node.dataset.baseline ?? "") === val) continue;
+    node.value = val;
+  }
 }
 
 function restoreFocus(saved: FocusedRow | null): void {
@@ -874,17 +911,21 @@ function restoreFocus(saved: FocusedRow | null): void {
 function renderInspector(): void {
   const item = selectedItem();
   const forWidget = item ? rowKey(item.path) : null;
-  if (forWidget !== inspectorFor) {
-    // Another widget's rows: the offset and the open sub-editors were
-    // statements about rows that are no longer here.
+  const switched = forWidget !== inspectorFor;
+  if (switched) {
+    // Another widget's rows: the offset, the open sub-editors and any typed
+    // text were statements about rows that are no longer here.
     inspectorFor = forWidget;
     inspectorScroll = 0;
     expandedBlocks.clear();
     editingRows.clear();
     pendingFocus = null;
+    pendingTyped = null;
   }
-  const focus = capturedFocus() ?? pendingFocus;
+  const focus = switched ? null : (capturedFocus() ?? pendingFocus);
+  const typed = switched ? null : (capturedTyped() ?? pendingTyped);
   pendingFocus = null;
+  pendingTyped = null;
   inspectorEl.textContent = "";
   inspectorInputs.clear();
   inspectorTexts.clear();
@@ -896,6 +937,7 @@ function renderInspector(): void {
   // Every early return below is a panel that is not showing the rows the
   // capture named, so the capture is held for the render that will be.
   pendingFocus = focus;
+  pendingTyped = typed;
   const head = el("div", "head");
   head.appendChild(el("div", undefined, widgetTitle(item)));
   const r = item.rect;
@@ -943,8 +985,10 @@ function renderInspector(): void {
   renderAddProperty(item, rows);
   renderAnchors(item.line, rows);
   pendingFocus = null;
+  pendingTyped = null;
   showingRows = true;
   inspectorEl.scrollTop = inspectorScroll;
+  restoreTyped(typed);
   restoreFocus(focus);
 }
 
@@ -1084,6 +1128,7 @@ function blockInput(
   input.value = value;
   input.spellcheck = false;
   input.dataset.row = rowId;
+  input.dataset.baseline = value;
   input.addEventListener("keydown", (ev) => {
     ev.stopPropagation();
     if (ev.key !== "Enter") return;
@@ -1479,8 +1524,10 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
   input.value = row.value;
   input.spellcheck = false;
   // Named so a rebuild can put the caret back where the user left it: a commit
-  // re-lays the document out and every row here is a new element.
+  // re-lays the document out and every row here is a new element. The baseline
+  // is what dirty-detection compares against when a sibling's commit rebuilds.
   input.dataset.row = row.key;
+  input.dataset.baseline = row.value;
   input.title = row.local
     ? row.value
     : `${row.value} (inherited: writing it adds an override on this widget).`;

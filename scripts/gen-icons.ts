@@ -97,7 +97,8 @@ const icons: Record<string, IconDef> = {
   },
 };
 
-const svg = (body: string): string => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">${body}\n</svg>\n`;
+const svg = (body: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">${body}\n</svg>\n`;
 
 for (const [name, def] of Object.entries(icons)) {
   fs.writeFileSync(path.join(outDir, `${name}-dark.svg`), svg(def.body(def.dark)));
