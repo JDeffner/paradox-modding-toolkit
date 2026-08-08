@@ -15,7 +15,7 @@
  *
  * PURE: no DOM.
  */
-import type { Scene } from "./scene";
+import { subtreeEnd, type Scene } from "./scene";
 
 export interface TreeRow {
   /** Draw index in the scene: the shared identity of a row and its rect. */
@@ -39,11 +39,23 @@ export function rowKey(path: readonly number[]): string {
 /**
  * Visible rows, in draw order, with the subtrees of collapsed rows omitted.
  * A collapsed ancestor hides its whole subtree, however deep.
+ *
+ * `focus` scopes the list to one subtree: the focused widget becomes the only
+ * root, at depth 0, and everything outside it is not a row at all. Depths are
+ * re-based on it so a focused subtree indents from the left edge instead of
+ * carrying the indent of ancestors that are no longer on screen.
  */
-export function treeRows(scene: Scene, collapsed: ReadonlySet<string>): TreeRow[] {
+export function treeRows(
+  scene: Scene,
+  collapsed: ReadonlySet<string>,
+  focus: number | null = null
+): TreeRow[] {
   const rows: TreeRow[] = [];
   let hiddenBelow: number | null = null;
-  for (let i = 0; i < scene.items.length; i++) {
+  const root = focus ?? 0;
+  const rebase = focus === null ? 0 : scene.items[focus].depth;
+  const last = focus === null ? scene.items.length : subtreeEnd(scene, focus);
+  for (let i = root; i < last; i++) {
     const item = scene.items[i];
     if (hiddenBelow !== null) {
       if (item.depth > hiddenBelow) continue;
@@ -53,7 +65,7 @@ export function treeRows(scene: Scene, collapsed: ReadonlySet<string>): TreeRow[
     const isCollapsed = hasChildren && collapsed.has(rowKey(item.path));
     rows.push({
       index: i,
-      depth: item.depth,
+      depth: item.depth - rebase,
       key: item.key,
       name: item.name,
       synthetic: !item.editable,

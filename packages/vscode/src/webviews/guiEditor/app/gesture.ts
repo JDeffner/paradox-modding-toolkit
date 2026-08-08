@@ -138,7 +138,12 @@ export function moveWrite(base: GestureBase, rect: SceneRect, dx: number, dy: nu
 }
 
 /** Which edges of the rect a handle drags. */
-function edgesOf(handle: ResizeHandle): { west: boolean; east: boolean; north: boolean; south: boolean } {
+export function edgesOf(handle: ResizeHandle): {
+  west: boolean;
+  east: boolean;
+  north: boolean;
+  south: boolean;
+} {
   return {
     west: handle === "nw" || handle === "w" || handle === "sw",
     east: handle === "ne" || handle === "e" || handle === "se",

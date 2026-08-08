@@ -50,11 +50,17 @@ function contains(rect: SceneRect, x: number, y: number): boolean {
 /**
  * Every widget under (x, y), best candidate FIRST. A widget clipped away by an
  * ancestor is not under the cursor: it is not on screen there.
+ *
+ * `skip` is the layers panel's lock and eye, and the tree's subtree focus, as
+ * one mask: a locked widget is still drawn and still selectable from a panel,
+ * it just stops swallowing clicks meant for what is underneath it, which is the
+ * blunt answer to overlapping widgets that Alt-cycling only softens.
  */
-export function hitStack(scene: Scene, x: number, y: number): number[] {
+export function hitStack(scene: Scene, x: number, y: number, skip?: Uint8Array | null): number[] {
   const hits: number[] = [];
   const areas = new Map<number, number>();
   for (let i = 0; i < scene.items.length; i++) {
+    if (skip?.[i]) continue;
     const rect = visibleRect(scene.items[i]);
     if (!contains(rect, x, y)) continue;
     hits.push(i);

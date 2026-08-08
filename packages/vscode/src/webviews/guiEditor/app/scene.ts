@@ -210,6 +210,36 @@ export function subtreeEnd(scene: Scene, index: number): number {
   return end;
 }
 
+/**
+ * The widget's parent in the draw list, or null for a root widget. A parent is
+ * drawn immediately before its subtree, so it is the nearest EARLIER item one
+ * level shallower.
+ */
+export function parentIndex(scene: Scene, index: number): number | null {
+  const depth = scene.items[index]?.depth;
+  if (depth === undefined || depth === 0) return null;
+  for (let i = index - 1; i >= 0; i--) {
+    if (scene.items[i].depth === depth - 1) return i;
+  }
+  return null;
+}
+
+/**
+ * The direct children of `parent`, in paint order, or the document's root
+ * widgets when it is null. Paint order IS source order, which is why the layers
+ * panel can list it and a reorder can act on it.
+ */
+export function childIndices(scene: Scene, parent: number | null): number[] {
+  const depth = parent === null ? 0 : scene.items[parent].depth + 1;
+  const start = parent === null ? 0 : parent + 1;
+  const end = parent === null ? scene.items.length : subtreeEnd(scene, parent);
+  const out: number[] = [];
+  for (let i = start; i < end; i++) {
+    if (scene.items[i].depth === depth) out.push(i);
+  }
+  return out;
+}
+
 function fillToken(fill: GuiLayoutFill | undefined): string | undefined {
   if (!fill) return undefined;
   if (fill.texture) {
