@@ -1,9 +1,10 @@
 /**
  * The Paradox Toolkit activity-bar container (rework plan AD-7): native tree views —
- * Tools, Mod Overview, Problems by Type, Localization Coverage, Overrides &
- * Conflicts. All data comes from the language server via paradox/* requests
- * (except Problems, which slices the editor's own diagnostics); views refresh
- * on the server's paradox/indexChanged notification.
+ * Mod Overview, Problems by Type, Localization Coverage, Overrides &
+ * Conflicts, Dependencies. All data comes from the language server via paradox/*
+ * requests (except Problems, which slices the editor's own diagnostics); views
+ * refresh on the server's paradox/indexChanged notification. The Project view
+ * (formerly Tools) is a webview — see webviews/dashboard/view.ts.
  */
 import * as vscode from "vscode";
 import * as path from "path";
@@ -21,10 +22,7 @@ import {
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
 import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
-import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
-import type { GameMeta } from "@px-lsp/server/games/profile";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
-import { metaFor } from "./meta";
 
 /**
  * Which mod the mod-scoped views (Overview, Loc Coverage, Overrides, event
@@ -36,6 +34,9 @@ export class FocusMod {
   /** Pinned root, or null = follow the active editor. */
   private pinned: string | null;
   private lastAutoRoot: string | null = null;
+  private readonly pinEmitter = new vscode.EventEmitter<void>();
+  /** Fires after pin() persists — both the tree views and the Project webview listen. */
+  readonly onDidPin = this.pinEmitter.event;
 
   constructor(
     private readonly state: vscode.Memento,
@@ -74,9 +75,15 @@ export class FocusMod {
     return this.pinned !== null;
   }
 
+  /** The raw pinned root (may point at an excluded/removed mod), or null = follow. */
+  pinnedRoot(): string | null {
+    return this.pinned;
+  }
+
   async pin(root: string | null): Promise<void> {
     this.pinned = root;
     await this.state.update("px.focusModRoot", root);
+    this.pinEmitter.fire();
   }
 
   label(root: string | null = this.current()): string {
@@ -412,111 +419,6 @@ class DependenciesProvider extends BaseProvider {
   }
 }
 
-// ---- Tools -----------------------------------------------------------------------------
-
-type ToolGroup = [group: string, items: Array<[label: string, command: string, icon: string]>];
-
-/**
- * One-click launcher for the extension's commands, grouped by workflow. Built
- * per game: labels carry the active game's name, and the tiger entry is absent
- * for games with no tiger (EU5) so no dead command is offered.
- */
-const toolGroups = (meta: GameMeta): ToolGroup[] => [
-  ["Create", [["New Content (event, decision, …)", "px.newContent", "new-file"]]],
-  [
-    "Localization",
-    [
-      ["Add Language (scaffold files)", "px.createTranslation", "globe"],
-      ["Translate Missing Keys (one by one)", "px.translateNext", "arrow-right"],
-      ["New Translation Mod (translate another mod)", "px.createTranslationMod", "repo-clone"],
-    ],
-  ],
-  [
-    "Images",
-    [
-      ["Convert Image to DDS", "px.convertToDds", "file-media"],
-      ["Image Guidelines (sizes & formats)", "px.imageGuidelines", "book"],
-    ],
-  ],
-  [
-    "Inspect",
-    [
-      ["Event Graph", "px.showEventGraph", "type-hierarchy"],
-      ["Simulate Event (walk one event step by step)", "px.simulateEvent", "debug-alt"],
-      ["GUI Widget Tree (open a .gui first)", "px.showGuiTree", "list-tree"],
-      ["GUI Layout Preview (open a .gui first)", "px.showGuiPreview", "preview"],
-      ["Mod Report", "px.modReport", "output"],
-      ["Format Docs (.info) for This File", "px.openInfoDocs", "question"],
-    ],
-  ],
-  [
-    "Validate & Test",
-    [
-      ...(meta.tiger
-        ? ([[`Run ${meta.tiger.binaryName} Validation`, "px.runTiger", "bug"]] as ToolGroup[1])
-        : []),
-      [`Launch ${meta.shortName} (debug mode)`, "px.launchGame", "play"],
-      ["Toggle error.log Watcher", "px.watchErrorLog", "eye"],
-      ["Run Setup & Health Check", "px.setup", "tools"],
-    ],
-  ],
-  // The tutorial is CK3-specific content bundled with the extension.
-  ...(meta.id === ck3Meta.id
-    ? ([["Learn", [["Tutorial: CK3 Modding from Zero", "px.tutorial", "mortar-board"]]]] as ToolGroup[])
-    : []),
-];
-
-class ToolsProvider extends BaseProvider {
-  constructor(
-    private readonly getCfg: () => PxConfig,
-    private readonly focus: FocusMod
-  ) {
-    super();
-  }
-
-  protected async roots(): Promise<Node[]> {
-    const groups = toolGroups(metaFor(this.getCfg().gameId)).map(([group, items]) => {
-      const g = new Node(group, vscode.TreeItemCollapsibleState.Expanded);
-      g.children = items.map(([label, command, icon]) => {
-        const item = new Node(label);
-        item.iconPath = new vscode.ThemeIcon(icon);
-        item.command = { command, title: label };
-        return item;
-      });
-      return g;
-    });
-    return [this.workspaceModsGroup(), ...groups];
-  }
-
-  /** Top group: focus-mod picker, exclusion picker, and the excluded mods. */
-  private workspaceModsGroup(): Node {
-    const g = new Node("Workspace Mods", vscode.TreeItemCollapsibleState.Expanded);
-    const pick = new Node("Pick Focus Mod (sidebar views)");
-    pick.iconPath = new vscode.ThemeIcon("folder-library");
-    pick.command = { command: "px.pickFocusMod", title: "Pick Focus Mod" };
-    pick.description = this.focus.isPinned() ? `${this.focus.label()} (pinned)` : this.focus.label();
-    const exclude = new Node("Exclude Mods from Indexing");
-    exclude.iconPath = new vscode.ThemeIcon("eye-closed");
-    exclude.command = { command: "px.excludeMods", title: "Exclude Workspace Mods from Indexing" };
-    g.children = [pick, exclude];
-
-    const excluded = this.getCfg().excludedMods;
-    if (excluded.length > 0) {
-      const list = new Node(`Excluded (${excluded.length})`, vscode.TreeItemCollapsibleState.Collapsed);
-      list.iconPath = new vscode.ThemeIcon("circle-slash");
-      list.children = excluded.map((p) => {
-        const item = new Node(readDescriptorName(p) ?? path.basename(p));
-        item.description = p;
-        item.iconPath = new vscode.ThemeIcon("circle-slash");
-        item.tooltip = "Not indexed. Run 'Exclude Mods from Indexing' to re-include.";
-        return item;
-      });
-      g.children.push(list);
-    }
-    return g;
-  }
-}
-
 // ---- registration ----------------------------------------------------------------------
 
 export interface PxViews {
@@ -530,15 +432,14 @@ export interface PxViews {
 export function registerPxViews(
   context: vscode.ExtensionContext,
   lc: LanguageClient,
-  getCfg: () => PxConfig
+  getCfg: () => PxConfig,
+  focus: FocusMod
 ): PxViews {
-  const focus = new FocusMod(context.workspaceState, getCfg);
   const overview = new OverviewProvider(lc, focus);
   const problems = new ProblemsProvider();
   const locCoverage = new LocCoverageProvider(lc, focus);
   const overrides = new OverridesProvider(lc, focus);
   const dependencies = new DependenciesProvider();
-  const tools = new ToolsProvider(getCfg, focus);
 
   // Mod-scoped views are created as TreeViews so their header can show WHICH
   // mod they describe (the focus mod's descriptor name).
@@ -560,7 +461,6 @@ export function registerPxViews(
     overridesView,
     vscode.window.registerTreeDataProvider("px.problems", problems),
     vscode.window.registerTreeDataProvider("px.dependencies", dependencies),
-    vscode.window.registerTreeDataProvider("px.tools", tools),
     vscode.commands.registerCommand("px.addLocalizationFromView", (node?: { pxKey?: string }) =>
       vscode.commands.executeCommand("px.editLocalization", node?.pxKey)
     )
@@ -571,14 +471,19 @@ export function registerPxViews(
     overview.refresh();
     locCoverage.refresh();
     overrides.refresh();
-    // Tools shows the focus mod and the exclusion list: keep it in sync.
-    tools.refresh();
   };
   lc.onNotification(indexChangedNotification, refreshServerBacked);
 
   // Follow the active editor between mods (unless pinned): switching files in
   // a multi-mod workspace re-filters the in-memory index — no re-indexing.
   let lastShown = focus.current();
+  // Pins land here from the quick pick below AND from the Project webview.
+  context.subscriptions.push(
+    focus.onDidPin(() => {
+      lastShown = focus.current();
+      refreshServerBacked();
+    })
+  );
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(() => {
       const now = focus.current();
@@ -617,8 +522,6 @@ export function registerPxViews(
       });
       if (!picked) return;
       await focus.pin(picked.root);
-      lastShown = focus.current();
-      refreshServerBacked();
     })
   );
 
@@ -657,7 +560,6 @@ export function registerPxViews(
         picked.map((i) => i.root),
         vscode.ConfigurationTarget.Workspace
       );
-      tools.refresh();
     })
   );
 

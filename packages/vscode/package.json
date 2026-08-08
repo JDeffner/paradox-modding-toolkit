@@ -500,7 +500,7 @@
             "default": [],
             "order": 3,
             "scope": "machine-overridable",
-            "markdownDescription": "Workspace mod folders to skip entirely (absolute paths). Excluded mods are not indexed: no completion, hover, navigation, diagnostics or views. Useful when the workspace contains mods you are not currently working on.\n\nEasiest via `Paradox: Exclude Workspace Mods from Indexing` (also in the sidebar Tools view), which shows a checklist of the detected mods."
+            "markdownDescription": "Workspace mod folders to skip entirely (absolute paths). Excluded mods are not indexed: no completion, hover, navigation, diagnostics or views. Useful when the workspace contains mods you are not currently working on.\n\nEasiest via the per-mod switches in the sidebar Project view, or `Paradox: Exclude Workspace Mods from Indexing`, which shows a checklist of the detected mods."
           },
           "px.locLanguage": {
             "type": "string",
@@ -621,7 +621,8 @@
       "px": [
         {
           "id": "px.tools",
-          "name": "Tools",
+          "type": "webview",
+          "name": "Project",
           "icon": "media/px-view.svg",
           "visibility": "visible",
           "when": "px.isCk3Workspace"

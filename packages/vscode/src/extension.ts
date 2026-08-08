@@ -35,7 +35,8 @@ import { LocFileDefinitionProvider, LocReferenceTracker, jumpToScriptReference }
 import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
-import { registerPxViews } from "./views";
+import { FocusMod, registerPxViews } from "./views";
+import { registerDashboardView } from "./webviews/dashboard/view";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
@@ -495,7 +496,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- overview suite --------------------------------------------------------
 
-  const views = registerPxViews(context, lc, () => cfg);
+  // Created here (not with the watcher commands below) because the Project
+  // webview shows the watcher switch and the focus mod.
+  const errorLog = new ErrorLogWatcher(() => cfg, log);
+  context.subscriptions.push(errorLog);
+  const focus = new FocusMod(context.workspaceState, () => cfg);
+  const views = registerPxViews(context, lc, () => cfg, focus);
+  registerDashboardView(context, {
+    getCfg: () => cfg,
+    focus,
+    errorLog,
+    workspaceState: context.workspaceState,
+  });
   // Event-graph fetches carry the focus mod (unless a call already scoped it),
   // so the graph shows the mod the sidebar shows.
   const fetchGraph = (params: EventGraphParams) =>
@@ -709,8 +721,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- workflow accelerators ---------------------------------------------------
 
-  const errorLog = new ErrorLogWatcher(() => cfg, log);
-  context.subscriptions.push(errorLog);
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
     vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg)),

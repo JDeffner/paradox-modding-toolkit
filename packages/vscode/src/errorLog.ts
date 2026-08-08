@@ -21,6 +21,9 @@ export class ErrorLogWatcher implements vscode.Disposable {
   private offset = 0;
   private byUri = new Map<string, vscode.Diagnostic[]>();
   private readonly statusItem: vscode.StatusBarItem;
+  private readonly stateEmitter = new vscode.EventEmitter<boolean>();
+  /** Fires with the new `watching` value on start/stop (Project view switch). */
+  readonly onDidChangeState = this.stateEmitter.event;
 
   constructor(
     private readonly getConfig: () => PxConfig,
@@ -66,6 +69,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.statusItem.text = `$(eye) ${metaFor(this.getConfig().gameId).shortName} error.log`;
     this.statusItem.tooltip = "Watching the game's error.log — click to stop";
     this.statusItem.show();
+    this.stateEmitter.fire(true);
     this.log(`watching ${file}`);
     void vscode.window.showInformationMessage(
       "Paradox Toolkit: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
@@ -73,10 +77,14 @@ export class ErrorLogWatcher implements vscode.Disposable {
   }
 
   stop(): void {
+    const wasWatching = this.watching;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.statusItem.hide();
-    this.log("error.log watch stopped");
+    if (wasWatching) {
+      this.stateEmitter.fire(false);
+      this.log("error.log watch stopped");
+    }
   }
 
   private poll(file: string): void {
@@ -150,6 +158,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.stop();
     this.diagnostics.dispose();
     this.statusItem.dispose();
+    this.stateEmitter.dispose();
   }
 }
 

@@ -4,6 +4,16 @@
 
 ### Added
 
+- **The Tools view is now "Project" — a proper dashboard.** The command-list
+  tree is replaced by a webview: every workspace mod as a row with a per-mod
+  focus dot (pin the sidebar views to one mod, or follow the active editor)
+  and an index on/off switch (backed by `px.excludedMods`); live toggles for
+  the new-problems-only tiger filter (hidden for games without a tiger), the
+  game error.log watcher, vanilla diagnostics and scope inlay hints; and the
+  familiar tool launchers with per-game labels (minus tiger runs, which live
+  in the status bar). Everything has an info tooltip on hover, and the view
+  reflects state changes from anywhere (settings, commands, status bar)
+  immediately.
 - **Dependency mods reach tiger** (Discord report): validating a mod that
   depends on other mods (`px.parentMods`, or the other mods of a multi-mod
   workspace) now declares those dependencies to tiger as `load_mod` entries,
