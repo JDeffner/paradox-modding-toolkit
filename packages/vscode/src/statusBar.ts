@@ -9,6 +9,8 @@ export interface PxStatus {
   tokens: number;
   indexing: boolean;
   tokensFromScriptDocs: boolean;
+  /** The script_docs tokens are the bundled snapshot, not the user's dump. */
+  tokensFromBundledDumps: boolean;
   definitions: number;
   gameOk: boolean;
   modOk: boolean;
@@ -45,7 +47,15 @@ export class PxStatusBar implements vscode.Disposable {
     const lines = [
       `**Paradox Toolkit** — click to run setup & health check`,
       "",
-      `${s.tokens > 0 ? "✓" : "✗"} engine tokens: ${s.tokens}${s.tokens > 0 ? (s.tokensFromScriptDocs ? " (script_docs + wiki)" : " (bundled wiki only)") : ""}`,
+      `${s.tokens > 0 ? "✓" : "✗"} engine tokens: ${s.tokens}${
+        s.tokens > 0
+          ? s.tokensFromBundledDumps
+            ? " (bundled script_docs snapshot — dump your own to match your patch)"
+            : s.tokensFromScriptDocs
+              ? " (script_docs + wiki)"
+              : " (bundled wiki only)"
+          : ""
+      }`,
       `${s.definitions > 0 ? "✓" : "✗"} indexed definitions: ${s.definitions}`,
       `${s.gameOk ? "✓" : "✗"} game path ${s.gameOk ? "configured" : "missing"}`,
       `${s.modOk ? "✓" : "✗"} mod folder ${s.modOk ? "found" : "missing"}`,

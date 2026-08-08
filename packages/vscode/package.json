@@ -451,7 +451,7 @@
             "default": "",
             "order": 2,
             "scope": "machine-overridable",
-            "markdownDescription": "Folder containing the `script_docs` dump files (`triggers.log`, `effects.log`, `event_targets.log`, `modifiers.log`). Leave empty to auto-detect it per game: `Documents/Paradox Interactive/<game>/logs` (EU5 dumps to `docs` instead).\n\nThe dumps match the engine vocabulary to your exact game version: launch the game with `-debug_mode`, run `script_docs` in the console (\\`), then run `Paradox: Reload Game Data (script_docs)`."
+            "markdownDescription": "Folder containing the `script_docs` dump files (`triggers.log`, `effects.log`, `event_targets.log`, `modifiers.log`). Leave empty to auto-detect it per game: `Documents/Paradox Interactive/<game>/logs` for CK3, `<game>/docs` for Victoria 3 and EU5.\n\nThe dumps match the engine vocabulary to your exact game version (bundled snapshots are used until you dump your own): launch the game with `-debug_mode`, run `script_docs` in the console (\\`), then run `Paradox: Reload Game Data (script_docs)`."
           },
           "px.tigerPath": {
             "type": "string",
@@ -930,6 +930,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/JDeffner/ck3-modding-toolkit.git"
+    "url": "https://github.com/JDeffner/paradox-modding-toolkit.git"
   }
 }

@@ -143,10 +143,14 @@ concrete:
 - **`gamePath`** is the game's `game/` folder, the source of vanilla
   definitions, asset paths and override detection. Without it the index knows
   only the mod.
-- **`logsPath`** is the folder holding the user's `script_docs` dumps. For CK3
-  it upgrades the bundled wiki tables to the exact game version and adds
-  modifiers; for Vic3 and EU5 nothing is bundled, so it is the difference
-  between working completion and a thin index of the user's own definitions.
+- **`logsPath`** is the folder holding the user's `script_docs` dumps. CK3 and
+  Vic3 ship bundled fallbacks (wiki tables, dump snapshots), so there it is an
+  exact-version upgrade; EU5 ships only a data-type snapshot so far, so for
+  engine tokens it is the
+  difference between working completion and a thin index of the user's own
+  definitions. Vic3/EU5 write script_docs to `Documents/.../docs`; the
+  data-type dump lands under `logs/` and the server probes the sibling
+  `logs/` folder of a docs-style `logsPath` automatically.
 - **`modPath`** is the mod root. Absent, the server falls back to the first
   workspace folder, then to nothing, and features that need a known mod
   (reference diagnostics, required-localization checks, the localization quick
@@ -458,7 +462,7 @@ Three of them, all runnable, all kept honest by CI or by the release checklist.
 
 ## Release artifacts
 
-Both are attached to every [GitHub release](https://github.com/JDeffner/ck3-modding-toolkit/releases)
+Both are attached to every [GitHub release](https://github.com/JDeffner/paradox-modding-toolkit/releases)
 and stage the identical server payload, defined once in
 `scripts/server-package.mjs` so the two cannot drift apart.
 

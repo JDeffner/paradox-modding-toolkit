@@ -73,11 +73,13 @@ export interface DashboardDeps {
 /**
  * Command launchers that have no button of their own anywhere else in the UI.
  * Anything reachable from an editor-title button, a view-title button or the
- * status bar is deliberately absent: tiger (status bar), the GUI tree, the GUI
- * editor and the event graph (editor title), Add Language (Localization
- * Coverage view title), Format Docs (editor title), Simulate Event (editor
- * context menu). Built per game: labels carry the active game's name. The
- * error.log watcher is a toggle above, not a launcher.
+ * status bar is deliberately absent: tiger RUNS (status bar), Setup & Health
+ * Check (the PX Toolkit status bar item), the GUI tree, the GUI editor and the
+ * event graph (editor title), Add Language (Localization Coverage view title),
+ * Format Docs (editor title), Simulate Event (editor context menu). Tiger's
+ * occasional commands (baseline, unused, conf, update) do live here. Built per
+ * game: labels carry the active game's name. The error.log watcher is a toggle
+ * above, not a launcher.
  */
 function actionGroups(meta: GameMeta): ActionGroup[] {
   return [
@@ -146,12 +148,36 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
           icon: "play",
           tip: "Start the game via Steam with -debug_mode -develop, so scripts reload live.",
         },
-        {
-          label: "Setup & Health Check",
-          command: "px.setup",
-          icon: "check",
-          tip: "Find the game and tools automatically and verify the workspace is wired up.",
-        },
+        // Tiger quick actions — only for games a tiger exists for. Setup &
+        // Health Check has no row: the PX Toolkit status bar item runs it.
+        ...(meta.tiger
+          ? ([
+              {
+                label: "Create Tiger Baseline",
+                command: "px.tigerCreateBaseline",
+                icon: "camera",
+                tip: "Snapshot today's tiger problems. With the 'new problems only' toggle on, only problems newer than the snapshot show.",
+              },
+              {
+                label: "Find Unused Definitions",
+                command: "px.tigerUnused",
+                icon: "search",
+                tip: "One tiger run that also reports definitions nothing references.",
+              },
+              {
+                label: `Generate ${meta.tiger.confName}`,
+                command: "px.tigerGenerateConf",
+                icon: "gear",
+                tip: "Write a tiger config for this mod, with its dependency mods declared as load_mod entries.",
+              },
+              {
+                label: `Update ${meta.tiger.binaryName}`,
+                command: "px.downloadTiger",
+                icon: "download",
+                tip: "Download the latest tiger release into the extension's storage (also how you update after a game patch).",
+              },
+            ] satisfies ActionGroup["items"])
+          : []),
       ],
     },
   ];
@@ -170,6 +196,11 @@ const ICONS = {
   info: '<circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r=".5" fill="currentColor"/>',
   play: '<path d="M5.5 3.8v8.4L12.5 8Z" fill="currentColor" stroke="none"/>',
   check: '<path d="M8 2 13 4v4.3c0 3-2 5.2-5 5.7-3-.5-5-2.7-5-5.7V4Z"/><path d="M5.8 8.1l1.6 1.6 3-3.2"/>',
+  camera:
+    '<path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h1.6l1-1.5h3.8l1 1.5h1.6A1.5 1.5 0 0 1 14 5.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5Z"/><circle cx="8" cy="8.4" r="2.4"/>',
+  search: '<circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.4 3.4"/>',
+  gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 2.3v2M8 11.7v2M2.3 8h2M11.7 8h2M4 4l1.4 1.4M10.6 10.6 12 12M12 4l-1.4 1.4M5.4 10.6 4 12"/>',
+  download: '<path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 12.5h10"/>',
 } as const;
 
 /**

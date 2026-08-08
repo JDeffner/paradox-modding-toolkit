@@ -223,6 +223,7 @@ let storageDir = "";
 let wikidocsDir = "";
 let freqsDir = "";
 let tokensFromScriptDocs = false;
+let tokensFromBundledDumps = false;
 let indexing = false;
 /** Bumped whenever paths change; in-flight scans abort when superseded. */
 let scanGeneration = 0;
@@ -406,6 +407,7 @@ function sendStatus(): void {
   const payload: StatusPayload = {
     tokens: data.tokens.length,
     tokensFromScriptDocs,
+    tokensFromBundledDumps,
     definitions: total,
     indexing,
   };
@@ -413,7 +415,12 @@ function sendStatus(): void {
   // Mirror into window/logMessage so bare clients (no paradox/status handler)
   // can tell an empty index from a cold one. Only on transitions: scans fire
   // many status updates, but the interesting line is start/end of indexing.
-  const line = `status: ${payload.tokens} tokens (${payload.tokensFromScriptDocs ? "script_docs" : "bundled"}), ${
+  const source = payload.tokensFromBundledDumps
+    ? "bundled script_docs"
+    : payload.tokensFromScriptDocs
+      ? "script_docs"
+      : "bundled";
+  const line = `status: ${payload.tokens} tokens (${source}), ${
     payload.definitions
   } definitions${payload.indexing ? ", indexing…" : ""}`;
   const key = `${payload.indexing}|${payload.tokens === 0}|${payload.definitions === 0}`;
@@ -463,6 +470,7 @@ data.onDidChange(() => {
 
 function loadDocs(force: boolean): void {
   tokensFromScriptDocs = false;
+  tokensFromBundledDumps = false;
   let scriptTokens = [] as ReturnType<typeof loadTokenData>["tokens"];
   let modifierTemplates = [] as ReturnType<typeof loadTokenData>["templates"];
   if (settings.logsPath) {
@@ -480,7 +488,25 @@ function loadDocs(force: boolean): void {
         `missing log files in ${settings.logsPath}: ${result.missing.join(", ")} (run script_docs in the game console)`
       );
     }
-  } else {
+  }
+  // No usable user dump: fall back to the bundled script_docs snapshot (shipped
+  // per game under data/<gameId>/script_docs). The user's own dump, once it
+  // exists, wins outright — it matches their exact game version.
+  if (scriptTokens.length === 0 && bundledDumpsDir) {
+    const t0 = Date.now();
+    const cacheFile = path.join(storageDir, `docsCacheBundled${activeProfile().cacheSuffix}.json`);
+    const result = loadTokenData(bundledDumpsDir, cacheFile, force);
+    scriptTokens = result.tokens;
+    modifierTemplates = result.templates;
+    tokensFromScriptDocs = scriptTokens.length > 0;
+    tokensFromBundledDumps = tokensFromScriptDocs;
+    log(
+      `bundled script_docs snapshot: ${result.tokens.length} tokens ` +
+        `(${result.fromCache ? "cache" : "parsed"}, ${Date.now() - t0}ms; ` +
+        `dump your own script_docs to match your exact game version)`
+    );
+  }
+  if (scriptTokens.length === 0 && !settings.logsPath) {
     log("script_docs logs path not found; engine tokens come from the bundled wiki docs only.");
   }
   data.setModifierTemplates(modifierTemplates);
@@ -495,10 +521,24 @@ function loadDocs(force: boolean): void {
   data.setTokens(merged);
   log(`wiki docs: ${wikiTokens.length} tokens, merged total ${merged.length} (${Date.now() - t1}ms)`);
 
-  data.onActionScopes = settings.logsPath ? parseOnActionsLog(settings.logsPath) : new Map();
+  // on_actions.log sits next to the other script_docs dumps; same fallback.
+  const onActionsDir =
+    settings.logsPath && fs.existsSync(path.join(settings.logsPath, "on_actions.log"))
+      ? settings.logsPath
+      : bundledDumpsDir || settings.logsPath;
+  data.onActionScopes = onActionsDir ? parseOnActionsLog(onActionsDir) : new Map();
   if (data.onActionScopes.size > 0) log(`on_actions.log: ${data.onActionScopes.size} on_action root scopes`);
 
-  data.dataTypes = loadDataTypes(settings.logsPath);
+  // Lowest priority first: bundled snapshot, then the user's folders. Games
+  // whose script_docs live outside logs/ (Vic3, EU5) still dump data types to
+  // logs/, so the sibling logs folder of a docs-style logsPath is probed too.
+  const dataTypeDirs: Array<string | null> = [bundledDataTypesDir || null];
+  if (settings.logsPath) {
+    const sibling = path.resolve(settings.logsPath, "..", "logs");
+    if (sibling.toLowerCase() !== path.resolve(settings.logsPath).toLowerCase()) dataTypeDirs.push(sibling);
+    dataTypeDirs.push(settings.logsPath);
+  }
+  data.dataTypes = loadDataTypes(dataTypeDirs);
   // Promote game (+ every workspace mod's) data_binding macros as global [ … ] functions.
   const macroRoots = [settings.gamePath, settings.modPath, ...workspaceModRoots()].filter(
     (r): r is string => r !== null
@@ -508,10 +548,11 @@ function loadDocs(force: boolean): void {
   if (data.dataTypes.source === "bundled wiki") {
     log(
       `data types: ${data.dataTypes.count} entries from the bundled wiki tables ` +
-        `(run "DumpDataTypes" in the game console for the complete, version-exact set)`
+        `(run "${activeProfile().dataTypesCommand ?? "DumpDataTypes"}" in the game console for the ` +
+        `complete, version-exact set)`
     );
   } else {
-    log(`data types: ${data.dataTypes.count} entries incl. data_types.log`);
+    log(`data types: ${data.dataTypes.count} entries incl. data-type dumps`);
   }
 
   const t2 = Date.now();
@@ -925,9 +966,18 @@ function deriveBundledDataDirs(): void {
     if (fs.existsSync(bundled)) wikidocsDir = bundled;
   }
   freqsDir = fs.existsSync(path.join(gameDir, "freqs.json")) ? gameDir : "";
+  // Bundled script_docs / data-type dumps (data/<gameId>/script_docs,
+  // data/<gameId>/data_types): the out-of-box fallback when the user has not
+  // dumped their own. The user's own dumps always win.
+  const dumps = path.join(gameDir, "script_docs");
+  bundledDumpsDir = fs.existsSync(dumps) ? dumps : "";
+  const dataTypes = path.join(gameDir, "data_types");
+  bundledDataTypesDir = fs.existsSync(dataTypes) ? dataTypes : "";
 }
 let clientDataDir = "";
 let clientWikidocsDir = "";
+let bundledDumpsDir = "";
+let bundledDataTypesDir = "";
 let clientOwnFileWatcher = false;
 let clientWatchedFilesDynamic = false;
 

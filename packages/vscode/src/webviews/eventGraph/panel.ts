@@ -359,7 +359,6 @@ export class EventGraphPanel {
   }
   .refrow { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; }
   .refrow .kind { font-size: 0.8em; color: var(--vscode-descriptionForeground); min-width: 88px; }
-  .node-rect.selected-node { filter: brightness(1.25); }
   #status {
     flex: 0 0 auto; padding: 4px 8px;
     border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
@@ -376,20 +375,63 @@ export class EventGraphPanel {
     color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
   }
   #empty.show { display: flex; }
-  .node-rect { cursor: pointer; }
+  /* Nodes are theme-native cards: widget background + border, with the kind
+     as a thin accent bar instead of a full repaint (multiple kinds must not
+     read as multiple alarm states). */
+  .node { cursor: pointer; }
+  .node-rect {
+    fill: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    stroke: var(--vscode-panel-border, rgba(128,128,128,0.5));
+    stroke-width: 1.2;
+  }
+  .node:hover .node-rect { stroke: var(--vscode-focusBorder, #007fd4); }
+  .node.selected .node-rect {
+    stroke: var(--vscode-focusBorder, #007fd4);
+    stroke-width: 2.2;
+  }
+  .node.root .node-rect { stroke-width: 2.2; }
   .node-label {
     pointer-events: none;
     fill: var(--vscode-editor-foreground);
     font-size: 12px;
   }
-  .node-sub { font-size: 9px; opacity: 0.75; }
-  .node-rect.search-hit { stroke: var(--vscode-charts-yellow, #cca700) !important; stroke-width: 3 !important; }
-  .edge-path { fill: none; }
+  .node-sub {
+    font-size: 9.5px;
+    fill: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
+  }
+  .node-rect.search-hit { stroke: var(--vscode-charts-yellow, #cca700) !important; stroke-width: 2.6 !important; }
+  /* Focus + context: selecting a node keeps its 1-hop neighborhood at full
+     opacity and dims the rest — dimmed, never hidden, so the mental map
+     survives. Incoming and outgoing edges of the selection read differently. */
+  .node.dim, .edge-path.dim, .edge-label.dim { opacity: 0.25; }
+  .edge-path { fill: none; transition: opacity .12s ease; }
+  .edge-path.out-of-sel { stroke: var(--vscode-charts-blue, #3794ff) !important; stroke-opacity: 0.95 !important; }
+  .edge-path.into-sel { stroke: var(--vscode-charts-orange, #d18616) !important; stroke-opacity: 0.95 !important; }
   .edge-label {
     pointer-events: none;
     fill: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
     font-size: 9px; opacity: 0.85;
   }
+  .edge-label.hidden { display: none; }
+  .legend button {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0 4px; margin: 0; border: none; background: none; cursor: pointer;
+    color: inherit; font: inherit;
+  }
+  .legend button.off { opacity: 0.35; }
+  .legend button.off .swatch { outline: 1px dashed currentColor; }
+  #zoomCtl {
+    position: absolute; right: 10px; bottom: 10px; z-index: 5;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #zoomCtl button {
+    width: 26px; height: 26px; padding: 0; cursor: pointer;
+    font-size: 14px; line-height: 1; border-radius: 3px;
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #zoomCtl button:hover { border-color: var(--vscode-focusBorder, #007fd4); }
   #help {
     position: absolute; top: 8px; right: 8px; z-index: 5; max-width: 380px;
     padding: 12px 14px; border-radius: 6px; display: none; font-size: 0.92em;
@@ -418,27 +460,32 @@ export class EventGraphPanel {
     <button id="refresh" class="secondary">Refresh</button>
     <button id="export" class="secondary">Export SVG</button>
     <button id="helpBtn" class="secondary" title="How this view works">?</button>
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--vscode-charts-blue,#3794ff)"></i>event</span>
-      <span><i class="swatch" style="background:var(--vscode-charts-purple,#b180d7)"></i>on_action</span>
-      <span><i class="swatch" style="background:var(--vscode-charts-green,#89d185)"></i>decision</span>
-      <span><i class="swatch" style="background:var(--vscode-charts-orange,#d18616)"></i>other</span>
+    <div class="legend" id="legend" title="Click a kind to dim it in the graph">
+      <button data-kind="event"><i class="swatch" style="background:var(--vscode-charts-blue,#3794ff)"></i>event</button>
+      <button data-kind="on_action"><i class="swatch" style="background:var(--vscode-charts-purple,#b180d7)"></i>on_action</button>
+      <button data-kind="decision"><i class="swatch" style="background:var(--vscode-charts-green,#89d185)"></i>decision</button>
+      <button data-kind="other"><i class="swatch" style="background:var(--vscode-charts-orange,#d18616)"></i>other</button>
     </div>
   </div>
   <div id="main">
     <div id="graphWrap">
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="zoomCtl">
+        <button id="zoomIn" title="Zoom in (+)">+</button>
+        <button id="zoomOut" title="Zoom out (−)">−</button>
+        <button id="zoomFit" title="Fit graph (0)">⛶</button>
+      </div>
       <div id="empty"></div>
       <div id="help">
         <h4>Event graph — how to read it</h4>
         <ul>
-          <li><b>Boxes</b> are events / on_actions / decisions (see the color legend). The small line under the id is the event's localized title.</li>
-          <li><b>Arrows</b> mean "fires / references": the label on an arrow tells you WHERE in the source event the call sits (an option's text, immediate, on_actions…).</li>
+          <li><b>Cards</b> are events / on_actions / decisions — the colored bar on the left is the kind (see the legend; click a legend entry to dim that kind). The small line is the localized title.</li>
+          <li><b>Arrows</b> mean "fires / references". <b>Click</b> a card to focus it: everything outside its neighborhood dims, <span style="color:var(--vscode-charts-blue,#3794ff)">blue</span> arrows are what it fires, <span style="color:var(--vscode-charts-orange,#d18616)">orange</span> arrows are what fires it, and the arrow labels say WHERE the call sits (an option, immediate, on_actions…). <b>Esc</b> zooms back out.</li>
           <li><b>Dashed borders</b> = vanilla content, solid = your mod, dotted = a parent mod.</li>
-          <li><b>Click</b> a box to open the inspector: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option, or <b>Simulate</b> the event (a walkthrough of what firing it does).</li>
+          <li>The click also opens the <b>inspector</b>: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option, or <b>Simulate</b> the event.</li>
           <li><b>Double-click</b> (or Ctrl+click) opens the source file beside the graph. <b>Right-click</b> re-centers the graph on that event.</li>
-          <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go. It completes against your mod's ids and namespaces (up/down to choose, Enter to run, Esc to dismiss). <b>All nodes</b> shows the whole mod at once. Typing also highlights matching boxes by id or title text.</li>
-          <li>Drag with the left or middle mouse button to pan, scroll to zoom, Export saves the picture as SVG.</li>
+          <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go — it completes against your mod's ids and namespaces. <b>All nodes</b> shows the whole mod. Typing highlights matching cards.</li>
+          <li>Drag to pan, scroll to zoom, <b>+</b>/<b>−</b>/<b>0</b> keys or the corner buttons zoom and fit, Export saves the picture as SVG.</li>
         </ul>
       </div>
     </div>
@@ -459,8 +506,17 @@ const statusEl = document.getElementById("status");
 const queryEl = document.getElementById("query");
 
 const NODE_W = 150, NODE_H = 40;
+// Edge labels render permanently only in sparse graphs; above this count they
+// appear on demand, for the selected node's own edges (label overlap is the
+// classic dense-graph failure).
+const LABELS_ALWAYS_MAX = 25;
 let view = { x: 0, y: 0, scale: 1 };
 let currentGraph = null;
+let lastPos = null;
+// id -> <g class="node">, and per-edge bookkeeping for the focus highlight.
+const nodeGroups = new Map();
+let edgeItems = [];
+const hiddenKinds = new Set();
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, function (c) {
@@ -495,6 +551,10 @@ let rootGroup = null;
 function render(graph, params) {
   currentGraph = graph;
   nodeRects.clear();
+  nodeGroups.clear();
+  edgeItems = [];
+  selectedId = null;
+  selectedRect = null;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
   const nodes = graph.nodes || [];
@@ -502,7 +562,7 @@ function render(graph, params) {
 
   if (nodes.length === 0) {
     emptyEl.classList.add("show");
-    emptyEl.textContent = "No events found — open a mod with events/ or pass a namespace.";
+    emptyEl.textContent = "No events found here yet. Open an event file and press Ctrl+Alt+G, type a namespace above, or hit All nodes for the whole mod.";
     setStatus("0 nodes · 0 edges", "");
     return;
   }
@@ -510,25 +570,31 @@ function render(graph, params) {
 
   const rootId = (params && params.root) || null;
   const pos = layoutGraph(nodes, edges, rootId);
-  const byId = {};
-  for (let i = 0; i < nodes.length; i++) byId[nodes[i].id] = nodes[i];
+  lastPos = pos;
 
-  // defs: arrowhead marker
+  // defs: arrowhead markers — one per edge state so the head matches its line.
   const defs = document.createElementNS(SVG_NS, "defs");
-  const marker = document.createElementNS(SVG_NS, "marker");
-  marker.setAttribute("id", "arrow");
-  marker.setAttribute("viewBox", "0 0 10 10");
-  marker.setAttribute("refX", "9");
-  marker.setAttribute("refY", "5");
-  marker.setAttribute("markerWidth", "7");
-  marker.setAttribute("markerHeight", "7");
-  marker.setAttribute("orient", "auto-start-reverse");
-  const arrowPath = document.createElementNS(SVG_NS, "path");
-  arrowPath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
-  arrowPath.setAttribute("fill", "var(--vscode-editor-foreground)");
-  arrowPath.setAttribute("opacity", "0.55");
-  marker.appendChild(arrowPath);
-  defs.appendChild(marker);
+  const markers = [
+    { id: "arrow", fill: "var(--vscode-editor-foreground)", opacity: "0.55" },
+    { id: "arrowOut", fill: "var(--vscode-charts-blue, #3794ff)", opacity: "1" },
+    { id: "arrowIn", fill: "var(--vscode-charts-orange, #d18616)", opacity: "1" },
+  ];
+  for (const spec of markers) {
+    const marker = document.createElementNS(SVG_NS, "marker");
+    marker.setAttribute("id", spec.id);
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "9");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "7");
+    marker.setAttribute("markerHeight", "7");
+    marker.setAttribute("orient", "auto-start-reverse");
+    const arrowPath = document.createElementNS(SVG_NS, "path");
+    arrowPath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    arrowPath.setAttribute("fill", spec.fill);
+    arrowPath.setAttribute("opacity", spec.opacity);
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+  }
   svg.appendChild(defs);
 
   const g = document.createElementNS(SVG_NS, "g");
@@ -538,6 +604,7 @@ function render(graph, params) {
   // edges first (under nodes)
   const edgeLayer = document.createElementNS(SVG_NS, "g");
   g.appendChild(edgeLayer);
+  const labelsAlways = edges.length <= LABELS_ALWAYS_MAX;
   for (let e = 0; e < edges.length; e++) {
     const from = pos.get(edges[e].from);
     const to = pos.get(edges[e].to);
@@ -551,7 +618,7 @@ function render(graph, params) {
     path.setAttribute("class", "edge-path");
     path.setAttribute("d", d);
     path.setAttribute("stroke", "var(--vscode-editor-foreground)");
-    path.setAttribute("stroke-opacity", "0.45");
+    path.setAttribute("stroke-opacity", "0.4");
     path.setAttribute("stroke-width", "1.4");
     path.setAttribute("marker-end", "url(#arrow)");
     const title = document.createElementNS(SVG_NS, "title");
@@ -560,19 +627,23 @@ function render(graph, params) {
     path.appendChild(title);
     edgeLayer.appendChild(path);
 
-    // Edge origin label (option text / immediate / on_actions …) at the midpoint.
+    // Edge origin label (option text / immediate / on_actions …): permanent in
+    // sparse graphs, on demand (selection) in dense ones — overlapping labels
+    // everywhere read as noise.
+    let elabel = null;
     if (edges[e].label) {
-      const elabel = document.createElementNS(SVG_NS, "text");
-      elabel.setAttribute("class", "edge-label");
+      elabel = document.createElementNS(SVG_NS, "text");
+      elabel.setAttribute("class", "edge-label" + (labelsAlways ? "" : " hidden"));
       elabel.setAttribute("x", String(mx));
       elabel.setAttribute("y", String((y1 + y2) / 2 - 4));
       elabel.setAttribute("text-anchor", "middle");
       elabel.textContent = edges[e].label;
       edgeLayer.appendChild(elabel);
     }
+    edgeItems.push({ from: edges[e].from, to: edges[e].to, path: path, label: elabel, labelsAlways: labelsAlways });
   }
 
-  // nodes
+  // nodes: theme-native cards with a kind accent bar on the left.
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     const p = pos.get(node.id);
@@ -580,38 +651,46 @@ function render(graph, params) {
     const isRoot = rootId != null && node.id === rootId;
 
     const ng = document.createElementNS(SVG_NS, "g");
+    ng.setAttribute("class", "node" + (isRoot ? " root" : ""));
+    ng.dataset.id = node.id;
+    ng.dataset.kind = kindKey(node.kind);
     ng.setAttribute("transform", "translate(" + (p.x - NODE_W / 2) + "," + (p.y - NODE_H / 2) + ")");
 
     const rect = document.createElementNS(SVG_NS, "rect");
     rect.setAttribute("class", "node-rect");
     rect.setAttribute("width", String(NODE_W));
     rect.setAttribute("height", String(NODE_H));
-    rect.setAttribute("rx", "8");
-    rect.setAttribute("ry", "8");
-    rect.setAttribute("fill", kindFill(node.kind));
-    rect.setAttribute("fill-opacity", isRoot ? "0.95" : "0.75");
-    rect.setAttribute("stroke", isRoot
-      ? "var(--vscode-focusBorder, #007fd4)"
-      : "var(--vscode-editor-foreground)");
-    rect.setAttribute("stroke-width", isRoot ? "3" : "1.5");
+    rect.setAttribute("rx", "5");
+    rect.setAttribute("ry", "5");
+    if (isRoot) rect.style.stroke = "var(--vscode-focusBorder, #007fd4)";
     rect.setAttribute("stroke-dasharray", sourceDash(node.source));
 
     const rtitle = document.createElementNS(SVG_NS, "title");
     rtitle.textContent = node.id + (node.title ? " — " + node.title : "") +
       "  [" + node.kind + " · " + node.source + "]" +
       (node.file ? "\\n" + node.file + (node.line ? ":" + node.line : "") : "") +
-      "\\nclick: inspect · double-click: open source · right-click: refocus";
+      "\\nclick: focus + inspect · double-click: open source · right-click: refocus";
     rect.appendChild(rtitle);
     ng.appendChild(rect);
     nodeRects.set(node.id, { rect: rect, node: node });
+    nodeGroups.set(node.id, ng);
+
+    const accent = document.createElementNS(SVG_NS, "rect");
+    accent.setAttribute("x", "4");
+    accent.setAttribute("y", "5");
+    accent.setAttribute("width", "3.5");
+    accent.setAttribute("height", String(NODE_H - 10));
+    accent.setAttribute("rx", "1.75");
+    accent.setAttribute("fill", kindFill(node.kind));
+    accent.setAttribute("pointer-events", "none");
+    ng.appendChild(accent);
 
     const label = document.createElementNS(SVG_NS, "text");
     label.setAttribute("class", "node-label");
-    label.setAttribute("x", String(NODE_W / 2));
-    label.setAttribute("y", String(node.title ? NODE_H / 2 - 2 : NODE_H / 2 + 4));
-    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("x", "13");
+    label.setAttribute("y", String(node.title ? NODE_H / 2 - 3 : NODE_H / 2 + 4));
     let text = node.id;
-    if (text.length > 20) text = text.slice(0, 19) + "…";
+    if (text.length > 21) text = text.slice(0, 20) + "…";
     label.textContent = text;
     ng.appendChild(label);
 
@@ -619,11 +698,10 @@ function render(graph, params) {
     if (node.title) {
       const sub = document.createElementNS(SVG_NS, "text");
       sub.setAttribute("class", "node-label node-sub");
-      sub.setAttribute("x", String(NODE_W / 2));
+      sub.setAttribute("x", "13");
       sub.setAttribute("y", String(NODE_H / 2 + 12));
-      sub.setAttribute("text-anchor", "middle");
       let t = node.title;
-      if (t.length > 24) t = t.slice(0, 23) + "…";
+      if (t.length > 27) t = t.slice(0, 26) + "…";
       sub.textContent = t;
       ng.appendChild(sub);
     }
@@ -650,6 +728,7 @@ function render(graph, params) {
     g.appendChild(ng);
   }
 
+  applyKindFilter();
   fitToView(pos);
   applyTransform(g);
 
@@ -661,6 +740,49 @@ function render(graph, params) {
   } else {
     setStatus(status, "");
   }
+}
+
+function kindKey(kind) {
+  return kind === "event" || kind === "on_action" || kind === "decision" ? kind : "other";
+}
+
+/** Focus + context: dim everything outside the selection's 1-hop neighborhood
+ * and color its in/out edges; labels of its edges show even in dense graphs. */
+function applyFocus() {
+  const id = selectedId;
+  const neighbors = new Set();
+  if (id !== null) {
+    neighbors.add(id);
+    for (const e of edgeItems) {
+      if (e.from === id) neighbors.add(e.to);
+      if (e.to === id) neighbors.add(e.from);
+    }
+  }
+  nodeGroups.forEach(function (gEl, nid) {
+    gEl.classList.toggle("selected", id !== null && nid === id);
+    gEl.classList.toggle(
+      "dim",
+      (id !== null && !neighbors.has(nid)) || hiddenKinds.has(gEl.dataset.kind)
+    );
+  });
+  for (const e of edgeItems) {
+    const touches = id !== null && (e.from === id || e.to === id);
+    e.path.classList.toggle("dim", id !== null && !touches);
+    e.path.classList.toggle("out-of-sel", touches && e.from === id);
+    e.path.classList.toggle("into-sel", touches && e.to === id && e.from !== id);
+    e.path.setAttribute("marker-end",
+      touches ? (e.from === id ? "url(#arrowOut)" : "url(#arrowIn)") : "url(#arrow)");
+    if (e.label) {
+      e.label.classList.toggle("hidden", !e.labelsAlways && !touches);
+      e.label.classList.toggle("dim", id !== null && !touches);
+    }
+  }
+}
+
+/** Legend filter: dim (never hide) the toggled-off kinds. Focus recomputes
+ * everything and honors the filter, so it serves both states. */
+function applyKindFilter() {
+  applyFocus();
 }
 
 function fitToView(pos) {
@@ -872,6 +994,57 @@ queryEl.addEventListener("input", function () {
 document.getElementById("helpBtn").addEventListener("click", function () {
   document.getElementById("help").classList.toggle("show");
 });
+// Legend doubles as a per-kind filter (dims, never hides).
+document.getElementById("legend").addEventListener("click", function (ev) {
+  const btn = ev.target.closest("button[data-kind]");
+  if (!btn) return;
+  const kind = btn.dataset.kind;
+  if (hiddenKinds.has(kind)) hiddenKinds.delete(kind);
+  else hiddenKinds.add(kind);
+  btn.classList.toggle("off", hiddenKinds.has(kind));
+  applyKindFilter();
+});
+
+// Zoom controls + keyboard: +/− zoom about the center, 0 fits, Esc deselects.
+function zoomBy(factor) {
+  if (!rootGroup) return;
+  const rect = svg.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const newScale = Math.min(4, Math.max(0.1, view.scale * factor));
+  view.x = cx - (cx - view.x) * (newScale / view.scale);
+  view.y = cy - (cy - view.y) * (newScale / view.scale);
+  view.scale = newScale;
+  applyTransform(rootGroup);
+}
+function fitAll() {
+  if (!rootGroup || !lastPos) return;
+  fitToView(lastPos);
+  applyTransform(rootGroup);
+}
+document.getElementById("zoomIn").addEventListener("click", function () { zoomBy(1.25); });
+document.getElementById("zoomOut").addEventListener("click", function () { zoomBy(1 / 1.25); });
+document.getElementById("zoomFit").addEventListener("click", fitAll);
+window.addEventListener("keydown", function (ev) {
+  if (ev.target === queryEl || ev.target.tagName === "INPUT") return;
+  if (ev.key === "+" || ev.key === "=") { ev.preventDefault(); zoomBy(1.25); }
+  else if (ev.key === "-") { ev.preventDefault(); zoomBy(1 / 1.25); }
+  else if (ev.key === "0" || ev.key === "f") { ev.preventDefault(); fitAll(); }
+  else if (ev.key === "Escape") {
+    const help = document.getElementById("help");
+    if (help.classList.contains("show")) help.classList.remove("show");
+    else if (selectedId !== null) clearSelection();
+  } else if (ev.key === "/") { ev.preventDefault(); queryEl.focus(); }
+});
+// Clicking empty canvas deselects (drag guards: only a stationary click).
+let downAt = null;
+svg.addEventListener("pointerdown", function (ev) {
+  if (ev.button === 0) downAt = { x: ev.clientX, y: ev.clientY };
+});
+svg.addEventListener("click", function (ev) {
+  if (ev.target !== svg && ev.target.tagName !== "svg") return;
+  if (downAt && Math.abs(ev.clientX - downAt.x) + Math.abs(ev.clientY - downAt.y) > 4) return;
+  if (selectedId !== null) clearSelection();
+});
 document.getElementById("showAll").addEventListener("click", function () {
   queryEl.value = "";
   hideSuggest();
@@ -902,13 +1075,19 @@ let selectedId = null;
 let selectedRect = null;
 
 function selectNode(id, rect) {
-  if (selectedRect) selectedRect.classList.remove("selected-node");
   selectedId = id;
   selectedRect = rect || null;
-  if (selectedRect) selectedRect.classList.add("selected-node");
+  applyFocus();
   inspectorEl.classList.add("show");
   inspectorEl.textContent = "Loading " + id + "…";
   vscode.postMessage({ type: "select", id: id });
+}
+
+function clearSelection() {
+  selectedId = null;
+  selectedRect = null;
+  applyFocus();
+  inspectorEl.classList.remove("show");
 }
 
 function el(tag, cls, text) {
@@ -985,6 +1164,12 @@ function renderDetail(detail) {
     vscode.postMessage({ type: "simulate", id: detail.id });
   });
   actions.appendChild(sim);
+  const center = el("a", "ilink", "Center graph here");
+  center.title = "Rebuild the graph around " + detail.id;
+  center.addEventListener("click", function () {
+    vscode.postMessage({ type: "refocus", id: detail.id });
+  });
+  actions.appendChild(center);
   inspectorEl.appendChild(actions);
 
   inspectorEl.appendChild(el("h3", "", "Text"));

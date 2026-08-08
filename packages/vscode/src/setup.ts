@@ -21,11 +21,33 @@ export interface SetupDeps {
   log: (msg: string) => void;
   /** Reveal the Paradox Toolkit output channel (where the report lands). */
   showOutput: () => void;
+  /** Whether the extension ships a bundled script_docs snapshot for the game. */
+  hasBundledDumps: (gameId: string) => boolean;
 }
 
 function scriptDocsPresent(logsPath: string | null): boolean {
   if (!logsPath) return false;
   return LOG_FILES.every(({ file }) => fs.existsSync(path.join(logsPath, file)));
+}
+
+/** The data-type dump, in any shape any game version has written it:
+ * data_types.log, data_type*.txt, or a data_types/ folder — in the script_docs
+ * folder or its sibling logs/ (Vic3 dumps script_docs to docs/ but data types
+ * to logs/data_types). Mirrors the server's probing. */
+function dataTypesDumpPresent(logsPath: string): boolean {
+  const dirs = [logsPath];
+  const sibling = path.resolve(logsPath, "..", "logs");
+  if (sibling.toLowerCase() !== path.resolve(logsPath).toLowerCase()) dirs.push(sibling);
+  for (const dir of dirs) {
+    if (fs.existsSync(path.join(dir, "data_types.log"))) return true;
+    if (fs.existsSync(path.join(dir, "data_types"))) return true;
+    try {
+      if (fs.readdirSync(dir).some((n) => /^data_type.*\.txt$/i.test(n))) return true;
+    } catch {
+      /* unreadable dir */
+    }
+  }
+  return false;
 }
 
 export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): Promise<string | null> {
@@ -113,20 +135,25 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     report.push(`• parent mods indexed read-only: ${depParents.map(modLabel).join(", ")}`);
   }
 
-  // 3. Logs / script_docs. Outside CK3 the how-to moves to the top action item
-  // below, so it is not repeated here.
+  // 3. Logs / script_docs. A game with bundled data (wiki tables or a bundled
+  // dump snapshot) is ready without the user's own dump — the dump is the
+  // optional exact-version upgrade. Without bundled data the how-to moves to
+  // the top action item below.
   cfg = deps.getConfig();
   const docsOk = scriptDocsPresent(cfg.logsPath);
+  const bundled = isCk3(meta.id)
+    ? "bundled wiki tables"
+    : deps.hasBundledDumps(meta.id)
+      ? "bundled script_docs snapshot"
+      : null;
   if (docsOk) {
     report.push(`✓ script_docs ${docsDir}: ${cfg.logsPath}`);
   } else if (cfg.logsPath) {
-    // On CK3 the bundled wiki data is the documented default, so a missing dump
-    // is a ready state with an optional upgrade — not something to fix.
     report.push(
-      isCk3(meta.id)
-        ? `✓ engine data: bundled wiki tables (optional upgrade: launch ${meta.shortName} with -debug_mode, ` +
+      bundled
+        ? `✓ engine data: ${bundled} (optional upgrade: launch ${meta.shortName} with -debug_mode, ` +
             `open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)" ` +
-            `to match your exact game version and add modifiers)`
+            `to match your exact game version)`
         : `• script_docs ${docsDir}: not generated yet.`
     );
   } else {
@@ -134,11 +161,11 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
       `✗ ${docsDir} folder: not found — set px.logsPath to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}`
     );
   }
-  if (cfg.logsPath && !fs.existsSync(path.join(cfg.logsPath, "data_types.log"))) {
+  const dataTypesCmd = meta.dataTypesCommand ?? "DumpDataTypes";
+  if (cfg.logsPath && !dataTypesDumpPresent(cfg.logsPath)) {
     report.push(
-      `• data types: data_types.log not generated yet` +
-        `${isCk3(meta.id) ? " (bundled wiki tables are used meanwhile)" : ""}. ` +
-        `Run "DumpDataTypes" in the game console for complete [datafunction] completion in gui/localization files.`
+      `• data types: not dumped yet${bundled ? ` (${bundled} are used meanwhile)` : ""}. ` +
+        `Run "${dataTypesCmd}" in the game console for complete [datafunction] completion in gui/localization files.`
     );
   }
 
@@ -158,9 +185,9 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     }
   }
 
-  // First-run guidance: outside CK3 there is no bundled wiki fallback, so the
+  // First-run guidance: without ANY bundled data (wiki or dump snapshot), the
   // script_docs dump is what makes completion/hovers useful. Say so first.
-  if (!isCk3(meta.id) && !docsOk) {
+  if (!isCk3(meta.id) && !docsOk && !bundled) {
     report.unshift(
       `➜ FIRST: run script_docs in ${meta.name}. Launch it with -debug_mode, open the console (\`), ` +
         `type "script_docs"; the dumps land in Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}. ` +

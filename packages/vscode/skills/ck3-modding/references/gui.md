@@ -6,7 +6,7 @@ with local files, the files win.
 
 Companion material (paths relative to the px-toolkit repo this skill ships in,
 `packages/vscode/skills/ck3-modding/` → repo root is `../../../../`; standalone copies of the skill: find the repo at
-github.com/JDeffner/ck3-modding-toolkit):
+github.com/JDeffner/paradox-modding-toolkit):
 - **Measured layout spec (pixel-exact, the authority for layout math)**:
   `docs/gui-designer/calibration/spec.md` — every rule carries in-game measurement provenance;
   the per-batch evidence (screenshots, predictions vs measured) sits in the same folder.

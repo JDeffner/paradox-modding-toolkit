@@ -19,6 +19,7 @@ export const eu5Meta: GameMeta = {
   docsFolderName: "Europa Universalis V",
   // EU5's `script_docs` console command writes to Documents/.../docs, not logs/.
   scriptDocsSubdir: "docs",
+  dataTypesCommand: "dump_data_types",
   steamAppId: 3450310,
   eventNamespaces: true,
   // All EU5 content sits under one of three load-stage folders at the mod

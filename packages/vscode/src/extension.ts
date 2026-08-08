@@ -199,6 +199,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let lastServerStatus: StatusPayload = {
     tokens: 0,
     tokensFromScriptDocs: false,
+    tokensFromBundledDumps: false,
     definitions: 0,
     indexing: true,
   };
@@ -214,6 +215,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
+      tokensFromBundledDumps: lastServerStatus.tokensFromBundledDumps ?? false,
       definitions: lastServerStatus.definitions,
       indexing: lastServerStatus.indexing,
       gameOk: cfg.gamePath !== null,
@@ -750,6 +752,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     log,
     showOutput: () => output.show(true),
+    hasBundledDumps: (gameId: string) =>
+      fs.existsSync(context.asAbsolutePath(path.join("data", gameId, "script_docs"))),
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),

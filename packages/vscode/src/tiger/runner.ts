@@ -90,10 +90,10 @@ export class TigerRunner implements vscode.Disposable {
       return;
     }
     if (this.lastCount === null) {
-      this.status.text = "$(play) tiger";
+      this.status.text = "$(play) Tiger";
       this.status.tooltip = `${this.tigerName()}: click to validate the mod`;
     } else {
-      this.status.text = this.lastCount === 0 ? "$(check) tiger" : `$(warning) tiger: ${this.lastCount}`;
+      this.status.text = this.lastCount === 0 ? "$(check) Tiger" : `$(warning) Tiger: ${this.lastCount}`;
       this.status.tooltip =
         this.lastCount === 0
           ? `${this.tigerName()}: no problems. Click to run again.`
@@ -113,7 +113,7 @@ export class TigerRunner implements vscode.Disposable {
   }
 
   private showRunning(): void {
-    this.status.text = "$(sync~spin) tiger";
+    this.status.text = "$(sync~spin) Tiger";
     this.status.tooltip = `${this.tigerName()} is validating the mod…`;
     this.status.show();
   }

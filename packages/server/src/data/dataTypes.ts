@@ -193,34 +193,43 @@ function insertMember(
   map.set(name, keep);
 }
 
-/**
- * Bundled baseline upgraded by the user's dump when present. Accepts
- * `data_types.log`, any `data_type*.txt` files in the logs folder, and every
- * file inside a `data_types/` subfolder (different game versions have written
- * the dump in all three shapes).
- */
-export function loadDataTypes(logsPath: string | null): DataTypesData {
-  const data = loadBundledDataTypes();
-  if (!logsPath) return data;
-  const dumpFiles: string[] = [];
-  const logFile = path.join(logsPath, "data_types.log");
-  if (fs.existsSync(logFile)) dumpFiles.push(logFile);
+/** The dump files a directory holds, in any of the three shapes different
+ * game versions have written: `data_types.log`, `data_type*.txt` files, and a
+ * `data_types/` subfolder of per-category files. */
+function dumpFilesIn(dir: string): string[] {
+  const files: string[] = [];
+  const logFile = path.join(dir, "data_types.log");
+  if (fs.existsSync(logFile)) files.push(logFile);
   try {
-    for (const name of fs.readdirSync(logsPath)) {
-      if (/^data_type.*\.txt$/i.test(name)) dumpFiles.push(path.join(logsPath, name));
+    for (const name of fs.readdirSync(dir)) {
+      if (/^data_type.*\.txt$/i.test(name)) files.push(path.join(dir, name));
     }
   } catch {
-    /* logs dir unreadable: bundled only */
+    /* dir unreadable */
   }
-  const dumpDir = path.join(logsPath, "data_types");
+  const dumpDir = path.join(dir, "data_types");
   try {
     for (const name of fs.readdirSync(dumpDir)) {
       const file = path.join(dumpDir, name);
-      if (fs.statSync(file).isFile()) dumpFiles.push(file);
+      if (fs.statSync(file).isFile()) files.push(file);
     }
   } catch {
     /* no data_types/ subfolder */
   }
+  return files;
+}
+
+/**
+ * Bundled baseline upgraded by dumps. `dirs` are searched in order and later
+ * directories win on conflicts, so callers list them lowest priority first
+ * (bundled dump, then the user's folders). A single string is accepted for
+ * convenience. Games whose script_docs live outside logs/ (Vic3, EU5) dump
+ * data types to logs/ anyway, so callers pass both folders.
+ */
+export function loadDataTypes(dirs: string | null | Array<string | null>): DataTypesData {
+  const data = loadBundledDataTypes();
+  const list = (Array.isArray(dirs) ? dirs : [dirs]).filter((d): d is string => d !== null);
+  const dumpFiles = list.flatMap(dumpFilesIn);
   if (dumpFiles.length === 0) return data;
   const before = data.count;
   for (const file of dumpFiles) {

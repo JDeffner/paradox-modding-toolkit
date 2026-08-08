@@ -1,20 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-  <defs><clipPath id="vt"><rect x="30.688" y="27" width="66.625" height="34" /></clipPath><clipPath id="vb"><rect x="30.688" y="67" width="66.625" height="34" /></clipPath></defs>
-  <g transform="translate(-7.027 -7.027) scale(0.29730)" stroke-width="8">
-    <g clip-path="url(#vt)">
-  <path d="M35.744 27L35.744 61" stroke="currentColor" />
-  <path d="M35.744 31L49.244 31" stroke="currentColor" />
-  <path d="M49.244 31A6.5 6.5 0 0 1 49.244 44" stroke="currentColor" />
-  <path d="M35.744 44L49.244 44" stroke="currentColor" />
-  <path d="M68.744 22L92.744 66" stroke="currentColor" />
-  <path d="M92.744 22L68.744 66" stroke="currentColor" />
-    </g>
-    <g clip-path="url(#vb)">
-  <path d="M31.688 71L59.688 71" stroke="currentColor" />
-  <path d="M45.688 67L45.688 101" stroke="currentColor" />
-  <path d="M70.688 67L70.688 101" stroke="currentColor" />
-  <path d="M93.688 64L70.688 84" stroke="currentColor" />
-  <path d="M70.688 84L93.688 104" stroke="currentColor" />
-    </g>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4.3 10.8V3h2.1a1.95 1.95 0 0 1 0 3.9H4.3"/>
+  <path d="m11.4 3 5.2 7.8M16.6 3l-5.2 7.8"/>
+  <path d="M3.7 13.2h5.4M6.4 13.2V21"/>
+  <path d="M12.2 13.2V21M17 13.2l-4.8 3.9L17 21"/>
 </svg>

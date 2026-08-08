@@ -4,6 +4,53 @@
 
 ### Added
 
+- **Bundled script_docs and data-type dumps.** The extension (and the
+  standalone server tarball) now ship dump snapshots per game under
+  `data/<game>/script_docs` and `data/<game>/data_types`: CK3 (full), Vic3
+  (full — completion works out of the box now, no dump required), EU5 (data
+  types; script_docs pending). Your own dump always wins outright — it
+  matches your exact game version; the status bar says which source is
+  active ("bundled script_docs snapshot" vs "script_docs + wiki").
+- **Victoria 3 dump paths fixed** (verified on a live install): Vic3's
+  `script_docs` writes to `Documents/.../Victoria 3/docs`, not `logs/` —
+  auto-detection now looks there — and its `dump_data_types` output in
+  `logs/data_types` is found by probing the sibling `logs/` folder of a
+  docs-style dump path. Setup names the right console command per game
+  (`DumpDataTypes` vs `dump_data_types`).
+
+### Changed (feedback round)
+
+- **Event graph redesigned** after researching the best event/dialogue graph
+  tools (articy, Arcweave, Yarn, React Flow, Foam): nodes are theme-native
+  cards with a kind accent bar instead of full-color boxes; selecting a node
+  dims everything outside its neighborhood, colors what it fires blue and
+  what fires it orange, and reveals its edge labels (labels show everywhere
+  only in sparse graphs, ending label soup); the legend is clickable to dim
+  kinds; zoom controls (+/−/fit, also keyboard +/−/0), Esc deselects,
+  clicking empty canvas deselects; the inspector gained "Center graph here".
+- **GUI tree focus reworked**: "Focus subtree" pins the subtree and clicking
+  around INSIDE it navigates without re-narrowing; `h` on a deeper node
+  re-focuses there, Esc zooms back out; the button says what it does in
+  each mode. Clicking any tree node now also flashes the widget's line in
+  the source editor (range highlight + overview ruler mark).
+- **File icons redrawn**: the "PS" script icon and the "PX TK" activity-bar
+  mark are single continuous paths now (the old separate stroke segments
+  read as a broken P at small sizes; the S was two >250° arcs), and the
+  descriptor.mod puzzle icon is optically centered.
+- **Project view**: Setup & Health Check row removed (the PX Toolkit status
+  bar item is that button); tiger quick actions added under Test &
+  Troubleshoot (Create Baseline, Find Unused, Generate conf, Update).
+- **Hovers in huge multi-mod workspaces**: a word with many same-kind
+  definitions (AGOT saves a scope named `type` in 33 places) now renders ONE
+  grouped card ("33 sites") instead of a stack of identical cards; on an
+  assignment KEY, the key's own structural meaning ranks first and
+  value-side identities are dropped; the "N references" count renders once
+  per hover instead of once per meaning.
+- The tiger status item is capitalized ("Tiger"), the DDS guidelines gained
+  the community sizing table (legacy tracks, lifestyle backgrounds,
+  bookmarks, clothing textures, mipmap notes; thanks Sparc), and every
+  GitHub link follows the repo rename to `paradox-modding-toolkit`.
+
 - **The Project view names the active game.** A header row shows the game the
   workspace mods (with an "auto-detected" or "set manually" badge); click it
   to change `px.gameId` when detection guessed wrong. The empty state now
@@ -235,7 +282,7 @@
 
 ### Fixed
 
-- **The error.log watcher actually watches** ([#10](https://github.com/JDeffner/ck3-modding-toolkit/issues/10)):
+- **The error.log watcher actually watches** ([#10](https://github.com/JDeffner/paradox-modding-toolkit/issues/10)):
   entries appended while the game holds the log open now appear (the old
   reader could silently skip regions on a short read and then never look at
   them again), and clearing the log from the in-game error tracker, or
@@ -297,7 +344,7 @@ Measured on the two workspaces the reports describe: the game mounted three
 times plus 20 small mods (1.86M definitions), and the game plus a total
 conversion twice (1.36M definitions, 8.3M references). Numbers are per window,
 because every window still runs its own indexer.
-[`docs/PERFORMANCE.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PERFORMANCE.md)
+[`docs/PERFORMANCE.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PERFORMANCE.md)
 is the new page on what a workspace costs and which settings shrink it.
 
 - **The index uses less than half the memory it did.** The parser hands out

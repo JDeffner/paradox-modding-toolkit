@@ -16,7 +16,7 @@ const vscode = join(root, "packages", "vscode");
  * Every bundled game gets its data/<gameId>/ folder, discovered rather than
  * listed: hardcoding "ck3" here would silently drop the next game's data from
  * the .vsix (the other tables are inlined into the bundle by esbuild; only
- * these two are read from disk at runtime).
+ * these disk assets — wiki mirror, freqs, bundled dumps — are read at runtime).
  */
 function discoverGameDataDirs(serverDataRoot) {
   if (!existsSync(serverDataRoot)) return [];
@@ -34,7 +34,7 @@ function copyServer() {
   const dataRoot = join(server, "data");
   for (const gameId of discoverGameDataDirs(dataRoot)) {
     mkdirSync(join(vscode, "data", gameId), { recursive: true });
-    for (const asset of ["freqs.json", "wikidocs"]) {
+    for (const asset of ["freqs.json", "wikidocs", "script_docs", "data_types"]) {
       const from = join(dataRoot, gameId, asset);
       if (!existsSync(from)) continue;
       cpSync(from, join(vscode, "data", gameId, asset), { recursive: true });

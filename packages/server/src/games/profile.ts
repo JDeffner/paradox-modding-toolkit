@@ -35,6 +35,13 @@ export interface GameMeta {
    * "logs" (the classic location); newer titles may write to "docs".
    */
   scriptDocsSubdir?: string;
+  /**
+   * Console command that dumps the data-type documentation. Absent =
+   * "DumpDataTypes" (CK3's casing); newer Jomini titles use snake_case.
+   * The dump lands under `<Documents>/<docsFolderName>/logs/` regardless of
+   * where script_docs go.
+   */
+  dataTypesCommand?: string;
   steamAppId: number;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;

@@ -13,6 +13,10 @@ export const vic3Meta: GameMeta = {
   descriptor: "metadata",
   configDirName: ".vic3modding",
   docsFolderName: "Victoria 3",
+  // Vic3's `script_docs` writes to Documents/.../docs (like EU5), while
+  // `dump_data_types` writes to logs/data_types — verified on a live install.
+  scriptDocsSubdir: "docs",
+  dataTypesCommand: "dump_data_types",
   steamAppId: 529340,
   eventNamespaces: true,
   // Vic3's script_docs dumps are markdown (`## name`), with modifiers as

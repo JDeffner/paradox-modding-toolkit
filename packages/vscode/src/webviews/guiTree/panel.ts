@@ -25,6 +25,14 @@ export class GuiTreePanel {
   private disposables: vscode.Disposable[] = [];
   private sourceUri: vscode.Uri;
   private disposed = false;
+  /** Transient whole-line highlight marking the clicked widget in the source. */
+  private readonly lineHighlight = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    backgroundColor: new vscode.ThemeColor("editor.rangeHighlightBackground"),
+    overviewRulerColor: new vscode.ThemeColor("editorOverviewRuler.rangeHighlightForeground"),
+    overviewRulerLane: vscode.OverviewRulerLane.Full,
+  });
+  private highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
   private constructor(
     fetchTree: (uri: vscode.Uri, text: string) => Promise<GuiTree>,
@@ -84,6 +92,8 @@ export class GuiTreePanel {
     if (this.disposed) return;
     this.disposed = true;
     GuiTreePanel.instance = undefined;
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.lineHighlight.dispose();
     for (const d of this.disposables.splice(0)) {
       try {
         d.dispose();
@@ -116,14 +126,22 @@ export class GuiTreePanel {
     if (msg.type === "open") {
       try {
         const doc = await vscode.workspace.openTextDocument(this.sourceUri);
-        const position = new vscode.Position(Math.max(0, msg.line), 0);
+        const line = Math.min(Math.max(0, msg.line), doc.lineCount - 1);
+        const position = new vscode.Position(line, 0);
         // Single click previews (focus stays in the tree, so hotkeys keep
         // working); double click hands focus to the editor.
-        await vscode.window.showTextDocument(doc, {
+        const editor = await vscode.window.showTextDocument(doc, {
           viewColumn: vscode.ViewColumn.One,
           preserveFocus: msg.focus !== true,
           selection: new vscode.Range(position, position),
         });
+        // Flash the widget's line so the eye lands on it even in a busy file;
+        // the decoration fades instead of lingering as a stale marker.
+        editor.setDecorations(this.lineHighlight, [doc.lineAt(line).range]);
+        if (this.highlightTimer) clearTimeout(this.highlightTimer);
+        this.highlightTimer = setTimeout(() => {
+          if (!this.disposed) editor.setDecorations(this.lineHighlight, []);
+        }, 1400);
       } catch (err) {
         void vscode.window.showErrorMessage(
           `Paradox GUI Tree: cannot open source: ${err instanceof Error ? err.message : String(err)}`
@@ -247,14 +265,19 @@ const filterEl = document.getElementById("filter");
 const ancestorsBtn = document.getElementById("ancestors");
 
 // One button, two contexts: while filtering it flattens matches (hideAncestors,
-// the #1 behavior, on by default); in the idle tree with a selected node it
-// focuses on that node's subtree (focusMode, off by default).
+// the #1 behavior, on by default); in the idle tree it focuses on the selected
+// node's subtree. The focus ROOT is pinned separately from the selection, so
+// clicking around INSIDE the focused subtree navigates without re-narrowing
+// the view; press h on a deeper node to re-focus there, Esc to zoom back out.
 let hideAncestors = true;
-let focusMode = false;
+let focusLine = null;
 let selectedLine = null;
 
+function rowFor(line) {
+  return line === null ? null : treeEl.querySelector('.row[data-line="' + line + '"]');
+}
 function selectedRow() {
-  return selectedLine === null ? null : treeEl.querySelector('.row[data-line="' + selectedLine + '"]');
+  return rowFor(selectedLine);
 }
 
 function updateSelection() {
@@ -305,6 +328,8 @@ function renderNode(node) {
     ev.stopPropagation();
     selectedLine = node.line;
     updateSelection();
+    // Safe inside a focused subtree: visibility keys off the pinned focusLine,
+    // not the selection, so this only refreshes the toolbar state.
     applyFilter();
     vscode.postMessage({ type: "open", line: node.line });
   });
@@ -344,24 +369,28 @@ function render(tree, file) {
 function applyFilter() {
   const q = filterEl.value.trim().toLowerCase();
   const rows = treeEl.querySelectorAll(".row");
-  const sel = selectedRow();
-  ancestorsBtn.disabled = !q && !sel;
-  const active = q ? hideAncestors : focusMode && !!sel;
+  const focusRoot = rowFor(focusLine);
+  if (focusRoot === null) focusLine = null;
+  ancestorsBtn.disabled = !q && !selectedRow() && !focusRoot;
+  const active = q ? hideAncestors : !!focusRoot;
+  ancestorsBtn.textContent = q ? "Hide ancestors" : "Focus subtree";
   ancestorsBtn.classList.toggle("active", active);
   ancestorsBtn.setAttribute("aria-pressed", String(active));
   ancestorsBtn.title = q
     ? "Show only the filter matches, without their ancestor rows (h)"
-    : sel
-      ? "Focus on the selected node's subtree (h) — Esc clears the selection"
-      : "Type a filter or select a node first (h)";
+    : focusRoot
+      ? "Focused on this subtree — click around inside it freely. h on a node re-focuses there, Esc zooms back out."
+      : selectedRow()
+        ? "Show only the selected node's subtree (h); clicks inside keep the focus"
+        : "Type a filter or select a node first (h)";
   treeEl.classList.toggle("noparents", !!q && hideAncestors);
   if (!q) {
     rows.forEach((r) => { r.classList.remove("hidden"); r.parentElement.classList.remove("hidden"); });
-    if (sel && focusMode) {
-      // Focus mode: the selected node's subtree only, everything else hidden.
+    if (focusRoot) {
+      // Focus mode: the pinned subtree only; the selection may move within it.
       rows.forEach((r) => r.classList.add("hidden"));
-      sel.parentElement.querySelectorAll(".row").forEach((r) => r.classList.remove("hidden"));
-      sel.classList.remove("hidden");
+      focusRoot.parentElement.querySelectorAll(".row").forEach((r) => r.classList.remove("hidden"));
+      focusRoot.classList.remove("hidden");
     }
     return;
   }
@@ -391,9 +420,16 @@ function applyFilter() {
 }
 
 function toggleAncestors() {
-  if (filterEl.value.trim() !== "") hideAncestors = !hideAncestors;
-  else if (selectedRow()) focusMode = !focusMode;
-  else return;
+  if (filterEl.value.trim() !== "") {
+    hideAncestors = !hideAncestors;
+  } else if (selectedLine !== null && selectedLine !== focusLine) {
+    // Focus (or re-focus deeper) on the selected node's subtree.
+    focusLine = selectedLine;
+  } else if (focusLine !== null) {
+    focusLine = null;
+  } else {
+    return;
+  }
   applyFilter();
 }
 
@@ -441,8 +477,9 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     filterEl.focus();
   } else if (ev.key === "Escape") {
-    selectedLine = null;
-    focusMode = false;
+    // First Esc zooms back out of the focused subtree, second clears selection.
+    if (focusLine !== null) focusLine = null;
+    else selectedLine = null;
     updateSelection();
     applyFilter();
   }

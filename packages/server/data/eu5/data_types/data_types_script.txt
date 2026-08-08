@@ -1,0 +1,5688 @@
+DATE
+Description: Jomini Date
+Definition type: Global promote
+Return type: Date
+
+-----------------------
+
+DATE_MAX
+Description: Jomini Date - Max
+Definition type: Global promote
+Return type: Date
+
+-----------------------
+
+DATE_MIN
+Description: Jomini Date - Min
+Definition type: Global promote
+Return type: Date
+
+-----------------------
+
+EmptyScope
+Definition type: Global promote
+Return type: TopScope
+
+-----------------------
+
+GetGlobalVariable( Arg0 )
+Definition type: Global promote
+Return type: Scope
+
+-----------------------
+
+GetVariableFromGlobalVariableMap( Arg0, Arg1 )
+Definition type: Global promote
+Return type: Scope
+
+-----------------------
+
+PREV
+Description: Script Scope
+Definition type: Global promote
+Return type: Scope
+
+-----------------------
+
+ROOT
+Description: Script Scope
+Definition type: Global promote
+Return type: Scope
+
+-----------------------
+
+SCOPE
+Description: Script Scope
+Definition type: Global promote
+Return type: TopScope
+
+-----------------------
+
+THIS
+Description: Script Scope
+Definition type: Global promote
+Return type: Scope
+
+-----------------------
+
+GetGlobalList( Arg0 )
+Definition type: Global function
+Return type: [unregistered]
+
+-----------------------
+
+GetGlobalVariable( Arg0 )
+Definition type: Global function
+Return type: [unregistered]
+
+-----------------------
+
+GetVarTimeRemaining( Arg0, Arg1 )
+Definition type: Global function
+Return type: int32
+
+-----------------------
+
+GetVariableFromGlobalVariableMap( Arg0, Arg1 )
+Definition type: Global function
+Return type: [unregistered]
+
+-----------------------
+
+MakeScopeBool( Arg0 )
+Definition type: Global function
+Return type: Scope
+
+-----------------------
+
+MakeScopeFlag( Arg0 )
+Definition type: Global function
+Return type: Scope
+
+-----------------------
+
+MakeScopeValue( Arg0 )
+Definition type: Global function
+Return type: Scope
+
+-----------------------
+
+ActiveResolution
+Definition type: Type
+
+-----------------------
+
+ActiveResolution.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+AdvanceDefinition
+Definition type: Type
+
+-----------------------
+
+AdvanceDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Age
+Definition type: Type
+
+-----------------------
+
+Age.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Area
+Definition type: Type
+
+-----------------------
+
+Area.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Artist
+Definition type: Type
+
+-----------------------
+
+Artist.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Avatar
+Definition type: Type
+
+-----------------------
+
+Avatar.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Building
+Definition type: Type
+
+-----------------------
+
+Building.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+BuildingType
+Definition type: Type
+
+-----------------------
+
+BuildingType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Bureaucracy
+Definition type: Type
+
+-----------------------
+
+Bureaucracy.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+BureaucracyType
+Definition type: Type
+
+-----------------------
+
+BureaucracyType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Cabinet
+Definition type: Type
+
+-----------------------
+
+Cabinet.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Cardinal
+Definition type: Type
+
+-----------------------
+
+Cardinal.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CasusBelli
+Definition type: Type
+
+-----------------------
+
+CasusBelli.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Character
+Definition type: Type
+
+-----------------------
+
+Character.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CharacterInteraction
+Definition type: Type
+
+-----------------------
+
+CharacterInteraction.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ChildEducation
+Definition type: Type
+
+-----------------------
+
+ChildEducation.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ChivalricOrder
+Definition type: Type
+
+-----------------------
+
+ChivalricOrder.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Climate
+Definition type: Type
+
+-----------------------
+
+Climate.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ColonialCharter
+Definition type: Type
+
+-----------------------
+
+ColonialCharter.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Combat
+Definition type: Type
+
+-----------------------
+
+Combat.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CombatSide
+Definition type: Type
+
+-----------------------
+
+CombatSide.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Container
+Definition type: Type
+
+-----------------------
+
+Container.AccessSelf
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Container.Self
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Continent
+Definition type: Type
+
+-----------------------
+
+Continent.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Country
+Definition type: Type
+
+-----------------------
+
+Country.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CountryInteraction
+Definition type: Type
+
+-----------------------
+
+CountryInteraction.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CountryRank
+Definition type: Type
+
+-----------------------
+
+CountryRank.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Culture
+Definition type: Type
+
+-----------------------
+
+Culture.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+CultureGroup
+Definition type: Type
+
+-----------------------
+
+CultureGroup.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+DisasterType
+Definition type: Type
+
+-----------------------
+
+DisasterType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Disease
+Definition type: Type
+
+-----------------------
+
+Disease.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+DiseaseOutbreak
+Definition type: Type
+
+-----------------------
+
+DiseaseOutbreak.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Dynasty
+Definition type: Type
+
+-----------------------
+
+Dynasty.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+EmploymentSystem
+Definition type: Type
+
+-----------------------
+
+EmploymentSystem.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Estate
+Definition type: Type
+
+-----------------------
+
+Estate.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+EstateType
+Definition type: Type
+
+-----------------------
+
+EstateType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Ethnicity
+Description: Portrait System - Ethnicity
+Definition type: Type
+
+-----------------------
+
+Ethnicity.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Exploration
+Definition type: Type
+
+-----------------------
+
+Exploration.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+FormableCountry
+Definition type: Type
+
+-----------------------
+
+FormableCountry.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+GenericAction
+Definition type: Type
+
+-----------------------
+
+GenericAction.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+God
+Definition type: Type
+
+-----------------------
+
+God.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Goods
+Definition type: Type
+
+-----------------------
+
+Goods.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+GoodsDemand
+Definition type: Type
+
+-----------------------
+
+GoodsDemand.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+GovernmentType
+Definition type: Type
+
+-----------------------
+
+GovernmentType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Hegemony
+Definition type: Type
+
+-----------------------
+
+Hegemony.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+HeirSelection
+Definition type: Type
+
+-----------------------
+
+HeirSelection.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+HolySite
+Definition type: Type
+
+-----------------------
+
+HolySite.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+HolySiteDefinition
+Definition type: Type
+
+-----------------------
+
+HolySiteDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+HolySiteType
+Definition type: Type
+
+-----------------------
+
+HolySiteType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ImperialCircle
+Definition type: Type
+
+-----------------------
+
+ImperialCircle.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Implementable
+Description: Base class for implementable game structures
+Definition type: Type
+
+-----------------------
+
+Implementable.AccessSelf
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Implementable.HasPotential
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+Implementable.Self
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Institution
+Definition type: Type
+
+-----------------------
+
+Institution.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+InternationalOrganization
+Definition type: Type
+
+-----------------------
+
+InternationalOrganization.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+InternationalOrganizationType
+Definition type: Type
+
+-----------------------
+
+InternationalOrganizationType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+LandOwnershipRule
+Definition type: Type
+
+-----------------------
+
+LandOwnershipRule.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Language
+Definition type: Type
+
+-----------------------
+
+Language.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+LanguageFamily
+Definition type: Type
+
+-----------------------
+
+LanguageFamily.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Law
+Definition type: Type
+
+-----------------------
+
+Law.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+LevySetup
+Definition type: Type
+
+-----------------------
+
+LevySetup.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Loan
+Definition type: Type
+
+-----------------------
+
+Loan.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Location
+Definition type: Type
+
+-----------------------
+
+Location.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+LocationRank
+Definition type: Type
+
+-----------------------
+
+LocationRank.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Market
+Definition type: Type
+
+-----------------------
+
+Market.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Mercenary
+Definition type: Type
+
+-----------------------
+
+Mercenary.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+MissionDefinition
+Definition type: Type
+
+-----------------------
+
+MissionDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+MissionTaskDefinition
+Definition type: Type
+
+-----------------------
+
+MissionTaskDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Movement
+Definition type: Type
+
+-----------------------
+
+Movement.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+MovementDefinition
+Definition type: Type
+
+-----------------------
+
+MovementDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Omen
+Definition type: Type
+
+-----------------------
+
+Omen.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ParliamentAgenda
+Definition type: Type
+
+-----------------------
+
+ParliamentAgenda.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ParliamentIssue
+Definition type: Type
+
+-----------------------
+
+ParliamentIssue.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ParliamentType
+Definition type: Type
+
+-----------------------
+
+ParliamentType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Payment
+Definition type: Type
+
+-----------------------
+
+Payment.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Policy
+Definition type: Type
+
+-----------------------
+
+Policy.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Pop
+Definition type: Type
+
+-----------------------
+
+Pop.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+PopType
+Definition type: Type
+
+-----------------------
+
+PopType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Price
+Definition type: Type
+
+-----------------------
+
+Price.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Privateer
+Definition type: Type
+
+-----------------------
+
+Privateer.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ProductionMethod
+Definition type: Type
+
+-----------------------
+
+ProductionMethod.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Province
+Definition type: Type
+
+-----------------------
+
+Province.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ProvinceDefinition
+Definition type: Type
+
+-----------------------
+
+ProvinceDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Rebel
+Definition type: Type
+
+-----------------------
+
+Rebel.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+RecruitmentMethod
+Definition type: Type
+
+-----------------------
+
+RecruitmentMethod.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+RegencyType
+Definition type: Type
+
+-----------------------
+
+RegencyType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Region
+Definition type: Type
+
+-----------------------
+
+Region.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Religion
+Definition type: Type
+
+-----------------------
+
+Religion.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligionGroup
+Definition type: Type
+
+-----------------------
+
+ReligionGroup.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligiousAspect
+Definition type: Type
+
+-----------------------
+
+ReligiousAspect.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligiousFaction
+Definition type: Type
+
+-----------------------
+
+ReligiousFaction.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligiousFigure
+Definition type: Type
+
+-----------------------
+
+ReligiousFigure.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligiousFocus
+Definition type: Type
+
+-----------------------
+
+ReligiousFocus.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ReligiousSchool
+Definition type: Type
+
+-----------------------
+
+ReligiousSchool.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Resolution
+Definition type: Type
+
+-----------------------
+
+Resolution.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+RoadType
+Definition type: Type
+
+-----------------------
+
+RoadType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Scope
+Definition type: Type
+
+-----------------------
+
+Scope.ActiveResolution
+Description: Jomini Script System
+Definition type: Promote
+Return type: ActiveResolution
+
+-----------------------
+
+Scope.AdvanceType
+Description: Jomini Script System
+Definition type: Promote
+Return type: AdvanceDefinition
+
+-----------------------
+
+Scope.Age
+Description: Jomini Script System
+Definition type: Promote
+Return type: Age
+
+-----------------------
+
+Scope.Area
+Description: Jomini Script System
+Definition type: Promote
+Return type: Area
+
+-----------------------
+
+Scope.Artist
+Description: Jomini Script System
+Definition type: Promote
+Return type: Artist
+
+-----------------------
+
+Scope.Avatar
+Description: Jomini Script System
+Definition type: Promote
+Return type: Avatar
+
+-----------------------
+
+Scope.Building
+Description: Jomini Script System
+Definition type: Promote
+Return type: Building
+
+-----------------------
+
+Scope.BuildingType
+Description: Jomini Script System
+Definition type: Promote
+Return type: BuildingType
+
+-----------------------
+
+Scope.Bureaucracy
+Description: Jomini Script System
+Definition type: Promote
+Return type: Bureaucracy
+
+-----------------------
+
+Scope.BureaucracyType
+Description: Jomini Script System
+Definition type: Promote
+Return type: BureaucracyType
+
+-----------------------
+
+Scope.Cabinet
+Description: Jomini Script System
+Definition type: Promote
+Return type: Cabinet
+
+-----------------------
+
+Scope.Cardinal
+Description: Jomini Script System
+Definition type: Promote
+Return type: Cardinal
+
+-----------------------
+
+Scope.CasusBelli
+Description: Jomini Script System
+Definition type: Promote
+Return type: CasusBelli
+
+-----------------------
+
+Scope.Character
+Description: Jomini Script System
+Definition type: Promote
+Return type: Character
+
+-----------------------
+
+Scope.CharacterInteraction
+Description: Jomini Script System
+Definition type: Promote
+Return type: CharacterInteraction
+
+-----------------------
+
+Scope.ChildEducation
+Description: Jomini Script System
+Definition type: Promote
+Return type: ChildEducation
+
+-----------------------
+
+Scope.ChivalricOrder
+Description: Jomini Script System
+Definition type: Promote
+Return type: ChivalricOrder
+
+-----------------------
+
+Scope.Climate
+Description: Jomini Script System
+Definition type: Promote
+Return type: Climate
+
+-----------------------
+
+Scope.ColonialCharter
+Description: Jomini Script System
+Definition type: Promote
+Return type: ColonialCharter
+
+-----------------------
+
+Scope.Combat
+Description: Jomini Script System
+Definition type: Promote
+Return type: Combat
+
+-----------------------
+
+Scope.CombatSide
+Description: Jomini Script System
+Definition type: Promote
+Return type: CombatSide
+
+-----------------------
+
+Scope.Continent
+Description: Jomini Script System
+Definition type: Promote
+Return type: Continent
+
+-----------------------
+
+Scope.Country
+Description: Jomini Script System
+Definition type: Promote
+Return type: Country
+
+-----------------------
+
+Scope.CountryInteraction
+Description: Jomini Script System
+Definition type: Promote
+Return type: CountryInteraction
+
+-----------------------
+
+Scope.CountryRank
+Description: Jomini Script System
+Definition type: Promote
+Return type: CountryRank
+
+-----------------------
+
+Scope.Culture
+Description: Jomini Script System
+Definition type: Promote
+Return type: Culture
+
+-----------------------
+
+Scope.CultureGroup
+Description: Jomini Script System
+Definition type: Promote
+Return type: CultureGroup
+
+-----------------------
+
+Scope.DisasterType
+Description: Jomini Script System
+Definition type: Promote
+Return type: DisasterType
+
+-----------------------
+
+Scope.Disease
+Description: Jomini Script System
+Definition type: Promote
+Return type: Disease
+
+-----------------------
+
+Scope.DiseaseOutbreak
+Description: Jomini Script System
+Definition type: Promote
+Return type: DiseaseOutbreak
+
+-----------------------
+
+Scope.Dynasty
+Description: Jomini Script System
+Definition type: Promote
+Return type: Dynasty
+
+-----------------------
+
+Scope.EmploymentSystem
+Description: Jomini Script System
+Definition type: Promote
+Return type: EmploymentSystem
+
+-----------------------
+
+Scope.Estate
+Description: Jomini Script System
+Definition type: Promote
+Return type: Estate
+
+-----------------------
+
+Scope.EstateType
+Description: Jomini Script System
+Definition type: Promote
+Return type: EstateType
+
+-----------------------
+
+Scope.Ethnicity
+Description: Jomini Script System
+Definition type: Promote
+Return type: Ethnicity
+
+-----------------------
+
+Scope.Exploration
+Description: Jomini Script System
+Definition type: Promote
+Return type: Exploration
+
+-----------------------
+
+Scope.Faction
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligiousFaction
+
+-----------------------
+
+Scope.FormableCountry
+Description: Jomini Script System
+Definition type: Promote
+Return type: FormableCountry
+
+-----------------------
+
+Scope.GenericAction
+Description: Jomini Script System
+Definition type: Promote
+Return type: GenericAction
+
+-----------------------
+
+Scope.GetActiveResolution
+Definition type: Promote
+Return type: ActiveResolution
+
+-----------------------
+
+Scope.GetAdvanceType
+Definition type: Promote
+Return type: AdvanceDefinition
+
+-----------------------
+
+Scope.GetAge
+Definition type: Promote
+Return type: Age
+
+-----------------------
+
+Scope.GetArea
+Definition type: Promote
+Return type: Area
+
+-----------------------
+
+Scope.GetArtist
+Definition type: Promote
+Return type: Artist
+
+-----------------------
+
+Scope.GetAvatar
+Definition type: Promote
+Return type: Avatar
+
+-----------------------
+
+Scope.GetBuilding
+Definition type: Promote
+Return type: Building
+
+-----------------------
+
+Scope.GetBuildingType
+Definition type: Promote
+Return type: BuildingType
+
+-----------------------
+
+Scope.GetBureaucracy
+Definition type: Promote
+Return type: Bureaucracy
+
+-----------------------
+
+Scope.GetBureaucracyType
+Definition type: Promote
+Return type: BureaucracyType
+
+-----------------------
+
+Scope.GetCabinet
+Definition type: Promote
+Return type: Cabinet
+
+-----------------------
+
+Scope.GetCabinetAction
+Definition type: Promote
+Return type: CabinetAction
+
+-----------------------
+
+Scope.GetCardinal
+Definition type: Promote
+Return type: Cardinal
+
+-----------------------
+
+Scope.GetCasusBelli
+Definition type: Promote
+Return type: CasusBelli
+
+-----------------------
+
+Scope.GetCharacter
+Definition type: Promote
+Return type: Character
+
+-----------------------
+
+Scope.GetCharacterInteraction
+Definition type: Promote
+Return type: CharacterInteraction
+
+-----------------------
+
+Scope.GetChildEducation
+Definition type: Promote
+Return type: ChildEducation
+
+-----------------------
+
+Scope.GetChivalricOrder
+Definition type: Promote
+Return type: ChivalricOrder
+
+-----------------------
+
+Scope.GetClimate
+Definition type: Promote
+Return type: Climate
+
+-----------------------
+
+Scope.GetColonialCharter
+Definition type: Promote
+Return type: ColonialCharter
+
+-----------------------
+
+Scope.GetCombat
+Definition type: Promote
+Return type: Combat
+
+-----------------------
+
+Scope.GetCombatSide
+Definition type: Promote
+Return type: CombatSide
+
+-----------------------
+
+Scope.GetContinent
+Definition type: Promote
+Return type: Continent
+
+-----------------------
+
+Scope.GetCountry
+Definition type: Promote
+Return type: Country
+
+-----------------------
+
+Scope.GetCountryInteraction
+Definition type: Promote
+Return type: CountryInteraction
+
+-----------------------
+
+Scope.GetCountryRank
+Definition type: Promote
+Return type: CountryRank
+
+-----------------------
+
+Scope.GetCulture
+Definition type: Promote
+Return type: Culture
+
+-----------------------
+
+Scope.GetCultureGroup
+Definition type: Promote
+Return type: CultureGroup
+
+-----------------------
+
+Scope.GetDialect
+Definition type: Promote
+Return type: Dialect
+
+-----------------------
+
+Scope.GetDisaster
+Definition type: Promote
+Return type: Disaster
+
+-----------------------
+
+Scope.GetDisasterType
+Definition type: Promote
+Return type: DisasterType
+
+-----------------------
+
+Scope.GetDisease
+Definition type: Promote
+Return type: Disease
+
+-----------------------
+
+Scope.GetDiseaseOutbreak
+Definition type: Promote
+Return type: DiseaseOutbreak
+
+-----------------------
+
+Scope.GetDynasty
+Definition type: Promote
+Return type: Dynasty
+
+-----------------------
+
+Scope.GetEmploymentSystem
+Definition type: Promote
+Return type: EmploymentSystem
+
+-----------------------
+
+Scope.GetEstate
+Definition type: Promote
+Return type: Estate
+
+-----------------------
+
+Scope.GetEstatePrivilege
+Definition type: Promote
+Return type: EstatePrivilege
+
+-----------------------
+
+Scope.GetEstateType
+Definition type: Promote
+Return type: EstateType
+
+-----------------------
+
+Scope.GetEthnicity
+Definition type: Promote
+Return type: Ethnicity
+
+-----------------------
+
+Scope.GetExploration
+Definition type: Promote
+Return type: Exploration
+
+-----------------------
+
+Scope.GetFormableCountry
+Definition type: Promote
+Return type: FormableCountry
+
+-----------------------
+
+Scope.GetGenericAction
+Definition type: Promote
+Return type: GenericAction
+
+-----------------------
+
+Scope.GetGod
+Definition type: Promote
+Return type: God
+
+-----------------------
+
+Scope.GetGoods
+Definition type: Promote
+Return type: Goods
+
+-----------------------
+
+Scope.GetGoodsDemand
+Definition type: Promote
+Return type: Goods
+
+-----------------------
+
+Scope.GetGovernmentReform
+Definition type: Promote
+Return type: GovernmentReform
+
+-----------------------
+
+Scope.GetGovernmentType
+Definition type: Promote
+Return type: GovernmentType
+
+-----------------------
+
+Scope.GetHegemony
+Definition type: Promote
+Return type: Hegemony
+
+-----------------------
+
+Scope.GetHeirSelection
+Definition type: Promote
+Return type: HeirSelection
+
+-----------------------
+
+Scope.GetHolySite
+Definition type: Promote
+Return type: HolySite
+
+-----------------------
+
+Scope.GetHolySiteDefinition
+Definition type: Promote
+Return type: HolySiteDefinition
+
+-----------------------
+
+Scope.GetHolySiteType
+Definition type: Promote
+Return type: HolySiteType
+
+-----------------------
+
+Scope.GetImperialCircle
+Definition type: Promote
+Return type: ImperialCircle
+
+-----------------------
+
+Scope.GetInstitution
+Definition type: Promote
+Return type: Institution
+
+-----------------------
+
+Scope.GetInternationalOrganization
+Definition type: Promote
+Return type: InternationalOrganization
+
+-----------------------
+
+Scope.GetInternationalOrganizationType
+Definition type: Promote
+Return type: InternationalOrganizationType
+
+-----------------------
+
+Scope.GetLandOwnershipRule
+Definition type: Promote
+Return type: LandOwnershipRule
+
+-----------------------
+
+Scope.GetLanguage
+Definition type: Promote
+Return type: Language
+
+-----------------------
+
+Scope.GetLaw
+Definition type: Promote
+Return type: Law
+
+-----------------------
+
+Scope.GetLevySetup
+Definition type: Promote
+Return type: LevySetup
+
+-----------------------
+
+Scope.GetLoan
+Definition type: Promote
+Return type: Loan
+
+-----------------------
+
+Scope.GetLocation
+Definition type: Promote
+Return type: Location
+
+-----------------------
+
+Scope.GetLocationRank
+Definition type: Promote
+Return type: LocationRank
+
+-----------------------
+
+Scope.GetMarket
+Definition type: Promote
+Return type: Market
+
+-----------------------
+
+Scope.GetMercenary
+Definition type: Promote
+Return type: Mercenary
+
+-----------------------
+
+Scope.GetMissionDefinition
+Definition type: Promote
+Return type: MissionDefinition
+
+-----------------------
+
+Scope.GetMissionTaskDefinition
+Definition type: Promote
+Return type: MissionTaskDefinition
+
+-----------------------
+
+Scope.GetMovement
+Definition type: Promote
+Return type: Movement
+
+-----------------------
+
+Scope.GetMovementDefinition
+Definition type: Promote
+Return type: MovementDefinition
+
+-----------------------
+
+Scope.GetOmen
+Definition type: Promote
+Return type: Omen
+
+-----------------------
+
+Scope.GetParliamentAgenda
+Definition type: Promote
+Return type: ParliamentAgenda
+
+-----------------------
+
+Scope.GetParliamentIssue
+Definition type: Promote
+Return type: ParliamentIssue
+
+-----------------------
+
+Scope.GetParliamentType
+Definition type: Promote
+Return type: ParliamentType
+
+-----------------------
+
+Scope.GetPayment
+Definition type: Promote
+Return type: Payment
+
+-----------------------
+
+Scope.GetPolicy
+Definition type: Promote
+Return type: Policy
+
+-----------------------
+
+Scope.GetPop
+Definition type: Promote
+Return type: Pop
+
+-----------------------
+
+Scope.GetPopType
+Definition type: Promote
+Return type: PopType
+
+-----------------------
+
+Scope.GetPrice
+Definition type: Promote
+Return type: Price
+
+-----------------------
+
+Scope.GetPrivateer
+Definition type: Promote
+Return type: Privateer
+
+-----------------------
+
+Scope.GetProductionMethod
+Definition type: Promote
+Return type: ProductionMethod
+
+-----------------------
+
+Scope.GetProvince
+Definition type: Promote
+Return type: Province
+
+-----------------------
+
+Scope.GetProvinceDefinition
+Definition type: Promote
+Return type: ProvinceDefinition
+
+-----------------------
+
+Scope.GetRebel
+Definition type: Promote
+Return type: Rebel
+
+-----------------------
+
+Scope.GetRecruitmentMethod
+Definition type: Promote
+Return type: RecruitmentMethod
+
+-----------------------
+
+Scope.GetRegencyType
+Definition type: Promote
+Return type: RegencyType
+
+-----------------------
+
+Scope.GetRegion
+Definition type: Promote
+Return type: Region
+
+-----------------------
+
+Scope.GetRelationType
+Definition type: Promote
+Return type: ScriptedRelationType
+
+-----------------------
+
+Scope.GetReligion
+Definition type: Promote
+Return type: Religion
+
+-----------------------
+
+Scope.GetReligionGroup
+Definition type: Promote
+Return type: ReligionGroup
+
+-----------------------
+
+Scope.GetReligiousAspect
+Definition type: Promote
+Return type: ReligiousAspect
+
+-----------------------
+
+Scope.GetReligiousFaction
+Definition type: Promote
+Return type: ReligiousFaction
+
+-----------------------
+
+Scope.GetReligiousFigure
+Definition type: Promote
+Return type: ReligiousFigure
+
+-----------------------
+
+Scope.GetReligiousFocus
+Definition type: Promote
+Return type: ReligiousFocus
+
+-----------------------
+
+Scope.GetReligiousSchool
+Definition type: Promote
+Return type: ReligiousSchool
+
+-----------------------
+
+Scope.GetResolution
+Definition type: Promote
+Return type: Resolution
+
+-----------------------
+
+Scope.GetRoadType
+Definition type: Promote
+Return type: RoadType
+
+-----------------------
+
+Scope.GetScriptableHintDefinition
+Definition type: Promote
+Return type: ScriptableHintDefinition
+
+-----------------------
+
+Scope.GetScriptedGeography
+Definition type: Promote
+Return type: ScriptedGeography
+
+-----------------------
+
+Scope.GetScriptedPeaceTreatyType
+Definition type: Promote
+Return type: ScriptedPeaceTreatyType
+
+-----------------------
+
+Scope.GetSiege
+Definition type: Promote
+Return type: Siege
+
+-----------------------
+
+Scope.GetSituation
+Definition type: Promote
+Return type: Situation
+
+-----------------------
+
+Scope.GetSocietalValue
+Definition type: Promote
+Return type: SocietalValue
+
+-----------------------
+
+Scope.GetSpecialStatus
+Definition type: Promote
+Return type: SpecialStatus
+
+-----------------------
+
+Scope.GetSubContinent
+Definition type: Promote
+Return type: SubContinent
+
+-----------------------
+
+Scope.GetSubUnit
+Definition type: Promote
+Return type: SubUnit
+
+-----------------------
+
+Scope.GetSubUnitCategory
+Definition type: Promote
+Return type: SubUnitCategory
+
+-----------------------
+
+Scope.GetSubjectMilitaryStance
+Definition type: Promote
+Return type: SubjectMilitaryStance
+
+-----------------------
+
+Scope.GetSubjectType
+Definition type: Promote
+Return type: SubjectType
+
+-----------------------
+
+Scope.GetTopography
+Definition type: Promote
+Return type: Topography
+
+-----------------------
+
+Scope.GetTownRights
+Definition type: Promote
+Return type: TownRightsType
+
+-----------------------
+
+Scope.GetTownRightsType
+Definition type: Promote
+Return type: TownRightsType
+
+-----------------------
+
+Scope.GetTrade
+Definition type: Promote
+Return type: Trade
+
+-----------------------
+
+Scope.GetTrait
+Definition type: Promote
+Return type: Trait
+
+-----------------------
+
+Scope.GetUnit
+Definition type: Promote
+Return type: Unit
+
+-----------------------
+
+Scope.GetUnitAbility
+Definition type: Promote
+Return type: UnitAbility
+
+-----------------------
+
+Scope.GetUnitType
+Definition type: Promote
+Return type: SubUnitType
+
+-----------------------
+
+Scope.GetVariable( Arg0 )
+Definition type: Promote
+Return type: Scope
+
+-----------------------
+
+Scope.GetVariableFromVariableMap( Arg0, Arg1 )
+Definition type: Promote
+Return type: Scope
+
+-----------------------
+
+Scope.GetVegetation
+Definition type: Promote
+Return type: Vegetation
+
+-----------------------
+
+Scope.GetWar
+Definition type: Promote
+Return type: War
+
+-----------------------
+
+Scope.GetWeatherSystem
+Definition type: Promote
+Return type: WeatherSystem
+
+-----------------------
+
+Scope.GetWorkOfArt
+Definition type: Promote
+Return type: WorkOfArt
+
+-----------------------
+
+Scope.GetWorkOfArtType
+Definition type: Promote
+Return type: WorkOfArtType
+
+-----------------------
+
+Scope.God
+Description: Jomini Script System
+Definition type: Promote
+Return type: God
+
+-----------------------
+
+Scope.Goods
+Description: Jomini Script System
+Definition type: Promote
+Return type: Goods
+
+-----------------------
+
+Scope.GoodsDemand
+Description: Jomini Script System
+Definition type: Promote
+Return type: GoodsDemand
+
+-----------------------
+
+Scope.GovernmentType
+Description: Jomini Script System
+Definition type: Promote
+Return type: GovernmentType
+
+-----------------------
+
+Scope.Hegemony
+Description: Jomini Script System
+Definition type: Promote
+Return type: Hegemony
+
+-----------------------
+
+Scope.HeirSelection
+Description: Jomini Script System
+Definition type: Promote
+Return type: HeirSelection
+
+-----------------------
+
+Scope.HolySite
+Description: Jomini Script System
+Definition type: Promote
+Return type: HolySite
+
+-----------------------
+
+Scope.HolySiteDefinition
+Description: Jomini Script System
+Definition type: Promote
+Return type: HolySiteDefinition
+
+-----------------------
+
+Scope.HolySiteType
+Description: Jomini Script System
+Definition type: Promote
+Return type: HolySiteType
+
+-----------------------
+
+Scope.ImperialCircle
+Description: Jomini Script System
+Definition type: Promote
+Return type: ImperialCircle
+
+-----------------------
+
+Scope.Institution
+Description: Jomini Script System
+Definition type: Promote
+Return type: Institution
+
+-----------------------
+
+Scope.InternationalOrganization
+Description: Jomini Script System
+Definition type: Promote
+Return type: InternationalOrganization
+
+-----------------------
+
+Scope.InternationalOrganizationType
+Description: Jomini Script System
+Definition type: Promote
+Return type: InternationalOrganizationType
+
+-----------------------
+
+Scope.LandOwnershipRule
+Description: Jomini Script System
+Definition type: Promote
+Return type: LandOwnershipRule
+
+-----------------------
+
+Scope.Language
+Description: Jomini Script System
+Definition type: Promote
+Return type: Language
+
+-----------------------
+
+Scope.LanguageFamily
+Description: Jomini Script System
+Definition type: Promote
+Return type: LanguageFamily
+
+-----------------------
+
+Scope.Law
+Description: Jomini Script System
+Definition type: Promote
+Return type: Law
+
+-----------------------
+
+Scope.LevySetup
+Description: Jomini Script System
+Definition type: Promote
+Return type: LevySetup
+
+-----------------------
+
+Scope.Loan
+Description: Jomini Script System
+Definition type: Promote
+Return type: Loan
+
+-----------------------
+
+Scope.Location
+Description: Jomini Script System
+Definition type: Promote
+Return type: Location
+
+-----------------------
+
+Scope.LocationRank
+Description: Jomini Script System
+Definition type: Promote
+Return type: LocationRank
+
+-----------------------
+
+Scope.Market
+Description: Jomini Script System
+Definition type: Promote
+Return type: Market
+
+-----------------------
+
+Scope.Mercenary
+Description: Jomini Script System
+Definition type: Promote
+Return type: Mercenary
+
+-----------------------
+
+Scope.MissionDefinition
+Description: Jomini Script System
+Definition type: Promote
+Return type: MissionDefinition
+
+-----------------------
+
+Scope.MissionTaskDefinition
+Description: Jomini Script System
+Definition type: Promote
+Return type: MissionTaskDefinition
+
+-----------------------
+
+Scope.Movement
+Description: Jomini Script System
+Definition type: Promote
+Return type: MovementDefinition
+
+-----------------------
+
+Scope.MovementOutbreak
+Description: Jomini Script System
+Definition type: Promote
+Return type: Movement
+
+-----------------------
+
+Scope.Omen
+Description: Jomini Script System
+Definition type: Promote
+Return type: Omen
+
+-----------------------
+
+Scope.ParliamenType
+Description: Jomini Script System
+Definition type: Promote
+Return type: ParliamentType
+
+-----------------------
+
+Scope.ParliamentAgenda
+Description: Jomini Script System
+Definition type: Promote
+Return type: ParliamentAgenda
+
+-----------------------
+
+Scope.ParliamentIssue
+Description: Jomini Script System
+Definition type: Promote
+Return type: ParliamentIssue
+
+-----------------------
+
+Scope.Payment
+Description: Jomini Script System
+Definition type: Promote
+Return type: Payment
+
+-----------------------
+
+Scope.Policy
+Description: Jomini Script System
+Definition type: Promote
+Return type: Policy
+
+-----------------------
+
+Scope.Pop
+Description: Jomini Script System
+Definition type: Promote
+Return type: Pop
+
+-----------------------
+
+Scope.PopType
+Description: Jomini Script System
+Definition type: Promote
+Return type: PopType
+
+-----------------------
+
+Scope.Price
+Description: Jomini Script System
+Definition type: Promote
+Return type: Price
+
+-----------------------
+
+Scope.Privateer
+Description: Jomini Script System
+Definition type: Promote
+Return type: Privateer
+
+-----------------------
+
+Scope.ProductionMethod
+Description: Jomini Script System
+Definition type: Promote
+Return type: ProductionMethod
+
+-----------------------
+
+Scope.Province
+Description: Jomini Script System
+Definition type: Promote
+Return type: Province
+
+-----------------------
+
+Scope.ProvinceDefinition
+Description: Jomini Script System
+Definition type: Promote
+Return type: ProvinceDefinition
+
+-----------------------
+
+Scope.Rebel
+Description: Jomini Script System
+Definition type: Promote
+Return type: Rebel
+
+-----------------------
+
+Scope.RecruitmentMethod
+Description: Jomini Script System
+Definition type: Promote
+Return type: RecruitmentMethod
+
+-----------------------
+
+Scope.RegencyType
+Description: Jomini Script System
+Definition type: Promote
+Return type: RegencyType
+
+-----------------------
+
+Scope.Region
+Description: Jomini Script System
+Definition type: Promote
+Return type: Region
+
+-----------------------
+
+Scope.RelationType
+Description: Jomini Script System
+Definition type: Promote
+Return type: ScriptedRelationType
+
+-----------------------
+
+Scope.Religion
+Description: Jomini Script System
+Definition type: Promote
+Return type: Religion
+
+-----------------------
+
+Scope.ReligionGroup
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligionGroup
+
+-----------------------
+
+Scope.ReligiousAspect
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligiousAspect
+
+-----------------------
+
+Scope.ReligiousFigure
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligiousFigure
+
+-----------------------
+
+Scope.ReligiousFocus
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligiousFocus
+
+-----------------------
+
+Scope.ReligiousSchool
+Description: Jomini Script System
+Definition type: Promote
+Return type: ReligiousSchool
+
+-----------------------
+
+Scope.Resolution
+Description: Jomini Script System
+Definition type: Promote
+Return type: Resolution
+
+-----------------------
+
+Scope.RoadType
+Description: Jomini Script System
+Definition type: Promote
+Return type: RoadType
+
+-----------------------
+
+Scope.ScriptableHintDefinition
+Description: Jomini Script System
+Definition type: Promote
+Return type: ScriptableHintDefinition
+
+-----------------------
+
+Scope.ScriptedGeography
+Description: Jomini Script System
+Definition type: Promote
+Return type: ScriptedGeography
+
+-----------------------
+
+Scope.ScriptedPeaceTreatyType
+Description: Jomini Script System
+Definition type: Promote
+Return type: ScriptedPeaceTreatyType
+
+-----------------------
+
+Scope.Siege
+Description: Jomini Script System
+Definition type: Promote
+Return type: Siege
+
+-----------------------
+
+Scope.Situation
+Description: Jomini Script System
+Definition type: Promote
+Return type: Situation
+
+-----------------------
+
+Scope.SocietalValue
+Description: Jomini Script System
+Definition type: Promote
+Return type: SocietalValue
+
+-----------------------
+
+Scope.SpecialStatus
+Description: Jomini Script System
+Definition type: Promote
+Return type: SpecialStatus
+
+-----------------------
+
+Scope.SubContinent
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubContinent
+
+-----------------------
+
+Scope.SubUnit
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubUnit
+
+-----------------------
+
+Scope.SubUnitCategory
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubUnitCategory
+
+-----------------------
+
+Scope.SubjectMilitaryStance
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubjectMilitaryStance
+
+-----------------------
+
+Scope.SubjectType
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubjectType
+
+-----------------------
+
+Scope.Topography
+Description: Jomini Script System
+Definition type: Promote
+Return type: Topography
+
+-----------------------
+
+Scope.TownRights
+Description: Jomini Script System
+Definition type: Promote
+Return type: TownRights
+
+-----------------------
+
+Scope.TownRightsType
+Description: Jomini Script System
+Definition type: Promote
+Return type: TownRightsType
+
+-----------------------
+
+Scope.Trade
+Description: Jomini Script System
+Definition type: Promote
+Return type: Trade
+
+-----------------------
+
+Scope.Trait
+Description: Jomini Script System
+Definition type: Promote
+Return type: Trait
+
+-----------------------
+
+Scope.Unit
+Description: Jomini Script System
+Definition type: Promote
+Return type: Unit
+
+-----------------------
+
+Scope.UnitAbility
+Description: Jomini Script System
+Definition type: Promote
+Return type: UnitAbility
+
+-----------------------
+
+Scope.UnitFormationPreference
+Description: Jomini Script System
+Definition type: Promote
+Return type: UnitFormationPreference
+
+-----------------------
+
+Scope.UnitType
+Description: Jomini Script System
+Definition type: Promote
+Return type: SubUnitType
+
+-----------------------
+
+Scope.Var( Arg0 )
+Definition type: Promote
+Return type: Scope
+
+-----------------------
+
+Scope.Vegetation
+Description: Jomini Script System
+Definition type: Promote
+Return type: Vegetation
+
+-----------------------
+
+Scope.War
+Description: Jomini Script System
+Definition type: Promote
+Return type: War
+
+-----------------------
+
+Scope.WeatherSystem
+Description: Jomini Script System
+Definition type: Promote
+Return type: WeatherSystem
+
+-----------------------
+
+Scope.WorkOfArt
+Description: Jomini Script System
+Definition type: Promote
+Return type: WorkOfArt
+
+-----------------------
+
+Scope.WorkOfArtType
+Description: Jomini Script System
+Definition type: Promote
+Return type: WorkOfArtType
+
+-----------------------
+
+Scope.AccessSelf
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ActiveResolution
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.AdvanceType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Age
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Area
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Artist
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Avatar
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Building
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.BuildingType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Bureaucracy
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.BureaucracyType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Cabinet
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Cardinal
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CasusBelli
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Character
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CharacterInteraction
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ChildEducation
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ChivalricOrder
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Climate
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ColonialCharter
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Combat
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CombatSide
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Continent
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Country
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CountryInteraction
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CountryRank
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Culture
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.CultureGroup
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.DisasterType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Disease
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.DiseaseOutbreak
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Dynasty
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.EmploymentSystem
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Estate
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.EstateType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Ethnicity
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Exploration
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Faction
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.FormableCountry
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GenericAction
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GetFlagName
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+Scope.GetList( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GetMapKeys( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GetScriptValueDesc( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+Scope.GetValue
+Definition type: Function
+Return type: CFixedPoint
+
+-----------------------
+
+Scope.GetValueWithDefault( Arg0 )
+Definition type: Function
+Return type: CFixedPoint
+
+-----------------------
+
+Scope.God
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Goods
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GoodsDemand
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.GovernmentType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Hegemony
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.HeirSelection
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.HolySite
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.HolySiteDefinition
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.HolySiteType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ImperialCircle
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Institution
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.InternationalOrganization
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.InternationalOrganizationType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.IsSet
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+Scope.LandOwnershipRule
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Language
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.LanguageFamily
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Law
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.LevySetup
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Loan
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Location
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.LocationRank
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Market
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Mercenary
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.MissionDefinition
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.MissionTaskDefinition
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Movement
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.MovementOutbreak
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Omen
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ParliamenType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ParliamentAgenda
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ParliamentIssue
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Payment
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Policy
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Pop
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.PopType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Price
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Privateer
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ProductionMethod
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Province
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ProvinceDefinition
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Rebel
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.RecruitmentMethod
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.RegencyType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Region
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.RelationType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Religion
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ReligionGroup
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ReligiousAspect
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ReligiousFigure
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ReligiousFocus
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ReligiousSchool
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Resolution
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.RoadType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ScriptValue( Arg0 )
+Definition type: Function
+Return type: CFixedPoint
+
+-----------------------
+
+Scope.ScriptableHintDefinition
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ScriptedGeography
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.ScriptedPeaceTreatyType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Self
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Siege
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Situation
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SocietalValue
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SpecialStatus
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SubContinent
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SubUnit
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SubUnitCategory
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SubjectMilitaryStance
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.SubjectType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Topography
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.TownRights
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.TownRightsType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Trade
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Trait
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Unit
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.UnitAbility
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.UnitFormationPreference
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.UnitType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.VarRemaining( Arg0 )
+Definition type: Function
+Return type: int32
+
+-----------------------
+
+Scope.VariableMapContainsKey( Arg0, Arg1 )
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+Scope.VariableMapContainsValue( Arg0, Arg1 )
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+Scope.VariableMapExists( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.Vegetation
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.War
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.WeatherSystem
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.WorkOfArt
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Scope.WorkOfArtType
+Description: Jomini Script System
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+ScriptableHintDefinition
+Definition type: Type
+
+-----------------------
+
+ScriptableHintDefinition.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ScriptedGeography
+Definition type: Type
+
+-----------------------
+
+ScriptedGeography.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ScriptedGui
+Definition type: Type
+
+-----------------------
+
+ScriptedGui.AccessSelf
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+ScriptedGui.BuildTooltip( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+ScriptedGui.Execute( Arg0 )
+Definition type: Function
+Return type: void
+
+-----------------------
+
+ScriptedGui.ExecuteTooltip( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+ScriptedGui.IsShown( Arg0 )
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+ScriptedGui.IsShownTooltip( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+ScriptedGui.IsValid( Arg0 )
+Definition type: Function
+Return type: bool
+
+-----------------------
+
+ScriptedGui.IsValidTooltip( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+ScriptedGui.Self
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+ScriptedPeaceTreatyType
+Definition type: Type
+
+-----------------------
+
+ScriptedPeaceTreatyType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+ScriptedRelationType
+Definition type: Type
+
+-----------------------
+
+ScriptedRelationType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Siege
+Definition type: Type
+
+-----------------------
+
+Siege.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Situation
+Definition type: Type
+
+-----------------------
+
+Situation.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SocietalValue
+Definition type: Type
+
+-----------------------
+
+SocietalValue.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SpecialStatus
+Definition type: Type
+
+-----------------------
+
+SpecialStatus.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubContinent
+Definition type: Type
+
+-----------------------
+
+SubContinent.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubUnit
+Definition type: Type
+
+-----------------------
+
+SubUnit.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubUnitCategory
+Definition type: Type
+
+-----------------------
+
+SubUnitCategory.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubUnitType
+Definition type: Type
+
+-----------------------
+
+SubUnitType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubjectMilitaryStance
+Definition type: Type
+
+-----------------------
+
+SubjectMilitaryStance.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+SubjectType
+Definition type: Type
+
+-----------------------
+
+SubjectType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+TopScope
+Definition type: Type
+
+-----------------------
+
+TopScope.AddList( Arg0, Arg1 )
+Definition type: Promote
+Return type: TopScope
+
+-----------------------
+
+TopScope.AddScope( Arg0, Arg1 )
+Definition type: Promote
+Return type: TopScope
+
+-----------------------
+
+TopScope.GetLocalVariable( Arg0 )
+Definition type: Promote
+Return type: Scope
+
+-----------------------
+
+TopScope.GetRootScope
+Definition type: Promote
+Return type: Scope
+
+-----------------------
+
+TopScope.SetRoot( Arg0 )
+Definition type: Promote
+Return type: TopScope
+
+-----------------------
+
+TopScope.sActiveResolution( Arg0 )
+Definition type: Promote
+Return type: ActiveResolution
+
+-----------------------
+
+TopScope.sAdvanceType( Arg0 )
+Definition type: Promote
+Return type: AdvanceDefinition
+
+-----------------------
+
+TopScope.sAge( Arg0 )
+Definition type: Promote
+Return type: Age
+
+-----------------------
+
+TopScope.sArea( Arg0 )
+Definition type: Promote
+Return type: Area
+
+-----------------------
+
+TopScope.sArtist( Arg0 )
+Definition type: Promote
+Return type: Artist
+
+-----------------------
+
+TopScope.sAudioCulture( Arg0 )
+Definition type: Promote
+Return type: AudioCultureType
+
+-----------------------
+
+TopScope.sAvatar( Arg0 )
+Definition type: Promote
+Return type: Avatar
+
+-----------------------
+
+TopScope.sBuildingType( Arg0 )
+Definition type: Promote
+Return type: BuildingType
+
+-----------------------
+
+TopScope.sBureaucracy( Arg0 )
+Definition type: Promote
+Return type: Bureaucracy
+
+-----------------------
+
+TopScope.sBureaucracyType( Arg0 )
+Definition type: Promote
+Return type: BureaucracyType
+
+-----------------------
+
+TopScope.sCabinet( Arg0 )
+Definition type: Promote
+Return type: Cabinet
+
+-----------------------
+
+TopScope.sCabinetAction( Arg0 )
+Definition type: Promote
+Return type: CabinetAction
+
+-----------------------
+
+TopScope.sCardinal( Arg0 )
+Definition type: Promote
+Return type: Cardinal
+
+-----------------------
+
+TopScope.sCasusBelli( Arg0 )
+Definition type: Promote
+Return type: CasusBelli
+
+-----------------------
+
+TopScope.sCharacter( Arg0 )
+Definition type: Promote
+Return type: Character
+
+-----------------------
+
+TopScope.sCharacterInteraction( Arg0 )
+Definition type: Promote
+Return type: CharacterInteraction
+
+-----------------------
+
+TopScope.sChildEducation( Arg0 )
+Definition type: Promote
+Return type: ChildEducation
+
+-----------------------
+
+TopScope.sChivalricOrder( Arg0 )
+Definition type: Promote
+Return type: ChivalricOrder
+
+-----------------------
+
+TopScope.sClimate( Arg0 )
+Definition type: Promote
+Return type: Climate
+
+-----------------------
+
+TopScope.sColonialCharter( Arg0 )
+Definition type: Promote
+Return type: ColonialCharter
+
+-----------------------
+
+TopScope.sCombat( Arg0 )
+Definition type: Promote
+Return type: Combat
+
+-----------------------
+
+TopScope.sCombatSide( Arg0 )
+Definition type: Promote
+Return type: CombatSide
+
+-----------------------
+
+TopScope.sContinent( Arg0 )
+Definition type: Promote
+Return type: Continent
+
+-----------------------
+
+TopScope.sCountry( Arg0 )
+Definition type: Promote
+Return type: Country
+
+-----------------------
+
+TopScope.sCountryInteraction( Arg0 )
+Definition type: Promote
+Return type: CountryInteraction
+
+-----------------------
+
+TopScope.sCountryRank( Arg0 )
+Definition type: Promote
+Return type: CountryRank
+
+-----------------------
+
+TopScope.sCulture( Arg0 )
+Definition type: Promote
+Return type: Culture
+
+-----------------------
+
+TopScope.sDialect( Arg0 )
+Definition type: Promote
+Return type: Dialect
+
+-----------------------
+
+TopScope.sDisaster( Arg0 )
+Definition type: Promote
+Return type: Disaster
+
+-----------------------
+
+TopScope.sDisasterType( Arg0 )
+Definition type: Promote
+Return type: DisasterType
+
+-----------------------
+
+TopScope.sDisease( Arg0 )
+Definition type: Promote
+Return type: Disease
+
+-----------------------
+
+TopScope.sDiseaseOutbreak( Arg0 )
+Definition type: Promote
+Return type: DiseaseOutbreak
+
+-----------------------
+
+TopScope.sDynasty( Arg0 )
+Definition type: Promote
+Return type: Dynasty
+
+-----------------------
+
+TopScope.sEmploymentSystem( Arg0 )
+Definition type: Promote
+Return type: EmploymentSystem
+
+-----------------------
+
+TopScope.sEstate( Arg0 )
+Definition type: Promote
+Return type: Estate
+
+-----------------------
+
+TopScope.sEstatePrivilege( Arg0 )
+Definition type: Promote
+Return type: EstatePrivilege
+
+-----------------------
+
+TopScope.sEstateType( Arg0 )
+Definition type: Promote
+Return type: EstateType
+
+-----------------------
+
+TopScope.sEthnicity( Arg0 )
+Definition type: Promote
+Return type: Ethnicity
+
+-----------------------
+
+TopScope.sExploration( Arg0 )
+Definition type: Promote
+Return type: Exploration
+
+-----------------------
+
+TopScope.sFormableCountry( Arg0 )
+Definition type: Promote
+Return type: FormableCountry
+
+-----------------------
+
+TopScope.sGenericAction( Arg0 )
+Definition type: Promote
+Return type: GenericAction
+
+-----------------------
+
+TopScope.sGod( Arg0 )
+Definition type: Promote
+Return type: God
+
+-----------------------
+
+TopScope.sGoods( Arg0 )
+Definition type: Promote
+Return type: Goods
+
+-----------------------
+
+TopScope.sGoodsDemand( Arg0 )
+Definition type: Promote
+Return type: GoodsDemand
+
+-----------------------
+
+TopScope.sGovernmentReform( Arg0 )
+Definition type: Promote
+Return type: GovernmentReform
+
+-----------------------
+
+TopScope.sGovernmentType( Arg0 )
+Definition type: Promote
+Return type: GovernmentType
+
+-----------------------
+
+TopScope.sGraphicalCulture( Arg0 )
+Definition type: Promote
+Return type: GraphicalCultureType
+
+-----------------------
+
+TopScope.sHegemony( Arg0 )
+Definition type: Promote
+Return type: Hegemony
+
+-----------------------
+
+TopScope.sHeirSelection( Arg0 )
+Definition type: Promote
+Return type: HeirSelection
+
+-----------------------
+
+TopScope.sHolySite( Arg0 )
+Definition type: Promote
+Return type: HolySite
+
+-----------------------
+
+TopScope.sHolySiteDefinition( Arg0 )
+Definition type: Promote
+Return type: HolySiteDefinition
+
+-----------------------
+
+TopScope.sHolySiteType( Arg0 )
+Definition type: Promote
+Return type: HolySiteType
+
+-----------------------
+
+TopScope.sImperialCircle( Arg0 )
+Definition type: Promote
+Return type: ImperialCircle
+
+-----------------------
+
+TopScope.sInstitution( Arg0 )
+Definition type: Promote
+Return type: Institution
+
+-----------------------
+
+TopScope.sInternationalOrganization( Arg0 )
+Definition type: Promote
+Return type: InternationalOrganization
+
+-----------------------
+
+TopScope.sInternationalOrganizationType( Arg0 )
+Definition type: Promote
+Return type: InternationalOrganizationType
+
+-----------------------
+
+TopScope.sLandOwnershipRule( Arg0 )
+Definition type: Promote
+Return type: LandOwnershipRule
+
+-----------------------
+
+TopScope.sLanguage( Arg0 )
+Definition type: Promote
+Return type: Language
+
+-----------------------
+
+TopScope.sLanguageFamily( Arg0 )
+Definition type: Promote
+Return type: LanguageFamily
+
+-----------------------
+
+TopScope.sLaw( Arg0 )
+Definition type: Promote
+Return type: Law
+
+-----------------------
+
+TopScope.sLevySetup( Arg0 )
+Definition type: Promote
+Return type: LevySetup
+
+-----------------------
+
+TopScope.sLoan( Arg0 )
+Definition type: Promote
+Return type: Loan
+
+-----------------------
+
+TopScope.sLocation( Arg0 )
+Definition type: Promote
+Return type: Location
+
+-----------------------
+
+TopScope.sLocationRank( Arg0 )
+Definition type: Promote
+Return type: LocationRank
+
+-----------------------
+
+TopScope.sMarket( Arg0 )
+Definition type: Promote
+Return type: Market
+
+-----------------------
+
+TopScope.sMercenary( Arg0 )
+Definition type: Promote
+Return type: Mercenary
+
+-----------------------
+
+TopScope.sMissionDefinition( Arg0 )
+Definition type: Promote
+Return type: MissionDefinition
+
+-----------------------
+
+TopScope.sMissionTaskDefinition( Arg0 )
+Definition type: Promote
+Return type: MissionTaskDefinition
+
+-----------------------
+
+TopScope.sMovement( Arg0 )
+Definition type: Promote
+Return type: Movement
+
+-----------------------
+
+TopScope.sMovementDefinition( Arg0 )
+Definition type: Promote
+Return type: MovementDefinition
+
+-----------------------
+
+TopScope.sOmen( Arg0 )
+Definition type: Promote
+Return type: Omen
+
+-----------------------
+
+TopScope.sParliamentAgenda( Arg0 )
+Definition type: Promote
+Return type: ParliamentAgenda
+
+-----------------------
+
+TopScope.sParliamentIssue( Arg0 )
+Definition type: Promote
+Return type: ParliamentIssue
+
+-----------------------
+
+TopScope.sParliamentType( Arg0 )
+Definition type: Promote
+Return type: ParliamentType
+
+-----------------------
+
+TopScope.sPayment( Arg0 )
+Definition type: Promote
+Return type: Payment
+
+-----------------------
+
+TopScope.sPolicy( Arg0 )
+Definition type: Promote
+Return type: Policy
+
+-----------------------
+
+TopScope.sPop( Arg0 )
+Definition type: Promote
+Return type: Pop
+
+-----------------------
+
+TopScope.sPopType( Arg0 )
+Definition type: Promote
+Return type: PopType
+
+-----------------------
+
+TopScope.sPrice( Arg0 )
+Definition type: Promote
+Return type: Price
+
+-----------------------
+
+TopScope.sPrivateer( Arg0 )
+Definition type: Promote
+Return type: Privateer
+
+-----------------------
+
+TopScope.sProductionMethod( Arg0 )
+Definition type: Promote
+Return type: ProductionMethod
+
+-----------------------
+
+TopScope.sProvince( Arg0 )
+Definition type: Promote
+Return type: Province
+
+-----------------------
+
+TopScope.sProvinceDefinition( Arg0 )
+Definition type: Promote
+Return type: ProvinceDefinition
+
+-----------------------
+
+TopScope.sRebel( Arg0 )
+Definition type: Promote
+Return type: Rebel
+
+-----------------------
+
+TopScope.sRecruitmentMethod( Arg0 )
+Definition type: Promote
+Return type: RecruitmentMethod
+
+-----------------------
+
+TopScope.sRegencyType( Arg0 )
+Definition type: Promote
+Return type: RegencyType
+
+-----------------------
+
+TopScope.sRegion( Arg0 )
+Definition type: Promote
+Return type: Region
+
+-----------------------
+
+TopScope.sRelationType( Arg0 )
+Definition type: Promote
+Return type: ScriptedRelationType
+
+-----------------------
+
+TopScope.sReligion( Arg0 )
+Definition type: Promote
+Return type: Religion
+
+-----------------------
+
+TopScope.sReligionGroup( Arg0 )
+Definition type: Promote
+Return type: ReligionGroup
+
+-----------------------
+
+TopScope.sReligiousAspect( Arg0 )
+Definition type: Promote
+Return type: ReligiousAspect
+
+-----------------------
+
+TopScope.sReligiousFaction( Arg0 )
+Definition type: Promote
+Return type: ReligiousFaction
+
+-----------------------
+
+TopScope.sReligiousFigure( Arg0 )
+Definition type: Promote
+Return type: ReligiousFigure
+
+-----------------------
+
+TopScope.sReligiousFocus( Arg0 )
+Definition type: Promote
+Return type: ReligiousFocus
+
+-----------------------
+
+TopScope.sReligiousSchool( Arg0 )
+Definition type: Promote
+Return type: ReligiousSchool
+
+-----------------------
+
+TopScope.sResolution( Arg0 )
+Definition type: Promote
+Return type: Resolution
+
+-----------------------
+
+TopScope.sRoadType( Arg0 )
+Definition type: Promote
+Return type: RoadType
+
+-----------------------
+
+TopScope.sScriptableHintDefinition( Arg0 )
+Definition type: Promote
+Return type: ScriptableHintDefinition
+
+-----------------------
+
+TopScope.sScriptedGeography( Arg0 )
+Definition type: Promote
+Return type: ScriptedGeography
+
+-----------------------
+
+TopScope.sScriptedPeaceTreatyType( Arg0 )
+Definition type: Promote
+Return type: ScriptedPeaceTreatyType
+
+-----------------------
+
+TopScope.sSiege( Arg0 )
+Definition type: Promote
+Return type: Siege
+
+-----------------------
+
+TopScope.sSituation( Arg0 )
+Definition type: Promote
+Return type: Situation
+
+-----------------------
+
+TopScope.sSocietalValue( Arg0 )
+Definition type: Promote
+Return type: SocietalValue
+
+-----------------------
+
+TopScope.sSpecialStatus( Arg0 )
+Definition type: Promote
+Return type: SpecialStatus
+
+-----------------------
+
+TopScope.sSubContinent( Arg0 )
+Definition type: Promote
+Return type: SubContinent
+
+-----------------------
+
+TopScope.sSubUnit( Arg0 )
+Definition type: Promote
+Return type: SubUnit
+
+-----------------------
+
+TopScope.sSubUnitCategory( Arg0 )
+Definition type: Promote
+Return type: SubUnitCategory
+
+-----------------------
+
+TopScope.sSubjectMilitaryStance( Arg0 )
+Definition type: Promote
+Return type: SubjectMilitaryStance
+
+-----------------------
+
+TopScope.sSubjectType( Arg0 )
+Definition type: Promote
+Return type: SubjectType
+
+-----------------------
+
+TopScope.sTopography( Arg0 )
+Definition type: Promote
+Return type: Topography
+
+-----------------------
+
+TopScope.sTownRights( Arg0 )
+Definition type: Promote
+Return type: TownRights
+
+-----------------------
+
+TopScope.sTownRightsType( Arg0 )
+Definition type: Promote
+Return type: TownRightsType
+
+-----------------------
+
+TopScope.sTrade( Arg0 )
+Definition type: Promote
+Return type: Trade
+
+-----------------------
+
+TopScope.sTrait( Arg0 )
+Definition type: Promote
+Return type: Trait
+
+-----------------------
+
+TopScope.sUnit( Arg0 )
+Definition type: Promote
+Return type: Unit
+
+-----------------------
+
+TopScope.sUnitAbility( Arg0 )
+Definition type: Promote
+Return type: UnitAbility
+
+-----------------------
+
+TopScope.sUnitFormationPreference( Arg0 )
+Definition type: Promote
+Return type: UnitFormationPreference
+
+-----------------------
+
+TopScope.sUnitTemplate( Arg0 )
+Definition type: Promote
+Return type: UnitTemplate
+
+-----------------------
+
+TopScope.sUnitType( Arg0 )
+Definition type: Promote
+Return type: SubUnitType
+
+-----------------------
+
+TopScope.sVegetation( Arg0 )
+Definition type: Promote
+Return type: Vegetation
+
+-----------------------
+
+TopScope.sWar( Arg0 )
+Definition type: Promote
+Return type: War
+
+-----------------------
+
+TopScope.sWeatherSystem( Arg0 )
+Definition type: Promote
+Return type: WeatherSystem
+
+-----------------------
+
+TopScope.sWorkOfArt( Arg0 )
+Definition type: Promote
+Return type: WorkOfArt
+
+-----------------------
+
+TopScope.sWorkOfArtType( Arg0 )
+Definition type: Promote
+Return type: WorkOfArtType
+
+-----------------------
+
+TopScope.AccessSelf
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.End
+Definition type: Function
+Return type: TopScope
+
+-----------------------
+
+TopScope.GetFlagName( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+TopScope.GetLocalVariable( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.GetRootScope
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.GetScriptValueDesc( Arg0 )
+Definition type: Function
+Return type: CString
+
+-----------------------
+
+TopScope.GetValue( Arg0 )
+Definition type: Function
+Return type: CFixedPoint
+
+-----------------------
+
+TopScope.ScriptValue( Arg0 )
+Definition type: Function
+Return type: CFixedPoint
+
+-----------------------
+
+TopScope.Self
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sActiveResolution( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sAdvanceType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sAge( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sArea( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sArtist( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sAudioCulture( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sAvatar( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sBuildingType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sBureaucracy( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sBureaucracyType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCabinet( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCabinetAction( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCardinal( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCasusBelli( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCharacter( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCharacterInteraction( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sChildEducation( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sChivalricOrder( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sClimate( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sColonialCharter( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCombat( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCombatSide( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sContinent( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCountry( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCountryInteraction( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCountryRank( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sCulture( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDialect( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDisaster( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDisasterType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDisease( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDiseaseOutbreak( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sDynasty( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sEmploymentSystem( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sEstate( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sEstatePrivilege( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sEstateType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sEthnicity( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sExploration( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sFormableCountry( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGenericAction( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGod( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGoods( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGoodsDemand( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGovernmentReform( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGovernmentType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sGraphicalCulture( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sHegemony( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sHeirSelection( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sHolySite( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sHolySiteDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sHolySiteType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sImperialCircle( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sInstitution( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sInternationalOrganization( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sInternationalOrganizationType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLandOwnershipRule( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLanguage( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLanguageFamily( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLaw( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLevySetup( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLoan( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLocation( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sLocationRank( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMarket( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMercenary( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMissionDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMissionTaskDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMovement( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sMovementDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sOmen( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sParliamentAgenda( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sParliamentIssue( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sParliamentType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPayment( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPolicy( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPop( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPopType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPrice( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sPrivateer( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sProductionMethod( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sProvince( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sProvinceDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRebel( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRecruitmentMethod( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRegencyType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRegion( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRelationType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligion( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligionGroup( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligiousAspect( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligiousFaction( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligiousFigure( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligiousFocus( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sReligiousSchool( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sResolution( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sRoadType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sScriptableHintDefinition( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sScriptedGeography( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sScriptedPeaceTreatyType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSiege( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSituation( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSocietalValue( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSpecialStatus( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSubContinent( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSubUnit( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSubUnitCategory( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSubjectMilitaryStance( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sSubjectType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sTopography( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sTownRights( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sTownRightsType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sTrade( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sTrait( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sUnit( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sUnitAbility( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sUnitFormationPreference( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sUnitTemplate( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sUnitType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sVegetation( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sWar( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sWeatherSystem( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sWorkOfArt( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+TopScope.sWorkOfArtType( Arg0 )
+Definition type: Function
+Return type: [unregistered]
+
+-----------------------
+
+Topography
+Definition type: Type
+
+-----------------------
+
+Topography.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+TownRights
+Definition type: Type
+
+-----------------------
+
+TownRights.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+TownRightsType
+Definition type: Type
+
+-----------------------
+
+TownRightsType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Trade
+Definition type: Type
+
+-----------------------
+
+Trade.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Trait
+Definition type: Type
+
+-----------------------
+
+Trait.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Unit
+Definition type: Type
+
+-----------------------
+
+Unit.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+UnitAbility
+Definition type: Type
+
+-----------------------
+
+UnitAbility.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+UnitFormationPreference
+Definition type: Type
+
+-----------------------
+
+UnitFormationPreference.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+Vegetation
+Definition type: Type
+
+-----------------------
+
+Vegetation.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+War
+Definition type: Type
+
+-----------------------
+
+War.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+WeatherSystem
+Definition type: Type
+
+-----------------------
+
+WeatherSystem.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+WorkOfArt
+Definition type: Type
+
+-----------------------
+
+WorkOfArt.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+
+WorkOfArtType
+Definition type: Type
+
+-----------------------
+
+WorkOfArtType.MakeScope
+Description: Jomini Script System
+Definition type: Function
+Return type: Scope
+
+-----------------------
+

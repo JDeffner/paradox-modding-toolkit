@@ -168,6 +168,9 @@ export const statusNotification = "paradox/status";
 export interface StatusPayload {
   tokens: number;
   tokensFromScriptDocs: boolean;
+  /** True when the script_docs tokens came from the BUNDLED dump snapshot
+   * (data/<gameId>/script_docs) rather than the user's own dump. */
+  tokensFromBundledDumps?: boolean;
   definitions: number;
   /** True while a (re)scan is running. */
   indexing: boolean;

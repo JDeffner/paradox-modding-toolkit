@@ -9,6 +9,6 @@ The game itself can produce the authoritative list:
 3. Type `script_docs` and press Enter
 4. Back in VS Code, run **Paradox: Reload Game Data (script_docs)**
 
-This writes `triggers.log`, `effects.log`, `event_targets.log` and `modifiers.log` into `Documents/Paradox Interactive/Crusader Kings III/logs/` (EU5 dumps to `docs/` instead) — the extension picks them up and merges them **over** the wiki data (wiki usage examples are kept).
+This writes `triggers.log`, `effects.log`, `event_targets.log` and `modifiers.log` into `Documents/Paradox Interactive/Crusader Kings III/logs/` (Victoria 3 and EU5 dump to `docs/` instead) — the extension picks them up and merges them **over** the wiki data (wiki usage examples are kept).
 
 Repeat after each game patch.

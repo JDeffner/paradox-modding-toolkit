@@ -132,15 +132,25 @@ export function provideHover(
   // the client can drive the references view from it.
   const at = { uri: document.uri, line: position.line, character: range.start };
 
+  // On the KEY of an assignment, the key's own structural meaning outranks
+  // same-named value identities: a total conversion that saves a scope named
+  // `type` in 33 places must not bury what `type =` means in an event.
+  const keyPos = !prefix && atKeyPosition(document, position);
+  const structureCard =
+    keyPos && entry?.kind && getSchema ? structureKeyCard(document, position, word, entry, getSchema) : null;
+
   if (expectedDefs.length > 0) {
-    for (const def of expectedDefs) cards.push(definitionCard(data, def, at));
+    cards.push(...definitionCards(data, expectedDefs, at));
   } else {
+    if (structureCard) cards.push(structureCard);
     for (const token of data.tokenMap.get(word) ?? []) {
       cards.push(tokenCard(token, current));
     }
-    for (const def of defs) {
-      cards.push(definitionCard(data, def, at));
+    let shownDefs = defs;
+    if (keyPos && (cards.length > 0 || defs.some((d) => !VALUE_IDENTITY_KINDS.has(d.kind)))) {
+      shownDefs = defs.filter((d) => !VALUE_IDENTITY_KINDS.has(d.kind));
     }
+    cards.push(...definitionCards(data, shownDefs, at));
   }
 
   // Fallback cards, only when nothing else matched, so a real token/def with
@@ -268,11 +278,111 @@ function otherTraitBits(traits: string | undefined): string[] {
     .filter((l) => l !== "" && !/^Traits:/i.test(l) && !/^Example:/i.test(l));
 }
 
+/** Definition kinds that name a VALUE-side identity (something you reference
+ * with `scope:`/`var:` or as a list), never what an assignment KEY means. */
+const VALUE_IDENTITY_KINDS = new Set(["saved_scope", "list", ...Object.values(VAR_PREFIX_KINDS).flat()]);
+
+/** True when the cursor sits on the KEY of an unquoted assignment. */
+function atKeyPosition(document: TextDocument, position: Position): boolean {
+  const { result, lineIndex } = getParse(document);
+  const offset = lineIndex.offsetAt(position);
+  const hit = nodeAtOffset(result.root, offset);
+  const last = hit?.path[hit.path.length - 1];
+  return (
+    !!last &&
+    last.kind === "assignment" &&
+    !last.key.quoted &&
+    offset >= last.key.range.start &&
+    offset <= last.key.range.end
+  );
+}
+
+/**
+ * Cards for a set of same-named definitions: one card per KIND, with N same-kind
+ * sites collapsed into a single card ("33 sites") instead of 33 identical cards.
+ * The name-wide reference count renders once, on the first card, because it is
+ * a property of the name, not of any one definition.
+ */
+function definitionCards(
+  data: ServerData,
+  defs: Array<ReturnType<ServerData["index"]["lookup"]>[number]>,
+  at?: { uri: string; line: number; character: number }
+): string[] {
+  const order: string[] = [];
+  const byKind = new Map<string, typeof defs>();
+  for (const def of defs) {
+    let group = byKind.get(def.kind);
+    if (!group) {
+      byKind.set(def.kind, (group = []));
+      order.push(def.kind);
+    }
+    group.push(def);
+  }
+  const cards: string[] = [];
+  let withRefs = true;
+  for (const kind of order) {
+    const group = byKind.get(kind)!;
+    cards.push(
+      group.length === 1
+        ? definitionCard(data, group[0], at, withRefs)
+        : definitionGroupCard(data, group, at, withRefs)
+    );
+    withRefs = false;
+  }
+  return cards;
+}
+
+/** The "N references" command link (or plain count) for a name, once per hover. */
+function referencesFooter(
+  data: ServerData,
+  name: string,
+  at?: { uri: string; line: number; character: number }
+): string | null {
+  const refs = data.refIndex.lookup(name).length;
+  if (refs === 0) return null;
+  const label = `${refs.toLocaleString("en-US")} reference${refs === 1 ? "" : "s"}`;
+  return at && canRunCommand(clientCommands.showReferences)
+    ? `[${label}](command:${clientCommands.showReferences}?${encodeURIComponent(
+        JSON.stringify([at.uri, at.line, at.character])
+      )} "Show all references")`
+    : label;
+}
+
+/** One card for N same-named, same-kind definitions: origin + site count up
+ * front, the first few sites as links, the rest as a count. */
+function definitionGroupCard(
+  data: ServerData,
+  group: Array<ReturnType<ServerData["index"]["lookup"]>[number]>,
+  at?: { uri: string; line: number; character: number },
+  withRefs = true
+): string {
+  const def = group[0];
+  const origins = [...new Set(group.map((d) => data.originLabel(d)))];
+  const card: CardInput = {
+    kind: def.kind,
+    badgeLabel: def.kind.replace(/_/g, " "),
+    name: def.name,
+    headTail:
+      origins.length === 1
+        ? `· ${origins[0]} (${group.length} sites)`
+        : `· ${group.length} sites in ${origins.join(", ")}`,
+  };
+  const footer = group.slice(0, 3).map(provenance);
+  if (group.length > 3) footer.push(`+${group.length - 3} more`);
+  if (withRefs) {
+    const refs = referencesFooter(data, def.name, at);
+    if (refs) footer.push(refs);
+  }
+  card.footer = footer;
+  return renderCard(card);
+}
+
 /** An indexed-definition card: badge, name, `· source`, provenance link (§D2 mock 2). */
 function definitionCard(
   data: ServerData,
   def: ReturnType<ServerData["index"]["lookup"]>[number],
-  at?: { uri: string; line: number; character: number }
+  at?: { uri: string; line: number; character: number },
+  withRefs = true
 ): string {
   const card: CardInput = { kind: def.kind, badgeLabel: def.kind.replace(/_/g, " "), name: def.name };
   // Origin: the owning mod's descriptor name where known ("· My Mod"), the raw
@@ -299,16 +409,11 @@ function definitionCard(
   // Full count including key-position call sites (usageCount excludes those).
   // A command link opens the references view; the client's hover middleware
   // trusts exactly this command (extension.ts). Plain text without an anchor.
-  const refs = data.refIndex.lookup(def.name).length;
-  if (refs > 0) {
-    const label = `${refs.toLocaleString("en-US")} reference${refs === 1 ? "" : "s"}`;
-    footer.push(
-      at && canRunCommand(clientCommands.showReferences)
-        ? `[${label}](command:${clientCommands.showReferences}?${encodeURIComponent(
-            JSON.stringify([at.uri, at.line, at.character])
-          )} "Show all references")`
-        : label
-    );
+  // Only the hover's first definition card carries it: the count belongs to
+  // the NAME, so repeating it per meaning taught nothing.
+  if (withRefs) {
+    const refs = referencesFooter(data, def.name, at);
+    if (refs) footer.push(refs);
   }
   card.footer = footer;
   return renderCard(card);

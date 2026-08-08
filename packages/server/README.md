@@ -13,7 +13,8 @@ What you get outside VS Code: ranked completion, hover docs, go-to-definition,
 find references, rename, document/workspace symbols, folding, formatting,
 semantic tokens, inlay hints and the structural/localization diagnostics.
 Game knowledge comes from your own game install and `script_docs` dumps; CK3
-additionally ships a bundled wiki fallback, the other two games do not (see
+and Victoria 3 additionally ship bundled fallbacks (wiki tables and a
+script_docs snapshot), EU5 does not yet (see
 [Per-game support](#per-game-support)).
 
 Hovers, code actions and logging adapt to the client automatically: a plain LSP
@@ -30,7 +31,7 @@ mirror in the log. Nothing has to be configured for that.
 ## Install
 
 Download `px-lsp-server-<version>.tar.gz` from the
-[GitHub releases](https://github.com/JDeffner/ck3-modding-toolkit/releases)
+[GitHub releases](https://github.com/JDeffner/paradox-modding-toolkit/releases)
 and extract it anywhere, e.g. `~/.local/share/px-lsp/`. Layout:
 
 ```
@@ -85,14 +86,15 @@ Code: set it explicitly for anything but CK3.
 | `gameId` | Mod is identified by | `gamePath` | `logsPath` (script_docs dumps) |
 |---|---|---|---|
 | `ck3` | `descriptor.mod` | `…/steamapps/common/Crusader Kings III/game` | `~/Documents/Paradox Interactive/Crusader Kings III/logs` |
-| `vic3` | `.metadata/metadata.json` | `…/steamapps/common/Victoria 3/game` | `~/Documents/Paradox Interactive/Victoria 3/logs` |
+| `vic3` | `.metadata/metadata.json` | `…/steamapps/common/Victoria 3/game` | `~/Documents/Paradox Interactive/Victoria 3/docs` (**not** `logs`) |
 | `eu5` | `.metadata/metadata.json` + stage folders | `…/steamapps/common/Europa Universalis V/game` | `~/Documents/Paradox Interactive/Europa Universalis V/docs` (**not** `logs`) |
 
-Two EU5 specifics worth knowing before you wire paths:
+Path specifics worth knowing before you wire them:
 
-- EU5's `script_docs` console command writes to `Documents/Paradox
-  Interactive/Europa Universalis V/docs`, **not** to `logs/`. Pointing
-  `logsPath` at `logs/` there finds nothing.
+- Victoria 3's and EU5's `script_docs` console command writes to
+  `Documents/Paradox Interactive/<Game>/docs`, **not** to `logs/`. Pointing
+  `logsPath` at `logs/` there finds nothing. (The data-type dump still lands
+  under `logs/` — the server probes the sibling `logs/` folder automatically.)
 - EU5 mods put their content under a **load-stage folder**: gameplay script
   lives in `<mod>/in_game/common/...`, `<mod>/in_game/events/...`, and so on
   (`main_menu/` and `loading_screen/` are the other two). The mod root itself
@@ -189,15 +191,15 @@ On neovim 0.10, use `require("lspconfig.configs")` with the same `cmd`/
 event targets and modifiers:
 
 1. Launch the game with `-debug_mode`.
-2. Open the console (`` ` ``) and run `script_docs`, then `DumpDataTypes` if
-   the game offers it.
-3. Point `logsPath` at the dump folder (`logs/` for CK3 and Vic3, `docs/` for
+2. Open the console (`` ` ``) and run `script_docs`, then the data-type dump
+   (`DumpDataTypes` on CK3, `dump_data_types` on Vic3) if the game offers it.
+3. Point `logsPath` at the dump folder (`logs/` for CK3, `docs/` for Vic3 and
    EU5), then restart the server (`:edit` a file or `:LspRestart`).
 
-For CK3 this upgrades the bundled wiki tables to your exact game version and
-adds modifiers. For Vic3 and EU5 there are no bundled tables, so this step is
-the difference between working completion/hover and a thin index of your own
-definitions only.
+CK3 and Vic3 ship bundled fallbacks (wiki tables for CK3, a script_docs
+snapshot for Vic3), so this step is an exact-version upgrade there. For EU5
+nothing is bundled yet, so it is the difference between working
+completion/hover and a thin index of your own definitions only.
 
 ## What works where
 
@@ -229,11 +231,11 @@ empty result for the language ids where the feature has no meaning.
 | | CK3 | Victoria 3 | EU5 |
 |---|---|---|---|
 | Schema (folder → definition kind) | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, imported from [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config), **unverified against a live install** |
-| Engine tokens with no `script_docs` dump | bundled wiki fallback | none (thin until you dump) | none (thin until you dump) |
-| `script_docs` location / format | `logs/`, classic text | `logs/`, markdown | `docs/`, markdown |
+| Engine tokens with no `script_docs` dump | bundled wiki fallback + bundled dump snapshot | bundled dump snapshot | none (thin until you dump) |
+| `script_docs` location / format | `logs/`, classic text | `docs/`, markdown | `docs/`, markdown |
 | Completion frequency ranking | bundled (vanilla + corpus) | bundled (vanilla) | none |
 | `.gui` widget schema | bundled (556 types) | bundled (579 types) | none |
-| `[ … ]` data-type chains | bundled tables + your `DumpDataTypes` | your `DumpDataTypes` only | your `DumpDataTypes` only |
+| `[ … ]` data-type chains | bundled tables + dump snapshot + your own dump | bundled dump snapshot + your own dump | bundled dump snapshot + your own dump |
 | Required-localization diagnostics | yes | yes (49 measured claims) | none, by design |
 | Deep validation (tiger) | ck3-tiger | vic3-tiger | none exists |
 | Mod descriptor | `descriptor.mod` | `.metadata/metadata.json` | `.metadata/metadata.json` |
@@ -278,7 +280,8 @@ question:
 - The first line names the **resolved data directory** for the active game. If
   it instead reads `no bundled data found for '<id>' (looked next to the server
   bundle)`, either the tarball got flattened or the game ships no bundled data
-  (Vic3 has no wiki mirror, EU5 has no bundled data at all).
+  (only CK3 has a wiki mirror; EU5 ships a data-type snapshot but no
+  script_docs snapshot yet).
 - `script_docs logs path not found` or `missing log files in <path>` means
   `logsPath` is wrong or the dump was never made.
 - The `status:` line is the mirror of the `paradox/status` notification, logged

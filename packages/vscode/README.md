@@ -30,7 +30,7 @@ stop.
 |---|---|---|---|
 | Language support (completion, hover, navigation, references, rename, diagnostics) | full | full | full |
 | Folder schema | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
-| Engine vocabulary before you dump `script_docs` | bundled wiki fallback | none | none |
+| Engine vocabulary before you dump `script_docs` | bundled wiki + dump snapshot | bundled dump snapshot | none yet |
 | Deep validation | ck3-tiger, auto-download | vic3-tiger, auto-download | none exists yet |
 | Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
@@ -111,7 +111,7 @@ reports are very welcome.
   in-game screenshots.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
-- **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Claude-Skill)**
+- **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Claude-Skill)**
   ships in `skills/ck3-modding/` for AI-assisted modding.
 - **Not tied to VS Code**: the language server is standard LSP over `--stdio`
   and runs from neovim, Zed, Helix or your own application — see
@@ -136,44 +136,44 @@ and everything else is optional. `px.gamePath`, `px.logsPath` and
 `px.tigerPath` describe whichever game is active and are honored whenever you
 set them; leave them empty and each game is detected on its own. Full
 walkthrough and every setting are in the wiki:
-**[Getting Started](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Getting-Started)**
-and **[Configuration](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Configuration)**.
+**[Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started)**
+and **[Configuration](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Configuration)**.
 
 ## Documentation
 
 The full docs live in the
-[wiki](https://github.com/JDeffner/ck3-modding-toolkit/wiki):
+[wiki](https://github.com/JDeffner/paradox-modding-toolkit/wiki):
 
-- [Home](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Home)
-- [Getting Started](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Getting-Started)
-- [Editor Features](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Editor-Features)
-- [Sidebar Views](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Sidebar-Views)
-- [DDS and Images](https://github.com/JDeffner/ck3-modding-toolkit/wiki/DDS-and-Images)
-- [Configuration](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Configuration)
-- [Multi-Mod and Translation](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Multi-Mod-and-Translation)
-- [Claude Skill](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Claude-Skill)
-- [Credits](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Credits)
+- [Home](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Home)
+- [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started)
+- [Editor Features](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Editor-Features)
+- [Sidebar Views](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Sidebar-Views)
+- [DDS and Images](https://github.com/JDeffner/paradox-modding-toolkit/wiki/DDS-and-Images)
+- [Configuration](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Configuration)
+- [Multi-Mod and Translation](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Multi-Mod-and-Translation)
+- [Claude Skill](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Claude-Skill)
+- [Credits](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Credits)
 
 Working in a workspace with a total conversion or a dozen mods?
-[`docs/PERFORMANCE.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PERFORMANCE.md)
+[`docs/PERFORMANCE.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PERFORMANCE.md)
 has the measured costs and the settings that shrink them.
 
 ## Outside VS Code
 
 The language server runs standalone over `--stdio` from any LSP client
 (neovim, Zed, Helix, ...). Grab `px-lsp-server-<version>.tar.gz` from the
-[releases](https://github.com/JDeffner/ck3-modding-toolkit/releases), or
+[releases](https://github.com/JDeffner/paradox-modding-toolkit/releases), or
 `px-lsp-win-x64-<version>.zip` if you want one download that already contains
 Node and a `px-lsp.cmd` launcher; setup,
 the per-language capability table and the per-game matrix are in
-[`packages/server/README.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/packages/server/README.md).
+[`packages/server/README.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/README.md).
 
 Embedding the server in your own application (a mod manager, a custom editor)
 is a supported, documented path:
-[`docs/EMBEDDING.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/EMBEDDING.md)
+[`docs/EMBEDDING.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/EMBEDDING.md)
 covers the process contract, initialization options, and the `paradox/*` wire
 methods beyond standard LSP (event graph, mod overview, GUI layout, scope
-inference), with [`docs/PROTOCOL.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PROTOCOL.md)
+inference), with [`docs/PROTOCOL.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PROTOCOL.md)
 as the method-by-method reference.
 
 ## Contributing & feedback
@@ -181,7 +181,7 @@ as the method-by-method reference.
 This is an alpha shaped by the people who use it. The best thing you can do is
 tell me what breaks and what is missing:
 
-- **File an [issue](https://github.com/JDeffner/ck3-modding-toolkit/issues)** for
+- **File an [issue](https://github.com/JDeffner/paradox-modding-toolkit/issues)** for
   bugs, false diagnostics, or feature ideas. Concrete examples from real mods
   are gold. Wrong or missing folder mappings, especially for EU5, have their
   own "Schema gap" issue form.
@@ -208,7 +208,7 @@ helpers) · `packages/*/test/` (vitest suites incl. corpus/fixture tests). The e
 client/server LSP split: the thin client runs in the extension host, all parsing
 and analysis lives in a separate server process. Everything game-specific sits
 behind one `GameProfile` boundary that CI enforces. The architecture map and
-conventions are in [`AGENTS.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/AGENTS.md).
+conventions are in [`AGENTS.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/AGENTS.md).
 
 ## Acknowledgements
 
@@ -221,20 +221,20 @@ The extension stands on work by others. The key sources and inspirations:
 - [kaiser-chris/cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config),
   the source of the EU5 folder schema (MIT, pinned commit; the Victoria 3
   equivalent was used as a cross-check only). Full notices in
-  [THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md).
+  [THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md).
 - [jesec/ck3-modding-wiki](https://github.com/jesec/ck3-modding-wiki), the source
   of the bundled CK3 fallback token lists (CC BY-SA 3.0, see
-  [ATTRIBUTION.md](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/packages/server/data/ck3/wikidocs/ATTRIBUTION.md)).
+  [ATTRIBUTION.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/data/ck3/wikidocs/ATTRIBUTION.md)).
 - Paradox's own in-game `_*.info` format docs, the primary ground truth for the
   CK3 schema layers. No game assets are redistributed.
 
 The complete table with licenses is on the
-[Credits wiki page](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Credits).
+[Credits wiki page](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Credits).
 
 ## License
 
 GPL-3.0-or-later. In short: use, modify and redistribute freely, but any
 distributed fork or derivative must publish its source under the GPL too. See
 [LICENSE](LICENSE). Bundled third-party data keeps its own terms (the CK3 wiki
-token lists are CC BY-SA, see [ATTRIBUTION.md](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/packages/server/data/ck3/wikidocs/ATTRIBUTION.md);
-the EU5 schema import is MIT, see [THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md)).
+token lists are CC BY-SA, see [ATTRIBUTION.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/data/ck3/wikidocs/ATTRIBUTION.md);
+the EU5 schema import is MIT, see [THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md)).

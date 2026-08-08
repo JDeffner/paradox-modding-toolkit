@@ -153,10 +153,13 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
     expect(latest.definitions).toBeGreaterThanOrEqual(4);
   });
 
-  it("bundles no wiki-token fallback for Vic3 (cut line)", () => {
+  it("serves the bundled Vic3 script_docs snapshot (no user dump configured)", () => {
     const latest = statuses[statuses.length - 1];
-    expect(latest.tokens).toBe(0);
-    expect(latest.tokensFromScriptDocs).toBe(false);
+    // Vic3 ships no wiki mirror, but since the bundled dump snapshot
+    // (data/vic3/script_docs) it starts with real engine tokens out of the box.
+    expect(latest.tokens).toBeGreaterThan(1000);
+    expect(latest.tokensFromScriptDocs).toBe(true);
+    expect(latest.tokensFromBundledDumps).toBe(true);
   });
 
   it("completion inside immediate offers the mod's scripted effect", async () => {
