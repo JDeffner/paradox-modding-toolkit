@@ -10,6 +10,7 @@
 import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeometry";
 import type { GuiLayoutFill } from "@px-lsp/protocol/protocol";
 import { handlePoints, HANDLE_SIZE } from "./gesture";
+import type { ConstraintOverlay } from "./placement";
 import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
 import type { Guide, SpacingBar } from "./snap";
 
@@ -40,6 +41,15 @@ const FLASH_STROKE = "#ffd54f";
 const DROP_STROKE = "#89d185";
 /** Solo: everything that is not the isolated subtree, at this alpha. */
 const DIM_OPACITY = 0.12;
+/** The constraint overlay's four parts, each its own colour so a glance separates them. */
+const PARENT_STROKE = "#7fd1c1";
+const ANCHOR_STROKE = "#ffb454";
+const CLIP_STROKE = "#c586c0";
+const EXPAND_STROKE = "#9cdcfe";
+/** Mint, used by nothing else: a layout pulse is not a selection and not a guide. */
+const PULSE_STROKE = "#4fffb0";
+/** How opaque a heatmap tint gets at its strongest. */
+const HEAT_ALPHA = 0.4;
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -272,6 +282,13 @@ export interface DrawReadout {
   text: string;
 }
 
+/** The rects a layout push moved, and how far through their flash they are. */
+export interface DrawPulse {
+  rects: readonly SceneRect[];
+  /** 1 at the moment of the change, down to 0 as it fades. */
+  alpha: number;
+}
+
 export interface DrawOptions {
   outlines: boolean;
   /** CSS font stack for widget text (the game font when the host supplied it). */
@@ -304,6 +321,15 @@ export interface DrawOptions {
   /** Where a box reorder would drop the dragged widget. */
   dropLine?: Guide;
   readout?: DrawReadout;
+  /**
+   * Per draw item, 0..1 to tint and -1 to leave alone (devtools.ts
+   * `buildHeatmap`). Absent or null is the normal case and costs one test.
+   */
+  heatmap?: Float32Array | null;
+  /** Why the selected widget's rect is where it is, drawn over the scene. */
+  constraints?: ConstraintOverlay;
+  /** The widgets the last layout push moved. */
+  pulse?: DrawPulse;
 }
 
 /**
@@ -457,6 +483,152 @@ function paintReadout(ctx: CanvasRenderingContext2D, readout: DrawReadout, camer
   ctx.restore();
 }
 
+/**
+ * The heatmap, as one wash per widget over the finished scene. It is a second
+ * walk of the draw list and nothing more: no state per item, no gradient
+ * objects, one `fillRect` each, so switching it on costs a mode the painter
+ * tests once rather than a different renderer.
+ *
+ * The ramp runs cool to warm because the question every one of these modes asks
+ * is "where is the deep end": blue reads as ordinary and orange as the thing to
+ * look at, and both survive being laid over a game sprite.
+ */
+function paintHeatmap(
+  ctx: CanvasRenderingContext2D,
+  scene: Scene,
+  values: Float32Array,
+  hidden: Uint8Array | null
+): void {
+  ctx.save();
+  for (let i = 0; i < scene.items.length; i++) {
+    const value = values[i];
+    if (value < 0 || hidden?.[i]) continue;
+    const rect = scene.items[i].rect;
+    if (rect.w <= 0 || rect.h <= 0) continue;
+    const r = Math.round(70 + value * 185);
+    const b = Math.round(230 - value * 170);
+    ctx.fillStyle = `rgba(${r},110,${b},${HEAT_ALPHA})`;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.restore();
+}
+
+/** A crosshair at an anchor point, screen-sized like every other affordance. */
+function paintCross(ctx: CanvasRenderingContext2D, x: number, y: number, zoom: number): void {
+  const arm = 6 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(x - arm, y);
+  ctx.lineTo(x + arm, y);
+  ctx.moveTo(x, y - arm);
+  ctx.lineTo(x, y + arm);
+  ctx.stroke();
+}
+
+/**
+ * The constraint overlay: the parent box the anchors are measured against, the
+ * two anchor points and the offset between them, the clip that cuts the result,
+ * and an arrow along each axis the widget expands on.
+ *
+ * Every number is placement.ts's, which is the engine's; this only strokes them.
+ */
+function paintConstraints(ctx: CanvasRenderingContext2D, overlay: ConstraintOverlay, zoom: number): void {
+  ctx.save();
+  ctx.lineWidth = 1 / zoom;
+
+  ctx.setLineDash([6 / zoom, 4 / zoom]);
+  ctx.strokeStyle = PARENT_STROKE;
+  ctx.strokeRect(overlay.parent.x, overlay.parent.y, overlay.parent.w, overlay.parent.h);
+  if (overlay.clip) {
+    ctx.strokeStyle = CLIP_STROKE;
+    ctx.strokeRect(overlay.clip.x, overlay.clip.y, overlay.clip.w, overlay.clip.h);
+  }
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = ANCHOR_STROKE;
+  const from = overlay.parentAnchor;
+  const to = overlay.widgetAnchor;
+  if (from) paintCross(ctx, from.x, from.y, zoom);
+  if (to) paintCross(ctx, to.x, to.y, zoom);
+  if (from && to && (from.x !== to.x || from.y !== to.y)) {
+    // The gap between the two points IS the `position` term, so the line is the
+    // offset a drag writes, drawn.
+    ctx.setLineDash([3 / zoom, 3 / zoom]);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const rect = overlay.rect;
+  ctx.strokeStyle = EXPAND_STROKE;
+  if (overlay.expand.x) paintExpandArrow(ctx, rect, "x", zoom);
+  if (overlay.expand.y) paintExpandArrow(ctx, rect, "y", zoom);
+  ctx.restore();
+}
+
+/** A double-headed arrow across the widget on one axis: "this side grows". */
+function paintExpandArrow(
+  ctx: CanvasRenderingContext2D,
+  rect: SceneRect,
+  axis: "x" | "y",
+  zoom: number
+): void {
+  const head = 5 / zoom;
+  const inset = 3 / zoom;
+  ctx.beginPath();
+  if (axis === "x") {
+    const y = rect.y + rect.h / 2;
+    const x0 = rect.x + inset;
+    const x1 = rect.x + rect.w - inset;
+    if (x1 <= x0) return;
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    for (const [x, dir] of [
+      [x0, 1],
+      [x1, -1],
+    ] as const) {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + head * dir, y - head);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + head * dir, y + head);
+    }
+  } else {
+    const x = rect.x + rect.w / 2;
+    const y0 = rect.y + inset;
+    const y1 = rect.y + rect.h - inset;
+    if (y1 <= y0) return;
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, y1);
+    for (const [y, dir] of [
+      [y0, 1],
+      [y1, -1],
+    ] as const) {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - head, y + head * dir);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + head, y + head * dir);
+    }
+  }
+  ctx.stroke();
+}
+
+/** The widgets a re-layout moved, outlined and fading. */
+function paintPulse(ctx: CanvasRenderingContext2D, pulse: DrawPulse, zoom: number): void {
+  if (pulse.alpha <= 0 || pulse.rects.length === 0) return;
+  ctx.save();
+  ctx.globalAlpha = pulse.alpha;
+  ctx.lineWidth = 2 / zoom;
+  ctx.strokeStyle = PULSE_STROKE;
+  ctx.beginPath();
+  for (const rect of pulse.rects) {
+    if (rect.w <= 0 || rect.h <= 0) continue;
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Repaint the whole canvas: viewport clear, world backdrop, then the scene. */
 export function drawScene(
   ctx: CanvasRenderingContext2D,
@@ -494,6 +666,11 @@ export function drawScene(
       paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
     }
   }
+  // Over the scene and under every affordance: a tint is about the widgets, and
+  // a guide line drawn under it would be the wrong colour.
+  if (options.heatmap) paintHeatmap(ctx, scene, options.heatmap, hidden);
+  if (options.pulse) paintPulse(ctx, options.pulse, camera.zoom);
+  if (options.constraints) paintConstraints(ctx, options.constraints, camera.zoom);
   if (options.flash) {
     ctx.save();
     ctx.lineWidth = 2 / camera.zoom;

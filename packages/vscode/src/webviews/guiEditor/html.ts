@@ -89,11 +89,68 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #palette .row { cursor: grab; padding-left: 6px; }
   #palette .row.dragging { opacity: 0.5; }
   #palette .note { padding: 4px 8px; white-space: normal; color: var(--vscode-descriptionForeground); }
-  #inspector {
-    flex: 0 0 auto; width: 280px;
+  #right {
+    flex: 0 0 auto; width: 300px; display: flex; flex-direction: column; min-height: 0;
     background: var(--vscode-sideBar-background, transparent);
     border-left: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
   }
+  #inspector { flex: 1 1 auto; min-height: 80px; }
+  #halo {
+    flex: 0 0 55%; min-height: 120px; display: flex; flex-direction: column; padding: 0;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #halo[hidden] { display: none; }
+  #haloTabs {
+    flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 4px 3px;
+    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #haloTabs button { padding: 1px 6px; font-size: 0.9em; }
+  #haloTabs button.on {
+    border-color: var(--vscode-focusBorder, #007fd4);
+    background: var(--vscode-list-activeSelectionBackground, rgba(70,130,200,0.4));
+  }
+  #haloBody { flex: 1 1 auto; overflow: auto; padding: 4px 0; }
+  #haloBody .head { padding: 4px 8px; white-space: normal; }
+  #haloBody .note { padding: 6px 8px; white-space: normal; color: var(--vscode-descriptionForeground); }
+  #haloBody .section { padding: 6px 8px 2px; color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+  #haloBody .prose { padding: 3px 8px; white-space: normal; }
+  #haloBody .terms { padding: 2px 8px; font-family: var(--vscode-editor-font-family, monospace); }
+  #haloBody .terms .term { display: flex; gap: 6px; justify-content: space-between; white-space: nowrap; }
+  #haloBody .terms .term.sum {
+    margin-top: 2px; padding-top: 2px;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #haloBody .terms .term .n { flex: 0 0 auto; text-align: right; min-width: 96px; }
+  #haloBody .terms .term .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #haloBody .link { cursor: pointer; color: var(--vscode-textLink-foreground, #3794ff); }
+  #haloBody .link:hover { text-decoration: underline; }
+  #haloBody .missing { color: var(--vscode-editorError-foreground, #f14c4c); }
+  #haloBody .chain { font-size: 0.85em; color: var(--vscode-descriptionForeground); white-space: normal; }
+  #haloBody .tools { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 8px; align-items: center; }
+  #haloBody .tools button { padding: 1px 6px; font-size: 0.9em; }
+  #haloBody input.text, #haloBody select {
+    min-width: 0; padding: 1px 3px; border-radius: 2px;
+    color: var(--vscode-input-foreground, inherit);
+    background: var(--vscode-input-background, transparent);
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #haloBody .filter { padding: 4px 8px; }
+  #haloBody .filter input { width: 100%; }
+  #haloBody .row { padding-left: 8px; }
+  #haloBody .row.picked { background: var(--vscode-list-activeSelectionBackground, rgba(70,130,200,0.4)); }
+  #haloBody .thumb {
+    display: block; margin: 4px 8px; background: #101010;
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #haloBody .swatch {
+    flex: 0 0 auto; width: 28px; height: 28px; background: #101010; object-fit: contain;
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #haloBody .texRow { display: flex; align-items: center; gap: 6px; padding: 2px 8px; cursor: pointer; }
+  #haloBody .texRow:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15)); }
+  #haloBody .texRow .names { min-width: 0; }
+  #haloBody .texRow .names div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #haloBody label.check { display: flex; align-items: center; gap: 4px; padding: 1px 8px; cursor: pointer; }
   #focusBar {
     flex: 0 0 auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
     padding: 4px 6px; white-space: nowrap;
@@ -185,12 +242,23 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #toast.refused { border-left-color: var(--vscode-editorError-foreground, #f14c4c); }
   #toast.warned { border-left-color: var(--vscode-editorWarning-foreground, #cca700); }
   #toast.info { border-left-color: var(--vscode-editorInfo-foreground, #3794ff); }
-  #status {
-    flex: 0 0 auto; padding: 4px 8px; font-size: 0.9em;
+  #statusBar {
+    flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 8px; font-size: 0.9em;
     border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
     color: var(--vscode-descriptionForeground);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  #status { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #stats {
+    flex: 0 0 auto; white-space: nowrap; opacity: 0.75;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+  #visibilityBadge {
+    flex: 0 0 auto; padding: 0 5px; border-radius: 2px; white-space: nowrap; cursor: pointer;
+    color: var(--vscode-editor-background);
+    background: var(--vscode-editorWarning-foreground, #cca700);
+  }
+  #visibilityBadge[hidden] { display: none; }
 </style>
 </head>
 <body data-font="${fontDataUri ? "game" : "fallback"}">
@@ -204,7 +272,11 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     <label><input id="outlines" type="checkbox" /> Outlines</label>
     <label title="Snap a drag to sibling edges, centres and equal gaps"><input id="snap" type="checkbox" checked /> Guides</label>
     <label title="Draw a 10 px grid and snap a drag to it"><input id="grid" type="checkbox" /> Grid</label>
+    <label title="Show the selected widget's parent box, its anchors and the offset between them"><input id="constraints" type="checkbox" /> Constraints</label>
+    <label title="Flash the widgets each re-layout moved"><input id="pulses" type="checkbox" /> Pulses</label>
+    <select id="heatmap" title="Tint the scene by one property of the widget tree"></select>
     <button id="paletteToggle" title="Show the widgets you can drag onto the canvas">Palette</button>
+    <button id="haloToggle" title="Explain, browse and reuse: why a widget is placed where it is, what it depends on, and the textures, types and saved pieces available to it">Devtools</button>
     <button id="refresh">Refresh</button>
     <span id="meta" style="margin-left:auto;color:var(--vscode-descriptionForeground)"></span>
   </div>
@@ -216,9 +288,16 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
       <div id="palette" hidden></div>
     </div>
     <div id="stage"><canvas id="canvas"></canvas><div id="toast" hidden></div></div>
-    <div id="inspector"></div>
+    <div id="right">
+      <div id="inspector"></div>
+      <div id="halo" hidden><div id="haloTabs"></div><div id="haloBody"></div></div>
+    </div>
   </div>
-  <div id="status">Loading…</div>
+  <div id="statusBar">
+    <span id="status">Loading…</span>
+    <span id="visibilityBadge" hidden></span>
+    <span id="stats"></span>
+  </div>
 </div>
 <script nonce="${nonce}" src="${scriptSrc}"></script>
 </body>

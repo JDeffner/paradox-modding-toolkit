@@ -27,17 +27,37 @@
  * a shift-click, a group drag with a refused member, align and distribute, a
  * palette drop, a copy/paste round trip through the stub's clipboard, delete,
  * duplicate, the anchor picker and a wrap — all against the real server.
+ *
+ * G5 stage 2's claim is the devtools halo and the browsers, and it has two
+ * halves. The first is that a CLOSED panel costs nothing: no request goes out
+ * for a surface nobody opened, which the cases assert by counting messages
+ * rather than by reading the panel. The second is that everything the new
+ * surfaces write goes through the SAME guarded paths as stage 1 — a texture
+ * pick and a `using` are `checkEdit` then `applyEdit`, a preset is one
+ * `applyOps` batch, a component is an `insertRaw` — so a refusal reads exactly
+ * as it does from the inspector.
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import type { GuiLayoutResult, GuiSourceEditResult, GuiSourceOp } from "@px-lsp/protocol/protocol";
+import type {
+  GuiDependenciesResult,
+  GuiLayoutResult,
+  GuiSourceEditResult,
+  GuiSourceOp,
+  GuiVisibilityOptions,
+} from "@px-lsp/protocol/protocol";
 import CK3_GUI_SCHEMA from "../../server/data/ck3/guiSchema.json";
-import { computeGuiLayoutResult } from "../../server/src/gui/layoutService";
+import { computeGuiLayoutResult, VIEWPORT } from "../../server/src/gui/layoutService";
 import { computeGuiWidgetInfo } from "../../server/src/gui/widgetInfo";
 import { collectGuiDefs } from "../../server/src/gui/guiDefs";
 import { computeGuiSourceEdit, computeGuiSourceEdits } from "../../server/src/gui/sourceEditService";
 import { computeGuiVocabulary } from "../../server/src/gui/vocabulary";
+import { computeGuiDependencies } from "../../server/src/gui/guiDependencies";
+import { collectScriptedGuiCalls, emptyGuiScriptLinks } from "../../server/src/gui/guiLinks";
+import { loadSchema } from "../../server/src/schema/loader";
+import { ServerData } from "../../server/src/serverData";
 import { applyAll } from "../../server/src/gui/sourceEdit";
-import type { AppToHost } from "../src/webviews/guiEditor/messages";
+import { countTopLevelBlocks } from "../src/webviews/guiEditor/userData";
+import type { AppToHost, EditProperty, TextureEntry } from "../src/webviews/guiEditor/messages";
 import { bootEditor, guiFixture, type EditorHarness } from "./guiEditorHarness";
 
 const TEXT = guiFixture("templates-types.gui");
@@ -59,21 +79,35 @@ let layoutRuns = 0;
 
 function layoutOf(text: string) {
   layoutRuns++;
-  return computeGuiLayoutResult(text, null, null);
+  return computeGuiLayoutResult(text, null, null, [], [], storedVisibility);
 }
 
 /** The host's half of the contract, replayed from the real server. */
 function serveLayout(harness: EditorHarness, text: string, file = "templates-types.gui"): void {
-  harness.push({ type: "layout", file, result: layoutOf(text), textures: {} });
+  harness.push({
+    type: "layout",
+    file,
+    result: layoutOf(text),
+    textures: {},
+    visibility: storedVisibility,
+  });
 }
 
+/**
+ * The inspector read, HONOURING the placement flag: the trace costs a full
+ * layout server side, so a host that answered with it either way would hide the
+ * whole reason the flag exists.
+ */
 function serveWidgetInfo(harness: EditorHarness, text: string): void {
   const request = [...harness.sent].reverse().find((m) => m.type === "requestWidgetInfo");
   if (!request || request.type !== "requestWidgetInfo") throw new Error("no widget info was requested");
   harness.push({
     type: "widgetInfo",
     line: request.line,
-    info: computeGuiWidgetInfo(text, request.line),
+    info: computeGuiWidgetInfo(text, request.line, undefined, {
+      placement: request.placement === true,
+      viewport: VIEWPORT,
+    }),
   });
 }
 
@@ -92,6 +126,18 @@ let docFile = "";
 /** How far `serveEdits` has read into what the app sent. */
 let served = 0;
 
+/**
+ * The stage 2 half of the stub host: exactly the per-user state `panel.ts`
+ * keeps in `workspaceState`, and the gfx listing it keeps from its own walk.
+ * Plain objects, because the point of the contract is that a host needs nothing
+ * cleverer than this to satisfy it.
+ */
+let storedVisibility: GuiVisibilityOptions | undefined;
+let savedComponents: Record<string, string> = {};
+let savedPresets: Record<string, EditProperty[]> = {};
+let textureCatalogue: TextureEntry[] = [];
+let revealedAt: { file: string; line: number }[] = [];
+
 beforeEach(() => {
   editor = bootEditor();
   doc = "";
@@ -99,6 +145,11 @@ beforeEach(() => {
   served = 0;
   layoutRuns = 0;
   clipboard = "";
+  storedVisibility = undefined;
+  savedComponents = {};
+  savedPresets = {};
+  textureCatalogue = [];
+  revealedAt = [];
 });
 afterEach(() => editor.close());
 
@@ -107,7 +158,7 @@ function openDoc(text: string, file: string): GuiLayoutResult {
   doc = text;
   docFile = file;
   const result = layoutOf(text);
-  editor.push({ type: "layout", file, result, textures: {} });
+  editor.push({ type: "layout", file, result, textures: {}, visibility: storedVisibility });
   return result;
 }
 
@@ -151,6 +202,7 @@ function serveEdits(): void {
       });
       continue;
     }
+    if (serveHalo(message)) continue;
     let request: { op: GuiSourceOp } | { ops: GuiSourceOp[] };
     if (message.type === "checkEdit" || message.type === "applyEdit") {
       request = { op: { kind: "setProperties", line: message.line, properties: message.properties } };
@@ -195,8 +247,147 @@ function serveEdits(): void {
     });
     if (!writes) continue;
     doc = applyAll(doc, result.edits!);
-    editor.push({ type: "layout", file: docFile, result: layoutOf(doc), textures: {} });
+    editor.push({
+      type: "layout",
+      file: docFile,
+      result: layoutOf(doc),
+      textures: {},
+      visibility: storedVisibility,
+    });
   }
+}
+
+/**
+ * The stage 2 messages, answered the way `panel.ts` answers them. Returns true
+ * when it handled the message, so the write path below sees only writes.
+ *
+ * `insertComponent` and `savePreset` deliberately go through the SAME server
+ * calls the paste and the batched write already use: what makes a saved
+ * component safe is that it is an `insertRaw` op like any other, not a second
+ * way into the document.
+ */
+function serveHalo(message: AppToHost): boolean {
+  switch (message.type) {
+    case "setVisibility": {
+      storedVisibility =
+        message.mode === "showAll" && !Object.values(message.checks ?? {}).some((v) => v === false)
+          ? undefined
+          : { mode: message.mode, checks: message.checks };
+      editor.push({
+        type: "layout",
+        file: docFile,
+        result: layoutOf(doc),
+        textures: {},
+        visibility: storedVisibility,
+      });
+      return true;
+    }
+    case "requestDependencies": {
+      editor.push({
+        type: "dependencies",
+        line: message.line,
+        result: dependenciesFor(doc, message.line),
+      });
+      return true;
+    }
+    case "requestTextureList": {
+      const needle = message.query.trim().toLowerCase();
+      const matches = textureCatalogue.filter((e) => e.path.toLowerCase().includes(needle));
+      editor.push({
+        type: "textureList",
+        entries: matches.slice(0, 200),
+        total: matches.length,
+        roots: true,
+      });
+      return true;
+    }
+    case "requestThumbnails": {
+      const urls: Record<string, string | null> = {};
+      for (const path of message.paths) urls[path] = `stub:${path}`;
+      editor.push({ type: "thumbnails", urls });
+      return true;
+    }
+    case "requestUserData":
+      pushUserData();
+      return true;
+    case "saveComponent": {
+      const result = answer({ ops: message.lines.map((line) => ({ kind: "blockText" as const, line })) });
+      const blocks = (result.results ?? []).map((r) => r.blockText).filter((b): b is string => !!b);
+      if (blocks.length === 0) {
+        editor.push({
+          type: "editVerdict",
+          id: message.id,
+          refused: result.refused ?? "there was nothing to save on those lines.",
+        });
+        return true;
+      }
+      savedComponents[message.name] = blocks.join("");
+      editor.push({ type: "editVerdict", id: message.id });
+      pushUserData();
+      return true;
+    }
+    case "insertComponent": {
+      const fragment = savedComponents[message.name];
+      if (!fragment) {
+        editor.push({
+          type: "editVerdict",
+          id: message.id,
+          refused: `there is no saved component called "${message.name}" any more.`,
+        });
+        return true;
+      }
+      commitOne(message.id, {
+        op: { kind: "insertRaw", line: message.line, fragment, index: message.index },
+      });
+      return true;
+    }
+    case "savePreset":
+      savedPresets[message.name] = message.properties;
+      pushUserData();
+      return true;
+    case "forgetSaved":
+      if (message.kind === "component") delete savedComponents[message.name];
+      else delete savedPresets[message.name];
+      pushUserData();
+      return true;
+    case "revealAt":
+      revealedAt.push({ file: message.file, line: message.line });
+      return true;
+    default:
+      return false;
+  }
+}
+
+function pushUserData(): void {
+  editor.push({
+    type: "userData",
+    components: Object.entries(savedComponents).map(([name, text]) => ({
+      name,
+      widgets: countTopLevelBlocks(text),
+    })),
+    presets: Object.entries(savedPresets).map(([name, properties]) => ({ name, properties })),
+  });
+}
+
+/** One op, applied and laid out again: `panel.ts`'s `commit`, in miniature. */
+function commitOne(id: number, request: { op: GuiSourceOp }): void {
+  const result = answer(request);
+  const writes = !result.refused && (result.edits?.length ?? 0) > 0;
+  editor.push({
+    type: "editVerdict",
+    id,
+    refused: writes ? undefined : (result.refused ?? "that edit changes nothing."),
+    warning: result.warning,
+  });
+  if (!writes) return;
+  doc = applyAll(doc, result.edits!);
+  editor.push({
+    type: "layout",
+    file: docFile,
+    result: layoutOf(doc),
+    textures: {},
+    visibility: storedVisibility,
+  });
 }
 
 function answer(request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }): GuiSourceEditResult {
@@ -1336,5 +1527,551 @@ describe("wrap", () => {
     expect(doc).toContain(
       '\tvbox = {\n\t\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }\n\t}\n'
     );
+  });
+});
+
+// ── G5 stage 2: the devtools halo, the browsers and the saved library ────────
+
+/** The colours the stage 2 overlays paint with, as the canvas stub sees them. */
+const PARENT_STROKE = "#7fd1c1";
+const PULSE_STROKE = "#4fffb0";
+
+/**
+ * A widget anchored to its parent's corner (an anchor sum to explain), one
+ * inside a vbox (a dropped position to report), one calling a scripted_gui and
+ * naming two loc keys (a dependency answer), and a conditional `visible` (a
+ * visibility check).
+ *
+ * The conditional one sits INSIDE the vbox on purpose: `ignoreinvisible`
+ * defaults to yes there, so a hidden child collapses to a zero rect and the
+ * mode has something a test can see. Outside a box, `visible` changes no rect
+ * at all, which is the engine's answer and not this panel's business.
+ */
+const HALO = [
+  'widget = { name = "px_h_root"',
+  "\tposition = { 100 50 }",
+  "\tsize = { 400 300 }",
+  '\twidget = { name = "px_h_anchored"',
+  "\t\tparentanchor = bottom|right",
+  "\t\tposition = { -30 -20 }",
+  "\t\tsize = { 40 20 }",
+  "\t}",
+  '\twidget = { name = "px_h_button"',
+  "\t\tposition = { 10 10 }",
+  "\t\tsize = { 60 30 }",
+  "\t\tonclick = \"[GetScriptedGui('px_h_gui').Execute(GuiScope.End)]\"",
+  '\t\ttext = "PX_H_LABEL"',
+  '\t\ttooltip = "PX_H_MISSING"',
+  "\t}",
+  "}",
+  '\nvbox = { name = "px_h_box"',
+  "\tposition = { 700 100 }",
+  '\twidget = { name = "px_h_boxed" position = { 5 5 } size = { 40 40 } }',
+  '\twidget = { name = "px_h_conditional"',
+  '\t\tvisible = "[GetPlayer.IsAI]"',
+  "\t\tsize = { 30 30 }",
+  "\t}",
+  "}",
+  "",
+].join("\n");
+
+/** The script side the dependency panel reads, indexed the way the server does. */
+const depsData = new ServerData();
+const depsSchema = loadSchema(null);
+const depsLinks = emptyGuiScriptLinks();
+const SGUI_FILE = "/px/common/scripted_guis/px_h.txt";
+depsData.index.addAll([
+  { name: "px_h_gui", kind: "scripted_gui", file: SGUI_FILE, line: 3, source: "mod" },
+  {
+    name: "PX_H_LABEL",
+    kind: "loc_key",
+    file: "/px/localization/px_l_english.yml",
+    line: 1,
+    source: "mod",
+    value: "Open it",
+  },
+]);
+collectScriptedGuiCalls(HALO, "/px/gui/px_h.gui", depsLinks);
+
+function dependenciesFor(text: string, line: number | undefined): GuiDependenciesResult {
+  return computeGuiDependencies(depsData, depsSchema, text, line, depsLinks);
+}
+
+function openHalo(): GuiLayoutResult {
+  const layout = openDoc(HALO, "halo.gui");
+  serveEdits();
+  editor.button("Devtools").click();
+  serveEdits();
+  return layout;
+}
+
+/**
+ * The halo's own requests fire on a DEBOUNCE after a selection change, so a
+ * case that clicks a widget and then reads a halo panel has to let the timer
+ * run: jsdom's timers are Node's, and a synchronous test never reaches them.
+ * That the wait is needed at all is the assertion the debounce is real.
+ */
+async function settleHalo(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  serveEdits();
+}
+
+describe("the halo costs nothing while it is closed", () => {
+  it("asks for no trace, no dependencies, no textures and no saved data until it is opened", () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+
+    // The inspector's own read goes out, WITHOUT the placement flag, and none
+    // of the halo's own requests do.
+    const read = lastOfType(editor, "requestWidgetInfo")!;
+    expect(read.placement).toBeUndefined();
+    for (const type of ["requestDependencies", "requestTextureList", "requestUserData"] as const) {
+      expect(editor.sent.filter((m) => m.type === type)).toHaveLength(0);
+    }
+  });
+
+  it("opening the Why tab re-reads the SAME widget, this time with the trace", () => {
+    const layout = openHalo();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    const read = lastOfType(editor, "requestWidgetInfo")!;
+    expect(read.placement).toBe(true);
+
+    // Moving off the tab stops paying for it again.
+    editor.button("Uses").click();
+    editor.click(at.x, at.y);
+    expect(lastOfType(editor, "requestWidgetInfo")!.placement).toBeUndefined();
+  });
+});
+
+describe("why is it here", () => {
+  it("reads the anchor terms and closes them on the rect the canvas drew", () => {
+    const layout = openHalo();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+
+    const body = editor.text("haloBody");
+    expect(body).toContain("the parent's content box");
+    expect(body).toContain("parentanchor = bottom|right");
+    expect(body).toContain("widgetanchor = bottom|right (mirrors parentanchor)");
+    expect(body).toContain("position = { -30 -20 }");
+    expect(body).toContain("= where it sits");
+    // The closing row IS the engine's rect, so the panel and the canvas cannot
+    // be made to disagree.
+    const rect = rectOf(layout, "px_h_anchored");
+    expect(body).toContain(`${rect.x}, ${rect.y}`);
+  });
+
+  it("says a box took the slot and dropped the position the author wrote", () => {
+    const layout = openHalo();
+    const at = centreOf(layout, "px_h_boxed");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+
+    const body = editor.text("haloBody");
+    expect(body).toContain("vbox#px_h_box placed it");
+    expect(body).toContain("position = { 5 5 } was DROPPED");
+    expect(body).toContain("Widget cannot have a position in a layout");
+  });
+});
+
+describe("the canvas devtools", () => {
+  it("the constraint overlay reaches the canvas only when it is switched on", () => {
+    const layout = openHalo();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+
+    editor.paint.reset();
+    expect(editor.paint.strokes).not.toContain(PARENT_STROKE);
+    editor.toggle("constraints", true);
+    expect(editor.paint.strokes).toContain(PARENT_STROKE);
+
+    editor.paint.reset();
+    editor.toggle("constraints", false);
+    expect(editor.paint.strokes).not.toContain(PARENT_STROKE);
+  });
+
+  it("the overlay fetches its own trace when the panel that reads it is closed", () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+    // No halo, so the first read was the plain one and there is nothing to draw.
+    expect(lastOfType(editor, "requestWidgetInfo")!.placement).toBeUndefined();
+
+    editor.toggle("constraints", true);
+    expect(lastOfType(editor, "requestWidgetInfo")!.placement).toBe(true);
+    editor.paint.reset();
+    serveWidgetInfo(editor, doc);
+    expect(editor.paint.strokes).toContain(PARENT_STROKE);
+  });
+
+  it("a heatmap tints the scene and says what it is tinting", () => {
+    openHalo();
+    editor.heatmap("synthetic");
+    expect(editor.toast()).toContain("spliced in from a template or a type");
+    editor.heatmap("depth");
+    expect(editor.toast()).toContain("depth 0 to");
+    editor.heatmap("off");
+  });
+
+  it("pulses flash what a commit moved, and say how many, only while switched on", () => {
+    const layout = openHalo();
+    editor.toggle("snap", false);
+    const at = centreOf(layout, "px_h_anchored");
+
+    editor.press(at.x, at.y);
+    serveEdits();
+    editor.move(at.x + 40, at.y + 20);
+    editor.up(at.x + 40, at.y + 20);
+    serveEdits();
+    expect(editor.text("status")).not.toContain("layout:");
+
+    editor.toggle("pulses", true);
+    const again = centreOf(layoutOf(doc), "px_h_anchored");
+    editor.paint.reset();
+    editor.press(again.x, again.y);
+    serveEdits();
+    editor.move(again.x + 40, again.y + 20);
+    editor.up(again.x + 40, again.y + 20);
+    serveEdits();
+
+    expect(editor.text("status")).toContain("layout: 1 widget changed");
+    expect(editor.paint.strokes).toContain(PULSE_STROKE);
+  });
+
+  it("the stats line carries the server's stages and the app's own", () => {
+    openHalo();
+    const stats = editor.text("stats");
+    for (const part of ["parse", "defs", "layout", "server", "scene", "paint"]) {
+      expect(stats).toContain(part);
+    }
+    expect(stats).toContain("w");
+  });
+});
+
+describe("conditional visibility", () => {
+  it("a mode change is one message, the layout is the answer, and the badge says so", () => {
+    openHalo();
+    editor.button("Visible").click();
+    // Reported in every mode, so the toggle UI exists before the mode changes.
+    expect(editor.text("haloBody")).toContain("[GetPlayer.IsAI]");
+    expect(editor.badge()).toBeNull();
+
+    editor.button("Hide all").click();
+    serveEdits();
+    expect(lastOfType(editor, "setVisibility")).toMatchObject({ mode: "hideAll" });
+    expect(editor.badge()).toContain("hiding every conditional widget");
+    // The widget really collapsed. It stays in the tree as a zero rect, which
+    // is the engine's own answer (L27) and what lets the user still select the
+    // thing they have just made invisible; the badge is why that is not a
+    // mystery.
+    expect(rectOf(layoutOf(doc), "px_h_conditional")).toMatchObject({ w: 0, h: 0 });
+    expect(editor.text("haloBody")).toContain("hidden");
+
+    editor.button("Show all").click();
+    serveEdits();
+    expect(editor.badge()).toBeNull();
+    expect(rectOf(layoutOf(doc), "px_h_conditional")).toMatchObject({ w: 30, h: 30 });
+  });
+
+  it("evaluate takes a per-check assignment, and the host remembers it", () => {
+    openHalo();
+    editor.button("Visible").click();
+    editor.button("Evaluate").click();
+    serveEdits();
+
+    const box = editor.document.querySelector<HTMLInputElement>("#haloBody label.check input")!;
+    expect(box.disabled).toBe(false);
+    box.checked = false;
+    box.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("change"));
+    serveEdits();
+
+    expect(lastOfType(editor, "setVisibility")).toMatchObject({
+      mode: "evaluate",
+      checks: { "[GetPlayer.IsAI]": false },
+    });
+    expect(storedVisibility).toEqual({ mode: "evaluate", checks: { "[GetPlayer.IsAI]": false } });
+    expect(editor.badge()).toContain("1 condition(s) set to false");
+    expect(rectOf(layoutOf(doc), "px_h_conditional")).toMatchObject({ w: 0, h: 0 });
+  });
+});
+
+describe("the dependency panel", () => {
+  it("lists the scripted_gui a widget calls, its chain and its loc keys", async () => {
+    const layout = openHalo();
+    editor.button("Uses").click();
+    const at = centreOf(layout, "px_h_button");
+    editor.click(at.x, at.y);
+    await settleHalo();
+
+    // Scoped to the widget's own source subtree, which is what the head says.
+    expect(lastOfType(editor, "requestDependencies")!.line).toBe(8);
+    const body = editor.text("haloBody");
+    expect(body).toContain("px_h_gui");
+    expect(body).toContain("PX_H_LABEL");
+    // The index has no definition for the tooltip key, and the panel says so
+    // rather than leaving it to be discovered in game.
+    expect(body).toContain("PX_H_MISSING");
+    expect(body).toContain("missing");
+  });
+
+  it("a row with a definition site reveals it in the text editor", async () => {
+    const layout = openHalo();
+    editor.button("Uses").click();
+    const at = centreOf(layout, "px_h_button");
+    editor.click(at.x, at.y);
+    await settleHalo();
+
+    editor.haloClick("px_h_gui");
+    serveEdits();
+    // A scripted_gui lives outside the .gui being edited, so it is the
+    // arbitrary-file reveal and not the document one.
+    expect(revealedAt).toEqual([{ file: SGUI_FILE, line: 3 }]);
+    expect(editor.sent.filter((m) => m.type === "reveal")).toHaveLength(0);
+  });
+
+  it("the scope switch asks about the whole file instead of the selection", async () => {
+    const layout = openHalo();
+    editor.button("Uses").click();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    await settleHalo();
+    // The anchored widget calls nothing.
+    expect(editor.text("haloBody")).toContain("This calls no scripted_gui");
+
+    const scope = editor.document.querySelector<HTMLInputElement>("#haloBody label.check input")!;
+    scope.checked = true;
+    scope.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("change"));
+    serveEdits();
+
+    expect(lastOfType(editor, "requestDependencies")!.line).toBeUndefined();
+    expect(editor.text("haloBody")).toContain("px_h_gui");
+  });
+});
+
+describe("the type and template browser", () => {
+  const WITH_TEMPLATE = [
+    "template PxHDeco {",
+    "\tsize = { 24 24 }",
+    "}",
+    "",
+    'widget = { name = "px_t_root"',
+    "\tsize = { 400 300 }",
+    '\twidget = { name = "px_t_kid" position = { 10 10 } size = { 40 40 } }',
+    "}",
+    "",
+  ].join("\n");
+
+  it("applies a template to the selection as a guarded `using` write", () => {
+    openDoc(WITH_TEMPLATE, "template.gui");
+    serveEdits();
+    editor.button("Devtools").click();
+    editor.button("Types").click();
+    serveEdits();
+
+    editor.click(30, 30);
+    expect(editor.selectedRow()).toContain("px_t_kid");
+    editor.filterHalo("PxHDeco");
+    editor.haloClick("PxHDeco");
+    editor.haloClick("Apply as using = PxHDeco");
+    serveEdits();
+
+    // Guards first, then the write, exactly as the anchor picker does it.
+    expect(lastOfType(editor, "checkEdit")!.properties).toEqual([{ key: "using", value: "PxHDeco" }]);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "using", value: "PxHDeco" }]);
+    expect(doc).toContain("using = PxHDeco");
+  });
+
+  it("inserting a type goes out as the palette's own insert op", () => {
+    openDoc(WITH_TEMPLATE, "template.gui");
+    serveEdits();
+    editor.button("Devtools").click();
+    editor.button("Types").click();
+    serveEdits();
+
+    editor.click(30, 30);
+    editor.filterHalo("vbox");
+    editor.haloClick("vbox");
+    editor.haloClick("Insert here");
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toEqual([{ kind: "insert", line: 4, widget: { type: "vbox" }, index: 1 }]);
+    expect(doc).toContain("\tvbox = {}\n");
+  });
+});
+
+describe("the texture browser", () => {
+  it("lists what the host walked, thumbnails only the page, and picks through the guards", async () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    textureCatalogue = [
+      { path: "gfx/interface/icons/px_shield.dds", source: "mod" },
+      { path: "gfx/interface/icons/px_sword.dds", source: "game" },
+      { path: "gfx/interface/frames/px_frame.dds", source: "game" },
+    ];
+    editor.button("Devtools").click();
+    editor.button("Art").click();
+    serveEdits();
+
+    expect(editor.text("haloBody")).toContain("px_shield.dds");
+    // A thumbnail per listed row, and no more.
+    const asked = lastOfType(editor, "requestThumbnails")!;
+    expect(asked.paths).toHaveLength(3);
+
+    editor.filterHalo("sword");
+    serveEdits();
+    expect(lastOfType(editor, "requestTextureList")!.query).toBe("sword");
+    expect(editor.text("haloBody")).not.toContain("px_shield.dds");
+
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    await settleHalo();
+    editor.haloClick("px_sword.dds");
+    serveEdits();
+
+    // Guards first, then the write, in the engine's own format: quoted,
+    // root-relative, forward slashes.
+    expect(lastOfType(editor, "checkEdit")!.properties).toEqual([
+      { key: "texture", value: '"gfx/interface/icons/px_sword.dds"' },
+    ]);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([
+      { key: "texture", value: '"gfx/interface/icons/px_sword.dds"' },
+    ]);
+    expect(doc).toContain('texture = "gfx/interface/icons/px_sword.dds"');
+  });
+});
+
+describe("saved components and presets", () => {
+  it("ships nothing, saves a selection's verbatim block, and inserts it back", () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    editor.button("Devtools").click();
+    editor.button("Saved").click();
+    serveEdits();
+    // No invented content: the panel is empty until the user fills it.
+    expect(editor.text("haloBody")).toContain("Nothing saved yet");
+    expect(savedComponents).toEqual({});
+
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    const name = editor.document.querySelector<HTMLInputElement>("#haloBody input.text")!;
+    name.value = "corner tag";
+    name.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("input"));
+    editor.haloClick("Save selection");
+    serveEdits();
+
+    expect(Object.keys(savedComponents)).toEqual(["corner tag"]);
+    expect(savedComponents["corner tag"]).toContain("px_h_anchored");
+    expect(editor.text("haloBody")).toContain("corner tag");
+
+    const before = doc;
+    editor.haloClick("Insert");
+    serveEdits();
+    // An insertRaw of the stored bytes: the widget is in the file twice now.
+    expect(doc).not.toBe(before);
+    expect(doc.split("px_h_anchored")).toHaveLength(3);
+  });
+
+  it("a preset is saved from the inspector and applied to the whole selection as ONE batch", () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    const anchored = centreOf(layout, "px_h_anchored");
+    editor.click(anchored.x, anchored.y);
+    serveWidgetInfo(editor, doc);
+
+    const name = editor.document.querySelector<HTMLInputElement>(
+      '#inspector input[placeholder="Preset name"]'
+    )!;
+    name.value = "corner";
+    name.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("input"));
+    // The button names the count, and the count is the widget's OWN rows.
+    const save = [...editor.document.querySelectorAll<HTMLButtonElement>("#inspector button")].find((b) =>
+      (b.textContent ?? "").startsWith("Save ")
+    )!;
+    save.click();
+    serveEdits();
+
+    expect(Object.keys(savedPresets)).toEqual(["corner"]);
+    const saved = savedPresets["corner"];
+    expect(saved.map((p) => p.key)).toContain("parentanchor");
+    // Inherited rows are another file's bytes and are not part of a preset.
+    expect(saved.every((p) => p.value.length > 0)).toBe(true);
+
+    editor.button("Devtools").click();
+    editor.button("Saved").click();
+    serveEdits();
+    const button = centreOf(layoutOf(doc), "px_h_button");
+    editor.click(button.x, button.y);
+    editor.click(anchored.x, anchored.y, { shiftKey: true });
+    editor.haloClick("Apply");
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toHaveLength(2);
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(1);
+    expect(doc).toContain("parentanchor = bottom|right");
+    // The other member took the preset too.
+    expect(doc.split("parentanchor = bottom|right")).toHaveLength(3);
+  });
+
+  it("forgetting a component leaves the document alone", () => {
+    const layout = openDoc(HALO, "halo.gui");
+    serveEdits();
+    savedComponents = { spare: 'widget = { name = "px_spare" size = { 4 4 } }\n' };
+    editor.button("Devtools").click();
+    editor.button("Saved").click();
+    serveEdits();
+    expect(editor.text("haloBody")).toContain("spare");
+
+    const before = doc;
+    editor.click(centreOf(layout, "px_h_anchored").x, centreOf(layout, "px_h_anchored").y);
+    editor.haloClick("Forget");
+    serveEdits();
+    expect(savedComponents).toEqual({});
+    expect(doc).toBe(before);
+  });
+});
+
+describe("the texture inspector", () => {
+  it("reports the sheet's size and its frame grid for the selected widget", () => {
+    const sheetDoc = [
+      'icon = { name = "px_ti_icon"',
+      "\tposition = { 0 0 }",
+      "\tsize = { 32 32 }",
+      '\ttexture = "gfx/px_fixtures/framestrip.dds"',
+      "\tframesize = { 32 32 }",
+      "\tframe = 3",
+      "}",
+      "",
+    ].join("\n");
+    openDoc(sheetDoc, "sheet.gui");
+    serveEdits();
+    editor.button("Devtools").click();
+    editor.button("Texture").click();
+    editor.click(16, 16);
+    serveWidgetInfo(editor, doc);
+
+    const body = editor.text("haloBody");
+    expect(body).toContain("framestrip.dds");
+    expect(body).toContain("fill:");
+    // No roots in this stub, so the header could not be read: the panel says
+    // that rather than drawing a grid it cannot justify.
+    expect(body).toContain("not found under any root");
+  });
+
+  it("says plainly when the widget draws nothing", () => {
+    const layout = openHalo();
+    editor.button("Texture").click();
+    const at = centreOf(layout, "px_h_anchored");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+    expect(editor.text("haloBody")).toContain("draws no texture");
   });
 });

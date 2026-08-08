@@ -29,10 +29,21 @@
  * one `applyOps` message, one server request, one document change and one undo
  * step, and each member's own verdict comes back with it, so a refused member
  * is named in the server's own words while the rest go through.
+ *
+ * G5 stage 2 is the DEVTOOLS HALO and the browsers, and it adds a fourth rule
+ * that only applies to them: A CLOSED PANEL COSTS NOTHING. Every surface below
+ * is behind a toggle, and while the toggle is off no request is sent, no scene
+ * is walked and no overlay is drawn — which is why the placement trace is a
+ * flag on `requestWidgetInfo` rather than a second request, why the heatmap is
+ * a mode the painter tests once, and why the halo's own requests are debounced
+ * on selection change and never fire inside a drag frame.
  */
 import type {
+  GuiDependenciesResult,
   GuiLayoutResult,
   GuiSourceOp,
+  GuiVisibilityCheck,
+  GuiVisibilityMode,
   GuiVocabularyEntry,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
@@ -44,7 +55,7 @@ import {
   type AnchorX,
   type AnchorY,
 } from "@px-lsp/server/gui/anchorSpec";
-import type { AppToHost, EditProperty } from "../messages";
+import type { AppToHost, EditProperty, SavedComponent, SavedPreset, TextureEntry } from "../messages";
 import { connectHost } from "./host";
 import {
   buildScene,
@@ -55,7 +66,15 @@ import {
   type SceneItem,
   type SceneRect,
 } from "./scene";
-import { drawScene, resetImageCache, type DrawMasks, type Images, WORLD_H, WORLD_W } from "./render";
+import {
+  drawScene,
+  resetImageCache,
+  type DrawMasks,
+  type DrawPulse,
+  type Images,
+  WORLD_H,
+  WORLD_W,
+} from "./render";
 import { hitRect, hitStack, marqueeHits, nextInStack } from "./hitTest";
 import { indexOfSelection, outermost, selectionAt, toggleSelected, type Selection } from "./selection";
 import { ancestorKeys, rowKey, treeRows } from "./tree";
@@ -63,6 +82,10 @@ import { inspectorRows, widgetTitle, type InspectorRow } from "./inspector";
 import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
 import { alignDeltas, distributeDeltas, type AlignMode } from "./align";
 import { containerRows, paletteLabel, paletteRows } from "./palette";
+import { browserGroups, usingValue, vocabularyDetail } from "./browse";
+import { buildHeatmap, diffScenes, HEATMAP_MODES, pulseNote, statsLine, type HeatmapMode } from "./devtools";
+import { constraintOverlay, num, overrideRows, placementReport, type ConstraintOverlay } from "./placement";
+import { textureFolder, textureName, texturePage, textureSummary, textureValue, thumbGrid } from "./textures";
 import { GRID_STEP, MOVE_EDGES, snapRect, type Guide, type SnapConfig, type SnapResult } from "./snap";
 import {
   baseOf,
@@ -87,15 +110,24 @@ const treeEl = document.getElementById("tree") as HTMLDivElement;
 const layersEl = document.getElementById("layers") as HTMLDivElement;
 const focusBarEl = document.getElementById("focusBar") as HTMLDivElement;
 const inspectorEl = document.getElementById("inspector") as HTMLDivElement;
-const statusEl = document.getElementById("status") as HTMLDivElement;
+const statusEl = document.getElementById("status") as HTMLSpanElement;
+const statsEl = document.getElementById("stats") as HTMLSpanElement;
+const visibilityBadgeEl = document.getElementById("visibilityBadge") as HTMLSpanElement;
 const toastEl = document.getElementById("toast") as HTMLDivElement;
 const metaEl = document.getElementById("meta") as HTMLSpanElement;
 const zoomLabel = document.getElementById("zoomLabel") as HTMLSpanElement;
 const outlinesEl = document.getElementById("outlines") as HTMLInputElement;
 const snapToggle = document.getElementById("snap") as HTMLInputElement;
 const gridToggle = document.getElementById("grid") as HTMLInputElement;
+const constraintsToggle = document.getElementById("constraints") as HTMLInputElement;
+const pulsesToggle = document.getElementById("pulses") as HTMLInputElement;
+const heatmapSelect = document.getElementById("heatmap") as HTMLSelectElement;
 const paletteEl = document.getElementById("palette") as HTMLDivElement;
 const paletteToggleEl = document.getElementById("paletteToggle") as HTMLButtonElement;
+const haloEl = document.getElementById("halo") as HTMLDivElement;
+const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
+const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
+const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
@@ -152,6 +184,24 @@ let flashIndex: number | null = null;
 const masks: DrawMasks = { hidden: null, dim: null };
 /** What the canvas hit-test skips: hidden, locked, or outside the focus. */
 let skipMask: Uint8Array | null = null;
+
+/**
+ * The three canvas devtools, all null while their toggle is off, which is what
+ * makes them free: the painter tests one field each and the scene is never
+ * walked for a mode nobody asked for.
+ */
+let heat: ReturnType<typeof buildHeatmap> = null;
+let constraints: ConstraintOverlay | null = null;
+let pulse: DrawPulse | null = null;
+let pulseTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The stats line's four numbers, and the flag that arms the paint measurement. */
+let measurePaint = false;
+let lastSceneMs = 0;
+let lastPaintMs = 0;
+let lastTimings = { parseMs: 0, defsMs: 0, layoutMs: 0, totalMs: 0 };
+/** The scene the last push replaced: what a pulse diffs against. */
+let previousScene: Scene | null = null;
 
 function selectedItem(): SceneItem | null {
   return selected === null ? null : (scene.items[selected] ?? null);
@@ -228,6 +278,23 @@ function markSubtree(mask: Uint8Array, index: number | undefined): void {
 }
 
 function draw(): void {
+  // Only the repaint that FOLLOWS a layout is timed: two clock reads per frame
+  // would be two clock reads inside a drag frame, and the stats line is a
+  // per-push readout anyway (devtools.ts).
+  const t0 = measurePaint ? performance.now() : 0;
+  paintScene();
+  if (!measurePaint) return;
+  measurePaint = false;
+  lastPaintMs = performance.now() - t0;
+  statsEl.textContent = statsLine({
+    timings: lastTimings,
+    sceneMs: lastSceneMs,
+    paintMs: lastPaintMs,
+    widgets: scene.count,
+  });
+}
+
+function paintScene(): void {
   const w = stage.clientWidth;
   const h = stage.clientHeight;
   canvas.width = w;
@@ -266,6 +333,9 @@ function draw(): void {
       // the slot a palette entry would be inserted into.
       dropLine: paletteDrag?.line ?? gesture?.drop?.line,
       readout: live && rect ? { x: rect.x, y: rect.y, text: geometry(rect) } : undefined,
+      heatmap: heat?.values ?? null,
+      constraints: constraintsToggle.checked ? (constraints ?? undefined) : undefined,
+      pulse: pulse ?? undefined,
     }
   );
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -818,6 +888,48 @@ function renderTools(item: SceneItem): void {
     // showing a menu with nothing in it.
     inspectorEl.appendChild(el("div", "section", "Open the palette to wrap this in a container."));
   }
+
+  // A preset is saved FROM the inspector because the rows it saves are the ones
+  // shown here: the widget's own, the ones it authored rather than inherited.
+  const local = localProperties();
+  if (local.length > 0) {
+    const presetTools = el("div", "tools");
+    const nameInput = document.createElement("input");
+    nameInput.className = "val";
+    nameInput.style.textAlign = "left";
+    nameInput.placeholder = "Preset name";
+    nameInput.value = presetName;
+    nameInput.spellcheck = false;
+    nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
+    nameInput.addEventListener("input", () => {
+      presetName = nameInput.value;
+    });
+    presetTools.appendChild(nameInput);
+    const save = el("button", undefined, `Save ${local.length} as preset`) as HTMLButtonElement;
+    save.title = `Store this widget's OWN ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`;
+    save.addEventListener("click", () => {
+      const name = presetName.trim();
+      if (name.length === 0) {
+        toast("Give the preset a name first.", "info");
+        return;
+      }
+      host.send({ type: "savePreset", name, properties: local });
+      toast(`Saved ${local.length} propert${local.length === 1 ? "y" : "ies"} as "${name}".`, "info");
+    });
+    presetTools.appendChild(save);
+    inspectorEl.appendChild(presetTools);
+  }
+}
+
+let presetName = "";
+
+/** The selected widget's own authored rows: what a preset is worth saving from. */
+function localProperties(): EditProperty[] {
+  const item = selectedItem();
+  if (!item || !info || infoLine !== item.line) return [];
+  return inspectorRows(info)
+    .filter((row) => row.local)
+    .map((row) => ({ key: row.key, value: row.value }));
 }
 
 /**
@@ -1140,7 +1252,7 @@ function select(
   } else if (infoLine !== item.line) {
     info = null;
     infoLine = null;
-    host.send({ type: "requestWidgetInfo", line: item.line });
+    askWidgetInfo(item.line);
   }
   // Reveal the row: expanding an ancestor changes the row list, and only then
   // is a rebuild worth it. A tree can be 13,000 rows deep (window_character),
@@ -1155,8 +1267,22 @@ function select(
   syncLayers();
   if (focusIndex === null) renderFocusBar();
   renderInspector();
+  // The overlay and the halo both read the selection; both are no-ops while
+  // their toggles are off, and the halo's own requests are debounced so a click
+  // through a tree does not fire one per row.
+  constraints = null;
+  if (haloOpen()) scheduleHaloRefresh();
   statusEl.textContent = statusLine();
   draw();
+}
+
+/**
+ * The inspector's read, plus the "why is it here" trace when the panel that
+ * shows it is open. One request either way: two answers echoing the same line
+ * would race, and the plainer one landing last would silently drop the trace.
+ */
+function askWidgetInfo(line: number): void {
+  host.send({ type: "requestWidgetInfo", line, placement: wantsPlacement() || undefined });
 }
 
 function statusLine(): string {
@@ -1170,7 +1296,8 @@ function statusLine(): string {
         ? ` · selected ${widgetTitle(item)}${item.editable ? "" : " (synthetic)"}`
         : "";
   const focused = focusIndex === null ? "" : ` · focused on ${widgetTitle(scene.items[focusIndex])}`;
-  return `${scene.count} widgets · ${file}${estimated}${focused}${picked}`;
+  const moved = pulseNoteText ? ` · ${pulseNoteText}` : "";
+  return `${scene.count} widgets · ${file}${estimated}${focused}${picked}${moved}`;
 }
 
 function loadTextures(urls: Record<string, string | null>): void {
@@ -1193,10 +1320,26 @@ function loadTextures(urls: Record<string, string | null>): void {
   }
 }
 
-function onLayout(result: GuiLayoutResult, textures: Record<string, string | null>, name: string): void {
+function onLayout(
+  result: GuiLayoutResult,
+  textures: Record<string, string | null>,
+  name: string,
+  visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined
+): void {
   file = name;
   defsFiles = result.defsFiles;
+  previousScene = scene.items.length > 0 ? scene : null;
+  const t0 = performance.now();
   scene = buildScene(result.nodes);
+  lastSceneMs = performance.now() - t0;
+  lastTimings = result.timings ?? lastTimings;
+  // The host is where a visibility mode lives, so what it echoes is the truth
+  // and the app keeps no copy that could disagree with the canvas.
+  visibilityMode = visibility?.mode ?? "showAll";
+  visibilityChecks = visibility?.checks ?? {};
+  visibilityFound = result.visibilityChecks ?? [];
+  renderVisibilityBadge();
+  markPulse();
   // The truth arrived: draw indices, rects and source values are all new, so
   // any preview standing in for it goes, whether it was this editor's write or
   // a keystroke in the text editor.
@@ -1212,6 +1355,7 @@ function onLayout(result: GuiLayoutResult, textures: Record<string, string | nul
   // Every path-keyed view (eye, lock, solo, focus) re-resolves against the new
   // draw indices before anything reads a mask.
   rebuildMasks();
+  rebuildHeatmap();
   renderFocusBar();
   // The document changed under the selection: find every member again by its
   // own identity, and re-read the primary's properties, whose lines may have
@@ -1230,12 +1374,62 @@ function onLayout(result: GuiLayoutResult, textures: Record<string, string | nul
     fitAndCenter();
   }
   const inserted = takePendingSelect();
+  // The next repaint is the one the stats line reports: it is the first full
+  // paint of this scene, which is what "what did this push cost" means.
+  measurePaint = true;
   select(inserted ?? restored, { reveal: false, rebuildTree: true, keepOthers: inserted === null });
   // The palette lists this document's own templates and types, and an edit can
   // add one, so an open palette re-asks. The first layout asks too even with
   // the palette closed: the inspector's "wrap in" menu is built from the same
   // vocabulary and must not be empty until someone opens a panel.
   if (paletteOpen() || !vocabularyAsked) askVocabulary();
+  // A document change can change what it depends on, so an open dependency
+  // panel re-asks; every other halo surface is redrawn from what it has.
+  if (haloOpen()) {
+    if (haloTab === "uses") askDependencies();
+    renderHalo();
+  }
+}
+
+/**
+ * The widgets this push moved, flashed. Off by default because the diff is a
+ * Map of the whole previous scene and a document can hold 13,700 widgets: it is
+ * cheap per push and it is not free, so it is a toggle like the grid.
+ *
+ * The fade runs on a timer rather than on animation frames: a repaint that
+ * schedules the next repaint is a loop, and the canvas already has one of those
+ * for gestures.
+ */
+const PULSE_STEPS = 6;
+const PULSE_STEP_MS = 70;
+
+function markPulse(): void {
+  if (pulseTimer) clearTimeout(pulseTimer);
+  pulseTimer = undefined;
+  pulse = null;
+  pulseNoteText = null;
+  if (!pulsesToggle.checked) return;
+  const diff = diffScenes(previousScene, scene);
+  const note = pulseNote(diff);
+  if (!note) return;
+  pulse = { rects: diff.changed.map((i) => hitRect(scene.items[i])), alpha: 1 };
+  pulseNoteText = note;
+  fadePulse(PULSE_STEPS);
+}
+
+function fadePulse(step: number): void {
+  pulseTimer = setTimeout(() => {
+    pulseTimer = undefined;
+    if (!pulse) return;
+    if (step <= 1) {
+      pulse = null;
+      draw();
+      return;
+    }
+    pulse = { rects: pulse.rects, alpha: (step - 1) / PULSE_STEPS };
+    draw();
+    fadePulse(step - 1);
+  }, PULSE_STEP_MS);
 }
 
 /**
@@ -1280,7 +1474,7 @@ const host = connectHost((message) => {
       statusEl.textContent = `Laying out ${message.file}…`;
       return;
     case "layout":
-      onLayout(message.result, message.textures, message.file);
+      onLayout(message.result, message.textures, message.file, message.visibility);
       return;
     case "widgetInfo": {
       const item = selectedItem();
@@ -1288,7 +1482,12 @@ const host = connectHost((message) => {
       if (!item || item.line !== message.line) return;
       info = message.info;
       infoLine = message.line;
+      // The constraint overlay and the "why" panel are the same answer read two
+      // ways, so both are refreshed from it and neither asks a second time.
+      constraints = info ? constraintOverlay(info) : null;
       renderInspector();
+      if (haloOpen()) renderHalo();
+      draw();
       return;
     }
     case "editVerdict": {
@@ -1301,6 +1500,33 @@ const host = connectHost((message) => {
       vocabulary = message.entries;
       vocabularyTotal = message.total;
       renderPalette();
+      renderInspector();
+      if (haloOpen() && haloTab === "types") renderHalo();
+      return;
+    case "dependencies": {
+      // Echoed like widgetInfo: an answer for a line the selection has left is
+      // an answer about a widget the panel is no longer showing.
+      if (message.line !== dependenciesLine) return;
+      dependencies = message.result;
+      dependenciesPending = false;
+      if (haloOpen() && haloTab === "uses") renderHalo();
+      return;
+    }
+    case "textureList":
+      textureEntries = message.entries;
+      textureTotal = message.total;
+      textureRootsKnown = message.roots;
+      texturesPending = false;
+      if (haloOpen() && haloTab === "art") renderHalo();
+      return;
+    case "thumbnails":
+      Object.assign(thumbUrls, message.urls);
+      if (haloOpen() && (haloTab === "art" || haloTab === "texture")) renderHalo();
+      return;
+    case "userData":
+      components = message.components;
+      presets = message.presets;
+      if (haloOpen() && haloTab === "saved") renderHalo();
       renderInspector();
       return;
     case "error":
@@ -2141,24 +2367,36 @@ function copySelection(): void {
  * is no container to name, so it says so.
  */
 function pasteIntoSelection(): void {
-  const item = selectedItem();
-  if (!item || !canEdit(item)) {
-    toast("Select a widget first: a paste needs a container to go into.", "info");
-    return;
-  }
-  const parent = parentIndex(scene, selected!);
-  const container = parent === null ? null : scene.items[parent];
-  const sibling = container && canEdit(container) && item.srcIndex !== undefined;
+  const target = pasteTarget();
+  if (!target) return;
   awaitVerdict(
-    (id) =>
-      sibling
-        ? { type: "pasteInto", id, line: container.line, index: item.srcIndex! + 1 }
-        : { type: "pasteInto", id, line: item.line },
+    (id) => ({ type: "pasteInto", id, line: target.line, index: target.index }),
     (verdict) => {
       if (verdict.refused) toast(verdict.refused, "refused");
       else if (verdict.warning) toast(verdict.warning, "warned");
     }
   );
+}
+
+/**
+ * Where a paste (or a saved component) lands: as the selected widget's next
+ * SIBLING, which is where a paste after a copy belongs. With a root widget
+ * selected (nothing to be a sibling inside) it appends into that widget
+ * instead, and with nothing selected there is no container to name, so it says
+ * so.
+ */
+function pasteTarget(): { line: number; index?: number } | null {
+  const item = selectedItem();
+  if (!item || !canEdit(item)) {
+    toast("Select a widget first: a paste needs a container to go into.", "info");
+    return null;
+  }
+  const parent = parentIndex(scene, selected!);
+  const container = parent === null ? null : scene.items[parent];
+  if (container && canEdit(container) && item.srcIndex !== undefined) {
+    return { line: container.line, index: item.srcIndex + 1 };
+  }
+  return { line: item.line };
 }
 
 /** A batch's answer: the whole gesture's refusal, or the members that skipped. */
@@ -2170,6 +2408,912 @@ function reportBatch(verdict: EditVerdict): void {
   const refused = distinctRefusals(verdict);
   if (refused.length > 0) toast(refused.join(" "), "warned");
   else if (verdict.warning) toast(verdict.warning, "warned");
+}
+
+// ---- the devtools halo ------------------------------------------------------
+
+/**
+ * Seven surfaces behind one toggle and one tab strip, and every one of them
+ * free while it is closed. That is not a nicety: the placement trace costs a
+ * full server-side layout, the dependency walk reads script files, and the
+ * texture browser walks a game's gfx tree, so a panel that asked for its data
+ * whether or not anyone was looking would make selecting a widget expensive.
+ *
+ * The tabs are all READERS except the last three, and those three write through
+ * exactly the same guarded paths the inspector and the palette use: a texture
+ * pick is a `setProperties`, a template is `using = Name`, a preset is one
+ * batched `setProperties`, and a component is an `insertRaw`. Nothing here has
+ * a write path of its own.
+ */
+type HaloTab = "why" | "texture" | "visible" | "uses" | "types" | "art" | "saved";
+
+const HALO_TABS: { tab: HaloTab; label: string; title: string }[] = [
+  { tab: "why", label: "Why", title: "Why the selected widget's rect is where it is" },
+  { tab: "texture", label: "Texture", title: "The sheets the selected widget draws, and the frame it shows" },
+  { tab: "visible", label: "Visible", title: "How the preview treats conditional visibility" },
+  { tab: "uses", label: "Uses", title: "The scripted_guis, events and loc keys this reaches" },
+  { tab: "types", label: "Types", title: "The widget types and templates available here" },
+  { tab: "art", label: "Art", title: "Browse the .dds files under the mod's and the game's gfx trees" },
+  { tab: "saved", label: "Saved", title: "Your saved components and property presets" },
+];
+
+let haloTab: HaloTab = "why";
+
+/** The dependency answer, and the line it was asked for (echo check, like widgetInfo). */
+let dependencies: GuiDependenciesResult | null = null;
+let dependenciesLine: number | undefined = undefined;
+let dependenciesPending = false;
+/** The Uses tab's scope switch: the selection's subtree, or the whole file. */
+let dependenciesWholeFile = false;
+
+/** The texture browser's last answer, and the thumbnails the host has served. */
+let textureEntries: TextureEntry[] = [];
+let textureTotal = 0;
+let textureRootsKnown = true;
+let textureQuery = "";
+let texturesPending = false;
+let texturesAsked = false;
+const thumbUrls: Record<string, string | null> = {};
+
+/** The saved user data, which lives on the host: this is a copy for drawing. */
+let components: SavedComponent[] = [];
+let presets: SavedPreset[] = [];
+let userDataAsked = false;
+
+/** The type/template browser's filter and its picked row. */
+let browserQuery = "";
+let browserPick: string | null = null;
+
+/** The conditional-visibility mode the CANVAS was laid out with (the host's). */
+let visibilityMode: GuiVisibilityMode = "showAll";
+let visibilityChecks: Record<string, boolean> = {};
+let visibilityFound: GuiVisibilityCheck[] = [];
+
+/** The pulse note the status line carries until the next layout push. */
+let pulseNoteText: string | null = null;
+
+function haloOpen(): boolean {
+  return !haloEl.hidden;
+}
+
+/**
+ * The "why" trace is the one halo read that costs a server-side layout, so it
+ * is asked for only by the two surfaces that draw it: the panel that reads it as
+ * prose, and the overlay that reads it as geometry. They share the ONE request,
+ * because they are the same answer read two ways.
+ */
+function wantsPlacement(): boolean {
+  return constraintsToggle.checked || (haloOpen() && haloTab === "why");
+}
+
+function toggleHalo(): void {
+  haloEl.hidden = !haloEl.hidden;
+  haloToggleEl.classList.toggle("on", haloOpen());
+  if (!haloOpen()) return;
+  renderHaloTabs();
+  askForTab();
+  renderHalo();
+}
+
+function setHaloTab(tab: HaloTab): void {
+  if (haloTab === tab) return;
+  const wanted = wantsPlacement();
+  haloTab = tab;
+  renderHaloTabs();
+  // The placement flag rides on the widget-info request, so a tab change that
+  // turns it on or off has to re-ask. A tab change that does neither does not.
+  if (wanted !== wantsPlacement()) reReadWidgetInfo();
+  askForTab();
+  renderHalo();
+}
+
+/** Ask for whatever the newly shown tab needs and does not already have. */
+function askForTab(): void {
+  if (haloTab === "uses") askDependencies();
+  if (haloTab === "types" && !vocabularyAsked) askVocabulary();
+  if (haloTab === "art" && !texturesAsked) askTextures();
+  if (haloTab === "saved" && !userDataAsked) {
+    userDataAsked = true;
+    host.send({ type: "requestUserData" });
+  }
+}
+
+/** Re-read the selected widget's properties, with the placement flag as it is now. */
+function reReadWidgetInfo(): void {
+  const item = selectedItem();
+  if (!item || item.line === undefined || !item.editable) return;
+  info = null;
+  infoLine = null;
+  askWidgetInfo(item.line);
+}
+
+/**
+ * A selection change moves through the halo on a debounce. Clicking down a tree
+ * or dragging a marquee moves the selection many times in a few hundred
+ * milliseconds, and each of those would otherwise be a server-side layout (the
+ * placement trace) or a script walk (the dependency panel).
+ */
+const HALO_DEBOUNCE_MS = 150;
+let haloTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleHaloRefresh(): void {
+  if (haloTimer) clearTimeout(haloTimer);
+  haloTimer = setTimeout(() => {
+    haloTimer = undefined;
+    if (!haloOpen()) return;
+    askForTab();
+    renderHalo();
+  }, HALO_DEBOUNCE_MS);
+}
+
+function askDependencies(): void {
+  const item = selectedItem();
+  const line = dependenciesWholeFile || !canEdit(item) ? undefined : item.line;
+  if (dependenciesPending && line === dependenciesLine) return;
+  dependenciesLine = line;
+  dependencies = null;
+  dependenciesPending = true;
+  host.send({ type: "requestDependencies", line });
+}
+
+function askTextures(): void {
+  texturesAsked = true;
+  texturesPending = true;
+  host.send({ type: "requestTextureList", query: textureQuery });
+}
+
+function renderHaloTabs(): void {
+  haloTabsEl.textContent = "";
+  for (const entry of HALO_TABS) {
+    const node = el("button", entry.tab === haloTab ? "on" : undefined, entry.label) as HTMLButtonElement;
+    node.title = entry.title;
+    node.addEventListener("click", () => setHaloTab(entry.tab));
+    haloTabsEl.appendChild(node);
+  }
+}
+
+function renderHalo(): void {
+  if (!haloOpen()) return;
+  haloBodyEl.textContent = "";
+  switch (haloTab) {
+    case "why":
+      renderWhy();
+      return;
+    case "texture":
+      renderTextureTab();
+      return;
+    case "visible":
+      renderVisible();
+      return;
+    case "uses":
+      renderUses();
+      return;
+    case "types":
+      renderTypes();
+      return;
+    case "art":
+      renderArt();
+      return;
+    case "saved":
+      renderSaved();
+      return;
+  }
+}
+
+/** The selected widget's info, but only when it is the answer for THIS selection. */
+function selectedInfo(): GuiWidgetInfo | null {
+  const item = selectedItem();
+  return item && info && infoLine === item.line ? info : null;
+}
+
+function note(text: string): void {
+  haloBodyEl.appendChild(el("div", "note", text));
+}
+
+// ---- tab: why is it here ----------------------------------------------------
+
+/**
+ * The anchor sum, term by term, with each term's own dx/dy in a column so the
+ * addition can be checked by eye, and the notes a sum cannot carry: the
+ * container that assigned the slot instead, the position it dropped doing so,
+ * the clip that cuts the result, and every property that overrides another.
+ */
+function renderWhy(): void {
+  const item = selectedItem();
+  if (!item) {
+    note("Nothing selected. Click a widget on the canvas.");
+    return;
+  }
+  const widgetInfo = selectedInfo();
+  if (!widgetInfo) {
+    note(
+      canEdit(item)
+        ? "Reading the placement trace…"
+        : "This widget is spliced in from a template or a type, so this file has no declaration to trace."
+    );
+    return;
+  }
+  const report = placementReport(widgetInfo);
+  if (!report) {
+    note("The layout did not reach this widget, so it has no rect to explain.");
+    return;
+  }
+
+  const head = el("div", "head");
+  head.appendChild(el("div", undefined, widgetTitle(item)));
+  head.appendChild(
+    el(
+      "div",
+      "chain",
+      `${num(report.rect.x)}, ${num(report.rect.y)} · ${num(report.rect.w)} x ${num(report.rect.h)}`
+    )
+  );
+  haloBodyEl.appendChild(head);
+
+  if (report.rows.length > 0) {
+    haloBodyEl.appendChild(el("div", "section", "Where the origin comes from"));
+    const terms = el("div", "terms");
+    report.rows.forEach((row, i) => {
+      const line = el("div", i === report.rows.length - 1 ? "term sum" : "term");
+      line.appendChild(el("span", "what", row.label));
+      line.appendChild(el("span", "n", `${num(row.dx)}, ${num(row.dy)}`));
+      terms.appendChild(line);
+    });
+    haloBodyEl.appendChild(terms);
+  }
+  for (const line of report.notes) haloBodyEl.appendChild(el("div", "prose", line));
+
+  const overrides = overrideRows(widgetInfo.properties);
+  if (overrides.length === 0) return;
+  haloBodyEl.appendChild(el("div", "section", "What overrides what"));
+  for (const row of overrides) {
+    const prose = el("div", "prose");
+    prose.appendChild(el("span", undefined, `${row.key} = ${row.value}`));
+    prose.appendChild(el("span", "chain", ` overrides ${row.was} from ${row.from}`));
+    haloBodyEl.appendChild(prose);
+  }
+}
+
+// ---- tab: the texture inspector ---------------------------------------------
+
+/** How big a frame-sheet thumbnail is drawn, in CSS pixels. */
+const THUMB_BOX = { w: 260, h: 150 };
+
+/**
+ * One row per texture the widget draws: the sheet's pixel size, its frame grid
+ * when it has one, and the sheet itself with the current cell picked out. The
+ * IMAGE comes from the host's own pipeline (the layout push already resolved
+ * every texture in the document to a URL); only the grid is drawn here.
+ */
+function renderTextureTab(): void {
+  const item = selectedItem();
+  const widgetInfo = selectedInfo();
+  if (!item) {
+    note("Nothing selected. Click a widget on the canvas.");
+    return;
+  }
+  if (!widgetInfo) {
+    note("Reading this widget's textures…");
+    return;
+  }
+  const textures = widgetInfo.textures ?? [];
+  if (textures.length === 0) {
+    note(`${widgetTitle(item)} draws no texture.`);
+    return;
+  }
+  for (const texture of textures) {
+    const head = el("div", "head");
+    head.appendChild(el("div", undefined, `${texture.source}: ${textureName(texture.path)}`));
+    head.appendChild(el("div", "chain", texture.path));
+    head.appendChild(el("div", "chain", textureSummary(texture)));
+    haloBodyEl.appendChild(head);
+
+    const grid = thumbGrid(texture, THUMB_BOX);
+    const url = images[texture.path]?.src ?? thumbUrls[texture.path] ?? null;
+    if (!grid || !url) {
+      note(
+        url
+          ? "The sheet's own pixel size could not be read, so no frame grid is drawn over it."
+          : "No decoded image for this path, so there is nothing to draw the grid on."
+      );
+      continue;
+    }
+    haloBodyEl.appendChild(frameCanvas(url, grid));
+  }
+}
+
+/** The sheet with its grid, drawn once into its own canvas (never the main one). */
+function frameCanvas(url: string, grid: ReturnType<typeof thumbGrid>): HTMLElement {
+  const node = document.createElement("canvas");
+  node.className = "thumb";
+  node.width = THUMB_BOX.w;
+  node.height = THUMB_BOX.h;
+  const context = node.getContext("2d");
+  if (!context || !grid) return node;
+  const image = new Image();
+  const paint = (): void => {
+    context.clearRect(0, 0, node.width, node.height);
+    context.drawImage(image, grid.image.x, grid.image.y, grid.image.w, grid.image.h);
+    if (grid.columns > 1 || grid.rows > 1) {
+      context.strokeStyle = "rgba(255,255,255,0.35)";
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let c = 1; c < grid.columns; c++) {
+        const x = grid.image.x + c * grid.cellW;
+        context.moveTo(x, grid.image.y);
+        context.lineTo(x, grid.image.y + grid.image.h);
+      }
+      for (let r = 1; r < grid.rows; r++) {
+        const y = grid.image.y + r * grid.cellH;
+        context.moveTo(grid.image.x, y);
+        context.lineTo(grid.image.x + grid.image.w, y);
+      }
+      context.stroke();
+    }
+    if (grid.current) {
+      context.strokeStyle = "#4fc1ff";
+      context.lineWidth = 2;
+      context.strokeRect(grid.current.x, grid.current.y, grid.current.w, grid.current.h);
+    }
+  };
+  image.onload = paint;
+  image.src = url;
+  return node;
+}
+
+// ---- tab: conditional visibility --------------------------------------------
+
+const VISIBILITY_MODES: { mode: GuiVisibilityMode; label: string; title: string }[] = [
+  { mode: "showAll", label: "Show all", title: "Keep every conditional widget: the safe default" },
+  { mode: "hideAll", label: "Hide all", title: "Collapse every widget whose visible is an expression" },
+  { mode: "evaluate", label: "Evaluate", title: "Decide each condition yourself, below" },
+];
+
+/**
+ * The three modes, and in `evaluate` a toggle per condition the layout met. The
+ * key is the condition SOURCE STRING, so two widgets written with the same
+ * condition share one toggle, which is what the wire says and what a designer
+ * expects.
+ */
+function renderVisible(): void {
+  const head = el("div", "head");
+  head.appendChild(el("div", undefined, "Conditional visibility"));
+  head.appendChild(
+    el(
+      "div",
+      "chain",
+      "A `visible` that is an expression cannot be evaluated in a static preview. Choose what the canvas should assume."
+    )
+  );
+  haloBodyEl.appendChild(head);
+
+  const tools = el("div", "tools");
+  for (const entry of VISIBILITY_MODES) {
+    const node = el(
+      "button",
+      entry.mode === visibilityMode ? "on" : undefined,
+      entry.label
+    ) as HTMLButtonElement;
+    node.title = entry.title;
+    if (entry.mode === visibilityMode) node.style.borderColor = "var(--vscode-focusBorder, #007fd4)";
+    node.addEventListener("click", () => sendVisibility(entry.mode, visibilityChecks));
+    tools.appendChild(node);
+  }
+  haloBodyEl.appendChild(tools);
+
+  if (visibilityFound.length === 0) {
+    note("No widget in this file has a conditional `visible`, so the mode changes nothing here.");
+    return;
+  }
+  haloBodyEl.appendChild(el("div", "section", `${visibilityFound.length} condition(s) the layout met`));
+  for (const check of visibilityFound) {
+    const label = el("label", "check") as HTMLLabelElement;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    // Unassigned behaves as shown (the wire's rule), so an unticked box means
+    // "assume false" and a ticked one means "assume true".
+    box.checked = visibilityChecks[check.key] !== false;
+    box.disabled = visibilityMode !== "evaluate";
+    box.addEventListener("change", () => {
+      sendVisibility("evaluate", { ...visibilityChecks, [check.key]: box.checked });
+    });
+    label.appendChild(box);
+    const text = el("span", undefined, check.key);
+    text.title = `${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
+    label.appendChild(text);
+    if (check.hidden) label.appendChild(el("span", "tag", "hidden"));
+    haloBodyEl.appendChild(label);
+  }
+}
+
+function sendVisibility(mode: GuiVisibilityMode, checks: Record<string, boolean>): void {
+  // Optimistic only for the badge and the buttons; the CANVAS changes when the
+  // host pushes the layout it computed, which is the only thing that can be
+  // said to be laid out this way.
+  host.send({ type: "setVisibility", mode, checks });
+}
+
+/**
+ * The badge is the whole honesty of the feature: a mode that hides a widget
+ * must never be silent, or a missing widget is a bug hunt. Visible whenever the
+ * mode is not the default, and clicking it opens the panel that set it.
+ */
+function renderVisibilityBadge(): void {
+  const off = visibilityMode === "showAll";
+  visibilityBadgeEl.hidden = off;
+  if (off) return;
+  const assigned = Object.values(visibilityChecks).filter((v) => v === false).length;
+  visibilityBadgeEl.textContent =
+    visibilityMode === "hideAll"
+      ? "visibility: hiding every conditional widget"
+      : `visibility: evaluating, ${assigned} condition(s) set to false`;
+}
+
+// ---- tab: what this reaches --------------------------------------------------
+
+/**
+ * The forward dependency surface: the scripted_guis this document (or this
+ * widget's subtree) calls, the events and on_actions they hand control to, and
+ * the loc keys it names. Every row with a definition site is a click-through,
+ * and a missing loc key is marked rather than left to be discovered in game.
+ */
+function renderUses(): void {
+  const item = selectedItem();
+  const head = el("div", "head");
+  head.appendChild(
+    el(
+      "div",
+      undefined,
+      dependenciesLine === undefined ? `Whole file: ${file}` : `Inside ${widgetTitle(item!)}`
+    )
+  );
+  haloBodyEl.appendChild(head);
+
+  const scope = el("label", "check") as HTMLLabelElement;
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = dependenciesWholeFile;
+  box.addEventListener("change", () => {
+    dependenciesWholeFile = box.checked;
+    askDependencies();
+    renderHalo();
+  });
+  scope.appendChild(box);
+  scope.appendChild(el("span", undefined, "The whole file, not just the selection"));
+  haloBodyEl.appendChild(scope);
+
+  if (!dependencies) {
+    note(dependenciesPending ? "Reading what this reaches…" : "The host could not answer that.");
+    return;
+  }
+
+  haloBodyEl.appendChild(el("div", "section", `scripted_gui (${dependencies.scriptedGuis.length})`));
+  if (dependencies.scriptedGuis.length === 0) {
+    note("This calls no scripted_gui, so it hands control to no script.");
+  }
+  for (const row of dependencies.scriptedGuis) {
+    const line = el("div", "prose");
+    line.appendChild(revealLink(row.name, row.file, row.line));
+    line.appendChild(
+      el("span", "chain", ` · ${row.uses} call site(s) across the gui tree, ${row.callLines.length} here`)
+    );
+    haloBodyEl.appendChild(line);
+    if (!row.file) haloBodyEl.appendChild(el("div", "chain missing", "  no scripted_gui by that name"));
+    for (const chain of row.chains) {
+      const entry = el("div", "prose");
+      entry.appendChild(el("span", "chain", "  → "));
+      entry.appendChild(revealLink(chain.name, chain.file, chain.line));
+      entry.appendChild(
+        el(
+          "span",
+          "chain",
+          chain.via.length === 0
+            ? ` (${chain.kind}, directly)`
+            : ` (${chain.kind}, via ${chain.via.join(" → ")})`
+        )
+      );
+      haloBodyEl.appendChild(entry);
+    }
+  }
+
+  haloBodyEl.appendChild(el("div", "section", `localization (${dependencies.locKeys.length})`));
+  if (dependencies.locKeys.length === 0) note("This names no localization key.");
+  for (const row of dependencies.locKeys) {
+    const line = el("div", "prose");
+    const key = el("span", row.missing ? "link missing" : "link", row.key);
+    key.title = row.missing
+      ? "No loc_key definition anywhere in the index: the game will print the key itself."
+      : (row.value ?? "");
+    // The key is named in THIS document, so the ordinary reveal is the right one.
+    key.addEventListener("click", () => host.send({ type: "reveal", line: row.line }));
+    line.appendChild(key);
+    line.appendChild(el("span", "chain", ` · ${row.prop}`));
+    if (row.missing) line.appendChild(el("span", "tag", "missing"));
+    else if (row.value) line.appendChild(el("span", "chain", ` · ${row.value}`));
+    haloBodyEl.appendChild(line);
+  }
+}
+
+/** A name that reveals its definition site, or plain text when there is none. */
+function revealLink(name: string, atFile: string | undefined, atLine: number | undefined): HTMLElement {
+  if (!atFile || atLine === undefined) return el("span", undefined, name);
+  const node = el("span", "link", name);
+  node.title = `${atFile}:${atLine + 1}`;
+  node.addEventListener("click", () => host.send({ type: "revealAt", file: atFile, line: atLine }));
+  return node;
+}
+
+// ---- tab: the type and template browser --------------------------------------
+
+/**
+ * The vocabulary read as a catalogue. A type is INSERTED through the same
+ * `insert` op the palette's drop uses; a template is APPLIED to the selected
+ * widget as `using = Name`, which is a plain guarded property write, because
+ * writing a template's name as a widget declaration would declare a widget the
+ * game does not know.
+ */
+function renderTypes(): void {
+  haloBodyEl.appendChild(
+    filterBox("Filter types and templates", browserQuery, (value) => {
+      browserQuery = value;
+      renderHalo();
+      focusFilter();
+    })
+  );
+  if (vocabulary.length === 0) {
+    note("No widget vocabulary for this game yet.");
+    return;
+  }
+  const groups = browserGroups(vocabulary, browserQuery);
+  if (groups.length === 0) {
+    note(`Nothing matches "${browserQuery}".`);
+    return;
+  }
+  for (const group of groups) {
+    haloBodyEl.appendChild(el("div", "section", group.title));
+    for (const entry of group.entries) {
+      const row = el("div", browserPick === entry.name ? "row picked" : "row");
+      row.appendChild(el("span", undefined, paletteLabel(entry)));
+      if (entry.count !== undefined) row.appendChild(el("span", "tag", String(entry.count)));
+      row.addEventListener("click", () => {
+        browserPick = browserPick === entry.name ? null : entry.name;
+        renderHalo();
+      });
+      haloBodyEl.appendChild(row);
+      if (browserPick !== entry.name) continue;
+      for (const detail of vocabularyDetail(entry)) {
+        haloBodyEl.appendChild(el("div", "chain", detail));
+      }
+      haloBodyEl.appendChild(browserActions(entry));
+    }
+    if (group.hidden > 0) {
+      haloBodyEl.appendChild(el("div", "note", `${group.hidden} more; type to filter.`));
+    }
+  }
+}
+
+/**
+ * A picked entry's two verbs. Both resolve the SELECTION AT CLICK TIME rather
+ * than at render time: a panel is rebuilt on a debounce, so a handler that
+ * closed over the selection it was drawn with would write to the widget the
+ * user had selected a moment ago.
+ */
+function browserActions(entry: GuiVocabularyEntry): HTMLElement {
+  const tools = el("div", "tools");
+  const writable = canEdit(selectedItem());
+  if (entry.kind === "template") {
+    const apply = el("button", undefined, `Apply as using = ${entry.name}`) as HTMLButtonElement;
+    apply.title = "Write `using` on the selected widget. Its own properties still win over the template's.";
+    apply.disabled = !writable;
+    apply.addEventListener("click", () => {
+      const target = selectedItem();
+      if (!canEdit(target)) {
+        toast("Select a widget with a declaration in this file first.", "info");
+        return;
+      }
+      guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
+    });
+    tools.appendChild(apply);
+    return tools;
+  }
+  const insert = el("button", undefined, "Insert here") as HTMLButtonElement;
+  insert.title = "Insert an instance next to the selected widget, through the same op a palette drop uses.";
+  insert.disabled = !writable;
+  insert.addEventListener("click", () => {
+    const at = pasteTarget();
+    if (!at) return;
+    sendOps(
+      "applyOps",
+      [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
+      (verdict) => {
+        if (verdict.refused) toast(verdict.refused, "refused");
+        else
+          toast(
+            `${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
+            "info"
+          );
+      }
+    );
+  });
+  tools.appendChild(insert);
+  return tools;
+}
+
+/**
+ * One property write, guards first: the check carries the value being written
+ * so the answer is exactly the commit's, and the commit only goes out if it
+ * passed. The same two-step the anchor picker uses.
+ */
+function guardedWrite(line: number, properties: EditProperty[]): void {
+  sendEdit("checkEdit", line, properties, (verdict) => {
+    if (verdict.refused) {
+      toast(verdict.refused, "refused");
+      return;
+    }
+    sendEdit("applyEdit", line, properties, (answer) => {
+      if (answer.refused) toast(answer.refused, "refused");
+      else if (answer.warning) toast(answer.warning, "warned");
+    });
+  });
+}
+
+// ---- tab: the texture browser -------------------------------------------------
+
+/**
+ * The `.dds` files under the mod's and the game's `gfx/` trees, enumerated by
+ * the HOST (the app has no file system) and thumbnailed through the host's
+ * existing decode cache. Picking one writes a texture property on the selected
+ * widget in the format the engine reads: a quoted, root-relative, forward-slash
+ * path (textures.ts `textureValue`).
+ */
+function renderArt(): void {
+  const item = selectedItem();
+  const keys = textureKeys();
+  const head = el("div", "head");
+  head.appendChild(el("div", undefined, "Textures under gfx/"));
+  head.appendChild(
+    el(
+      "div",
+      "chain",
+      canEdit(item)
+        ? `Picking one writes it on ${widgetTitle(item)}.`
+        : "Select a widget with a declaration in this file to pick one."
+    )
+  );
+  haloBodyEl.appendChild(head);
+
+  if (canEdit(item) && keys.length > 1) {
+    const tools = el("div", "tools");
+    tools.appendChild(el("span", undefined, "Write to"));
+    const select = document.createElement("select");
+    for (const key of keys) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = key;
+      if (key === texturePropertyKey) option.selected = true;
+      select.appendChild(option);
+    }
+    select.addEventListener("change", () => {
+      texturePropertyKey = select.value;
+    });
+    tools.appendChild(select);
+    haloBodyEl.appendChild(tools);
+  }
+
+  haloBodyEl.appendChild(
+    filterBox("Filter by path", textureQuery, (value) => {
+      textureQuery = value;
+      askTextures();
+      renderHalo();
+      focusFilter();
+    })
+  );
+
+  if (!textureRootsKnown) {
+    note("No mod or game folder is configured, so there is no gfx tree to walk.");
+    return;
+  }
+  if (textureEntries.length === 0) {
+    note(texturesPending ? "Walking the gfx trees…" : `No .dds path contains "${textureQuery}".`);
+    return;
+  }
+  const page = texturePage(textureEntries);
+  // Thumbnails only for what is on screen: the host decodes one image per path,
+  // and a whole listing would be a decode per file in the game.
+  const wanted = page.paths.filter((path) => thumbUrls[path] === undefined);
+  if (wanted.length > 0) host.send({ type: "requestThumbnails", paths: wanted });
+
+  for (const entry of page.rows) {
+    const row = el("div", "texRow");
+    const url = thumbUrls[entry.path];
+    if (url) {
+      const img = document.createElement("img");
+      img.className = "swatch";
+      img.src = url;
+      row.appendChild(img);
+    } else {
+      row.appendChild(el("span", "swatch"));
+    }
+    const names = el("div", "names");
+    names.appendChild(el("div", undefined, textureName(entry.path)));
+    names.appendChild(el("div", "chain", `${entry.source} · ${textureFolder(entry.path)}`));
+    row.appendChild(names);
+    row.title = entry.path;
+    row.addEventListener("click", () => {
+      // At click time, not at render time: the panel is rebuilt on a debounce
+      // and the selection may have moved on since it was drawn.
+      const target = selectedItem();
+      if (!canEdit(target)) {
+        toast("Select a widget with a declaration in this file first.", "info");
+        return;
+      }
+      guardedWrite(target.line, [{ key: texturePropertyKey, value: textureValue(entry.path) }]);
+    });
+    haloBodyEl.appendChild(row);
+  }
+  const hidden = textureTotal - page.rows.length;
+  if (hidden > 0) haloBodyEl.appendChild(el("div", "note", `${hidden} more; type to filter.`));
+}
+
+/** Which property a pick writes. `texture` unless the widget names another one. */
+let texturePropertyKey = "texture";
+
+/**
+ * The widget's own texture-valued keys, found by their VALUES rather than by a
+ * list of key names: a `.dds` in the value is what makes a property a texture,
+ * and the vanilla trees spell that key several ways.
+ */
+function textureKeys(): string[] {
+  const widgetInfo = selectedInfo();
+  const keys = new Set<string>(["texture"]);
+  for (const property of widgetInfo?.properties ?? []) {
+    if (/\.dds"?\s*$/i.test(property.value.trim())) keys.add(property.key);
+  }
+  const list = [...keys];
+  if (!list.includes(texturePropertyKey)) texturePropertyKey = "texture";
+  return list;
+}
+
+// ---- tab: saved components and presets ----------------------------------------
+
+/**
+ * The user's own library, which is the host's to keep (workspaceState) and the
+ * app's only to draw. NOTHING is bundled: a component or a preset this editor
+ * shipped would be a guess at what a mod's widgets look like, and the panel
+ * says it is empty rather than filling itself with invented content.
+ */
+function renderSaved(): void {
+  const item = selectedItem();
+
+  haloBodyEl.appendChild(el("div", "section", `Components (${components.length})`));
+  const saveTools = el("div", "tools");
+  const nameInput = document.createElement("input");
+  nameInput.className = "text";
+  nameInput.placeholder = "Name";
+  nameInput.value = componentName;
+  nameInput.spellcheck = false;
+  nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
+  nameInput.addEventListener("input", () => {
+    componentName = nameInput.value;
+  });
+  saveTools.appendChild(nameInput);
+  const save = el("button", undefined, "Save selection") as HTMLButtonElement;
+  save.title = "Store the selected widgets' verbatim block text under that name.";
+  save.disabled = selected === null;
+  save.addEventListener("click", () => saveSelectionAsComponent());
+  saveTools.appendChild(save);
+  haloBodyEl.appendChild(saveTools);
+
+  if (components.length === 0) {
+    note("Nothing saved yet. Select one or more widgets, name them, and save.");
+  }
+  for (const component of components) {
+    const row = el("div", "row");
+    row.appendChild(el("span", undefined, component.name));
+    row.appendChild(el("span", "tag", `${component.widgets}w`));
+    const insert = el("button", undefined, "Insert") as HTMLButtonElement;
+    insert.disabled = !canEdit(item);
+    insert.addEventListener("click", () => insertComponent(component.name));
+    row.appendChild(insert);
+    row.appendChild(forgetButton("component", component.name));
+    haloBodyEl.appendChild(row);
+  }
+
+  haloBodyEl.appendChild(el("div", "section", `Property presets (${presets.length})`));
+  if (presets.length === 0) {
+    note('Nothing saved yet. Use "Save preset" in the inspector to store a widget\'s own properties.');
+  }
+  for (const preset of presets) {
+    const row = el("div", "row");
+    row.appendChild(el("span", undefined, preset.name));
+    row.appendChild(el("span", "tag", `${preset.properties.length}`));
+    row.title = preset.properties.map((p) => `${p.key} = ${p.value}`).join("\n");
+    const apply = el("button", undefined, "Apply") as HTMLButtonElement;
+    apply.title = "Write every property of this preset onto the selection, as one undo step.";
+    apply.disabled = selected === null;
+    apply.addEventListener("click", () => applyPreset(preset));
+    row.appendChild(apply);
+    row.appendChild(forgetButton("preset", preset.name));
+    haloBodyEl.appendChild(row);
+  }
+}
+
+let componentName = "";
+
+function forgetButton(kind: "component" | "preset", name: string): HTMLElement {
+  const node = el("button", undefined, "Forget") as HTMLButtonElement;
+  node.title = `Remove "${name}" from your saved ${kind}s. The document is not touched.`;
+  node.addEventListener("click", () => host.send({ type: "forgetSaved", kind, name }));
+  return node;
+}
+
+function saveSelectionAsComponent(): void {
+  const name = componentName.trim();
+  if (name.length === 0) {
+    toast("Give the component a name first.", "info");
+    return;
+  }
+  const lines = selectionLines("saved");
+  if (!lines) return;
+  awaitVerdict(
+    (id) => ({ type: "saveComponent", id, name, lines }),
+    (verdict) => {
+      if (verdict.refused) toast(verdict.refused, "refused");
+      else toast(`Saved ${lines.length} widget(s) as "${name}".`, "info");
+    }
+  );
+}
+
+function insertComponent(name: string): void {
+  const at = pasteTarget();
+  if (!at) return;
+  awaitVerdict(
+    (id) => ({ type: "insertComponent", id, name, line: at.line, index: at.index }),
+    (verdict) => {
+      if (verdict.refused) toast(verdict.refused, "refused");
+      else if (verdict.warning) toast(verdict.warning, "warned");
+    }
+  );
+}
+
+/**
+ * A preset over the selection: ONE batch, so several widgets are one document
+ * change and one undo step, exactly like align and wrap. A member with no
+ * declaration here is named rather than silently skipped.
+ */
+function applyPreset(preset: SavedPreset): void {
+  const ops: GuiSourceOp[] = [];
+  const skipped: string[] = [];
+  for (const index of allSelected()) {
+    const item = scene.items[index];
+    if (canEdit(item)) ops.push({ kind: "setProperties", line: item.line, properties: preset.properties });
+    else skipped.push(`${widgetTitle(item)} ${NO_SOURCE_HERE}`);
+  }
+  if (skipped.length > 0) toast([...new Set(skipped)].join(" "), "warned");
+  if (ops.length === 0) return;
+  sendOps("applyOps", ops, reportBatch);
+}
+
+/** A filter box, the palette's, reused by the two browsers. */
+function filterBox(placeholder: string, value: string, onInput: (value: string) => void): HTMLElement {
+  const wrap = el("div", "filter");
+  const input = document.createElement("input");
+  input.className = "text";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.spellcheck = false;
+  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  input.addEventListener("input", () => onInput(input.value));
+  wrap.appendChild(input);
+  return wrap;
+}
+
+/** A re-render replaces the box the user is typing in; put the caret back. */
+function focusFilter(): void {
+  const input = haloBodyEl.querySelector<HTMLInputElement>(".filter input");
+  if (!input) return;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 // ---- camera and selection interactions -------------------------------------
@@ -2416,10 +3560,56 @@ document.getElementById("zoomFit")!.addEventListener("click", () => {
 });
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
 paletteToggleEl.addEventListener("click", togglePalette);
+haloToggleEl.addEventListener("click", toggleHalo);
 outlinesEl.addEventListener("change", draw);
 snapToggle.addEventListener("change", draw);
 gridToggle.addEventListener("change", draw);
+constraintsToggle.addEventListener("change", () => {
+  // Switching it on turns the placement flag on, so the trace has to be fetched
+  // for the CURRENT selection or the overlay would stay blank until the user
+  // clicked something else. An answer already in hand is reused rather than
+  // re-asked, which is the case whenever the "why" panel is open as well.
+  if (!constraintsToggle.checked) {
+    draw();
+    return;
+  }
+  const widgetInfo = selectedInfo();
+  constraints = widgetInfo ? constraintOverlay(widgetInfo) : null;
+  if (!constraints) reReadWidgetInfo();
+  draw();
+});
+pulsesToggle.addEventListener("change", () => {
+  if (!pulsesToggle.checked) {
+    if (pulseTimer) clearTimeout(pulseTimer);
+    pulseTimer = undefined;
+    pulse = null;
+    pulseNoteText = null;
+    statusEl.textContent = statusLine();
+  }
+  draw();
+});
+for (const entry of HEATMAP_MODES) {
+  const option = document.createElement("option");
+  option.value = entry.mode;
+  option.textContent = entry.label;
+  option.title = entry.title;
+  heatmapSelect.appendChild(option);
+}
+heatmapSelect.addEventListener("change", () => {
+  rebuildHeatmap();
+  if (heat) toast(heat.legend, "info");
+  draw();
+});
 window.addEventListener("resize", draw);
+
+/**
+ * The heatmap is rebuilt on a mode change and on every layout push, and never
+ * per frame: it is a Float32Array over the whole draw list, which is the same
+ * discipline `rebuildMasks` follows and for the same reason.
+ */
+function rebuildHeatmap(): void {
+  heat = buildHeatmap(scene, heatmapSelect.value as HeatmapMode);
+}
 // A palette drag has no pointer capture of its own: it starts on a panel row
 // and ends over the canvas, where the stage's own handler commits it. This is
 // the other half, a release anywhere else, which cancels rather than leaving
@@ -2431,7 +3621,13 @@ window.addEventListener("pointercancel", () => {
   if (paletteDrag) endPaletteDrag(false);
 });
 
+visibilityBadgeEl.addEventListener("click", () => {
+  if (!haloOpen()) toggleHalo();
+  setHaloTab("visible");
+});
+
 renderFocusBar();
 renderLayers();
 renderInspector();
+renderHaloTabs();
 host.send({ type: "ready" });

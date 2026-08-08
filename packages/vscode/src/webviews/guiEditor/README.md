@@ -1,8 +1,9 @@
 # The GUI editor, and the contract a host implements
 
 `app/` is the whole editor: canvas, tree, layers, palette, inspector,
-hit-testing, gestures, smart guides, subtree focus, multi-selection and the
-clipboard gestures. It
+hit-testing, gestures, smart guides, subtree focus, multi-selection, the
+clipboard gestures, and the devtools halo (placement, overlays, heatmaps,
+visibility, dependencies) with its browsers and its saved library. It
 imports no `vscode` API, touches no file system, and computes no layout. Every
 line it needs from the outside world is a message in
 [`messages.ts`](./messages.ts). `panel.ts` is one implementation of that
@@ -17,18 +18,19 @@ it, and which of the promises are load-bearing rather than conveniences.
 
 | File | What it is | Who ports it |
 |---|---|---|
-| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
+| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`, `placement`, `devtools`, `textures`, `browse`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
 | `app/host.ts` | The transport shim, and the ONLY file under `app/` that knows which host it is in | A new host adds a branch here. Nothing else under `app/` changes. |
 | `messages.ts` | The typed contract, both directions | Nobody. It is the contract. |
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |
 | `panel.ts` | The VS Code host | Replaced by the new host. |
 | `textureCache.ts` | Host-side DDS decoding, caching and eviction | Replaced or reused; it has no `vscode` import. |
+| `userData.ts` | The storage keys and shapes for the per-user state, plus the block count a component row shows | Reused. No `vscode` import, and a component saved in one host should be readable in the other. |
 
 The bundle is built by `compile:webview` (esbuild, IIFE, es2020) to
 `dist/webview/guiEditor.js`. `guiEditorPackaging.test.ts` fails if that step
 leaves the compile chain or the output stops shipping in the vsix.
 
-## The two rules
+## The three rules
 
 **The host owns the text. The server owns the truth.** The app never edits
 source and never computes layout. It asks; the host asks the server
@@ -46,7 +48,15 @@ problem and must not reintroduce a second stack.)
 
 **Textures are opaque.** The app receives URL strings it hands to an `Image`.
 It knows nothing about DDS, decoding, caches or paths, and a host is free to
-serve `data:` URIs, a virtual scheme or files.
+serve `data:` URIs, a virtual scheme or files. The texture BROWSER does not
+change that: the host walks the `gfx/` trees and answers with engine-relative
+path strings, so the app still never sees a file system path.
+
+**The host owns the per-user state.** The conditional-visibility mode, the
+saved components and the property presets are none of them in the document and
+none of them the server's, so the app keeps no authoritative copy: it asks, it
+draws what it is told, and the state survives the panel being closed because
+the host is where it lives. See "What the host remembers".
 
 ## What a host must implement
 
@@ -65,7 +75,11 @@ each has to actually do.
   0-based line and answer, ECHOING the line. The app drops an answer whose line
   the selection has already left, so an unechoed line silently breaks the
   inspector. A read that fails answers `info: null` rather than an error: a
-  failed inspector read is not worth a banner over the canvas.
+  failed inspector read is not worth a banner over the canvas. **Pass
+  `placement` through unchanged.** It costs a full server-side layout, the app
+  only sets it while the panel that reads it is open, and a host that hard-coded
+  it either way would either make every selection expensive or make the "why is
+  it here" panel permanently empty.
 - **`checkEdit`** Ask the guards what `applyEdit` would answer and WRITE
   NOTHING. This is the gesture-start check, which is why it is a message of its
   own rather than a flag: a host that misread a flag would edit the document on
@@ -101,11 +115,50 @@ each has to actually do.
   nothing rather than breaking.
 - **`reveal`** Show that line in the text editor without stealing focus and
   without hijacking the column the editor panel is in.
+- **`revealAt`** The same, for an ARBITRARY file: a dependency row points at a
+  scripted_gui, an event or a loc key, none of which live in the .gui being
+  edited. A path that no longer resolves is said plainly; revealing the wrong
+  line in the wrong file is the failure this message exists to avoid.
+- **`setVisibility`** Store the mode and the per-check assignments FOR THIS
+  DOCUMENT, then lay the document out with them and push the result. There is no
+  verdict: nothing was written and there is nothing for the guards to refuse,
+  and the layout is the whole answer. Every later `layout` for that document
+  must carry the same options in its `visibility` field, including the first one
+  after reopening the file: that field is what the app builds its mode
+  indicator from, and a hidden widget with no indicator is a bug hunt.
+- **`requestDependencies` / `dependencies`** Answer `paradox/guiDependencies`
+  for the line (or for the whole document when it is absent), ECHOING the line
+  like `widgetInfo` does. A failure answers `result: null`, not an error.
+- **`requestTextureList` / `textureList`** Walk the mod's and the game's `gfx/`
+  trees for `.dds` files whose engine-relative path contains the query, and
+  answer with at most a couple of hundred plus the real `total`. Bound the walk
+  in depth and in count, do it lazily (nobody who never opens the browser should
+  pay for it), and cache it: the filter box sends a request per keystroke and
+  none of them may re-walk a game folder. `roots: false` says there is no folder
+  configured, which the panel words differently from "nothing matched".
+- **`requestThumbnails` / `thumbnails`** Decode those paths through the same
+  cache and eviction the canvas fills use, CAPPED to a thumbnail size. The app
+  asks only for the page it is drawing; a host that decoded a whole listing
+  would decode a game's entire sprite set to draw a scrollbar.
+- **`requestUserData` / `userData`** Answer with the saved components and
+  presets. **Ship none.** A component or a preset this editor invented would be
+  a guess at what a mod's widgets look like; two empty lists is the correct
+  answer for a new user and the panels say so.
+- **`saveComponent`** Read those widgets' verbatim blocks (a `blockText` op
+  each, one batch, exactly like `copyBlocks`), store the TEXT under the name,
+  answer `editVerdict`, then push `userData`. Storing a rendering rather than
+  the bytes loses the comments, the tabs and the single-line bodies a paste is
+  supposed to survive.
+- **`insertComponent`** Send the stored text as one `insertRaw` op: the same
+  verdict-then-layout contract as `pasteInto`. A name the host no longer has is
+  a refusal, not silence.
+- **`savePreset` / `forgetSaved`** Update the store and push `userData`. Neither
+  touches the document, so neither answers a verdict.
 
 Every `checkEdit`, `applyEdit`, `checkReorder`, `reorder`, `checkOps`,
-`applyOps`, `copyBlocks` and `pasteInto` must get exactly one `editVerdict`. The
-app keeps a pending-callback map keyed by `id`; an unanswered id leaves a
-gesture armed forever.
+`applyOps`, `copyBlocks`, `pasteInto`, `saveComponent` and `insertComponent`
+must get exactly one `editVerdict`. The app keeps a pending-callback map keyed
+by `id`; an unanswered id leaves a gesture armed forever.
 
 Three cases are easy to get wrong and are worth stating:
 
@@ -134,18 +187,58 @@ scrollarea's pass-through children (their ranks count the `scrollwidget`'s body,
 not the scrollarea's). A host must treat absent as "cannot be reordered" and
 never count one up for it; the app greys the grip and drops nothing there.
 
+## What the host remembers
+
+Three things outlive the panel, and [`userData.ts`](./userData.ts) owns their
+keys and shapes so both hosts store the same bytes. `panel.ts` puts all three in
+VS Code's `workspaceState`; another host may use anything with the same shape.
+
+| Key | Shape | Scope |
+|---|---|---|
+| `px.guiEditor.components` | `{ [name]: string }` — the widgets' VERBATIM block text | A library: global, not per document |
+| `px.guiEditor.presets` | `{ [name]: { key, value }[] }` — property writes in saved order | A library: global, not per document |
+| `px.guiEditor.visibility` | `{ [documentUri]: { mode, checks? } }` | Per document |
+
+Two rules about them. The visibility default is NEVER stored: writing `showAll`
+for every file ever opened would grow the map by one entry per file, for the
+mode those files already have. And a component is stored as bytes rather than a
+parse, because that is the only form an `insertRaw` can put back unchanged.
+
 ## What the page must provide
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
 these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
-`inspector`, `status`, `toast`, `meta`, `zoomLabel`, `outlines`, `snap`, `grid`,
-`zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`, `refresh`. `snap` and `grid`
-are checkboxes, `snap` checked by default; `palette` starts `hidden` and
-`paletteToggle` is what shows it. The stage needs pointer events and, ideally, pointer
+`inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `toast`, `meta`,
+`zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`, `heatmap`,
+`zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`, `haloToggle`, `halo`,
+`haloTabs`, `haloBody`, `refresh`. `snap`, `grid`, `constraints` and `pulses`
+are checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app
+fills its own options into. `palette` and `halo` start `hidden` and their
+toggles are what show them. The stage needs pointer events and, ideally, pointer
 capture (`app/` guards its absence, so a host without it loses only the ability
 to finish a drag off-canvas). A layers row drag needs no capture at all: it
 follows `pointermove` on the rows and ends on a window `pointerup`.
 `body[data-font="game"]` tells the app the page embedded the game font.
+
+## What a closed panel costs
+
+Nothing, and that is a contract clause rather than a nicety, because three of
+the halo's surfaces are expensive: the placement trace is a full server-side
+layout, the dependency answer reads script files, and the texture browser walks
+a game's gfx tree. So:
+
+- the placement flag rides on `requestWidgetInfo` and is set only while one of
+  the two surfaces that draw it is on: the "why" panel, which reads it as prose,
+  and the constraint overlay, which reads it as geometry. They share the one
+  request, because they are the same answer read two ways;
+- `requestDependencies`, `requestTextureList` and `requestUserData` are sent
+  when their tab is first shown, never on boot;
+- halo requests are debounced on selection change, so clicking down a tree or
+  dragging a marquee sends one, not one per row;
+- the canvas overlays (constraints, heatmaps, pulses) each cost one field test
+  per repaint while off, and nothing new runs inside a drag frame unless its
+  toggle is on. The stats line measures only the repaint that follows a layout
+  push, so a gesture frame does not even pay for two clock reads.
 
 ## Testing a host
 
@@ -156,6 +249,9 @@ expectations:
 - `guiEditorScene.test.ts` dumps the scene for every layout fixture and asserts
   scene rects EQUAL the engine's rects. The canvas decides how a widget looks,
   never where it is.
+- `guiEditorDevtools.test.ts` pins the halo's pure halves without a DOM: the
+  placement rows add up to the engine's own rect, the heatmap bins, the layout
+  diff, the frame-sheet grid and the vocabulary browser's grouping.
 - `guiEditorHarness.ts` + `guiEditorSmoke.test.ts` boot the REAL bundle in jsdom
   against a stub host that replays the REAL server, and assert the exact op a
   gesture sends, the bytes it changes, and the refusal text a user reads.

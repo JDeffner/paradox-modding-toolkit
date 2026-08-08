@@ -91,9 +91,22 @@ export interface EditorHarness {
   /** A keydown at the window, with the modifiers a chord needs. */
   key(key: string, init?: ClickModifiers): void;
   /** Visible text of one of the app's panels. */
-  text(id: "tree" | "layers" | "inspector" | "status" | "focusBar" | "palette"): string;
+  text(
+    id:
+      "tree" | "layers" | "inspector" | "status" | "stats" | "focusBar" | "palette" | "haloTabs" | "haloBody"
+  ): string;
   /** Flip one of the toolbar checkboxes, the way a click on it would. */
-  toggle(id: "outlines" | "snap" | "grid", on: boolean): void;
+  toggle(id: "outlines" | "snap" | "grid" | "constraints" | "pulses", on: boolean): void;
+  /** Choose a heatmap mode in the toolbar select. */
+  heatmap(mode: "off" | "depth" | "clipped" | "synthetic"): void;
+  /** Every row the devtools halo is showing, in order. */
+  haloRows(): string[];
+  /** Click the first element in the halo whose text contains `text`. */
+  haloClick(text: string): void;
+  /** Type into the halo's filter box, the way a keystroke would. */
+  filterHalo(text: string): void;
+  /** The conditional-visibility badge in the status strip, or null when it is down. */
+  badge(): string | null;
   /** The toast currently up, or null when none is. */
   toast(): string | null;
   /** The inspector's editable input for a property row, or null when it has none. */
@@ -213,6 +226,37 @@ export function bootEditor(): EditorHarness {
       const input = el(id) as HTMLInputElement;
       input.checked = on;
       input.dispatchEvent(new win.Event("change", { bubbles: true }));
+    },
+    heatmap(mode) {
+      const select = el("heatmap") as HTMLSelectElement;
+      select.value = mode;
+      select.dispatchEvent(new win.Event("change", { bubbles: true }));
+    },
+    haloRows() {
+      return [...el("haloBody").querySelectorAll(".row, .texRow, .term, .prose, .check")].map(
+        (r) => r.textContent ?? ""
+      );
+    },
+    haloClick(text) {
+      for (const node of el("haloBody").querySelectorAll<HTMLElement>("*")) {
+        // The innermost match, so clicking "Insert" hits the button and not the
+        // row it sits in: a row's own handler would select instead of insert.
+        if (!(node.textContent ?? "").includes(text)) continue;
+        if ([...node.children].some((c) => (c.textContent ?? "").includes(text))) continue;
+        node.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+        return;
+      }
+      throw new Error(`nothing in the halo reads "${text}"`);
+    },
+    filterHalo(text) {
+      const input = el("haloBody").querySelector<HTMLInputElement>(".filter input");
+      if (!input) throw new Error("the halo has no filter box");
+      input.value = text;
+      input.dispatchEvent(new win.Event("input", { bubbles: true }));
+    },
+    badge() {
+      const node = el("visibilityBadge");
+      return node.hasAttribute("hidden") ? null : (node.textContent ?? "");
     },
     toast() {
       const toast = el("toast");
