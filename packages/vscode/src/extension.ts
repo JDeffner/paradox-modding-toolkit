@@ -413,6 +413,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       cfg = resolveConfig();
       updateStatus();
+      // Same trigger the PX item's visibility uses: a folder change can turn
+      // the workspace into (or out of) a mod workspace, and tiger's gate
+      // must follow.
+      tiger.refreshStatus();
       updateInfoDocContext(cfg);
       wireModWatcher();
       reapplyLanguages();
