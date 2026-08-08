@@ -75,10 +75,13 @@ export class TigerRunner implements vscode.Disposable {
    * Sync the footer item with the current state. The item is persistent, not a
    * transient flash: with tigerRunOn defaulting to manual, a run-scoped item
    * would simply never be seen, and the footer is where users look for the
-   * validator. Hidden only when the game has no tiger or none is configured.
+   * validator. Hidden when the game has no tiger, none is configured, or the
+   * workspace is not a mod workspace at all (same gate as the PX item, so an
+   * unrelated project never grows a tiger segment).
    */
   refreshStatus(): void {
-    if (!this.tigerExists() || !this.getConfig().tigerPath) {
+    const cfg = this.getConfig();
+    if (!this.tigerExists() || !cfg.tigerPath || !cfg.isCk3Workspace) {
       this.status.hide();
       return;
     }

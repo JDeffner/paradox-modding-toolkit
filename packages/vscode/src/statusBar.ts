@@ -25,7 +25,7 @@ export class PxStatusBar implements vscode.Disposable {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
     this.item.name = "Paradox Toolkit";
     this.item.command = "px.setup";
-    this.item.text = "$(loading~spin) PX";
+    this.item.text = "$(loading~spin) PX Toolkit";
   }
 
   /** Shown only in mod/game workspaces; hidden (not disposed) elsewhere so it can
@@ -37,7 +37,11 @@ export class PxStatusBar implements vscode.Disposable {
 
   update(s: PxStatus): void {
     const healthy = s.gameOk && s.modOk && (s.tigerName === null || s.tigerOk) && s.tokens > 0;
-    this.item.text = s.indexing ? "$(loading~spin) PX" : healthy ? "$(check) PX" : "$(warning) PX";
+    this.item.text = s.indexing
+      ? "$(loading~spin) PX Toolkit"
+      : healthy
+        ? "$(check) PX Toolkit"
+        : "$(warning) PX Toolkit";
     const lines = [
       `**Paradox Toolkit** — click to run setup & health check`,
       "",
