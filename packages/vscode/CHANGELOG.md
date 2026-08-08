@@ -52,8 +52,45 @@
     silently doing nothing.
   A container whose content the engine cannot statically measure is drawn as a
   dashed estimate box and counted in the status line, because the engine invents
-  no pixels and the canvas should not pretend it did. Creation, deletion,
-  multi-select, layers and guides are not in this version.
+  no pixels and the canvas should not pretend it did.
+- **The GUI editor becomes a designer.** Everything above was the first
+  version's select/drag/inspect loop; on top of it:
+  - **Layers, guides and focus.** A layers panel over the selected widget's
+    container: eye (preview-hide), lock (stops swallowing clicks), solo (dim
+    the rest), hover flashes the outline, and dragging rows reorders source
+    order through the writer, labeled as layout order inside an hbox/vbox
+    because that is what source order means there. Smart guides snap a drag to
+    sibling edges, centers and equal spacing, with an optional grid; a live
+    x/y/w/h readout and live inspector values follow the gesture; dragging a
+    widget inside a box shows a drop line and commits a reorder. Subtree focus
+    (`f`) scopes the tree, the canvas and hit-testing to one branch, with a
+    breadcrumb back out.
+  - **Editing several widgets at once.** Shift+click and marquee selection;
+    move, nudge, delete, duplicate, align and distribute commit as ONE undo
+    step through a batched `paradox/guiSourceEdit` (ops computed against one
+    source model; a refused member is skipped and its reason shown verbatim,
+    the rest proceed). Copy puts the widget's verbatim block on the clipboard,
+    paste re-inserts it; a palette inserts new widgets from the harvested
+    widget vocabulary plus the document's own types (never from memory); an
+    anchor picker offers exactly the anchor words the layout engine parses;
+    wrap encloses a sibling run in a new container. Reorder indices count the
+    declarations a preview cannot see (a `blockoverride` between two widget
+    children used to shift every later index by one), so a layers drag moves
+    exactly the block you dragged.
+  - **An editor that explains itself.** A "why is it here" panel sums the
+    engine's own placement terms to the widget's rect origin, names the layout
+    container that dropped an authored position, the clipping ancestor and the
+    template value each property overrides; a constraint overlay draws parent
+    bounds, anchor crosshair and link line, clip rect and expanding-axis
+    arrows; depth/clip/synthetic heatmaps; optional layout-change pulses; a
+    stats line with the server's per-stage timings. Conditional visibility
+    gets preview modes (show all, hide all, or evaluate with per-check answers
+    the editor remembers per document). A dependency panel links the selected
+    widget to its scripted_guis (file:line, used-by counts), the event chains
+    that reach them, and its loc keys with missing ones flagged, every row a
+    click-through. Texture and type browsers pick values from the mod and game
+    trees; a selection can be saved as a named component and property bundles
+    as presets, both stored in your workspace, none shipped bundled.
 - **`px.trace.perf`**: wall clock for every request, file rescan, index change
   and indexing phase in the *Paradox Toolkit* output channel, so a slow save or
   a slow completion can be reported as a millisecond timeline instead of a
@@ -110,6 +147,17 @@
   definition site, and for an on_action what it in turn fires). Targets are
   collected from the active game profile's event/on_action reference fields,
   not a hard-coded key list.
+
+### Changed
+
+- **tiger lives in the footer for real.** The status item used to appear only
+  while tiger ran and for five seconds after, which, with `px.tigerRunOn` now
+  defaulting to manual, meant never. It is persistent whenever the active game
+  has a tiger and one is configured: a play prompt when idle, a spinner while
+  validating, the last report count until the next run. Clicking it runs tiger.
+- **The icon's letterforms widened** (24 to 28 units per cap), so the PX/TK
+  lockup fills the tile instead of floating in it. Every brand asset
+  regenerates from the same shared geometry.
 
 ### Changed (GUI preview fidelity)
 
