@@ -46,9 +46,10 @@ function hasDescriptor(root: string): boolean {
 
 export class TigerRunner implements vscode.Disposable {
   private readonly diagnostics: vscode.DiagnosticCollection;
-  /** Visible feedback that tiger is running (spinner while the process lives). */
+  /** Persistent footer presence: idle prompt, spinner while running, last result. */
   private readonly status: vscode.StatusBarItem;
-  private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Report count of the last completed run, kept visible until the next one. */
+  private lastCount: number | null = null;
   private child: ChildProcess | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private errorNotified = false;
@@ -67,6 +68,35 @@ export class TigerRunner implements vscode.Disposable {
     this.diagnostics = vscode.languages.createDiagnosticCollection(this.tigerName());
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
     this.status.name = this.tigerName();
+    this.status.command = "px.runTiger";
+  }
+
+  /**
+   * Sync the footer item with the current state. The item is persistent, not a
+   * transient flash: with tigerRunOn defaulting to manual, a run-scoped item
+   * would simply never be seen, and the footer is where users look for the
+   * validator. Hidden only when the game has no tiger or none is configured.
+   */
+  refreshStatus(): void {
+    if (!this.tigerExists() || !this.getConfig().tigerPath) {
+      this.status.hide();
+      return;
+    }
+    if (this.child) {
+      this.showRunning();
+      return;
+    }
+    if (this.lastCount === null) {
+      this.status.text = "$(play) tiger";
+      this.status.tooltip = `${this.tigerName()}: click to validate the mod`;
+    } else {
+      this.status.text = this.lastCount === 0 ? "$(check) tiger" : `$(warning) tiger: ${this.lastCount}`;
+      this.status.tooltip =
+        this.lastCount === 0
+          ? `${this.tigerName()}: no problems. Click to run again.`
+          : `${this.tigerName()}: ${this.lastCount} report(s). Click to run again.`;
+    }
+    this.status.show();
   }
 
   /** The active game's tiger binary name, or "tiger" when it has none. */
@@ -80,25 +110,15 @@ export class TigerRunner implements vscode.Disposable {
   }
 
   private showRunning(): void {
-    if (this.statusHideTimer) clearTimeout(this.statusHideTimer);
     this.status.text = "$(sync~spin) tiger";
     this.status.tooltip = `${this.tigerName()} is validating the mod…`;
     this.status.show();
   }
 
-  /** Flash the result for a moment, then hide. */
+  /** Record a finished run (null = no result, e.g. killed) and re-sync. */
   private showDone(problemCount: number | null): void {
-    if (this.statusHideTimer) clearTimeout(this.statusHideTimer);
-    if (problemCount === null) {
-      this.status.hide();
-      return;
-    }
-    this.status.text = problemCount === 0 ? "$(check) tiger" : `$(warning) tiger: ${problemCount}`;
-    this.status.tooltip =
-      problemCount === 0
-        ? `${this.tigerName()}: no problems`
-        : `${this.tigerName()}: ${problemCount} report(s)`;
-    this.statusHideTimer = setTimeout(() => this.status.hide(), 5000);
+    if (problemCount !== null) this.lastCount = problemCount;
+    this.refreshStatus();
   }
 
   /** Call when configuration changed: allows the "binary broken" notice to fire again. */

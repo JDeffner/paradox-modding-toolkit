@@ -240,6 +240,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return args;
   };
   const tiger = new TigerRunner(() => cfg, log, tigerExtraArgs);
+  tiger.refreshStatus();
   // Games with no tiger (EU5) get a clear no-op instead of a broken command.
   // TigerRunner.run / createBaseline and generateTigerConfCommand say it
   // themselves; this covers the commands that only toggle state.
@@ -389,6 +390,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const oldRoots = watchedRoots(cfg);
       cfg = resolveConfig();
       tiger.resetErrorNotice();
+      tiger.refreshStatus();
       updateStatus();
       updateInfoDocContext(cfg);
       if (watchedRoots(cfg) !== oldRoots) {
@@ -740,6 +742,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refresh: () => {
       cfg = resolveConfig();
       tiger.resetErrorNotice();
+      tiger.refreshStatus();
       updateStatus();
       void lc.sendNotification(configChangedNotification, toSettings(cfg));
     },
