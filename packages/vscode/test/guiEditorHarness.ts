@@ -31,6 +31,18 @@ const PKG_ROOT = path.join(__dirname, "..");
 
 /** The canvas the harness pretends the stage has. */
 export const VIEWPORT = { w: 1000, h: 600 };
+
+/**
+ * What the canvas stub was told to paint with, since the last `reset`. jsdom
+ * draws no pixels, so the styles the painter SETS are the only evidence a
+ * canvas-only affordance (a guide line, a hover flash, a dimmed solo) actually
+ * reached the canvas rather than only the app's own state.
+ */
+export interface PaintLog {
+  strokes: string[];
+  alphas: number[];
+  reset(): void;
+}
 /** The app's own reference viewport (render.ts WORLD_W/WORLD_H). */
 const WORLD = { w: 1920, h: 1080 };
 
@@ -78,7 +90,9 @@ export interface EditorHarness {
   up(x: number, y: number): void;
   key(key: string): void;
   /** Visible text of one of the app's panels. */
-  text(id: "tree" | "inspector" | "status"): string;
+  text(id: "tree" | "layers" | "inspector" | "status" | "focusBar"): string;
+  /** Flip one of the toolbar checkboxes, the way a click on it would. */
+  toggle(id: "outlines" | "snap" | "grid", on: boolean): void;
   /** The toast currently up, or null when none is. */
   toast(): string | null;
   /** The inspector's editable input for a property row, or null when it has none. */
@@ -87,6 +101,21 @@ export interface EditorHarness {
   selectedRow(): string | null;
   /** Every tree row's text, in order. */
   rows(): string[];
+  /** Every layers row's text, in order (the panel's head and notes excluded). */
+  layers(): string[];
+  /** The layers row whose label contains `name`. */
+  layer(name: string): HTMLElement;
+  /** Click something inside a panel: a focus crumb, a button, the first toggle. */
+  clickIn(node: Element, selector: string): void;
+  /** Click one of a layers row's three glyph columns. */
+  clickToggle(node: Element, which: "eye" | "lock" | "solo"): void;
+  /** Move the pointer onto a panel row, or off it. */
+  hover(node: Element, on: boolean): void;
+  /** A pointer event on a panel element, for the row drags the layers panel has. */
+  rowPointer(node: Element, type: "pointerdown" | "pointermove", at?: { x: number; y: number }): void;
+  /** Release the button anywhere, which is what ends a row drag. */
+  releasePointer(): void;
+  paint: PaintLog;
   document: Document;
   close(): void;
 }
@@ -110,7 +139,7 @@ export function bootEditor(): EditorHarness {
       sent.push(message);
     },
   });
-  stubBrowser(win);
+  const paint = stubBrowser(win);
 
   win.eval(appBundle());
 
@@ -169,6 +198,11 @@ export function bootEditor(): EditorHarness {
       walk(el(id));
       return parts.join("");
     },
+    toggle(id, on) {
+      const input = el(id) as HTMLInputElement;
+      input.checked = on;
+      input.dispatchEvent(new win.Event("change", { bubbles: true }));
+    },
     toast() {
       const toast = el("toast");
       return toast.hasAttribute("hidden") ? null : (toast.textContent ?? "");
@@ -186,6 +220,45 @@ export function bootEditor(): EditorHarness {
     rows() {
       return [...el("tree").querySelectorAll(".row")].map((r) => r.textContent ?? "");
     },
+    layers() {
+      return [...el("layers").querySelectorAll(".row")].map((r) => r.textContent ?? "");
+    },
+    layer(name) {
+      for (const row of el("layers").querySelectorAll<HTMLElement>(".row")) {
+        if (row.querySelector(".label")?.textContent?.includes(name)) return row;
+      }
+      throw new Error(`no layers row for ${name}`);
+    },
+    clickIn(node, selector) {
+      const target = node.querySelector(selector);
+      if (!target) throw new Error(`no ${selector} in that element`);
+      target.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    },
+    clickToggle(node, which) {
+      const at = { eye: 0, lock: 1, solo: 2 }[which];
+      const target = node.querySelectorAll(".toggle")[at];
+      if (!target) throw new Error(`no ${which} toggle in that row`);
+      target.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+    },
+    hover(node, on) {
+      node.dispatchEvent(new win.PointerEvent(on ? "pointerenter" : "pointerleave", { bubbles: false }));
+    },
+    rowPointer(node, type, at = { x: 0, y: 0 }) {
+      node.dispatchEvent(
+        new win.PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: 1,
+          pointerId: 2,
+          clientX: at.x,
+          clientY: at.y,
+        })
+      );
+    },
+    releasePointer() {
+      win.dispatchEvent(new win.PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 2 }));
+    },
+    paint,
     document: doc,
     close() {
       win.close();
@@ -198,13 +271,23 @@ export function guiFixture(name: string, dir = "layout"): string {
   return fs.readFileSync(path.join(PKG_ROOT, "..", "server", "test", "fixtures", "gui", dir, name), "utf8");
 }
 
-function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>): void {
+function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>): PaintLog {
+  const paint: PaintLog = {
+    strokes: [],
+    alphas: [],
+    reset() {
+      paint.strokes.length = 0;
+      paint.alphas.length = 0;
+    },
+  };
   const context = new Proxy(
     { globalAlpha: 1, lineWidth: 1, fillStyle: "", strokeStyle: "", font: "", textBaseline: "" },
     {
       get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined),
       set: (target, key, value) => {
         (target as Record<string | symbol, unknown>)[key] = value;
+        if (key === "strokeStyle") paint.strokes.push(String(value));
+        if (key === "globalAlpha") paint.alphas.push(Number(value));
         return true;
       },
     }
@@ -233,4 +316,15 @@ function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>):
   const noop = () => undefined;
   (win.Element.prototype as unknown as Record<string, unknown>).setPointerCapture = noop;
   (win.Element.prototype as unknown as Record<string, unknown>).releasePointerCapture = noop;
+  // The app repaints through requestAnimationFrame during a gesture; jsdom's
+  // own schedules on a timer that never fires inside a synchronous test, so
+  // the frame runs at once and every assertion sees the paint its pointer
+  // event produced. The handle is 0 because the app stores what this returns
+  // as "a frame is pending", and a frame that has already run is not pending.
+  win.requestAnimationFrame = ((run: FrameRequestCallback) => {
+    run(0);
+    return 0;
+  }) as typeof win.requestAnimationFrame;
+  win.cancelAnimationFrame = noop;
+  return paint;
 }

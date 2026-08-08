@@ -13,6 +13,13 @@
  * and laid out again exactly as `panel.ts` does it. So a drag here proves the
  * op the app sends, the bytes the server changes, and the refusal reasons a
  * user would read, all against the same code the extension ships.
+ *
+ * G4's claims are the UX pass: the layers panel's eye, lock and solo really
+ * reach the canvas and the hit-test, a hovered row really flashes, a drag
+ * really snaps and commits the SNAPPED number, a drag inside a box really
+ * becomes a reorder op, and a focused subtree is really the only thing left to
+ * click. The canvas paints nothing in jsdom, so the styles the painter sets
+ * (harness `paint`) stand in for the pixels.
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import type { GuiLayoutResult, GuiSourceOp } from "@px-lsp/protocol/protocol";
@@ -26,6 +33,13 @@ import { bootEditor, guiFixture, type EditorHarness } from "./guiEditorHarness";
 
 const TEXT = guiFixture("templates-types.gui");
 const REFUSALS = guiFixture("refusal-shapes.gui", "writer");
+
+/** The colours render.ts paints its G4 affordances with, as the stub sees them. */
+const GUIDE_STROKE = "#ff4fd8";
+const FLASH_STROKE = "#ffd54f";
+const DROP_STROKE = "#89d185";
+/** render.ts DIM_OPACITY: what solo leaves everything else at. */
+const DIM_OPACITY = 0.12;
 
 /** The card is at position { 10 10 } size { 100 50 } inside the frame at 0,0. */
 const CARD_CENTER = { x: 60, y: 35 };
@@ -88,6 +102,16 @@ function openDoc(text: string, file: string): GuiLayoutResult {
 }
 
 /**
+ * Smart guides are on by default and pull a drag onto its siblings, which is
+ * the point of them. A case about the OP a drag sends says so and turns them
+ * off, so its numbers are the gesture's own arithmetic and nothing else;
+ * "smart guides" below is where the snapped numbers are asserted.
+ */
+function withoutGuides(): void {
+  editor.toggle("snap", false);
+}
+
+/**
  * The host's write half, replayed from the real server: answer every check and
  * commit the app has sent since the last call, apply an accepted commit to the
  * document, and push the fresh layout the way `panel.ts` does after its own
@@ -96,16 +120,19 @@ function openDoc(text: string, file: string): GuiLayoutResult {
 function serveEdits(): void {
   for (; served < editor.sent.length; served++) {
     const message = editor.sent[served];
-    if (message.type !== "checkEdit" && message.type !== "applyEdit") continue;
-    const op: GuiSourceOp = {
-      kind: "setProperties",
-      line: message.line,
-      properties: message.properties,
-    };
+    let op: GuiSourceOp;
+    if (message.type === "checkEdit" || message.type === "applyEdit") {
+      op = { kind: "setProperties", line: message.line, properties: message.properties };
+    } else if (message.type === "checkReorder" || message.type === "reorder") {
+      op = { kind: "reorder", line: message.line, from: message.from, to: message.to };
+    } else {
+      continue;
+    }
     const result = computeGuiSourceEdit(doc, op, collectGuiDefs(doc)) ?? {
       refused: "the server had no answer for that edit.",
     };
-    const writes = message.type === "applyEdit" && !result.refused && (result.edits?.length ?? 0) > 0;
+    const commits = message.type === "applyEdit" || message.type === "reorder";
+    const writes = commits && !result.refused && (result.edits?.length ?? 0) > 0;
     editor.push({
       type: "editVerdict",
       id: message.id,
@@ -126,6 +153,11 @@ function rectOf(result: GuiLayoutResult, name: string): { x: number; y: number; 
     stack.push(...node.children);
   }
   throw new Error(`no widget named ${name}`);
+}
+
+/** The named widgets sorted by where they appear in the text: source order, read back. */
+function orderIn(text: string, names: readonly string[]): string[] {
+  return [...names].sort((a, b) => text.indexOf(a) - text.indexOf(b));
 }
 
 /** A point inside a rect, as a fraction of it (the centre by default). */
@@ -307,6 +339,7 @@ describe("the selection survives a document change", () => {
 
   it("a drag commits, and the selection follows the widget it just moved", () => {
     openDoc(TEXT, "templates-types.gui");
+    withoutGuides();
     editor.press(CARD_CENTER.x, CARD_CENTER.y);
     serveEdits();
     editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
@@ -333,6 +366,7 @@ describe("the selection survives a document change", () => {
 describe("dragging on the canvas", () => {
   it("commits ONE op writing the effective position plus the drag delta", () => {
     openDoc(TEXT, "templates-types.gui");
+    withoutGuides();
     editor.press(CARD_CENTER.x, CARD_CENTER.y);
     // The guards are asked before anything moves, for the property the release
     // would write, on the widget's own line.
@@ -362,6 +396,7 @@ describe("dragging on the canvas", () => {
   it("the write is surgical, and the undo the host feeds back restores it byte for byte", () => {
     const before = TEXT;
     openDoc(TEXT, "templates-types.gui");
+    withoutGuides();
     editor.press(CARD_CENTER.x, CARD_CENTER.y);
     serveEdits();
     editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
@@ -395,7 +430,7 @@ describe("dragging on the canvas", () => {
     expect(doc).toBe(TEXT);
   });
 
-  it("a box child's drag is refused before it moves, in the server's own words", () => {
+  it("a box child's drag writes no position, and says so in the server's own words", () => {
     const layout = openDoc(REFUSALS, "refusal-shapes.gui");
     const child = rectOf(layout, "px_refuse_drag_in_vbox");
     const start = pointIn(child);
@@ -407,8 +442,10 @@ describe("dragging on the canvas", () => {
     editor.move(start.x + 40, start.y + 40);
     editor.up(start.x + 40, start.y + 40);
 
-    // The reason is the writer's, verbatim, and it arrives with the document
-    // untouched and nothing having moved on the canvas.
+    // The reason is the writer's, verbatim, and it arrives with nothing having
+    // moved on the canvas. G4 gives the same gesture a second meaning (the
+    // layout-order drag below), and this is the half that stays true: no
+    // position is ever written inside a box.
     const reason = computeGuiSourceEdit(
       REFUSALS,
       {
@@ -421,7 +458,6 @@ describe("dragging on the canvas", () => {
     expect(reason).toContain("places its children itself");
     expect(editor.toast()).toBe(reason);
     expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
-    expect(doc).toBe(REFUSALS);
     expect(editor.text("status")).not.toContain("position =");
   });
 
@@ -525,6 +561,7 @@ describe("the commit round trip", () => {
    */
   it("a nudge is ONE op, ONE layout of ONE document, inside the nudge budget", () => {
     openDoc(TEXT, "templates-types.gui");
+    withoutGuides();
     const taken: number[] = [];
 
     // Three in a row, following the widget as it moves: the first pays for
@@ -565,5 +602,328 @@ describe("the commit round trip", () => {
     // costs ~65 ms of host work (guiEditorPerf.test.ts measures it against the
     // real file), and this budget is what says the two together stay under it.
     expect(sorted[1]).toBeLessThan(150);
+  });
+});
+
+describe("the layers panel", () => {
+  it("lists the selected widget's container in source order and says what that order is", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+
+    const head = editor.text("layers");
+    expect(head).toContain("In widget#px_template_frame");
+    expect(head).toContain("later rows paint on top");
+    // The frame's own children, in the order the file declares them.
+    const rows = editor.layers();
+    expect(rows[0]).toContain("px_card_positioned");
+    expect(rows[1]).toContain("px_card_resized");
+    expect(rows.some((r) => r.includes("px_derived_frame"))).toBe(true);
+  });
+
+  it("the eye hides a widget, and the canvas stops picking what it cannot see", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    editor.clickToggle(editor.layer("px_card_positioned"), "eye");
+    expect(editor.layer("px_card_positioned").className).toContain("hiddenWidget");
+
+    // The same click lands on the frame behind it now.
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    expect(editor.selectedRow()).toContain("px_template_frame");
+  });
+
+  it("the lock leaves a widget on screen and only stops it swallowing clicks", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    editor.clickToggle(editor.layer("px_card_positioned"), "lock");
+    // Not hidden: a locked widget is still drawn, which is the whole difference.
+    expect(editor.layer("px_card_positioned").className).not.toContain("hiddenWidget");
+
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    expect(editor.selectedRow()).toContain("px_template_frame");
+  });
+
+  it("solo dims everything outside the isolated subtree", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    editor.paint.reset();
+    expect(editor.paint.alphas).not.toContain(DIM_OPACITY);
+
+    editor.clickToggle(editor.layer("px_card_positioned"), "solo");
+    expect(editor.paint.alphas).toContain(DIM_OPACITY);
+
+    editor.paint.reset();
+    editor.clickToggle(editor.layer("px_card_positioned"), "solo");
+    expect(editor.paint.alphas).not.toContain(DIM_OPACITY);
+  });
+
+  it("hovering a row flashes that widget's outline on the canvas", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    const row = editor.layer("px_card_resized");
+
+    editor.paint.reset();
+    editor.hover(row, true);
+    expect(editor.paint.strokes).toContain(FLASH_STROKE);
+
+    editor.paint.reset();
+    editor.hover(row, false);
+    expect(editor.paint.strokes).not.toContain(FLASH_STROKE);
+  });
+
+  it("dragging a row reorders the source as ONE op, and the file follows", () => {
+    const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+    const child = rectOf(layout, "px_refuse_drag_in_vbox");
+    editor.click(child.x + child.w / 2, child.y + child.h / 2);
+    expect(editor.layers()[0]).toContain("px_refuse_drag_in_vbox");
+
+    const source = editor.layer("px_refuse_drag_in_vbox");
+    editor.rowPointer(source, "pointerdown", { x: 0, y: 0 });
+    editor.rowPointer(source, "pointermove", { x: 0, y: 20 });
+    serveEdits();
+    editor.rowPointer(editor.layer("px_refuse_size_one"), "pointermove", { x: 0, y: 60 });
+    editor.releasePointer();
+
+    const reorder = lastOfType(editor, "reorder")!;
+    expect(reorder.from).toBe(0);
+    expect(reorder.to).toBe(2);
+    serveEdits();
+    // Last of the three now, and carried verbatim: a reorder is a permutation
+    // of blocks, never a rewrite of them.
+    expect(orderIn(doc, ["px_refuse_drag_in_vbox", "px_refuse_size_both", "px_refuse_size_one"])).toEqual([
+      "px_refuse_size_both",
+      "px_refuse_size_one",
+      "px_refuse_drag_in_vbox",
+    ]);
+    expect(editor.sent.filter((m) => m.type === "reorder")).toHaveLength(1);
+  });
+
+  it("a reorder the writer turns down is shown in the writer's own words", () => {
+    // Two declarations sharing a line: the blocks are not separable, so the
+    // permutation the op would need does not exist.
+    const shared = [
+      "widget = {",
+      '\tname = "px_share_root"',
+      "\tsize = { 400 300 }",
+      '\twidget = { name = "px_a" position = { 0 0 } size = { 40 40 } } widget = { name = "px_b" position = { 100 0 } size = { 40 40 } }',
+      '\twidget = { name = "px_c" position = { 0 100 } size = { 40 40 } }',
+      "}",
+      "",
+    ].join("\n");
+    openDoc(shared, "line-sharing.gui");
+    editor.click(20, 20);
+    expect(editor.selectedRow()).toContain("px_a");
+
+    const source = editor.layer("px_a");
+    editor.rowPointer(source, "pointerdown", { x: 0, y: 0 });
+    editor.rowPointer(source, "pointermove", { x: 0, y: 20 });
+    serveEdits();
+
+    const reason = computeGuiSourceEdit(
+      shared,
+      { kind: "reorder", line: 0, from: 0, to: 1 },
+      collectGuiDefs(shared)
+    )!.refused;
+    expect(reason).toContain("cannot be reordered");
+    expect(editor.toast()).toBe(reason);
+
+    editor.rowPointer(editor.layer("px_c"), "pointermove", { x: 0, y: 60 });
+    editor.releasePointer();
+    // Refused at the probe: the drop never becomes a commit.
+    expect(editor.sent.filter((m) => m.type === "reorder")).toHaveLength(0);
+    expect(doc).toBe(shared);
+  });
+});
+
+describe("smart guides", () => {
+  it("a drag snaps to a sibling and commits the SNAPPED value, not the cursor's", () => {
+    openDoc(TEXT, "templates-types.gui");
+    editor.press(CARD_CENTER.x, CARD_CENTER.y);
+    serveEdits();
+    editor.paint.reset();
+    editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+
+    // The raw drag would write { 50 30 }. px_card_resized spans x 10..70, so
+    // its centre line is x = 40, and the card's left edge is 10 world px from
+    // it: inside the 6 screen px tolerance at this zoom. The guide is drawn and
+    // the number the readout shows is the number the commit sends.
+    expect(editor.paint.strokes).toContain(GUIDE_STROKE);
+    expect(editor.text("status")).toContain("position = { 40 30 }");
+    editor.up(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 40 30 }" }]);
+    serveEdits();
+    expect(doc).toContain("position = { 40 30 }");
+  });
+
+  it("the same drag with the guides off writes exactly where the cursor left it", () => {
+    openDoc(TEXT, "templates-types.gui");
+    editor.toggle("snap", false);
+    editor.press(CARD_CENTER.x, CARD_CENTER.y);
+    serveEdits();
+    editor.paint.reset();
+    editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+
+    expect(editor.paint.strokes).not.toContain(GUIDE_STROKE);
+    editor.up(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 50 30 }" }]);
+  });
+
+  it("equal spacing pulls a widget into the middle of the gap between its siblings", () => {
+    // 50 px of gap on one side, 70 on the other: nudging it 5 px right lands it
+    // at 60 and 60, which is the whole point of an equal-spacing hint.
+    const spaced = [
+      "widget = {",
+      '\tname = "px_space_root"',
+      "\tsize = { 400 300 }",
+      '\twidget = { name = "px_left" position = { 0 0 } size = { 40 40 } }',
+      '\twidget = { name = "px_mid" position = { 90 0 } size = { 40 40 } }',
+      '\twidget = { name = "px_right" position = { 200 0 } size = { 40 40 } }',
+      "}",
+      "",
+    ].join("\n");
+    openDoc(spaced, "spacing.gui");
+    editor.press(110, 20);
+    serveEdits();
+    editor.move(125, 20);
+    editor.up(125, 20);
+
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 100 0 }" }]);
+    serveEdits();
+    expect(doc).toContain('name = "px_mid" position = { 100 0 }');
+  });
+
+  it("the grid snaps to its own lattice, and only when it is switched on", () => {
+    openDoc(TEXT, "templates-types.gui");
+    editor.toggle("snap", false);
+    editor.toggle("grid", true);
+    editor.press(CARD_CENTER.x, CARD_CENTER.y);
+    serveEdits();
+    editor.move(CARD_CENTER.x + 43, CARD_CENTER.y + 27);
+    editor.up(CARD_CENTER.x + 43, CARD_CENTER.y + 27);
+
+    // { 53 37 } raw; the grid takes the widget's own top left to the lattice.
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 50 40 }" }]);
+  });
+});
+
+describe("drag polish", () => {
+  it("the inspector's rows and the readout follow the gesture, and go back if it is abandoned", () => {
+    openDoc(TEXT, "templates-types.gui");
+    withoutGuides();
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    serveWidgetInfo(editor, TEXT);
+    expect(editor.rowInput("position")!.value).toBe("{ 10 10 }");
+
+    editor.press(CARD_CENTER.x, CARD_CENTER.y);
+    serveEdits();
+    editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+    // The row shows the number the commit would send, and the readout the
+    // geometry it would land on: both live, neither written yet.
+    expect(editor.rowInput("position")!.value).toBe("{ 50 30 }");
+    expect(editor.text("status")).toContain("50, 30 · 100 x 50");
+
+    editor.key("Escape");
+    expect(editor.rowInput("position")!.value).toBe("{ 10 10 }");
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+    expect(doc).toBe(TEXT);
+  });
+});
+
+describe("dragging a widget inside a layout box", () => {
+  it("becomes a layout-order drag: a drop line, then ONE reorder op", () => {
+    const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+    const child = rectOf(layout, "px_refuse_drag_in_vbox");
+    const last = rectOf(layout, "px_refuse_size_one");
+    const start = pointIn(child);
+    editor.click(start.x, start.y);
+    editor.press(start.x, start.y);
+    // The position check refuses, and the refusal arms the reorder probe.
+    serveEdits();
+
+    editor.paint.reset();
+    const below = { x: start.x, y: last.y + last.h * 0.75 };
+    editor.move(below.x, below.y);
+    expect(editor.paint.strokes).toContain(DROP_STROKE);
+    expect(editor.text("status")).toContain("layout order 1 -> 3 of 3");
+
+    editor.up(below.x, below.y);
+    const reorder = lastOfType(editor, "reorder")!;
+    expect(reorder).toEqual({ type: "reorder", id: reorder.id, line: reorder.line, from: 0, to: 2 });
+    serveEdits();
+    expect(doc.indexOf("px_refuse_drag_in_vbox")).toBeGreaterThan(doc.indexOf("px_refuse_size_one"));
+    // Still no position anywhere: the box owns the slots, and it always did.
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+  });
+
+  it("a drop back on its own slot writes nothing", () => {
+    const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+    const child = rectOf(layout, "px_refuse_drag_in_vbox");
+    const start = pointIn(child);
+    editor.click(start.x, start.y);
+    editor.press(start.x, start.y);
+    serveEdits();
+    editor.move(start.x + 5, start.y + 3);
+    editor.up(start.x + 5, start.y + 3);
+
+    expect(editor.sent.filter((m) => m.type === "reorder")).toHaveLength(0);
+    expect(doc).toBe(REFUSALS);
+  });
+});
+
+describe("subtree focus", () => {
+  it("scopes the tree and the canvas to one subtree, and the breadcrumb walks back out", () => {
+    serveLayout(editor, TEXT);
+    // Somewhere inside the frame but on no child of it.
+    editor.click(600, 350);
+    expect(editor.selectedRow()).toContain("px_template_frame");
+
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    const full = editor.rows().length;
+    editor.key("f");
+
+    expect(editor.rows()).toHaveLength(1);
+    expect(editor.rows()[0]).toContain("px_card_positioned");
+    expect(editor.text("status")).toContain("focused on px_card#px_card_positioned");
+    expect(editor.text("focusBar")).toContain("px_template_frame");
+
+    // The canvas is scoped too: the frame is no longer there to be clicked.
+    editor.click(600, 350);
+    expect(editor.selectedRow()).toBeNull();
+
+    editor.clickIn(editor.document.getElementById("focusBar")!, "button");
+    expect(editor.rows()).toHaveLength(full);
+    editor.click(600, 350);
+    expect(editor.selectedRow()).toContain("px_template_frame");
+  });
+
+  it("a crumb focuses the ancestor it names", () => {
+    serveLayout(editor, TEXT);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    editor.key("f");
+    expect(editor.rows()).toHaveLength(1);
+
+    editor.clickIn(editor.document.getElementById("focusBar")!, ".crumb");
+    // The frame is the card's only ancestor, so focusing it brings its whole
+    // subtree back as rows, with the frame itself as the root.
+    expect(editor.rows()[0]).toContain("px_template_frame");
+    expect(editor.rows().length).toBeGreaterThan(1);
+    expect(editor.text("status")).toContain("focused on widget#px_template_frame");
+  });
+
+  it("the focus survives the re-layout an edit causes", () => {
+    openDoc(TEXT, "templates-types.gui");
+    editor.toggle("snap", false);
+    editor.click(CARD_CENTER.x, CARD_CENTER.y);
+    editor.key("f");
+    expect(editor.rows()).toHaveLength(1);
+
+    editor.press(CARD_CENTER.x, CARD_CENTER.y);
+    serveEdits();
+    editor.move(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+    editor.up(CARD_CENTER.x + 40, CARD_CENTER.y + 20);
+    serveEdits();
+
+    expect(doc).toContain("position = { 50 30 }");
+    expect(editor.rows()).toHaveLength(1);
+    expect(editor.rows()[0]).toContain("px_card_positioned");
   });
 });
