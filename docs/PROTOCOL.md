@@ -137,7 +137,7 @@ instead.
 | `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
 | `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
-| `paradox/guiVocabulary` | request | `{ uri, text }` → `GuiVocabularyResult` — the widget names a designer palette may offer: the bundled per-game harvest plus this document's own templates and types |
+| `paradox/guiVocabulary` | request | `{ uri, text }` → `GuiVocabularyResult` — the widget names a designer palette may offer, plus the property names an inspector may offer per widget type: the bundled per-game harvest plus this document's own templates and types |
 | `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture (one `op`, or a batch of `ops` answered as one edit set with a verdict each), or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
@@ -303,6 +303,16 @@ type, which is what a "wrap in a container" menu should show; it is derived
 from the harvest's own child counts, with the engine's attribute blocks
 excluded, not from a list of container names. The harvested tail is capped and
 `total` gives the real count.
+
+The same answer carries what an inspector's add-property row may offer.
+`properties` maps a widget type to its harvested property names, most used
+first: only the types the requested document NAMES are in it (the keys it
+writes blocks under, plus the bases of its own `type X = base` declarations),
+because the harvest holds hundreds of types and a designer re-asks after every
+layout. `commonProperties` is the vanilla tree's overall ranking, the fallback
+for a widget whose type the harvest has never seen. Both are capped, both are
+empty for a game with no harvest, and neither ever contains a name the vanilla
+`gui/` tree does not write.
 
 `paradox/guiSourceEdit` takes `{ uri, text, op }` and answers
 `{ edits }` or `{ refused }`, never both, and `null` only for an op it does not

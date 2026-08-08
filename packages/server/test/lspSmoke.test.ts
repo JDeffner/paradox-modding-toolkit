@@ -27,6 +27,7 @@ import {
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
+  guiVocabularyRequest,
   guiWidgetEditRequest,
   guiWidgetInfoRequest,
   scopeAtRequest,
@@ -521,6 +522,26 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     })) as GuiSourceEditResult;
     expect(refused.edits).toBeUndefined();
     expect(refused.refused).toContain("places its children itself");
+  });
+
+  it("paradox/guiVocabulary answers with harvested widget names and their properties", async () => {
+    const text = 'widget = {\n\tname = "smoke_vocab_root"\n\ticon = { size = { 20 20 } }\n}\n';
+    const result = (await conn.sendRequest(guiVocabularyRequest, {
+      uri: "file:///smoke_vocab.gui",
+      text,
+    })) as import("@px-lsp/protocol/protocol").GuiVocabularyResult;
+
+    // The harvest reaches the wire: names ranked by vanilla usage, capped, with
+    // the real count beside them.
+    expect(result.entries.length).toBeGreaterThan(10);
+    expect(result.entries.every((e) => e.name.length > 0)).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(result.entries.length);
+
+    // The property half, scoped to the two types this document names: an
+    // inspector completing `texture` on an icon is completing a harvested name.
+    expect(Object.keys(result.properties!).sort()).toEqual(["icon", "widget"]);
+    expect(result.properties!.icon).toContain("texture");
+    expect(result.commonProperties!.length).toBeGreaterThan(10);
   });
 
   it("open -> guiLayout -> guiSourceEdit: a drag commits base + delta and the layout moves by it", async () => {

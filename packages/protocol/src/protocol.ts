@@ -820,6 +820,21 @@ export interface GuiVocabularyResult {
    */
   entries: GuiVocabularyEntry[];
   total: number;
+  /**
+   * Widget type -> the property names the harvest saw on it, most used first
+   * and capped: what an inspector's add-property row completes from. Only the
+   * types THIS DOCUMENT names are here (the keys it writes blocks under, plus
+   * the bases of its own `type X = base` declarations), because the harvest
+   * holds hundreds of types and this answer is re-asked after every layout.
+   * Absent for a game with no harvest.
+   */
+  properties?: Record<string, string[]>;
+  /**
+   * The vanilla tree's most-used property names overall, most used first and
+   * capped: the fallback ranking for a widget whose type the harvest has never
+   * seen, so completion still offers something real rather than nothing.
+   */
+  commonProperties?: string[];
 }
 
 /**

@@ -8,7 +8,12 @@
  */
 import { describe, expect, it } from "vitest";
 import CK3_GUI_SCHEMA from "../data/ck3/guiSchema.json";
-import { computeGuiVocabulary, VOCABULARY_LIMIT } from "../src/gui/vocabulary";
+import {
+  COMMON_PROPERTY_LIMIT,
+  computeGuiVocabulary,
+  TYPE_PROPERTY_LIMIT,
+  VOCABULARY_LIMIT,
+} from "../src/gui/vocabulary";
 
 const DOC = [
   "types PxPaletteTypes {",
@@ -62,5 +67,44 @@ describe("the palette's vocabulary comes from the harvest and the document", () 
     const { entries, total } = computeGuiVocabulary(DOC, undefined);
     expect(entries.map((e) => e.name)).toEqual(["px_palette_card", "PxPaletteDeco"]);
     expect(total).toBe(2);
+  });
+});
+
+/**
+ * The other half of the vocabulary: what an inspector's add-property row is
+ * allowed to offer. Same provenance rule as the widget names, so the row cannot
+ * complete a property the vanilla tree never writes on that widget.
+ */
+describe("the property vocabulary", () => {
+  it("ranks a named type's properties by vanilla usage", () => {
+    const { properties } = computeGuiVocabulary(DOC, CK3_GUI_SCHEMA);
+    // `widget` is named twice over: the document writes one, and its own
+    // px_palette_card derives from it, which is where the type chain ends.
+    expect(properties!.widget[0]).toBe("size");
+    expect(properties!.widget).toContain("parentanchor");
+    expect(properties!.widget.length).toBeLessThanOrEqual(TYPE_PROPERTY_LIMIT);
+  });
+
+  it("carries only the types the document names, not the whole harvest", () => {
+    const { properties } = computeGuiVocabulary(DOC, CK3_GUI_SCHEMA);
+    expect(Object.keys(properties!)).toEqual(["widget"]);
+    // Named nowhere here, and the harvest holds hundreds like it.
+    expect(properties!.progressbar).toBeUndefined();
+
+    const withBox = computeGuiVocabulary(`${DOC}\nvbox = {\n\ticon = { }\n}\n`, CK3_GUI_SCHEMA);
+    expect(Object.keys(withBox.properties!).sort()).toEqual(["icon", "vbox", "widget"]);
+    expect(withBox.properties!.icon).toContain("texture");
+  });
+
+  it("offers the tree-wide ranking as the fallback for a type it does not know", () => {
+    const { commonProperties } = computeGuiVocabulary(DOC, CK3_GUI_SCHEMA);
+    expect(commonProperties![0]).toBe("name");
+    expect(commonProperties!.length).toBe(COMMON_PROPERTY_LIMIT);
+  });
+
+  it("has nothing to offer for a game with no harvest, and says so with empties", () => {
+    const { properties, commonProperties } = computeGuiVocabulary(DOC, undefined);
+    expect(properties).toEqual({});
+    expect(commonProperties).toEqual([]);
   });
 });
