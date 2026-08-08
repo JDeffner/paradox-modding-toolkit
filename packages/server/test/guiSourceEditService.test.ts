@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { collectGuiDefs, emptyGuiDefs } from "../src/gui/guiDefs";
-import { computeGuiSourceEdit } from "../src/gui/sourceEditService";
+import { computeGuiSourceEdit, computeGuiSourceEdits } from "../src/gui/sourceEditService";
 import { applyAll } from "../src/gui/sourceEdit";
 import { parseGuiSource, findEntry } from "../src/gui/sourceModel";
 import type { GuiSourceOp } from "@px-lsp/protocol/protocol";
@@ -276,5 +276,97 @@ describe("guiSourceEdit: the op surface", () => {
       "cannot be reordered"
     );
     expect(run(DOC, { kind: "insertRaw", line: 0, fragment: "   " })!.refused).toContain("cannot be pasted");
+  });
+});
+
+// ── The batch form: one gesture over several widgets ────────────────────────
+
+describe("guiSourceEdit: a batch of ops against one text", () => {
+  const DOC =
+    "window = {\n" +
+    '\tname = "px_batch_root"\n' +
+    "\tsize = { 400 300 }\n" +
+    '\twidget = { name = "px_one" position = { 0 0 } size = { 10 10 } }\n' +
+    '\twidget = { name = "px_two" position = { 40 40 } size = { 10 10 } }\n' +
+    "\tvbox = {\n" +
+    '\t\tname = "px_box"\n' +
+    '\t\twidget = { name = "px_boxed" position = { 5 5 } size = { 10 10 } }\n' +
+    "\t}\n" +
+    "}\n";
+
+  function batch(text: string, ops: GuiSourceOp[]) {
+    return computeGuiSourceEdits(text, ops, collectGuiDefs(text));
+  }
+
+  function move(text: string, name: string, value: string): GuiSourceOp {
+    return { kind: "setProperties", line: lineOf(text, name), properties: [{ key: "position", value }] };
+  }
+
+  it("moves two widgets as ONE edit set, applied together", () => {
+    const result = batch(DOC, [move(DOC, "px_one", "{ 5 5 }"), move(DOC, "px_two", "{ 45 45 }")])!;
+    expect(result.refused).toBeUndefined();
+    expect(result.results!.map((r) => r.edits.length)).toEqual([1, 1]);
+    // Both offsets are into the SAME text, so one apply lands both.
+    const out = applyAll(DOC, result.edits!);
+    expect(out).toContain('name = "px_one" position = { 5 5 }');
+    expect(out).toContain('name = "px_two" position = { 45 45 }');
+  });
+
+  it("a refused member skips itself and leaves the others applied", () => {
+    const result = batch(DOC, [
+      move(DOC, "px_one", "{ 5 5 }"),
+      move(DOC, "px_boxed", "{ 9 9 }"),
+      move(DOC, "px_two", "{ 45 45 }"),
+    ])!;
+    expect(result.refused).toBeUndefined();
+    expect(result.results![1].refused).toContain("places its children itself");
+    expect(result.results![1].edits).toEqual([]);
+    const out = applyAll(DOC, result.edits!);
+    expect(out).toContain('name = "px_one" position = { 5 5 }');
+    expect(out).toContain('name = "px_two" position = { 45 45 }');
+    // The box child keeps every byte it had: a skipped op writes nothing.
+    expect(out).toContain('name = "px_boxed" position = { 5 5 }');
+  });
+
+  it("a member that changes nothing reports no edits and no refusal", () => {
+    const result = batch(DOC, [move(DOC, "px_one", "{ 0 0 }"), move(DOC, "px_two", "{ 45 45 }")])!;
+    expect(result.results![0]).toEqual({ refused: undefined, warning: undefined, edits: [], blockText: undefined });
+    expect(result.edits).toHaveLength(1);
+  });
+
+  it("a second op over bytes the first already rewrites is refused, not dropped", () => {
+    // Deleting a widget and then setting a property on it: applyAll would drop
+    // the loser silently, so the batch names it instead.
+    const result = batch(DOC, [
+      { kind: "delete", line: lineOf(DOC, "px_one") },
+      move(DOC, "px_one", "{ 5 5 }"),
+    ])!;
+    expect(result.results![0].edits).toHaveLength(1);
+    expect(result.results![1].refused).toContain("already rewrites those bytes");
+    expect(applyAll(DOC, result.edits!)).toBe(DOC.replace('\twidget = { name = "px_one" position = { 0 0 } size = { 10 10 } }\n', ""));
+  });
+
+  it("carries a per-op warning and joins them at the top", () => {
+    const line = lineOf(REFUSALS, "px_refuse_size_one");
+    const result = computeGuiSourceEdits(
+      REFUSALS,
+      [{ kind: "setProperties", line, properties: [{ key: "size", value: "{ 80 80 }" }] }],
+      collectGuiDefs(REFUSALS)
+    )!;
+    expect(result.results![0].warning).toContain("owns the width of an expanding child");
+    expect(result.warning).toBe(result.results![0].warning);
+  });
+
+  it("refuses the whole request only for a whole-request failure", () => {
+    expect(computeGuiSourceEdits(DOC, [], emptyGuiDefs())!.refused).toContain("named no widgets");
+    expect(computeGuiSourceEdits("widget = {", [{ kind: "delete", line: 0 }], emptyGuiDefs())!.refused).toContain(
+      "parse error"
+    );
+    expect(computeGuiSourceEdits(DOC, null, emptyGuiDefs())).toBeNull();
+    // An unknown op is that op's refusal, not the batch's.
+    const mixed = batch(DOC, [{ kind: "nonsense" } as unknown as GuiSourceOp, move(DOC, "px_one", "{ 5 5 }")])!;
+    expect(mixed.refused).toBeUndefined();
+    expect(mixed.results![0].refused).toContain("no such edit");
+    expect(mixed.results![1].edits).toHaveLength(1);
   });
 });

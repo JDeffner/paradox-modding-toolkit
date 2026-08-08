@@ -78,7 +78,7 @@ import {
   VIEWPORT,
 } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
-import { computeGuiSourceEdit } from "./gui/sourceEditService";
+import { computeGuiSourceEdit, computeGuiSourceEdits } from "./gui/sourceEditService";
 import { computeGuiWidgetInfo } from "./gui/widgetInfo";
 import { computeGuiDependencies, computeGuiUses } from "./gui/guiDependencies";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
@@ -1176,9 +1176,14 @@ function guiLinks() {
   return getGuiScriptLinks(settings.gamePath, settings.modPath, settings.parentPaths, engineRoots());
 }
 
-connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) =>
-  computeGuiSourceEdit(params.text ?? "", params.op, guiDefsForEdits())
-);
+// One op or a batch, never both: a request carrying the two shapes cannot say
+// which one the caller meant, and guessing would write the wrong set.
+connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) => {
+  const text = params.text ?? "";
+  const defs = guiDefsForEdits();
+  if (params.ops) return params.op ? null : computeGuiSourceEdits(text, params.ops, defs);
+  return computeGuiSourceEdit(text, params.op, defs);
+});
 
 // The inspector reads through the same store the preview lays out with, so a
 // row it shows is a value the canvas used.

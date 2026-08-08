@@ -799,7 +799,18 @@ export interface GuiSourceEditParams {
   uri: string;
   /** Authoritative document text every offset refers to. */
   text: string;
-  op: GuiSourceOp;
+  /** One op. Mutually exclusive with {@link ops}; sending both answers null. */
+  op?: GuiSourceOp;
+  /**
+   * A BATCH: several ops computed against this one text and answered as one
+   * edit set, which is what makes a multi-widget gesture one document change
+   * and one undo step. Every op gets a verdict of its own in
+   * {@link GuiSourceEditResult.results}, so a refusal is per op and the rest
+   * still apply. Order matters: the ops are computed in the order given, and a
+   * later one whose bytes a earlier one already changes is refused rather than
+   * silently dropped.
+   */
+  ops?: GuiSourceOp[];
 }
 
 /** One surgical replacement: replace `[start, end)` with `newText`. */
@@ -840,16 +851,36 @@ export interface GuiNewWidget {
 }
 
 /**
- * Exactly one of `edits` and `refused` is present. A refusal is an ANSWER, not
- * an error: it names why the gesture would not do what it looks like it does
- * (a box owns its children's slots, a content-sized type ignores an explicit
- * size, a type definition other files use). `warning` rides along with a write
- * that went ahead but is only half honoured.
+ * For a single `op`, exactly one of `edits` and `refused` is present. A refusal
+ * is an ANSWER, not an error: it names why the gesture would not do what it
+ * looks like it does (a box owns its children's slots, a content-sized type
+ * ignores an explicit size, a type definition other files use). `warning` rides
+ * along with a write that went ahead but is only half honoured.
+ *
+ * For a BATCH (`ops`), `results` is present with one entry per op in the same
+ * order, `edits` is every applied op's edits together (apply them as ONE
+ * change), and `warning` joins the warnings. Top-level `refused` then names
+ * only a whole-request failure (a document that does not parse, an empty
+ * batch): a per-op refusal lives in its own entry and does not stop the others.
  */
 export interface GuiSourceEditResult {
   edits?: GuiTextEdit[];
   refused?: string;
   warning?: string;
+  /** `blockText` only: the copied block. */
+  blockText?: string;
+  /** Batch only: one verdict per requested op, in request order. */
+  results?: GuiSourceOpResult[];
+}
+
+/** One op's own answer inside a batch. */
+export interface GuiSourceOpResult {
+  /** Why this op wrote nothing. The others in the batch still applied. */
+  refused?: string;
+  /** This op wrote, and is only half honoured. */
+  warning?: string;
+  /** This op's contribution to the combined `edits`; empty when it wrote nothing. */
+  edits: GuiTextEdit[];
   /** `blockText` only: the copied block. */
   blockText?: string;
 }

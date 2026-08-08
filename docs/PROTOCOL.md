@@ -137,7 +137,7 @@ instead.
 | `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
 | `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
-| `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture, or a refusal with a reason |
+| `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture (one `op`, or a batch of `ops` answered as one edit set with a verdict each), or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
 `ModScopedParams` is `{ modRoot?: string | null }`: restrict a mod-scoped
@@ -301,6 +301,26 @@ end-first, so the host keeps undo, dirty state and the live preview
 (host-owns-text). Every edit is surgical, over the exact span of the entry it
 changes, so comments, CRLF, tabs-vs-spaces and single-line bodies survive a
 write byte for byte.
+
+`ops: GuiSourceOp[]` replaces `op` for a BATCH: several ops against the one
+text, answered as one edit set, which is what makes a gesture over a
+multi-selection one document change and one undo step. Sending both `op` and
+`ops` answers `null` — a request carrying two shapes cannot say which it meant.
+A batch answers with `results`, one `GuiSourceOpResult` per op in request
+order:
+
+- `edits` (top level) is every applied op's edits together, already checked for
+  overlap. Apply the whole set as ONE change.
+- `results[i].refused` is that op's own answer and skips only that op; the rest
+  still applied. A client shows the reason verbatim, per member.
+- `results[i].edits` is what that op contributed (empty for a refused op, and
+  empty for an op whose bytes were already what it would write).
+- Ops are computed in the order given, and a later one whose bytes an earlier
+  one already rewrites is refused rather than dropped: `applyAll` discards an
+  overlapping edit silently, and an op reported as applied must have been.
+- Top-level `refused` on a batch names a WHOLE-REQUEST failure only (a document
+  that does not parse, an empty `ops`); it is never a per-op refusal.
+- `warning` joins the distinct per-op warnings; each op also carries its own.
 
 The op is a discriminated union on `kind`: `setProperties` (a batch; a null
 value removes), `reorder`, `insert`, `insertRaw` (paste), `delete`,

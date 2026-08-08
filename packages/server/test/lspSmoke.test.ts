@@ -583,6 +583,48 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(applyEdits(text, pasted.edits!)).toBe(text.replace(/\}\n$/, copied.blockText! + "}\n"));
   });
 
+  it("paradox/guiSourceEdit answers a BATCH as one edit set with a verdict per op", async () => {
+    // What a multi-selection drag sends: several ops against one text, one
+    // edit set back, one undo step on the host's side. The box child's move is
+    // refused on its own and the two free widgets still move.
+    const text =
+      "window = {\n" +
+      '\tname = "smoke_batch_root"\n' +
+      "\tsize = { 400 300 }\n" +
+      '\twidget = { name = "smoke_free_a" position = { 0 0 } size = { 10 10 } }\n' +
+      '\twidget = { name = "smoke_free_b" position = { 40 40 } size = { 10 10 } }\n' +
+      "\tvbox = {\n" +
+      '\t\twidget = { name = "smoke_boxed" position = { 5 5 } size = { 10 10 } }\n' +
+      "\t}\n" +
+      "}\n";
+    const move = (line: number, value: string) => ({
+      kind: "setProperties" as const,
+      line,
+      properties: [{ key: "position", value }],
+    });
+    const batch = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke_batch.gui",
+      text,
+      ops: [move(3, "{ 5 5 }"), move(6, "{ 9 9 }"), move(4, "{ 45 45 }")],
+    })) as GuiSourceEditResult;
+    expect(batch.refused).toBeUndefined();
+    expect(batch.results).toHaveLength(3);
+    expect(batch.results![1].refused).toContain("places its children itself");
+    expect(batch.results![1].edits).toEqual([]);
+    expect(applyEdits(text, batch.edits!)).toBe(
+      text.replace("position = { 0 0 }", "position = { 5 5 }").replace("position = { 40 40 }", "position = { 45 45 }")
+    );
+
+    // One shape or the other: a request carrying both cannot say which it meant.
+    const both = (await conn.sendRequest(guiSourceEditRequest, {
+      uri: "file:///smoke_batch.gui",
+      text,
+      op: move(3, "{ 1 1 }"),
+      ops: [move(3, "{ 2 2 }")],
+    })) as GuiSourceEditResult | null;
+    expect(both).toBeNull();
+  });
+
   it("paradox/guiWidgetInfo reports a widget's properties with their origins", async () => {
     const text =
       'types PxSmokeTypes {\n\ttype px_smoke_card = widget { size = { 100 50 } }\n}\n\npx_smoke_card = {\n\tname = "smoke_card"\n\tposition = { 10 10 }\n}\n';

@@ -18,7 +18,13 @@
  *
  * No `vscode` imports: unit-tested in plain Node.
  */
-import type { GuiSourceEditResult, GuiSourceOp, GuiTextEdit, GuiNewWidget } from "@px-lsp/protocol/protocol";
+import type {
+  GuiSourceEditResult,
+  GuiSourceOp,
+  GuiSourceOpResult,
+  GuiTextEdit,
+  GuiNewWidget,
+} from "@px-lsp/protocol/protocol";
 import {
   findEntry,
   findWidgetAtLine,
@@ -175,12 +181,71 @@ export function computeGuiSourceEdit(
 ): GuiSourceEditResult | null {
   if (!op || typeof op.kind !== "string") return null;
   const file = parseGuiSource(text);
-  if (file.errors.length > 0) {
-    return {
-      refused: `this document has ${file.errors.length} parse error(s), so no offset in it can be trusted: fix the syntax first.`,
-    };
-  }
+  const unparseable = parseRefusal(file);
+  if (unparseable) return unparseable;
+  return runOp(file, op, defs);
+}
 
+/**
+ * Answers a BATCH against the one authoritative `text`: every op is computed
+ * against the SAME source model, so one gesture over several widgets is one
+ * edit set, one document change and one undo step.
+ *
+ * The honesty rules the single-op path has, kept per op: a refusal is that op's
+ * own answer and skips only it, and an op whose bytes an EARLIER one already
+ * changes is refused rather than dropped, because `applyAll` drops an
+ * overlapping edit silently and an op reported as applied must have been.
+ */
+export function computeGuiSourceEdits(
+  text: string,
+  ops: readonly GuiSourceOp[] | null | undefined,
+  defs: GuiDefs
+): GuiSourceEditResult | null {
+  if (!Array.isArray(ops)) return null;
+  if (ops.length === 0) return { refused: "that gesture named no widgets to change." };
+  const file = parseGuiSource(text);
+  const unparseable = parseRefusal(file);
+  if (unparseable) return unparseable;
+
+  const results: GuiSourceOpResult[] = [];
+  const edits: GuiTextEdit[] = [];
+  const warnings: string[] = [];
+  for (const op of ops) {
+    const answer = !op || typeof op.kind !== "string" ? null : runOp(file, op, defs);
+    if (!answer) {
+      results.push({ refused: "the server has no such edit.", edits: [] });
+      continue;
+    }
+    const own = answer.edits ?? [];
+    if (answer.refused || own.length === 0) {
+      results.push({ refused: answer.refused, warning: answer.warning, edits: [], blockText: answer.blockText });
+      if (answer.warning) warnings.push(answer.warning);
+      continue;
+    }
+    if (overlapping([...edits, ...own])) {
+      results.push({
+        refused:
+          "another change in the same gesture already rewrites those bytes, so this one was left out: make it on its own.",
+        edits: [],
+      });
+      continue;
+    }
+    edits.push(...own);
+    results.push({ warning: answer.warning, edits: own, blockText: answer.blockText });
+    if (answer.warning) warnings.push(answer.warning);
+  }
+  return { edits, results, warning: warnings.length > 0 ? [...new Set(warnings)].join(" ") : undefined };
+}
+
+/** A document with parse errors has no trustworthy offset, single op or batch. */
+function parseRefusal(file: GuiSourceFile): GuiSourceEditResult | null {
+  if (file.errors.length === 0) return null;
+  return {
+    refused: `this document has ${file.errors.length} parse error(s), so no offset in it can be trusted: fix the syntax first.`,
+  };
+}
+
+function runOp(file: GuiSourceFile, op: GuiSourceOp, defs: GuiDefs): GuiSourceEditResult | null {
   switch (op.kind) {
     case "setProperties":
       return withTarget(file, op.line, (target) => setProperties(file, target, op.properties ?? [], defs));
