@@ -6,19 +6,19 @@
   <rect width="128" height="128" rx="26" fill="#17161A" />
   <g fill="none" stroke-width="8" stroke-linecap="butt" stroke-linejoin="miter">
     <g clip-path="url(#t)">
-  <path d="M39.679 27L39.679 61" stroke="#F2EDE3" />
-  <path d="M39.679 31L47.679 31" stroke="#F2EDE3" />
-  <path d="M47.679 31A8 8 0 0 1 47.679 47" stroke="#F2EDE3" />
-  <path d="M39.679 47L47.679 47" stroke="#F2EDE3" />
-  <path d="M68.679 22L88.679 66" stroke="#F2EDE3" />
-  <path d="M88.679 22L68.679 66" stroke="#F2EDE3" />
+  <path d="M35.744 27L35.744 61" stroke="#F2EDE3" />
+  <path d="M35.744 31L47.744 31" stroke="#F2EDE3" />
+  <path d="M47.744 31A8 8 0 0 1 47.744 47" stroke="#F2EDE3" />
+  <path d="M35.744 47L47.744 47" stroke="#F2EDE3" />
+  <path d="M68.744 22L92.744 66" stroke="#F2EDE3" />
+  <path d="M92.744 22L68.744 66" stroke="#F2EDE3" />
     </g>
     <g clip-path="url(#b)">
-  <path d="M35.55 71L59.55 71" stroke="#C8952F" />
-  <path d="M47.55 67L47.55 101" stroke="#C8952F" />
-  <path d="M70.55 67L70.55 101" stroke="#C8952F" />
-  <path d="M89.55 64L70.55 84" stroke="#C8952F" />
-  <path d="M70.55 84L89.55 104" stroke="#C8952F" />
+  <path d="M31.688 71L59.688 71" stroke="#C8952F" />
+  <path d="M45.688 67L45.688 101" stroke="#C8952F" />
+  <path d="M70.688 67L70.688 101" stroke="#C8952F" />
+  <path d="M93.688 64L70.688 84" stroke="#C8952F" />
+  <path d="M70.688 84L93.688 104" stroke="#C8952F" />
     </g>
   </g>
 </svg>

@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-  <defs><clipPath id="c"><rect x="-5.664" y="0" width="67.970" height="34" /></clipPath></defs>
-  <g transform="translate(2.000 5.997) scale(0.35310)" stroke-width="8" clip-path="url(#c)">
+  <defs><clipPath id="c"><rect x="-6.451" y="0" width="77.414" height="34" /></clipPath></defs>
+  <g transform="translate(2.000 6.730) scale(0.31002)" stroke-width="8" clip-path="url(#c)">
   <path d="M4 0L4 34" stroke="currentColor" />
-  <path d="M4 4L12 4" stroke="currentColor" />
-  <path d="M12 4A8 8 0 0 1 12 20" stroke="currentColor" />
-  <path d="M4 20L12 20" stroke="currentColor" />
-  <path d="M33 -5L53 39" stroke="currentColor" />
-  <path d="M53 -5L33 39" stroke="currentColor" />
+  <path d="M4 4L16 4" stroke="currentColor" />
+  <path d="M16 4A8 8 0 0 1 16 20" stroke="currentColor" />
+  <path d="M4 20L16 20" stroke="currentColor" />
+  <path d="M37 -5L61 39" stroke="currentColor" />
+  <path d="M61 -5L37 39" stroke="currentColor" />
   </g>
 </svg>

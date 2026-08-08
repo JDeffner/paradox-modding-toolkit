@@ -37,7 +37,8 @@ export const CAP = 34;
 export const WEIGHT = 8;
 const HALF = WEIGHT / 2;
 
-export const WIDTH: Record<string, number> = { P: 24, X: 24, T: 24, K: 24, L: 22, S: 21 };
+// Extended face: 28-unit caps (was 24) so the lockup fills more of the tile.
+export const WIDTH: Record<string, number> = { P: 28, X: 28, T: 28, K: 28, L: 25, S: 21 };
 
 const D = Math.PI / 180;
 const arc = (cx: number, cy: number, r: number, a0: number, a1: number): Arc => ({
@@ -55,32 +56,32 @@ export function glyph(ch: string, x: number, y: number): Stroke[] {
   switch (ch) {
     case "P":
       // Stem, then a bowl: two horizontals joined by a semicircle bulging right.
-      // Outer edge lands at x+24 = x + WIDTH.P exactly.
+      // Outer edge lands at x+28 = x + WIDTH.P exactly (16 + r8 + HALF).
       return [
         line(x + HALF, y, x + HALF, b),
-        line(x + HALF, y + HALF, x + 12, y + HALF),
-        arc(x + 12, y + 12, 8, -90, 90),
-        line(x + HALF, y + 20, x + 12, y + 20),
+        line(x + HALF, y + HALF, x + 16, y + HALF),
+        arc(x + 16, y + 12, 8, -90, 90),
+        line(x + HALF, y + 20, x + 16, y + 20),
       ];
     case "X":
       // Overshoot: the band clip cuts these flat at cap height and baseline,
       // the way a real face terminates a diagonal. Cutting perpendicular
       // (the natural butt cap) makes X and K sit lower than P and T.
-      return [line(x + 2, y - 5, x + 22, b + 5), line(x + 22, y - 5, x + 2, b + 5)];
+      return [line(x + 2, y - 5, x + 26, b + 5), line(x + 26, y - 5, x + 2, b + 5)];
     case "T":
-      return [line(x, y + HALF, x + 24, y + HALF), line(x + 12, y, x + 12, b)];
+      return [line(x, y + HALF, x + 28, y + HALF), line(x + 14, y, x + 14, b)];
     case "K":
       // Both diagonals meet ON the stem centreline so the butt caps are buried
       // inside the stem and the junction reads as one clean vertex.
       return [
         line(x + HALF, y, x + HALF, b),
-        line(x + 23, y - 3, x + HALF, y + 17),
-        line(x + HALF, y + 17, x + 23, b + 3),
+        line(x + 27, y - 3, x + HALF, y + 17),
+        line(x + HALF, y + 17, x + 27, b + 3),
       ];
     case "L":
       // Stem runs to the baseline, not to the bar's centreline, or the
       // bottom-left corner is left unfilled.
-      return [line(x + HALF, y, x + HALF, b), line(x + HALF, b - HALF, x + 22, b - HALF)];
+      return [line(x + HALF, y, x + HALF, b), line(x + HALF, b - HALF, x + 25, b - HALF)];
     case "S":
       // Two bowls sweeping in OPPOSITE directions: the upper one counter-
       // clockwise from upper-right over the top, the lower one clockwise from
