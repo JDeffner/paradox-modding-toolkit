@@ -148,13 +148,62 @@
   collected from the active game profile's event/on_action reference fields,
   not a hard-coded key list.
 
+### Added (feedback round)
+
+- **The inspector grows up.** An add-property row with completion from the
+  harvested widget vocabulary (per-type property names plus the tree-wide
+  ranking; type a name, pick a suggestion, values complete too where the
+  engine has a vocabulary, like anchors). Block values such as
+  `background = { using = X alpha = 0.7 }` open into a sub-editor with one
+  row per entry, rows addable and removable, committed as one write. Property
+  values get a display mode: full, abbreviated (ellipsis, full value on
+  hover) or hidden, remembered per workspace. And the panel holds its place:
+  committing a value no longer jumps the scroll to the top, and text typed
+  into one field survives a commit in another.
+- **Middle-mouse drag pans everywhere.** The event graph, the event
+  simulator, the GUI widget tree and the GUI editor all pan (or grab-scroll)
+  with the middle button, with pointer capture so a release outside the
+  window never leaves a pan stuck.
+- **The event graph query completes.** The root/namespace box suggests the
+  mod's real event ids and namespaces as you type, from the same index that
+  draws the graph; picking one asks for exactly that graph.
+- **Simulate Event is reachable.** A "Simulate" CodeLens sits above every
+  event declaration (the editor's global CodeLens toggle governs it), and a
+  selected graph node offers Simulate next to Open source.
+- **The Project view is three collapsible sections** (Workspace Mods,
+  Toggles, Tools), each remembering its state. Tools now lists only commands
+  with no button elsewhere; everything with an editor-title button or a
+  status-bar entry lost its duplicate row. The view uses the editor's own
+  background and follows theme changes.
+
+### Fixed
+
+- **The error.log watcher actually watches** ([#10](https://github.com/JDeffner/ck3-modding-toolkit/issues/10)):
+  entries appended while the game holds the log open now appear (the old
+  reader could silently skip regions on a short read and then never look at
+  them again), and clearing the log from the in-game error tracker, or
+  relaunching the game, drops the stale Problems instead of leaving them.
+
 ### Changed
 
+- **The GUI Layout preview is retired.** The GUI editor does everything it
+  did and more, so the editor inherits its place: the $(preview) icon on
+  .gui editor titles and the Ctrl+Alt+P keybinding now open the editor, and
+  the editor's tab carries a proper icon. If you only ever wanted to look,
+  the editor with the file read-only is that.
+- **Brand and file icons.** Script files show a "PS" glyph drawn from the
+  same geometry as the marketplace lockup; the mod-descriptor puzzle icon was
+  being clipped at the viewBox edge (why it looked oversized) and now sits in
+  the same box as every other glyph; the activity bar shows the full PX/TK
+  lockup; the P's bowl moved to classic proportions. The footer item reads
+  "PX Toolkit".
 - **tiger lives in the footer for real.** The status item used to appear only
   while tiger ran and for five seconds after, which, with `px.tigerRunOn` now
   defaulting to manual, meant never. It is persistent whenever the active game
-  has a tiger and one is configured: a play prompt when idle, a spinner while
-  validating, the last report count until the next run. Clicking it runs tiger.
+  has a tiger, one is configured, and the workspace is actually a mod
+  workspace (an unrelated project never grows a tiger segment): a play prompt
+  when idle, a spinner while validating, the last report count until the next
+  run. Clicking it runs tiger.
 - **The icon's letterforms widened** (24 to 28 units per cap), so the PX/TK
   lockup fills the tile instead of floating in it. Every brand asset
   regenerates from the same shared geometry.
