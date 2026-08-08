@@ -3,6 +3,10 @@
  * while the game runs and surface entries as diagnostics pointing at the mod
  * files — the edit→test loop without alt-tabbing into a log file.
  *
+ * The offset/truncation half lives in `logTail.ts` (no vscode, unit-tested):
+ * this file only turns the lines it hands back into diagnostics, and drops the
+ * collection whenever the tail reports the log was cleared or replaced.
+ *
  * Plus `Paradox: Launch Game (debug mode)` via the Steam run URL of the active
  * game (meta.steamAppId).
  */
@@ -11,6 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
+import { LogTail } from "./logTail";
 import { metaFor } from "./meta";
 
 const POLL_MS = 1000;
@@ -18,7 +23,9 @@ const POLL_MS = 1000;
 export class ErrorLogWatcher implements vscode.Disposable {
   private readonly diagnostics: vscode.DiagnosticCollection;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private offset = 0;
+  private tail: LogTail | null = null;
+  private seen = false;
+  private entries = 0;
   private byUri = new Map<string, vscode.Diagnostic[]>();
   private readonly statusItem: vscode.StatusBarItem;
   private readonly stateEmitter = new vscode.EventEmitter<boolean>();
@@ -59,16 +66,12 @@ export class ErrorLogWatcher implements vscode.Disposable {
     }
     this.byUri.clear();
     this.diagnostics.clear();
+    this.entries = 0;
     // Start from the current end: only NEW entries of this play session matter.
-    try {
-      this.offset = fs.statSync(file).size;
-    } catch {
-      this.offset = 0;
-    }
-    this.timer = setInterval(() => this.poll(file), POLL_MS);
-    this.statusItem.text = `$(eye) ${metaFor(this.getConfig().gameId).shortName} error.log`;
-    this.statusItem.tooltip = "Watching the game's error.log — click to stop";
-    this.statusItem.show();
+    this.tail = new LogTail(file);
+    this.seen = this.tail.seekToEnd();
+    this.timer = setInterval(() => this.poll(), POLL_MS);
+    this.showStatus();
     this.stateEmitter.fire(true);
     this.log(`watching ${file}`);
     void vscode.window.showInformationMessage(
@@ -80,6 +83,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     const wasWatching = this.watching;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.tail = null;
     this.statusItem.hide();
     if (wasWatching) {
       this.stateEmitter.fire(false);
@@ -87,31 +91,45 @@ export class ErrorLogWatcher implements vscode.Disposable {
     }
   }
 
-  private poll(file: string): void {
-    let size: number;
-    try {
-      size = fs.statSync(file).size;
-    } catch {
-      return; // file missing (log rotated / game not started yet)
-    }
-    if (size < this.offset) this.offset = 0; // game restarted, log truncated
-    if (size === this.offset) return;
-    let chunk: string;
-    try {
-      const fd = fs.openSync(file, "r");
-      try {
-        const buf = Buffer.alloc(size - this.offset);
-        fs.readSync(fd, buf, 0, buf.length, this.offset);
-        chunk = buf.toString("utf8");
-      } finally {
-        fs.closeSync(fd);
-      }
-    } catch {
+  /**
+   * Watching a file the game has not written yet is indistinguishable from a
+   * broken watcher, so the item distinguishes the two states and carries the
+   * running entry count (which drops back to zero when the log is cleared).
+   */
+  private showStatus(): void {
+    const name = metaFor(this.getConfig().gameId).shortName;
+    const file = this.tail?.file ?? "error.log";
+    this.statusItem.text = this.seen ? `$(eye) ${name} error.log` : `$(eye) ${name} error.log (waiting)`;
+    this.statusItem.tooltip = this.seen
+      ? `Watching ${file} (${this.entries} ${this.entries === 1 ? "entry" : "entries"}). Click to stop.`
+      : `Waiting for ${file}, which the game writes once it runs. Click to stop.`;
+    this.statusItem.show();
+  }
+
+  private poll(): void {
+    const tail = this.tail;
+    if (!tail) return;
+    const { lines, reset, missing } = tail.read();
+    if (missing) {
+      // Log deleted or momentarily locked; the tail keeps its offset and picks
+      // up again on the next round.
       return;
     }
-    this.offset = size;
+    if (!this.seen) {
+      this.seen = true;
+      this.showStatus();
+    }
+    if (reset) {
+      // The in-game error tracker's "clear log" truncates the file and a game
+      // relaunch replaces it. Either way every diagnostic published so far
+      // describes an entry the user can no longer see, so it has to go.
+      this.byUri.clear();
+      this.diagnostics.clear();
+      this.entries = 0;
+      this.log("error.log was cleared or replaced; game diagnostics reset");
+    }
     let published = 0;
-    for (const rawLine of chunk.split("\n")) {
+    for (const rawLine of lines) {
       const parsed = parseErrorLogLine(rawLine);
       if (!parsed) continue;
       const resolved = this.resolve(parsed.relFile);
@@ -137,6 +155,10 @@ export class ErrorLogWatcher implements vscode.Disposable {
         this.diagnostics.set(vscode.Uri.parse(uriStr), diags);
       }
       this.log(`error.log: ${published} new entr${published === 1 ? "y" : "ies"}`);
+    }
+    if (published > 0 || reset) {
+      this.entries += published;
+      this.showStatus();
     }
   }
 
