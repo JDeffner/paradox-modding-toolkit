@@ -51,7 +51,7 @@ export interface PxConfig {
    * this is game-agnostic: `looksLikeMod` accepts a `.metadata/` descriptor and
    * `gameDataDir` accepts any Jomini install layout, so a Vic3 or EU5 workspace
    * lights the same UI up. Anything that really is CK3-only gates on
-   * `isCk3(cfg.gameId)` instead (see px.guiPreviewSupported). The machine-scope
+   * `isCk3(cfg.gameId)` instead (see px.guiEditorSupported). The machine-scope
    * px.gamePath setting deliberately does NOT count: it is set once per
    * machine and would light the extension up in every window. */
   isCk3Workspace: boolean;

@@ -88,7 +88,7 @@ export async function run(): Promise<void> {
 
   await check("commands registered", async () => {
     const cmds = new Set(await vscode.commands.getCommands(true));
-    const wanted = ["px.showDependencies", "px.showGuiPreview", "px.showGuiTree", "px.showEventGraph"];
+    const wanted = ["px.showDependencies", "px.openGuiEditor", "px.showGuiTree", "px.showEventGraph"];
     const missing = wanted.filter((c) => !cmds.has(c));
     if (missing.length > 0) throw new Error(`missing: ${missing.join(", ")}`);
   });
@@ -201,9 +201,9 @@ export async function run(): Promise<void> {
     return `${m[1]} -> ${defs[0].uri.fsPath.split(/[\\/]/).slice(-2).join("/")}`;
   });
 
-  await check("GUI preview opens (datamodel ghosts render server-side)", async () => {
+  await check("GUI editor opens (datamodel ghosts render server-side)", async () => {
     await openFirst("gui/**/*.gui");
-    await vscode.commands.executeCommand("px.showGuiPreview");
+    await vscode.commands.executeCommand("px.openGuiEditor");
     await sleep(3000); // webview + layout request
   });
 

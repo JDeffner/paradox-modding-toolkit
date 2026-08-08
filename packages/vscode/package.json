@@ -268,16 +268,10 @@
         "enablement": "activeWebviewPanelId == px.guiTree"
       },
       {
-        "command": "px.showGuiPreview",
-        "category": "Paradox",
-        "title": "Preview GUI Layout",
-        "icon": "$(preview)"
-      },
-      {
         "command": "px.openGuiEditor",
         "category": "Paradox",
         "title": "Open GUI Editor",
-        "icon": "$(edit)"
+        "icon": "$(preview)"
       },
       {
         "command": "px.modReport",
@@ -743,10 +737,6 @@
           "when": "px.isCk3Workspace"
         },
         {
-          "command": "px.showGuiPreview",
-          "when": "px.isCk3Workspace"
-        },
-        {
           "command": "px.openGuiEditor",
           "when": "px.isCk3Workspace"
         },
@@ -835,11 +825,6 @@
           "group": "navigation"
         },
         {
-          "command": "px.showGuiPreview",
-          "when": "resourceExtname == .gui && px.isCk3Workspace",
-          "group": "navigation"
-        },
-        {
           "command": "px.openGuiEditor",
           "when": "resourceExtname == .gui && px.isCk3Workspace",
           "group": "navigation"
@@ -881,7 +866,7 @@
         "when": "editorTextFocus && (editorLangId == paradox || editorLangId == paradox-loc)"
       },
       {
-        "command": "px.showGuiPreview",
+        "command": "px.openGuiEditor",
         "key": "ctrl+alt+p",
         "when": "editorTextFocus && editorLangId == paradox-gui"
       },

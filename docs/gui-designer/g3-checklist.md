@@ -126,7 +126,8 @@ On `window_character.gui`, with the game folder configured:
 
 ## 9. Boundaries
 
-- [ ] The old preview (**Paradox: Preview GUI Layout**) still works, untouched.
+- [ ] The read-only preview is gone: **Paradox: Preview GUI Layout** is not in
+      the palette, and Ctrl+Alt+P on a `.gui` file opens the editor instead.
 - [ ] Opening the editor on a second `.gui` file reuses the panel, retitles it,
       and resolves textures against THAT file's mod.
 - [ ] On a Victoria 3 or EU5 workspace, the command explains it is CK3 only

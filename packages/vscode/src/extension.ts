@@ -40,7 +40,6 @@ import { registerDashboardView } from "./webviews/dashboard/view";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
-import { GuiPreviewPanel } from "./webviews/guiPreview/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
@@ -83,9 +82,6 @@ import {
   guiSourceEditRequest,
   type GuiSourceEditParams,
   type GuiSourceEditResult,
-  guiWidgetEditRequest,
-  type GuiWidgetEditParams,
-  type GuiWidgetEditResult,
   guiWidgetInfoRequest,
   type GuiWidgetInfo,
   type GuiWidgetInfoParams,
@@ -213,7 +209,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.commands.executeCommand("setContext", "px.isCk3Workspace", cfg.isCk3Workspace);
     // Context keys for anything a `when` clause may want to gate on later.
     void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
-    void vscode.commands.executeCommand("setContext", "px.guiPreviewSupported", isCk3(cfg.gameId));
+    void vscode.commands.executeCommand("setContext", "px.guiEditorSupported", isCk3(cfg.gameId));
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -618,44 +614,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
     }),
     vscode.commands.registerCommand("px.guiTreeToggleParents", () => GuiTreePanel.toggleParents()),
-    vscode.commands.registerCommand("px.showGuiPreview", () => {
-      // The preview's pixel engine (fonts, sprite lookup, widget defaults) is
+    vscode.commands.registerCommand("px.openGuiEditor", () => {
+      // The editor's pixel engine (fonts, sprite lookup, widget defaults) is
       // calibrated against CK3 only. The .gui LANGUAGE features — completion,
       // hovers, diagnostics, the widget tree — stay on for every game.
-      if (!isCk3(cfg.gameId)) {
-        void vscode.window.showInformationMessage(
-          `Paradox Toolkit: the GUI layout preview is CK3 only for now — its pixel layout is calibrated against CK3. ` +
-            `.gui editing and the GUI Widget Tree work for ${metaFor(cfg.gameId).name}.`
-        );
-        return;
-      }
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
-        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
-        return;
-      }
-      GuiPreviewPanel.show(
-        (uri, text) =>
-          lc.sendRequest<GuiLayoutResult>(guiLayoutRequest, {
-            uri: uri.toString(),
-            text,
-          } satisfies GuiLayoutParams),
-        (uri, text, line, property, values) =>
-          lc.sendRequest<GuiWidgetEditResult | null>(guiWidgetEditRequest, {
-            uri: uri.toString(),
-            text,
-            line,
-            property,
-            values,
-          } satisfies GuiWidgetEditParams),
-        editor.document,
-        // Textures resolve against the mod that owns the previewed .gui file.
-        { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
-      );
-    }),
-    vscode.commands.registerCommand("px.openGuiEditor", () => {
-      // Same gate as the preview: the editor draws the same calibrated pixel
-      // engine, which is measured against CK3 only.
       if (!isCk3(cfg.gameId)) {
         void vscode.window.showInformationMessage(
           `Paradox Toolkit: the GUI editor is CK3 only for now — its pixel layout is calibrated against CK3. ` +
