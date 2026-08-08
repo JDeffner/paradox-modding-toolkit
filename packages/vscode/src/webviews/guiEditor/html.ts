@@ -210,6 +210,37 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #inspector .prop input.val:hover { border-color: var(--vscode-panel-border, rgba(128,128,128,0.4)); }
   #inspector .prop input.val:focus { border-color: var(--vscode-focusBorder, #007fd4); outline: none; }
   #inspector .prop .from { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+  #inspector .prop .twisty { width: 12px; }
+  #inspector .prop .val.short {
+    flex: 1 1 auto; min-width: 0; text-align: right; padding: 0 3px; cursor: text;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  #inspector .prop .val.short:hover { border-color: var(--vscode-panel-border, rgba(128,128,128,0.4)); }
+  #inspector .prop input.val.key { flex: 0 0 40%; text-align: left; }
+  #inspector .prop .block { padding: 2px 0 2px 14px; }
+  #inspector .prop .block .line { display: flex; gap: 4px; align-items: center; padding: 1px 0; }
+  #inspector .prop .block .toggle {
+    flex: 0 0 auto; width: 14px; text-align: center; cursor: pointer;
+    color: var(--vscode-descriptionForeground);
+  }
+  #inspector .prop .block .toggle:hover { color: var(--vscode-editorError-foreground, #f14c4c); }
+  #inspector .prop .block button { padding: 0 5px; font-size: 0.9em; }
+  #inspector .modeButton { margin-top: 4px; padding: 0 6px; font-size: 0.85em; }
+  #inspector .addProp { padding: 2px 8px 6px; }
+  #inspector .addProp .line { display: flex; gap: 4px; align-items: center; }
+  #inspector .addProp input.val, #inspector .addProp select {
+    flex: 1 1 auto; min-width: 0; padding: 0 3px; border-radius: 2px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    color: var(--vscode-input-foreground, inherit);
+    background: var(--vscode-input-background, transparent);
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #inspector .addProp input.val.key { flex: 0 0 40%; text-align: left; }
+  #inspector .addProp button { padding: 0 6px; font-size: 0.9em; }
+  #inspector .addProp .suggest { margin-top: 2px; }
+  #inspector .addProp .suggest .row {
+    padding: 0 4px; cursor: pointer; font-family: var(--vscode-editor-font-family, monospace);
+  }
   #inspector .tools { display: flex; flex-wrap: wrap; gap: 3px; padding: 5px 8px; }
   #inspector .tools button { padding: 1px 6px; font-size: 0.9em; }
   #inspector .tools select {

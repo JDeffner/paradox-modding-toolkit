@@ -6,6 +6,11 @@
  * These are the click cases a mouse can produce, asserted without a mouse. The
  * jsdom smoke (guiEditorSmoke.test.ts) proves the shell wires them up; this
  * file proves they are right.
+ *
+ * The inspector's own arithmetic is at the end, for the same reason: how a
+ * block value splits into rows and comes back as one line, how much of a value
+ * a display mode shows, and which property names an add-property row may offer
+ * are all decisions with a right answer and no DOM in them.
  */
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
@@ -21,7 +26,14 @@ import {
   toggleSelected,
 } from "../src/webviews/guiEditor/app/selection";
 import { ancestorKeys, rowKey, treeRows } from "../src/webviews/guiEditor/app/tree";
-import { originLabel } from "../src/webviews/guiEditor/app/inspector";
+import {
+  abbreviate,
+  ABBREVIATED_MAX,
+  blockEntries,
+  composeBlock,
+  originLabel,
+  propertyChoices,
+} from "../src/webviews/guiEditor/app/inspector";
 
 const FIXTURES = path.join(__dirname, "..", "..", "server", "test", "fixtures", "gui", "layout");
 
@@ -387,5 +399,72 @@ describe("origin labels read as a chain, innermost first", () => {
         { kind: "type", name: "px_card" },
       ])
     ).toBe("template PxDeco in type px_card");
+  });
+});
+
+describe("a block value splits into rows and comes back as one line", () => {
+  it("reads a block of assignments, quotes and nesting included", () => {
+    expect(blockEntries("{ using = Background_Area_Dark alpha = 0.7 }")).toEqual([
+      { key: "using", value: "Background_Area_Dark" },
+      { key: "alpha", value: "0.7" },
+    ]);
+    expect(blockEntries('{ texture = "gfx/a b.dds" color = { 1 1 1 1 } }')).toEqual([
+      { key: "texture", value: '"gfx/a b.dds"' },
+      { key: "color", value: "{ 1 1 1 1 }" },
+    ]);
+  });
+
+  it("refuses everything it could not put back byte for byte", () => {
+    // A bare pair is the geometry rows, and they keep their plain input.
+    expect(blockEntries("{ 10 10 }")).toBeNull();
+    expect(blockEntries("0.5")).toBeNull();
+    expect(blockEntries("{ }")).toBeNull();
+    // A comment has a place in the file that a recomposed line would lose.
+    expect(blockEntries("{ alpha = 0.7 # the dim one\n }")).toBeNull();
+    // Half a pair is not a pair.
+    expect(blockEntries("{ using = }")).toBeNull();
+    expect(blockEntries("{ using }")).toBeNull();
+  });
+
+  it("recomposes the rows it was given, and only those", () => {
+    const entries = blockEntries("{ using = Background_Area_Dark alpha = 0.7 }")!;
+    expect(composeBlock(entries)).toBe("{ using = Background_Area_Dark alpha = 0.7 }");
+    expect(composeBlock(entries.filter((e) => e.key !== "using"))).toBe("{ alpha = 0.7 }");
+    expect(composeBlock([...entries, { key: "frame", value: "2" }])).toBe(
+      "{ using = Background_Area_Dark alpha = 0.7 frame = 2 }"
+    );
+    // A row whose key was blanked is a row the user removed.
+    expect(composeBlock([{ key: "  ", value: "1" }])).toBe("{ }");
+  });
+});
+
+describe("what the inspector shows and offers", () => {
+  it("abbreviates only what does not fit, and never silently shortens a short value", () => {
+    expect(abbreviate("{ 10 10 }")).toBe("{ 10 10 }");
+    const long = "{ using = Background_Area_Dark alpha = 0.7 }";
+    expect(abbreviate(long)).toHaveLength(ABBREVIATED_MAX);
+    expect(abbreviate(long).endsWith("…")).toBe(true);
+    expect(long.startsWith(abbreviate(long).slice(0, -1))).toBe(true);
+  });
+
+  it("offers this widget's own type before the tree-wide ranking, and never a row it has", () => {
+    const properties = { icon: ["texture", "frame"], widget: ["visible", "texture"] };
+    const common = ["name", "tooltip", "visible"];
+    const taken = new Set(["frame"]);
+    // The chain innermost first: the widget's own key outranks the base.
+    expect(propertyChoices(["icon", "widget"], properties, common, taken, "")).toEqual([
+      "texture",
+      "visible",
+      "name",
+      "tooltip",
+    ]);
+    // A type the harvest never saw still gets the fallback ranking.
+    expect(propertyChoices(["px_card"], properties, common, taken, "")).toEqual([
+      "name",
+      "tooltip",
+      "visible",
+    ]);
+    expect(propertyChoices(["icon"], properties, common, taken, "tex")).toEqual(["texture"]);
+    expect(propertyChoices(["icon"], properties, common, new Set(["texture", "frame"]), "fra")).toEqual([]);
   });
 });

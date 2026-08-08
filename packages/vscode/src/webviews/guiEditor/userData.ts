@@ -13,12 +13,13 @@
  * presets would be guessing at what a mod's widgets look like; the panels say
  * they are empty instead.
  */
-import type { EditProperty } from "./messages";
+import type { EditProperty, GuiEditorUiState, GuiValueMode } from "./messages";
 
 /** Storage keys, so both halves of a host agree on them without a string literal. */
 export const COMPONENTS_KEY = "px.guiEditor.components";
 export const PRESETS_KEY = "px.guiEditor.presets";
 export const VISIBILITY_KEY = "px.guiEditor.visibility";
+export const UI_KEY = "px.guiEditor.ui";
 
 /**
  * name -> the widgets' VERBATIM block text, exactly as `blockText` read it out
@@ -37,6 +38,19 @@ export type StoredPresets = Record<string, EditProperty[]>;
  * preference about .gui files in general. The default is never stored.
  */
 export type StoredVisibility = Record<string, { mode: string; checks?: Record<string, boolean> }>;
+
+/** The value display modes a stored preference may name. */
+const VALUE_MODES: readonly GuiValueMode[] = ["full", "abbreviated", "hidden"];
+
+/**
+ * The stored view preferences, or undefined when the user has never changed
+ * one. Validated rather than cast: the store outlives the version that wrote it
+ * and a mode this build does not know must not reach the inspector.
+ */
+export function readUiState(stored: unknown): GuiEditorUiState | undefined {
+  const mode = (stored as { valueMode?: unknown } | undefined)?.valueMode;
+  return VALUE_MODES.includes(mode as GuiValueMode) ? { valueMode: mode as GuiValueMode } : undefined;
+}
 
 /**
  * How many top-level blocks a saved component holds, for its row's label. A

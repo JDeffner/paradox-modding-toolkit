@@ -19,9 +19,10 @@
  *
  * G5 stage 2 gives the host a third thing to own beside the text and the
  * textures: PER-USER STATE. The conditional-visibility mode is remembered per
- * document and the saved components and presets are remembered globally, both
- * in `workspaceState`, because none of the three is in the document and none is
- * the server's. The app holds only a copy for drawing.
+ * document; the saved components, the presets and the inspector's value display
+ * mode are remembered globally; all of it in `workspaceState`, because none of
+ * it is in the document and none of it is the server's. The app holds only a
+ * copy for drawing.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -42,6 +43,8 @@ import {
   COMPONENTS_KEY,
   countTopLevelBlocks,
   PRESETS_KEY,
+  readUiState,
+  UI_KEY,
   VISIBILITY_KEY,
   type StoredComponents,
   type StoredPresets,
@@ -259,7 +262,14 @@ export class GuiEditorPanel {
         textures[texture] = png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
       }
       if (this.disposed || generation !== this.generation) return;
-      this.post({ type: "layout", file, result, textures, visibility });
+      this.post({
+        type: "layout",
+        file,
+        result,
+        textures,
+        visibility,
+        ui: readUiState(this.state.get(UI_KEY)),
+      });
     } catch (err) {
       if (this.disposed) return;
       this.post({ type: "error", message: err instanceof Error ? err.message : String(err) });
@@ -623,6 +633,12 @@ export class GuiEditorPanel {
         await this.commit(message.id, {
           op: { kind: "insertRaw", line: message.line, fragment, index: message.index },
         });
+        return;
+      }
+      case "setUiState": {
+        // Stored, not echoed: the app has already applied it, and the next
+        // panel picks it up from the `ui` field of its first layout.
+        await this.state.update(UI_KEY, { valueMode: message.valueMode });
         return;
       }
       case "savePreset": {

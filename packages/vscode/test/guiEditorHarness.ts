@@ -111,6 +111,22 @@ export interface EditorHarness {
   toast(): string | null;
   /** The inspector's editable input for a property row, or null when it has none. */
   rowInput(key: string): HTMLInputElement | null;
+  /** The inspector's whole row element for a property, or null when it has none. */
+  propRow(key: string): HTMLElement | null;
+  /** Type into an inspector field addressed by its `data-row` name, then commit it. */
+  typeRow(row: string, text: string, commit?: boolean): HTMLInputElement;
+  /** Scroll a panel the way a wheel would; jsdom does no layout, so the offset is stubbed. */
+  scrollPanel(id: "inspector", top: number): void;
+  /** That panel's current scroll offset. */
+  scrollOf(id: "inspector"): number;
+  /** The `data-row` name of whatever has keyboard focus, or null. */
+  focusedRow(): string | null;
+  /** What the add-property row is currently offering to complete. */
+  suggestions(): string[];
+  /** Pick one of those completions, the way a mouse does. */
+  pickSuggestion(name: string): void;
+  /** The values the add-property row offers for the property named in it. */
+  valueOptions(): string[];
   /** The tree row currently marked selected, or null. */
   selectedRow(): string | null;
   /** Every tree row's text, in order. */
@@ -269,6 +285,53 @@ export function bootEditor(): EditorHarness {
       }
       return null;
     },
+    propRow(key) {
+      for (const prop of doc.querySelectorAll<HTMLElement>("#inspector .prop")) {
+        if (prop.querySelector(".key")?.textContent === key) return prop;
+      }
+      return null;
+    },
+    typeRow(row, text, commit = true) {
+      const input = doc.querySelector<HTMLInputElement>(`#inspector [data-row="${row}"]`);
+      if (!input) throw new Error(`the inspector has no field named ${row}`);
+      input.focus();
+      input.value = text;
+      input.dispatchEvent(new win.Event("input", { bubbles: true }));
+      if (commit) input.dispatchEvent(new win.Event("change", { bubbles: true }));
+      return input;
+    },
+    scrollPanel(id, top) {
+      const node = el(id);
+      node.scrollTop = top;
+      // jsdom fires nothing of its own: the app listens for this to remember
+      // where the user left the panel.
+      node.dispatchEvent(new win.Event("scroll", { bubbles: false }));
+    },
+    scrollOf(id) {
+      return el(id).scrollTop;
+    },
+    focusedRow() {
+      const active = doc.activeElement as HTMLElement | null;
+      return active?.dataset.row ?? null;
+    },
+    suggestions() {
+      return [...doc.querySelectorAll("#inspector .addProp .suggest .row")].map((r) => r.textContent ?? "");
+    },
+    pickSuggestion(name) {
+      for (const row of doc.querySelectorAll<HTMLElement>("#inspector .addProp .suggest .row")) {
+        if (row.textContent !== name) continue;
+        // mousedown, not click: the row is picked before the input's blur can
+        // take the list away, which is the whole reason it listens for that.
+        row.dispatchEvent(new win.MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        return;
+      }
+      throw new Error(`the add-property row is not offering ${name}`);
+    },
+    valueOptions() {
+      return [...doc.querySelectorAll<HTMLOptionElement>("#inspector .addProp select option")].map(
+        (o) => o.value
+      );
+    },
     selectedRow() {
       return el("tree").querySelector(".row.selected")?.textContent ?? null;
     },
@@ -390,6 +453,22 @@ function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>):
       toJSON: () => ({}),
     }) as DOMRect;
   win.Element.prototype.scrollIntoView = () => undefined;
+  // jsdom does no layout, so its scrollTop is a constant 0 and a panel that
+  // remembers where it was scrolled to could not be tested at all. The stored
+  // value is tied to the content it was measured against: replacing a panel's
+  // children drops it back to 0, which is what a browser does when a rebuild
+  // leaves nothing to scroll, and is the exact failure the app has to undo.
+  const offsets = new WeakMap<Element, { top: number; content: ChildNode | null }>();
+  Object.defineProperty(win.Element.prototype, "scrollTop", {
+    get(this: Element) {
+      const saved = offsets.get(this);
+      return saved && saved.content === this.firstChild ? saved.top : 0;
+    },
+    set(this: Element, value: number) {
+      offsets.set(this, { top: value, content: this.firstChild });
+    },
+    configurable: true,
+  });
   // jsdom implements no pointer capture at all; the app calls it for every drag.
   const noop = () => undefined;
   (win.Element.prototype as unknown as Record<string, unknown>).setPointerCapture = noop;

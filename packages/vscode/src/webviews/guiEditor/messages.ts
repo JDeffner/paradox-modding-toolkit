@@ -29,10 +29,11 @@
  *
  * G5 stage 2 is the devtools halo, the browsers and the saved user data. It
  * adds a THIRD thing a host owns, alongside the text and the textures: PER-USER
- * STATE. A visibility mode, a saved component and a property preset are none of
- * them in the document and none of them the server's, so the app holds no copy
- * it could disagree with — it asks, the host answers, and the host is where the
- * state survives the panel being closed.
+ * STATE. A visibility mode, a saved component, a property preset and the
+ * inspector's value display mode are none of them in the document and none of
+ * them the server's, so the app holds no copy it could disagree with — it asks,
+ * the host answers, and the host is where the state survives the panel being
+ * closed.
  */
 import type {
   GuiDependenciesResult,
@@ -76,6 +77,23 @@ export interface SavedComponent {
 export interface SavedPreset {
   name: string;
   properties: EditProperty[];
+}
+
+/**
+ * How the inspector shows a property VALUE. `abbreviated` clips a long value to
+ * an ellipsis with the whole of it on hover; `hidden` drops the value column
+ * and lists names only, which is how a widget with forty inherited properties
+ * becomes readable.
+ */
+export type GuiValueMode = "full" | "abbreviated" | "hidden";
+
+/**
+ * The editor's own view preferences: not in the document, not the server's, and
+ * not per document either, so the host stores them exactly as it stores the
+ * saved components and presets.
+ */
+export interface GuiEditorUiState {
+  valueMode: GuiValueMode;
 }
 
 /** Messages the editor app sends UP to its host. */
@@ -238,6 +256,14 @@ export type AppToHost =
    * component the host no longer has is a refusal, not silence.
    */
   | { type: "insertComponent"; id: number; name: string; line: number; index?: number }
+  /**
+   * Remember the inspector's value display mode. There is no answer: the app
+   * applied it the moment the user picked it, and the host's copy is what the
+   * NEXT panel boots with (it rides down on `layout.ui`). A host that stored it
+   * and echoed it back mid-session would fight a user who changed it twice
+   * before the first write landed.
+   */
+  | { type: "setUiState"; valueMode: GuiValueMode }
   /** Remember these properties under a name. The host answers by pushing `userData`. */
   | { type: "savePreset"; name: string; properties: EditProperty[] }
   /** Forget a saved component or preset. The host answers by pushing `userData`. */
@@ -265,6 +291,14 @@ export type HostToApp =
        * indicator next to a canvas that was actually laid out that way.
        */
       visibility?: GuiVisibilityOptions;
+      /**
+       * The view preferences the host has stored, which the app adopts ONCE,
+       * from the first layout it receives. They ride here rather than on a
+       * request of their own so the very first inspector render already honours
+       * them, and they are adopted once so a layout in flight cannot undo a
+       * choice the user has just made.
+       */
+      ui?: GuiEditorUiState;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an
@@ -295,10 +329,23 @@ export type HostToApp =
       ops?: { refused?: string; warning?: string }[];
     }
   /**
-   * Answer to `requestVocabulary`: what the palette may offer. `total` is the
-   * real count behind a capped list, so the panel can say what it hid.
+   * Answer to `requestVocabulary`: what the palette and the inspector may
+   * offer. `total` is the real count behind a capped list, so the panel can say
+   * what it hid.
    */
-  | { type: "vocabulary"; entries: GuiVocabularyEntry[]; total: number }
+  | {
+      type: "vocabulary";
+      entries: GuiVocabularyEntry[];
+      total: number;
+      /**
+       * The property half of the same answer, forwarded UNCHANGED: widget type
+       * -> the harvested property names, and the tree-wide ranking behind them.
+       * A host that dropped these would leave the add-property row offering
+       * nothing, which looks exactly like a game with no harvest.
+       */
+      properties?: Record<string, string[]>;
+      commonProperties?: string[];
+    }
   /**
    * Answer to `requestDependencies`. `line` is echoed (absent for a
    * whole-document answer) so the app can drop an answer the selection has

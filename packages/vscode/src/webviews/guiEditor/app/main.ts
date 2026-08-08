@@ -55,7 +55,15 @@ import {
   type AnchorX,
   type AnchorY,
 } from "@px-lsp/server/gui/anchorSpec";
-import type { AppToHost, EditProperty, SavedComponent, SavedPreset, TextureEntry } from "../messages";
+import type {
+  AppToHost,
+  EditProperty,
+  GuiEditorUiState,
+  GuiValueMode,
+  SavedComponent,
+  SavedPreset,
+  TextureEntry,
+} from "../messages";
 import { connectHost } from "./host";
 import {
   buildScene,
@@ -78,7 +86,17 @@ import {
 import { hitRect, hitStack, marqueeHits, nextInStack } from "./hitTest";
 import { indexOfSelection, outermost, selectionAt, toggleSelected, type Selection } from "./selection";
 import { ancestorKeys, rowKey, treeRows } from "./tree";
-import { inspectorRows, widgetTitle, type InspectorRow } from "./inspector";
+import {
+  abbreviate,
+  blockEntries,
+  composeBlock,
+  inspectorRows,
+  nextValueMode,
+  propertyChoices,
+  widgetTitle,
+  type BlockEntry,
+  type InspectorRow,
+} from "./inspector";
 import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
 import { alignDeltas, distributeDeltas, type AlignMode } from "./align";
 import { containerRows, paletteLabel, paletteRows } from "./palette";
@@ -668,6 +686,14 @@ function highlightLayers(): void {
 let vocabulary: GuiVocabularyEntry[] = [];
 let vocabularyTotal = 0;
 let vocabularyAsked = false;
+/**
+ * The other half of the same answer: which PROPERTIES the harvest saw on the
+ * types this document names, and the tree-wide ranking behind them. What the
+ * inspector's add-property row completes from, and empty until the first
+ * vocabulary lands, which is why that row offers nothing rather than guessing.
+ */
+let vocabularyProps: Record<string, string[]> = {};
+let vocabularyCommon: string[] = [];
 let paletteQuery = "";
 const paletteEls = new Map<string, HTMLElement>();
 
@@ -755,24 +781,121 @@ function renderPalette(): void {
  * The editable rows by key, so a gesture can show its numbers in them while it
  * runs. Live values only: the file is unchanged until release, and a gesture
  * that ends without a commit rebuilds the panel from what the file still says.
+ * A row the display mode is showing as text is in `inspectorTexts` instead, and
+ * a preview updates whichever half the row happens to be.
  */
 const inspectorInputs = new Map<string, HTMLInputElement>();
+const inspectorTexts = new Map<string, HTMLElement>();
+
+/**
+ * How much of a value the rows show. The host stores it and it rides down on
+ * the first layout; from then on this is the truth, so a layout still in flight
+ * cannot undo a choice the user has just made.
+ */
+let valueMode: GuiValueMode = "full";
+let uiAdopted = false;
+
+/**
+ * The block-valued rows whose sub-editor is open, and the abbreviated rows the
+ * user has clicked into. Both are keyed by PROPERTY NAME and both are dropped
+ * when the selection moves to another widget: they are statements about the
+ * rows on screen, and those rows are one widget's.
+ */
+const expandedBlocks = new Set<string>();
+const editingRows = new Set<string>();
+
+/**
+ * The panel's scroll offset, and whether what is on screen is the property rows
+ * it was measured against. A commit re-lays the document out, which rebuilds
+ * these rows from scratch, and a panel that went back to the top every time a
+ * value was written made a long widget unusable. The offset is only recorded
+ * while the rows are up: the browser clamping a placeholder to 0 is not a user
+ * scrolling to the top.
+ */
+let inspectorScroll = 0;
+let showingRows = false;
+/** Which widget the rows belong to, as a positional path. */
+let inspectorFor: string | null = null;
+
+inspectorEl.addEventListener("scroll", () => {
+  if (showingRows) inspectorScroll = inspectorEl.scrollTop;
+});
 
 function previewInspector(write: GestureWrite): void {
   for (const property of write.properties) {
     const input = inspectorInputs.get(property.key);
     if (input) input.value = property.value;
+    const text = inspectorTexts.get(property.key);
+    if (text) text.textContent = abbreviate(property.value);
+  }
+}
+
+/**
+ * The row that had keyboard focus, so a rebuild can give it back. Without it,
+ * committing a property with Enter drops the caret out of the panel and the
+ * next keystroke goes to the canvas.
+ */
+interface FocusedRow {
+  row: string;
+  caret: number | null;
+}
+
+/**
+ * A capture that has not been given back yet. A commit rebuilds the panel
+ * TWICE, once for the re-layout and once for the property read that follows it,
+ * and the first of those is the one that detaches the focused element: without
+ * carrying the capture across, the caret would always be lost to the gap.
+ */
+let pendingFocus: FocusedRow | null = null;
+
+function capturedFocus(): FocusedRow | null {
+  const active = document.activeElement as HTMLElement | null;
+  if (!active || !inspectorEl.contains(active) || active.dataset.row === undefined) return null;
+  const caret = active instanceof HTMLInputElement ? active.selectionStart : null;
+  return { row: active.dataset.row, caret };
+}
+
+function restoreFocus(saved: FocusedRow | null): void {
+  if (!saved) return;
+  // Only when nothing else has taken it: the panel gives focus back after
+  // rebuilding its own rows, it never takes it from wherever the user went.
+  const active = document.activeElement;
+  if (active && active !== document.body && !inspectorEl.contains(active)) return;
+  for (const node of Array.from(inspectorEl.querySelectorAll<HTMLElement>("[data-row]"))) {
+    if (node.dataset.row !== saved.row) continue;
+    node.focus();
+    if (saved.caret !== null && node instanceof HTMLInputElement) {
+      node.setSelectionRange(saved.caret, saved.caret);
+    }
+    return;
   }
 }
 
 function renderInspector(): void {
   const item = selectedItem();
+  const forWidget = item ? rowKey(item.path) : null;
+  if (forWidget !== inspectorFor) {
+    // Another widget's rows: the offset and the open sub-editors were
+    // statements about rows that are no longer here.
+    inspectorFor = forWidget;
+    inspectorScroll = 0;
+    expandedBlocks.clear();
+    editingRows.clear();
+    pendingFocus = null;
+  }
+  const focus = capturedFocus() ?? pendingFocus;
+  pendingFocus = null;
   inspectorEl.textContent = "";
   inspectorInputs.clear();
+  inspectorTexts.clear();
+  showingRows = false;
   if (!item) {
     inspectorEl.appendChild(el("div", "note", "Nothing selected. Click a widget on the canvas."));
     return;
   }
+  // Every early return below is a panel that is not showing the rows the
+  // capture named, so the capture is held for the render that will be.
+  pendingFocus = focus;
   const head = el("div", "head");
   head.appendChild(el("div", undefined, widgetTitle(item)));
   const r = item.rect;
@@ -792,6 +915,7 @@ function renderInspector(): void {
       )
     );
   }
+  head.appendChild(valueModeButton());
   inspectorEl.appendChild(head);
   renderTools(item);
 
@@ -814,17 +938,321 @@ function renderInspector(): void {
     inspectorEl.appendChild(el("div", "note", "This widget sets no properties."));
   }
   for (const row of rows) {
-    const prop = el("div", "prop");
-    const line = el("div", "line");
-    line.appendChild(el("span", "key", row.key));
-    const input = rowInput(row, item.line);
-    inspectorInputs.set(row.key, input);
-    line.appendChild(input);
-    prop.appendChild(line);
-    if (!row.local) prop.appendChild(el("div", "from", `from ${row.origin}`));
-    inspectorEl.appendChild(prop);
+    inspectorEl.appendChild(propRow(row, item.line));
   }
+  renderAddProperty(item, rows);
   renderAnchors(item.line, rows);
+  pendingFocus = null;
+  showingRows = true;
+  inspectorEl.scrollTop = inspectorScroll;
+  restoreFocus(focus);
+}
+
+/** One property row: its name, its value as the display mode shows it, and its block sub-editor. */
+function propRow(row: InspectorRow, line: number): HTMLElement {
+  const prop = el("div", "prop");
+  const head = el("div", "line");
+  const entries = blockEntries(row.value);
+  const expanded = expandedBlocks.has(row.key);
+  if (entries) {
+    const twisty = el("span", "twisty", expanded ? "▾" : "▸");
+    twisty.title = "Edit this block one key at a time";
+    twisty.addEventListener("click", () => {
+      if (expanded) expandedBlocks.delete(row.key);
+      else expandedBlocks.add(row.key);
+      renderInspector();
+    });
+    head.appendChild(twisty);
+  }
+  head.appendChild(el("span", "key", row.key));
+  const value = valueCell(row, line);
+  if (value) head.appendChild(value);
+  prop.appendChild(head);
+  if (!row.local) prop.appendChild(el("div", "from", `from ${row.origin}`));
+  if (entries && expanded) prop.appendChild(blockEditor(row, entries, line));
+  return prop;
+}
+
+/**
+ * The value half of a row, as the display mode has it: an editable input, an
+ * ellipsized label that becomes one on click, or nothing at all.
+ *
+ * An abbreviated row is a LABEL rather than a short input value, because an
+ * input holds what a commit would write: a row that displayed `Background_A…`
+ * in an editable field would eventually write those bytes into the file.
+ */
+function valueCell(row: InspectorRow, line: number): HTMLElement | null {
+  if (valueMode === "hidden") return null;
+  const short = abbreviate(row.value);
+  if (valueMode === "full" || short === row.value.trim() || editingRows.has(row.key)) {
+    const input = rowInput(row, line);
+    inspectorInputs.set(row.key, input);
+    return input;
+  }
+  const label = el("span", "val short", short);
+  label.title = `${row.value} (click to edit)`;
+  label.addEventListener("click", () => {
+    editingRows.add(row.key);
+    renderInspector();
+    inspectorInputs.get(row.key)?.focus();
+  });
+  inspectorTexts.set(row.key, label);
+  return label;
+}
+
+/** The three-way cycle, in the header because it is a statement about all the rows. */
+function valueModeButton(): HTMLElement {
+  const button = el("button", "modeButton", `Values: ${valueMode}`) as HTMLButtonElement;
+  button.title =
+    "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.";
+  button.addEventListener("click", () => setValueMode(nextValueMode(valueMode)));
+  return button;
+}
+
+function setValueMode(mode: GuiValueMode): void {
+  valueMode = mode;
+  editingRows.clear();
+  // Applied here and now; the host is told so the NEXT panel starts this way.
+  host.send({ type: "setUiState", valueMode: mode });
+  renderInspector();
+}
+
+/**
+ * A block value, one row per inner key. Every change recomposes the WHOLE block
+ * and commits it as one `setProperties` through the guarded path, because that
+ * is what the property is: the engine reads `background = { … }` as one value,
+ * and half a block is not a smaller edit, it is a different one.
+ */
+function blockEditor(row: InspectorRow, entries: readonly BlockEntry[], line: number): HTMLElement {
+  const wrap = el("div", "block");
+  const commit = (next: BlockEntry[]): void => {
+    const value = composeBlock(next);
+    if (value === row.value.trim()) return;
+    writeProperty(line, row.key, value);
+  };
+  entries.forEach((entry, index) => {
+    const sub = el("div", "line");
+    sub.appendChild(
+      blockInput(`${row.key}.${index}.key`, entry.key, "key", (text) => {
+        const next = entries.map((e, i) => (i === index ? { ...e, key: text } : e));
+        commit(next);
+      })
+    );
+    sub.appendChild(
+      blockInput(`${row.key}.${index}.value`, entry.value, "val", (text) => {
+        const next = entries.map((e, i) => (i === index ? { ...e, value: text } : e));
+        commit(next);
+      })
+    );
+    const remove = el("span", "toggle", "✕");
+    remove.title = `Remove ${entry.key} from ${row.key}`;
+    remove.addEventListener("click", () => commit(entries.filter((_, i) => i !== index)));
+    sub.appendChild(remove);
+    wrap.appendChild(sub);
+  });
+
+  const add = el("div", "line");
+  const key = blockInput(`${row.key}.new.key`, "", "key", () => undefined);
+  const value = blockInput(`${row.key}.new.value`, "", "val", () => undefined);
+  key.placeholder = "key";
+  value.placeholder = "value";
+  const go = el("button", undefined, "Add key") as HTMLButtonElement;
+  go.title = `Add a key to ${row.key}`;
+  go.addEventListener("click", () => {
+    if (key.value.trim().length === 0 || value.value.trim().length === 0) {
+      toast(`A ${row.key} entry needs both a key and a value.`, "info");
+      return;
+    }
+    commit([...entries, { key: key.value.trim(), value: value.value.trim() }]);
+  });
+  add.appendChild(key);
+  add.appendChild(value);
+  add.appendChild(go);
+  wrap.appendChild(add);
+  return wrap;
+}
+
+/** One field of a block row. `change` fires on blur and on Enter, like the property rows. */
+function blockInput(
+  rowId: string,
+  value: string,
+  className: string,
+  onCommit: (text: string) => void
+): HTMLInputElement {
+  const input = document.createElement("input");
+  input.className = className === "key" ? "val key" : "val";
+  input.value = value;
+  input.spellcheck = false;
+  input.dataset.row = rowId;
+  input.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    input.blur();
+  });
+  input.addEventListener("change", () => {
+    const text = input.value.trim();
+    if (text.length === 0 || text === value.trim()) {
+      input.value = value;
+      return;
+    }
+    onCommit(text);
+  });
+  return input;
+}
+
+/**
+ * The add-property row. Its completion comes from `paradox/guiVocabulary`: the
+ * property names the vanilla harvest saw on this widget's own type chain, then
+ * the tree-wide ranking. Nothing here is a list typed into the editor, which is
+ * the same rule the palette's widget names follow.
+ *
+ * A value vocabulary is offered where the engine has one: the anchors, whose
+ * words come from the layout engine's own `anchorSpec` table, so the row cannot
+ * write a word the engine does not parse.
+ */
+function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void {
+  if (item.line === undefined) return;
+  const line = item.line;
+  const taken = new Set(rows.map((row) => row.key.toLowerCase()));
+  const chain = [item.key, ...(info?.typeChain ?? [])];
+
+  inspectorEl.appendChild(el("div", "section", "Add a property"));
+  const wrap = el("div", "addProp");
+  const fields = el("div", "line");
+  const name = document.createElement("input");
+  name.className = "val key";
+  name.placeholder = "property";
+  name.spellcheck = false;
+  name.dataset.row = "+name";
+  const suggestions = el("div", "suggest");
+  let value: HTMLInputElement | HTMLSelectElement = valueControl(name.value);
+
+  const commit = (): void => {
+    const key = name.value.trim().toLowerCase();
+    if (key.length === 0) {
+      toast("Name the property to add first.", "info");
+      return;
+    }
+    if (taken.has(key)) {
+      toast(`${key} is already on this widget: edit its row instead.`, "info");
+      return;
+    }
+    const written = value.value.trim();
+    if (written.length === 0) {
+      toast(`${key} needs a value.`, "info");
+      return;
+    }
+    writeProperty(line, key, written);
+  };
+
+  const syncValue = (): void => {
+    const next = valueControl(name.value);
+    if (next.tagName === value.tagName) return;
+    fields.replaceChild(next, value);
+    value = next;
+  };
+  const syncSuggestions = (): void => {
+    suggestions.textContent = "";
+    if (document.activeElement !== name) return;
+    for (const choice of propertyChoices(chain, vocabularyProps, vocabularyCommon, taken, name.value)) {
+      const node = el("div", "row", choice);
+      node.addEventListener("mousedown", (ev) => {
+        // mousedown, not click: the input's blur would clear the list first.
+        ev.preventDefault();
+        name.value = choice;
+        syncValue();
+        suggestions.textContent = "";
+        value.focus();
+      });
+      suggestions.appendChild(node);
+    }
+  };
+
+  name.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      const first = suggestions.firstElementChild?.textContent;
+      if (first && first !== name.value) {
+        name.value = first;
+        syncValue();
+        suggestions.textContent = "";
+        value.focus();
+        return;
+      }
+      value.focus();
+    } else if (ev.key === "Escape") {
+      suggestions.textContent = "";
+    }
+  });
+  name.addEventListener("input", () => {
+    syncValue();
+    syncSuggestions();
+  });
+  name.addEventListener("focus", syncSuggestions);
+  name.addEventListener("blur", () => {
+    suggestions.textContent = "";
+  });
+
+  const go = el("button", undefined, "Add") as HTMLButtonElement;
+  go.title = "Write this property into the widget's own body, through the same guards every edit passes.";
+  go.addEventListener("click", commit);
+  fields.appendChild(name);
+  fields.appendChild(value);
+  fields.appendChild(go);
+  wrap.appendChild(fields);
+  wrap.appendChild(suggestions);
+  inspectorEl.appendChild(wrap);
+}
+
+/** The nine anchor words the engine parses, from the layout engine's own table. */
+const ANCHOR_SPECS = ANCHOR_Y.flatMap((y) => ANCHOR_X.map((x) => anchorSpec(x as AnchorX, y as AnchorY)));
+
+/**
+ * A `<select>` where the engine's vocabulary for the property is known, a plain
+ * field where it is not. Anchors are the known case: their words are the layout
+ * engine's, so a picked one always parses.
+ */
+function valueControl(key: string): HTMLInputElement | HTMLSelectElement {
+  const lower = key.trim().toLowerCase();
+  if (lower === "parentanchor" || lower === "widgetanchor") {
+    const select = document.createElement("select");
+    select.dataset.row = "+value";
+    for (const spec of ANCHOR_SPECS) {
+      const option = document.createElement("option");
+      option.value = spec;
+      option.textContent = spec;
+      select.appendChild(option);
+    }
+    return select;
+  }
+  const input = document.createElement("input");
+  input.className = "val";
+  input.placeholder = "value";
+  input.spellcheck = false;
+  input.dataset.row = "+value";
+  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  return input;
+}
+
+/**
+ * Write one property through the normal single-op path, guards first: the check
+ * carries the same write, so it answers exactly what the commit would, and the
+ * commit only goes out if it passed. Adding a property and rewriting a block
+ * are both this: one `setProperties`, one document change, one undo step.
+ */
+function writeProperty(line: number, key: string, value: string): void {
+  sendEdit("checkEdit", line, [{ key, value }], (verdict) => {
+    if (verdict.refused) {
+      toast(verdict.refused, "refused");
+      return;
+    }
+    sendEdit("applyEdit", line, [{ key, value }], (answer) => {
+      if (answer.refused) toast(answer.refused, "refused");
+      else if (answer.warning) toast(answer.warning, "warned");
+    });
+  });
 }
 
 /**
@@ -900,6 +1328,7 @@ function renderTools(item: SceneItem): void {
     nameInput.placeholder = "Preset name";
     nameInput.value = presetName;
     nameInput.spellcheck = false;
+    nameInput.dataset.row = "+preset";
     nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
     nameInput.addEventListener("input", () => {
       presetName = nameInput.value;
@@ -962,29 +1391,11 @@ function anchorGrid(line: number, key: string, current: string | undefined): HTM
       // An unwritten anchor is the engine's own default (top|left), so the grid
       // shows that corner lit rather than nothing.
       if (current !== undefined && x === at.x && y === at.y) cell.classList.add("on");
-      cell.addEventListener("click", () => setAnchor(line, key, spec));
+      cell.addEventListener("click", () => writeProperty(line, key, spec));
       grid.appendChild(cell);
     }
   }
   return grid;
-}
-
-/**
- * Write one anchor through the normal single-op path, guards first: the check
- * carries the value the file already has, so it writes nothing and answers
- * exactly what the commit would, and the commit only goes out if it passed.
- */
-function setAnchor(line: number, key: string, spec: string): void {
-  sendEdit("checkEdit", line, [{ key, value: spec }], (verdict) => {
-    if (verdict.refused) {
-      toast(verdict.refused, "refused");
-      return;
-    }
-    sendEdit("applyEdit", line, [{ key, value: spec }], (answer) => {
-      if (answer.refused) toast(answer.refused, "refused");
-      else if (answer.warning) toast(answer.warning, "warned");
-    });
-  });
 }
 
 /**
@@ -1067,6 +1478,9 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
   input.className = "val";
   input.value = row.value;
   input.spellcheck = false;
+  // Named so a rebuild can put the caret back where the user left it: a commit
+  // re-lays the document out and every row here is a new element.
+  input.dataset.row = row.key;
   input.title = row.local
     ? row.value
     : `${row.value} (inherited: writing it adds an override on this widget).`;
@@ -1324,8 +1738,15 @@ function onLayout(
   result: GuiLayoutResult,
   textures: Record<string, string | null>,
   name: string,
-  visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined
+  visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined,
+  ui: GuiEditorUiState | undefined
 ): void {
+  // Adopted ONCE, from the first layout: after that the panel's own copy is the
+  // truth, so a layout already in flight cannot undo a mode the user just set.
+  if (!uiAdopted) {
+    uiAdopted = true;
+    if (ui) valueMode = ui.valueMode;
+  }
   file = name;
   defsFiles = result.defsFiles;
   previousScene = scene.items.length > 0 ? scene : null;
@@ -1474,7 +1895,7 @@ const host = connectHost((message) => {
       statusEl.textContent = `Laying out ${message.file}…`;
       return;
     case "layout":
-      onLayout(message.result, message.textures, message.file, message.visibility);
+      onLayout(message.result, message.textures, message.file, message.visibility, message.ui);
       return;
     case "widgetInfo": {
       const item = selectedItem();
@@ -1499,6 +1920,8 @@ const host = connectHost((message) => {
     case "vocabulary":
       vocabulary = message.entries;
       vocabularyTotal = message.total;
+      vocabularyProps = message.properties ?? {};
+      vocabularyCommon = message.commonProperties ?? [];
       renderPalette();
       renderInspector();
       if (haloOpen() && haloTab === "types") renderHalo();

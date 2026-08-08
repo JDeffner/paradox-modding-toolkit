@@ -46,6 +46,7 @@ import type {
   GuiVisibilityOptions,
 } from "@px-lsp/protocol/protocol";
 import CK3_GUI_SCHEMA from "../../server/data/ck3/guiSchema.json";
+import { ANCHOR_X, ANCHOR_Y } from "../../server/src/gui/anchorSpec";
 import { computeGuiLayoutResult, VIEWPORT } from "../../server/src/gui/layoutService";
 import { computeGuiWidgetInfo } from "../../server/src/gui/widgetInfo";
 import { collectGuiDefs } from "../../server/src/gui/guiDefs";
@@ -57,7 +58,12 @@ import { loadSchema } from "../../server/src/schema/loader";
 import { ServerData } from "../../server/src/serverData";
 import { applyAll } from "../../server/src/gui/sourceEdit";
 import { countTopLevelBlocks } from "../src/webviews/guiEditor/userData";
-import type { AppToHost, EditProperty, TextureEntry } from "../src/webviews/guiEditor/messages";
+import type {
+  AppToHost,
+  EditProperty,
+  GuiEditorUiState,
+  TextureEntry,
+} from "../src/webviews/guiEditor/messages";
 import { bootEditor, guiFixture, type EditorHarness } from "./guiEditorHarness";
 
 const TEXT = guiFixture("templates-types.gui");
@@ -137,6 +143,8 @@ let savedComponents: Record<string, string> = {};
 let savedPresets: Record<string, EditProperty[]> = {};
 let textureCatalogue: TextureEntry[] = [];
 let revealedAt: { file: string; line: number }[] = [];
+/** The view preferences the host keeps, which ride down on every layout it pushes. */
+let storedUi: GuiEditorUiState | undefined;
 
 beforeEach(() => {
   editor = bootEditor();
@@ -150,6 +158,7 @@ beforeEach(() => {
   savedPresets = {};
   textureCatalogue = [];
   revealedAt = [];
+  storedUi = undefined;
 });
 afterEach(() => editor.close());
 
@@ -187,7 +196,13 @@ function serveEdits(): void {
     const message = editor.sent[served];
     if (message.type === "requestVocabulary") {
       const vocabulary = computeGuiVocabulary(doc, CK3_GUI_SCHEMA);
-      editor.push({ type: "vocabulary", entries: vocabulary.entries, total: vocabulary.total });
+      editor.push({
+        type: "vocabulary",
+        entries: vocabulary.entries,
+        total: vocabulary.total,
+        properties: vocabulary.properties,
+        commonProperties: vocabulary.commonProperties,
+      });
       continue;
     }
     if (message.type === "copyBlocks") {
@@ -341,6 +356,11 @@ function serveHalo(message: AppToHost): boolean {
       });
       return true;
     }
+    case "setUiState":
+      // Stored and never echoed back mid-session, exactly like panel.ts: the
+      // app has already applied it and the next panel reads it from its layout.
+      storedUi = { valueMode: message.valueMode };
+      return true;
     case "savePreset":
       savedPresets[message.name] = message.properties;
       pushUserData();
@@ -2073,5 +2093,234 @@ describe("the texture inspector", () => {
     editor.click(at.x, at.y);
     serveWidgetInfo(editor, doc);
     expect(editor.text("haloBody")).toContain("draws no texture");
+  });
+});
+
+// ── round 2: the inspector reads, adds and edits in place ───────────────────
+
+/**
+ * A widget with the three shapes round 2 is about: a long value (what a display
+ * mode abbreviates), a block value (what the sub-editor takes apart), and room
+ * for a property it does not carry yet.
+ */
+const INSPECT = [
+  "widget = {",
+  '\tname = "px_r2_root"',
+  "\tsize = { 400 300 }",
+  "\twidget = {",
+  '\t\tname = "px_r2_card"',
+  "\t\tposition = { 20 20 }",
+  "\t\tsize = { 120 60 }",
+  "\t\tbackground = { using = Background_Area_Dark alpha = 0.7 }",
+  "\t}",
+  "}",
+  "",
+].join("\n");
+
+/** Open INSPECT, select the card, and answer both reads the panel makes. */
+function openInspect(): void {
+  openDoc(INSPECT, "inspect.gui");
+  serveEdits();
+  editor.click(80, 50);
+  expect(editor.selectedRow()).toContain("px_r2_card");
+  serveWidgetInfo(editor, doc);
+}
+
+describe("how much of a value the inspector shows", () => {
+  it("cycles full -> abbreviated -> hidden, and abbreviated keeps the whole value on hover", () => {
+    openInspect();
+    expect(editor.rowInput("background")!.value).toContain("Background_Area_Dark");
+
+    editor.button("Values: full").click();
+    // A LABEL, not a short input value: an input holds what a commit would
+    // write, and an ellipsis is not something this editor may write.
+    expect(editor.rowInput("background")).toBeNull();
+    const label = editor.propRow("background")!.querySelector<HTMLElement>(".val.short")!;
+    expect(label.textContent).toContain("…");
+    expect(label.title).toContain("{ using = Background_Area_Dark alpha = 0.7 }");
+    // A short value has nothing to abbreviate, so it stays editable.
+    expect(editor.rowInput("position")!.value).toBe("{ 20 20 }");
+
+    editor.button("Values: abbreviated").click();
+    expect(editor.text("inspector")).toContain("background");
+    expect(editor.text("inspector")).not.toContain("0.7");
+    expect(editor.text("inspector")).not.toContain("{ 20 20 }");
+
+    editor.button("Values: hidden").click();
+    expect(editor.rowInput("background")!.value).toContain("Background_Area_Dark");
+  });
+
+  it("clicking an abbreviated value opens that one row for editing", () => {
+    openInspect();
+    editor.button("Values: full").click();
+    editor.clickIn(editor.propRow("background")!, ".val.short");
+    expect(editor.rowInput("background")!.value).toBe("{ using = Background_Area_Dark alpha = 0.7 }");
+    // That row alone: the mode is untouched, so the others are still labels.
+    expect(editor.button("Values: abbreviated")).toBeTruthy();
+  });
+
+  it("the host is told, and it is what the NEXT panel boots with", () => {
+    openInspect();
+    editor.button("Values: full").click();
+    serveEdits();
+    expect(lastOfType(editor, "setUiState")).toEqual({ type: "setUiState", valueMode: "abbreviated" });
+    expect(storedUi).toEqual({ valueMode: "abbreviated" });
+
+    // A second panel, opened with what the host kept.
+    editor.close();
+    editor = bootEditor();
+    editor.push({
+      type: "layout",
+      file: "inspect.gui",
+      result: layoutOf(INSPECT),
+      textures: {},
+      ui: storedUi,
+    });
+    editor.click(80, 50);
+    serveWidgetInfo(editor, INSPECT);
+    expect(editor.button("Values: abbreviated")).toBeTruthy();
+    expect(editor.rowInput("background")).toBeNull();
+
+    // Adopted once: a later layout carrying nothing does not undo it, which is
+    // what keeps a push already in flight from fighting the user.
+    editor.push({ type: "layout", file: "inspect.gui", result: layoutOf(INSPECT), textures: {} });
+    expect(editor.button("Values: abbreviated")).toBeTruthy();
+  });
+});
+
+describe("adding a property", () => {
+  it("completes from the harvested vocabulary for this widget's type", () => {
+    openInspect();
+    editor.typeRow("+name", "vis", false);
+    const offered = editor.suggestions();
+    expect(offered).toContain("visible");
+    // Harvested, not invented: every offer is a name guiVocabulary answered with.
+    const vocabulary = computeGuiVocabulary(doc, CK3_GUI_SCHEMA);
+    const known = new Set([
+      ...Object.values(vocabulary.properties ?? {}).flat(),
+      ...(vocabulary.commonProperties ?? []),
+    ]);
+    expect(offered.filter((name) => !known.has(name))).toEqual([]);
+    // A property the widget already carries is an edit of its row, not an add.
+    editor.typeRow("+name", "siz", false);
+    expect(editor.suggestions()).not.toContain("size");
+  });
+
+  it("picking a completion and committing writes ONE guarded op into the widget's body", () => {
+    openInspect();
+    editor.typeRow("+name", "vis", false);
+    editor.pickSuggestion("visible");
+    editor.typeRow("+value", "no", false);
+    editor.button("Add").click();
+
+    const check = lastOfType(editor, "checkEdit")!;
+    expect(check.properties).toEqual([{ key: "visible", value: "no" }]);
+    serveEdits();
+    const apply = lastOfType(editor, "applyEdit")!;
+    expect(apply.properties).toEqual([{ key: "visible", value: "no" }]);
+    serveEdits();
+    // Into the card's own body, and nothing else in the file moved.
+    expect(doc).toBe(INSPECT.replace("\t}\n}", "\t\tvisible = no\n\t}\n}"));
+  });
+
+  it("offers the engine's own anchor words as values, and never anything else", () => {
+    openInspect();
+    editor.typeRow("+name", "parentanchor", false);
+    const options = editor.valueOptions();
+    // The nine cells of the layout engine's own anchor table (anchorSpec).
+    expect(options).toHaveLength(9);
+    expect(options).toContain("center");
+    expect(options).toContain("bottom|right");
+    const words = new Set([...ANCHOR_X, ...ANCHOR_Y, "center"]);
+    expect(options.every((spec) => spec.split("|").every((word) => words.has(word)))).toBe(true);
+  });
+
+  it("a refusal is the server's, and nothing is written", () => {
+    // A vbox child with no position of its own: the row is addable, and the
+    // guards are what turn it down.
+    const layout = openDoc(GROUP, "group.gui");
+    serveEdits();
+    const at = centreOf(layout, "px_g5_boxed");
+    editor.click(at.x, at.y);
+    serveWidgetInfo(editor, doc);
+
+    editor.typeRow("+name", "position", false);
+    editor.typeRow("+value", "{ 40 40 }", false);
+    editor.button("Add").click();
+    serveEdits();
+    expect(editor.toast()).toContain("places its children itself");
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+    expect(doc).toBe(GROUP);
+  });
+});
+
+describe("a block value, as rows", () => {
+  it("expands into one row per inner key and commits the recomposed block as ONE write", () => {
+    openInspect();
+    editor.clickIn(editor.propRow("background")!, ".twisty");
+    // Two keys plus the row that adds a third.
+    expect(editor.propRow("background")!.querySelectorAll(".block .line")).toHaveLength(3);
+
+    editor.typeRow("background.1.value", "0.4");
+    serveEdits();
+    const apply = lastOfType(editor, "applyEdit")!;
+    expect(apply.properties).toEqual([
+      { key: "background", value: "{ using = Background_Area_Dark alpha = 0.4 }" },
+    ]);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(1);
+    expect(doc).toContain("background = { using = Background_Area_Dark alpha = 0.4 }");
+  });
+
+  it("a removed key and an added one are each one write of the whole block", () => {
+    openInspect();
+    editor.clickIn(editor.propRow("background")!, ".twisty");
+    editor.clickIn(editor.propRow("background")!, ".block .toggle");
+    serveEdits();
+    expect(doc).toContain("background = { alpha = 0.7 }");
+    serveWidgetInfo(editor, doc);
+
+    editor.typeRow("background.new.key", "texture", false);
+    editor.typeRow("background.new.value", '"gfx/px/plate.dds"', false);
+    editor.button("Add key").click();
+    serveEdits();
+    expect(doc).toContain('background = { alpha = 0.7 texture = "gfx/px/plate.dds" }');
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(2);
+  });
+
+  it("a bare pair keeps its plain row: there is nothing to take apart", () => {
+    openInspect();
+    expect(editor.propRow("size")!.querySelector(".twisty")).toBeNull();
+    expect(editor.propRow("background")!.querySelector(".twisty")).not.toBeNull();
+  });
+});
+
+describe("the inspector holds its place across the re-layout a commit causes", () => {
+  it("keeps the scroll offset, the open sub-editor and the caret", () => {
+    openInspect();
+    editor.clickIn(editor.propRow("background")!, ".twisty");
+    editor.scrollPanel("inspector", 120);
+
+    editor.typeRow("position", "{ 30 30 }");
+    serveEdits();
+    serveWidgetInfo(editor, doc);
+    expect(doc).toContain("position = { 30 30 }");
+
+    // The panel the user was reading is the panel they get back.
+    expect(editor.scrollOf("inspector")).toBe(120);
+    expect(editor.propRow("background")!.querySelectorAll(".block .line").length).toBeGreaterThan(0);
+    expect(editor.focusedRow()).toBe("position");
+  });
+
+  it("goes back to the top for a different widget, whose rows it has never scrolled", () => {
+    openInspect();
+    editor.clickIn(editor.propRow("background")!, ".twisty");
+    editor.scrollPanel("inspector", 120);
+
+    // The root, not the card: another widget's rows entirely.
+    editor.click(300, 200);
+    expect(editor.selectedRow()).toContain("px_r2_root");
+    serveWidgetInfo(editor, doc);
+    expect(editor.scrollOf("inspector")).toBe(0);
+    expect(editor.propRow("size")!.querySelector(".block")).toBeNull();
   });
 });

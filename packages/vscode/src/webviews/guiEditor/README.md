@@ -24,7 +24,7 @@ it, and which of the promises are load-bearing rather than conveniences.
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |
 | `panel.ts` | The VS Code host | Replaced by the new host. |
 | `textureCache.ts` | Host-side DDS decoding, caching and eviction | Replaced or reused; it has no `vscode` import. |
-| `userData.ts` | The storage keys and shapes for the per-user state, plus the block count a component row shows | Reused. No `vscode` import, and a component saved in one host should be readable in the other. |
+| `userData.ts` | The storage keys and shapes for the per-user state, the block count a component row shows, and the validator for the stored view preferences | Reused. No `vscode` import, and a component saved in one host should be readable in the other. |
 
 The bundle is built by `compile:webview` (esbuild, IIFE, es2020) to
 `dist/webview/guiEditor.js`. `guiEditorPackaging.test.ts` fails if that step
@@ -53,10 +53,11 @@ change that: the host walks the `gfx/` trees and answers with engine-relative
 path strings, so the app still never sees a file system path.
 
 **The host owns the per-user state.** The conditional-visibility mode, the
-saved components and the property presets are none of them in the document and
-none of them the server's, so the app keeps no authoritative copy: it asks, it
-draws what it is told, and the state survives the panel being closed because
-the host is where it lives. See "What the host remembers".
+saved components, the property presets and the inspector's value display mode
+are none of them in the document and none of them the server's, so the app
+keeps no authoritative copy: it asks, it draws what it is told, and the state
+survives the panel being closed because the host is where it lives. See "What
+the host remembers".
 
 ## What a host must implement
 
@@ -110,9 +111,12 @@ each has to actually do.
 - **`pasteInto`** Read the clipboard and commit it as one `insertRaw` op at the
   named container and index. An empty clipboard is a refusal, not silence.
 - **`requestVocabulary` / `vocabulary`** Answer `paradox/guiVocabulary` for the
-  current text: the widget names a palette may offer. A host with no such
-  request answers `{ entries: [], total: 0 }`, and the palette says it has
-  nothing rather than breaking.
+  current text, WHOLE: the widget names a palette may offer, and the
+  `properties` / `commonProperties` an inspector's add-property row completes
+  from. A host that forwarded only the entries would leave that row offering
+  nothing, which looks exactly like a document whose types the harvest does not
+  know. A host with no such request answers `{ entries: [], total: 0 }`, and
+  both panels say they have nothing rather than breaking.
 - **`reveal`** Show that line in the text editor without stealing focus and
   without hijacking the column the editor panel is in.
 - **`revealAt`** The same, for an ARBITRARY file: a dependency row points at a
@@ -154,6 +158,12 @@ each has to actually do.
   a refusal, not silence.
 - **`savePreset` / `forgetSaved`** Update the store and push `userData`. Neither
   touches the document, so neither answers a verdict.
+- **`setUiState`** Store the inspector's value display mode and answer NOTHING.
+  The app applied it the moment the user picked it, and what the host keeps is
+  what the next panel boots with, which it reads off `layout.ui`. A host that
+  echoed it back mid-session would fight a user who changed it twice while a
+  layout was in flight, which is also why the app adopts `layout.ui` only from
+  the FIRST layout it receives.
 
 Every `checkEdit`, `applyEdit`, `checkReorder`, `reorder`, `checkOps`,
 `applyOps`, `copyBlocks`, `pasteInto`, `saveComponent` and `insertComponent`
@@ -189,8 +199,8 @@ never count one up for it; the app greys the grip and drops nothing there.
 
 ## What the host remembers
 
-Three things outlive the panel, and [`userData.ts`](./userData.ts) owns their
-keys and shapes so both hosts store the same bytes. `panel.ts` puts all three in
+Four things outlive the panel, and [`userData.ts`](./userData.ts) owns their
+keys and shapes so both hosts store the same bytes. `panel.ts` puts all four in
 VS Code's `workspaceState`; another host may use anything with the same shape.
 
 | Key | Shape | Scope |
@@ -198,11 +208,15 @@ VS Code's `workspaceState`; another host may use anything with the same shape.
 | `px.guiEditor.components` | `{ [name]: string }` — the widgets' VERBATIM block text | A library: global, not per document |
 | `px.guiEditor.presets` | `{ [name]: { key, value }[] }` — property writes in saved order | A library: global, not per document |
 | `px.guiEditor.visibility` | `{ [documentUri]: { mode, checks? } }` | Per document |
+| `px.guiEditor.ui` | `{ valueMode: "full" \| "abbreviated" \| "hidden" }` | A preference: global |
 
-Two rules about them. The visibility default is NEVER stored: writing `showAll`
-for every file ever opened would grow the map by one entry per file, for the
-mode those files already have. And a component is stored as bytes rather than a
-parse, because that is the only form an `insertRaw` can put back unchanged.
+Three rules about them. The visibility default is NEVER stored: writing
+`showAll` for every file ever opened would grow the map by one entry per file,
+for the mode those files already have. A component is stored as bytes rather
+than a parse, because that is the only form an `insertRaw` can put back
+unchanged. And the ui state is READ BACK THROUGH `readUiState`, never cast: the
+store outlives the build that wrote it, and a mode this build does not know
+must not reach the inspector.
 
 ## What the page must provide
 
