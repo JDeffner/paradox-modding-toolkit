@@ -231,6 +231,11 @@ export function readConfig(): PxConfig {
   if (gameId !== ck3Meta.id) {
     // workspaceGameDir probes for a CK3-shaped install; never borrow it here.
     gamePath = explicitGamePath ?? findGameFolder(activeMeta.name);
+  } else if (gamePath === null) {
+    // CK3 falls back to the same Steam detection the other games get; without
+    // it, a mod-only workspace runs every game-data feature (GUI templates,
+    // texture roots, vanilla index) with no vanilla at all.
+    gamePath = findGameFolder(activeMeta.name);
   }
   if (logsPath === null && (cfg.get<string>("logsPath") ?? "").trim() === "") {
     logsPath = defaultLogsPath(activeMeta.docsFolderName, activeMeta.steamAppId, activeMeta.scriptDocsSubdir);

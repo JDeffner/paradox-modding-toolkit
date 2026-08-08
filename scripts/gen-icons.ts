@@ -13,27 +13,33 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { glyph, toPathData, WEIGHT, WIDTH, type Stroke } from "./brandGeometry";
+import { CREAM, glyph, INK, toPathData, WEIGHT, WIDTH, type Stroke } from "./brandGeometry";
 
 const outDir = path.join(__dirname, "..", "packages", "vscode", "media", "fileicons");
 fs.mkdirSync(outDir, { recursive: true });
 
 /**
- * The script icon is the brand's own letterforms: "PS" (Paradox Script) from
- * brandGeometry, so the file icon and the product lockup cannot drift apart.
- * Tighter gap than the tile's 7: at 16px every scaled unit of cap counts.
+ * The script icon follows the JS-icon convention: a filled box with the
+ * letters anchored bottom-right — but the letters are still brandGeometry's
+ * own "PS", so the file icon and the product lockup cannot drift apart.
+ * Colors are the brand's cream and ink, never pure white or black: on a dark
+ * UI the box is cream with ink letters, on a light UI the inverse.
  */
-function psBody(color: string): string {
-  const GAP16 = 5;
+function psBody(box: string): string {
+  const ink = box === CREAM ? INK : CREAM;
+  const GAP16 = 4;
   const strokes: Stroke[] = [...glyph("P", 0, 0), ...glyph("S", WIDTH.P + GAP16, 0)];
   const inkW = WIDTH.P + GAP16 + WIDTH.S; // PS has no diagonal overshoot: ink = advance
   const inkH = 34; // CAP; the S's arcs are designed to the same ink height
-  const scale = 13.2 / Math.max(inkW, inkH);
-  const tx = (16 - inkW * scale) / 2;
-  const ty = (16 - inkH * scale) / 2;
+  const scale = 6.3 / inkH; // letters at ~48% of the box; the leftover space
+  // lands on the left and top, which is what reads as the JS-style anchor
+  const MARGIN = 1.55; // from the box's right and bottom edges to the ink
+  const tx = 14.6 - MARGIN - inkW * scale;
+  const ty = 14.6 - MARGIN - inkH * scale;
   const d = strokes.map((s) => `  <path d="${toPathData(s)}" />`).join("\n");
   return `
-  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(5)})" fill="none" stroke="${color}" stroke-width="${WEIGHT}" stroke-linecap="butt" stroke-linejoin="miter">
+  <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="1.8" fill="${box}"/>
+  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(5)})" fill="none" stroke="${ink}" stroke-width="${WEIGHT}" stroke-linecap="butt" stroke-linejoin="miter">
 ${d}
   </g>`;
 }
@@ -45,10 +51,11 @@ interface IconDef {
 }
 
 const icons: Record<string, IconDef> = {
-  // Paradox Script: the brand letterforms
+  // Paradox Script: the brand letterforms in a JS-style box. The theme color
+  // is the BOX fill; the letters take the opposite brand neutral (see psBody).
   paradox: {
-    dark: "#E3B341",
-    light: "#A87B0F",
+    dark: CREAM,
+    light: INK,
     body: psBody,
   },
   // Localization: speech bubble with two text lines cut out

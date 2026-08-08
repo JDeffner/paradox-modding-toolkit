@@ -299,6 +299,14 @@ export type HostToApp =
        * choice the user has just made.
        */
       ui?: GuiEditorUiState;
+      /**
+       * The host's own words for a template store built without the game's
+       * files (no game install configured/found): sizes and positions that
+       * resolve through vanilla templates collapse, which looks like a broken
+       * canvas. Shown verbatim in the meta line; absent means the store is
+       * complete and the app shows the file count alone.
+       */
+      storeWarning?: string;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an

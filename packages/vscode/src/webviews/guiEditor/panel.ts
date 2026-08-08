@@ -269,6 +269,11 @@ export class GuiEditorPanel {
         textures,
         visibility,
         ui: readUiState(this.state.get(UI_KEY)),
+        // No game root means the store holds mod files alone: vanilla-template
+        // sizes collapse and the canvas looks broken for no visible reason.
+        storeWarning: this.roots.gamePath
+          ? undefined
+          : "game install not found — layout is missing the game's templates. Run “Paradox Toolkit: Setup” or set px.gamePath",
       });
     } catch (err) {
       if (this.disposed) return;

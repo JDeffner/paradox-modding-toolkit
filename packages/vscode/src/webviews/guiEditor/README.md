@@ -71,7 +71,10 @@ each has to actually do.
   document changes by `LAYOUT_DEBOUNCE_MS` (300 ms, the analysis debounce
   culture) and skips the debounce after its own write, so a released drag does
   not hang on its preview. `textures` maps every path in `result.textures` to a
-  URL or to null.
+  URL or to null. When the store was built without the game's own files (no game
+  install configured), say so in `storeWarning`, in the host's words: a store of
+  mod files alone collapses every vanilla-template size, and the meta line is
+  where the app explains a canvas that would otherwise just look broken.
 - **`requestWidgetInfo` / `widgetInfo`** Read the widget declared on that
   0-based line and answer, ECHOING the line. The app drops an answer whose line
   the selection has already left, so an unechoed line silently breaks the

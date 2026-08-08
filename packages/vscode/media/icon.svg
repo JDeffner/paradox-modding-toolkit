@@ -1,24 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <defs>
-    <clipPath id="t"><rect x="0" y="27" width="128" height="34" /></clipPath>
-    <clipPath id="b"><rect x="0" y="67" width="128" height="34" /></clipPath>
-  </defs>
   <rect width="128" height="128" rx="26" fill="#17161A" />
-  <g fill="none" stroke-width="8" stroke-linecap="butt" stroke-linejoin="miter">
-    <g clip-path="url(#t)">
-  <path d="M35.744 27L35.744 61" stroke="#F2EDE3" />
-  <path d="M35.744 31L49.244 31" stroke="#F2EDE3" />
-  <path d="M49.244 31A6.5 6.5 0 0 1 49.244 44" stroke="#F2EDE3" />
-  <path d="M35.744 44L49.244 44" stroke="#F2EDE3" />
-  <path d="M68.744 22L92.744 66" stroke="#F2EDE3" />
-  <path d="M92.744 22L68.744 66" stroke="#F2EDE3" />
-    </g>
-    <g clip-path="url(#b)">
-  <path d="M31.688 71L59.688 71" stroke="#C8952F" />
-  <path d="M45.688 67L45.688 101" stroke="#C8952F" />
-  <path d="M70.688 67L70.688 101" stroke="#C8952F" />
-  <path d="M93.688 64L70.688 84" stroke="#C8952F" />
-  <path d="M70.688 84L93.688 104" stroke="#C8952F" />
-    </g>
+  <g transform="translate(29.559 61) scale(0.023192 -0.023192)" fill="#F2EDE3" fill-rule="evenodd">
+    <path transform="translate(0 0)" d="M0 0L0 1466L700 1466Q1010 1466 1140 1362Q1270 1258 1270 1040Q1270 822 1140 719Q1010 616 700 616L453 616L453 0ZM453 946L690 946Q900 946 900 1040Q900 1136 690 1136L453 1136Z" />
+    <path transform="translate(1470 0)" d="M0 1466L560 1466L750 1169.7L940 1466L1500 1466L1030 733L1500 0L940 0L750 296.3L560 0L0 0L470 733Z" />
+  </g>
+  <g transform="translate(27.692 101) scale(0.023192 -0.023192)" fill="#C8952F" fill-rule="evenodd">
+    <path transform="translate(0 0)" d="M0 1466H1377V1104H915V0H462V1104H0Z" />
+    <path transform="translate(1577 0)" d="M0 1466H453V912L928 1466H1530L996 913L1554 0H996L687 603L453 358V0H0Z" />
   </g>
 </svg>

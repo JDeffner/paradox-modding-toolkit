@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4.3 10.8V3h2.1a1.95 1.95 0 0 1 0 3.9H4.3"/>
-  <path d="m11.4 3 5.2 7.8M16.6 3l-5.2 7.8"/>
-  <path d="M3.7 13.2h5.4M6.4 13.2V21"/>
-  <path d="M12.2 13.2V21M17 13.2l-4.8 3.9L17 21"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <g transform="translate(1.761 11.108) scale(0.006895 -0.006895)" fill="currentColor" fill-rule="evenodd">
+    <path transform="translate(0 0)" d="M0 0L0 1466L700 1466Q1010 1466 1140 1362Q1270 1258 1270 1040Q1270 822 1140 719Q1010 616 700 616L453 616L453 0ZM453 946L690 946Q900 946 900 1040Q900 1136 690 1136L453 1136Z" />
+    <path transform="translate(1470 0)" d="M0 1466L560 1466L750 1169.7L940 1466L1500 1466L1030 733L1500 0L940 0L750 296.3L560 0L0 0L470 733Z" />
+  </g>
+  <g transform="translate(1.206 23) scale(0.006895 -0.006895)" fill="currentColor" fill-rule="evenodd">
+    <path transform="translate(0 0)" d="M0 1466H1377V1104H915V0H462V1104H0Z" />
+    <path transform="translate(1577 0)" d="M0 1466H453V912L928 1466H1530L996 913L1554 0H996L687 603L453 358V0H0Z" />
+  </g>
 </svg>

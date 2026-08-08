@@ -1786,7 +1786,8 @@ function onLayout(
   textures: Record<string, string | null>,
   name: string,
   visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined,
-  ui: GuiEditorUiState | undefined
+  ui: GuiEditorUiState | undefined,
+  storeWarning?: string
 ): void {
   // Adopted ONCE, from the first layout: after that the panel's own copy is the
   // truth, so a layout already in flight cannot undo a mode the user just set.
@@ -1818,7 +1819,14 @@ function onLayout(
   marquee = null;
   flashIndex = null;
   layersBuilt = false;
-  metaEl.textContent = `${defsFiles} gui files in template store`;
+  // The warning is the host's own words, shown verbatim: the app cannot know
+  // how many files a complete store holds, only the host knows why it is short.
+  metaEl.textContent = storeWarning
+    ? `${defsFiles} gui files in template store — ${storeWarning}`
+    : `${defsFiles} gui files in template store`;
+  metaEl.style.color = storeWarning
+    ? "var(--vscode-editorWarning-foreground)"
+    : "var(--vscode-descriptionForeground)";
   seedCollapse();
   // Every path-keyed view (eye, lock, solo, focus) re-resolves against the new
   // draw indices before anything reads a mask.
@@ -1942,7 +1950,7 @@ const host = connectHost((message) => {
       statusEl.textContent = `Laying out ${message.file}…`;
       return;
     case "layout":
-      onLayout(message.result, message.textures, message.file, message.visibility, message.ui);
+      onLayout(message.result, message.textures, message.file, message.visibility, message.ui, message.storeWarning);
       return;
     case "widgetInfo": {
       const item = selectedItem();
