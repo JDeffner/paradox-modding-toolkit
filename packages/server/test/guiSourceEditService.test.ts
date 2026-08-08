@@ -330,7 +330,12 @@ describe("guiSourceEdit: a batch of ops against one text", () => {
 
   it("a member that changes nothing reports no edits and no refusal", () => {
     const result = batch(DOC, [move(DOC, "px_one", "{ 0 0 }"), move(DOC, "px_two", "{ 45 45 }")])!;
-    expect(result.results![0]).toEqual({ refused: undefined, warning: undefined, edits: [], blockText: undefined });
+    expect(result.results![0]).toEqual({
+      refused: undefined,
+      warning: undefined,
+      edits: [],
+      blockText: undefined,
+    });
     expect(result.edits).toHaveLength(1);
   });
 
@@ -343,7 +348,9 @@ describe("guiSourceEdit: a batch of ops against one text", () => {
     ])!;
     expect(result.results![0].edits).toHaveLength(1);
     expect(result.results![1].refused).toContain("already rewrites those bytes");
-    expect(applyAll(DOC, result.edits!)).toBe(DOC.replace('\twidget = { name = "px_one" position = { 0 0 } size = { 10 10 } }\n', ""));
+    expect(applyAll(DOC, result.edits!)).toBe(
+      DOC.replace('\twidget = { name = "px_one" position = { 0 0 } size = { 10 10 } }\n', "")
+    );
   });
 
   it("carries a per-op warning and joins them at the top", () => {
@@ -359,12 +366,15 @@ describe("guiSourceEdit: a batch of ops against one text", () => {
 
   it("refuses the whole request only for a whole-request failure", () => {
     expect(computeGuiSourceEdits(DOC, [], emptyGuiDefs())!.refused).toContain("named no widgets");
-    expect(computeGuiSourceEdits("widget = {", [{ kind: "delete", line: 0 }], emptyGuiDefs())!.refused).toContain(
-      "parse error"
-    );
+    expect(
+      computeGuiSourceEdits("widget = {", [{ kind: "delete", line: 0 }], emptyGuiDefs())!.refused
+    ).toContain("parse error");
     expect(computeGuiSourceEdits(DOC, null, emptyGuiDefs())).toBeNull();
     // An unknown op is that op's refusal, not the batch's.
-    const mixed = batch(DOC, [{ kind: "nonsense" } as unknown as GuiSourceOp, move(DOC, "px_one", "{ 5 5 }")])!;
+    const mixed = batch(DOC, [
+      { kind: "nonsense" } as unknown as GuiSourceOp,
+      move(DOC, "px_one", "{ 5 5 }"),
+    ])!;
     expect(mixed.refused).toBeUndefined();
     expect(mixed.results![0].refused).toContain("no such edit");
     expect(mixed.results![1].edits).toHaveLength(1);

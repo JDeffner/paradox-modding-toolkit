@@ -218,7 +218,12 @@ export function computeGuiSourceEdits(
     }
     const own = answer.edits ?? [];
     if (answer.refused || own.length === 0) {
-      results.push({ refused: answer.refused, warning: answer.warning, edits: [], blockText: answer.blockText });
+      results.push({
+        refused: answer.refused,
+        warning: answer.warning,
+        edits: [],
+        blockText: answer.blockText,
+      });
       if (answer.warning) warnings.push(answer.warning);
       continue;
     }

@@ -782,6 +782,47 @@ export interface GuiDependenciesResult {
 }
 
 /**
+ * Request: the widget names a designer palette may offer for THIS document;
+ * {@link GuiVocabularyParams} -> {@link GuiVocabularyResult}.
+ *
+ * Every name is harvested, never listed by hand: the bundled per-game widget
+ * schema (`data/<game>/guiSchema.json`, built from the vanilla `gui/` tree)
+ * plus the requested document's own `template` and `type` declarations. A
+ * palette entry is therefore always a widget the game knows.
+ */
+export const guiVocabularyRequest = "paradox/guiVocabulary";
+export interface GuiVocabularyParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  text: string;
+}
+export interface GuiVocabularyEntry {
+  name: string;
+  /** `builtin` = the vanilla harvest; `type`/`template` = this document declares it. */
+  kind: "builtin" | "type" | "template";
+  /** How many times the vanilla gui tree writes it (`builtin` only). */
+  count?: number;
+  /** The base widget key a `type` derives from. */
+  base?: string;
+  /** Declared in the requested document itself. */
+  local?: boolean;
+  /**
+   * The vanilla tree writes widgets inside it, so it can hold children: what a
+   * "wrap in a container" menu offers. Derived from the harvest's own child
+   * counts, not from a list of container names.
+   */
+  container?: boolean;
+}
+export interface GuiVocabularyResult {
+  /**
+   * The document's own declarations first, then the harvested types by vanilla
+   * usage. Capped; `total` gives the real count, so a UI states what it hid.
+   */
+  entries: GuiVocabularyEntry[];
+  total: number;
+}
+
+/**
  * Request: source edits for a `.gui` designer gesture;
  * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
  * request itself makes no sense (an unknown op). The server never writes: it

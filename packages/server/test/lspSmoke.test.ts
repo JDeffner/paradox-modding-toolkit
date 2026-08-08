@@ -612,7 +612,9 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(batch.results![1].refused).toContain("places its children itself");
     expect(batch.results![1].edits).toEqual([]);
     expect(applyEdits(text, batch.edits!)).toBe(
-      text.replace("position = { 0 0 }", "position = { 5 5 }").replace("position = { 40 40 }", "position = { 45 45 }")
+      text
+        .replace("position = { 0 0 }", "position = { 5 5 }")
+        .replace("position = { 40 40 }", "position = { 45 45 }")
     );
 
     // One shape or the other: a request carrying both cannot say which it meant.

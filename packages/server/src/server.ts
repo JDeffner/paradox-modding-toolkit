@@ -63,6 +63,8 @@ import {
   type GuiWidgetInfoParams,
   guiDependenciesRequest,
   type GuiDependenciesParams,
+  guiVocabularyRequest,
+  type GuiVocabularyParams,
   dependenciesRequest,
   type DependenciesParams,
   scopeAtRequest,
@@ -79,6 +81,7 @@ import {
 } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
 import { computeGuiSourceEdit, computeGuiSourceEdits } from "./gui/sourceEditService";
+import { computeGuiVocabulary } from "./gui/vocabulary";
 import { computeGuiWidgetInfo } from "./gui/widgetInfo";
 import { computeGuiDependencies, computeGuiUses } from "./gui/guiDependencies";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
@@ -1193,6 +1196,12 @@ connection.onRequest(guiWidgetInfoRequest, (params: GuiWidgetInfoParams) =>
     roots: textureRoots(),
     viewport: VIEWPORT,
   })
+);
+
+// What a designer palette may offer: the bundled harvest for the active game
+// plus this document's own declarations. Never a hand-written name list.
+connection.onRequest(guiVocabularyRequest, (params: GuiVocabularyParams) =>
+  computeGuiVocabulary(params.text ?? "", activeProfile().guiSchema)
 );
 
 // The GUI half of the dependency explorer. Same document text the canvas is

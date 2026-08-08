@@ -137,6 +137,7 @@ instead.
 | `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
 | `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
+| `paradox/guiVocabulary` | request | `{ uri, text }` → `GuiVocabularyResult` — the widget names a designer palette may offer: the bundled per-game harvest plus this document's own templates and types |
 | `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture (one `op`, or a batch of `ops` answered as one edit set with a verdict each), or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
@@ -292,6 +293,16 @@ real "none found", absent means it was not requested). Each site is one
 `file:line` of a `GetScriptedGui(...)` call plus the `scriptedGui` it names and
 the same `via` hop list, so the whole path reads
 `file:line -> scripted_gui -> effects -> definition`.
+
+`paradox/guiVocabulary` is what a designer palette is allowed to offer. Every
+name is harvested rather than listed: the active game's bundled
+`guiSchema.json` (built from the vanilla `gui/` tree) plus the requested
+document's own `template` and `type` declarations, which come first and are
+never capped. `container` says the vanilla tree writes widgets inside that
+type, which is what a "wrap in a container" menu should show; it is derived
+from the harvest's own child counts, with the engine's attribute blocks
+excluded, not from a list of container names. The harvested tail is capped and
+`total` gives the real count.
 
 `paradox/guiSourceEdit` takes `{ uri, text, op }` and answers
 `{ edits }` or `{ refused }`, never both, and `null` only for an op it does not

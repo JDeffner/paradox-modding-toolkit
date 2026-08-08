@@ -31,6 +31,9 @@
 import { LineIndex, parseScript, type BlockNode, type ScalarNode, type Statement } from "../parser";
 import { collectBlockOverrides, collectGuiDefs, emptyGuiDefs, expandWidget, type GuiDefs } from "./guiDefs";
 import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
+// The anchor table is a leaf so the webview's anchor picker offers exactly the
+// words this engine parses (B1-B/C).
+import { anchorFractions } from "./anchorSpec";
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -837,9 +840,7 @@ function collectWidgets(statements: Statement[], ctx: BuildCtx): WNode[] {
     const k = stmt.key.text.toLowerCase();
     if (PROPERTY_BLOCKS.has(k)) continue;
     if (k.startsWith("@")) continue;
-    out.push(
-      buildWNode(stmt.key.text, block, ctx, ctx.lineOf(stmt.key.range.start), true, ranks.get(stmt))
-    );
+    out.push(buildWNode(stmt.key.text, block, ctx, ctx.lineOf(stmt.key.range.start), true, ranks.get(stmt)));
   }
   return out;
 }
@@ -897,40 +898,6 @@ function str(node: WNode, key: string): string | undefined {
 
 function yes(node: WNode, key: string): boolean {
   return node.props.get(key)?.text.toLowerCase() === "yes";
-}
-
-/** parentanchor/widgetanchor -> fractional point (0=left/top, 1=right/bottom). */
-function anchorFractions(spec: string | undefined): [number, number] {
-  let fx = 0;
-  let fy = 0;
-  if (!spec) return [0, 0];
-  for (const part of spec.toLowerCase().split("|")) {
-    switch (part.trim()) {
-      case "left":
-        fx = 0;
-        break;
-      case "hcenter":
-        fx = 0.5;
-        break;
-      case "right":
-        fx = 1;
-        break;
-      case "top":
-        fy = 0;
-        break;
-      case "vcenter":
-        fy = 0.5;
-        break;
-      case "bottom":
-        fy = 1;
-        break;
-      case "center":
-        fx = 0.5;
-        fy = 0.5;
-        break;
-    }
-  }
-  return [fx, fy];
 }
 
 /** margin pair + directional overrides -> [left, top, right, bottom]. (B1-E3, B4-T7) */

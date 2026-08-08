@@ -12,7 +12,14 @@
  */
 
 /** Marker words that turn the FOLLOWING assignment into a declaration. */
-export const DECL_MARKERS = new Set(["template", "local_template", "types", "type", "block", "blockoverride"]);
+export const DECL_MARKERS = new Set([
+  "template",
+  "local_template",
+  "types",
+  "type",
+  "block",
+  "blockoverride",
+]);
 
 /**
  * Named slots, which vanilla spells two ways: `blockoverride "name" { ... }`
