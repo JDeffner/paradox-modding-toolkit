@@ -17,8 +17,8 @@
  *   `Image`, and knows nothing about DDS, decoding or caches.
  *
  * G3.1 added what rendering needs, G3.2 what selecting and inspecting need,
- * G3.3 what writing needs. Later stages add message kinds here first and
- * implement them on both sides.
+ * G3.3 what writing needs, G4 what reordering needs. Later stages add message
+ * kinds here first and implement them on both sides.
  */
 import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
 
@@ -59,7 +59,31 @@ export type AppToHost =
    * verdict for `id` either way, and pushes a fresh layout when the write
    * changed the document.
    */
-  | { type: "applyEdit"; id: number; line: number; properties: EditProperty[] };
+  | { type: "applyEdit"; id: number; line: number; properties: EditProperty[] }
+  /**
+   * The gesture-start check for a reorder drag, the counterpart of `checkEdit`:
+   * ask the guards and WRITE NOTHING. The move it asks about is the moved
+   * child's NEIGHBOURING slot, the smallest legal one, because the drop is not
+   * known yet; that answers the questions the user needs before dragging (a
+   * type definition other files instantiate, a body with nothing to permute)
+   * and the commit's own answer is still shown when it differs.
+   */
+  | { type: "checkReorder"; id: number; line: number; from: number; to: number }
+  /**
+   * Move one source child of the widget declared on `line`, as ONE edit: the
+   * child at index `from` ends up at index `to`. Same contract as `applyEdit`:
+   * a verdict for `id` either way, a fresh layout when the document changed.
+   *
+   * The indices count the container's children THIS DOCUMENT DECLARES, in
+   * source order, which is the order the layout reports them in and the order
+   * the layers panel lists. Children spliced in from a template or a type are
+   * not counted: they have no bytes at the use site, so no index can name them.
+   *
+   * In an hbox/vbox/flowcontainer this IS the layout order, and the app says so
+   * rather than calling it a z-order: source order is the only order those
+   * containers have.
+   */
+  | { type: "reorder"; id: number; line: number; from: number; to: number };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =

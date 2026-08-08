@@ -26,7 +26,7 @@ import type {
   GuiSourceOp,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
-import { LAYOUT_DEBOUNCE_MS, type AppToHost, type EditProperty, type HostToApp } from "./messages";
+import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp } from "./messages";
 import { guiEditorHtml } from "./html";
 import { GuiTextureCache, type TextureRoots } from "./textureCache";
 
@@ -183,22 +183,16 @@ export class GuiEditorPanel {
   }
 
   /**
-   * One `setProperties` op against the document's current text. The server
-   * decides everything: which bytes change, whether the gesture is refused and
-   * with what words. The version is captured with the text the offsets were
-   * computed from, so a stale batch can be recognised instead of applied.
+   * One op against the document's current text. The server decides everything:
+   * which bytes change, whether the gesture is refused and with what words. The
+   * version is captured with the text the offsets were computed from, so a
+   * stale batch can be recognised instead of applied.
    */
   private async sourceEdit(
-    line: number,
-    properties: readonly EditProperty[]
+    op: GuiSourceOp
   ): Promise<{ doc: vscode.TextDocument; version: number; result: GuiSourceEditResult }> {
     const doc = await vscode.workspace.openTextDocument(this.sourceUri);
     const version = doc.version;
-    const op: GuiSourceOp = {
-      kind: "setProperties",
-      line,
-      properties: properties.map((p) => ({ key: p.key, value: p.value })),
-    };
     try {
       const result = await this.fetchSourceEdit(doc.uri, doc.getText(), op);
       return { doc, version, result: result ?? { refused: "the server had no answer for that edit." } };
@@ -260,17 +254,19 @@ export class GuiEditorPanel {
         }
         return;
       }
-      case "checkEdit": {
+      case "checkEdit":
+      case "checkReorder": {
         // A gesture-start check. Whatever the server returns, the edits are
         // thrown away: the point of asking early is that the answer arrives
         // before anything moves, and a check that wrote would be a bug the
         // user could only discover through undo.
-        const { result } = await this.sourceEdit(message.line, message.properties);
+        const { result } = await this.sourceEdit(opOf(message));
         this.post({ type: "editVerdict", id: message.id, refused: result.refused, warning: result.warning });
         return;
       }
-      case "applyEdit": {
-        const attempt = await this.sourceEdit(message.line, message.properties);
+      case "applyEdit":
+      case "reorder": {
+        const attempt = await this.sourceEdit(opOf(message));
         const { refused, warning, edits } = attempt.result;
         if (refused || !edits || edits.length === 0) {
           // No edits and no refusal is the writer saying the bytes it would
@@ -323,6 +319,23 @@ export class GuiEditorPanel {
       }
     }
   }
+}
+
+/**
+ * The op one edit message means. A check and its commit send the SAME op: the
+ * only difference is what the host does with the answer, which is why the two
+ * are separate message kinds rather than one with a flag.
+ */
+function opOf(
+  message: Extract<AppToHost, { type: "checkEdit" | "applyEdit" | "checkReorder" | "reorder" }>
+): GuiSourceOp {
+  return message.type === "checkEdit" || message.type === "applyEdit"
+    ? {
+        kind: "setProperties",
+        line: message.line,
+        properties: message.properties.map((p) => ({ key: p.key, value: p.value })),
+      }
+    : { kind: "reorder", line: message.line, from: message.from, to: message.to };
 }
 
 /** The game's standard UI font, embedded so text metrics roughly match. */

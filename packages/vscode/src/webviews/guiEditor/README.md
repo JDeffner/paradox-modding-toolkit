@@ -1,6 +1,7 @@
 # The GUI editor, and the contract a host implements
 
-`app/` is the whole editor: canvas, tree, inspector, hit-testing, gestures. It
+`app/` is the whole editor: canvas, tree, layers, inspector, hit-testing,
+gestures, smart guides, subtree focus. It
 imports no `vscode` API, touches no file system, and computes no layout. Every
 line it needs from the outside world is a message in
 [`messages.ts`](./messages.ts). `panel.ts` is one implementation of that
@@ -15,7 +16,7 @@ it, and which of the promises are load-bearing rather than conveniences.
 
 | File | What it is | Who ports it |
 |---|---|---|
-| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `selection`, `inspector`, `tree`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
+| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
 | `app/host.ts` | The transport shim, and the ONLY file under `app/` that knows which host it is in | A new host adds a branch here. Nothing else under `app/` changes. |
 | `messages.ts` | The typed contract, both directions | Nobody. It is the contract. |
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |
@@ -71,12 +72,18 @@ each has to actually do.
   the document changed. A refusal reason is the SERVER'S OWN string and is shown
   verbatim: it names what the engine would have done with the write, which is
   knowledge the app does not have and must not paraphrase.
+- **`checkReorder` / `reorder`** The same pair for one `reorder` op:
+  `{ line, from, to }` goes to the server unchanged, `line` being the
+  CONTAINER's declaration and `from`/`to` being source-child indices. The check
+  writes nothing; the commit is one op, one document change, one undo step, then
+  a fresh `layout`. A host that already has these two for `setProperties` has
+  nothing new to do beyond building the other op kind.
 - **`reveal`** Show that line in the text editor without stealing focus and
   without hijacking the column the editor panel is in.
 
-Every `checkEdit` and `applyEdit` must get exactly one `editVerdict`. The app
-keeps a pending-callback map keyed by `id`; an unanswered id leaves a gesture
-armed forever.
+Every `checkEdit`, `applyEdit`, `checkReorder` and `reorder` must get exactly
+one `editVerdict`. The app keeps a pending-callback map keyed by `id`; an
+unanswered id leaves a gesture armed forever.
 
 Three cases are easy to get wrong and are worth stating:
 
@@ -89,13 +96,28 @@ Three cases are easy to get wrong and are worth stating:
    ahead and was only half honoured (a container owning one axis of a resize).
    The app shows it and keeps the result.
 
+### The one thing a reorder index cannot say yet
+
+`reorder`'s `from` and `to` count the container's SOURCE children, and the app
+derives them by ranking the container's children that carry a `line` in this
+document. That is exact whenever a container's body holds widgets and
+properties, which is nearly always. It is off by one per intervening
+declaration when the body ALSO holds `block` / `blockoverride` declarations
+between its widget children, because those have no layout node and the app
+cannot see them. The fix is server-side and small (a source-child index on
+`GuiLayoutNode`); until it lands, the app never guesses beyond this and a wrong
+permutation is one undo step, visible immediately in the re-laid-out tree.
+
 ## What the page must provide
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
-these ids: `canvas`, `stage`, `tree`, `inspector`, `status`, `toast`, `meta`,
-`zoomLabel`, `outlines`, `zoomIn`, `zoomOut`, `zoomFit`, `refresh`. The stage
-needs pointer events and, ideally, pointer capture (`app/` guards its absence,
-so a host without it loses only the ability to finish a drag off-canvas).
+these ids: `canvas`, `stage`, `tree`, `layers`, `focusBar`, `inspector`,
+`status`, `toast`, `meta`, `zoomLabel`, `outlines`, `snap`, `grid`, `zoomIn`,
+`zoomOut`, `zoomFit`, `refresh`. `snap` and `grid` are checkboxes, `snap`
+checked by default. The stage needs pointer events and, ideally, pointer
+capture (`app/` guards its absence, so a host without it loses only the ability
+to finish a drag off-canvas). A layers row drag needs no capture at all: it
+follows `pointermove` on the rows and ends on a window `pointerup`.
 `body[data-font="game"]` tells the app the page embedded the game font.
 
 ## Testing a host
