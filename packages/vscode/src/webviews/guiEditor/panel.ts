@@ -16,23 +16,48 @@
  * The webview loads dist/webview/guiEditor.js under the house nonce CSP: the
  * app is a real bundle, not a serialized function, because an editor does not
  * fit in a template literal.
+ *
+ * G5 stage 2 gives the host a third thing to own beside the text and the
+ * textures: PER-USER STATE. The conditional-visibility mode is remembered per
+ * document and the saved components and presets are remembered globally, both
+ * in `workspaceState`, because none of the three is in the document and none is
+ * the server's. The app holds only a copy for drawing.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type {
+  GuiDependenciesResult,
   GuiLayoutResult,
   GuiSourceEditResult,
   GuiSourceOp,
+  GuiVisibilityOptions,
   GuiVocabularyResult,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
-import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp } from "./messages";
+import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp, type TextureEntry } from "./messages";
 import { guiEditorHtml } from "./html";
-import { GuiTextureCache, type TextureRoots } from "./textureCache";
+import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "./textureCache";
+import {
+  COMPONENTS_KEY,
+  countTopLevelBlocks,
+  PRESETS_KEY,
+  VISIBILITY_KEY,
+  type StoredComponents,
+  type StoredPresets,
+} from "./userData";
 
-export type FetchLayout = (uri: vscode.Uri, text: string) => Promise<GuiLayoutResult>;
-export type FetchWidgetInfo = (uri: vscode.Uri, text: string, line: number) => Promise<GuiWidgetInfo | null>;
+export type FetchLayout = (
+  uri: vscode.Uri,
+  text: string,
+  visibility: GuiVisibilityOptions | undefined
+) => Promise<GuiLayoutResult>;
+export type FetchWidgetInfo = (
+  uri: vscode.Uri,
+  text: string,
+  line: number,
+  placement: boolean
+) => Promise<GuiWidgetInfo | null>;
 /** One op or a batch of them; the batch is what makes a multi-widget gesture one undo step. */
 export type FetchSourceEdit = (
   uri: vscode.Uri,
@@ -40,6 +65,32 @@ export type FetchSourceEdit = (
   request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }
 ) => Promise<GuiSourceEditResult | null>;
 export type FetchVocabulary = (uri: vscode.Uri, text: string) => Promise<GuiVocabularyResult>;
+export type FetchDependencies = (
+  uri: vscode.Uri,
+  text: string,
+  line: number | undefined
+) => Promise<GuiDependenciesResult>;
+
+/**
+ * The per-user state lives in `workspaceState` under the keys `userData.ts`
+ * names; that module owns the shapes so a second host reads the same bytes.
+ * The visibility map is typed here with the wire's own options type, which is
+ * narrower than the storage shape and is what this host actually writes.
+ */
+type StoredVisibility = Record<string, GuiVisibilityOptions>;
+
+/**
+ * Bounds on the texture walk. A game's `gfx/` tree is tens of thousands of
+ * files deep in places, and the browser is a picker, not an asset database: the
+ * walk stops at a depth no vanilla sprite path exceeds and at a file count that
+ * still holds every texture either root realistically ships, and the answer
+ * itself is capped far lower because the panel thumbnails what it lists.
+ */
+const TEXTURE_WALK_DEPTH = 10;
+const TEXTURE_WALK_MAX = 20000;
+const TEXTURE_ANSWER_MAX = 200;
+/** One page of thumbnails is what the app asks for; a longer batch is truncated. */
+const THUMBNAIL_BATCH_MAX = 60;
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -50,8 +101,13 @@ export class GuiEditorPanel {
   private readonly fetchWidgetInfo: FetchWidgetInfo;
   private readonly fetchSourceEdit: FetchSourceEdit;
   private readonly fetchVocabulary: FetchVocabulary;
+  private readonly fetchDependencies: FetchDependencies;
+  private readonly state: vscode.Memento;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
+  private roots: TextureRoots;
+  /** The gfx walk's answer, built once per panel per root set. */
+  private textureIndex: TextureEntry[] | null = null;
   private disposables: vscode.Disposable[] = [];
   private sourceUri: vscode.Uri;
   private disposed = false;
@@ -64,6 +120,7 @@ export class GuiEditorPanel {
     fetchWidgetInfo: FetchWidgetInfo,
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
+    fetchDependencies: FetchDependencies,
     source: vscode.TextDocument,
     roots: TextureRoots
   ) {
@@ -71,8 +128,11 @@ export class GuiEditorPanel {
     this.fetchWidgetInfo = fetchWidgetInfo;
     this.fetchSourceEdit = fetchSourceEdit;
     this.fetchVocabulary = fetchVocabulary;
+    this.fetchDependencies = fetchDependencies;
+    this.state = context.workspaceState;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
+    this.roots = roots;
     this.textures = new GuiTextureCache(this.storageDir, roots);
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
@@ -127,6 +187,7 @@ export class GuiEditorPanel {
     fetchWidgetInfo: FetchWidgetInfo,
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
+    fetchDependencies: FetchDependencies,
     source: vscode.TextDocument,
     roots: TextureRoots
   ): void {
@@ -138,7 +199,11 @@ export class GuiEditorPanel {
       if (existing.debounce) clearTimeout(existing.debounce);
       existing.debounce = undefined;
       existing.sourceUri = source.uri;
+      existing.roots = roots;
       existing.textures = new GuiTextureCache(existing.storageDir, roots);
+      // The browser lists the roots the document resolves against, so the walk
+      // is thrown away with the cache it belongs to.
+      existing.textureIndex = null;
       existing.panel.reveal(undefined, true);
       void existing.load(source);
       return;
@@ -149,6 +214,7 @@ export class GuiEditorPanel {
       fetchWidgetInfo,
       fetchSourceEdit,
       fetchVocabulary,
+      fetchDependencies,
       source,
       roots
     );
@@ -175,7 +241,10 @@ export class GuiEditorPanel {
     this.panel.title = `GUI Editor — ${file}`;
     this.post({ type: "loading", file });
     try {
-      const result = await this.fetchLayout(source.uri, source.getText());
+      // The stored mode is read per push rather than held in a field: the mode
+      // belongs to the document, and `show` can point this panel at a new one.
+      const visibility = this.visibility();
+      const result = await this.fetchLayout(source.uri, source.getText(), visibility);
       if (this.disposed || generation !== this.generation) return;
       const textures: Record<string, string | null> = {};
       for (const texture of result.textures) {
@@ -183,11 +252,86 @@ export class GuiEditorPanel {
         textures[texture] = png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
       }
       if (this.disposed || generation !== this.generation) return;
-      this.post({ type: "layout", file, result, textures });
+      this.post({ type: "layout", file, result, textures, visibility });
     } catch (err) {
       if (this.disposed) return;
       this.post({ type: "error", message: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  /** The conditional-visibility options stored for THIS document, if any. */
+  private visibility(): GuiVisibilityOptions | undefined {
+    const all = this.state.get<StoredVisibility>(VISIBILITY_KEY) ?? {};
+    return all[this.sourceUri.toString()];
+  }
+
+  private async setVisibility(options: GuiVisibilityOptions | undefined): Promise<void> {
+    const all = { ...(this.state.get<StoredVisibility>(VISIBILITY_KEY) ?? {}) };
+    const key = this.sourceUri.toString();
+    // The default is not a setting: storing it would grow the map by one entry
+    // per file ever opened, for the mode those files already have.
+    if (!options || (options.mode === "showAll" && !hasAssignment(options.checks))) delete all[key];
+    else all[key] = options;
+    await this.state.update(VISIBILITY_KEY, all);
+  }
+
+  /** Push the saved library the app draws from. There is no bundled content. */
+  private postUserData(): void {
+    const components = this.state.get<StoredComponents>(COMPONENTS_KEY) ?? {};
+    const presets = this.state.get<StoredPresets>(PRESETS_KEY) ?? {};
+    this.post({
+      type: "userData",
+      components: Object.entries(components).map(([name, text]) => ({
+        name,
+        widgets: countTopLevelBlocks(text),
+      })),
+      presets: Object.entries(presets).map(([name, properties]) => ({ name, properties })),
+    });
+  }
+
+  /**
+   * Every `.dds` under the roots' `gfx/` trees, as the engine would name it:
+   * root-relative, forward slashes. Walked once per panel per root set, bounded
+   * in depth and in count, and never re-walked for a keystroke in the filter
+   * box — the filter runs over this array.
+   *
+   * The mod is walked first and wins a duplicate path, which is the order the
+   * game itself resolves an asset in.
+   */
+  private textureCatalogue(): TextureEntry[] {
+    if (this.textureIndex) return this.textureIndex;
+    const seen = new Map<string, TextureEntry>();
+    let budget = TEXTURE_WALK_MAX;
+    for (const [root, source] of [
+      [this.roots.modPath, "mod"],
+      [this.roots.gamePath, "game"],
+    ] as const) {
+      if (!root) continue;
+      const gfx = path.join(root, "gfx");
+      const walk = (dir: string, rel: string, depth: number): void => {
+        if (budget <= 0 || depth > TEXTURE_WALK_DEPTH) return;
+        let entries: fs.Dirent[];
+        try {
+          entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          if (budget <= 0) return;
+          const next = rel === "" ? entry.name : `${rel}/${entry.name}`;
+          if (entry.isDirectory()) {
+            walk(path.join(dir, entry.name), next, depth + 1);
+          } else if (entry.name.toLowerCase().endsWith(".dds")) {
+            budget--;
+            const key = `gfx/${next}`;
+            if (!seen.has(key)) seen.set(key, { path: key, source });
+          }
+        }
+      };
+      walk(gfx, "", 0);
+    }
+    this.textureIndex = [...seen.values()].sort((a, b) => a.path.localeCompare(b.path));
+    return this.textureIndex;
   }
 
   /**
@@ -294,7 +438,7 @@ export class GuiEditorPanel {
         const line = message.line;
         const doc = await vscode.workspace.openTextDocument(this.sourceUri);
         try {
-          const info = await this.fetchWidgetInfo(doc.uri, doc.getText(), line);
+          const info = await this.fetchWidgetInfo(doc.uri, doc.getText(), line, message.placement === true);
           this.post({ type: "widgetInfo", line, info });
         } catch {
           // A failed inspector read is not worth an error banner over the
@@ -379,28 +523,162 @@ export class GuiEditorPanel {
         }
         return;
       }
-      case "reveal": {
+      case "setVisibility": {
+        await this.setVisibility({ mode: message.mode, checks: message.checks });
+        // The layout IS the answer: no verdict, because nothing was written to
+        // the document and there is nothing for the guards to refuse.
+        await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+        return;
+      }
+      case "requestDependencies": {
+        const line = message.line;
         const doc = await vscode.workspace.openTextDocument(this.sourceUri);
-        const line = Math.max(0, Math.min(message.line, doc.lineCount - 1));
-        const range = doc.lineAt(line).range;
-        // The document's own column, never the ACTIVE one: the active column is
-        // the panel's while the canvas has focus, and opening the text there
-        // would shove the editor the reveal was meant to point at. Focus stays
-        // on the canvas, so the gesture is not interrupted either.
-        const visible = vscode.window.visibleTextEditors.find(
-          (e) => e.document.uri.toString() === this.sourceUri.toString()
-        );
-        const editor = await vscode.window.showTextDocument(doc, {
-          viewColumn: visible?.viewColumn ?? vscode.ViewColumn.One,
-          preserveFocus: true,
-          preview: false,
+        try {
+          const result = await this.fetchDependencies(doc.uri, doc.getText(), line);
+          this.post({ type: "dependencies", line, result });
+        } catch {
+          // Same rule as a failed inspector read: the panel says it has no
+          // answer rather than putting a banner over the canvas.
+          this.post({ type: "dependencies", line, result: null });
+        }
+        return;
+      }
+      case "requestTextureList": {
+        const catalogue = this.textureCatalogue();
+        const needle = message.query.trim().toLowerCase();
+        const matches =
+          needle.length === 0
+            ? catalogue
+            : catalogue.filter((entry) => entry.path.toLowerCase().includes(needle));
+        this.post({
+          type: "textureList",
+          entries: matches.slice(0, TEXTURE_ANSWER_MAX),
+          total: matches.length,
+          roots: this.roots.modPath !== null || this.roots.gamePath !== null,
         });
-        editor.selection = new vscode.Selection(range.start, range.start);
-        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        return;
+      }
+      case "requestThumbnails": {
+        const urls: Record<string, string | null> = {};
+        for (const rel of message.paths.slice(0, THUMBNAIL_BATCH_MAX)) {
+          // Capped decode, through the same cache and the same eviction the
+          // canvas fills use: a browser row draws 28 pixels and must never pay
+          // for a 4096x4096 one.
+          const png = this.textures.resolve(rel, THUMBNAIL_MAX_DIM);
+          urls[rel] = png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
+        }
+        this.post({ type: "thumbnails", urls });
+        return;
+      }
+      case "requestUserData": {
+        this.postUserData();
+        return;
+      }
+      case "saveComponent": {
+        // The same read `copyBlocks` does, for the same reason: one batch, so
+        // every block comes off the same text and they concatenate in order.
+        const { result } = await this.sourceEdit({
+          ops: message.lines.map((line) => ({ kind: "blockText", line })),
+        });
+        const blocks = (result.results ?? []).map((r) => r.blockText).filter((b): b is string => !!b);
+        if (blocks.length === 0) {
+          const reason = result.refused ?? result.results?.find((r) => r.refused)?.refused;
+          this.post({
+            type: "editVerdict",
+            id: message.id,
+            refused: reason ?? "there was nothing to save on those lines.",
+          });
+          return;
+        }
+        const stored = { ...(this.state.get<StoredComponents>(COMPONENTS_KEY) ?? {}) };
+        stored[message.name] = blocks.join("");
+        await this.state.update(COMPONENTS_KEY, stored);
+        const skipped = result.results?.filter((r) => r.refused) ?? [];
+        this.post({
+          type: "editVerdict",
+          id: message.id,
+          warning: skipped.length > 0 ? skipped.map((r) => r.refused).join(" ") : undefined,
+        });
+        this.postUserData();
+        return;
+      }
+      case "insertComponent": {
+        const stored = this.state.get<StoredComponents>(COMPONENTS_KEY) ?? {};
+        const fragment = stored[message.name];
+        if (!fragment || fragment.trim().length === 0) {
+          this.post({
+            type: "editVerdict",
+            id: message.id,
+            refused: `there is no saved component called "${message.name}" any more.`,
+          });
+          return;
+        }
+        await this.commit(message.id, {
+          op: { kind: "insertRaw", line: message.line, fragment, index: message.index },
+        });
+        return;
+      }
+      case "savePreset": {
+        const stored = { ...(this.state.get<StoredPresets>(PRESETS_KEY) ?? {}) };
+        stored[message.name] = message.properties;
+        await this.state.update(PRESETS_KEY, stored);
+        this.postUserData();
+        return;
+      }
+      case "forgetSaved": {
+        const key = message.kind === "component" ? COMPONENTS_KEY : PRESETS_KEY;
+        const stored = { ...(this.state.get<Record<string, unknown>>(key) ?? {}) };
+        delete stored[message.name];
+        await this.state.update(key, stored);
+        this.postUserData();
+        return;
+      }
+      case "revealAt": {
+        // A dependency row points OUTSIDE the edited document, so the file is
+        // opened rather than assumed; a path that no longer resolves is said
+        // plainly instead of revealing the wrong line in the wrong file.
+        try {
+          const target = await vscode.workspace.openTextDocument(vscode.Uri.file(message.file));
+          await this.revealIn(target, message.line);
+        } catch {
+          void vscode.window.showWarningMessage(
+            `Paradox Toolkit: could not open ${message.file}. The index may be out of date.`
+          );
+        }
+        return;
+      }
+      case "reveal": {
+        await this.revealIn(await vscode.workspace.openTextDocument(this.sourceUri), message.line);
         return;
       }
     }
   }
+
+  /**
+   * Show a line without stealing focus and without hijacking the column the
+   * editor panel is in: the DOCUMENT's own column, never the ACTIVE one, which
+   * is the panel's while the canvas has focus. Opening it there would shove the
+   * editor the reveal was meant to point at.
+   */
+  private async revealIn(doc: vscode.TextDocument, at: number): Promise<void> {
+    const line = Math.max(0, Math.min(at, doc.lineCount - 1));
+    const range = doc.lineAt(line).range;
+    const visible = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.toString() === doc.uri.toString()
+    );
+    const editor = await vscode.window.showTextDocument(doc, {
+      viewColumn: visible?.viewColumn ?? vscode.ViewColumn.One,
+      preserveFocus: true,
+      preview: false,
+    });
+    editor.selection = new vscode.Selection(range.start, range.start);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+}
+
+/** An `evaluate` mode with no assignment is still not the default: it hides nothing yet. */
+function hasAssignment(checks: Record<string, boolean> | undefined): boolean {
+  return checks !== undefined && Object.values(checks).some((v) => v === false);
 }
 
 /**

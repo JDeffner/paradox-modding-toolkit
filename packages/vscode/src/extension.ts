@@ -92,6 +92,9 @@ import {
   guiVocabularyRequest,
   type GuiVocabularyParams,
   type GuiVocabularyResult,
+  guiDependenciesRequest,
+  type GuiDependenciesParams,
+  type GuiDependenciesResult,
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
@@ -667,16 +670,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       GuiEditorPanel.show(
         context,
-        (uri, text) =>
+        (uri, text, visibility) =>
           lc.sendRequest<GuiLayoutResult>(guiLayoutRequest, {
             uri: uri.toString(),
             text,
+            visibility,
           } satisfies GuiLayoutParams),
-        (uri, text, line) =>
+        (uri, text, line, placement) =>
           lc.sendRequest<GuiWidgetInfo | null>(guiWidgetInfoRequest, {
             uri: uri.toString(),
             text,
             line,
+            placement,
           } satisfies GuiWidgetInfoParams),
         (uri, text, request) =>
           lc.sendRequest<GuiSourceEditResult | null>(guiSourceEditRequest, {
@@ -689,6 +694,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             uri: uri.toString(),
             text,
           } satisfies GuiVocabularyParams),
+        (uri, text, line) =>
+          lc.sendRequest<GuiDependenciesResult>(guiDependenciesRequest, {
+            uri: uri.toString(),
+            text,
+            line,
+          } satisfies GuiDependenciesParams),
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
       );
