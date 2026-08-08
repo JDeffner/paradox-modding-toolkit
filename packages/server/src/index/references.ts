@@ -21,7 +21,7 @@ import {
 } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
 import { isLocProperty } from "@px-lsp/protocol/locProperties";
-import { classifyKeyword } from "../contextKeywords";
+import { isStructuralKeyword } from "../contextKeywords";
 import { intern, shareDefinitionStrings, shareReferenceStrings } from "./intern";
 import type { SchemaData } from "../schema/loader";
 import {
@@ -334,10 +334,12 @@ export function extractReferences(
     // Key-position calls (`my_effect = yes`, `my_trigger = { ... }`): indexed
     // as call references so find-references and rename cover call sites, which
     // is where scripted effects/triggers/modifiers are actually used. Grammar
-    // keywords and iterator-shaped keys classify away; engine tokens are
-    // filtered by the caller (memory: they dominate large mods). Top-level
-    // keys are definitions, not calls. Excluded from the usage-count ranking
-    // signal via the `call` flag.
+    // keywords and iterator-shaped keys are excluded via isStructuralKeyword —
+    // NOT classifyKeyword, whose X_trigger/on_X convention buckets would drop
+    // the call sites of conventionally named scripted triggers (#5); engine
+    // tokens are filtered by the caller (memory: they dominate large mods).
+    // Top-level keys are definitions, not calls. Excluded from the usage-count
+    // ranking signal via the `call` flag.
     if (
       key !== null &&
       value != null &&
@@ -345,7 +347,7 @@ export function extractReferences(
       !key.includes(".") &&
       !key.includes(":") &&
       !key.includes("$") &&
-      classifyKeyword(key) === "unknown" &&
+      !isStructuralKeyword(key) &&
       !schema.refFields.has(key) &&
       !isEngineToken?.(key)
     ) {

@@ -21,7 +21,7 @@
 import * as fs from "fs";
 import type { DefSource, Reference } from "@px-lsp/protocol/types";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
-import { classifyKeyword } from "../contextKeywords";
+import { isStructuralKeyword } from "../contextKeywords";
 
 export interface LazyRefRoot {
   root: string;
@@ -57,14 +57,16 @@ export class LazyReferenceScanner {
   }
 
   /** All usage sites of `name` across the configured roots. Engine tokens and
-   * grammar keywords are excluded: they appear in nearly every file, and their
-   * documentation comes from script_docs, not the index. */
+   * structural grammar keywords are excluded: they appear in nearly every
+   * file, and their documentation comes from script_docs, not the index.
+   * (isStructuralKeyword, not classifyKeyword: the latter's naming-convention
+   * buckets would swallow every *_trigger-named scripted trigger, #5.) */
   lookup(name: string): Promise<Reference[]> {
     if (
       this.roots.length === 0 ||
       name.length < 2 ||
       !NAME_OK.test(name) ||
-      classifyKeyword(name) !== "unknown" ||
+      isStructuralKeyword(name) ||
       this.isEngineToken?.(name)
     ) {
       return Promise.resolve([]);

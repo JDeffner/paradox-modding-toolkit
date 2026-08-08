@@ -141,13 +141,57 @@ export function extractDefinitions(
       }
       break;
 
-    case "event-id":
-      for (const stmt of root.statements) {
-        if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
-        if (stmt.op !== "=" && stmt.op !== "?=") continue;
-        if (EVENT_ID.test(stmt.key.text)) push(stmt.key.text, stmt.key.range.start);
-      }
+    case "event-id": {
+      // Event files may also declare `scripted_trigger NAME = { ... }` /
+      // `scripted_effect NAME = { ... }` inline (file-local, but referenced
+      // like their common/ counterparts). The tolerant parser reads the
+      // keyword as a bare marker scalar followed by the NAME assignment.
+      // Scanned at EVERY depth: one tolerant-parse hiccup earlier in a
+      // thousand-line vanilla file nests everything after it inside a block,
+      // and the declarations must survive that (#5). Event ids stay
+      // top-level only — nested ids are option/trigger content, not events.
+      const scanList = (statements: Statement[], depth: number) => {
+        let inlineKind: "scripted_trigger" | "scripted_effect" | null = null;
+        for (const stmt of statements) {
+          if (stmt.kind === "value") {
+            const text = stmt.value.kind === "scalar" && !stmt.value.quoted ? stmt.value.text : "";
+            inlineKind = text === "scripted_trigger" || text === "scripted_effect" ? text : null;
+            if (stmt.value.kind === "block") scanList(stmt.value.statements, depth + 1);
+            else if (stmt.value.kind === "tagged-block") scanList(stmt.value.block.statements, depth + 1);
+            continue;
+          }
+          const marker = inlineKind;
+          inlineKind = null;
+          if (stmt.key.quoted) continue;
+          if (stmt.op === "=" || stmt.op === "?=") {
+            if (marker && DEF_NAME.test(stmt.key.text)) {
+              const line = lines.positionAt(stmt.key.range.start).line;
+              const def: Definition = { name: stmt.key.text, kind: marker, file, line, source };
+              const block = docForDefinition(rawLines, line);
+              if (block) {
+                if (block.doc) def.doc = block.doc;
+                if (block.tags.length > 0) def.tags = block.tags;
+              }
+              const body = content.slice(stmt.range.start, stmt.range.end);
+              const params: string[] = [];
+              PARAM.lastIndex = 0;
+              let m: RegExpExecArray | null;
+              while ((m = PARAM.exec(body)) !== null) {
+                if (!params.includes(m[1])) params.push(m[1]);
+              }
+              if (params.length > 0) def.params = params;
+              defs.push(def);
+            } else if (depth === 0 && EVENT_ID.test(stmt.key.text)) {
+              push(stmt.key.text, stmt.key.range.start);
+            }
+          }
+          if (stmt.value?.kind === "block") scanList(stmt.value.statements, depth + 1);
+          else if (stmt.value?.kind === "tagged-block") scanList(stmt.value.block.statements, depth + 1);
+        }
+      };
+      scanList(root.statements, 0);
       break;
+    }
 
     case "nested-title":
       // Landed titles nest: e_empire { k_kingdom { d_duchy { c_county { b_barony } } } }

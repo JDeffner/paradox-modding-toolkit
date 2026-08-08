@@ -38,6 +38,49 @@ describe("provideDefinition", () => {
   });
 });
 
+describe("provideDefinition doc-local fallback", () => {
+  it("answers from the open document when the index has nothing (#5)", () => {
+    const data = new ServerData(); // empty index: vanilla not (yet) scanned
+    const text = [
+      "namespace = tgp",
+      "scripted_effect tgp_give_effect = {",
+      "\tadd_gold = 5",
+      "}",
+      "tgp.1 = {",
+      "\timmediate = { tgp_give_effect = yes }",
+      "}",
+    ].join("\n");
+    const eventDoc = TextDocument.create("file:///game/events/e.txt", "paradox", 1, text);
+    const docDefs = (word: string) =>
+      (
+        [
+          {
+            name: "tgp_give_effect",
+            kind: "scripted_effect",
+            file: "/game/events/e.txt",
+            line: 1,
+            source: "vanilla",
+          },
+        ] as Definition[]
+      ).filter((d) => d.name === word);
+    const locations = provideDefinition(data, eventDoc, { line: 5, character: 20 }, docDefs);
+    expect(locations).toHaveLength(1);
+    expect(locations[0].uri).toBe("file:///game/events/e.txt");
+    expect(locations[0].range.start.line).toBe(1);
+    // Indexed answers keep precedence: no doc-local duplicates once indexed.
+    data.index.addAll([
+      {
+        name: "tgp_give_effect",
+        kind: "scripted_effect",
+        file: "/game/events/e.txt",
+        line: 1,
+        source: "vanilla",
+      },
+    ]);
+    expect(provideDefinition(data, eventDoc, { line: 5, character: 20 }, docDefs)).toHaveLength(1);
+  });
+});
+
 describe("provideReferences", () => {
   it("merges on-demand vanilla usage sites with the indexed ones (#3)", async () => {
     const data = dataWith([def("mod", "/mod/common/scripted_effects/a.txt", 4)]);

@@ -35,6 +35,49 @@ describe("parseScriptDefinitions", () => {
     expect(defs.map((d) => d.name)).toEqual(["my_mod.0001"]);
   });
 
+  it("indexes inline scripted_trigger/scripted_effect declarations in event files (#5)", () => {
+    const content = [
+      "namespace = my_mod",
+      "",
+      "scripted_trigger my_mod_can_pay_trigger = {",
+      "\tgold >= $AMOUNT$",
+      "}",
+      "scripted_effect my_mod_pay_effect = {",
+      "\tremove_short_term_gold = 5",
+      "}",
+      "my_mod.0001 = {",
+      "\ttrigger = { my_mod_can_pay_trigger = yes }",
+      "}",
+      "",
+    ].join("\n");
+    const defs = parseScriptDefinitions(content, "event", "f.txt", "mod");
+    expect(defs.map((d) => [d.name, d.kind, d.line])).toEqual([
+      ["my_mod_can_pay_trigger", "scripted_trigger", 2],
+      ["my_mod_pay_effect", "scripted_effect", 5],
+      ["my_mod.0001", "event", 8],
+    ]);
+    expect(defs[0].params).toEqual(["AMOUNT"]);
+  });
+
+  it("finds inline declarations even when a parse hiccup nests them (#5)", () => {
+    // An unclosed brace earlier in the file makes the tolerant parser nest
+    // everything after it; the declarations must still be found.
+    const content = [
+      "namespace = my_mod",
+      "broken = {",
+      "\tdesc = oops",
+      "",
+      "scripted_trigger my_mod_nested_trigger = {",
+      "\tgold >= 5",
+      "}",
+      "",
+    ].join("\n");
+    const defs = parseScriptDefinitions(content, "event", "f.txt", "mod");
+    const trigger = defs.find((d) => d.name === "my_mod_nested_trigger");
+    expect(trigger).toBeDefined();
+    expect(trigger!.kind).toBe("scripted_trigger");
+  });
+
   it("finds valueless script values", () => {
     const content = "flat_value = 25\nblock_value = {\n\tvalue = 1\n}\n";
     const defs = parseScriptDefinitions(content, "script_value", "f.txt", "mod");

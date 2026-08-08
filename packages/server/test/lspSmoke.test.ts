@@ -94,6 +94,18 @@ smoke.2 = {
 		trigger_event = smoke.1
 	}
 }
+
+# Can the character pay the toll?
+scripted_trigger smoke_can_pay_trigger = {
+	gold >= 5
+}
+
+smoke.3 = {
+	type = character_event
+	trigger = {
+		smoke_can_pay_trigger = yes
+	}
+}
 `;
 
 // Parent-mod fixture (submod workflow): indexed via settings.parentPaths.
@@ -357,6 +369,33 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(defs.length).toBeGreaterThan(0);
     expect(defs[0].uri).toContain("parent_effects.txt");
     expect(defs[0].range.start.line).toBe(1);
+  });
+
+  it("navigates an inline scripted_trigger declared in the same event file (#5)", async () => {
+    // "smoke_can_pay_trigger = yes" call site on line 33; declaration on line 26.
+    const defs = (await conn.sendRequest("textDocument/definition", {
+      textDocument: { uri: eventsUri },
+      position: { line: 33, character: 4 },
+    })) as Array<{ uri: string; range: { start: { line: number } } }>;
+    expect(defs.length).toBeGreaterThan(0);
+    expect(defs[0].uri).toContain("smoke_events.txt");
+    expect(defs[0].range.start.line).toBe(26);
+
+    const hover = (await conn.sendRequest("textDocument/hover", {
+      textDocument: { uri: eventsUri },
+      position: { line: 33, character: 4 },
+    })) as { contents: { value: string } } | null;
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("smoke_can_pay_trigger");
+    expect(hover!.contents.value).toContain("pay the toll");
+
+    // Find-references from the declaration line reaches the call site.
+    const refs = (await conn.sendRequest("textDocument/references", {
+      textDocument: { uri: eventsUri },
+      position: { line: 26, character: 20 },
+      context: { includeDeclaration: false },
+    })) as Array<{ uri: string; range: { start: { line: number } } }>;
+    expect(refs.some((r) => r.uri.includes("smoke_events.txt") && r.range.start.line === 33)).toBe(true);
   });
 
   it("completion offers the parent-mod effect", async () => {

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Inline `scripted_trigger`/`scripted_effect` declarations in event files
+  are indexed** (#5): go-to-definition, hover (with doc comment and
+  `$PARAM$`s) and find-references now work on triggers/effects declared
+  inline in the same event file, at any nesting depth — even while the
+  vanilla index is still building, stale, or absent (the open document
+  answers on its own). Call sites of conventionally named scripted
+  triggers/effects (`*_trigger`, `on_*`) are no longer mistaken for grammar
+  keywords, so their references, rename and unused detection work too. The
+  vanilla index cache format is bumped so existing installs pick this up on
+  first restart.
+
 ### Added
 
 - **Bundled script_docs and data-type dumps.** The extension (and the

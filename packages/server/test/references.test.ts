@@ -75,6 +75,22 @@ describe("extractReferences", () => {
     const r = refs("e = {\n\ttrigger_event = yes\n}\n");
     expect(r.references.filter((x) => x.kinds.includes("event"))).toHaveLength(0);
   });
+
+  it("indexes call sites of conventionally named scripted triggers/effects (#5)", () => {
+    // *_trigger / on_* keys match classifyKeyword's naming-convention buckets,
+    // but as CALL keys they reference the scripted definition all the same.
+    const r = refs(
+      "my.1 = {\n\ttrigger = { my_can_pay_trigger = yes }\n\timmediate = { on_pay_effect = yes }\n}\n"
+    );
+    const call = r.references.find((x) => x.name === "my_can_pay_trigger");
+    expect(call).toBeDefined();
+    expect(call!.call).toBe(true);
+    expect(call!.kinds).toContain("scripted_trigger");
+    expect(r.references.find((x) => x.name === "on_pay_effect")).toBeDefined();
+    // Structural grammar keys stay out.
+    expect(r.references.find((x) => x.name === "trigger")).toBeUndefined();
+    expect(r.references.find((x) => x.name === "immediate")).toBeUndefined();
+  });
 });
 
 describe("ReferenceIndex", () => {

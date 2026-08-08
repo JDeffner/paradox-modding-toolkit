@@ -180,6 +180,21 @@ export function isExplicitKeyword(rawKeyword: string): boolean {
   );
 }
 
+/**
+ * Grammar words that can never be the call site of a scripted effect/trigger:
+ * the exact keyword sets plus iterator- and prev-shaped keys. Deliberately
+ * NARROWER than classifyKeyword's "not unknown" — its naming-convention
+ * buckets (X_trigger blocks, on_X blocks) match the names modders give their
+ * scripted triggers/effects, and those keys ARE call sites (#3, #5:
+ * tribute_mission_1000_can_give_treasury_trigger = yes).
+ */
+export function isStructuralKeyword(rawKeyword: string): boolean {
+  const kw = rawKeyword.toLowerCase();
+  if (isExplicitKeyword(kw)) return true;
+  if (/^(any|every|random|ordered)_/.test(kw)) return true;
+  return /^prev+$/.test(kw);
+}
+
 export function classifyKeyword(rawKeyword: string): KeywordClass {
   const kw = rawKeyword.toLowerCase();
   if (TRIGGER_BLOCK_KEYWORDS.has(kw)) return "trigger";

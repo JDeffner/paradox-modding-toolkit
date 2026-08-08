@@ -7,16 +7,29 @@
 import type { Location, Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
-import type { DefSource } from "@px-lsp/protocol/types";
+import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { datafunctionExprAt } from "./datafunction";
 
-export function provideDefinition(data: ServerData, document: TextDocument, position: Position): Location[] {
+export function provideDefinition(
+  data: ServerData,
+  document: TextDocument,
+  position: Position,
+  /** Definitions extracted from the OPEN document itself: the index-free net
+   * for same-file declarations (inline scripted_triggers in a vanilla file
+   * whose index is stale, missing, or still building — #5). */
+  docDefs?: (word: string) => Definition[]
+): Location[] {
   const range = wordRangeAt(getLineText(document, position.line), position.character);
   if (!range) return [];
-  return lookupLocations(data, range.word);
+  const locations = lookupLocations(data, range.word);
+  if (locations.length > 0 || !docDefs) return locations;
+  return docDefs(range.word).map((d) => ({
+    uri: document.uri,
+    range: { start: { line: d.line, character: 0 }, end: { line: d.line, character: 0 } },
+  }));
 }
 
 /**

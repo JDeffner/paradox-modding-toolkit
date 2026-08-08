@@ -48,7 +48,10 @@ export function provideHover(
   position: Position,
   rootScopes: Set<Scope> | null,
   entry: SchemaEntry | null = null,
-  getSchema?: () => SchemaData
+  getSchema?: () => SchemaData,
+  /** Definitions extracted from the OPEN document itself, consulted when the
+   * index has nothing for the word (same-file inline declarations, #5). */
+  docDefs?: (word: string) => Definition[]
 ): Hover | null {
   const lineText = getLineText(document, position.line);
 
@@ -126,7 +129,8 @@ export function provideHover(
   // only those meanings instead of every same-named symbol (the `faith` event
   // target is noise on `theme = faith`). Falls through when nothing matches.
   const expected = getSchema ? refKindsAt(document, position, getSchema().refFields) : null;
-  const defs = data.index.lookup(word);
+  let defs = data.index.lookup(word);
+  if (defs.length === 0 && docDefs) defs = docDefs(word);
   const expectedDefs = expected ? defs.filter((d) => expected.includes(d.kind)) : [];
   // Anchor for the "N references" command link: the hovered site itself, so
   // the client can drive the references view from it.

@@ -530,8 +530,8 @@ function loadDocs(force: boolean): void {
   if (data.onActionScopes.size > 0) log(`on_actions.log: ${data.onActionScopes.size} on_action root scopes`);
 
   // Lowest priority first: bundled snapshot, then the user's folders. Games
-  // whose script_docs live outside logs/ (Vic3, EU5) still dump data types to
-  // logs/, so the sibling logs folder of a docs-style logsPath is probed too.
+  // whose script_docs live outside logs/ (newer Jomini titles) still dump data
+  // types to logs/, so the sibling logs folder of a docs-style logsPath is probed too.
   const dataTypeDirs: Array<string | null> = [bundledDataTypesDir || null];
   if (settings.logsPath) {
     const sibling = path.resolve(settings.logsPath, "..", "logs");
@@ -1389,10 +1389,35 @@ connection.onHover((params) =>
       params.position,
       entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
       entry,
-      () => schema
+      () => schema,
+      (word) => docLocalDefs(doc).filter((d) => d.name === word)
     );
   })
 );
+
+/** Definitions extracted from an OPEN document, memoized per uri+version: the
+ * index-free net behind hover/definition for same-file declarations — inline
+ * scripted_triggers keep answering even when the vanilla index is stale,
+ * missing, or still building (#5). */
+const docDefsCache = new Map<string, Definition[]>();
+function docLocalDefs(doc: TextDocument): Definition[] {
+  const key = `${doc.uri}|${doc.version}`;
+  let defs = docDefsCache.get(key);
+  if (!defs) {
+    if (docDefsCache.size >= 16) docDefsCache.clear();
+    const fsPath = URI.parse(doc.uri).fsPath;
+    // Outside every known root (unset gamePath, stray copy), an events-shaped
+    // scan still nets the inline declarations plain files carry.
+    const entry = schemaEntryForFile(fsPath) ?? {
+      path: "events",
+      kind: "event",
+      extraction: "event-id" as const,
+    };
+    defs = extractDefinitions(doc.getText(), entry, fsPath, "vanilla");
+    docDefsCache.set(key, defs);
+  }
+  return defs;
+}
 
 connection.onDefinition((params) =>
   indexRead(`definition ${perfName(params.textDocument.uri)}`, () => {
@@ -1408,7 +1433,9 @@ connection.onDefinition((params) =>
       const gui = provideGuiDefinition(doc, params.position, guiPaths());
       if (gui) return gui;
     }
-    return provideDefinition(data, doc, params.position);
+    return provideDefinition(data, doc, params.position, (word) =>
+      docLocalDefs(doc).filter((d) => d.name === word)
+    );
   })
 );
 
