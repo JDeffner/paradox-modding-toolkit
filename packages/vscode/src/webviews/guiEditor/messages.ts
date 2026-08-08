@@ -17,10 +17,22 @@
  *   `Image`, and knows nothing about DDS, decoding or caches.
  *
  * G3.1 added what rendering needs, G3.2 what selecting and inspecting need,
- * G3.3 what writing needs, G4 what reordering needs. Later stages add message
- * kinds here first and implement them on both sides.
+ * G3.3 what writing needs, G4 what reordering needs, G5 what a multi-selection,
+ * a palette and a clipboard need. Later stages add message kinds here first and
+ * implement them on both sides.
+ *
+ * From G5 the app names some gestures as SERVER OPS (`GuiSourceOp`) rather than
+ * as a message per gesture: insert, paste, delete, duplicate and wrap are the
+ * server's own vocabulary, and one relay message for all of them keeps the host
+ * thin. The two rules are untouched by that: the app still computes no edits
+ * and no layout, and the host still owns the text.
  */
-import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
+import type {
+  GuiLayoutResult,
+  GuiSourceOp,
+  GuiVocabularyEntry,
+  GuiWidgetInfo,
+} from "@px-lsp/protocol/protocol";
 
 /** One property a write sets, with its value in `.gui` syntax (`{ 10 10 }`, `0.5`, `"name"`). */
 export interface EditProperty {
@@ -83,7 +95,47 @@ export type AppToHost =
    * rather than calling it a z-order: source order is the only order those
    * containers have.
    */
-  | { type: "reorder"; id: number; line: number; from: number; to: number };
+  | { type: "reorder"; id: number; line: number; from: number; to: number }
+  /**
+   * The gesture-start check for a BATCH: ask the guards about every op and
+   * WRITE NOTHING. Same contract as `checkEdit`, one verdict per op in
+   * `editVerdict.ops`, so a multi-selection drag knows before it moves which
+   * of its members will not.
+   */
+  | { type: "checkOps"; id: number; ops: GuiSourceOp[] }
+  /**
+   * Commit these ops as ONE document change and ONE undo step: the host sends
+   * them as the server's `ops` batch, applies the single edit set it gets back,
+   * and pushes a fresh layout. `editVerdict.ops` carries each op's own verdict,
+   * because a refused member must be named rather than folded into a summary.
+   *
+   * This is the general write path (insert, insertRaw, delete, duplicate, wrap,
+   * and a setProperties over several widgets). `applyEdit` stays the
+   * single-widget property spelling: it is the hot path, and the inspector and
+   * a one-widget drag never need op vocabulary to use it.
+   */
+  | { type: "applyOps"; id: number; ops: GuiSourceOp[] }
+  /**
+   * Put these widgets' verbatim blocks on the system clipboard, in the order
+   * given. The app never sees the text: a clipboard is the host's, like the
+   * document is, and a paste has to survive being made in another editor.
+   * Answer `editVerdict` for `id`; a refusal is shown verbatim.
+   */
+  | { type: "copyBlocks"; id: number; lines: number[] }
+  /**
+   * Paste whatever `.gui` text the clipboard holds into the widget on `line`,
+   * at `index` among its source children (absent appends). The host reads the
+   * clipboard and sends it as one `insertRaw` op; same verdict-then-layout
+   * contract as `applyEdit`. An empty or unusable clipboard is a refusal.
+   */
+  | { type: "pasteInto"; id: number; line: number; index?: number }
+  /**
+   * Ask for the widget names a palette may offer for THIS document
+   * (`paradox/guiVocabulary`). Sent when the palette opens and after a layout
+   * while it is open, because a document's own templates and types change as it
+   * is edited. The host answers `vocabulary`.
+   */
+  | { type: "requestVocabulary" };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =
@@ -107,15 +159,32 @@ export type HostToApp =
    */
   | { type: "widgetInfo"; line: number; info: GuiWidgetInfo | null }
   /**
-   * The answer to the `checkEdit` or `applyEdit` numbered `id`.
+   * The answer to the `checkEdit`, `applyEdit`, `checkOps`, `applyOps`,
+   * `copyBlocks` or `pasteInto` numbered `id`.
    *
    * `refused` means nothing was written and the reason is the SERVER'S OWN
    * string, shown verbatim: it names what the engine would have done with the
    * write, which is knowledge the app does not have and must not paraphrase.
    * `warning` rides along with a write that went ahead and is only half
    * honoured. Neither means it was written as asked.
+   *
+   * `ops` answers a BATCH, one entry per requested op in the same order. A
+   * per-op refusal means that member alone was skipped while the rest applied,
+   * so top-level `refused` on a batch means the WHOLE gesture failed. Present
+   * only for `checkOps` / `applyOps`.
    */
-  | { type: "editVerdict"; id: number; refused?: string; warning?: string }
+  | {
+      type: "editVerdict";
+      id: number;
+      refused?: string;
+      warning?: string;
+      ops?: { refused?: string; warning?: string }[];
+    }
+  /**
+   * Answer to `requestVocabulary`: what the palette may offer. `total` is the
+   * real count behind a capped list, so the panel can say what it hid.
+   */
+  | { type: "vocabulary"; entries: GuiVocabularyEntry[]; total: number }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 

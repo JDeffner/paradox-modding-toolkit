@@ -57,6 +57,7 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
   }
   #toolbar label { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+  #toolbar button.on { border-color: var(--vscode-focusBorder, #007fd4); }
   #zoomLabel { min-width: 46px; text-align: center; }
   .sep { width: 1px; align-self: stretch; background: var(--vscode-panel-border, rgba(128,128,128,0.35)); }
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
@@ -67,12 +68,27 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
     background: var(--vscode-sideBar-background, transparent);
   }
-  #tree, #layers, #inspector { overflow: auto; padding: 4px 0; }
+  #tree, #layers, #inspector, #palette { overflow: auto; padding: 4px 0; }
   #tree { flex: 1 1 auto; min-height: 60px; }
   #layers {
     flex: 0 0 40%; min-height: 70px;
     border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
   }
+  #palette {
+    flex: 0 0 35%; min-height: 90px; padding-top: 0;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #palette[hidden] { display: none; }
+  #palette .head { position: sticky; top: 0; padding: 4px 6px; background: var(--vscode-sideBar-background, var(--vscode-editor-background)); }
+  #palette .head input {
+    width: 100%; padding: 2px 4px; border-radius: 2px;
+    color: var(--vscode-input-foreground, inherit);
+    background: var(--vscode-input-background, transparent);
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #palette .row { cursor: grab; padding-left: 6px; }
+  #palette .row.dragging { opacity: 0.5; }
+  #palette .note { padding: 4px 8px; white-space: normal; color: var(--vscode-descriptionForeground); }
   #inspector {
     flex: 0 0 auto; width: 280px;
     background: var(--vscode-sideBar-background, transparent);
@@ -137,6 +153,24 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #inspector .prop input.val:hover { border-color: var(--vscode-panel-border, rgba(128,128,128,0.4)); }
   #inspector .prop input.val:focus { border-color: var(--vscode-focusBorder, #007fd4); outline: none; }
   #inspector .prop .from { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+  #inspector .tools { display: flex; flex-wrap: wrap; gap: 3px; padding: 5px 8px; }
+  #inspector .tools button { padding: 1px 6px; font-size: 0.9em; }
+  #inspector .tools select {
+    max-width: 130px; padding: 1px 2px;
+    color: var(--vscode-input-foreground, inherit);
+    background: var(--vscode-input-background, transparent);
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
+  }
+  #inspector .section { padding: 5px 8px 2px; color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+  #inspector .anchors { display: flex; gap: 10px; padding: 2px 8px 6px; }
+  #inspector .anchorGrid {
+    display: grid; grid-template-columns: repeat(3, 15px); grid-auto-rows: 15px; gap: 2px;
+  }
+  #inspector .anchorGrid .cell {
+    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4)); cursor: pointer;
+  }
+  #inspector .anchorGrid .cell:hover { border-color: var(--vscode-focusBorder, #007fd4); }
+  #inspector .anchorGrid .cell.on { background: var(--vscode-focusBorder, #007fd4); }
   #toast {
     position: absolute; left: 10px; right: 10px; bottom: 10px;
     padding: 7px 10px; border-radius: 3px; white-space: normal;
@@ -170,6 +204,7 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     <label><input id="outlines" type="checkbox" /> Outlines</label>
     <label title="Snap a drag to sibling edges, centres and equal gaps"><input id="snap" type="checkbox" checked /> Guides</label>
     <label title="Draw a 10 px grid and snap a drag to it"><input id="grid" type="checkbox" /> Grid</label>
+    <button id="paletteToggle" title="Show the widgets you can drag onto the canvas">Palette</button>
     <button id="refresh">Refresh</button>
     <span id="meta" style="margin-left:auto;color:var(--vscode-descriptionForeground)"></span>
   </div>
@@ -178,6 +213,7 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
       <div id="focusBar"></div>
       <div id="tree"></div>
       <div id="layers"></div>
+      <div id="palette" hidden></div>
     </div>
     <div id="stage"><canvas id="canvas"></canvas><div id="toast" hidden></div></div>
     <div id="inspector"></div>

@@ -22,8 +22,28 @@
  * smart guides, the subtree focus and the eye/lock/solo toggles are all VIEWS
  * over the same scene; the only new write is a reorder, and it goes out as one
  * op through the same pending-verdict map as everything else.
+ *
+ * G5 stage 1 is editing parity: a multi-selection, a palette, a clipboard,
+ * delete/duplicate, align/distribute, an anchor picker and wrap. It keeps the
+ * three rules by keeping the BATCH honest: a gesture over several widgets is
+ * one `applyOps` message, one server request, one document change and one undo
+ * step, and each member's own verdict comes back with it, so a refused member
+ * is named in the server's own words while the rest go through.
  */
-import type { GuiLayoutResult, GuiWidgetInfo } from "@px-lsp/protocol/protocol";
+import type {
+  GuiLayoutResult,
+  GuiSourceOp,
+  GuiVocabularyEntry,
+  GuiWidgetInfo,
+} from "@px-lsp/protocol/protocol";
+import {
+  ANCHOR_X,
+  ANCHOR_Y,
+  anchorCell,
+  anchorSpec,
+  type AnchorX,
+  type AnchorY,
+} from "@px-lsp/server/gui/anchorSpec";
 import type { AppToHost, EditProperty } from "../messages";
 import { connectHost } from "./host";
 import {
@@ -36,11 +56,13 @@ import {
   type SceneRect,
 } from "./scene";
 import { drawScene, resetImageCache, type DrawMasks, type Images, WORLD_H, WORLD_W } from "./render";
-import { hitRect, hitStack, nextInStack } from "./hitTest";
-import { indexOfSelection, selectionAt, type Selection } from "./selection";
+import { hitRect, hitStack, marqueeHits, nextInStack } from "./hitTest";
+import { indexOfSelection, outermost, selectionAt, toggleSelected, type Selection } from "./selection";
 import { ancestorKeys, rowKey, treeRows } from "./tree";
 import { inspectorRows, widgetTitle, type InspectorRow } from "./inspector";
 import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
+import { alignDeltas, distributeDeltas, type AlignMode } from "./align";
+import { containerRows, paletteLabel, paletteRows } from "./palette";
 import { GRID_STEP, MOVE_EDGES, snapRect, type Guide, type SnapConfig, type SnapResult } from "./snap";
 import {
   baseOf,
@@ -72,6 +94,8 @@ const zoomLabel = document.getElementById("zoomLabel") as HTMLSpanElement;
 const outlinesEl = document.getElementById("outlines") as HTMLInputElement;
 const snapToggle = document.getElementById("snap") as HTMLInputElement;
 const gridToggle = document.getElementById("grid") as HTMLInputElement;
+const paletteEl = document.getElementById("palette") as HTMLDivElement;
+const paletteToggleEl = document.getElementById("paletteToggle") as HTMLButtonElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
@@ -90,6 +114,14 @@ let panFrom = { x: 0, y: 0, panX: 0, panY: 0 };
 /** The selection's identity across re-parses; `selected` is its index in THIS scene. */
 let selection: Selection | null = null;
 let selected: number | null = null;
+/**
+ * The OTHER members of a multi-selection, primary excluded (that is `selected`).
+ * Kept as draw indices for this scene plus identities for the next one, exactly
+ * like the primary: an edit re-lays the document out and a draw index means
+ * nothing afterwards.
+ */
+let others: number[] = [];
+let otherIds: Selection[] = [];
 /** Collapsed tree rows, by positional path, so collapse survives a re-layout too. */
 const collapsed = new Set<string>();
 const rowEls = new Map<number, HTMLElement>();
@@ -203,6 +235,7 @@ function draw(): void {
   const item = selectedItem();
   const live = livePreview();
   const rect = live?.write.rect ?? (item ? hitRect(item) : undefined);
+  const shift = live?.write.offset;
   drawScene(
     ctx,
     scene,
@@ -213,16 +246,25 @@ function draw(): void {
       outlines: outlinesEl.checked,
       fontFamily,
       selected: rect,
-      handles: canEdit(item),
-      preview: live
-        ? { from: live.from, to: live.to, dx: live.write.offset.dx, dy: live.write.offset.dy }
-        : undefined,
+      // While a marquee runs its catch is what is marked, so the user sees the
+      // selection they are about to get without the panels rebuilding for it.
+      // Otherwise the other members, moved by the same delta as the primary, so
+      // their marks follow the preview instead of sitting where the file still
+      // has them (a resize is single-member and never gets here with others).
+      others: marquee
+        ? marquee.hits.map((i) => hitRect(scene.items[i]))
+        : others.map((i) => shifted(hitRect(scene.items[i]), shift)),
+      handles: canEdit(item) && others.length === 0,
+      marquee: marquee?.rect,
+      preview: live ? { slices: live.slices, dx: live.write.offset.dx, dy: live.write.offset.dy } : undefined,
       masks,
       grid: gridToggle.checked ? GRID_STEP : 0,
       guides: gesture?.snap?.guides,
       bars: gesture?.snap?.bars,
       flash: flashIndex === null ? undefined : hitRect(scene.items[flashIndex]),
-      dropLine: gesture?.drop?.line,
+      // The same affordance for both kinds of drop: a reorder's new slot, and
+      // the slot a palette entry would be inserted into.
+      dropLine: paletteDrag?.line ?? gesture?.drop?.line,
       readout: live && rect ? { x: rect.x, y: rect.y, text: geometry(rect) } : undefined,
     }
   );
@@ -231,6 +273,10 @@ function draw(): void {
 
 function geometry(rect: SceneRect): string {
   return `${round(rect.x)}, ${round(rect.y)} · ${round(rect.w)} x ${round(rect.h)}`;
+}
+
+function shifted(rect: SceneRect, by: { dx: number; dy: number } | undefined): SceneRect {
+  return by ? { ...rect, x: rect.x + by.dx, y: rect.y + by.dy } : rect;
 }
 
 /**
@@ -330,10 +376,11 @@ function renderTree(): void {
 }
 
 function highlightTree(scrollTo: boolean): void {
+  const members = new Set(others);
   for (const [index, node] of rowEls) {
-    const isSelected = index === selected;
-    node.classList.toggle("selected", isSelected);
-    if (isSelected && scrollTo) node.scrollIntoView({ block: "nearest" });
+    const isPrimary = index === selected;
+    node.classList.toggle("selected", isPrimary || members.has(index));
+    if (isPrimary && scrollTo) node.scrollIntoView({ block: "nearest" });
   }
 }
 
@@ -533,7 +580,105 @@ function afterToggle(): void {
 }
 
 function highlightLayers(): void {
-  for (const [index, node] of layerEls) node.classList.toggle("selected", index === selected);
+  const members = new Set(others);
+  for (const [index, node] of layerEls) {
+    node.classList.toggle("selected", index === selected || members.has(index));
+  }
+}
+
+// ---- the palette -----------------------------------------------------------
+
+/**
+ * What the palette may offer, straight from the host (`requestVocabulary`): the
+ * game's own harvested widget vocabulary plus this document's declarations.
+ * Nothing here invents a name, so a dropped entry is always a widget the game
+ * knows. Empty until the panel is first opened; asking costs a server request
+ * and a closed palette has nothing to show.
+ */
+let vocabulary: GuiVocabularyEntry[] = [];
+let vocabularyTotal = 0;
+let vocabularyAsked = false;
+let paletteQuery = "";
+const paletteEls = new Map<string, HTMLElement>();
+
+/**
+ * The widget an insert should select once the document comes back: the
+ * container's path plus the source index the op wrote at. A draw index would
+ * mean nothing after the re-layout the insert itself causes.
+ */
+let pendingSelect: { parent: string; source: number } | null = null;
+
+function paletteOpen(): boolean {
+  return !paletteEl.hidden;
+}
+
+function togglePalette(): void {
+  paletteEl.hidden = !paletteEl.hidden;
+  paletteToggleEl.classList.toggle("on", paletteOpen());
+  if (paletteOpen()) {
+    // The document's own templates and types change as it is edited, so the
+    // list is re-asked for whenever the panel is showing (onLayout does the
+    // same); a closed panel asks once and lives with what it got.
+    askVocabulary();
+    renderPalette();
+  }
+}
+
+function askVocabulary(): void {
+  vocabularyAsked = true;
+  host.send({ type: "requestVocabulary" });
+}
+
+function renderPalette(): void {
+  if (!paletteOpen()) return;
+  paletteEl.textContent = "";
+  paletteEls.clear();
+
+  const head = el("div", "head");
+  const filter = document.createElement("input");
+  filter.placeholder = "Filter widgets";
+  filter.value = paletteQuery;
+  filter.spellcheck = false;
+  filter.addEventListener("keydown", (ev) => ev.stopPropagation());
+  filter.addEventListener("input", () => {
+    paletteQuery = filter.value;
+    renderPalette();
+    filter.focus();
+  });
+  head.appendChild(filter);
+  paletteEl.appendChild(head);
+
+  if (vocabulary.length === 0) {
+    paletteEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
+    return;
+  }
+  const rows = paletteRows(vocabulary, paletteQuery);
+  if (rows.length === 0) {
+    paletteEl.appendChild(el("div", "note", `Nothing matches "${paletteQuery}".`));
+    return;
+  }
+  for (const entry of rows) {
+    const node = el("div", "row");
+    node.appendChild(el("span", undefined, paletteLabel(entry)));
+    if (entry.count !== undefined) {
+      const tag = el("span", "tag", String(entry.count));
+      tag.title = `${entry.count} uses in the game's own gui files`;
+      node.appendChild(tag);
+    }
+    node.title = "Drag onto the canvas to insert it";
+    node.addEventListener("pointerdown", (ev) => {
+      if ((ev as PointerEvent).button !== 0 || committing) return;
+      paletteDrag = { entry, target: null, rank: 0, line: null };
+      node.classList.add("dragging");
+    });
+    paletteEls.set(entry.name, node);
+    paletteEl.appendChild(node);
+  }
+  const shown = rows.length;
+  const hidden = vocabularyTotal - shown;
+  if (hidden > 0) {
+    paletteEl.appendChild(el("div", "note", `${hidden} more; type to filter.`));
+  }
 }
 
 /**
@@ -565,7 +710,20 @@ function renderInspector(): void {
   if (info && infoLine === item.line && info.typeChain.length > 0) {
     head.appendChild(el("div", "chain", `type chain: ${info.typeChain.join(" -> ")}`));
   }
+  if (others.length > 0) {
+    // Said plainly rather than shown as a merged property list: the rows below
+    // are ONE widget's, and an inspector that implied otherwise would let a
+    // user write a value onto widgets they cannot see.
+    head.appendChild(
+      el(
+        "div",
+        "chain",
+        `${others.length + 1} selected. The rows below are the primary's alone; the buttons act on all of them.`
+      )
+    );
+  }
   inspectorEl.appendChild(head);
+  renderTools(item);
 
   if (!item.editable || item.line === undefined) {
     inspectorEl.appendChild(
@@ -584,7 +742,6 @@ function renderInspector(): void {
   const rows = inspectorRows(info);
   if (rows.length === 0) {
     inspectorEl.appendChild(el("div", "note", "This widget sets no properties."));
-    return;
   }
   for (const row of rows) {
     const prop = el("div", "prop");
@@ -597,6 +754,191 @@ function renderInspector(): void {
     if (!row.local) prop.appendChild(el("div", "from", `from ${row.origin}`));
     inspectorEl.appendChild(prop);
   }
+  renderAnchors(item.line, rows);
+}
+
+/**
+ * The buttons that act on the SELECTION rather than on one property: align,
+ * distribute and wrap. Each is one gesture, so each is one batch: one document
+ * change and one undo step, with a per-member verdict for the ones the guards
+ * turn down.
+ */
+function renderTools(item: SceneItem): void {
+  const members = allSelected();
+  const tools = el("div", "tools");
+  const button = (label: string, title: string, enabled: boolean, run: () => void): void => {
+    const node = el("button", undefined, label) as HTMLButtonElement;
+    node.title = title;
+    node.disabled = !enabled;
+    node.addEventListener("click", run);
+    tools.appendChild(node);
+  };
+
+  if (members.length >= 2) {
+    inspectorEl.appendChild(el("div", "section", "Align the selection"));
+    const aligns: [string, AlignMode, string][] = [
+      ["⇤", "left", "Align left edges"],
+      ["⇔", "hcenter", "Align horizontal centres"],
+      ["⇥", "right", "Align right edges"],
+      ["⇡", "top", "Align top edges"],
+      ["⇕", "vcenter", "Align vertical centres"],
+      ["⇣", "bottom", "Align bottom edges"],
+    ];
+    for (const [label, mode, title] of aligns) {
+      button(label, title, true, () => commitMoves(members, alignDeltas(members.map(rectOf), mode), title));
+    }
+    button("↔", "Distribute horizontally: equal gaps left to right", members.length >= 3, () =>
+      commitMoves(members, distributeDeltas(members.map(rectOf), "x"), "Distribute horizontally")
+    );
+    button("↕", "Distribute vertically: equal gaps top to bottom", members.length >= 3, () =>
+      commitMoves(members, distributeDeltas(members.map(rectOf), "y"), "Distribute vertically")
+    );
+    inspectorEl.appendChild(tools);
+  }
+
+  const wrapTools = el("div", "tools");
+  const containers = containerRows(vocabulary);
+  if (containers.length > 0 && canEdit(item)) {
+    const select = document.createElement("select");
+    select.title = "Wrap the selection in a fresh container";
+    for (const entry of containers) {
+      const option = document.createElement("option");
+      option.value = entry.name;
+      option.textContent = paletteLabel(entry);
+      select.appendChild(option);
+    }
+    wrapTools.appendChild(el("span", undefined, "Wrap in"));
+    wrapTools.appendChild(select);
+    const go = el("button", undefined, "Wrap") as HTMLButtonElement;
+    go.addEventListener("click", () => commitWrap(members, select.value));
+    wrapTools.appendChild(go);
+    inspectorEl.appendChild(wrapTools);
+  } else if (canEdit(item)) {
+    // The palette is where the vocabulary comes from, so say that rather than
+    // showing a menu with nothing in it.
+    inspectorEl.appendChild(el("div", "section", "Open the palette to wrap this in a container."));
+  }
+}
+
+/**
+ * A 9-point anchor picker for `parentanchor` and `widgetanchor`. The cells are
+ * built from the LAYOUT ENGINE's own anchor table (`@px-lsp/server/gui/
+ * anchorSpec`), so the picker cannot offer a word the engine does not parse and
+ * quietly write a value the game ignores.
+ */
+function renderAnchors(line: number, rows: readonly InspectorRow[]): void {
+  const valueOf = (key: string) => rows.find((r) => r.key === key)?.value;
+  inspectorEl.appendChild(el("div", "section", "Anchors"));
+  const wrap = el("div", "anchors");
+  for (const key of ["parentanchor", "widgetanchor"] as const) {
+    const column = el("div");
+    column.appendChild(el("div", "from", key));
+    column.appendChild(anchorGrid(line, key, valueOf(key)));
+    wrap.appendChild(column);
+  }
+  inspectorEl.appendChild(wrap);
+}
+
+function anchorGrid(line: number, key: string, current: string | undefined): HTMLElement {
+  const grid = el("div", "anchorGrid");
+  const at = anchorCell(current);
+  for (const y of ANCHOR_Y) {
+    for (const x of ANCHOR_X) {
+      const spec = anchorSpec(x as AnchorX, y as AnchorY);
+      const cell = el("div", "cell");
+      cell.title = `${key} = ${spec}`;
+      // An unwritten anchor is the engine's own default (top|left), so the grid
+      // shows that corner lit rather than nothing.
+      if (current !== undefined && x === at.x && y === at.y) cell.classList.add("on");
+      cell.addEventListener("click", () => setAnchor(line, key, spec));
+      grid.appendChild(cell);
+    }
+  }
+  return grid;
+}
+
+/**
+ * Write one anchor through the normal single-op path, guards first: the check
+ * carries the value the file already has, so it writes nothing and answers
+ * exactly what the commit would, and the commit only goes out if it passed.
+ */
+function setAnchor(line: number, key: string, spec: string): void {
+  sendEdit("checkEdit", line, [{ key, value: spec }], (verdict) => {
+    if (verdict.refused) {
+      toast(verdict.refused, "refused");
+      return;
+    }
+    sendEdit("applyEdit", line, [{ key, value: spec }], (answer) => {
+      if (answer.refused) toast(answer.refused, "refused");
+      else if (answer.warning) toast(answer.warning, "warned");
+    });
+  });
+}
+
+/**
+ * Move several widgets by their own deltas as ONE batch: one document change,
+ * one undo step. Members the guards refuse are named in the server's own words
+ * and stay exactly where they were; the others go through.
+ */
+function commitMoves(
+  members: readonly number[],
+  deltas: readonly { dx: number; dy: number }[],
+  what: string
+): void {
+  const ops: GuiSourceOp[] = [];
+  const skipped: string[] = [];
+  members.forEach((index, i) => {
+    const item = scene.items[index];
+    const delta = deltas[i];
+    if (!canEdit(item)) {
+      skipped.push(`${widgetTitle(item)} ${NO_SOURCE_HERE}`);
+      return;
+    }
+    if (delta.dx === 0 && delta.dy === 0) return;
+    const base = baseOf(item);
+    ops.push({
+      kind: "setProperties",
+      line: item.line,
+      properties: [
+        { key: "position", value: pairValue(base.position[0] + delta.dx, base.position[1] + delta.dy) },
+      ],
+    });
+  });
+  if (skipped.length > 0) toast([...new Set(skipped)].join(" "), "warned");
+  if (ops.length === 0) {
+    toast(`${what}: every widget is already where that would put it.`, "info");
+    return;
+  }
+  sendOps("applyOps", ops, (verdict) => {
+    if (verdict.refused) {
+      toast(verdict.refused, "refused");
+      return;
+    }
+    const refused = distinctRefusals(verdict);
+    if (refused.length > 0) toast(refused.join(" "), "warned");
+  });
+}
+
+/**
+ * Wrap the selection in a fresh container. The server takes SIBLINGS, so a
+ * selection spread over several bodies is refused by it, verbatim, rather than
+ * being silently narrowed here.
+ */
+function commitWrap(members: readonly number[], type: string): void {
+  const lines: number[] = [];
+  for (const index of members) {
+    const item = scene.items[index];
+    if (!canEdit(item)) {
+      toast(`${widgetTitle(item)} ${NO_SOURCE_HERE}`, "refused");
+      return;
+    }
+    lines.push(item.line);
+  }
+  if (lines.length === 0) return;
+  sendOps("applyOps", [{ kind: "wrap", lines, container: { type } }], (verdict) => {
+    const refused = verdict.refused ?? distinctRefusals(verdict)[0];
+    if (refused) toast(refused, "refused");
+  });
 }
 
 /**
@@ -708,6 +1050,8 @@ toastEl.addEventListener("click", hideToast);
 interface EditVerdict {
   refused?: string;
   warning?: string;
+  /** A batch's per-op answers, in the order the ops were sent. */
+  ops?: { refused?: string; warning?: string }[];
 }
 
 /** In-flight checks and commits, by the id the host echoes back. */
@@ -742,6 +1086,18 @@ function sendReorder(
   );
 }
 
+/**
+ * A batch: several ops, one document change, one undo step. The verdict carries
+ * one answer per op in the same order, so a refused member can be named.
+ */
+function sendOps(
+  type: "checkOps" | "applyOps",
+  ops: GuiSourceOp[],
+  onVerdict: (verdict: EditVerdict) => void
+): void {
+  awaitVerdict((id) => ({ type, id, ops }), onVerdict);
+}
+
 function awaitVerdict(build: (id: number) => AppToHost, onVerdict: (verdict: EditVerdict) => void): void {
   const id = nextEditId++;
   pendingEdits.set(id, onVerdict);
@@ -750,7 +1106,31 @@ function awaitVerdict(build: (id: number) => AppToHost, onVerdict: (verdict: Edi
 
 // ---- selection -------------------------------------------------------------
 
-function select(index: number | null, options: { reveal: boolean; rebuildTree?: boolean }): void {
+/** Every selected widget, primary LAST: the order `toggleSelected` maintains. */
+function allSelected(): number[] {
+  return selected === null ? [...others] : [...others, selected];
+}
+
+/**
+ * Replace the whole selection from a member list whose LAST entry is the
+ * primary. Everything else in the app reads `selected` plus `others`, so this
+ * is the one place the two are set together.
+ */
+function selectMany(members: readonly number[], options: { reveal: boolean; rebuildTree?: boolean }): void {
+  const list = outermost(scene, members);
+  others = list.slice(0, -1);
+  otherIds = others.map((i) => selectionAt(scene, i)).filter((s): s is Selection => s !== null);
+  select(list.length === 0 ? null : list[list.length - 1], { ...options, keepOthers: true });
+}
+
+function select(
+  index: number | null,
+  options: { reveal: boolean; rebuildTree?: boolean; keepOthers?: boolean }
+): void {
+  if (!options.keepOthers) {
+    others = [];
+    otherIds = [];
+  }
   selected = index;
   selection = index === null ? null : selectionAt(scene, index);
   const item = selectedItem();
@@ -783,7 +1163,12 @@ function statusLine(): string {
   const ghosts = scene.items.filter((i) => i.ghostBox).length;
   const estimated = ghosts > 0 ? ` · ${ghosts} unmeasurable (dashed)` : "";
   const item = selectedItem();
-  const picked = item ? ` · selected ${widgetTitle(item)}${item.editable ? "" : " (synthetic)"}` : "";
+  const picked =
+    others.length > 0
+      ? ` · ${others.length + 1} selected, ${item ? widgetTitle(item) : "none"} is the primary`
+      : item
+        ? ` · selected ${widgetTitle(item)}${item.editable ? "" : " (synthetic)"}`
+        : "";
   const focused = focusIndex === null ? "" : ` · focused on ${widgetTitle(scene.items[focusIndex])}`;
   return `${scene.count} widgets · ${file}${estimated}${focused}${picked}`;
 }
@@ -818,6 +1203,8 @@ function onLayout(result: GuiLayoutResult, textures: Record<string, string | nul
   gesture = null;
   committing = null;
   rowDrag = null;
+  paletteDrag = null;
+  marquee = null;
   flashIndex = null;
   layersBuilt = false;
   metaEl.textContent = `${defsFiles} gui files in template store`;
@@ -826,9 +1213,15 @@ function onLayout(result: GuiLayoutResult, textures: Record<string, string | nul
   // draw indices before anything reads a mask.
   rebuildMasks();
   renderFocusBar();
-  // The document changed under the selection: find the same widget again by its
-  // path, and re-read its properties, whose lines may have moved.
+  // The document changed under the selection: find every member again by its
+  // own identity, and re-read the primary's properties, whose lines may have
+  // moved. A member the edit removed simply stops being selected.
   const restored = selection ? indexOfSelection(scene, selection) : null;
+  const restoredOthers = otherIds
+    .map((id) => ({ id, index: indexOfSelection(scene, id) }))
+    .filter((m): m is { id: Selection; index: number } => m.index !== null);
+  others = restoredOthers.map((m) => m.index);
+  otherIds = restoredOthers.map((m) => m.id);
   infoLine = null;
   info = null;
   loadTextures(textures);
@@ -836,7 +1229,30 @@ function onLayout(result: GuiLayoutResult, textures: Record<string, string | nul
     fitPending = false;
     fitAndCenter();
   }
-  select(restored, { reveal: false, rebuildTree: true });
+  const inserted = takePendingSelect();
+  select(inserted ?? restored, { reveal: false, rebuildTree: true, keepOthers: inserted === null });
+  // The palette lists this document's own templates and types, and an edit can
+  // add one, so an open palette re-asks. The first layout asks too even with
+  // the palette closed: the inspector's "wrap in" menu is built from the same
+  // vocabulary and must not be empty until someone opens a panel.
+  if (paletteOpen() || !vocabularyAsked) askVocabulary();
+}
+
+/**
+ * The widget an insert just wrote, found in the layout that insert caused: the
+ * child of the recorded container whose source index is the one the op asked
+ * for (or the last one, for an append). Null when nothing was pending or the
+ * container is gone.
+ */
+function takePendingSelect(): number | null {
+  const pending = pendingSelect;
+  pendingSelect = null;
+  if (!pending) return null;
+  const container = scene.items.findIndex((item) => rowKey(item.path) === pending.parent);
+  if (container < 0) return null;
+  const rows = layerRows(scene, container).filter((row) => row.source >= 0);
+  const exact = rows.find((row) => row.source === pending.source);
+  return exact?.index ?? rows[rows.length - 1]?.index ?? null;
 }
 
 /**
@@ -878,9 +1294,15 @@ const host = connectHost((message) => {
     case "editVerdict": {
       const handler = pendingEdits.get(message.id);
       pendingEdits.delete(message.id);
-      handler?.({ refused: message.refused, warning: message.warning });
+      handler?.({ refused: message.refused, warning: message.warning, ops: message.ops });
       return;
     }
+    case "vocabulary":
+      vocabulary = message.entries;
+      vocabularyTotal = message.total;
+      renderPalette();
+      renderInspector();
+      return;
     case "error":
       statusEl.textContent = `Error: ${message.message}`;
       return;
@@ -918,7 +1340,14 @@ interface Gesture {
   warned: string | null;
   /** Past DRAG_THRESHOLD: this is a drag, not a click. */
   engaged: boolean;
-  write: GestureWrite | null;
+  /**
+   * Every widget this drag moves, the pressed one FIRST. One entry for a plain
+   * drag and for every resize; several when the press landed on a member of a
+   * multi-selection, and then the commit is one batch.
+   */
+  members: GestureMember[];
+  /** Per member, index-aligned with `members`; `writes[0]` is the pressed one's. */
+  writes: GestureWrite[] | null;
   /** The other children of the same container: what the smart guides align to. */
   siblings: SceneRect[];
   /** What the last preview snapped to, for the guide lines. */
@@ -927,6 +1356,39 @@ interface Gesture {
   reorder: ReorderContext | null;
   /** Where a reorder drag would drop, as the op's `to` index plus its drop line. */
   drop: { to: number; line: Guide } | null;
+}
+
+/**
+ * One widget a drag carries. `line` is null for a widget with no declaration
+ * here; `refused` is filled in from the gesture-start check, and a member that
+ * carries one neither previews nor commits while the rest do.
+ */
+interface GestureMember {
+  index: number;
+  from: number;
+  to: number;
+  line: number | null;
+  base: GestureBase;
+  rect: SceneRect;
+  refused: string | null;
+}
+
+function memberOf(index: number): GestureMember {
+  const item = scene.items[index];
+  return {
+    index,
+    from: index,
+    to: subtreeEnd(scene, index),
+    line: canEdit(item) ? item.line : null,
+    base: baseOf(item),
+    rect: hitRect(item),
+    refused: canEdit(item) ? null : `${widgetTitle(item)} ${NO_SOURCE_HERE}`,
+  };
+}
+
+/** The members a drag actually moves: the ones the guards did not turn down. */
+function movingMembers(g: Gesture): GestureMember[] {
+  return g.members.filter((m) => m.refused === null && m.line !== null);
 }
 
 /**
@@ -1005,15 +1467,28 @@ function siblingRects(index: number): SceneRect[] {
 }
 
 let gesture: Gesture | null = null;
-/** A released gesture whose write is in flight: its preview holds until the layout lands. */
-let committing: { from: number; to: number; write: GestureWrite } | null = null;
 
-function livePreview(): { from: number; to: number; write: GestureWrite } | null {
+/**
+ * What the canvas paints instead of the file's own geometry: the subtrees that
+ * move, and the pressed widget's own write (the rect the marquee draws and the
+ * readout reports). Slices are ascending and disjoint, which is what lets the
+ * painter walk them with the draw list in one pass.
+ */
+interface LivePreview {
+  slices: { from: number; to: number }[];
+  write: GestureWrite;
+}
+
+/** A released gesture whose write is in flight: its preview holds until the layout lands. */
+let committing: LivePreview | null = null;
+
+function livePreview(): LivePreview | null {
   if (committing) return committing;
-  if (gesture?.status === "allowed" && gesture.write) {
-    return { from: gesture.from, to: gesture.to, write: gesture.write };
-  }
-  return null;
+  if (gesture?.status !== "allowed" || !gesture.writes) return null;
+  const slices = movingMembers(gesture)
+    .map((m) => ({ from: m.from, to: m.to }))
+    .sort((a, b) => a.from - b.from);
+  return { slices, write: gesture.writes[0] };
 }
 
 const NO_SOURCE_HERE =
@@ -1021,8 +1496,12 @@ const NO_SOURCE_HERE =
 
 /**
  * Arm a gesture on the widget at `index` and ask the guards what the commit
- * would answer. The check carries the widget's CURRENT values, so it writes
+ * would answer. The check carries each widget's CURRENT values, so it writes
  * nothing and its verdict is exactly the one the commit will get.
+ *
+ * A press on a member of a multi-selection arms the whole selection: one check
+ * per member, in one `checkOps` batch, and a member the guards turn down keeps
+ * its reason and stays where it is while the rest preview and move.
  */
 function beginGesture(
   index: number,
@@ -1032,23 +1511,30 @@ function beginGesture(
 ): void {
   const item = scene.items[index];
   if (!item) return;
-  const base = baseOf(item);
-  const editable = canEdit(item);
+  // A resize grip belongs to ONE widget's rect, so it never carries the others.
+  // A press on any member drags the whole set, the pressed one included: the
+  // pointerdown promoted it to primary, so membership is what to test, not
+  // whether it is one of the others.
+  const group =
+    handle === null && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
+  const members = [memberOf(index), ...group.filter((i) => i !== index).map(memberOf)];
+  const first = members[0];
   const next: Gesture = {
     index,
-    from: index,
-    to: subtreeEnd(scene, index),
-    line: editable ? item.line : null,
+    from: first.from,
+    to: first.to,
+    line: first.line,
     handle,
     origin: world,
     screen,
-    base,
-    rect: hitRect(item),
-    status: editable ? "pending" : "blocked",
-    reason: editable ? null : `${widgetTitle(item)} ${NO_SOURCE_HERE}`,
+    base: first.base,
+    rect: first.rect,
+    status: first.refused === null ? "pending" : "blocked",
+    reason: first.refused,
     warned: null,
     engaged: false,
-    write: null,
+    members,
+    writes: null,
     siblings: siblingRects(index),
     snap: null,
     reorder: null,
@@ -1057,32 +1543,69 @@ function beginGesture(
   gesture = next;
   if (next.line === null) return;
 
-  const properties = gestureKeys(handle).map((key) => ({
-    key,
-    value:
-      key === "position"
-        ? pairValue(base.position[0], base.position[1])
-        : pairValue(base.size[0], base.size[1]),
-  }));
-  sendEdit("checkEdit", next.line, properties, (verdict) => {
-    if (gesture !== next) return;
-    if (verdict.refused) {
-      next.reason = verdict.refused;
-      // A move the container refuses is not a dead gesture when the container
-      // is one that places its children itself: what a drag means there is a
-      // change of LAYOUT ORDER, which is a reorder, and the refusal above is
-      // the server's own explanation of why it is not a move.
-      const reorder = handle === null ? reorderContextFor(index) : null;
-      next.status = reorder ? "reorder" : "blocked";
-      next.reorder = reorder;
-      if (reorder) probeReorder(reorder, next);
-    } else {
-      next.status = "allowed";
-      if (verdict.warning) next.warned = verdict.warning;
+  const keys = gestureKeys(handle);
+  const currentOf = (m: GestureMember) =>
+    keys.map((key) => ({
+      key,
+      value:
+        key === "position"
+          ? pairValue(m.base.position[0], m.base.position[1])
+          : pairValue(m.base.size[0], m.base.size[1]),
+    }));
+
+  if (members.length === 1) {
+    sendEdit("checkEdit", next.line, currentOf(first), (verdict) => armGesture(next, verdict));
+    return;
+  }
+  const asked = movingMembers(next);
+  sendOps(
+    "checkOps",
+    asked.map((m) => ({ kind: "setProperties", line: m.line!, properties: currentOf(m) })),
+    (verdict) => {
+      if (gesture !== next) return;
+      verdict.ops?.forEach((answer, i) => {
+        if (answer.refused) asked[i].refused = answer.refused;
+      });
+      const moving = movingMembers(next);
+      // The primary's own verdict decides what the gesture IS (a move, or the
+      // reorder a box child's refusal turns it into); the others only decide
+      // whether they come along.
+      armGesture(next, {
+        refused: first.refused ?? (moving.length === 0 ? verdict.refused : undefined),
+        warning: verdict.warning,
+      });
+      if (next.status === "allowed") announceSkipped(next);
     }
-    // The press may already have become a drag while the check was out.
-    if (next.engaged) announceGesture(next);
-  });
+  );
+}
+
+/** Turn a gesture-start verdict into what the drag may do. */
+function armGesture(g: Gesture, verdict: EditVerdict): void {
+  if (gesture !== g) return;
+  if (verdict.refused) {
+    g.reason = verdict.refused;
+    // A move the container refuses is not a dead gesture when the container is
+    // one that places its children itself: what a drag means there is a change
+    // of LAYOUT ORDER, which is a reorder, and the refusal above is the
+    // server's own explanation of why it is not a move.
+    const reorder = g.handle === null && g.members.length === 1 ? reorderContextFor(g.index) : null;
+    g.status = reorder ? "reorder" : "blocked";
+    g.reorder = reorder;
+    if (reorder) probeReorder(reorder, g);
+  } else {
+    g.status = "allowed";
+    if (verdict.warning) g.warned = verdict.warning;
+  }
+  // The press may already have become a drag while the check was out.
+  if (g.engaged) announceGesture(g);
+}
+
+/** The members that will not come along, in the server's own words. */
+function announceSkipped(g: Gesture): void {
+  const reasons = [...new Set(g.members.map((m) => m.refused).filter((r): r is string => r !== null))];
+  if (reasons.length === 0) return;
+  const staying = g.members.length - movingMembers(g).length;
+  toast(`${staying} of ${g.members.length} will not move. ${reasons.join(" ")}`, "warned");
 }
 
 /**
@@ -1131,23 +1654,29 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
   // guards have answered for it.
   if (g.status !== "allowed") return;
   const [rawX, rawY] = roundDelta(world.x - g.origin.x, world.y - g.origin.y);
-  let write = writeFor(g, rawX, rawY);
-  const snap = snapRect(write.rect, g.siblings, g.handle ? edgesOf(g.handle) : MOVE_EDGES, snapConfig());
+  let delta: [number, number] = [rawX, rawY];
+  // The guides are the PRIMARY's: one drag has one delta, and snapping every
+  // member to its own neighbours would tear the selection apart.
+  const snap = snapRect(
+    writeFor(g, g.members[0], rawX, rawY).rect,
+    g.siblings,
+    g.handle ? edgesOf(g.handle) : MOVE_EDGES,
+    snapConfig()
+  );
   if (snap.dx !== 0 || snap.dy !== 0) {
     // Rounded again, for the reason gesture.ts rounds at all: the preview, the
     // readout and the commit have to come out of one whole-pixel delta.
-    const [dx, dy] = roundDelta(rawX + snap.dx, rawY + snap.dy);
-    write = writeFor(g, dx, dy);
+    delta = roundDelta(rawX + snap.dx, rawY + snap.dy);
   }
   g.snap = snap;
-  g.write = write;
+  g.writes = g.members.map((m) => writeFor(g, m, delta[0], delta[1]));
   statusEl.textContent = gestureReadout(g);
-  previewInspector(write);
+  previewInspector(g.writes[0]);
   requestDraw();
 }
 
-function writeFor(g: Gesture, dx: number, dy: number): GestureWrite {
-  return g.handle ? resizeWrite(g.base, g.rect, g.handle, dx, dy) : moveWrite(g.base, g.rect, dx, dy);
+function writeFor(g: Gesture, m: GestureMember, dx: number, dy: number): GestureWrite {
+  return g.handle ? resizeWrite(m.base, m.rect, g.handle, dx, dy) : moveWrite(m.base, m.rect, dx, dy);
 }
 
 /**
@@ -1172,13 +1701,15 @@ function dropLine(ctx: ReorderContext, to: number): Guide {
   const rects = ctx.rects;
   const lo = (r: SceneRect) => (axis === "x" ? r.x : r.y);
   const hi = (r: SceneRect) => (axis === "x" ? r.x + r.w : r.y + r.h);
-  const others = rects.filter((_, i) => i !== ctx.from);
+  // The children the dragged one is landing among; named `rest` because
+  // `others` is the multi-selection at this scope.
+  const rest = rects.filter((_, i) => i !== ctx.from);
   const at =
     to <= 0
-      ? lo(others[0]) - 2
-      : to >= others.length
-        ? hi(others[others.length - 1]) + 2
-        : (hi(others[to - 1]) + lo(others[to])) / 2;
+      ? lo(rest[0]) - 2
+      : to >= rest.length
+        ? hi(rest[rest.length - 1]) + 2
+        : (hi(rest[to - 1]) + lo(rest[to])) / 2;
   // Across the whole container, so the line reads as a slot and not as an edge.
   let start = Infinity;
   let end = -Infinity;
@@ -1192,30 +1723,36 @@ function dropLine(ctx: ReorderContext, to: number): Guide {
 /** The live geometry readout: where the widget is now, and what release would write. */
 function gestureReadout(g: Gesture): string {
   const item = scene.items[g.index];
-  const rect = g.write?.rect ?? g.rect;
+  const write = g.writes?.[0];
+  const rect = write?.rect ?? g.rect;
   const writes =
-    g.write && g.write.properties.length > 0
-      ? g.write.properties.map((p) => `${p.key} = ${p.value}`).join("  ")
+    write && write.properties.length > 0
+      ? write.properties.map((p) => `${p.key} = ${p.value}`).join("  ")
       : "no change yet";
-  return `${widgetTitle(item)} · ${geometry(rect)} · ${writes}`;
+  const moving = movingMembers(g).length;
+  const group = moving > 1 ? ` · and ${moving - 1} more` : "";
+  return `${widgetTitle(item)} · ${geometry(rect)} · ${writes}${group}`;
 }
 
-/** Release: one op, or an honest reason there is none. */
+/** Release: one op (or one batch), or an honest reason there is none. */
 function endGesture(g: Gesture): void {
   gesture = null;
   if (g.status === "reorder" && g.engaged && g.reorder && g.drop && g.drop.to !== g.reorder.from) {
     commitReorder(g.reorder, g.drop.to);
     return;
   }
-  if (!g.engaged || g.status !== "allowed" || g.line === null || !g.write) {
+  const preview = livePreviewOf(g);
+  if (!g.engaged || g.status !== "allowed" || g.line === null || !g.writes) {
     statusEl.textContent = statusLine();
     // A gesture that previewed and then wrote nothing leaves the inspector
     // saying what the file still says, not what the abandoned preview showed.
-    if (g.write) renderInspector();
+    if (g.writes) renderInspector();
     draw();
     return;
   }
-  if (g.write.noop) {
+  const moving = movingMembers(g);
+  const changed = moving.filter((m) => !g.writes![g.members.indexOf(m)].noop);
+  if (changed.length === 0) {
     // Reported, never silently dropped: a drag that rounds to nothing looks
     // exactly like a drag the editor lost.
     toast("That is less than a whole pixel, so nothing was written.", "info");
@@ -1223,8 +1760,8 @@ function endGesture(g: Gesture): void {
     draw();
     return;
   }
-  committing = { from: g.from, to: g.to, write: g.write };
-  sendEdit("applyEdit", g.line, g.write.properties, (verdict) => {
+  committing = preview;
+  const onVerdict = (verdict: EditVerdict): void => {
     if (verdict.refused) {
       // Nothing was written, so the preview is a lie: drop it now rather than
       // waiting for a layout that is not coming.
@@ -1234,9 +1771,40 @@ function endGesture(g: Gesture): void {
       draw();
       return;
     }
-    if (verdict.warning && verdict.warning !== g.warned) toast(verdict.warning, "warned");
-  });
+    const refused = distinctRefusals(verdict);
+    if (refused.length > 0) toast(refused.join(" "), "warned");
+    else if (verdict.warning && verdict.warning !== g.warned) toast(verdict.warning, "warned");
+  };
+
+  if (changed.length === 1 && g.members.length === 1) {
+    sendEdit("applyEdit", g.line, g.writes[0].properties, onVerdict);
+  } else {
+    // One batch: several widgets, one document change, one undo step.
+    sendOps(
+      "applyOps",
+      changed.map((m) => ({
+        kind: "setProperties" as const,
+        line: m.line!,
+        properties: g.writes![g.members.indexOf(m)].properties,
+      })),
+      onVerdict
+    );
+  }
   draw();
+}
+
+/** The preview a released gesture holds until the layout for its write lands. */
+function livePreviewOf(g: Gesture): LivePreview | null {
+  if (!g.writes) return null;
+  const slices = movingMembers(g)
+    .map((m) => ({ from: m.from, to: m.to }))
+    .sort((a, b) => a.from - b.from);
+  return { slices, write: g.writes[0] };
+}
+
+/** Per-member refusals, deduplicated and never paraphrased. */
+function distinctRefusals(verdict: EditVerdict): string[] {
+  return [...new Set((verdict.ops ?? []).map((o) => o.refused).filter((r): r is string => !!r))];
 }
 
 /**
@@ -1325,6 +1893,285 @@ function endRowDrag(): void {
   commitReorder(drag.ctx, drag.to);
 }
 
+// ---- the marquee -----------------------------------------------------------
+
+/**
+ * A rubber band on empty canvas. It catches the widgets ENTIRELY inside it
+ * (hitTest.ts says why containment and not intersection), and the catch is
+ * painted rather than selected until release: a marquee over a vanilla window
+ * would otherwise rebuild the tree, the layers panel and the inspector on every
+ * pointer move.
+ */
+interface Marquee {
+  origin: { x: number; y: number };
+  rect: SceneRect;
+  /** Shift: the catch joins the selection instead of replacing it. */
+  additive: boolean;
+  /** What was selected when the band started, for the additive case. */
+  base: number[];
+  hits: number[];
+}
+
+let marquee: Marquee | null = null;
+
+// ---- dropping a palette entry ----------------------------------------------
+
+/**
+ * A widget being dragged out of the palette. It carries no geometry of its own:
+ * what a drop means is decided by the container under the cursor, exactly as a
+ * reorder drop is, and the widget itself is written by the server.
+ */
+interface PaletteDrag {
+  entry: GuiVocabularyEntry;
+  /** The container the pointer is over, or null while it is over nothing writable. */
+  target: DropTarget | null;
+  /** The rank inside that container the drop would land at. */
+  rank: number;
+  /** The drop line, when the container has children to land between. */
+  line: Guide | null;
+}
+
+/** A container a drop can write into, and the children a drop line reads. */
+interface DropTarget {
+  index: number;
+  /** The container's own declaration line: what the `insert` op is addressed to. */
+  line: number;
+  children: number[];
+  sources: number[];
+  rects: SceneRect[];
+  axis: "x" | "y";
+}
+
+let paletteDrag: PaletteDrag | null = null;
+
+/**
+ * The nearest container a drop can be written into: the widget under the
+ * cursor, or the first ancestor of it with a declaration in this file. Null
+ * when there is none, which is the honest answer over a template-spliced
+ * subtree — the server would refuse that insert, and the drop affordance must
+ * not promise it.
+ */
+function dropTargetAt(world: { x: number; y: number }): DropTarget | null {
+  const hit = hitStack(scene, world.x, world.y, skipMask)[0];
+  if (hit === undefined) return null;
+  for (let i: number | null = hit; i !== null; i = parentIndex(scene, i)) {
+    const container = scene.items[i];
+    if (!canEdit(container)) continue;
+    const rows = layerRows(scene, i).filter((row) => row.rank >= 0);
+    const children = rows.map((row) => row.index);
+    const rects = children.map(rectOf);
+    return {
+      index: i,
+      line: container.line,
+      children,
+      sources: rows.map((row) => row.source),
+      rects,
+      axis: boxAxis(rects),
+    };
+  }
+  return null;
+}
+
+/** The `index` an insert takes to land at `rank` among a container's children. */
+function insertIndex(target: DropTarget, rank: number): number | undefined {
+  // Source indices, not ranks: a declaration between two children holds a slot
+  // the preview cannot see (layers.ts). Past the last child, the op appends.
+  return rank >= target.sources.length ? undefined : target.sources[rank];
+}
+
+function updatePaletteDrag(world: { x: number; y: number }): void {
+  const drag = paletteDrag!;
+  const target = dropTargetAt(world);
+  drag.target = target;
+  if (!target) {
+    drag.line = null;
+    flashIndex = null;
+    statusEl.textContent = `${drag.entry.name} · no widget here can take a child`;
+    requestDraw();
+    return;
+  }
+  // The same drop reading a reorder uses: how many children the pointer has
+  // passed the centre of. With fewer than two there is no gap to point at, so
+  // the container is highlighted and the insert appends.
+  drag.rank =
+    target.rects.length >= 2
+      ? dropRank(target.rects, -1, target.axis, target.axis === "x" ? world.x : world.y)
+      : target.rects.length;
+  drag.line = target.rects.length >= 2 ? dropLineIn(target, drag.rank) : null;
+  flashIndex = target.index;
+  const container = scene.items[target.index];
+  statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
+  requestDraw();
+}
+
+/** The drop indicator for an INSERT: a line in the gap the new widget lands in. */
+function dropLineIn(target: DropTarget, rank: number): Guide {
+  const axis = target.axis;
+  const lo = (r: SceneRect) => (axis === "x" ? r.x : r.y);
+  const hi = (r: SceneRect) => (axis === "x" ? r.x + r.w : r.y + r.h);
+  const rects = target.rects;
+  const at =
+    rank <= 0
+      ? lo(rects[0]) - 2
+      : rank >= rects.length
+        ? hi(rects[rects.length - 1]) + 2
+        : (hi(rects[rank - 1]) + lo(rects[rank])) / 2;
+  let start = Infinity;
+  let end = -Infinity;
+  for (const r of rects) {
+    start = Math.min(start, axis === "x" ? r.y : r.x);
+    end = Math.max(end, axis === "x" ? r.y + r.h : r.x + r.w);
+  }
+  return { axis, at, start, end };
+}
+
+/**
+ * Release: ONE `insert` op, and the new widget becomes the selection. The body
+ * is empty on purpose — a size this editor invented would be a number the
+ * author never chose and the engine never measured — so the status line says
+ * the widget draws nothing until it is given one.
+ */
+function endPaletteDrag(commit: boolean): void {
+  const drag = paletteDrag;
+  paletteDrag = null;
+  flashIndex = null;
+  for (const node of paletteEls.values()) node.classList.remove("dragging");
+  if (!drag) return;
+  const target = drag.target;
+  if (!commit || !target) {
+    statusEl.textContent = statusLine();
+    draw();
+    return;
+  }
+  const index = insertIndex(target, drag.rank);
+  // Select what lands: the container's path plus the source index the op wrote
+  // at, resolved against the NEXT layout (a draw index would be meaningless).
+  pendingSelect = {
+    parent: rowKey(scene.items[target.index].path),
+    source: index ?? Number.POSITIVE_INFINITY,
+  };
+  sendOps(
+    "applyOps",
+    [{ kind: "insert", line: target.line, widget: { type: drag.entry.name }, index }],
+    (verdict) => {
+      if (verdict.refused) {
+        pendingSelect = null;
+        toast(verdict.refused, "refused");
+        return;
+      }
+      toast(
+        `${drag.entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
+        "info"
+      );
+    }
+  );
+  statusEl.textContent = statusLine();
+  draw();
+}
+
+// ---- delete, duplicate, copy and paste -------------------------------------
+
+/**
+ * The selection's declaration lines, in SOURCE order (ascending), with anything
+ * that has no declaration here reported rather than silently dropped. Source
+ * order is what makes a multi-copy read like the file it came from.
+ */
+function selectionLines(what: string): number[] | null {
+  const members = allSelected();
+  if (members.length === 0) return null;
+  const lines: number[] = [];
+  const skipped: string[] = [];
+  for (const index of members) {
+    const item = scene.items[index];
+    if (canEdit(item)) lines.push(item.line);
+    else skipped.push(`${widgetTitle(item)} ${NO_SOURCE_HERE}`);
+  }
+  if (skipped.length > 0) toast([...new Set(skipped)].join(" "), "warned");
+  if (lines.length === 0) {
+    toast(`Nothing in the selection can be ${what}.`, "refused");
+    return null;
+  }
+  return lines.sort((a, b) => a - b);
+}
+
+/** Del: one batch, so several widgets are one document change and one undo step. */
+function deleteSelection(): void {
+  const lines = selectionLines("deleted");
+  if (!lines) return;
+  sendOps(
+    "applyOps",
+    lines.map((line) => ({ kind: "delete" as const, line })),
+    reportBatch
+  );
+}
+
+/** Ctrl+D: each widget's copy lands directly below it, all in one batch. */
+function duplicateSelection(): void {
+  const lines = selectionLines("duplicated");
+  if (!lines) return;
+  sendOps(
+    "applyOps",
+    lines.map((line) => ({ kind: "duplicate" as const, line })),
+    reportBatch
+  );
+}
+
+/**
+ * Ctrl+C: the host puts the widgets' verbatim blocks on the system clipboard,
+ * concatenated in source order. The app never handles the text: a clipboard is
+ * the host's, and a paste has to survive being made in a different editor.
+ */
+function copySelection(): void {
+  const lines = selectionLines("copied");
+  if (!lines) return;
+  awaitVerdict(
+    (id) => ({ type: "copyBlocks", id, lines }),
+    (verdict) => {
+      if (verdict.refused) toast(verdict.refused, "refused");
+      else if (verdict.warning) toast(verdict.warning, "warned");
+      else toast(`${lines.length} widget(s) copied.`, "info");
+    }
+  );
+}
+
+/**
+ * Ctrl+V: paste as the selected widget's next SIBLING, which is where a paste
+ * after a copy belongs. With a root widget selected (nothing to be a sibling
+ * inside) it appends into that widget instead, and with nothing selected there
+ * is no container to name, so it says so.
+ */
+function pasteIntoSelection(): void {
+  const item = selectedItem();
+  if (!item || !canEdit(item)) {
+    toast("Select a widget first: a paste needs a container to go into.", "info");
+    return;
+  }
+  const parent = parentIndex(scene, selected!);
+  const container = parent === null ? null : scene.items[parent];
+  const sibling = container && canEdit(container) && item.srcIndex !== undefined;
+  awaitVerdict(
+    (id) =>
+      sibling
+        ? { type: "pasteInto", id, line: container.line, index: item.srcIndex! + 1 }
+        : { type: "pasteInto", id, line: item.line },
+    (verdict) => {
+      if (verdict.refused) toast(verdict.refused, "refused");
+      else if (verdict.warning) toast(verdict.warning, "warned");
+    }
+  );
+}
+
+/** A batch's answer: the whole gesture's refusal, or the members that skipped. */
+function reportBatch(verdict: EditVerdict): void {
+  if (verdict.refused) {
+    toast(verdict.refused, "refused");
+    return;
+  }
+  const refused = distinctRefusals(verdict);
+  if (refused.length > 0) toast(refused.join(" "), "warned");
+  else if (verdict.warning) toast(verdict.warning, "warned");
+}
+
 // ---- camera and selection interactions -------------------------------------
 
 /** Canvas-local screen point -> world (game) coordinates: the camera, inverted. */
@@ -1363,9 +2210,29 @@ stage.addEventListener("pointerdown", (ev) => {
     return;
   }
   const stack = hitStack(scene, world.x, world.y, skipMask);
-  // Empty canvas clears; Alt steps through everything under the cursor.
+  // Empty canvas starts a marquee; Alt steps through everything under the
+  // cursor; Shift (without the reveal chord) adds to or removes from the set.
   const next = ev.altKey ? nextInStack(stack, selected) : (stack[0] ?? null);
-  select(next, { reveal: (ev.ctrlKey || ev.metaKey) && ev.shiftKey });
+  const reveal = (ev.ctrlKey || ev.metaKey) && ev.shiftKey;
+  const additive = ev.shiftKey && !ev.ctrlKey && !ev.metaKey;
+  if (next === null) {
+    if (!additive) select(null, { reveal: false });
+    marquee = { origin: world, rect: { ...world, w: 0, h: 0 }, additive, base: allSelected(), hits: [] };
+    capture(ev.pointerId);
+    draw();
+    return;
+  }
+  if (additive) {
+    // A shift-click is a SELECTION gesture: it never also arms a drag, or the
+    // widget the user was only adding would move with the next pointer move.
+    selectMany(toggleSelected(allSelected(), next), { reveal: false });
+    return;
+  }
+  const members = allSelected();
+  // Pressing a member keeps the whole selection (and drags all of it), with the
+  // pressed one as the primary; pressing anything else replaces the selection.
+  if (members.includes(next)) selectMany([...members.filter((i) => i !== next), next], { reveal });
+  else select(next, { reveal });
   if (selected === null || committing) return;
   capture(ev.pointerId);
   beginGesture(selected, null, world, screen);
@@ -1378,6 +2245,24 @@ stage.addEventListener("pointermove", (ev) => {
     return;
   }
   const world = toWorld(ev);
+  if (paletteDrag) {
+    updatePaletteDrag(world);
+    return;
+  }
+  if (marquee) {
+    marquee.rect = {
+      x: Math.min(marquee.origin.x, world.x),
+      y: Math.min(marquee.origin.y, world.y),
+      w: Math.abs(world.x - marquee.origin.x),
+      h: Math.abs(world.y - marquee.origin.y),
+    };
+    // Painted, not selected, until release: a marquee over a big window would
+    // otherwise rebuild the tree and the inspector on every pointer move.
+    marquee.hits = marqueeHits(scene, marquee.rect, skipMask);
+    statusEl.textContent = `${marquee.hits.length} widget(s) inside the marquee`;
+    requestDraw();
+    return;
+  }
   if (gesture) {
     updateGesture(gesture, world, { x: ev.clientX, y: ev.clientY });
     return;
@@ -1393,7 +2278,20 @@ stage.addEventListener("pointerup", (ev) => {
     stage.style.cursor = "default";
     return;
   }
-  if (ev.button !== 0 || !gesture) return;
+  if (ev.button !== 0) return;
+  if (paletteDrag) {
+    release(ev.pointerId);
+    endPaletteDrag(true);
+    return;
+  }
+  if (marquee) {
+    release(ev.pointerId);
+    const caught = marquee.additive ? [...marquee.base, ...marquee.hits] : marquee.hits;
+    marquee = null;
+    selectMany([...new Set(caught)], { reveal: false });
+    return;
+  }
+  if (!gesture) return;
   release(ev.pointerId);
   endGesture(gesture);
 });
@@ -1401,7 +2299,7 @@ stage.addEventListener("pointercancel", () => {
   // The pointer went away mid-gesture (a touch cancelled, the window lost it):
   // drop the gesture without committing anything.
   if (!gesture) return;
-  const previewed = gesture.write !== null;
+  const previewed = gesture.writes !== null;
   gesture = null;
   statusEl.textContent = statusLine();
   if (previewed) renderInspector();
@@ -1446,6 +2344,22 @@ stage.addEventListener(
   { passive: false }
 );
 window.addEventListener("keydown", (ev) => {
+  const chord = ev.ctrlKey || ev.metaKey;
+  if (chord && !ev.altKey) {
+    const key = ev.key.toLowerCase();
+    if (key === "c" || key === "d" || key === "v") {
+      ev.preventDefault();
+      if (key === "c") copySelection();
+      else if (key === "d") duplicateSelection();
+      else pasteIntoSelection();
+      return;
+    }
+  }
+  if ((ev.key === "Delete" || ev.key === "Backspace") && !chord) {
+    ev.preventDefault();
+    deleteSelection();
+    return;
+  }
   if (ev.key === "f" && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
     // Focus the selection, or leave the focus when there is nothing new to
     // focus on: one key, both directions.
@@ -1454,10 +2368,20 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
   if (ev.key !== "Escape") return;
+  if (paletteDrag) {
+    endPaletteDrag(false);
+    return;
+  }
+  if (marquee) {
+    marquee = null;
+    statusEl.textContent = statusLine();
+    draw();
+    return;
+  }
   if (gesture) {
     // Escape abandons the drag in progress before it touches the selection:
     // the widget snaps back to where the file still has it.
-    const previewed = gesture.write !== null;
+    const previewed = gesture.writes !== null;
     gesture = null;
     hideToast();
     statusEl.textContent = statusLine();
@@ -1491,10 +2415,21 @@ document.getElementById("zoomFit")!.addEventListener("click", () => {
   else fitRect(hitRect(scene.items[focusIndex]));
 });
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
+paletteToggleEl.addEventListener("click", togglePalette);
 outlinesEl.addEventListener("change", draw);
 snapToggle.addEventListener("change", draw);
 gridToggle.addEventListener("change", draw);
 window.addEventListener("resize", draw);
+// A palette drag has no pointer capture of its own: it starts on a panel row
+// and ends over the canvas, where the stage's own handler commits it. This is
+// the other half, a release anywhere else, which cancels rather than leaving
+// the drag armed for the next pointer move.
+window.addEventListener("pointerup", () => {
+  if (paletteDrag) endPaletteDrag(false);
+});
+window.addEventListener("pointercancel", () => {
+  if (paletteDrag) endPaletteDrag(false);
+});
 
 renderFocusBar();
 renderLayers();

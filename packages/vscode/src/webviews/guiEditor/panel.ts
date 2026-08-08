@@ -24,6 +24,7 @@ import type {
   GuiLayoutResult,
   GuiSourceEditResult,
   GuiSourceOp,
+  GuiVocabularyResult,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
 import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp } from "./messages";
@@ -32,11 +33,13 @@ import { GuiTextureCache, type TextureRoots } from "./textureCache";
 
 export type FetchLayout = (uri: vscode.Uri, text: string) => Promise<GuiLayoutResult>;
 export type FetchWidgetInfo = (uri: vscode.Uri, text: string, line: number) => Promise<GuiWidgetInfo | null>;
+/** One op or a batch of them; the batch is what makes a multi-widget gesture one undo step. */
 export type FetchSourceEdit = (
   uri: vscode.Uri,
   text: string,
-  op: GuiSourceOp
+  request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }
 ) => Promise<GuiSourceEditResult | null>;
+export type FetchVocabulary = (uri: vscode.Uri, text: string) => Promise<GuiVocabularyResult>;
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -46,6 +49,7 @@ export class GuiEditorPanel {
   private readonly fetchLayout: FetchLayout;
   private readonly fetchWidgetInfo: FetchWidgetInfo;
   private readonly fetchSourceEdit: FetchSourceEdit;
+  private readonly fetchVocabulary: FetchVocabulary;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
   private disposables: vscode.Disposable[] = [];
@@ -59,12 +63,14 @@ export class GuiEditorPanel {
     fetchLayout: FetchLayout,
     fetchWidgetInfo: FetchWidgetInfo,
     fetchSourceEdit: FetchSourceEdit,
+    fetchVocabulary: FetchVocabulary,
     source: vscode.TextDocument,
     roots: TextureRoots
   ) {
     this.fetchLayout = fetchLayout;
     this.fetchWidgetInfo = fetchWidgetInfo;
     this.fetchSourceEdit = fetchSourceEdit;
+    this.fetchVocabulary = fetchVocabulary;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
     this.textures = new GuiTextureCache(this.storageDir, roots);
@@ -120,6 +126,7 @@ export class GuiEditorPanel {
     fetchLayout: FetchLayout,
     fetchWidgetInfo: FetchWidgetInfo,
     fetchSourceEdit: FetchSourceEdit,
+    fetchVocabulary: FetchVocabulary,
     source: vscode.TextDocument,
     roots: TextureRoots
   ): void {
@@ -141,6 +148,7 @@ export class GuiEditorPanel {
       fetchLayout,
       fetchWidgetInfo,
       fetchSourceEdit,
+      fetchVocabulary,
       source,
       roots
     );
@@ -189,12 +197,12 @@ export class GuiEditorPanel {
    * stale batch can be recognised instead of applied.
    */
   private async sourceEdit(
-    op: GuiSourceOp
+    request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }
   ): Promise<{ doc: vscode.TextDocument; version: number; result: GuiSourceEditResult }> {
     const doc = await vscode.workspace.openTextDocument(this.sourceUri);
     const version = doc.version;
     try {
-      const result = await this.fetchSourceEdit(doc.uri, doc.getText(), op);
+      const result = await this.fetchSourceEdit(doc.uri, doc.getText(), request);
       return { doc, version, result: result ?? { refused: "the server had no answer for that edit." } };
     } catch (err) {
       return {
@@ -233,6 +241,47 @@ export class GuiEditorPanel {
     void this.panel.webview.postMessage(message);
   }
 
+  /**
+   * One gesture: ask the server, apply the whole edit set as ONE
+   * `WorkspaceEdit`, answer the verdict, push the fresh layout. A batch takes
+   * exactly this path, which is what makes a multi-widget gesture one undo step
+   * rather than one per member.
+   */
+  private async commit(id: number, request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }): Promise<void> {
+    const attempt = await this.sourceEdit(request);
+    const { refused, warning, edits, results } = attempt.result;
+    const ops = results?.map((r) => ({ refused: r.refused, warning: r.warning }));
+    if (refused || !edits || edits.length === 0) {
+      // No edits and no refusal is the writer saying the bytes it would write
+      // are already there. Nothing happened, so the app hears it as a refusal
+      // rather than waiting for a layout that will not come.
+      this.post({
+        type: "editVerdict",
+        id,
+        refused: refused ?? "that edit changes nothing: the file already says exactly that.",
+        warning,
+        ops,
+      });
+      return;
+    }
+    const failure = await this.applyEdits(attempt.doc, attempt.version, edits);
+    this.post({
+      type: "editVerdict",
+      id,
+      refused: failure,
+      warning: failure ? undefined : warning,
+      ops: failure ? undefined : ops,
+    });
+    if (!failure) {
+      // Our own single write, not a burst of typing: the debounce exists to
+      // coalesce keystrokes and there is nothing here to coalesce. Skipping it
+      // is what keeps a released drag from hanging on its preview.
+      if (this.debounce) clearTimeout(this.debounce);
+      this.debounce = undefined;
+      await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+    }
+  }
+
   private async onMessage(message: AppToHost): Promise<void> {
     switch (message.type) {
       case "ready":
@@ -255,45 +304,78 @@ export class GuiEditorPanel {
         return;
       }
       case "checkEdit":
-      case "checkReorder": {
+      case "checkReorder":
+      case "checkOps": {
         // A gesture-start check. Whatever the server returns, the edits are
         // thrown away: the point of asking early is that the answer arrives
         // before anything moves, and a check that wrote would be a bug the
         // user could only discover through undo.
-        const { result } = await this.sourceEdit(opOf(message));
-        this.post({ type: "editVerdict", id: message.id, refused: result.refused, warning: result.warning });
-        return;
-      }
-      case "applyEdit":
-      case "reorder": {
-        const attempt = await this.sourceEdit(opOf(message));
-        const { refused, warning, edits } = attempt.result;
-        if (refused || !edits || edits.length === 0) {
-          // No edits and no refusal is the writer saying the bytes it would
-          // write are already there. Nothing happened, so the app hears it as
-          // a refusal rather than waiting for a layout that will not come.
-          this.post({
-            type: "editVerdict",
-            id: message.id,
-            refused: refused ?? "that edit changes nothing: the file already says exactly that.",
-            warning,
-          });
-          return;
-        }
-        const failure = await this.applyEdits(attempt.doc, attempt.version, edits);
+        const { result } = await this.sourceEdit(requestOf(message));
         this.post({
           type: "editVerdict",
           id: message.id,
-          refused: failure,
-          warning: failure ? undefined : warning,
+          refused: result.refused,
+          warning: result.warning,
+          ops: result.results?.map((r) => ({ refused: r.refused, warning: r.warning })),
         });
-        if (!failure) {
-          // Our own single write, not a burst of typing: the debounce exists to
-          // coalesce keystrokes and there is nothing here to coalesce. Skipping
-          // it is what keeps a released drag from hanging on its preview.
-          if (this.debounce) clearTimeout(this.debounce);
-          this.debounce = undefined;
-          await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+        return;
+      }
+      case "applyEdit":
+      case "reorder":
+      case "applyOps": {
+        await this.commit(message.id, requestOf(message));
+        return;
+      }
+      case "copyBlocks": {
+        // One `blockText` op per widget, as a batch so every block is read off
+        // the SAME text, then joined in the order the app asked for. The app
+        // never sees the text: the clipboard is the host's, like the document.
+        const { result } = await this.sourceEdit({
+          ops: message.lines.map((line) => ({ kind: "blockText", line })),
+        });
+        const blocks = (result.results ?? []).map((r) => r.blockText).filter((b): b is string => !!b);
+        if (blocks.length === 0) {
+          const reason = result.refused ?? result.results?.find((r) => r.refused)?.refused;
+          this.post({
+            type: "editVerdict",
+            id: message.id,
+            refused: reason ?? "there was nothing to copy on those lines.",
+          });
+          return;
+        }
+        await vscode.env.clipboard.writeText(blocks.join(""));
+        const skipped = result.results?.filter((r) => r.refused) ?? [];
+        this.post({
+          type: "editVerdict",
+          id: message.id,
+          warning: skipped.length > 0 ? skipped.map((r) => r.refused).join(" ") : undefined,
+        });
+        return;
+      }
+      case "pasteInto": {
+        const fragment = await vscode.env.clipboard.readText();
+        if (fragment.trim().length === 0) {
+          this.post({
+            type: "editVerdict",
+            id: message.id,
+            refused: "the clipboard is empty, so there is nothing to paste.",
+          });
+          return;
+        }
+        await this.commit(message.id, {
+          op: { kind: "insertRaw", line: message.line, fragment, index: message.index },
+        });
+        return;
+      }
+      case "requestVocabulary": {
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        try {
+          const result = await this.fetchVocabulary(doc.uri, doc.getText());
+          this.post({ type: "vocabulary", entries: result.entries, total: result.total });
+        } catch {
+          // A palette with no entries says so on its own; an error banner over
+          // the canvas would be about the wrong thing.
+          this.post({ type: "vocabulary", entries: [], total: 0 });
         }
         return;
       }
@@ -322,20 +404,32 @@ export class GuiEditorPanel {
 }
 
 /**
- * The op one edit message means. A check and its commit send the SAME op: the
- * only difference is what the host does with the answer, which is why the two
- * are separate message kinds rather than one with a flag.
+ * The server request one edit message means. A check and its commit send the
+ * SAME thing: the only difference is what the host does with the answer, which
+ * is why the two are separate message kinds rather than one with a flag.
  */
-function opOf(
-  message: Extract<AppToHost, { type: "checkEdit" | "applyEdit" | "checkReorder" | "reorder" }>
-): GuiSourceOp {
-  return message.type === "checkEdit" || message.type === "applyEdit"
-    ? {
-        kind: "setProperties",
-        line: message.line,
-        properties: message.properties.map((p) => ({ key: p.key, value: p.value })),
-      }
-    : { kind: "reorder", line: message.line, from: message.from, to: message.to };
+function requestOf(
+  message: Extract<
+    AppToHost,
+    { type: "checkEdit" | "applyEdit" | "checkReorder" | "reorder" | "checkOps" | "applyOps" }
+  >
+): { op: GuiSourceOp } | { ops: GuiSourceOp[] } {
+  switch (message.type) {
+    case "checkEdit":
+    case "applyEdit":
+      return {
+        op: {
+          kind: "setProperties",
+          line: message.line,
+          properties: message.properties.map((p) => ({ key: p.key, value: p.value })),
+        },
+      };
+    case "checkReorder":
+    case "reorder":
+      return { op: { kind: "reorder", line: message.line, from: message.from, to: message.to } };
+    default:
+      return { ops: message.ops };
+  }
 }
 
 /** The game's standard UI font, embedded so text metrics roughly match. */

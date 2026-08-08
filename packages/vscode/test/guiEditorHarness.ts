@@ -88,9 +88,10 @@ export interface EditorHarness {
   move(x: number, y: number): void;
   /** Release at a WORLD point, committing whatever the gesture became. */
   up(x: number, y: number): void;
-  key(key: string): void;
+  /** A keydown at the window, with the modifiers a chord needs. */
+  key(key: string, init?: ClickModifiers): void;
   /** Visible text of one of the app's panels. */
-  text(id: "tree" | "layers" | "inspector" | "status" | "focusBar"): string;
+  text(id: "tree" | "layers" | "inspector" | "status" | "focusBar" | "palette"): string;
   /** Flip one of the toolbar checkboxes, the way a click on it would. */
   toggle(id: "outlines" | "snap" | "grid", on: boolean): void;
   /** The toast currently up, or null when none is. */
@@ -105,6 +106,16 @@ export interface EditorHarness {
   layers(): string[];
   /** The layers row whose label contains `name`. */
   layer(name: string): HTMLElement;
+  /** Every selected row's text in a panel, tree or layers. */
+  selectedRows(id: "tree" | "layers"): string[];
+  /** Every palette row's text, in order. */
+  paletteRows(): string[];
+  /** The palette row whose text starts with `name`. */
+  paletteRow(name: string): HTMLElement;
+  /** Type into the palette's filter box, the way a keystroke would. */
+  filterPalette(text: string): void;
+  /** Click a toolbar or inspector button by its visible label. */
+  button(label: string): HTMLButtonElement;
   /** Click something inside a panel: a focus crumb, a button, the first toggle. */
   clickIn(node: Element, selector: string): void;
   /** Click one of a layers row's three glyph columns. */
@@ -183,8 +194,8 @@ export function bootEditor(): EditorHarness {
     up(x, y) {
       pointer("pointerup", x, y);
     },
-    key(key) {
-      win.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true }));
+    key(key, init = {}) {
+      win.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true, ...init }));
     },
     text(id) {
       // What the panel SHOWS, which since G3.3 includes the inspector's input
@@ -228,6 +239,29 @@ export function bootEditor(): EditorHarness {
         if (row.querySelector(".label")?.textContent?.includes(name)) return row;
       }
       throw new Error(`no layers row for ${name}`);
+    },
+    selectedRows(id) {
+      return [...el(id).querySelectorAll(".row.selected")].map((r) => r.textContent ?? "");
+    },
+    paletteRows() {
+      return [...el("palette").querySelectorAll(".row")].map((r) => r.textContent ?? "");
+    },
+    paletteRow(name) {
+      for (const row of el("palette").querySelectorAll<HTMLElement>(".row")) {
+        if ((row.textContent ?? "").startsWith(name)) return row;
+      }
+      throw new Error(`no palette row for ${name}`);
+    },
+    filterPalette(text) {
+      const input = el("palette").querySelector("input")!;
+      input.value = text;
+      input.dispatchEvent(new win.Event("input", { bubbles: true }));
+    },
+    button(label) {
+      for (const node of doc.querySelectorAll<HTMLButtonElement>("button")) {
+        if (node.textContent === label) return node;
+      }
+      throw new Error(`no button labelled ${label}`);
     },
     clickIn(node, selector) {
       const target = node.querySelector(selector);

@@ -22,7 +22,7 @@
  *
  * PURE: no DOM, no host.
  */
-import type { Scene } from "./scene";
+import { parentIndex, type Scene } from "./scene";
 
 export interface Selection {
   path: number[];
@@ -45,6 +45,37 @@ function samePath(a: readonly number[], b: readonly number[]): boolean {
  * path holding the same widget, else the same widget among the same siblings
  * (an insert or a delete above it shifted every index).
  */
+/**
+ * Shift+click: add the widget to the selection, or take it back out. The LAST
+ * entry is the primary, the one the inspector reads and a wrap is anchored on,
+ * so a re-click on a member that is not the primary promotes it rather than
+ * removing it: clicking a widget always ends with it being the one the panels
+ * are talking about, and a second click on THAT one clears it.
+ */
+export function toggleSelected(current: readonly number[], index: number): number[] {
+  const at = current.indexOf(index);
+  if (at < 0) return [...current, index];
+  if (at === current.length - 1) return current.slice(0, -1);
+  return [...current.slice(0, at), ...current.slice(at + 1), index];
+}
+
+/**
+ * The members with no selected ancestor, in the order they were given. A
+ * widget inside another selected widget is DROPPED, because both readings of
+ * keeping it are wrong: a move would shift it once with its parent and once on
+ * its own, and a delete of its parent already takes it. Dropping is also what
+ * the writer does with an overlapping structural batch (`dropNested`).
+ */
+export function outermost(scene: Scene, indices: readonly number[]): number[] {
+  const set = new Set(indices);
+  return indices.filter((index) => {
+    for (let p = parentIndex(scene, index); p !== null; p = parentIndex(scene, p)) {
+      if (set.has(p)) return false;
+    }
+    return true;
+  });
+}
+
 export function indexOfSelection(scene: Scene, selection: Selection): number | null {
   const parent = selection.path.slice(0, -1);
   let sibling: number | null = null;

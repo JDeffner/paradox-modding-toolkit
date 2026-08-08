@@ -13,8 +13,13 @@ import * as path from "path";
 import type { GuiLayoutNode } from "@px-lsp/protocol/protocol";
 import { computeGuiLayoutResult } from "../../server/src/gui/layoutService";
 import { buildScene, type Scene } from "../src/webviews/guiEditor/app/scene";
-import { hitRect, hitStack, nextInStack } from "../src/webviews/guiEditor/app/hitTest";
-import { indexOfSelection, selectionAt } from "../src/webviews/guiEditor/app/selection";
+import { hitRect, hitStack, marqueeHits, nextInStack } from "../src/webviews/guiEditor/app/hitTest";
+import {
+  indexOfSelection,
+  outermost,
+  selectionAt,
+  toggleSelected,
+} from "../src/webviews/guiEditor/app/selection";
 import { ancestorKeys, rowKey, treeRows } from "../src/webviews/guiEditor/app/tree";
 import { originLabel } from "../src/webviews/guiEditor/app/inspector";
 
@@ -76,6 +81,63 @@ describe("hit-testing: the smallest rect under the cursor wins", () => {
     // The medium widget is painted after the icon but is larger, so a click in
     // the icon still picks the icon.
     expect(labels(scene, hitStack(scene, 45, 45))[0]).toBe("small");
+  });
+});
+
+describe("a marquee catches what is entirely inside it", () => {
+  const scene = buildScene([
+    node(
+      "widget",
+      [0, 0, 400, 300],
+      [
+        node("icon", [10, 10, 40, 40], [], { name: "inside" }),
+        node("icon", [200, 10, 40, 40], [], { name: "outside" }),
+        node("icon", [20, 20, 0, 0], [], { name: "empty" }),
+      ]
+    ),
+  ]);
+
+  it("takes the contained widgets and leaves the crossed ones", () => {
+    // The band covers the first icon and cuts the second: intersection would
+    // take both, and the parent that the band merely overlaps as well.
+    expect(labels(scene, marqueeHits(scene, { x: 0, y: 0, w: 100, h: 100 }))).toEqual(["inside"]);
+  });
+
+  it("takes an ancestor and its children when the band holds all of them", () => {
+    // Both come back; dropping the ones inside a selected ancestor is the
+    // selection's own job (`outermost`), not the hit-test's.
+    expect(labels(scene, marqueeHits(scene, { x: -10, y: -10, w: 500, h: 400 }))).toEqual([
+      "widget",
+      "inside",
+      "outside",
+    ]);
+  });
+
+  it("skips what the eye, the lock or the focus took out", () => {
+    const skip = new Uint8Array(scene.items.length);
+    skip[1] = 1;
+    expect(marqueeHits(scene, { x: 0, y: 0, w: 100, h: 100 }, skip)).toEqual([]);
+  });
+});
+
+describe("a selection of several widgets", () => {
+  it("shift+click adds, re-clicks the primary to remove, and promotes the rest", () => {
+    expect(toggleSelected([], 3)).toEqual([3]);
+    expect(toggleSelected([3], 7)).toEqual([3, 7]);
+    // The last entry is the primary: clicking it takes it back out.
+    expect(toggleSelected([3, 7], 7)).toEqual([3]);
+    // Clicking a member that is NOT the primary makes it one, because a click
+    // always ends with the panels talking about the widget that was clicked.
+    expect(toggleSelected([3, 7, 9], 3)).toEqual([7, 9, 3]);
+  });
+
+  it("drops a member that is inside another member", () => {
+    const scene = buildScene([
+      node("widget", [0, 0, 400, 300], [node("icon", [10, 10, 40, 40], [], { name: "child" })]),
+    ]);
+    // Moving both would shift the child twice, and deleting both is one delete.
+    expect(outermost(scene, [0, 1])).toEqual([0]);
+    expect(outermost(scene, [1])).toEqual([1]);
   });
 });
 

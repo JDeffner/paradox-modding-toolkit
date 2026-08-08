@@ -77,6 +77,30 @@ export function hitStack(scene: Scene, x: number, y: number, skip?: Uint8Array |
 }
 
 /**
+ * A marquee's catch: every widget whose visible rect is ENTIRELY inside the
+ * dragged rectangle. Containment rather than intersection, because a marquee
+ * drawn across a window would otherwise select the window, its every ancestor
+ * and everything it clips — the rule every canvas editor settled on.
+ *
+ * Zero-area widgets are skipped: they are inside every rectangle, and selecting
+ * a widget the user cannot see is a selection they cannot explain.
+ */
+export function marqueeHits(scene: Scene, area: SceneRect, skip?: Uint8Array | null): number[] {
+  const x1 = area.x + area.w;
+  const y1 = area.y + area.h;
+  const hits: number[] = [];
+  for (let i = 0; i < scene.items.length; i++) {
+    if (skip?.[i]) continue;
+    const rect = visibleRect(scene.items[i]);
+    if (rect.w <= 0 || rect.h <= 0) continue;
+    if (rect.x >= area.x && rect.y >= area.y && rect.x + rect.w <= x1 && rect.y + rect.h <= y1) {
+      hits.push(i);
+    }
+  }
+  return hits;
+}
+
+/**
  * Alt+click: step to the next candidate under the cursor, wrapping. A selection
  * that is not in this stack (the click moved) starts the cycle over at the top
  * candidate, so alt-clicking somewhere new never returns nothing.

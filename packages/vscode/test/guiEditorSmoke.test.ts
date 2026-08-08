@@ -20,13 +20,22 @@
  * becomes a reorder op, and a focused subtree is really the only thing left to
  * click. The canvas paints nothing in jsdom, so the styles the painter sets
  * (harness `paint`) stand in for the pixels.
+ *
+ * G5 stage 1's claim is editing parity, and it rests on the BATCH: a gesture
+ * over a multi-selection is one `applyOps` message, one server request and one
+ * document change, with a verdict per member. The cases below drive a marquee,
+ * a shift-click, a group drag with a refused member, align and distribute, a
+ * palette drop, a copy/paste round trip through the stub's clipboard, delete,
+ * duplicate, the anchor picker and a wrap — all against the real server.
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import type { GuiLayoutResult, GuiSourceOp } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutResult, GuiSourceEditResult, GuiSourceOp } from "@px-lsp/protocol/protocol";
+import CK3_GUI_SCHEMA from "../../server/data/ck3/guiSchema.json";
 import { computeGuiLayoutResult } from "../../server/src/gui/layoutService";
 import { computeGuiWidgetInfo } from "../../server/src/gui/widgetInfo";
 import { collectGuiDefs } from "../../server/src/gui/guiDefs";
-import { computeGuiSourceEdit } from "../../server/src/gui/sourceEditService";
+import { computeGuiSourceEdit, computeGuiSourceEdits } from "../../server/src/gui/sourceEditService";
+import { computeGuiVocabulary } from "../../server/src/gui/vocabulary";
 import { applyAll } from "../../server/src/gui/sourceEdit";
 import type { AppToHost } from "../src/webviews/guiEditor/messages";
 import { bootEditor, guiFixture, type EditorHarness } from "./guiEditorHarness";
@@ -89,6 +98,7 @@ beforeEach(() => {
   docFile = "";
   served = 0;
   layoutRuns = 0;
+  clipboard = "";
 });
 afterEach(() => editor.close());
 
@@ -111,38 +121,91 @@ function withoutGuides(): void {
   editor.toggle("snap", false);
 }
 
+/** The stub host's clipboard: exactly as much of one as `panel.ts` uses. */
+let clipboard = "";
+
 /**
  * The host's write half, replayed from the real server: answer every check and
  * commit the app has sent since the last call, apply an accepted commit to the
  * document, and push the fresh layout the way `panel.ts` does after its own
- * write.
+ * write. A batch takes the same path as a single op, which is the point of it:
+ * one request, one edit set, one document change.
  */
 function serveEdits(): void {
   for (; served < editor.sent.length; served++) {
     const message = editor.sent[served];
-    let op: GuiSourceOp;
+    if (message.type === "requestVocabulary") {
+      const vocabulary = computeGuiVocabulary(doc, CK3_GUI_SCHEMA);
+      editor.push({ type: "vocabulary", entries: vocabulary.entries, total: vocabulary.total });
+      continue;
+    }
+    if (message.type === "copyBlocks") {
+      const result = answer({ ops: message.lines.map((line) => ({ kind: "blockText" as const, line })) });
+      const blocks = (result.results ?? []).map((r) => r.blockText).filter((b): b is string => !!b);
+      if (blocks.length > 0) clipboard = blocks.join("");
+      editor.push({
+        type: "editVerdict",
+        id: message.id,
+        refused:
+          blocks.length > 0 ? undefined : (result.refused ?? "there was nothing to copy on those lines."),
+      });
+      continue;
+    }
+    let request: { op: GuiSourceOp } | { ops: GuiSourceOp[] };
     if (message.type === "checkEdit" || message.type === "applyEdit") {
-      op = { kind: "setProperties", line: message.line, properties: message.properties };
+      request = { op: { kind: "setProperties", line: message.line, properties: message.properties } };
     } else if (message.type === "checkReorder" || message.type === "reorder") {
-      op = { kind: "reorder", line: message.line, from: message.from, to: message.to };
+      request = { op: { kind: "reorder", line: message.line, from: message.from, to: message.to } };
+    } else if (message.type === "checkOps" || message.type === "applyOps") {
+      request = { ops: message.ops };
+    } else if (message.type === "pasteInto") {
+      if (clipboard.trim().length === 0) {
+        editor.push({
+          type: "editVerdict",
+          id: message.id,
+          refused: "the clipboard is empty, so there is nothing to paste.",
+        });
+        continue;
+      }
+      request = {
+        op: { kind: "insertRaw", line: message.line, fragment: clipboard, index: message.index },
+      };
     } else {
       continue;
     }
-    const result = computeGuiSourceEdit(doc, op, collectGuiDefs(doc)) ?? {
-      refused: "the server had no answer for that edit.",
-    };
-    const commits = message.type === "applyEdit" || message.type === "reorder";
+    const result = answer(request);
+    const commits =
+      message.type === "applyEdit" ||
+      message.type === "reorder" ||
+      message.type === "applyOps" ||
+      message.type === "pasteInto";
     const writes = commits && !result.refused && (result.edits?.length ?? 0) > 0;
     editor.push({
       type: "editVerdict",
       id: message.id,
-      refused: writes ? undefined : result.refused,
+      // A check answers with whatever the guards said; a commit that wrote
+      // nothing is a refusal even when the writer had no words for it.
+      refused: commits
+        ? writes
+          ? undefined
+          : (result.refused ?? "that edit changes nothing.")
+        : result.refused,
       warning: result.warning,
+      ops: result.results?.map((r) => ({ refused: r.refused, warning: r.warning })),
     });
     if (!writes) continue;
     doc = applyAll(doc, result.edits!);
     editor.push({ type: "layout", file: docFile, result: layoutOf(doc), textures: {} });
   }
+}
+
+function answer(request: { op: GuiSourceOp } | { ops: GuiSourceOp[] }): GuiSourceEditResult {
+  const defs = collectGuiDefs(doc);
+  const result =
+    "ops" in request
+      ? computeGuiSourceEdits(doc, request.ops, defs)
+      : computeGuiSourceEdit(doc, request.op, defs);
+  return result ?? { refused: "the server had no answer for that edit." };
 }
 
 /** The rect the engine gave a named widget, so no test hardcodes geometry. */
@@ -962,5 +1025,316 @@ describe("subtree focus", () => {
     expect(doc).toContain("position = { 50 30 }");
     expect(editor.rows()).toHaveLength(1);
     expect(editor.rows()[0]).toContain("px_card_positioned");
+  });
+});
+
+// ── G5 stage 1: several widgets at a time ───────────────────────────────────
+
+/**
+ * Three free root widgets with room around them (so a marquee has empty canvas
+ * to start on), a frame with a child (a container a drop and a paste can go
+ * into), and a vbox child (the member the guards refuse).
+ */
+const GROUP = [
+  'widget = { name = "px_g5_a" position = { 10 10 } size = { 40 40 } }',
+  'widget = { name = "px_g5_b" position = { 100 30 } size = { 40 40 } }',
+  'widget = { name = "px_g5_c" position = { 260 90 } size = { 40 40 } }',
+  "widget = {",
+  '\tname = "px_g5_frame"',
+  "\tposition = { 600 400 }",
+  "\tsize = { 300 200 }",
+  '\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }',
+  "}",
+  "vbox = {",
+  '\tname = "px_g5_box"',
+  "\tposition = { 1000 400 }",
+  '\twidget = { name = "px_g5_boxed" size = { 40 40 } }',
+  "}",
+  "",
+].join("\n");
+
+/** The centre of each fixture widget, so no case hardcodes a rect. */
+function centreOf(layout: GuiLayoutResult, name: string) {
+  return pointIn(rectOf(layout, name));
+}
+
+function openGroup(): GuiLayoutResult {
+  const layout = openDoc(GROUP, "group.gui");
+  // The vocabulary the palette and the wrap menu are built from.
+  serveEdits();
+  return layout;
+}
+
+describe("multi-selection", () => {
+  it("shift+click adds and removes, and every panel shows the whole set", () => {
+    const layout = openGroup();
+    const a = centreOf(layout, "px_g5_a");
+    const b = centreOf(layout, "px_g5_b");
+    editor.click(a.x, a.y);
+    editor.click(b.x, b.y, { shiftKey: true });
+
+    expect(editor.text("status")).toContain("2 selected");
+    expect(editor.selectedRows("tree")).toHaveLength(2);
+    expect(editor.selectedRows("layers")).toHaveLength(2);
+    // The inspector says whose rows it is showing rather than merging them.
+    expect(editor.text("inspector")).toContain("The rows below are the primary's alone");
+
+    editor.click(b.x, b.y, { shiftKey: true });
+    expect(editor.selectedRows("tree")).toHaveLength(1);
+    expect(editor.text("status")).toContain("selected widget#px_g5_a");
+  });
+
+  it("a marquee on empty canvas selects what is entirely inside it", () => {
+    openGroup();
+    editor.press(0, 0);
+    editor.move(320, 150);
+    expect(editor.text("status")).toContain("3 widget(s) inside the marquee");
+    editor.up(320, 150);
+
+    expect(editor.selectedRows("tree")).toHaveLength(3);
+    expect(editor.text("status")).toContain("3 selected");
+    // The frame and the box are outside the band and stay unselected.
+    expect(editor.selectedRows("tree").join(" ")).not.toContain("px_g5_frame");
+  });
+
+  it("a group drag moves every member as ONE batch, and says who stayed", () => {
+    const layout = openGroup();
+    withoutGuides();
+    const a = centreOf(layout, "px_g5_a");
+    const boxed = centreOf(layout, "px_g5_boxed");
+    editor.click(a.x, a.y);
+    editor.click(boxed.x, boxed.y, { shiftKey: true });
+    // Press the member that CAN move, so the gesture is a move and not the
+    // reorder a box child's own press turns into.
+    editor.press(a.x, a.y);
+    serveEdits();
+    editor.move(a.x + 20, a.y + 10);
+    // The refusal is the server's, verbatim, and it arrives before anything
+    // has been written.
+    expect(editor.toast()).toContain("places its children itself");
+    editor.up(a.x + 20, a.y + 10);
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toHaveLength(1);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+    expect(doc).toContain('name = "px_g5_a" position = { 30 20 }');
+    // The box child is where the file always had it.
+    expect(doc).toContain('name = "px_g5_boxed" size = { 40 40 }');
+  });
+
+  it("Escape clears the whole set, not just the primary", () => {
+    const layout = openGroup();
+    editor.click(centreOf(layout, "px_g5_a").x, centreOf(layout, "px_g5_a").y);
+    editor.click(centreOf(layout, "px_g5_b").x, centreOf(layout, "px_g5_b").y, { shiftKey: true });
+    editor.key("Escape");
+    expect(editor.selectedRows("tree")).toHaveLength(0);
+  });
+});
+
+describe("align and distribute", () => {
+  it("aligns the selection's left edges as ONE batch of position writes", () => {
+    const layout = openGroup();
+    for (const [i, name] of ["px_g5_a", "px_g5_b", "px_g5_c"].entries()) {
+      const at = centreOf(layout, name);
+      editor.click(at.x, at.y, i === 0 ? {} : { shiftKey: true });
+    }
+    editor.button("⇤").click();
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    // The leftmost widget is already there, so its op is not sent at all.
+    expect(apply.ops).toHaveLength(2);
+    expect(doc).toContain('name = "px_g5_a" position = { 10 10 }');
+    expect(doc).toContain('name = "px_g5_b" position = { 10 30 }');
+    expect(doc).toContain('name = "px_g5_c" position = { 10 90 }');
+    // One gesture, one document change: the layout ran once for all of them.
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(1);
+  });
+
+  it("distributes the vertical gaps evenly", () => {
+    const layout = openGroup();
+    for (const [i, name] of ["px_g5_a", "px_g5_b", "px_g5_c"].entries()) {
+      const at = centreOf(layout, name);
+      editor.click(at.x, at.y, i === 0 ? {} : { shiftKey: true });
+    }
+    editor.button("↕").click();
+    serveEdits();
+
+    // Tops at 10, 30 and 90 over a span of 10..130: three 40 px widgets leave
+    // 40 px of gap to share, so the middle one lands at 10 + 40 + 20 = 70.
+    expect(doc).toContain('name = "px_g5_b" position = { 100 50 }');
+    expect(doc).toContain('name = "px_g5_c" position = { 260 90 }');
+  });
+});
+
+describe("the palette", () => {
+  it("offers the game's own widgets and filters them", () => {
+    openGroup();
+    editor.button("Palette").click();
+    serveEdits();
+
+    expect(editor.paletteRows().length).toBeGreaterThan(5);
+    editor.filterPalette("vbo");
+    expect(editor.paletteRows()[0]).toContain("vbox");
+  });
+
+  it("a drop commits ONE insert op and selects what it wrote", () => {
+    const layout = openGroup();
+    editor.button("Palette").click();
+    serveEdits();
+    const frame = rectOf(layout, "px_g5_frame");
+
+    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    // Inside the frame but on none of its children: the drop appends.
+    editor.move(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    expect(editor.text("status")).toContain("into widget#px_g5_frame");
+    editor.up(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toEqual([{ kind: "insert", line: 3, widget: { type: "vbox" }, index: undefined }]);
+    expect(doc).toContain(
+      '\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }\n\tvbox = {}\n'
+    );
+    // The new widget is the selection, and the toast says why it draws nothing.
+    expect(editor.selectedRow()).toContain("vbox");
+    expect(editor.toast()).toContain("no size yet");
+  });
+
+  it("a drop the writer refuses is shown in the writer's own words", () => {
+    // Inside a `type` definition: other files instantiate it, so the writer
+    // turns the insert down rather than restructuring it through one preview.
+    const inType = [
+      "types PxG5Types {",
+      "\ttype px_g5_card = widget {",
+      "\t\tsize = { 200 100 }",
+      '\t\twidget = { name = "px_g5_type_kid" size = { 20 20 } }',
+      "\t}",
+      "}",
+      "",
+      "px_g5_card = {",
+      '\tname = "px_g5_use"',
+      "\tposition = { 100 100 }",
+      "}",
+      "",
+    ].join("\n");
+    openDoc(inType, "in-type.gui");
+    serveEdits();
+    editor.button("Palette").click();
+    serveEdits();
+
+    // The instance's own children are spliced from the type, so a drop on them
+    // finds no container with bytes here at all.
+    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.move(110, 110);
+    expect(editor.text("status")).toContain("into px_g5_card#px_g5_use");
+    editor.up(110, 110);
+    serveEdits();
+    // The use site takes the child: a type definition is never edited through
+    // an instance, and this insert is not one.
+    expect(doc).toContain("\tvbox = {}\n");
+    expect(doc).toContain('\t\twidget = { name = "px_g5_type_kid" size = { 20 20 } }\n');
+  });
+});
+
+describe("copy, paste, delete and duplicate", () => {
+  it("copies a block and pastes it back as the next sibling", () => {
+    const layout = openGroup();
+    const inner = centreOf(layout, "px_g5_inner");
+    editor.click(inner.x, inner.y);
+    editor.key("c", { ctrlKey: true });
+    serveEdits();
+    expect(editor.toast()).toContain("1 widget(s) copied");
+
+    editor.key("v", { ctrlKey: true });
+    serveEdits();
+    // Verbatim, twice, inside the same frame.
+    expect(doc.split('name = "px_g5_inner"')).toHaveLength(3);
+    expect(doc).toContain(
+      '\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }\n' +
+        '\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }\n'
+    );
+  });
+
+  it("a multi-copy concatenates the blocks in source order", () => {
+    const layout = openGroup();
+    // Selected bottom-up; the clipboard still reads like the file.
+    editor.click(centreOf(layout, "px_g5_c").x, centreOf(layout, "px_g5_c").y);
+    editor.click(centreOf(layout, "px_g5_a").x, centreOf(layout, "px_g5_a").y, { shiftKey: true });
+    editor.key("c", { ctrlKey: true });
+    serveEdits();
+    expect(clipboard.indexOf("px_g5_a")).toBeLessThan(clipboard.indexOf("px_g5_c"));
+
+    editor.click(centreOf(layout, "px_g5_inner").x, centreOf(layout, "px_g5_inner").y);
+    editor.key("v", { ctrlKey: true });
+    serveEdits();
+    expect(doc.indexOf("px_g5_a", doc.indexOf("px_g5_frame"))).toBeLessThan(
+      doc.indexOf("px_g5_c", doc.indexOf("px_g5_frame"))
+    );
+  });
+
+  it("Del removes the whole selection in one batch, Ctrl+D duplicates", () => {
+    const layout = openGroup();
+    editor.click(centreOf(layout, "px_g5_a").x, centreOf(layout, "px_g5_a").y);
+    editor.click(centreOf(layout, "px_g5_b").x, centreOf(layout, "px_g5_b").y, { shiftKey: true });
+    editor.key("Delete");
+    serveEdits();
+    // The quoted names, because `px_g5_box` has `px_g5_b` inside it.
+    expect(doc).not.toContain('name = "px_g5_a"');
+    expect(doc).not.toContain('name = "px_g5_b"');
+    expect(doc).toContain('name = "px_g5_c"');
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(1);
+
+    const after = layoutOf(doc);
+    editor.click(centreOf(after, "px_g5_c").x, centreOf(after, "px_g5_c").y);
+    editor.key("d", { ctrlKey: true });
+    serveEdits();
+    expect(doc.split("px_g5_c")).toHaveLength(3);
+  });
+});
+
+describe("the anchor picker", () => {
+  it("writes a spec the layout engine parses, guards asked first", () => {
+    const layout = openGroup();
+    const a = centreOf(layout, "px_g5_a");
+    editor.click(a.x, a.y);
+    serveWidgetInfo(editor, doc);
+
+    const grids = editor.document.querySelectorAll("#inspector .anchorGrid");
+    expect(grids).toHaveLength(2);
+    // Bottom right of the parentanchor grid: the last of nine cells.
+    const cell = grids[0].children[8] as HTMLElement;
+    cell.click();
+    serveEdits();
+
+    expect(lastOfType(editor, "checkEdit")!.properties).toEqual([
+      { key: "parentanchor", value: "bottom|right" },
+    ]);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([
+      { key: "parentanchor", value: "bottom|right" },
+    ]);
+    expect(doc).toContain("parentanchor = bottom|right");
+    // The engine reads it: the widget is now anchored to the viewport's corner.
+    expect(rectOf(layoutOf(doc), "px_g5_a").x).toBeGreaterThan(1000);
+  });
+});
+
+describe("wrap", () => {
+  it("wraps the selection in the container the menu names", () => {
+    const layout = openGroup();
+    const inner = centreOf(layout, "px_g5_inner");
+    editor.click(inner.x, inner.y);
+
+    const select = editor.document.querySelector<HTMLSelectElement>("#inspector .tools select")!;
+    select.value = "vbox";
+    editor.button("Wrap").click();
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toEqual([{ kind: "wrap", lines: [7], container: { type: "vbox" } }]);
+    expect(doc).toContain(
+      '\tvbox = {\n\t\twidget = { name = "px_g5_inner" position = { 10 10 } size = { 40 40 } }\n\t}\n'
+    );
   });
 });

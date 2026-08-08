@@ -1,7 +1,8 @@
 # The GUI editor, and the contract a host implements
 
-`app/` is the whole editor: canvas, tree, layers, inspector, hit-testing,
-gestures, smart guides, subtree focus. It
+`app/` is the whole editor: canvas, tree, layers, palette, inspector,
+hit-testing, gestures, smart guides, subtree focus, multi-selection and the
+clipboard gestures. It
 imports no `vscode` API, touches no file system, and computes no layout. Every
 line it needs from the outside world is a message in
 [`messages.ts`](./messages.ts). `panel.ts` is one implementation of that
@@ -16,7 +17,7 @@ it, and which of the promises are load-bearing rather than conveniences.
 
 | File | What it is | Who ports it |
 |---|---|---|
-| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
+| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
 | `app/host.ts` | The transport shim, and the ONLY file under `app/` that knows which host it is in | A new host adds a branch here. Nothing else under `app/` changes. |
 | `messages.ts` | The typed contract, both directions | Nobody. It is the contract. |
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |
@@ -31,12 +32,14 @@ leaves the compile chain or the output stops shipping in the vsix.
 
 **The host owns the text. The server owns the truth.** The app never edits
 source and never computes layout. It asks; the host asks the server
-(`paradox/guiLayout`, `paradox/guiWidgetInfo`, `paradox/guiSourceEdit`, all in
-`PROTOCOL.md`), applies the returned edits to the real document, and pushes a
-fresh layout back down. The widget tree is built from the layout result, so
-there is no separate tree request to serve. That
-is why undo is the host document's own undo and the editor holds no history:
-one gesture is one op is one document change is one undo step. (The Studio's
+(`paradox/guiLayout`, `paradox/guiWidgetInfo`, `paradox/guiSourceEdit`,
+`paradox/guiVocabulary`, all in `PROTOCOL.md`), applies the returned edits to
+the real document, and pushes a fresh layout back down. The widget tree is
+built from the layout result, so there is no separate tree request to serve.
+That is why undo is the host document's own undo and the editor holds no
+history: one gesture is one request is one document change is one undo step —
+for a multi-selection too, which is what the `ops` BATCH exists for. (The
+Studio's
 separate canvas undo stack existed because `_code.SetText` reset Monaco's
 history. A host that applies edits as a proper document edit does not have that
 problem and must not reintroduce a second stack.)
@@ -78,12 +81,31 @@ each has to actually do.
   writes nothing; the commit is one op, one document change, one undo step, then
   a fresh `layout`. A host that already has these two for `setProperties` has
   nothing new to do beyond building the other op kind.
+- **`checkOps` / `applyOps`** The same pair for a BATCH of `GuiSourceOp`s,
+  which is how everything a multi-selection does reaches the document: send
+  them as the server's `ops` (not one request per op), apply the ONE edit set
+  that comes back as ONE change, and put the per-op verdicts in
+  `editVerdict.ops`, in request order. A per-op refusal means that member alone
+  was skipped, so it must NOT become the top-level `refused`; the app shows
+  those reasons per member and keeps the rest of the gesture.
+- **`copyBlocks`** Read those widgets' verbatim blocks (a `blockText` op each,
+  as one batch so they all come off the same text), join them in the order
+  given, and put them on the system clipboard. The app never sees the text: a
+  clipboard is the host's, and a paste has to survive being made in another
+  editor. Answer `editVerdict`.
+- **`pasteInto`** Read the clipboard and commit it as one `insertRaw` op at the
+  named container and index. An empty clipboard is a refusal, not silence.
+- **`requestVocabulary` / `vocabulary`** Answer `paradox/guiVocabulary` for the
+  current text: the widget names a palette may offer. A host with no such
+  request answers `{ entries: [], total: 0 }`, and the palette says it has
+  nothing rather than breaking.
 - **`reveal`** Show that line in the text editor without stealing focus and
   without hijacking the column the editor panel is in.
 
-Every `checkEdit`, `applyEdit`, `checkReorder` and `reorder` must get exactly
-one `editVerdict`. The app keeps a pending-callback map keyed by `id`; an
-unanswered id leaves a gesture armed forever.
+Every `checkEdit`, `applyEdit`, `checkReorder`, `reorder`, `checkOps`,
+`applyOps`, `copyBlocks` and `pasteInto` must get exactly one `editVerdict`. The
+app keeps a pending-callback map keyed by `id`; an unanswered id leaves a
+gesture armed forever.
 
 Three cases are easy to get wrong and are worth stating:
 
@@ -115,10 +137,11 @@ never count one up for it; the app greys the grip and drops nothing there.
 ## What the page must provide
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
-these ids: `canvas`, `stage`, `tree`, `layers`, `focusBar`, `inspector`,
-`status`, `toast`, `meta`, `zoomLabel`, `outlines`, `snap`, `grid`, `zoomIn`,
-`zoomOut`, `zoomFit`, `refresh`. `snap` and `grid` are checkboxes, `snap`
-checked by default. The stage needs pointer events and, ideally, pointer
+these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
+`inspector`, `status`, `toast`, `meta`, `zoomLabel`, `outlines`, `snap`, `grid`,
+`zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`, `refresh`. `snap` and `grid`
+are checkboxes, `snap` checked by default; `palette` starts `hidden` and
+`paletteToggle` is what shows it. The stage needs pointer events and, ideally, pointer
 capture (`app/` guards its absence, so a host without it loses only the ability
 to finish a drag off-canvas). A layers row drag needs no capture at all: it
 follows `pointermove` on the rows and ends on a window `pointerup`.

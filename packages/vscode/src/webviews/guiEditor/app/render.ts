@@ -32,6 +32,7 @@ const OUTLINE = "rgba(120,180,255,0.35)";
 const GHOST_BOX_STROKE = "#ff9f43";
 const SELECT_STROKE = "#4fc1ff";
 const SELECT_SHADOW = "rgba(0,0,0,0.65)";
+const MARQUEE_FILL = "rgba(79,193,255,0.08)";
 const GRID_STROKE = "rgba(255,255,255,0.07)";
 const GUIDE_STROKE = "#ff4fd8";
 const FLASH_STROKE = "#ffd54f";
@@ -241,9 +242,13 @@ function paintItem(
  * pretends to know what the inside will look like until the server answers.
  */
 export interface DrawPreview {
-  /** Draw-list slice of the subtree, `[from, to)`. */
-  from: number;
-  to: number;
+  /**
+   * Draw-list slices of the moving subtrees, `[from, to)` each, ASCENDING and
+   * disjoint (a multi-selection drops any member inside another). Sorted so the
+   * painter walks them alongside the draw list instead of testing every item
+   * against every slice.
+   */
+  slices: readonly { from: number; to: number }[];
   dx: number;
   dy: number;
 }
@@ -277,8 +282,15 @@ export interface DrawOptions {
    * during a gesture, the rect the gesture would commit.
    */
   selected?: SceneRect;
+  /**
+   * The other members of a multi-selection: marked like the primary but never
+   * given handles, because a resize grip belongs to one widget's own rect.
+   */
+  others?: readonly SceneRect[];
   /** Draw resize handles on `selected` (a widget with a declaration to write to). */
   handles?: boolean;
+  /** The rubber band of a marquee drag, in world coordinates. */
+  marquee?: SceneRect;
   preview?: DrawPreview;
   masks?: DrawMasks;
   /** World grid step; 0 or absent draws no grid. */
@@ -328,6 +340,21 @@ function paintHandles(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: numb
     ctx.fillRect(x, y, side, side);
     ctx.strokeRect(x, y, side, side);
   }
+  ctx.restore();
+}
+
+/**
+ * The marquee's rubber band: a dashed outline over a barely-there wash, so the
+ * widgets it is about to catch stay readable underneath it.
+ */
+function paintMarquee(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: number): void {
+  ctx.save();
+  ctx.fillStyle = MARQUEE_FILL;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.setLineDash([4 / zoom, 3 / zoom]);
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
   ctx.restore();
 }
 
@@ -448,12 +475,16 @@ export function drawScene(
   if (options.grid) paintGrid(ctx, options.grid, camera.zoom);
   const preview = options.preview;
   const shifted = preview && (preview.dx !== 0 || preview.dy !== 0);
+  const slices = preview?.slices ?? [];
+  let slice = 0;
   const hidden = options.masks?.hidden ?? null;
   const dim = options.masks?.dim ?? null;
   for (let i = 0; i < scene.items.length; i++) {
+    // The slices are ascending, so one pointer walks them with the draw list.
+    while (slice < slices.length && i >= slices[slice].to) slice++;
+    const inPreview = slice < slices.length && i >= slices[slice].from;
     if (hidden?.[i]) continue;
     const alpha = dim?.[i] ? DIM_OPACITY : 1;
-    const inPreview = preview !== undefined && i >= preview.from && i < preview.to;
     if (shifted && inPreview) {
       ctx.save();
       ctx.translate(preview.dx, preview.dy);
@@ -473,6 +504,8 @@ export function drawScene(
   if (options.guides) paintGuides(ctx, options.guides, camera.zoom, GUIDE_STROKE, false);
   if (options.bars) paintBars(ctx, options.bars, camera.zoom);
   if (options.dropLine) paintGuides(ctx, [options.dropLine], camera.zoom, DROP_STROKE, true);
+  if (options.marquee) paintMarquee(ctx, options.marquee, camera.zoom);
+  for (const rect of options.others ?? []) paintSelection(ctx, rect, camera.zoom);
   if (options.selected) {
     paintSelection(ctx, options.selected, camera.zoom);
     if (options.handles) paintHandles(ctx, options.selected, camera.zoom);
