@@ -52,6 +52,33 @@ describe("buildTranslation", () => {
     const out = buildTranslation(' key:0 "x"\n', "polish");
     expect(out.startsWith(BOM + "l_polish:")).toBe(true);
   });
+
+  it("blanks entries with a trailing comment, keeping the comment", () => {
+    const src = 'l_english:\n key:0 "value" # keep me\n';
+    const out = buildTranslation(src, "german");
+    expect(out).toContain('key:0 "" # english: value # keep me');
+    expect(out).not.toContain('"value"');
+  });
+
+  it("blanks doubled-quote speech values, downgrading quotes in the comment", () => {
+    // Vic3 vanilla shape: cholera.1.f:0 ""text"" # John Snow
+    const src = 'l_english:\n cholera.1.f:0 ""The result of the inquiry."" # John Snow\n';
+    const out = buildTranslation(src, "german");
+    // The outer quotes are the delimiters; the value keeps one literal quote
+    // per side, downgraded to ' so the comment stays quote-free.
+    expect(out).toContain("cholera.1.f:0 \"\" # english: 'The result of the inquiry.' # John Snow");
+    // No quote may survive after the blanked value: the game (and our parser)
+    // would read everything up to the last quote as the value.
+    const line = out.split("\n").find((l) => l.includes("cholera"))!;
+    expect(line.slice(line.indexOf('""') + 2)).not.toContain('"');
+  });
+
+  it("leaves already-blank entries untouched, comment or not", () => {
+    const src = 'l_english:\n empty_a: ""\n empty_b:0 "" # note\n';
+    const out = buildTranslation(src, "german");
+    expect(out).toContain(' empty_a: ""\n');
+    expect(out).toContain(' empty_b:0 "" # note\n');
+  });
 });
 
 describe("mergeTranslation", () => {

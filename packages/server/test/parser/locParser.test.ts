@@ -38,6 +38,43 @@ describe("parseLoc — happy path", () => {
   });
 });
 
+describe("parseLoc — inner quotes (value closes at the LAST quote on the line)", () => {
+  it("doubled-quote speech idiom keeps the literal quotes", () => {
+    // Shape of CK3 coronation_events.1004.bribe / Vic3 cholera.1.f.
+    const text = 'l_english:\n bribe:0 ""How much for your silence?""\n';
+    const res = parseLoc(text);
+    expect(res.errors).toHaveLength(0);
+    expect(res.entries).toHaveLength(1);
+    expect(res.entries[0].value).toBe('"How much for your silence?"');
+    expect(text.slice(res.entries[0].valueRange.start, res.entries[0].valueRange.end)).toBe(
+      '"How much for your silence?"'
+    );
+  });
+
+  it("doubled-quote value followed by a trailing comment", () => {
+    const text = 'l_english:\n cholera.1.f:0 ""The result of the inquiry."" # John Snow\n';
+    const res = parseLoc(text);
+    expect(res.errors).toHaveLength(0);
+    expect(res.entries[0].value).toBe('"The result of the inquiry."');
+  });
+
+  it("bare quotes mid-value survive", () => {
+    const text = 'l_english:\n k:0 "My opponent yawns. "More of a challenge, please." Then silence."\n';
+    const res = parseLoc(text);
+    expect(res.errors).toHaveLength(0);
+    expect(res.entries[0].value).toBe('My opponent yawns. "More of a challenge, please." Then silence.');
+  });
+
+  it("genuinely empty value stays empty", () => {
+    const text = 'l_english:\n coronation_phase_feast_desc: ""\n with_comment: "" # note\n';
+    const res = parseLoc(text);
+    expect(res.errors).toHaveLength(0);
+    expect(res.entries).toHaveLength(2);
+    expect(res.entries[0].value).toBe("");
+    expect(res.entries[1].value).toBe("");
+  });
+});
+
 describe("parseLoc — BOM", () => {
   it("hadBom true and offsets still line up", () => {
     const text = '﻿l_english:\n key:0 "hello"\n';

@@ -58,13 +58,18 @@ export function retargetLocPath(srcFile: string, sourceLang: string, targetLang:
   return changed ? result : null;
 }
 
-const ENTRY_LINE = /^(\s*[A-Za-z0-9_.\-']+:\d*\s*)"(.*)"\s*$/;
+// Greedy `(.*)` closes the value at the LAST quote before any trailing
+// comment, matching the game's parsing of inner quotes (`""speech""`).
+const ENTRY_LINE = /^(\s*[A-Za-z0-9_.\-']+:\d*\s*)"(.*)"\s*(#.*)?$/;
 
 /** Blank an entry's value, keeping the source text visible as a comment. */
 function blankEntry(line: string, sourceLang: string): string {
   const m = ENTRY_LINE.exec(line);
   if (!m || m[2] === "") return line;
-  return `${m[1]}"" # ${sourceLang}: ${m[2]}`;
+  // The game reads the value up to the last quote on the LINE, so any quote
+  // echoed into the comment would leak back into the value; downgrade to '.
+  const comment = `# ${sourceLang}: ${m[2]}${m[3] ? ` ${m[3]}` : ""}`.replace(/"/g, "'");
+  return `${m[1]}"" ${comment}`;
 }
 
 /**

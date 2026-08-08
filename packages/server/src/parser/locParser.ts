@@ -14,7 +14,7 @@ export interface LocEntry {
   key: string;
   keyRange: Range;
   version: number | null;
-  value: string; // text INSIDE the quotes (escapes NOT unescaped)
+  value: string; // text between the opening quote and the LAST quote on the line, verbatim
   valueRange: Range; // covers the text inside the quotes
   line: number; // 0-based
 }
@@ -222,25 +222,15 @@ export function parseLoc(text: string): LocParseResult {
       return;
     }
     const quoteOpen = j;
-    j++; // consume opening quote
-    const valueInnerStart = entryBase + j;
+    const valueInnerStart = entryBase + quoteOpen + 1;
 
-    // Scan for closing quote, honoring `\"` escapes.
-    let closed = false;
-    while (j < entryText.length) {
-      const ch = entryText[j];
-      if (ch === "\\") {
-        j += 2;
-        continue;
-      }
-      if (ch === '"') {
-        closed = true;
-        break;
-      }
-      j++;
-    }
+    // The game closes the value at the LAST quote on the line. Inner quotes
+    // are literal — vanilla wraps direct speech as `""…""` and embeds bare
+    // quotes mid-value without escaping — so scanning to the first close would
+    // read those values as empty/truncated.
+    const quoteClose = entryText.lastIndexOf('"');
 
-    if (!closed) {
+    if (quoteClose === quoteOpen) {
       errors.push({
         code: "unterminated-value",
         message: "Unterminated localization value (missing closing quote).",
@@ -262,8 +252,8 @@ export function parseLoc(text: string): LocParseResult {
       return;
     }
 
-    const valueInnerEnd = entryBase + j;
-    const value = entryText.slice(quoteOpen + 1, j);
+    const valueInnerEnd = entryBase + quoteClose;
+    const value = entryText.slice(quoteOpen + 1, quoteClose);
     // Anything after the closing quote is ignored (trailing comments etc.).
 
     entries.push({
