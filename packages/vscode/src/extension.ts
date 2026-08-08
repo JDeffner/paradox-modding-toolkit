@@ -32,6 +32,7 @@ import {
   type LocLookup,
 } from "./locCommands";
 import { LocFileDefinitionProvider, LocReferenceTracker, jumpToScriptReference } from "./locNavigation";
+import { registerSimulateEventLens } from "./eventLens";
 import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
@@ -428,7 +429,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerDefinitionProvider(
       LOC_SELECTOR,
       new LocFileDefinitionProvider(tracker, () => cfg)
-    )
+    ),
+    registerSimulateEventLens()
   );
 
   // Title button "Open .info Reference" shows only when the active file maps to
@@ -516,11 +518,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // so the graph shows the mod the sidebar shows.
   const fetchGraph = (params: EventGraphParams) =>
     lc.sendRequest<EventGraph>(eventGraphRequest, { modRoot: views.focusRoot(), ...params });
+  const fetchEventDetail = (id: string) =>
+    lc.sendRequest<EventDetail | null>(eventDetailRequest, { id } satisfies EventDetailParams);
   // Inspector actions: loc writes reuse the BOM-correct edit machinery; the
   // option scaffold inserts before the event's closing brace and creates loc.
   const graphActions = {
-    fetchDetail: (id: string) =>
-      lc.sendRequest<EventDetail | null>(eventDetailRequest, { id } satisfies EventDetailParams),
+    fetchDetail: fetchEventDetail,
+    simulate: (id: string) => EventSimPanel.show(fetchEventDetail, id),
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
         if (!replaceLocLineValue(file, line, value))
@@ -575,10 +579,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showInformationMessage("Paradox Toolkit: no indexed definition under the cursor.");
       }
     }),
-    vscode.commands.registerCommand("px.simulateEvent", async () => {
-      const id = await resolveEventIdAtCursor(lc);
+    // The id is optional: the CodeLens and the graph inspector name the event
+    // they sit on, the palette entry resolves it from the cursor.
+    vscode.commands.registerCommand("px.simulateEvent", async (arg?: unknown) => {
+      const id = typeof arg === "string" && arg !== "" ? arg : await resolveEventIdAtCursor(lc);
       if (!id) return;
-      EventSimPanel.show(graphActions.fetchDetail, id);
+      EventSimPanel.show(fetchEventDetail, id);
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
       // Seed the graph from where the user is: the event id under the cursor,

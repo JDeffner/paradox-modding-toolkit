@@ -9,6 +9,7 @@ type InboundMessage =
   | { type: "fetch"; params: EventGraphParams }
   | { type: "export"; svg: string }
   | { type: "select"; id: string }
+  | { type: "simulate"; id: string }
   | { type: "editLoc"; id: string; key: string; value: string; file?: string; line?: number }
   | { type: "addOption"; id: string; file: string; endLine: number; count: number };
 
@@ -22,6 +23,8 @@ type OutboundMessage =
 /** Host-side actions the inspector needs (loc writes, option scaffolding). */
 export interface EventGraphActions {
   fetchDetail(id: string): Promise<EventDetail | null>;
+  /** Open the event simulator on this event. */
+  simulate(id: string): void;
   /** Write a loc value: in place when file/line given, else via the replace file. */
   editLoc(key: string, value: string, file?: string, line?: number): Promise<void>;
   /** Insert a scaffolded option before `endLine` and create its loc key. */
@@ -144,6 +147,9 @@ export class EventGraphPanel {
         break;
       case "select":
         await this.sendDetail(msg.id);
+        break;
+      case "simulate":
+        this.actions?.simulate(msg.id);
         break;
       case "editLoc":
         if (this.actions) {
@@ -429,7 +435,7 @@ export class EventGraphPanel {
           <li><b>Boxes</b> are events / on_actions / decisions (see the color legend). The small line under the id is the event's localized title.</li>
           <li><b>Arrows</b> mean "fires / references": the label on an arrow tells you WHERE in the source event the call sits (an option's text, immediate, on_actions…).</li>
           <li><b>Dashed borders</b> = vanilla content, solid = your mod, dotted = a parent mod.</li>
-          <li><b>Click</b> a box to open the inspector: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option.</li>
+          <li><b>Click</b> a box to open the inspector: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option, or <b>Simulate</b> the event (a walkthrough of what firing it does).</li>
           <li><b>Double-click</b> (or Ctrl+click) opens the source file beside the graph. <b>Right-click</b> re-centers the graph on that event.</li>
           <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go. It completes against your mod's ids and namespaces (up/down to choose, Enter to run, Esc to dismiss). <b>All nodes</b> shows the whole mod at once. Typing also highlights matching boxes by id or title text.</li>
           <li>Drag with the left or middle mouse button to pan, scroll to zoom, Export saves the picture as SVG.</li>
@@ -961,6 +967,12 @@ function renderDetail(detail) {
 
   const actions = el("div", "badges");
   actions.appendChild(openLink("Open source (" + ((detail.line || 0) + 1) + ")", detail.file, detail.line));
+  const sim = el("a", "ilink", "Simulate");
+  sim.title = "Walk through " + detail.id + " in the event simulator";
+  sim.addEventListener("click", function () {
+    vscode.postMessage({ type: "simulate", id: detail.id });
+  });
+  actions.appendChild(sim);
   inspectorEl.appendChild(actions);
 
   inspectorEl.appendChild(el("h3", "", "Text"));
