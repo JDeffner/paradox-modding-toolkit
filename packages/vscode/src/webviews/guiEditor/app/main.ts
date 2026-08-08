@@ -1950,7 +1950,14 @@ const host = connectHost((message) => {
       statusEl.textContent = `Laying out ${message.file}…`;
       return;
     case "layout":
-      onLayout(message.result, message.textures, message.file, message.visibility, message.ui, message.storeWarning);
+      onLayout(
+        message.result,
+        message.textures,
+        message.file,
+        message.visibility,
+        message.ui,
+        message.storeWarning
+      );
       return;
     case "widgetInfo": {
       const item = selectedItem();
