@@ -88,6 +88,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     if (wasWatching) {
       this.stateEmitter.fire(false);
       this.log("error.log watch stopped");
+      void vscode.window.showInformationMessage("Paradox Toolkit: stopped watching error.log.");
     }
   }
 
@@ -141,7 +142,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
         parsed.message,
         parsed.severity === "warning" ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error
       );
-      diag.source = "ck3-game";
+      diag.source = `${this.getConfig().gameId}-game`;
       let list = this.byUri.get(uri);
       if (!list) this.byUri.set(uri, (list = []));
       // The game repeats entries on reload; keep one per message+line.
@@ -184,11 +185,18 @@ export class ErrorLogWatcher implements vscode.Disposable {
   }
 }
 
-export async function launchGameDebugCommand(cfg: PxConfig): Promise<void> {
+export async function launchGameDebugCommand(cfg: PxConfig, errorLog: ErrorLogWatcher): Promise<void> {
   const meta = metaFor(cfg.gameId);
   const url = `steam://run/${meta.steamAppId}//-debug_mode%20-develop/`;
   await vscode.env.openExternal(vscode.Uri.parse(url));
-  void vscode.window.showInformationMessage(
-    `Paradox Toolkit: launching ${meta.name} via Steam with -debug_mode -develop. Tip: run 'Paradox: Toggle error.log Watcher' to see script errors live.`
-  );
+  // One click instead of a command name to retype; hidden once already watching.
+  const watch = errorLog.watching ? [] : ["Watch error.log"];
+  void vscode.window
+    .showInformationMessage(
+      `Paradox Toolkit: launching ${meta.name} via Steam with -debug_mode -develop (scripts reload live).`,
+      ...watch
+    )
+    .then((choice) => {
+      if (choice) errorLog.toggle();
+    });
 }

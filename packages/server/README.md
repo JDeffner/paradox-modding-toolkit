@@ -128,7 +128,8 @@ highlighting and an empty completion popup, check `:set filetype?` first. A
 `.txt` that stayed `text` never reaches the server at all, and the server
 cannot report a problem it never heard about.
 
-**2. The server.** Adjust the paths and the game id:
+**2. The server.** Adjust the paths and the game id (replace `<version>`
+everywhere with the release you downloaded, e.g. `0.3.0`):
 
 ```lua
 vim.lsp.config("px_lsp", {

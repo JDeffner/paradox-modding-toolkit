@@ -84,20 +84,22 @@ async function pickKind(): Promise<Kind | undefined> {
     },
   ];
   const pick = await vscode.window.showQuickPick<KindItem>(items, {
-    title: "Paradox: New Content",
+    title: "New Content",
     placeHolder: "What do you want to create?",
   });
   return pick?.value;
 }
 
+const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
+
 async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
   const fallback = cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod";
   const value = lastPrefix ?? fallback;
   const prefix = await vscode.window.showInputBox({
-    title: "Paradox: New Content — prefix",
+    title: "New Content — mod prefix",
     prompt: "Mod prefix for filenames and the event namespace (lowercase, letters/digits/_).",
     value,
-    validateInput: (v) => (PREFIX_RE.test(v.trim()) ? null : "Must match /^[a-z][a-z0-9_]*$/"),
+    validateInput: (v) => (PREFIX_RE.test(v.trim()) ? null : IDENTIFIER_HINT),
   });
   if (prefix === undefined) return undefined;
   lastPrefix = prefix.trim();
@@ -107,7 +109,7 @@ async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
 async function askEventId(prefix: string): Promise<string | undefined> {
   const re = new RegExp(`^${escapeRegExp(prefix)}\\.\\d+$`);
   return vscode.window.showInputBox({
-    title: "Paradox: New event — id",
+    title: "New Event — id",
     prompt: `Event id (must be ${prefix}.<number>).`,
     value: `${prefix}.1`,
     validateInput: (v) => (re.test(v.trim()) ? null : `Event id must be ${prefix}.<number>`),
@@ -116,11 +118,12 @@ async function askEventId(prefix: string): Promise<string | undefined> {
 
 async function askName(prefix: string, label: string): Promise<string | undefined> {
   const re = /^[a-z][a-z0-9_]*$/;
+  const display = label.charAt(0).toUpperCase() + label.slice(1);
   return vscode.window.showInputBox({
-    title: `Paradox: New ${label} — name`,
-    prompt: `${label} key (lowercase, letters/digits/_).`,
+    title: `New ${display} — name`,
+    prompt: `${display} key (lowercase, letters/digits/_).`,
     value: `${prefix}_${label.replace(/[^a-z]+/g, "_")}`,
-    validateInput: (v) => (re.test(v.trim()) ? null : "Must match /^[a-z][a-z0-9_]*$/"),
+    validateInput: (v) => (re.test(v.trim()) ? null : IDENTIFIER_HINT),
   });
 }
 
@@ -130,13 +133,13 @@ async function askVanillaOnAction(): Promise<string | undefined> {
     { label: "$(edit) Other…", detail: "Type another vanilla on_action name" },
   ];
   const pick = await vscode.window.showQuickPick(items, {
-    title: "Paradox: on_action hook — which vanilla on_action?",
+    title: "New on_action Hook",
     placeHolder: "Pick the vanilla on_action to hook into",
   });
   if (!pick) return undefined;
   if (pick.label.startsWith("$(edit)")) {
     return vscode.window.showInputBox({
-      title: "Paradox: on_action hook — vanilla on_action",
+      title: "New on_action Hook — vanilla on_action",
       prompt: "Vanilla on_action name (e.g. on_county_faith_change).",
       validateInput: (v) => (/^on_[a-z0-9_]+$/.test(v.trim()) ? null : "Expected an on_<name> identifier"),
     });
@@ -246,7 +249,9 @@ export async function newContentCommand(
   onFileChanged: (fsPath: string) => void
 ): Promise<void> {
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
+    void vscode.window.showWarningMessage(
+      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+    );
     return;
   }
 

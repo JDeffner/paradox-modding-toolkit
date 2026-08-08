@@ -97,7 +97,7 @@ export class TigerRunner implements vscode.Disposable {
       this.status.tooltip =
         this.lastCount === 0
           ? `${this.tigerName()}: no problems. Click to run again.`
-          : `${this.tigerName()}: ${this.lastCount} report(s). Click to run again.`;
+          : `${this.tigerName()}: ${this.lastCount} ${this.lastCount === 1 ? "problem" : "problems"}. Click to run again.`;
     }
     this.status.show();
   }
@@ -204,16 +204,24 @@ export class TigerRunner implements vscode.Disposable {
     }
     if (!cfg.tigerPath) {
       if (manual) {
-        void vscode.window.showWarningMessage(
-          `Paradox Toolkit: set px.tigerPath to a ${meta.tiger.binaryName} binary to enable diagnostics.`
-        );
+        void vscode.window
+          .showWarningMessage(
+            `Paradox Toolkit: ${meta.tiger.binaryName} is not set up yet — download it once, or point ` +
+              `px.tigerPath at your own binary.`,
+            `Download ${meta.tiger.binaryName}`
+          )
+          .then((choice) => {
+            if (choice) void vscode.commands.executeCommand("px.downloadTiger");
+          });
       }
       return;
     }
     const modRoot = this.resolveRoot(cfg, rootOverride);
     if (!modRoot) {
       if (manual)
-        void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
+        void vscode.window.showWarningMessage(
+          "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+        );
       return;
     }
     // tiger refuses folders without a mod descriptor (descriptor.mod for CK3,
@@ -222,10 +230,17 @@ export class TigerRunner implements vscode.Disposable {
     // workspace never spawns tiger or throws errors at the user.
     if (!hasDescriptor(modRoot)) {
       if (manual) {
-        this.notifyError(
-          `Paradox Toolkit: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
-            "Is px.modPath pointing at the mod itself? Mods created via the launcher have one."
-        );
+        // The extension can create the missing descriptor itself; offer that
+        // instead of describing the fix.
+        void vscode.window
+          .showErrorMessage(
+            `Paradox Toolkit: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
+              "Mods created via the launcher have one.",
+            "Create descriptor.mod"
+          )
+          .then((choice) => {
+            if (choice) void vscode.commands.executeCommand("px.createDescriptor");
+          });
       } else {
         this.log(`tiger: skipped, no mod descriptor in ${modRoot} (not a mod workspace?)`);
       }

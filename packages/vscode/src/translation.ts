@@ -29,7 +29,9 @@ function languagesInMod(locDir: string): string[] {
 
 export async function createTranslationCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
+    void vscode.window.showWarningMessage(
+      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+    );
     return;
   }
   const locDir = path.join(cfg.modPath, "localization");

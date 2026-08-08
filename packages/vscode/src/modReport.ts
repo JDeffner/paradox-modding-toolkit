@@ -17,9 +17,14 @@ import {
 } from "@px-lsp/protocol/protocol";
 import type { IndexStats } from "@px-lsp/protocol/types";
 
-function diagnosticsSummary(): string[] {
+/** Diagnostics scoped to the reported mod: the rest of the report describes
+ * modRoot, so window-wide counts (other mods, other extensions) would lie
+ * under the "Mod: …" header. Without a modRoot every diagnostic counts. */
+function diagnosticsSummary(modRoot: string | null): string[] {
   const counts = new Map<string, number>();
-  for (const [, diags] of vscode.languages.getDiagnostics()) {
+  const prefix = modRoot ? modRoot.replace(/[\\/]+$/, "").toLowerCase() : null;
+  for (const [uri, diags] of vscode.languages.getDiagnostics()) {
+    if (prefix && !uri.fsPath.toLowerCase().startsWith(prefix)) continue;
     for (const d of diags) {
       const sev = vscode.DiagnosticSeverity[d.severity];
       const key = `${d.source ?? "other"} · ${sev}`;
@@ -51,8 +56,8 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
     lines.push("");
   }
 
-  lines.push(`## Problems`, "");
-  const diag = diagnosticsSummary();
+  lines.push(modRoot ? `## Problems in this mod` : `## Problems`, "");
+  const diag = diagnosticsSummary(modRoot);
   if (diag[0].startsWith("|")) lines.push(`| Source · Severity | Count |`, `|---|---|`);
   lines.push(...diag, "");
 
@@ -90,7 +95,8 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
   lines.push(`## Index`, "");
   lines.push(`Total indexed (all sources): ${stats.total} definitions in ${stats.files} files.`, "");
 
+  // Preview only: showing the raw markdown too would leave a dirty untitled
+  // tab behind that prompts to save on close.
   const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: lines.join("\n") });
-  await vscode.window.showTextDocument(doc, { preview: true });
   await vscode.commands.executeCommand("markdown.showPreview", doc.uri);
 }

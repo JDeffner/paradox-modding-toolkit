@@ -331,7 +331,9 @@ export function registerDescriptorMod(
   const createDescriptor = async () => {
     const cfg = getConfig();
     if (!cfg.modPath) {
-      void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
+      void vscode.window.showWarningMessage(
+        "Paradox Toolkit: open the folder that should become the mod as a workspace folder first."
+      );
       return;
     }
     const file = path.join(cfg.modPath, "descriptor.mod");

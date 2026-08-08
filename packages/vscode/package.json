@@ -1,7 +1,7 @@
 {
   "name": "px-toolkit",
   "displayName": "Paradox Toolkit",
-  "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and GUI preview.",
+  "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
   "version": "0.3.0",
   "publisher": "JDeffner",
   "author": {
@@ -14,7 +14,10 @@
   },
   "categories": [
     "Programming Languages",
-    "Linters"
+    "Linters",
+    "Snippets",
+    "Formatters",
+    "Visualization"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -291,7 +294,7 @@
       {
         "command": "px.tigerUnused",
         "category": "Paradox Tiger",
-        "title": "Find Unused Definitions (--unused)"
+        "title": "Find Unused Definitions"
       },
       {
         "command": "px.tigerGenerateConf",
@@ -335,12 +338,6 @@
         "category": "Paradox Localization",
         "title": "Add Localization…",
         "icon": "$(add)"
-      },
-      {
-        "command": "px.tutorial",
-        "category": "Paradox",
-        "title": "Open Tutorial (learn CK3 modding)",
-        "icon": "$(mortar-board)"
       },
       {
         "command": "px.createDescriptor",
@@ -402,7 +399,7 @@
           {
             "id": "px.step.tiger",
             "title": "Enable tiger diagnostics",
-            "description": "ck3-tiger validates your mod on every save and shows problems as squiggles.\n[Download ck3-tiger](command:px.downloadTiger)",
+            "description": "ck3-tiger validates your whole mod and shows problems as squiggles. Run it with Ctrl+Alt+V or from the tiger item in the status bar; set px.tigerRunOn to 'save' to run it on every save.\n[Download ck3-tiger](command:px.downloadTiger)",
             "media": {
               "markdown": "media/walkthrough/tiger.md"
             },
@@ -424,10 +421,10 @@
           },
           {
             "id": "px.step.overview",
-            "title": "Explore the CK3 view",
-            "description": "The CK3 icon in the Activity Bar opens the mod overview: content inventory, problems, localization coverage, overrides and the event graph.\n[Show Event Graph](command:px.showEventGraph)\n[Show Mod Report](command:px.modReport)",
+            "title": "Explore the Paradox view",
+            "description": "The Paradox icon in the Activity Bar opens the Project view and the mod overview: content inventory, problems, localization coverage, overrides and the event graph.\n[Show Event Graph](command:px.showEventGraph)\n[Show Mod Report](command:px.modReport)",
             "media": {
-              "markdown": "media/walkthrough/explore.md"
+              "markdown": "media/walkthrough/overview.md"
             },
             "completionEvents": [
               "onCommand:px.showEventGraph",
@@ -447,21 +444,39 @@
             "default": "",
             "order": 1,
             "scope": "machine-overridable",
-            "markdownDescription": "Path to the CK3 game data folder, e.g. `.../steamapps/common/Crusader Kings III/game`. Powers completion, hover and go-to-definition on vanilla content.\n\n**Easiest:** leave empty and run `Paradox: Run Setup & Health Check` — it finds the game via Steam and fills this in. Opening the game folder as an extra workspace folder also works."
+            "markdownDescription": "Path to the active game's data folder, e.g. `.../steamapps/common/Crusader Kings III/game`. Powers completion, hover and go-to-definition on vanilla content. Which game is active follows `px.gameId`.\n\n**Easiest:** leave empty and run `Paradox: Run Setup & Health Check` — it finds the game via Steam and fills this in. Opening the game folder as an extra workspace folder also works."
           },
           "px.logsPath": {
             "type": "string",
             "default": "",
             "order": 2,
             "scope": "machine-overridable",
-            "markdownDescription": "Folder containing the `script_docs` log files (`triggers.log`, `effects.log`, `event_targets.log`, `modifiers.log`). Leave empty to auto-detect `Documents/Paradox Interactive/Crusader Kings III/logs`.\n\nThe logs upgrade the bundled wiki data to your exact game version: launch CK3 with `-debug_mode`, run `script_docs` in the console (\\`), then run `Paradox: Reload Game Data (script_docs)`."
+            "markdownDescription": "Folder containing the `script_docs` dump files (`triggers.log`, `effects.log`, `event_targets.log`, `modifiers.log`). Leave empty to auto-detect it per game: `Documents/Paradox Interactive/<game>/logs` (EU5 dumps to `docs` instead).\n\nThe dumps match the engine vocabulary to your exact game version: launch the game with `-debug_mode`, run `script_docs` in the console (\\`), then run `Paradox: Reload Game Data (script_docs)`."
           },
           "px.tigerPath": {
             "type": "string",
             "default": "",
             "order": 3,
             "scope": "machine-overridable",
-            "markdownDescription": "Path to your own `ck3-tiger` binary. Leave empty to use the copy installed by `Paradox Tiger: Download or Update Binary` (also offered during Setup)."
+            "markdownDescription": "Path to your own tiger binary (`ck3-tiger` or `vic3-tiger`, matching the active game). Leave empty to use the copy installed by `Paradox Tiger: Download or Update Binary` (also offered during Setup)."
+          },
+          "px.gameId": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ck3",
+              "vic3",
+              "eu5"
+            ],
+            "default": "auto",
+            "order": 0,
+            "enumDescriptions": [
+              "Detect from the mod's descriptor shape: descriptor.mod → CK3; .metadata/ plus in_game|main_menu|loading_screen stage folders → EU5; .metadata/ alone → Victoria 3; otherwise CK3.",
+              "Crusader Kings III",
+              "Victoria 3",
+              "Europa Universalis V (community-sourced schema; not yet verified against a live install)"
+            ],
+            "markdownDescription": "Which game this workspace mods. `auto` detects from the mod's descriptor shape and is right for almost everyone; set explicitly when detection guesses wrong. `px.gamePath`/`px.logsPath`/`px.tigerPath` always describe the ACTIVE game and are honored when set; unset paths are auto-detected per game (Steam library / Documents). Games without a tiger build (EU5) skip tiger integration."
           }
         }
       },
@@ -474,7 +489,7 @@
             "default": "",
             "order": 1,
             "scope": "machine-overridable",
-            "markdownDescription": "**Leave this empty** unless your mod folder is not part of the workspace. Every workspace folder that is a CK3 mod is detected and fully indexed automatically. Features follow the file you are editing, and the sidebar views follow it too (or a mod you pin via `Paradox: Pick Focus Mod`)."
+            "markdownDescription": "**Leave this empty** unless your mod folder is not part of the workspace. Every workspace folder that is a mod of the active game is detected and fully indexed automatically. Features follow the file you are editing, and the sidebar views follow it too (or a mod you pin via `Paradox: Pick Focus Mod`)."
           },
           "px.parentMods": {
             "type": "array",
@@ -562,25 +577,7 @@
             "type": "boolean",
             "default": true,
             "order": 2,
-            "markdownDescription": "Escape hatch: set to false to stop this workspace's txt/yml files from being switched to the CK3 language modes."
-          },
-          "px.gameId": {
-            "type": "string",
-            "enum": [
-              "auto",
-              "ck3",
-              "vic3",
-              "eu5"
-            ],
-            "default": "auto",
-            "order": 3,
-            "enumDescriptions": [
-              "Detect from the mod's descriptor shape: descriptor.mod → CK3; .metadata/ plus in_game|main_menu|loading_screen stage folders → EU5; .metadata/ alone → Victoria 3; otherwise CK3.",
-              "Crusader Kings III",
-              "Victoria 3",
-              "Europa Universalis V (community-sourced schema; not yet verified against a live install)"
-            ],
-            "markdownDescription": "Which game this workspace mods. `auto` detects from the mod's descriptor shape and is right for almost everyone; set explicitly when detection guesses wrong. `px.gamePath`/`px.logsPath`/`px.tigerPath` always describe the ACTIVE game and are honored when set; unset paths are auto-detected per game (Steam library / Documents). Games without a tiger build (EU5) skip tiger integration."
+            "markdownDescription": "Escape hatch: set to false to stop this workspace's txt/yml files from being switched to the Paradox language modes."
           },
           "px.trace.server": {
             "type": "string",
@@ -591,7 +588,7 @@
             ],
             "default": "off",
             "order": 3,
-            "markdownDescription": "Trace the communication between VS Code and the CK3 language server (for debugging / bug reports)."
+            "markdownDescription": "Trace the communication between VS Code and the language server (for debugging / bug reports)."
           },
           "px.trace.perf": {
             "type": "boolean",
@@ -775,6 +772,14 @@
         {
           "command": "px.newContent",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.convertToDds",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.imageGuidelines",
+          "when": "px.isCk3Workspace"
         }
       ],
       "view/title": [
@@ -815,7 +820,7 @@
         {
           "command": "px.simulateEvent",
           "when": "editorLangId == paradox && px.isCk3Workspace",
-          "group": "navigation@1"
+          "group": "1_modification"
         }
       ],
       "editor/title": [
@@ -871,24 +876,9 @@
         "when": "editorTextFocus && editorLangId == paradox-gui"
       },
       {
-        "command": "px.showGuiTree",
-        "key": "ctrl+alt+w",
-        "when": "editorTextFocus && editorLangId == paradox-gui"
-      },
-      {
         "command": "px.guiTreeToggleParents",
         "key": "ctrl+alt+h",
         "when": "activeWebviewPanelId == px.guiTree"
-      },
-      {
-        "command": "px.showEventGraph",
-        "key": "ctrl+alt+g",
-        "when": "editorTextFocus && editorLangId == paradox"
-      },
-      {
-        "command": "px.showDependencies",
-        "key": "ctrl+alt+d",
-        "when": "editorTextFocus && editorLangId == paradox"
       },
       {
         "command": "px.runTiger",
@@ -896,19 +886,9 @@
         "when": "editorLangId == paradox || editorLangId == paradox-loc || editorLangId == paradox-gui"
       },
       {
-        "command": "px.openLocalizationSideBySide",
-        "key": "ctrl+alt+l",
-        "when": "editorTextFocus && (editorLangId == paradox || editorLangId == paradox-loc)"
-      },
-      {
         "command": "px.jumpToScriptReference",
         "key": "ctrl+alt+j",
         "when": "editorTextFocus && editorLangId == paradox-loc"
-      },
-      {
-        "command": "px.openInfoDocs",
-        "key": "ctrl+alt+o",
-        "when": "editorTextFocus && px.hasInfoDoc"
       }
     ]
   },

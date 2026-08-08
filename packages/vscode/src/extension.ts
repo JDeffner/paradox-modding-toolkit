@@ -495,12 +495,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.Uri.file(context.asAbsolutePath("media/image-guidelines.md"))
       )
     ),
-    vscode.commands.registerCommand("px.tutorial", () =>
-      vscode.commands.executeCommand(
-        "markdown.showPreview",
-        vscode.Uri.file(context.asAbsolutePath("media/tutorial/index.md"))
-      )
-    ),
     DdsPreviewProvider.register(context)
   );
 
@@ -682,7 +676,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // The baseline belongs to the mod of the active editor (multi-mod).
       const bl = baselineFileFor(cfgForActive().modPath);
       if (!bl) {
-        void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder.");
+        void vscode.window.showWarningMessage(
+          "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+        );
         return;
       }
       const count = await tiger.createBaseline(bl);
@@ -698,6 +694,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!requireTiger()) return;
       const enabled = !context.workspaceState.get<boolean>("px.tigerBaselineEnabled");
       await context.workspaceState.update("px.tigerBaselineEnabled", enabled);
+      // The filter only bites when a baseline snapshot exists for the mod;
+      // claiming "problems are filtered" without one would be a lie.
+      const bl = baselineFileFor(cfgForActive().modPath);
+      if (enabled && (!bl || !fs.existsSync(bl))) {
+        void vscode.window
+          .showInformationMessage(
+            "Paradox Toolkit: tiger baseline is ON, but this mod has no baseline snapshot yet — " +
+              "all problems are still shown. Create one to snapshot today's problems.",
+            "Create Baseline"
+          )
+          .then((choice) => {
+            if (choice) void vscode.commands.executeCommand("px.tigerCreateBaseline");
+          });
+        return;
+      }
       void vscode.window.showInformationMessage(
         enabled
           ? "Paradox Toolkit: tiger baseline ON — only problems newer than the baseline are shown."
@@ -716,7 +727,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
-    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg)),
+    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg, errorLog)),
     vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),
@@ -738,6 +749,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void lc.sendNotification(configChangedNotification, toSettings(cfg));
     },
     log,
+    showOutput: () => output.show(true),
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),

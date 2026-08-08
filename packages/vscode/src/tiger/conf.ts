@@ -21,7 +21,9 @@ export async function generateTigerConfCommand(cfg: PxConfig): Promise<void> {
     return;
   }
   if (!cfg.modPath) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: no mod folder (open one or set px.modPath).");
+    void vscode.window.showWarningMessage(
+      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+    );
     return;
   }
   const confName = meta.tiger.confName;

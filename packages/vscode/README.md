@@ -35,7 +35,7 @@ stop.
 | Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
 | `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | no (calibrated against CK3 only) | no |
-| Bundled tutorial and AI modding skill | yes | no (CK3 content) | no (CK3 content) |
+| Bundled AI modding skill | yes | no (CK3 content) | no (CK3 content) |
 
 **Existing CK3 users need to change nothing.** `px.gameId` defaults to `auto`
 and the detection ladder ends in CK3: a mod folder with a `descriptor.mod` is
@@ -96,7 +96,7 @@ reports are very welcome.
   editing, a coverage view, and scaffolds for whole translation mods.
 - **Content scaffolds**: **New Content** generates events, decisions,
   interactions and on_action hooks that are correct by construction.
-- **Live debugging**: the launch-in-debug-mode command plus a **Toggle
+- **Live debugging**: **Launch Game (debug mode)** plus a **Toggle
   error.log Watcher** that surfaces in-game script errors as editor squiggles.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
@@ -111,10 +111,11 @@ reports are very welcome.
   in-game screenshots.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
-- **Bundled 10-chapter CK3 tutorial** (**Open Tutorial**) with every
-  snippet verified against the game files.
 - **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/ck3-modding-toolkit/wiki/Claude-Skill)**
   ships in `skills/ck3-modding/` for AI-assisted modding.
+- **Not tied to VS Code**: the language server is standard LSP over `--stdio`
+  and runs from neovim, Zed, Helix or your own application — see
+  [Outside VS Code](#outside-vs-code).
 
 ## Quick start
 
@@ -167,6 +168,14 @@ Node and a `px-lsp.cmd` launcher; setup,
 the per-language capability table and the per-game matrix are in
 [`packages/server/README.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/packages/server/README.md).
 
+Embedding the server in your own application (a mod manager, a custom editor)
+is a supported, documented path:
+[`docs/EMBEDDING.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/EMBEDDING.md)
+covers the process contract, initialization options, and the `paradox/*` wire
+methods beyond standard LSP (event graph, mod overview, GUI layout, scope
+inference), with [`docs/PROTOCOL.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/docs/PROTOCOL.md)
+as the method-by-method reference.
+
 ## Contributing & feedback
 
 This is an alpha shaped by the people who use it. The best thing you can do is
@@ -198,10 +207,8 @@ profiles, bundled data) · `packages/protocol/` (types, wire protocol, shared
 helpers) · `packages/*/test/` (vitest suites incl. corpus/fixture tests). The extension is a
 client/server LSP split: the thin client runs in the extension host, all parsing
 and analysis lives in a separate server process. Everything game-specific sits
-behind one `GameProfile` boundary that CI enforces. Design rationale and the
-full plans are in [`docs/rework-plan.md`](docs/rework-plan.md),
-[`docs/PLAN.md`](docs/PLAN.md) and
-[`docs/PLAN-multigame.md`](docs/PLAN-multigame.md).
+behind one `GameProfile` boundary that CI enforces. The architecture map and
+conventions are in [`AGENTS.md`](https://github.com/JDeffner/ck3-modding-toolkit/blob/main/AGENTS.md).
 
 ## Acknowledgements
 

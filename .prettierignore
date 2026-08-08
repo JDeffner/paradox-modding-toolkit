@@ -5,9 +5,8 @@ packages/vscode/data/
 pnpm-lock.yaml
 # Harvested/generated data: byte-for-byte reproducible from scripts/, never hand-edited.
 packages/server/data/
-# Bundled wiki mirrors (CC BY-SA) and the tutorial/skill prose keep their upstream shape.
+# Bundled wiki mirrors (CC BY-SA) and the skill prose keep their upstream shape.
 packages/vscode/skills/
-packages/vscode/media/tutorial/
 # Test fixtures are exact game-file samples; reformatting changes what is under test.
 packages/server/test/fixtures/
 # Prose is written to the conventions in AGENTS.md (no em dashes, hand-wrapped

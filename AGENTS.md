@@ -7,8 +7,7 @@ Kings III mod authors a full language workbench: an LSP server with a
 hand-written tolerant parser for Paradox/Jomini script, grammar-aware
 completion, hover docs, diagnostics for the silent-failure class of bugs,
 ck3-tiger integration, an editable event-graph webview, DDS texture
-preview/conversion, PdxGui support, localization tooling, and a bundled
-tutorial.
+preview/conversion, PdxGui support, and localization tooling.
 
 **The one design idea that explains most decisions:** all language knowledge
 is *derived from the game itself* — the user's `script_docs` logs, the vanilla
@@ -61,7 +60,7 @@ game files or a harvest, or don't add it.
 | `packages/*/test/` | Vitest suites, package-local. The bulk (plus `fixtures/`, `parser/`, `dds/`) lives in `packages/server/test`: `vscodeFuzzy.ts` = faithful port of VS Code's suggest scoring; `rankEvalCore.ts` = ranking eval harness; `lspSmoke.test.ts` forks the real bundle over node IPC. Protocol-pure tests in `packages/protocol/test`; client-ish ones in `packages/vscode/test` |
 | `scripts/` | Build-time harvests and evals (see "Regenerating data") |
 | `packages/server/data/ck3/wikidocs/` | Bundled wiki token lists (CC BY-SA, see its ATTRIBUTION.md) — the fallback when the user has no `script_docs` logs |
-| `packages/vscode/media/` | Icon, walkthrough pages, `image-guidelines.md`, `tutorial/` (10-chapter course). `media/` SHIPS in the vsix; `docs/` does NOT |
+| `packages/vscode/media/` | Icon, walkthrough pages, `image-guidelines.md`. `media/` SHIPS in the vsix; `docs/` does NOT |
 | `docs/` | Tracked: `diagnostics/` (per-code explanations, linked from README + diagnostic codes), `gui-designer/` (the in-game layout-calibration campaign: spec + evidence), `guides/` (UI-modding guide + screenshots, referenced by the skill). Everything else (design history: `rework-plan.md`, `UPDATE_PLAN_v1.1.md`, `research.md`, …) is LOCAL-ONLY, gitignored |
 | `packages/vscode/skills/ck3-modding/` | A Claude/agent skill for CK3 modding itself (not the extension): routing table, per-system recipes, validation workflow, distilled AGOT/PoD pattern notes. Machine-agnostic: paths appear as `<game>`/`<logs>`/`<mods>`/`<workshop>`/`<tiger>` placeholders resolved per SKILL.md Step 0. Excluded from the vsix |
 | `packages/vscode/syntaxes/` | TextMate grammars (`paradox`, `paradox-loc`, `paradox-info` for the game's `_*.info` format docs, `paradox-mod` for .mod descriptors; `paradox-gui` reuses the script grammar) |
@@ -202,7 +201,7 @@ paths from that game's `dev-paths.json` slots:
 
 ## Conventions
 
-- User-facing prose (README, CHANGELOG entries, tutorial, UI copy) avoids
+- User-facing prose (README, CHANGELOG entries, UI copy) avoids
   em dashes; code comments follow the existing style.
 - Comments state constraints and provenance ("measured", "per §C2"), not
   narration of the code below them.

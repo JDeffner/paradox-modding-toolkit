@@ -3,7 +3,7 @@ import * as path from "path";
 import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
-import { isCk3, metaFor } from "../../meta";
+import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 
@@ -22,6 +22,7 @@ type InboundMessage =
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
   | { type: "watcher" }
   | { type: "baseline" }
+  | { type: "gameSettings" }
   | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
@@ -41,6 +42,9 @@ interface ActionGroup {
 }
 
 interface DashboardState {
+  /** Active game (full name) and whether it came from auto-detection. */
+  gameName: string;
+  gameAuto: boolean;
   mods: ModState[];
   /** Raw pin, or null = follow the active editor. */
   pinnedRoot: string | null;
@@ -53,7 +57,7 @@ interface DashboardState {
   watcherAvailable: boolean;
   diagnosticsVanilla: boolean;
   scopeInlayHints: boolean;
-  /** Game-aware launcher groups (per-game labels, CK3-only tutorial). */
+  /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
   /** Persisted per-section collapse flags; every section defaults to expanded. */
   collapsed: Record<SectionId, boolean>;
@@ -72,9 +76,8 @@ export interface DashboardDeps {
  * status bar is deliberately absent: tiger (status bar), the GUI tree, the GUI
  * editor and the event graph (editor title), Add Language (Localization
  * Coverage view title), Format Docs (editor title), Simulate Event (editor
- * context menu). Built per game: labels carry the active game's name, and
- * CK3-only content (the tutorial) is absent elsewhere. The error.log watcher is
- * a toggle above, not a launcher.
+ * context menu). Built per game: labels carry the active game's name. The
+ * error.log watcher is a toggle above, not a launcher.
  */
 function actionGroups(meta: GameMeta): ActionGroup[] {
   return [
@@ -109,7 +112,12 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
     {
       label: "Images",
       items: [
-        { label: "Convert Image to DDS", command: "px.convertToDds", icon: "image" },
+        {
+          label: "Convert Image to DDS",
+          command: "px.convertToDds",
+          icon: "image",
+          tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
+        },
         {
           label: "Image Guidelines",
           command: "px.imageGuidelines",
@@ -130,7 +138,7 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
       ],
     },
     {
-      label: "Validate & Test",
+      label: "Test & Troubleshoot",
       items: [
         {
           label: `Launch ${meta.shortName} (debug mode)`,
@@ -146,15 +154,6 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
         },
       ],
     },
-    // The tutorial is CK3-specific content bundled with the extension.
-    ...(isCk3(meta.id)
-      ? [
-          {
-            label: "Learn",
-            items: [{ label: "Tutorial: CK3 Modding from Zero", command: "px.tutorial", icon: "cap" }],
-          } satisfies ActionGroup,
-        ]
-      : []),
   ];
 }
 
@@ -171,7 +170,6 @@ const ICONS = {
   info: '<circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r=".5" fill="currentColor"/>',
   play: '<path d="M5.5 3.8v8.4L12.5 8Z" fill="currentColor" stroke="none"/>',
   check: '<path d="M8 2 13 4v4.3c0 3-2 5.2-5 5.7-3-.5-5-2.7-5-5.7V4Z"/><path d="M5.8 8.1l1.6 1.6 3-3.2"/>',
-  cap: '<path d="M2 6.3 8 4l6 2.3L8 8.7Zm2.5 1.5v3.2c2 1.5 5 1.5 7 0V7.8M14 6.3v3.2"/>',
 } as const;
 
 /**
@@ -229,6 +227,8 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       }
     }
     return {
+      gameName: meta.name,
+      gameAuto: (vscode.workspace.getConfiguration("px").get<string>("gameId") ?? "auto") === "auto",
       mods,
       pinnedRoot: this.deps.focus.pinnedRoot(),
       focusRoot: this.deps.focus.current(),
@@ -286,6 +286,9 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "watcher":
         this.deps.errorLog.toggle();
         this.refresh();
+        return;
+      case "gameSettings":
+        await vscode.commands.executeCommand("workbench.action.openSettings", "px.gameId");
         return;
       case "baseline":
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
@@ -500,6 +503,17 @@ function buildHtml(): string {
   .empty { padding: 4px 6px; color: var(--vscode-descriptionForeground); }
   .hidden { display: none; }
 
+  /* game header */
+  .game-row {
+    display: flex; align-items: center; gap: 6px;
+    margin: 6px 8px 0; padding: 2px 10px; cursor: pointer; border-radius: 4px;
+  }
+  .game-row:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.12)); }
+  .game-row .game-name { font-weight: 600; }
+  .game-row:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4); outline-offset: 1px;
+  }
+
   /* tooltip */
   #tip {
     position: fixed; z-index: 10; max-width: 260px; padding: 5px 8px;
@@ -514,6 +528,7 @@ function buildHtml(): string {
 </style>
 </head>
 <body>
+<div class="game-row" id="game" role="button" tabindex="0"></div>
 <div class="section" id="section-mods">
   ${sectionHead(
     "mods",
@@ -548,7 +563,11 @@ function buildHtml(): string {
   </div>
 </div>
 <div class="section" id="section-tools">
-  ${sectionHead("tools", "Tools", "Commands with no button of their own elsewhere in the UI.")}
+  ${sectionHead(
+    "tools",
+    "Tools",
+    "Commands that have no button anywhere else. Everything else lives on an editor tab, a view title, or the status bar."
+  )}
   <div class="section-body" id="body-tools"><div id="tools"></div></div>
 </div>
 <div id="tip" role="tooltip"></div>
@@ -683,6 +702,27 @@ function renderActions() {
   }
 }
 
+// ---- game header ----
+const gameRow = document.getElementById("game");
+gameRow.setAttribute("data-tip",
+  "The game this workspace mods. Click to change it (px.gameId) if the detection guessed wrong.");
+const openGameSettings = () => vscode.postMessage({ type: "gameSettings" });
+gameRow.addEventListener("click", openGameSettings);
+gameRow.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openGameSettings(); }
+});
+function renderGame() {
+  gameRow.textContent = "";
+  const name = document.createElement("span");
+  name.className = "game-name";
+  name.textContent = state.gameName;
+  gameRow.appendChild(name);
+  const badge = document.createElement("span");
+  badge.className = "badge subtle";
+  badge.textContent = state.gameAuto ? "auto-detected" : "set manually";
+  gameRow.appendChild(badge);
+}
+
 // ---- mods ----
 function dot(on, tipText, onClick) {
   const b = document.createElement("button");
@@ -699,8 +739,25 @@ function renderMods() {
   if (!state.mods.length) {
     const d = document.createElement("div");
     d.className = "empty";
-    d.textContent = "No mods detected in this workspace.";
+    d.textContent = "No mod descriptor found in this workspace.";
     box.appendChild(d);
+    const fix = document.createElement("div");
+    fix.className = "row action";
+    fix.setAttribute("role", "button");
+    fix.tabIndex = 0;
+    fix.setAttribute("data-tip",
+      "Create the descriptor file that marks this folder as a mod, so the game (and this extension) can load it.");
+    fix.appendChild(iconSvg("plus"));
+    const l = document.createElement("span");
+    l.className = "label";
+    l.textContent = "Create descriptor.mod";
+    fix.appendChild(l);
+    const run = () => vscode.postMessage({ type: "run", command: "px.createDescriptor" });
+    fix.addEventListener("click", run);
+    fix.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); run(); }
+    });
+    box.appendChild(fix);
     return;
   }
   const following = state.pinnedRoot === null;
@@ -772,6 +829,7 @@ function renderMods() {
 }
 
 function render() {
+  renderGame();
   renderMods();
   renderActions();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);

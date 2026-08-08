@@ -19,6 +19,8 @@ export interface SetupDeps {
   /** Re-read config and rebuild data (called after settings were written). */
   refresh: () => void;
   log: (msg: string) => void;
+  /** Reveal the Paradox Toolkit output channel (where the report lands). */
+  showOutput: () => void;
 }
 
 function scriptDocsPresent(logsPath: string | null): boolean {
@@ -38,7 +40,7 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
   }
   if (askFirst) {
     const choice = await vscode.window.showInformationMessage(
-      `Download ${flavor.prefix} (mod validator, ~15 MB) from github.com/${flavor.repoSlug} into the extension's storage?`,
+      `Download ${flavor.prefix} (mod validator, about 15 MB) from github.com/${flavor.repoSlug} into the extension's storage?`,
       "Download",
       "Not now"
     );
@@ -59,13 +61,17 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
     );
     deps.log(`tiger ${result.version} installed at ${result.binaryPath}`);
     void vscode.window.showInformationMessage(
-      `${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
+      `Paradox Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
     );
     deps.refresh();
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    void vscode.window.showErrorMessage(`Paradox Toolkit: tiger download failed — ${msg}`);
+    const retry = await vscode.window.showErrorMessage(
+      `Paradox Toolkit: tiger download failed — ${msg}`,
+      "Retry"
+    );
+    if (retry) return downloadTigerCommand(deps, false);
     return null;
   }
 }
@@ -114,12 +120,14 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   if (docsOk) {
     report.push(`✓ script_docs ${docsDir}: ${cfg.logsPath}`);
   } else if (cfg.logsPath) {
+    // On CK3 the bundled wiki data is the documented default, so a missing dump
+    // is a ready state with an optional upgrade — not something to fix.
     report.push(
-      `• script_docs ${docsDir}: not generated yet` +
-        (isCk3(meta.id)
-          ? ` (bundled wiki data is used meanwhile). Launch ${meta.shortName} with -debug_mode, ` +
-            `open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)".`
-          : ".")
+      isCk3(meta.id)
+        ? `✓ engine data: bundled wiki tables (optional upgrade: launch ${meta.shortName} with -debug_mode, ` +
+            `open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)" ` +
+            `to match your exact game version and add modifiers)`
+        : `• script_docs ${docsDir}: not generated yet.`
     );
   } else {
     report.push(
@@ -166,11 +174,13 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   deps.log("setup report:\n  " + report.join("\n  "));
   const checks = flavor ? 4 : 3;
   const ok = Math.min(report.filter((l) => l.startsWith("✓")).length, checks);
-  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${report.some((l) => l.startsWith("✗") || l.startsWith("•") || l.startsWith("➜")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
-  const action = await vscode.window.showInformationMessage(summary, "Show details");
-  if (action === "Show details") {
-    await vscode.commands.executeCommand("workbench.action.output.toggleOutput");
-  }
+  const hasBlocker = report.some((l) => l.startsWith("✗") || l.startsWith("➜"));
+  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${hasBlocker || report.some((l) => l.startsWith("•")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
+  const buttons = hasBlocker ? ["Show details", "Open Settings"] : ["Show details"];
+  const action = await vscode.window.showInformationMessage(summary, ...buttons);
+  if (action === "Show details") deps.showOutput();
+  else if (action === "Open Settings")
+    await vscode.commands.executeCommand("workbench.action.openSettings", "px.");
 }
 
 /** One-time nudge on first activation without a configured game path. Only in

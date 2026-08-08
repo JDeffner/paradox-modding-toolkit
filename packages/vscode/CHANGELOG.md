@@ -4,6 +4,63 @@
 
 ### Added
 
+- **The Project view names the active game.** A header row shows the game the
+  workspace mods (with an "auto-detected" or "set manually" badge); click it
+  to change `px.gameId` when detection guessed wrong. The empty state now
+  offers **Create descriptor.mod** instead of a dead end.
+- **Actionable notifications.** Running tiger without a binary offers the
+  download in one click; a missing mod descriptor offers **Create
+  descriptor.mod**; launching the game offers **Watch error.log**; a failed
+  tiger download offers **Retry**; a setup report with a blocker offers
+  **Open Settings**; and turning on the tiger baseline filter with no
+  snapshot says so honestly and offers **Create Baseline** instead of
+  claiming problems are filtered.
+
+### Changed (UX round: fable + opus adversarial review)
+
+- **The bundled 10-chapter tutorial moved out of the extension** — it is
+  becoming a tutorial website. `px.tutorial`, the Project view's "Learn"
+  group and `media/tutorial/` are gone; the AI modding skill stays.
+- **Settings speak all three games.** `px.gamePath`, `px.logsPath`,
+  `px.tigerPath`, `px.modPath` and the trace settings no longer hardcode CK3
+  in their descriptions; `px.gameId` moved to the top of the Setup section
+  (it shared an `order` with `px.trace.server` under Editor).
+- **The walkthrough tells the truth about tiger**: it runs on demand by
+  default (`px.tigerRunOn: "manual"`), with `save` as the opt-in — the old
+  copy claimed the opposite. The overview step got its own page (it shared
+  one with "Try it"), and the pages stopped calling the Paradox view "CK3".
+- **Keybindings survive European keyboards.** `Ctrl+Alt+letter` is AltGr on
+  many layouts (AltGr+L is `ł`, AltGr+O is `ó` — typing Polish loc text
+  triggered commands). Only five defaults remain (T, P, V, J, and H in the
+  GUI tree); Event Graph, GUI Tree, Dependencies, Side-by-Side and Format
+  Docs keep their buttons and palette entries, rebindable as ever.
+- **Honest per-mod problem counts**: the Mod Report now counts only the
+  focused mod's diagnostics (it counted the whole window under a "Mod: …"
+  header) and no longer leaves a dirty Untitled tab behind; error.log
+  diagnostics are sourced `vic3-game` in a Vic3 workspace instead of always
+  `ck3-game`; the tiger status item says "3 problems", not "3 report(s)".
+- **Copy polish everywhere else**: "no mod folder" errors stopped pointing
+  at `px.modPath` (the setting whose own description says leave it empty);
+  scaffold validation errors explain instead of printing a regex
+  (`Must match /^[a-z][a-z0-9_]*$/`); the translation loop documents
+  skipping (leave empty) and reports written vs skipped; quick-pick titles
+  dropped the redundant "Paradox:" prefix; `Find Unused Definitions`
+  dropped its `(--unused)` flag; Setup on CK3 no longer scores the optional
+  script_docs dump as a missing item; "Show details" opens the Paradox
+  Toolkit output channel instead of toggling whatever panel was last open;
+  Convert Image to DDS and Image Guidelines left the palette of non-mod
+  workspaces; marketplace listing gained the Snippets/Formatters/
+  Visualization categories and a description that says "GUI editor", not
+  the retired "GUI preview".
+- **The integration story is visible**: the README highlights that the
+  server is standard LSP over `--stdio`, and Outside VS Code links
+  `docs/EMBEDDING.md` (process contract, init options, `paradox/*` wire
+  methods) next to the neovim guide. `EMBEDDING.md` now states that
+  `modPath` always gets reference indexing (`workspaceMods` upgrades
+  additional roots), resolving an apparent contradiction with the server
+  README. Verified against neovim 0.12.4: the nvim-parity harness passes
+  all 19 checks against a real mod.
+
 - **The Tools view is now "Project" — a proper dashboard.** The command-list
   tree is replaced by a webview: every workspace mod as a row with a per-mod
   focus dot (pin the sidebar views to one mod, or follow the active editor)

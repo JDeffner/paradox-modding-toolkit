@@ -2,7 +2,7 @@
 
 **Paradox: Run Setup & Health Check** does the tedious part for you:
 
-- finds your CK3 installation by reading Steam's library folders (works with games on any drive)
+- finds your game installation (CK3, Victoria 3 or EU5 — whichever this workspace mods) by reading Steam's library folders, on any drive
 - writes `px.gamePath` into your settings
 - locates the Paradox logs folder (redirected Documents folders included)
 - offers to download the **ck3-tiger** validator (~15 MB, from github.com/amtep/tiger)

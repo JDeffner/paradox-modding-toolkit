@@ -153,8 +153,11 @@ concrete:
   fix) stay silent because the open file belongs to no mod it knows.
 - **`workspaceMods`** are the roots being *edited*. Listing a root here is what
   upgrades it from a plain definition scan to reference indexing plus reference
-  diagnostics. A single-mod host sets it to `[modPath]`. Read-only dependency
-  mods go in `parentPaths` instead, base first, in load order.
+  diagnostics. `modPath` itself always gets that treatment, so a single-mod
+  host can send `modPath` alone (setting `workspaceMods` to `[modPath]` is
+  equivalent) — which is also why a bare editor client whose workspace root
+  becomes the fallback `modPath` still gets reference diagnostics. Read-only
+  dependency mods go in `parentPaths` instead, base first, in load order.
 - **`locLanguage`** selects the localization language for inlay previews and
   coverage.
 
