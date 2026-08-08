@@ -75,7 +75,12 @@ reports are very welcome.
 - **Deep tiger integration**: auto-download of ck3-tiger or vic3-tiger, run on
   save or manually, JSON reports as native Problems, and a baseline workflow to
   adopt tiger on a legacy mod (suppress today's reports, see only new ones).
-  EU5 has no tiger build, so the toolkit says so instead of pretending.
+  Dependency mods (`px.parentMods` and the other workspace mods) are passed to
+  tiger as `load_mod` entries, so a submod's references into its parents
+  resolve instead of coming back "unknown" — automatic when the mod has no
+  tiger conf of its own, and written into the conf **Generate ck3-tiger.conf**
+  creates. EU5 has no tiger build, so the toolkit says so instead of
+  pretending.
 - **Sidebar**: mod overview, localization coverage, overrides and conflicts
   (with the LIOS/FIOS winner), an interactive event graph with a node inspector,
   and a GUI widget tree.

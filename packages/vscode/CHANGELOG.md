@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Dependency mods reach tiger** (Discord report): validating a mod that
+  depends on other mods (`px.parentMods`, or the other mods of a multi-mod
+  workspace) now declares those dependencies to tiger as `load_mod` entries,
+  so their scripted effects, variables and other definitions resolve instead
+  of being reported unknown. When the mod has its own `<game>-tiger.conf`,
+  that conf stays in charge (tiger reads it directly; regenerate or add
+  `load_mod` blocks there); without one, the runner passes a generated conf
+  via `--config` on every run, including baseline creation. **Generate
+  ck3-tiger.conf** now writes the `load_mod` blocks into the conf it creates.
 - **GUI editor** (**Open GUI Editor**, CK3): a `.gui` file, drawn by the
   measured layout engine and editable with a mouse. Click to select the widget
   you meant (the smallest rect under the cursor, not the anchored box filling

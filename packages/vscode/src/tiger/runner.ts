@@ -7,12 +7,15 @@
  * never publishes diagnostics, and never shows the tiger status segment.
  */
 import * as vscode from "vscode";
+import * as crypto from "crypto";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import type { PxConfig } from "../config";
 import { isUnder, modRootFor } from "../config";
 import { metaFor } from "../meta";
+import { renderLoadModBlocks } from "./loadMods";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { parseTigerJson, type TigerReport } from "@px-lsp/protocol/tigerParser";
 import {
@@ -115,6 +118,41 @@ export class TigerRunner implements vscode.Disposable {
     return cfg.modPath;
   }
 
+  /**
+   * Dependency mods without a user conf: when the mod root has no
+   * `<game>-tiger.conf`, point tiger (--config) at a generated temp conf
+   * holding only `load_mod` blocks for cfg.parentPaths, so definitions from
+   * dependency mods resolve during validation. A conf in the mod root always
+   * wins — tiger loads it by itself and load_mod lives there
+   * (px.tigerGenerateConf seeds it).
+   */
+  private configArgs(cfg: PxConfig, modRoot: string): string[] {
+    const meta = metaFor(cfg.gameId);
+    if (!meta.tiger) return [];
+    if (fs.existsSync(path.join(modRoot, meta.tiger.confName))) return [];
+    const deps = renderLoadModBlocks(meta.descriptor, cfg.parentPaths, modRoot);
+    for (const dir of deps.skipped) this.log(`tiger: dependency mod skipped (no descriptor found): ${dir}`);
+    if (deps.conf === "") return [];
+    // Stable per-mod temp path: rewritten each run, never accumulates.
+    const hash = crypto.createHash("sha1").update(modRoot.toLowerCase()).digest("hex").slice(0, 8);
+    const tmp = path.join(os.tmpdir(), "px-toolkit", `${hash}-${meta.tiger.confName}`);
+    try {
+      fs.mkdirSync(path.dirname(tmp), { recursive: true });
+      fs.writeFileSync(
+        tmp,
+        `# Generated per run by the Paradox Toolkit extension: dependency mods of ${modRoot}\n${deps.conf}`,
+        "utf8"
+      );
+    } catch (err) {
+      this.log(
+        `tiger: could not write the dependency conf (${String(err)}); running without dependency mods`
+      );
+      return [];
+    }
+    this.log(`tiger: loading ${deps.loaded.length} dependency mod(s) via ${tmp}`);
+    return ["--config", tmp];
+  }
+
   onDidSaveDocument(doc: vscode.TextDocument): void {
     const cfg = this.getConfig();
     if (!this.tigerExists()) return;
@@ -179,7 +217,7 @@ export class TigerRunner implements vscode.Disposable {
       return;
     }
 
-    const args = ["--json", ...this.extraArgs(modRoot)];
+    const args = ["--json", ...this.configArgs(cfg, modRoot), ...this.extraArgs(modRoot)];
     if (cfg.gamePath) {
       // tiger's game flag (--ck3 / --vic3, matching the profile id) wants the
       // install root (".../<game name>"), while the resolved gamePath points at
@@ -260,7 +298,9 @@ export class TigerRunner implements vscode.Disposable {
         resolve(null);
         return;
       }
-      const args = ["--json"];
+      // Same dependency wiring as diagnostic runs: a baseline created without
+      // the dependency mods would suppress the wrong report set.
+      const args = ["--json", ...this.configArgs(cfg, cfg.modPath)];
       if (cfg.gamePath) {
         const gameDir =
           path.basename(cfg.gamePath).toLowerCase() === "game" ? path.dirname(cfg.gamePath) : cfg.gamePath;
