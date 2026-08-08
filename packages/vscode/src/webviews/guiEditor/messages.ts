@@ -26,10 +26,20 @@
  * server's own vocabulary, and one relay message for all of them keeps the host
  * thin. The two rules are untouched by that: the app still computes no edits
  * and no layout, and the host still owns the text.
+ *
+ * G5 stage 2 is the devtools halo, the browsers and the saved user data. It
+ * adds a THIRD thing a host owns, alongside the text and the textures: PER-USER
+ * STATE. A visibility mode, a saved component and a property preset are none of
+ * them in the document and none of them the server's, so the app holds no copy
+ * it could disagree with — it asks, the host answers, and the host is where the
+ * state survives the panel being closed.
  */
 import type {
+  GuiDependenciesResult,
   GuiLayoutResult,
   GuiSourceOp,
+  GuiVisibilityMode,
+  GuiVisibilityOptions,
   GuiVocabularyEntry,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
@@ -38,6 +48,34 @@ import type {
 export interface EditProperty {
   key: string;
   value: string;
+}
+
+/** One `.dds` the texture browser offers, as the engine would read it. */
+export interface TextureEntry {
+  /**
+   * Root-relative, forward slashes, exactly the string a `texture = "…"` takes
+   * (`gfx/interface/icons/foo.dds`). The host walks the roots; the app never
+   * builds one of these out of a file system path.
+   */
+  path: string;
+  /** Which root it came from, so an override can be told from the original. */
+  source: "mod" | "game";
+}
+
+/**
+ * A selection saved for reuse, host-side. The app never sees the block text: it
+ * is the document's bytes, which are the host's, exactly like the clipboard.
+ */
+export interface SavedComponent {
+  name: string;
+  /** How many top-level widgets the saved text holds, for the row's label. */
+  widgets: number;
+}
+
+/** A named bundle of property writes, applied as ONE batched `setProperties`. */
+export interface SavedPreset {
+  name: string;
+  properties: EditProperty[];
 }
 
 /** Messages the editor app sends UP to its host. */
@@ -49,8 +87,15 @@ export type AppToHost =
   /**
    * The selection moved to the widget declared on `line` (the layout node's own
    * 0-based line). The host answers with `widgetInfo` for the same line.
+   *
+   * `placement` asks for the "why is it here" trace as well
+   * (`GuiWidgetInfoParams.placement`), which costs a full layout of the
+   * document server side. The app sets it ONLY while the panel that reads it is
+   * open, so an inspector-only selection never pays for it, and it is a flag on
+   * this message rather than a second request because two answers echoing the
+   * same line would race and the plainer one could land last.
    */
-  | { type: "requestWidgetInfo"; line: number }
+  | { type: "requestWidgetInfo"; line: number; placement?: boolean }
   /** Show the widget's declaration in the host's text editor. */
   | { type: "reveal"; line: number }
   /**
@@ -135,7 +180,68 @@ export type AppToHost =
    * while it is open, because a document's own templates and types change as it
    * is edited. The host answers `vocabulary`.
    */
-  | { type: "requestVocabulary" };
+  | { type: "requestVocabulary" }
+  /**
+   * Lay the document out in this conditional-visibility mode from now on
+   * (`GuiLayoutParams.visibility`), and REMEMBER it for this document: a widget
+   * the user hid must still be hidden when they come back to the file, and a
+   * mode that reset on reopen would make a missing widget a mystery.
+   *
+   * The host answers by pushing a fresh `layout`, whose `visibility` field
+   * echoes what it stored. There is no separate verdict: the layout IS the
+   * answer, and a mode change writes nothing to the document.
+   */
+  | { type: "setVisibility"; mode: GuiVisibilityMode; checks?: Record<string, boolean> }
+  /**
+   * What the document (or one widget's source subtree) reaches on the script
+   * side: `paradox/guiDependencies` for `line`, or for the whole file when it
+   * is absent. The host answers `dependencies`, ECHOING the line for the same
+   * reason `widgetInfo` does.
+   */
+  | { type: "requestDependencies"; line?: number }
+  /**
+   * Show `file`'s `line` in the host's text editor, the way `reveal` shows the
+   * edited document's. A dependency row points at a scripted_gui, an event or a
+   * loc key, and none of those live in the .gui file being edited, which is why
+   * this is a second message rather than a field on `reveal`: a host that
+   * ignored an unknown file would silently reveal the wrong line.
+   */
+  | { type: "revealAt"; file: string; line: number }
+  /**
+   * The `.dds` files under the mod's and the game's `gfx/` trees whose path
+   * contains `query`. The host walks the roots (bounded, lazily, cached) and
+   * answers `textureList`; the app never touches a file system path and never
+   * builds a texture value out of one.
+   */
+  | { type: "requestTextureList"; query: string }
+  /**
+   * Thumbnails for the rows currently on screen, through the host's existing
+   * texture pipeline and its cache. Sent for a bounded page, never for a whole
+   * listing: decoding a game's entire gfx tree to draw a scrollable list is the
+   * cost this message exists to avoid. The host answers `thumbnails`.
+   */
+  | { type: "requestThumbnails"; paths: string[] }
+  /** The user's saved components and presets. The host answers `userData`. */
+  | { type: "requestUserData" }
+  /**
+   * Save the widgets on those lines as a named component: the host reads their
+   * verbatim blocks (a `blockText` op each, one batch, like `copyBlocks`) and
+   * keeps the TEXT, not a rendering of it. Answer `editVerdict` for `id`, then
+   * push `userData`. An existing name is overwritten, which is what "save as"
+   * means everywhere else.
+   */
+  | { type: "saveComponent"; id: number; name: string; lines: number[] }
+  /**
+   * Insert a saved component into the widget on `line`, at `index` among its
+   * source children (absent appends). The host sends its stored text as one
+   * `insertRaw` op: same verdict-then-layout contract as `pasteInto`, and a
+   * component the host no longer has is a refusal, not silence.
+   */
+  | { type: "insertComponent"; id: number; name: string; line: number; index?: number }
+  /** Remember these properties under a name. The host answers by pushing `userData`. */
+  | { type: "savePreset"; name: string; properties: EditProperty[] }
+  /** Forget a saved component or preset. The host answers by pushing `userData`. */
+  | { type: "forgetSaved"; kind: "component" | "preset"; name: string };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =
@@ -151,6 +257,14 @@ export type HostToApp =
        * load, or null when it could not be resolved or decoded.
        */
       textures: Record<string, string | null>;
+      /**
+       * The conditional-visibility options this layout was computed with, as
+       * the host has them stored for this document. Absent means the default
+       * (`showAll`). It rides on the layout rather than being pushed separately
+       * because it is a property OF this layout: the app shows the mode
+       * indicator next to a canvas that was actually laid out that way.
+       */
+      visibility?: GuiVisibilityOptions;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an
@@ -185,6 +299,27 @@ export type HostToApp =
    * real count behind a capped list, so the panel can say what it hid.
    */
   | { type: "vocabulary"; entries: GuiVocabularyEntry[]; total: number }
+  /**
+   * Answer to `requestDependencies`. `line` is echoed (absent for a
+   * whole-document answer) so the app can drop an answer the selection has
+   * moved past; `result` is null when the host could not ask.
+   */
+  | { type: "dependencies"; line?: number; result: GuiDependenciesResult | null }
+  /**
+   * Answer to `requestTextureList`: the matches, capped, with `total` giving
+   * the real count so the panel can say what it hid. `roots` is false when the
+   * host has no mod or game folder configured, which is a different thing from
+   * a query that matched nothing and is said differently.
+   */
+  | { type: "textureList"; entries: TextureEntry[]; total: number; roots: boolean }
+  /** Answer to `requestThumbnails`: each asked path mapped to a URL, or null. */
+  | { type: "thumbnails"; urls: Record<string, string | null> }
+  /**
+   * The user's saved components and presets, pushed after every change to them
+   * and in answer to `requestUserData`. There is no built-in content: a host
+   * with nothing stored answers with two empty lists, and the panel says so.
+   */
+  | { type: "userData"; components: SavedComponent[]; presets: SavedPreset[] }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 
