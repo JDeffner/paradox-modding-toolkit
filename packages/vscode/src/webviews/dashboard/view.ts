@@ -7,6 +7,12 @@ import { isCk3, metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 
+/** The three collapsible sections, in render order. */
+type SectionId = "mods" | "toggles" | "tools";
+
+/** workspaceState key holding the per-section collapse flags (absent = expanded). */
+const COLLAPSED_KEY = "px.dashboardCollapsed";
+
 /** Messages the webview sends to the host. */
 type InboundMessage =
   | { type: "ready" }
@@ -15,7 +21,8 @@ type InboundMessage =
   | { type: "exclude"; root: string; excluded: boolean }
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
   | { type: "watcher" }
-  | { type: "baseline" };
+  | { type: "baseline" }
+  | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
 type OutboundMessage = { type: "state"; state: DashboardState };
@@ -48,6 +55,8 @@ interface DashboardState {
   scopeInlayHints: boolean;
   /** Game-aware launcher groups (per-game labels, CK3-only tutorial). */
   actions: ActionGroup[];
+  /** Persisted per-section collapse flags; every section defaults to expanded. */
+  collapsed: Record<SectionId, boolean>;
 }
 
 export interface DashboardDeps {
@@ -58,10 +67,14 @@ export interface DashboardDeps {
 }
 
 /**
- * The command launchers the old Tools tree offered, hints moved into tooltips.
- * Built per game: labels carry the active game's name, and CK3-only content
- * (the tutorial) is absent elsewhere. Tiger runs and the error.log watcher are
- * NOT here — the status bar owns tiger, and the watcher is a toggle above.
+ * Command launchers that have no button of their own anywhere else in the UI.
+ * Anything reachable from an editor-title button, a view-title button or the
+ * status bar is deliberately absent: tiger (status bar), the GUI tree, the GUI
+ * editor and the event graph (editor title), Add Language (Localization
+ * Coverage view title), Format Docs (editor title), Simulate Event (editor
+ * context menu). Built per game: labels carry the active game's name, and
+ * CK3-only content (the tutorial) is absent elsewhere. The error.log watcher is
+ * a toggle above, not a launcher.
  */
 function actionGroups(meta: GameMeta): ActionGroup[] {
   return [
@@ -79,12 +92,6 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
     {
       label: "Localization",
       items: [
-        {
-          label: "Add Language",
-          command: "px.createTranslation",
-          icon: "globe",
-          tip: "Scaffold localization files for another language from your existing keys.",
-        },
         {
           label: "Translate Missing Keys",
           command: "px.translateNext",
@@ -115,40 +122,10 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
       label: "Inspect",
       items: [
         {
-          label: "Event Graph",
-          command: "px.showEventGraph",
-          icon: "graph",
-          tip: "Interactive graph of your event chains: triggers, options, follow-ups.",
-        },
-        {
-          label: "Simulate Event",
-          command: "px.simulateEvent",
-          icon: "sim",
-          tip: "Walk one event step by step: which triggers pass, which options show, where each leads.",
-        },
-        {
-          label: "GUI Widget Tree",
-          command: "px.showGuiTree",
-          icon: "tree",
-          tip: "Widget hierarchy of the active .gui file. Open a .gui file first.",
-        },
-        {
-          label: "GUI Layout Preview",
-          command: "px.showGuiPreview",
-          icon: "layout",
-          tip: "Approximate layout render of the active .gui file. Open a .gui file first.",
-        },
-        {
           label: "Mod Report",
           command: "px.modReport",
           icon: "report",
           tip: "Summary of the focused mod: content counts, localization coverage, problems.",
-        },
-        {
-          label: "Format Docs (.info)",
-          command: "px.openInfoDocs",
-          icon: "info",
-          tip: "Paradox's own format documentation for the kind of file you are editing.",
         },
       ],
     },
@@ -184,19 +161,13 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
 /** 16×16 stroke icons (currentColor), hand-kept so the webview stays asset-free. */
 const ICONS = {
   plus: '<path d="M8 3.5v9M3.5 8h9"/>',
-  globe:
-    '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2.3 2.7 2.3 9.3 0 12M8 2c-2.3 2.7-2.3 9.3 0 12"/>',
   arrowRight: '<path d="M2.5 8h10M9 4.5 12.5 8 9 11.5"/>',
   clone: '<rect x="2.5" y="2.5" width="8" height="8" rx="1"/><path d="M5.5 13.5h7a1 1 0 0 0 1-1v-7"/>',
   image:
     '<rect x="2" y="3" width="12" height="10" rx="1"/><circle cx="5.5" cy="6.5" r="1"/><path d="M4 12l3-3 2 2 2.5-2.5L14 11"/>',
   book: '<path d="M8 4C6.4 3 4.4 3 2.5 3.5v9C4.4 12 6.4 12 8 13c1.6-1 3.6-1 5.5-.5v-9C11.6 3 9.6 3 8 4Zm0 0v9"/>',
-  graph:
-    '<circle cx="8" cy="3.5" r="1.7"/><circle cx="3.8" cy="12" r="1.7"/><circle cx="12.2" cy="12" r="1.7"/><path d="M7.2 5 4.6 10.5M8.8 5l2.6 5.5"/>',
-  sim: '<path d="M3 3.5h6M3 7h4M3 10.5h4"/><path d="M9.5 6.5v6l5-3z" fill="currentColor" stroke="none"/>',
-  tree: '<path d="M4.5 3v7.5A1.5 1.5 0 0 0 6 12h2.5M4.5 6.5H8"/><circle cx="4.5" cy="3" r="1.4"/><circle cx="10" cy="6.5" r="1.4"/><circle cx="10.5" cy="12" r="1.4"/>',
-  layout: '<rect x="2" y="2.5" width="12" height="11" rx="1"/><path d="M2 5.5h12M6 5.5V13.5"/>',
   report: '<rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3"/>',
+  chevron: '<path d="M6 3.5 10.5 8 6 12.5"/>',
   info: '<circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r=".5" fill="currentColor"/>',
   play: '<path d="M5.5 3.8v8.4L12.5 8Z" fill="currentColor" stroke="none"/>',
   check: '<path d="M8 2 13 4v4.3c0 3-2 5.2-5 5.7-3-.5-5-2.7-5-5.7V4Z"/><path d="M5.8 8.1l1.6 1.6 3-3.2"/>',
@@ -268,6 +239,16 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
       actions: actionGroups(meta),
+      collapsed: this.collapsedState(),
+    };
+  }
+
+  private collapsedState(): Record<SectionId, boolean> {
+    const stored = this.deps.workspaceState.get<Partial<Record<SectionId, boolean>>>(COLLAPSED_KEY);
+    return {
+      mods: stored?.mods === true,
+      toggles: stored?.toggles === true,
+      tools: stored?.tools === true,
     };
   }
 
@@ -309,6 +290,13 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "baseline":
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
         this.refresh();
+        return;
+      case "collapse":
+        // The webview already moved; persist only, no state push back.
+        await this.deps.workspaceState.update(COLLAPSED_KEY, {
+          ...this.collapsedState(),
+          [msg.section]: msg.collapsed,
+        });
         return;
     }
   }
@@ -375,12 +363,23 @@ function escapeAttr(s: string): string {
 }
 
 /**
- * The static shell: toggle rows and containers; the mod list and the
- * game-aware action groups are rendered by script from the pushed state.
+ * The static shell: section frames, toggle rows and containers; the mod list
+ * and the game-aware action groups are rendered by script from the pushed
+ * state.
  */
 function buildHtml(): string {
   const nonce = makeNonce();
   const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`].join("; ");
+
+  // The hint icon sits beside the collapse button, not inside it: a focusable
+  // element nested in a button swallows its own hover/focus.
+  const sectionHead = (id: SectionId, title: string, tip?: string): string =>
+    `<div class="section-head">
+      <button class="section-toggle" data-section="${id}" aria-expanded="true" aria-controls="body-${id}">
+        ${icon("chevron", "chevron")}<span class="section-title">${title}</span>
+      </button>
+      ${tip ? infoIcon(tip) : ""}
+    </div>`;
 
   const toggleRow = (id: string, label: string, tip: string): string =>
     `<div class="row toggle-row" data-toggle="${id}">
@@ -402,21 +401,36 @@ function buildHtml(): string {
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; padding: 0;
+    margin: 0; padding: 0; min-height: 100%;
     font-family: var(--vscode-font-family, sans-serif);
     font-size: var(--vscode-font-size, 13px);
-    color: var(--vscode-sideBar-foreground, var(--vscode-foreground));
-    background: transparent;
+    /* Editor colors, not sidebar ones: the view should read like the other
+       tabs, and the vars retheme themselves when the color theme changes. */
+    color: var(--vscode-editor-foreground, var(--vscode-foreground));
+    background: var(--vscode-editor-background);
     -webkit-user-select: none; user-select: none;
   }
-  .section { padding: 2px 8px 8px; }
-  .section + .section { border-top: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.2)); }
-  h3 {
-    display: flex; align-items: center; gap: 5px;
-    margin: 8px 4px 4px; font-size: 11px; font-weight: 600;
+  .section { padding: 0 8px 8px; }
+  .section.collapsed { padding-bottom: 2px; }
+  .section + .section { border-top: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,0.2)); }
+  .section-head { display: flex; align-items: center; gap: 5px; margin: 8px 4px 4px; }
+  .section-toggle {
+    display: flex; align-items: center; gap: 3px; flex: 0 1 auto;
+    margin: 0; padding: 0; border: none; background: none; cursor: pointer;
+    font-family: inherit; font-size: 11px; font-weight: 600;
     letter-spacing: .05em; text-transform: uppercase;
     color: var(--vscode-descriptionForeground);
   }
+  .section-toggle:hover { color: var(--vscode-foreground); }
+  .section-toggle:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4); outline-offset: 2px; border-radius: 3px;
+  }
+  .chevron {
+    width: 14px; height: 14px; flex: 0 0 auto; margin-left: -3px;
+    transform: rotate(90deg); transition: transform .12s ease;
+  }
+  .section.collapsed .chevron { transform: rotate(0deg); }
+  .section.collapsed .section-body { display: none; }
   .row {
     display: flex; align-items: center; gap: 7px;
     min-height: 24px; padding: 2px 6px; border-radius: 4px;
@@ -500,38 +514,42 @@ function buildHtml(): string {
 </style>
 </head>
 <body>
-<div class="section" id="mods-section">
-  <h3>Workspace Mods ${infoIcon(
+<div class="section" id="section-mods">
+  ${sectionHead(
+    "mods",
+    "Workspace Mods",
     "Every mod detected in this workspace. Indexed mods are treated as yours: completion, navigation, diagnostics and the localization tools work across all of them. The filled dot marks the mod the sidebar views describe."
-  )}</h3>
-  <div id="mods"></div>
+  )}
+  <div class="section-body" id="body-mods"><div id="mods"></div></div>
 </div>
-<div class="section">
-  <h3>Toggles</h3>
-  ${toggleRow(
-    "baseline",
-    "Tiger: new problems only",
-    "Hide every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot via the 'Create Baseline' command."
-  )}
-  ${toggleRow(
-    "watcher",
-    "Watch game error.log",
-    "Tail the game's error.log while it runs and surface new entries as Problems on your mod files. Launch the game in debug mode for live script reloads."
-  )}
-  ${toggleRow(
-    "vanilla",
-    "Diagnose vanilla files",
-    "Also diagnose files under the game folder. Off: only your mod files are checked."
-  )}
-  ${toggleRow(
-    "inlay",
-    "Scope inlay hints",
-    "Show the inferred scope (e.g. character) after scope-changing block openers like every_vassal = {. Best-effort inference, display only."
-  )}
+<div class="section" id="section-toggles">
+  ${sectionHead("toggles", "Toggles")}
+  <div class="section-body" id="body-toggles">
+    ${toggleRow(
+      "baseline",
+      "Tiger: new problems only",
+      "Hide every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot via the 'Create Baseline' command."
+    )}
+    ${toggleRow(
+      "watcher",
+      "Watch game error.log",
+      "Tail the game's error.log while it runs and surface new entries as Problems on your mod files. Launch the game in debug mode for live script reloads."
+    )}
+    ${toggleRow(
+      "vanilla",
+      "Diagnose vanilla files",
+      "Also diagnose files under the game folder. Off: only your mod files are checked."
+    )}
+    ${toggleRow(
+      "inlay",
+      "Scope inlay hints",
+      "Show the inferred scope (e.g. character) after scope-changing block openers like every_vassal = {. Best-effort inference, display only."
+    )}
+  </div>
 </div>
-<div class="section">
-  <h3>Tools</h3>
-  <div id="tools"></div>
+<div class="section" id="section-tools">
+  ${sectionHead("tools", "Tools", "Commands with no button of their own elsewhere in the UI.")}
+  <div class="section-body" id="body-tools"><div id="tools"></div></div>
 </div>
 <div id="tip" role="tooltip"></div>
 <script nonce="${nonce}">
@@ -587,6 +605,22 @@ document.addEventListener("focusin", (e) => {
   if (t) showTip(t);
 });
 document.addEventListener("focusout", hideTip);
+
+// ---- collapsible sections (state persisted host-side in workspaceState) ----
+function setCollapsed(id, collapsed) {
+  const section = document.getElementById("section-" + id);
+  if (!section) return;
+  section.classList.toggle("collapsed", collapsed);
+  section.querySelector(".section-toggle").setAttribute("aria-expanded", String(!collapsed));
+}
+for (const btn of document.querySelectorAll(".section-toggle")) {
+  btn.addEventListener("click", () => {
+    const id = btn.getAttribute("data-section");
+    const collapsed = !document.getElementById("section-" + id).classList.contains("collapsed");
+    setCollapsed(id, collapsed);
+    vscode.postMessage({ type: "collapse", section: id, collapsed });
+  });
+}
 
 // ---- switches ----
 const SWITCH_MSG = {
@@ -740,6 +774,7 @@ function renderMods() {
 function render() {
   renderMods();
   renderActions();
+  for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
   document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
   setSwitch("baseline", state.tigerBaseline, false);
   setSwitch("watcher", state.watcherOn, !state.watcherAvailable,
