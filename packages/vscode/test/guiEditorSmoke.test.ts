@@ -697,6 +697,43 @@ describe("the layers panel", () => {
     expect(editor.sent.filter((m) => m.type === "reorder")).toHaveLength(1);
   });
 
+  it("a declaration between the children shifts the index the drag sends", () => {
+    // The blockoverride is a source child with no layout node, so the widgets
+    // are at source indices 0 and 2. A drag that ranked the visible rows would
+    // send to = 1 and land the widget ABOVE the blockoverride; the server's own
+    // srcIndex is what makes the drop mean what the user aimed at.
+    const withSlot = [
+      "widget = {",
+      '\tname = "px_slot_root"',
+      "\tsize = { 400 300 }",
+      '\twidget = { name = "px_slot_a" position = { 0 0 } size = { 40 40 } }',
+      '\tblockoverride "px_named_slot" {}',
+      '\twidget = { name = "px_slot_b" position = { 0 100 } size = { 40 40 } }',
+      "}",
+      "",
+    ].join("\n");
+    openDoc(withSlot, "named-slot.gui");
+    editor.click(20, 20);
+    expect(editor.selectedRow()).toContain("px_slot_a");
+
+    const source = editor.layer("px_slot_a");
+    editor.rowPointer(source, "pointerdown", { x: 0, y: 0 });
+    editor.rowPointer(source, "pointermove", { x: 0, y: 20 });
+    serveEdits();
+    editor.rowPointer(editor.layer("px_slot_b"), "pointermove", { x: 0, y: 60 });
+    editor.releasePointer();
+
+    const reorder = lastOfType(editor, "reorder")!;
+    expect([reorder.from, reorder.to]).toEqual([0, 2]);
+    serveEdits();
+    // Below the second widget, and the blockoverride keeps its own slot.
+    expect(orderIn(doc, ["px_slot_a", "px_named_slot", "px_slot_b"])).toEqual([
+      "px_named_slot",
+      "px_slot_b",
+      "px_slot_a",
+    ]);
+  });
+
   it("a reorder the writer turns down is shown in the writer's own words", () => {
     // Two declarations sharing a line: the blocks are not separable, so the
     // permutation the op would need does not exist.

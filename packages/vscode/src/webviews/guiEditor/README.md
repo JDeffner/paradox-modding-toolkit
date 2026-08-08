@@ -96,17 +96,21 @@ Three cases are easy to get wrong and are worth stating:
    ahead and was only half honoured (a container owning one axis of a resize).
    The app shows it and keeps the result.
 
-### The one thing a reorder index cannot say yet
+### Where a reorder index comes from
 
-`reorder`'s `from` and `to` count the container's SOURCE children, and the app
-derives them by ranking the container's children that carry a `line` in this
-document. That is exact whenever a container's body holds widgets and
-properties, which is nearly always. It is off by one per intervening
-declaration when the body ALSO holds `block` / `blockoverride` declarations
-between its widget children, because those have no layout node and the app
-cannot see them. The fix is server-side and small (a source-child index on
-`GuiLayoutNode`); until it lands, the app never guesses beyond this and a wrong
-permutation is one undo step, visible immediately in the re-laid-out tree.
+`reorder`'s `from` and `to` count the container's SOURCE children, which are its
+DECLARATIONS: widget children and the `block` / `blockoverride` / `template`
+entries alongside them, properties excluded. Those declarations have no layout
+node, so an app that ranked the children it can see would be off by one per
+intervening one. It does not: the server puts the real index on the node
+(`GuiLayoutNode.srcIndex`), the app carries it through the scene and the layers
+panel translates a dropped RANK into an op index (`app/layers.ts` `reorderTo`).
+
+`srcIndex` is ABSENT wherever no index names the widget: a template- or
+type-spliced child, a datamodel ghost, the contents of a named slot, and a
+scrollarea's pass-through children (their ranks count the `scrollwidget`'s body,
+not the scrollarea's). A host must treat absent as "cannot be reordered" and
+never count one up for it; the app greys the grip and drops nothing there.
 
 ## What the page must provide
 

@@ -30,6 +30,7 @@
  */
 import { LineIndex, parseScript, type BlockNode, type ScalarNode, type Statement } from "../parser";
 import { collectBlockOverrides, collectGuiDefs, emptyGuiDefs, expandWidget, type GuiDefs } from "./guiDefs";
+import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -121,6 +122,18 @@ export interface LayoutNode {
   srcPosition?: [number, number];
   /** Raw `size = { w h }` source values, when present (may be % — see sizePct). */
   srcSize?: [number, number];
+  /**
+   * The widget's index among its parent body's REORDER SIBLINGS, which is what
+   * a `reorder`, `insert` or `delete` op counts: the body's declarations, the
+   * `blockoverride`/`block`/`template` entries included, properties excluded
+   * (sourceModel.ts `GuiBody.children`). Absent for anything whose statement is
+   * not a direct entry of a body in THIS document: a template- or type-spliced
+   * child, a datamodel ghost, the contents of a named slot, and a scrollarea's
+   * pass-through children, whose indices count a body their new parent does not
+   * own. Absent means "not addressable by index", which is the only honest
+   * answer a client can act on.
+   */
+  srcIndex?: number;
   /**
    * True for placeholder copies of a datamodel item template: the list has no
    * real runtime data in the preview, so GHOST_COUNT reduced-opacity instances
@@ -372,6 +385,8 @@ interface WNode {
   consts: Map<string, number>;
   line?: number;
   ownLine: boolean; // line points at this widget's own statement
+  /** Rank among the parent body's reorder siblings; see LayoutNode.srcIndex. */
+  srcIndex?: number;
   /** Resolved once in the build phase, per the request's visibility mode. */
   invisible: boolean;
   bg?: Fill;
@@ -506,7 +521,14 @@ interface BuildCtx {
  */
 const SKIP_SUBTREES = new Set(["tooltipwidget"]);
 
-function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number, ownLine = false): WNode {
+function buildWNode(
+  key: string,
+  block: BlockNode,
+  ctx: BuildCtx,
+  line?: number,
+  ownLine = false,
+  srcIndex?: number
+): WNode {
   const lower = key.toLowerCase();
   // Cycle/depth guard: a TYPE instantiated inside its own expansion gets no
   // type expansion (instance statements + templates only), which breaks
@@ -526,6 +548,7 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
     consts: ctx.consts,
     line,
     ownLine,
+    srcIndex,
     invisible: false,
     children: [],
   };
@@ -533,6 +556,10 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
   const rootOverrides = new Map(collectBlockOverrides(statements));
   for (const [k, v] of ctx.overrides) rootOverrides.set(k, v);
   const childStack = isType ? [...ctx.stack, lower] : ctx.stack;
+  // The reorder ranks of this instance's OWN body. Statements spliced in from a
+  // type, a template or a named slot are not in it, so they get no srcIndex:
+  // their index would count a body that is not the one the client would address.
+  const ranks = siblingRanks(block.statements);
 
   // `ov` is threaded explicitly: an override is CONSUMED when applied, so a
   // block re-declaring its own name inside override content (vanilla's
@@ -592,6 +619,10 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
             overrides: ov,
             stack: childStack,
           });
+          // Adopted by the scrollarea, so their ranks count a body the client
+          // could not address: an index into the scrollwidget's children read
+          // as an index into the scrollarea's would move the wrong block.
+          for (const c of inner.children) c.srcIndex = undefined;
           node.children.push(...inner.children);
         } else if (PROPERTY_BLOCKS.has(k)) {
           node.pairs.set(k, numbersIn(child, ctx.consts));
@@ -620,7 +651,8 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
               child,
               { ...ctx, overrides: ov, stack: childStack },
               childLine,
-              inInstance
+              inInstance,
+              ranks.get(stmt)
             )
           );
         }
@@ -787,6 +819,7 @@ function borderTuple(
 
 function collectWidgets(statements: Statement[], ctx: BuildCtx): WNode[] {
   const out: WNode[] = [];
+  const ranks = siblingRanks(statements);
   let isDecl = false;
   for (const stmt of statements) {
     if (stmt.kind === "value") {
@@ -804,9 +837,48 @@ function collectWidgets(statements: Statement[], ctx: BuildCtx): WNode[] {
     const k = stmt.key.text.toLowerCase();
     if (PROPERTY_BLOCKS.has(k)) continue;
     if (k.startsWith("@")) continue;
-    out.push(buildWNode(stmt.key.text, block, ctx, ctx.lineOf(stmt.key.range.start), true));
+    out.push(
+      buildWNode(stmt.key.text, block, ctx, ctx.lineOf(stmt.key.range.start), true, ranks.get(stmt))
+    );
   }
   return out;
+}
+
+/**
+ * Every DECLARATION entry of one body, ranked by the index a `reorder`,
+ * `insert` or `delete` op counts in. That list is `GuiBody.children` in
+ * `sourceModel.ts`: widgets AND decl entries, properties skipped. The marker
+ * set and the attribute-block set are the shared ones, so the writer's list and
+ * this ranking cannot drift; a `blockoverride` between two widget children
+ * takes a slot here exactly as it does there, which is what a client counting
+ * only the widgets it can see gets wrong.
+ *
+ * Only widget entries end up in the map — a decl has no layout node to carry a
+ * rank — but every decl still advances the counter.
+ */
+function siblingRanks(statements: readonly Statement[]): Map<Statement, number> {
+  const ranks = new Map<Statement, number>();
+  let marker = false;
+  let next = 0;
+  for (const stmt of statements) {
+    if (stmt.kind === "value") {
+      marker = stmt.value.kind === "scalar" && DECL_MARKERS.has(stmt.value.text.toLowerCase());
+      continue;
+    }
+    const declared = marker;
+    marker = false;
+    // `blockoverride = "name" { ... }`: the second vanilla spelling of a slot,
+    // one assignment the writer reads as a declaration.
+    const slotForm = stmt.value?.kind === "tagged-block" && SLOT_KEYS.has(stmt.key.text.toLowerCase());
+    if (declared || slotForm) {
+      next++;
+      continue;
+    }
+    const key = stmt.key.text.toLowerCase();
+    if (!blockOf(stmt) || PROPERTY_BLOCKS.has(key) || key.startsWith("@")) continue;
+    ranks.set(stmt, next++);
+  }
+  return ranks;
 }
 
 // ---------------------------------------------------------------------------
@@ -1134,6 +1206,9 @@ function arrange(
     editable: node.ownLine && node.line !== undefined && !node.ghost,
     srcPosition: srcPosition && srcPosition.length >= 2 ? [srcPosition[0], srcPosition[1]] : undefined,
     srcSize: srcSize && srcSize.length >= 2 ? [srcSize[0], srcSize[1]] : undefined,
+    // A ghost's statements exist, but the copies are placeholders: no index of
+    // theirs names a slot a client could move.
+    srcIndex: node.ghost ? undefined : node.srcIndex,
     ghost: node.ghost ? true : undefined,
     children: [],
   };

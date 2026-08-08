@@ -718,6 +718,69 @@ widget = { size = { 300 200 }
   });
 });
 
+/**
+ * `srcIndex` is the widget's index in the WRITER's sibling list
+ * (`sourceModel.ts` `GuiBody.children`), which is what a reorder/insert/delete
+ * op counts. The two lists are ranked from one shared marker set, so this is
+ * where they are held to each other: a client that counted the widgets it can
+ * see would be off by one per declaration between them.
+ */
+describe("source indices address the writer's own sibling list", () => {
+  it("a blockoverride between two children takes a slot the preview cannot see", () => {
+    const root = lay(`
+widget = {
+	size = { 300 200 }
+	name = "px_srcindex_root"
+	widget = { name = "px_first" size = { 10 10 } }
+	blockoverride "slot_a" {}
+	widget = { name = "px_second" size = { 10 10 } }
+	blockoverride = "slot_b" {}
+	widget = { name = "px_third" size = { 10 10 } }
+}`);
+    // 0, 2, 4: the two blockoverrides (the marker form and the tagged-block
+    // form vanilla also writes) each hold a slot, and `name` / `size` do not.
+    expect(root.children.map((c) => c.srcIndex)).toEqual([0, 2, 4]);
+    expect(root.srcIndex).toBe(0);
+  });
+
+  it("nothing without an addressable slot carries one", () => {
+    const defs = collectGuiDefs(`
+types PxIdxTypes {
+	type px_idx_card = widget {
+		size = { 40 40 }
+		widget = { name = "px_idx_spliced" size = { 5 5 } }
+	}
+}`);
+    const nodes = computeGuiLayout(
+      `
+types PxIdxLocal {}
+window = {
+	size = { 300 200 }
+	px_idx_card = { name = "px_idx_use" }
+	scrollarea = {
+		size = { 100 100 }
+		scrollwidget = {
+			widget = { name = "px_idx_scrolled" size = { 5 5 } }
+		}
+	}
+}`,
+      { viewport: { w: 1000, h: 1000 }, defs }
+    );
+    // The root's own list counts the `types` declaration, so the window is 1.
+    expect(nodes[0].srcIndex).toBe(1);
+    const [use, scroll] = nodes[0].children;
+    expect(use.srcIndex).toBe(0);
+    expect(scroll.srcIndex).toBe(1);
+    // Spliced from the type: no statement here, so no index names it.
+    expect(use.children[0].name).toBe("px_idx_spliced");
+    expect(use.children[0].srcIndex).toBeUndefined();
+    // Adopted from the scrollwidget: its rank counts a body the scrollarea
+    // does not own, so the wire carries none rather than a wrong one.
+    expect(scroll.children[0].name).toBe("px_idx_scrolled");
+    expect(scroll.children[0].srcIndex).toBeUndefined();
+  });
+});
+
 describe("render info", () => {
   it("extracts background and icon fills with raw color values", () => {
     const root = lay(`

@@ -505,6 +505,19 @@ export interface GuiLayoutNode {
   /** Raw `size = { w h }` source values, when present. */
   srcSize?: [number, number];
   /**
+   * The widget's index among its parent body's REORDER SIBLINGS: exactly the
+   * index a `reorder`, `insert` or `delete` op counts (see {@link GuiSourceOp}).
+   * Those are the body's DECLARATIONS, which include the `blockoverride` /
+   * `block` / `template` entries a preview never shows, so a client that ranks
+   * the widgets it can see is off by one per intervening declaration.
+   *
+   * Absent whenever no index names the node: a template- or type-spliced child,
+   * a datamodel ghost, the contents of a named slot, and a scrollarea's
+   * pass-through children, whose ranks count a body their drawn parent does not
+   * own. Absent means "not addressable by index"; do not fall back to counting.
+   */
+  srcIndex?: number;
+  /**
    * Placeholder copy of a datamodel item template (the list has no runtime
    * rows in a static preview). The renderer draws it at reduced opacity; it is
    * never editable. Presentation only, not a measured layout rule.

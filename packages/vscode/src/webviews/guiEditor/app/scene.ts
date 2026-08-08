@@ -97,6 +97,13 @@ export interface SceneItem {
    */
   srcPosition?: [number, number];
   srcSize?: [number, number];
+  /**
+   * The widget's index among its parent body's source children, the index a
+   * `reorder` / `insert` / `delete` op counts. The server sets it only where an
+   * index names something (`GuiLayoutNode.srcIndex`); absent means the widget
+   * has no addressable slot, and nothing here counts one up for it.
+   */
+  srcIndex?: number;
 }
 
 export interface SceneTextLine {
@@ -185,6 +192,7 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
       editable: node.editable,
       srcPosition: node.srcPosition,
       srcSize: node.srcSize,
+      srcIndex: node.srcIndex,
     });
     // A clipping widget clips its CHILDREN; its own fill is drawn against the
     // clip it inherited (the engine keeps true geometry and flags the clip,

@@ -40,7 +40,7 @@ import { hitRect, hitStack, nextInStack } from "./hitTest";
 import { indexOfSelection, selectionAt, type Selection } from "./selection";
 import { ancestorKeys, rowKey, treeRows } from "./tree";
 import { inspectorRows, widgetTitle, type InspectorRow } from "./inspector";
-import { boxAxis, dropRank, layerRows, type LayerRow } from "./layers";
+import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
 import { GRID_STEP, MOVE_EDGES, snapRect, type Guide, type SnapConfig, type SnapResult } from "./snap";
 import {
   baseOf,
@@ -470,7 +470,7 @@ function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   const key = rowKey(scene.items[row.index].path);
   const node = el("div", "row");
   node.classList.toggle("hiddenWidget", hiddenPaths.has(key));
-  node.appendChild(el("span", "grip", reorderable && !row.synthetic ? "⠿" : ""));
+  node.appendChild(el("span", "grip", reorderable && row.rank >= 0 ? "⠿" : ""));
   node.appendChild(
     toggle("◉", "◌", hiddenPaths.has(key), "Hide this widget in the preview", () => {
       if (hiddenPaths.has(key)) hiddenPaths.delete(key);
@@ -723,13 +723,23 @@ function sendEdit(
   awaitVerdict((id) => ({ type, id, line, properties }), onVerdict);
 }
 
+/** `to` is a RANK among the movable rows; the op's indices come out of `reorderTo`. */
 function sendReorder(
   type: "checkReorder" | "reorder",
   ctx: ReorderContext,
   to: number,
   onVerdict: (verdict: EditVerdict) => void
 ): void {
-  awaitVerdict((id) => ({ type, id, line: ctx.parentLine, from: ctx.from, to }), onVerdict);
+  awaitVerdict(
+    (id) => ({
+      type,
+      id,
+      line: ctx.parentLine,
+      from: ctx.sources[ctx.from],
+      to: reorderTo(ctx.sources, ctx.from, to),
+    }),
+    onVerdict
+  );
 }
 
 function awaitVerdict(build: (id: number) => AppToHost, onVerdict: (verdict: EditVerdict) => void): void {
@@ -920,16 +930,20 @@ interface Gesture {
 }
 
 /**
- * A container whose source children a drag can permute. The indices are ranks
- * among the children THIS DOCUMENT DECLARES, which is what the `reorder` op
- * counts (messages.ts): a template- or type-supplied child has no bytes here
- * and no rank.
+ * A container whose source children a drag can permute. `from` and the drop are
+ * RANKS among the movable rows, which is what the panel and the pointer speak;
+ * `sources` turns a rank into the op's index, which counts the container's
+ * source children including the declarations the preview cannot see (layers.ts
+ * `reorderTo`). A template- or type-supplied child has no bytes here, no source
+ * index and no rank.
  */
 interface ReorderContext {
   /** The container's own line: the op is addressed to the parent, not the child. */
   parentLine: number;
   /** Draw indices of the reorderable children, in source order. */
   children: number[];
+  /** Their `srcIndex`, ascending: the op's own numbering. */
+  sources: number[];
   /** Their rects, resolved once: a drag reads them every frame and allocates none. */
   rects: SceneRect[];
   /** The dragged child's rank among them. */
@@ -948,13 +962,20 @@ function reorderContextFor(index: number): ReorderContext | null {
   if (parent === null) return null;
   const container = scene.items[parent];
   if (!canEdit(container)) return null;
-  const rows = layerRows(scene, parent).filter((row) => !row.synthetic);
+  const rows = layerRows(scene, parent).filter((row) => row.rank >= 0);
   if (rows.length < 2) return null;
   const from = rows.findIndex((row) => row.index === index);
   if (from < 0) return null;
   const children = rows.map((row) => row.index);
   const rects = children.map(rectOf);
-  return { parentLine: container.line, children, rects, from, axis: boxAxis(rects) };
+  return {
+    parentLine: container.line,
+    children,
+    sources: rows.map((row) => row.source),
+    rects,
+    from,
+    axis: boxAxis(rects),
+  };
 }
 
 function rectOf(index: number): SceneRect {
@@ -1256,7 +1277,7 @@ let rowDrag: RowDrag | null = null;
 function onLayerPointerDown(ev: PointerEvent, row: LayerRow, reorderable: boolean): void {
   if (ev.button !== 0) return;
   select(row.index, { reveal: false });
-  if (!reorderable || row.synthetic || committing) return;
+  if (!reorderable || row.rank < 0 || committing) return;
   const ctx = reorderContextFor(row.index);
   if (!ctx) return;
   rowDrag = {
@@ -1281,8 +1302,8 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
     layerEls.get(drag.index)?.classList.add("dragging");
     announceGesture(drag);
   }
-  if (drag.status === "blocked" || row.synthetic) return;
-  drag.to = row.source;
+  if (drag.status === "blocked" || row.rank < 0) return;
+  drag.to = row.rank;
   markDropRow(drag);
 }
 

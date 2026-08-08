@@ -34,6 +34,7 @@ import {
   type Statement,
   type ValueNode,
 } from "../parser";
+import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
 import { PROPERTY_BLOCKS } from "./layoutEngine";
 
 /** A raw byte range in the document (UTF-16 code units, like the CST). */
@@ -48,18 +49,13 @@ export type GuiSpan = Range;
  */
 export type GuiEntryKind = "widget" | "decl" | "property";
 
-/** Marker words that turn the following assignment into a declaration. */
-const DECL_MARKERS = new Set(["template", "local_template", "types", "type", "block", "blockoverride"]);
-
 /**
- * Named slots, which vanilla spells two ways: `blockoverride "name" { ... }`
- * (272 uses in the game tree, the marker form) and `blockoverride = "name"
- * { ... }` (29 uses, which the CST reads as one assignment whose value is a
- * tagged block). Both mean the same slot, so the model normalizes the second
- * into the first: the key becomes the marker, the tag becomes the key, and the
- * value is the block alone.
+ * `DECL_MARKERS` and `SLOT_KEYS` come from `declMarkers.ts` because the layout
+ * engine counts the same entries for `srcIndex`. The slot form
+ * (`blockoverride = "name" { ... }`) is normalized into the marker form here:
+ * the key becomes the marker, the tag becomes the key, and the value is the
+ * block alone.
  */
-const SLOT_KEYS = new Set(["block", "blockoverride"]);
 
 /** One `key [op] value` statement, with every raw span the writer addresses it by. */
 export interface GuiEntry {
