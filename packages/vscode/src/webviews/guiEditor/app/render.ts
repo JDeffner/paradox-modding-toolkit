@@ -11,6 +11,7 @@ import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeome
 import type { GuiLayoutFill } from "@px-lsp/protocol/protocol";
 import { handlePoints, HANDLE_SIZE } from "./gesture";
 import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
+import type { Guide, SpacingBar } from "./snap";
 
 export interface Camera {
   zoom: number;
@@ -31,6 +32,13 @@ const OUTLINE = "rgba(120,180,255,0.35)";
 const GHOST_BOX_STROKE = "#ff9f43";
 const SELECT_STROKE = "#4fc1ff";
 const SELECT_SHADOW = "rgba(0,0,0,0.65)";
+const GRID_STROKE = "rgba(255,255,255,0.07)";
+const GUIDE_STROKE = "#ff4fd8";
+const FLASH_STROKE = "#ffd54f";
+/** Green, and not the selection's blue: a drop line is an insertion, not a selection. */
+const DROP_STROKE = "#89d185";
+/** Solo: everything that is not the isolated subtree, at this alpha. */
+const DIM_OPACITY = 0.12;
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -174,7 +182,8 @@ function paintItem(
   images: Images,
   zoom: number,
   outlines: boolean,
-  fontFamily: string
+  fontFamily: string,
+  alpha: number
 ): void {
   if (item.clip && (item.clip.w <= 0 || item.clip.h <= 0)) return;
   ctx.save();
@@ -183,7 +192,7 @@ function paintItem(
     ctx.rect(item.clip.x, item.clip.y, item.clip.w, item.clip.h);
     ctx.clip();
   }
-  ctx.globalAlpha = item.opacity;
+  ctx.globalAlpha = item.opacity * alpha;
   paintFill(ctx, item.rect, item.bg, images);
   paintFill(ctx, item.rect, item.fill, images);
 
@@ -239,6 +248,25 @@ export interface DrawPreview {
   dy: number;
 }
 
+/**
+ * The layers panel's eye and lock, and the tree's subtree focus, as two masks
+ * over the draw list. Both are computed once per change, never per frame: a
+ * gesture repaints at 60 Hz and must allocate nothing to do it.
+ */
+export interface DrawMasks {
+  /** 1 = not painted at all: hidden by the eye, or outside the focused subtree. */
+  hidden: Uint8Array | null;
+  /** 1 = painted dimmed: solo is on somewhere else. */
+  dim: Uint8Array | null;
+}
+
+/** A live geometry readout, anchored at a world point and drawn at screen size. */
+export interface DrawReadout {
+  x: number;
+  y: number;
+  text: string;
+}
+
 export interface DrawOptions {
   outlines: boolean;
   /** CSS font stack for widget text (the game font when the host supplied it). */
@@ -252,6 +280,18 @@ export interface DrawOptions {
   /** Draw resize handles on `selected` (a widget with a declaration to write to). */
   handles?: boolean;
   preview?: DrawPreview;
+  masks?: DrawMasks;
+  /** World grid step; 0 or absent draws no grid. */
+  grid?: number;
+  /** Smart guides the current gesture snapped to. */
+  guides?: readonly Guide[];
+  /** Equal-spacing bars for the gaps the gesture equalised. */
+  bars?: readonly SpacingBar[];
+  /** A hovered layers row's outline, flashed so the row and the rect find each other. */
+  flash?: SceneRect;
+  /** Where a box reorder would drop the dragged widget. */
+  dropLine?: Guide;
+  readout?: DrawReadout;
 }
 
 /**
@@ -291,6 +331,105 @@ function paintHandles(ctx: CanvasRenderingContext2D, rect: SceneRect, zoom: numb
   ctx.restore();
 }
 
+/** The grid, drawn under the scene as one path so the step costs one stroke. */
+function paintGrid(ctx: CanvasRenderingContext2D, step: number, zoom: number): void {
+  if (step <= 0 || step * zoom < 4) return;
+  ctx.save();
+  ctx.beginPath();
+  for (let x = step; x < WORLD_W; x += step) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, WORLD_H);
+  }
+  for (let y = step; y < WORLD_H; y += step) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(WORLD_W, y);
+  }
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = GRID_STROKE;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** One smart guide, one screen pixel wide at any zoom, like the marquee. */
+function paintGuides(
+  ctx: CanvasRenderingContext2D,
+  guides: readonly Guide[],
+  zoom: number,
+  color: string,
+  dash: boolean
+): void {
+  if (guides.length === 0) return;
+  ctx.save();
+  ctx.beginPath();
+  for (const guide of guides) {
+    if (guide.axis === "x") {
+      ctx.moveTo(guide.at, guide.start);
+      ctx.lineTo(guide.at, guide.end);
+    } else {
+      ctx.moveTo(guide.start, guide.at);
+      ctx.lineTo(guide.end, guide.at);
+    }
+  }
+  if (dash) ctx.setLineDash([5 / zoom, 3 / zoom]);
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The two equal gaps, as segments with end ticks so a gap reads as a measure. */
+function paintBars(ctx: CanvasRenderingContext2D, bars: readonly SpacingBar[], zoom: number): void {
+  if (bars.length === 0) return;
+  const tick = 4 / zoom;
+  ctx.save();
+  ctx.beginPath();
+  for (const bar of bars) {
+    if (bar.axis === "x") {
+      ctx.moveTo(bar.start, bar.on);
+      ctx.lineTo(bar.end, bar.on);
+      ctx.moveTo(bar.start, bar.on - tick);
+      ctx.lineTo(bar.start, bar.on + tick);
+      ctx.moveTo(bar.end, bar.on - tick);
+      ctx.lineTo(bar.end, bar.on + tick);
+    } else {
+      ctx.moveTo(bar.on, bar.start);
+      ctx.lineTo(bar.on, bar.end);
+      ctx.moveTo(bar.on - tick, bar.start);
+      ctx.lineTo(bar.on + tick, bar.start);
+      ctx.moveTo(bar.on - tick, bar.end);
+      ctx.lineTo(bar.on + tick, bar.end);
+    }
+  }
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = GUIDE_STROKE;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The live geometry readout, drawn in SCREEN space: it is a label about the
+ * gesture, not a thing in the world, so it stays the same size at every zoom
+ * and never ends up subpixel over a widget the user is trying to place.
+ */
+function paintReadout(ctx: CanvasRenderingContext2D, readout: DrawReadout, camera: Camera): void {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = "11px var(--vscode-editor-font-family, monospace), monospace";
+  ctx.textBaseline = "top";
+  const padding = 4;
+  const width = ctx.measureText(readout.text).width + padding * 2;
+  const height = 16;
+  const x = readout.x * camera.zoom + camera.panX;
+  // Above the rect when there is room, inside it when there is not.
+  const y = readout.y * camera.zoom + camera.panY - height - 3;
+  const top = y < 0 ? y + height + 6 : y;
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(x, top, width, height);
+  ctx.fillStyle = SELECT_STROKE;
+  ctx.fillText(readout.text, x + padding, top + 3);
+  ctx.restore();
+}
+
 /** Repaint the whole canvas: viewport clear, world backdrop, then the scene. */
 export function drawScene(
   ctx: CanvasRenderingContext2D,
@@ -306,23 +445,39 @@ export function drawScene(
   ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.panX, camera.panY);
   ctx.fillStyle = WORLD_BG;
   ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+  if (options.grid) paintGrid(ctx, options.grid, camera.zoom);
   const preview = options.preview;
   const shifted = preview && (preview.dx !== 0 || preview.dy !== 0);
+  const hidden = options.masks?.hidden ?? null;
+  const dim = options.masks?.dim ?? null;
   for (let i = 0; i < scene.items.length; i++) {
+    if (hidden?.[i]) continue;
+    const alpha = dim?.[i] ? DIM_OPACITY : 1;
     const inPreview = preview !== undefined && i >= preview.from && i < preview.to;
     if (shifted && inPreview) {
       ctx.save();
       ctx.translate(preview.dx, preview.dy);
-      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily);
+      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
       ctx.restore();
     } else {
-      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily);
+      paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
     }
   }
+  if (options.flash) {
+    ctx.save();
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.strokeStyle = FLASH_STROKE;
+    ctx.strokeRect(options.flash.x, options.flash.y, options.flash.w, options.flash.h);
+    ctx.restore();
+  }
+  if (options.guides) paintGuides(ctx, options.guides, camera.zoom, GUIDE_STROKE, false);
+  if (options.bars) paintBars(ctx, options.bars, camera.zoom);
+  if (options.dropLine) paintGuides(ctx, [options.dropLine], camera.zoom, DROP_STROKE, true);
   if (options.selected) {
     paintSelection(ctx, options.selected, camera.zoom);
     if (options.handles) paintHandles(ctx, options.selected, camera.zoom);
   }
+  if (options.readout) paintReadout(ctx, options.readout, camera);
 }
 
 /** Drop the tint/cell caches: a fresh layout may re-color the same sprites. */

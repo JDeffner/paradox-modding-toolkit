@@ -62,12 +62,31 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
   #stage { flex: 1 1 auto; overflow: hidden; background: #101010; position: relative; min-width: 0; }
   #canvas { display: block; }
-  #tree, #inspector {
-    flex: 0 0 auto; overflow: auto; padding: 4px 0;
+  #side {
+    flex: 0 0 auto; width: 240px; display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
     background: var(--vscode-sideBar-background, transparent);
   }
-  #tree { width: 240px; border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35)); }
-  #inspector { width: 280px; border-left: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35)); }
+  #tree, #layers, #inspector { overflow: auto; padding: 4px 0; }
+  #tree { flex: 1 1 auto; min-height: 60px; }
+  #layers {
+    flex: 0 0 40%; min-height: 70px;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #inspector {
+    flex: 0 0 auto; width: 280px;
+    background: var(--vscode-sideBar-background, transparent);
+    border-left: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #focusBar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+    padding: 4px 6px; white-space: nowrap;
+    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  }
+  #focusBar button { padding: 1px 6px; font-size: 0.9em; }
+  #focusBar .crumb { cursor: pointer; color: var(--vscode-textLink-foreground, #3794ff); }
+  #focusBar .crumb:hover { text-decoration: underline; }
+  #focusBar .sepArrow { color: var(--vscode-descriptionForeground); }
   .row {
     display: flex; align-items: center; gap: 4px; padding: 1px 6px 1px 0;
     white-space: nowrap; cursor: default; user-select: none;
@@ -79,6 +98,25 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     color: var(--vscode-descriptionForeground);
   }
   .rowName { color: var(--vscode-descriptionForeground); }
+  #layers .head { padding: 2px 6px 5px; white-space: normal; }
+  #layers .head .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #layers .head .hint { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+  #layers .row { padding-left: 2px; }
+  #layers .row.dragging { opacity: 0.5; }
+  #layers .row.dropBefore { box-shadow: inset 0 2px 0 0 var(--vscode-focusBorder, #007fd4); }
+  #layers .row.dropAfter { box-shadow: inset 0 -2px 0 0 var(--vscode-focusBorder, #007fd4); }
+  #layers .row .grip {
+    flex: 0 0 auto; width: 14px; text-align: center; cursor: grab;
+    color: var(--vscode-descriptionForeground);
+  }
+  #layers .row .toggle {
+    flex: 0 0 auto; width: 16px; text-align: center; cursor: pointer;
+    color: var(--vscode-descriptionForeground);
+  }
+  #layers .row .toggle.on { color: var(--vscode-charts-yellow, #cca700); }
+  #layers .row .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #layers .row.hiddenWidget .label { text-decoration: line-through; opacity: 0.6; }
+  #layers .note { padding: 4px 8px; white-space: normal; color: var(--vscode-descriptionForeground); }
   .tag {
     flex: 0 0 auto; margin-left: 4px; padding: 0 4px; border-radius: 2px; font-size: 0.85em;
     color: var(--vscode-descriptionForeground);
@@ -130,11 +168,17 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     <button id="zoomFit" title="Fit the 1920x1080 reference viewport">Fit</button>
     <span class="sep"></span>
     <label><input id="outlines" type="checkbox" /> Outlines</label>
+    <label title="Snap a drag to sibling edges, centres and equal gaps"><input id="snap" type="checkbox" checked /> Guides</label>
+    <label title="Draw a 10 px grid and snap a drag to it"><input id="grid" type="checkbox" /> Grid</label>
     <button id="refresh">Refresh</button>
     <span id="meta" style="margin-left:auto;color:var(--vscode-descriptionForeground)"></span>
   </div>
   <div id="main">
-    <div id="tree"></div>
+    <div id="side">
+      <div id="focusBar"></div>
+      <div id="tree"></div>
+      <div id="layers"></div>
+    </div>
     <div id="stage"><canvas id="canvas"></canvas><div id="toast" hidden></div></div>
     <div id="inspector"></div>
   </div>
