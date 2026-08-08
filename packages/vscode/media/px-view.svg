@@ -1,11 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-  <defs><clipPath id="c"><rect x="-6.451" y="0" width="77.414" height="34" /></clipPath></defs>
-  <g transform="translate(2.000 6.730) scale(0.31002)" stroke-width="8" clip-path="url(#c)">
-  <path d="M4 0L4 34" stroke="currentColor" />
-  <path d="M4 4L16 4" stroke="currentColor" />
-  <path d="M16 4A8 8 0 0 1 16 20" stroke="currentColor" />
-  <path d="M4 20L16 20" stroke="currentColor" />
-  <path d="M37 -5L61 39" stroke="currentColor" />
-  <path d="M61 -5L37 39" stroke="currentColor" />
+  <defs><clipPath id="vt"><rect x="30.688" y="27" width="66.625" height="34" /></clipPath><clipPath id="vb"><rect x="30.688" y="67" width="66.625" height="34" /></clipPath></defs>
+  <g transform="translate(-7.027 -7.027) scale(0.29730)" stroke-width="8">
+    <g clip-path="url(#vt)">
+  <path d="M35.744 27L35.744 61" stroke="currentColor" />
+  <path d="M35.744 31L49.244 31" stroke="currentColor" />
+  <path d="M49.244 31A6.5 6.5 0 0 1 49.244 44" stroke="currentColor" />
+  <path d="M35.744 44L49.244 44" stroke="currentColor" />
+  <path d="M68.744 22L92.744 66" stroke="currentColor" />
+  <path d="M92.744 22L68.744 66" stroke="currentColor" />
+    </g>
+    <g clip-path="url(#vb)">
+  <path d="M31.688 71L59.688 71" stroke="currentColor" />
+  <path d="M45.688 67L45.688 101" stroke="currentColor" />
+  <path d="M70.688 67L70.688 101" stroke="currentColor" />
+  <path d="M93.688 64L70.688 84" stroke="currentColor" />
+  <path d="M70.688 84L93.688 104" stroke="currentColor" />
+    </g>
   </g>
 </svg>

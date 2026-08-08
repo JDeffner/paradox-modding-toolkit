@@ -182,7 +182,7 @@ paths from that game's `dev-paths.json` slots:
 | `import-cwt-types.ts <clone>` | `packages/server/src/games/eu5/schema.generated.ts` | Projects the `types = { ... }` blocks of a pinned kaiser-chris/cwtools-eu5-config clone onto the EU5 schema table. NOT a build step: run by hand when re-pinning upstream, then update the pinned commit in the file header AND `THIRD-PARTY-NOTICES.md`, and read the "Not covered" block for newly dropped types |
 | `audit-schema-coverage.ts [--game <id>]` | stdout | Compares the profile's schema table + `data/<id>/structures.json` against every game `_*.info` and common/ folder; run per patch, gaps should be 0 or documented |
 | `gen-brand.ts` | `packages/vscode/media/icon.{png,svg}`, `media/px-view.svg`, `packages/server/media/px-lsp.svg` | The PX lockup. Geometry lives in `brandGeometry.ts` so the raster and the vector cannot drift; it asserts the ink is centred, so an off-centre icon fails the build rather than shipping |
-| `gen-icons.mjs` | `packages/vscode/media/fileicons/*.svg` | The per-language file icons (unrelated to the brand lockup) |
+| `gen-icons.ts` | `packages/vscode/media/fileicons/*.svg` | The per-language file icons; the script glyph is the brand "PS" letterforms imported from `brandGeometry.ts` |
 | `rank-eval.ts` / `fuzzy-diag.ts` | stdout | Completion-quality measurement: rank-eval replays real corpus positions; fuzzy-diag replays typed prefixes through VS Code's own scoring — run BEFORE and AFTER any ranking change |
 
 ## Testing philosophy

@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <path fill="#A87B0F" d="M2 3.9 5 6.9 8 2.6l3 4.3 3-3v6.5H2Z"/>
-  <rect fill="#A87B0F" x="2" y="11.6" width="12" height="1.8" rx="0.6"/>
+  <g transform="translate(1.400 3.844) scale(0.24444)" fill="none" stroke="#A87B0F" stroke-width="8" stroke-linecap="butt" stroke-linejoin="miter">
+  <path d="M4 0L4 34" />
+  <path d="M4 4L17.5 4" />
+  <path d="M17.5 4A6.5 6.5 0 0 1 17.5 17" />
+  <path d="M4 17L17.5 17" />
+  <path d="M49.608 8.277A6.5 6.5 0 1 0 43.5 17" />
+  <path d="M43.5 17A6.5 6.5 0 1 1 37.392 25.723" />
+  </g>
 </svg>

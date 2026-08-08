@@ -56,12 +56,14 @@ export function glyph(ch: string, x: number, y: number): Stroke[] {
   switch (ch) {
     case "P":
       // Stem, then a bowl: two horizontals joined by a semicircle bulging right.
-      // Outer edge lands at x+28 = x + WIDTH.P exactly (16 + r8 + HALF).
+      // Outer edge lands at x+28 = x + WIDTH.P exactly (17.5 + r6.5 + HALF).
+      // The bowl's waist sits at y+17 like K's junction: the old y+20 waist put
+      // the bowl at 71% of cap height, which read top-heavy at small sizes.
       return [
         line(x + HALF, y, x + HALF, b),
-        line(x + HALF, y + HALF, x + 16, y + HALF),
-        arc(x + 16, y + 12, 8, -90, 90),
-        line(x + HALF, y + 20, x + 16, y + 20),
+        line(x + HALF, y + HALF, x + 17.5, y + HALF),
+        arc(x + 17.5, y + 10.5, 6.5, -90, 90),
+        line(x + HALF, y + 17, x + 17.5, y + 17),
       ];
     case "X":
       // Overshoot: the band clip cuts these flat at cap height and baseline,

@@ -23,7 +23,6 @@ import {
   inkBounds,
   lockup,
   toPathData,
-  word,
   type Stroke,
 } from "./brandGeometry";
 
@@ -139,23 +138,41 @@ fs.mkdirSync(SERVER_MEDIA, { recursive: true });
 fs.writeFileSync(path.join(SERVER_MEDIA, "px-lsp.svg"), tileSvg(S, RADIUS, "PX", "LSP"));
 
 // ---- 24x24 activity bar ----------------------------------------------------
-// One line only: "TK"/"LSP" is illegible at 24 px. currentColor so VS Code can
-// theme it, and the same even-padding rule applied to a single line.
+// Both lines, like the tile: PX over TK (user decision 2026-08-08; the earlier
+// one-line version optimized legibility, this one optimizes brand identity).
+// currentColor for both lines: the activity bar is monochrome by design.
 
 const V = 24;
-const strokes = word("PX", 0, 0);
-const band = { top: 0, bottom: CAP };
-const ink = inkBounds(strokes, band);
-// Fit the ink box into the 24px square with a 2px optical margin, so the glyph
-// is centred on what is drawn rather than on nominal advance widths.
-const margin = 2;
-const scale = (V - margin * 2) / Math.max(ink.x1 - ink.x0, ink.y1 - ink.y0);
-const tx = (V - (ink.x1 - ink.x0) * scale) / 2 - ink.x0 * scale;
-const ty = (V - (ink.y1 - ink.y0) * scale) / 2 - ink.y0 * scale;
+const vl = lockup("PX", "TK", S);
+const vit = inkBounds(vl.top, vl.topBand);
+const vib = inkBounds(vl.bottom, vl.bottomBand);
+const vInk = {
+  x0: Math.min(vit.x0, vib.x0),
+  y0: vit.y0,
+  x1: Math.max(vit.x1, vib.x1),
+  y1: vib.y1,
+};
+// 1px optical margin: at two lines in 24px every scaled pixel of cap height counts.
+const margin = 1;
+const scale = (V - margin * 2) / Math.max(vInk.x1 - vInk.x0, vInk.y1 - vInk.y0);
+const tx = (V - (vInk.x1 - vInk.x0) * scale) / 2 - vInk.x0 * scale;
+const ty = (V - (vInk.y1 - vInk.y0) * scale) / 2 - vInk.y0 * scale;
+// The clip bands live in lockup coordinates: they sit INSIDE the transformed
+// group, so the same rects that cut the tile's diagonals flat cut these.
+const viewBand = (b: { top: number; bottom: number }, id: string) =>
+  `<clipPath id="${id}"><rect x="${n2(vInk.x0 - 1)}" y="${n2(b.top)}" width="${n2(vInk.x1 - vInk.x0 + 2)}" height="${n2(b.bottom - b.top)}" /></clipPath>`;
+function n2(v: number): string {
+  return Number(v.toFixed(3)).toString();
+}
 const viewSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${V} ${V}" fill="none" stroke="currentColor">
-  <defs><clipPath id="c"><rect x="${(-tx / scale).toFixed(3)}" y="${band.top}" width="${(V / scale).toFixed(3)}" height="${band.bottom - band.top}" /></clipPath></defs>
-  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(5)})" stroke-width="${WEIGHT}" clip-path="url(#c)">
-${paths(strokes, "currentColor")}
+  <defs>${viewBand(vl.topBand, "vt")}${viewBand(vl.bottomBand, "vb")}</defs>
+  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(5)})" stroke-width="${WEIGHT}">
+    <g clip-path="url(#vt)">
+${paths(vl.top, "currentColor")}
+    </g>
+    <g clip-path="url(#vb)">
+${paths(vl.bottom, "currentColor")}
+    </g>
   </g>
 </svg>
 `;
