@@ -131,11 +131,12 @@ instead.
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
 | `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
 | `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph |
-| `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name) |
+| `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
-| `paradox/guiLayout` | request | `{ uri, text }` → `GuiLayoutResult` — measured layout rectangles for a .gui document |
-| `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from |
+| `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
+| `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
+| `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
 | `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture, or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
 
@@ -197,6 +198,100 @@ It is a per-selection request rather than a field on `GuiLayoutNode` on
 purpose: a vanilla window lays out 500+ widgets, and every layout push would
 carry every widget's expanded property list for rows one widget at a time is
 ever shown.
+
+A property assigned more than once also carries `overrides`: the values it
+shadowed, in expansion order, base-most first, each with its own origin. That
+is the "this overrides `{ 100 50 }` from type px_card" note, and it is the
+engine's own discard recorded where the discard happens, not a second walk.
+A key assigned once has no `overrides` field at all.
+
+`textures` lists what the widget draws, its own fill first and then its
+`background`, with the frame-sheet geometry of each: `framesize` and `frame` as
+authored, plus `width` / `height` / `columns` / `rows` / `cell` once the file
+resolves. Sizes come from the DDS **header** (128 bytes read, never a decode) so
+an inspector row cannot cost a 4096x4096 BC7 decode; the path resolves the way
+the game loads an asset, mod first, then parent mods from the last loaded back,
+then the game. The grid is driven by `framesize` alone: neither the CK3 nor the
+Victoria 3 gui tree, nor either harvested `guiSchema.json`, contains a
+`noofframes`, so no second spelling is guessed at. Frames are 1-based and
+row-major over `floor(width/cellW)` columns, and an out-of-range `frame` clamps
+into the grid rather than reading off the sheet.
+
+`placement` answers "why is it here", and only when the request sets
+`placement: true` — it costs a full layout of the document, and the trace it
+records is gated so an ordinary `paradox/guiLayout` never pays for it. Two
+shapes, never both:
+
+- an anchored widget carries `terms`, the contributions of the engine's own
+  formula in order (`parentOrigin`, `parentanchor`, `widgetanchor`, `position`).
+  Their `dx`/`dy` **sum exactly to the rect's `x`/`y`**, which is the invariant
+  that keeps the readout from drifting from the placement it explains. A
+  `widgetanchor` that was never written still appears, sourced from the
+  `parentanchor` it mirrors;
+- a widget inside a layout container carries `placedBy` and an EMPTY `terms`:
+  the container computed the slot. `droppedPosition` is the `position` the
+  engine discarded there (it logs "Widget cannot have a position in a layout"),
+  which is the single most common "why is my widget not where I put it".
+
+`clippedBy` rides along either way, naming the innermost `scrollarea` viewport
+or `scissor = yes` ancestor and its clip rect. The rect is the clipper's, not an
+intersection: the widget's own geometry stays true and the renderer clips.
+`placement` is absent for a widget the layout never reaches, such as one inside
+a `tooltipwidget` (created lazily in-engine, skipped in a static preview).
+
+`paradox/guiLayout` takes an optional `visibility` mode for the widgets a static
+preview cannot resolve, those whose `visible` holds an expression. `visible = no`
+and `visible = yes` are deterministic and unaffected by the mode; only an
+expression is a *check*.
+
+- `showAll` (the default, and what the server did before this field existed):
+  a conditional widget is KEPT. Showing it is the non-destructive default, and
+  the same unknown is what makes a container's content unmeasurable;
+- `hideAll`: every conditional widget collapses, exactly as `ignoreinvisible`
+  collapses a `visible = no` one — its slot disappears and its siblings shift up;
+- `evaluate`: the widgets whose check the caller assigned `false` collapse. A
+  check with **no assignment behaves as shown**, so a partial map cannot hide
+  something the caller never decided about.
+
+The check KEY is the `visible` value exactly as authored, minus its quotes
+(`[GetPlayer.IsAI]`). A static preview has no widget-independent identity for a
+condition, and the source string is the one thing that is stable across edits
+that do not touch the condition; two widgets written with the same condition
+therefore share one toggle, which is what a toggle UI wants. `visibilityChecks`
+reports every check met — in ALL modes, `showAll` included, so the UI can be
+built before the user switches mode — each with the number of widgets carrying
+it and whether THIS run resolved it to hidden.
+
+`timings` is that request's own wall clock, split into `parseMs` (the document's
+CST plus its own declarations), `defsMs` (the cross-file template/type store, 0
+on a cache hit), `layoutMs` (widget tree and rects) and `totalMs`. Four clock
+reads per request; there is no flag because there is nothing to switch off.
+
+`paradox/guiDependencies` is the GUI-to-script surface, forward. PdxGui reaches
+script through exactly one door — `GetScriptedGui('name')`, the only spelling
+the CK3 and Victoria 3 trees use — so a widget's script dependencies are the
+scripted_guis its own SOURCE subtree calls (`line` scopes the answer to one
+widget; absent means the whole document). Each row carries the definition site,
+`callLines` in the requested document, `uses` across every `.gui` file the
+layout store scanned, and `chains`: the events and on_actions that scripted_gui
+hands control to. A chain's `via` is empty for "directly" and lists the scripted
+effects otherwise, outermost first, so `["effect_a", "effect_b"]` renders as
+"via effect_a -> effect_b". The walk follows the active profile's event/on_action
+reference fields (never a hard-coded key list), goes at most three
+scripted-effect hops, records the shortest path to each name, and terminates on
+cycles. `locKeys` are the `text` / `tooltip` values the subtree names, deduped,
+each flagged against the loc index (`raw_text` / `raw_tooltip` are literal
+strings by definition and are not keys, and a `[datafunction]` value is not one
+either).
+
+The REVERSE direction is `paradox/dependencies` with `guiUses: true`, so a
+client asking "what depends on this event" gets the GUI answer in the same
+place. `guiUses` is off by default because it walks the scripted_gui definitions
+that some `.gui` file calls; when set, the response carries `guiUses` (`[]` is a
+real "none found", absent means it was not requested). Each site is one
+`file:line` of a `GetScriptedGui(...)` call plus the `scriptedGui` it names and
+the same `via` hop list, so the whole path reads
+`file:line -> scripted_gui -> effects -> definition`.
 
 `paradox/guiSourceEdit` takes `{ uri, text, op }` and answers
 `{ edits }` or `{ refused }`, never both, and `null` only for an op it does not

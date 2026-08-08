@@ -19,7 +19,12 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { DependenciesResult, DependencyGroup, DependencyItem } from "@px-lsp/protocol/protocol";
+import type {
+  DependenciesResult,
+  DependencyGroup,
+  DependencyItem,
+  GuiUseSite,
+} from "@px-lsp/protocol/protocol";
 import type { Definition } from "@px-lsp/protocol/types";
 import { pushAll } from "@px-lsp/protocol/arrays";
 import type { ServerData } from "../serverData";
@@ -34,17 +39,21 @@ export function computeDependencies(
   data: ServerData,
   schema: SchemaData,
   name: string,
-  kind?: string
+  kind?: string,
+  /** The GUI half of the answer, when the caller asked for it. Injected rather
+   *  than imported so this module stays free of the gui store's file walk. */
+  guiUses?: (name: string) => GuiUseSite[]
 ): DependenciesResult {
   const resolved = data.index.lookup(name);
   const candidates = resolved.length > 0 ? resolved : data.index.lookupAll(name);
   const def = (kind ? candidates.find((d) => d.kind === kind) : undefined) ?? candidates[0] ?? null;
-  if (!def) return { def: null, dependents: [], dependencies: [] };
+  if (!def) return { def: null, dependents: [], dependencies: [], ...(guiUses ? { guiUses: [] } : {}) };
 
   return {
     def: { name: def.name, kind: def.kind, file: def.file, line: def.line },
     dependents: collectDependents(data, def),
     dependencies: collectDependencies(data, schema, def),
+    ...(guiUses ? { guiUses: guiUses(def.name) } : {}),
   };
 }
 

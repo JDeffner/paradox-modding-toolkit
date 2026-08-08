@@ -61,6 +61,8 @@ import {
   type GuiSourceEditParams,
   guiWidgetInfoRequest,
   type GuiWidgetInfoParams,
+  guiDependenciesRequest,
+  type GuiDependenciesParams,
   dependenciesRequest,
   type DependenciesParams,
   scopeAtRequest,
@@ -68,10 +70,17 @@ import {
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
-import { computeGuiLayoutResult, getGuiDefs, invalidateGuiDefsCache } from "./gui/layoutService";
+import {
+  computeGuiLayoutResult,
+  getGuiDefs,
+  getGuiScriptLinks,
+  invalidateGuiDefsCache,
+  VIEWPORT,
+} from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
 import { computeGuiSourceEdit } from "./gui/sourceEditService";
 import { computeGuiWidgetInfo } from "./gui/widgetInfo";
+import { computeGuiDependencies, computeGuiUses } from "./gui/guiDependencies";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
 import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
@@ -1142,13 +1151,29 @@ connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
     settings.gamePath,
     settings.modPath,
     settings.parentPaths,
-    engineRoots()
+    engineRoots(),
+    params.visibility
   )
 );
 
 /** The type chain a size guard resolves through is the same store the preview lays out with. */
 function guiDefsForEdits() {
   return getGuiDefs(settings.gamePath, settings.modPath, settings.parentPaths, engineRoots());
+}
+
+/** Texture paths resolve the way the game loads assets: mod over parents over game. */
+function textureRoots() {
+  return {
+    gamePath: settings.gamePath,
+    modPath: settings.modPath,
+    parentPaths: settings.parentPaths,
+    engineRoots: engineRoots(),
+  };
+}
+
+/** The `GetScriptedGui(...)` index, cached alongside the template/type store. */
+function guiLinks() {
+  return getGuiScriptLinks(settings.gamePath, settings.modPath, settings.parentPaths, engineRoots());
 }
 
 connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) =>
@@ -1158,7 +1183,17 @@ connection.onRequest(guiSourceEditRequest, (params: GuiSourceEditParams) =>
 // The inspector reads through the same store the preview lays out with, so a
 // row it shows is a value the canvas used.
 connection.onRequest(guiWidgetInfoRequest, (params: GuiWidgetInfoParams) =>
-  computeGuiWidgetInfo(params.text ?? "", params.line, guiDefsForEdits())
+  computeGuiWidgetInfo(params.text ?? "", params.line, guiDefsForEdits(), {
+    placement: params.placement === true,
+    roots: textureRoots(),
+    viewport: VIEWPORT,
+  })
+);
+
+// The GUI half of the dependency explorer. Same document text the canvas is
+// showing, so a selection answers about what the editor has, not what disk has.
+connection.onRequest(guiDependenciesRequest, (params: GuiDependenciesParams) =>
+  computeGuiDependencies(data, schema, params.text ?? "", params.line, guiLinks())
 );
 
 // Deprecated: the narrow position/size shape, over the same core.
@@ -1181,8 +1216,13 @@ connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {
       if (range) name = range.word;
     }
   }
-  if (!name) return { def: null, dependents: [], dependencies: [] };
-  return computeDependencies(data, schema, name, kind);
+  const guiUses = params?.guiUses
+    ? (target: string) => computeGuiUses(data, schema, guiLinks(), target)
+    : undefined;
+  if (!name) {
+    return { def: null, dependents: [], dependencies: [], ...(guiUses ? { guiUses: [] } : {}) };
+  }
+  return computeDependencies(data, schema, name, kind, guiUses);
 });
 
 connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | null => {

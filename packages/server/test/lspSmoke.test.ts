@@ -22,6 +22,8 @@ import {
   type MessageConnection,
 } from "vscode-jsonrpc/node";
 import {
+  dependenciesRequest,
+  guiDependenciesRequest,
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
@@ -29,8 +31,11 @@ import {
   guiWidgetInfoRequest,
   scopeAtRequest,
   statusNotification,
+  type DependenciesResult,
+  type GuiDependenciesResult,
   type GuiSourceEditResult,
   type GuiTextEdit,
+  type GuiWidgetInfo,
   type ScopeAtResult,
   type StatusPayload,
 } from "@px-lsp/protocol/protocol";
@@ -116,6 +121,35 @@ const GUI_TXT = `widget = {
 }
 `;
 
+// The one door .gui has into script, plus the loc keys a panel names: the
+// subject of paradox/guiDependencies and of `dependencies` with `guiUses`.
+const SGUI_TXT = `smoke_open_gui = {
+	scope = character
+	effect = {
+		trigger_event = smoke.1
+		smoke_gui_effect = yes
+	}
+}
+`;
+
+// Its own file, and its own effect: the chain hop must be visible on the wire
+// without changing my_smoke_effect's reference count, which other smokes pin.
+const GUI_EFFECT_TXT = `smoke_gui_effect = {
+	trigger_event = smoke.2
+}
+`;
+
+const GUI_PANEL_TXT = `window = {
+	name = "smoke_panel"
+	widget = {
+		name = "smoke_open_button"
+		onclick = "[GetScriptedGui('smoke_open_gui').Execute(GuiScope.SetRoot(GetPlayer.MakeScope).End)]"
+		text = "smoke.1.t"
+		tooltip = "smoke_absent_tip"
+	}
+}
+`;
+
 const CLOC_TXT = `SmokeCustom = {
 	type = character
 	text = {
@@ -143,6 +177,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let eventsUri: string;
   let locFile: string;
   let locUri: string;
+  let guiPanelFile: string;
   let initResult: { serverInfo?: { name: string; version: string } };
   const statuses: StatusPayload[] = [];
 
@@ -161,6 +196,9 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fx("common/scripted_effects/smoke_effects.txt", EFFECTS_TXT);
     eventsFile = fx("events/smoke_events.txt", EVENTS_TXT);
     fx("common/customizable_localization/smoke_cloc.txt", CLOC_TXT);
+    fx("common/scripted_guis/smoke_sguis.txt", SGUI_TXT);
+    fx("common/scripted_effects/smoke_gui_effects.txt", GUI_EFFECT_TXT);
+    guiPanelFile = fx("gui/smoke_panel.gui", GUI_PANEL_TXT);
     locFile = fx("localization/english/smoke_l_english.yml", LOC_YML);
     eventsUri = toUri(eventsFile);
     locUri = toUri(locFile);
@@ -565,6 +603,118 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(
       await conn.sendRequest(guiWidgetInfoRequest, { uri: "file:///smoke.gui", text, line: 3 })
     ).toBeNull();
+  });
+
+  it("paradox/guiLayout reports stage timings and the conditional-visibility checks", async () => {
+    const text =
+      'vbox = {\n\twidget = { name = "a" size = { 40 30 } }\n' +
+      '\twidget = { name = "b" size = { 40 30 } visible = "[GetPlayer.IsAI]" }\n}\n';
+    const shown = (await conn.sendRequest(guiLayoutRequest, {
+      uri: "file:///smoke_vis.gui",
+      text,
+    })) as import("@px-lsp/protocol/protocol").GuiLayoutResult;
+    expect(shown.visibilityChecks).toEqual([{ key: "[GetPlayer.IsAI]", count: 1, hidden: false }]);
+    expect(shown.nodes[0].children[1].rect.h).toBe(30);
+    for (const ms of [
+      shown.timings.parseMs,
+      shown.timings.defsMs,
+      shown.timings.layoutMs,
+      shown.timings.totalMs,
+    ]) {
+      expect(Number.isFinite(ms)).toBe(true);
+      expect(ms).toBeGreaterThanOrEqual(0);
+    }
+
+    const hidden = (await conn.sendRequest(guiLayoutRequest, {
+      uri: "file:///smoke_vis.gui",
+      text,
+      visibility: { mode: "evaluate", checks: { "[GetPlayer.IsAI]": false } },
+    })) as import("@px-lsp/protocol/protocol").GuiLayoutResult;
+    expect(hidden.nodes[0].children[1].rect.h).toBe(0);
+    expect(hidden.visibilityChecks[0].hidden).toBe(true);
+  });
+
+  it("paradox/guiWidgetInfo answers the placement question only when asked", async () => {
+    const text =
+      'widget = {\n\tname = "smoke_frame"\n\tsize = { 300 200 }\n\twidget = {\n\t\tname = "smoke_anchored"\n' +
+      "\t\tparentanchor = bottom|right\n\t\tposition = { -30 -30 }\n\t\tsize = { 20 20 }\n\t}\n}\n";
+    const plain = (await conn.sendRequest(guiWidgetInfoRequest, {
+      uri: "file:///smoke_place.gui",
+      text,
+      line: 3,
+    })) as GuiWidgetInfo;
+    expect(plain.placement).toBeUndefined();
+    expect(plain.textures).toEqual([]);
+
+    const explained = (await conn.sendRequest(guiWidgetInfoRequest, {
+      uri: "file:///smoke_place.gui",
+      text,
+      line: 3,
+      placement: true,
+    })) as GuiWidgetInfo;
+    const placement = explained.placement!;
+    expect(placement.rect).toEqual({ x: 250, y: 150, w: 20, h: 20 });
+    expect(placement.terms.map((t) => t.kind)).toEqual([
+      "parentOrigin",
+      "parentanchor",
+      "widgetanchor",
+      "position",
+    ]);
+    expect(placement.terms.reduce((n, t) => n + t.dx, 0)).toBe(placement.rect.x);
+  });
+
+  it("paradox/guiWidgetInfo names the value a local property overrides", async () => {
+    const text =
+      "template SmokeDeco { alpha = 0.25 }\n" + "widget = {\n\tusing = SmokeDeco\n\talpha = 0.9\n}\n";
+    const info = (await conn.sendRequest(guiWidgetInfoRequest, {
+      uri: "file:///smoke_override.gui",
+      text,
+      line: 1,
+    })) as GuiWidgetInfo;
+    const alpha = info.properties.find((p) => p.key === "alpha")!;
+    expect(alpha.value).toBe("0.9");
+    expect(alpha.overrides).toEqual([{ value: "0.25", origin: [{ kind: "template", name: "SmokeDeco" }] }]);
+  });
+
+  it("paradox/guiDependencies walks the widget's scripted_gui and loc keys", async () => {
+    const result = (await conn.sendRequest(guiDependenciesRequest, {
+      uri: toUri(guiPanelFile),
+      text: GUI_PANEL_TXT,
+      line: 2,
+    })) as GuiDependenciesResult;
+    expect(result.widget).toEqual({ key: "widget", name: "smoke_open_button", line: 2 });
+    const [row] = result.scriptedGuis;
+    expect(row.name).toBe("smoke_open_gui");
+    expect(row.line).toBe(0);
+    // The mod's own gui tree fed the store, so the count is tree-wide.
+    expect(row.uses).toBe(1);
+    // `trigger_event = smoke.1` sits in the scripted_gui's own effect block;
+    // smoke.2 is one scripted-effect hop past it.
+    expect(row.chains).toEqual([
+      expect.objectContaining({ name: "smoke.1", kind: "event", via: [] }),
+      expect.objectContaining({ name: "smoke.2", kind: "event", via: ["smoke_gui_effect"] }),
+    ]);
+    expect(result.locKeys).toEqual([
+      expect.objectContaining({ key: "smoke.1.t", prop: "text", missing: false }),
+      expect.objectContaining({ key: "smoke_absent_tip", prop: "tooltip", missing: true }),
+    ]);
+  });
+
+  it("paradox/dependencies carries the reverse gui path only when guiUses is asked for", async () => {
+    const plain = (await conn.sendRequest(dependenciesRequest, {
+      name: "smoke.1",
+      kind: "event",
+    })) as DependenciesResult;
+    expect(plain.guiUses).toBeUndefined();
+
+    const withGui = (await conn.sendRequest(dependenciesRequest, {
+      name: "smoke.1",
+      kind: "event",
+      guiUses: true,
+    })) as DependenciesResult;
+    expect(withGui.guiUses).toEqual([
+      { file: guiPanelFile, line: 4, scriptedGui: "smoke_open_gui", via: [] },
+    ]);
   });
 
   it("paradox/guiWidgetEdit produces an applicable position edit", async () => {

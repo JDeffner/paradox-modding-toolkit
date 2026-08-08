@@ -406,6 +406,48 @@ export interface GuiLayoutParams {
   /** For display only; the text is authoritative. */
   uri: string;
   text: string;
+  /** Conditional-visibility preview mode; absent = `showAll`. */
+  visibility?: GuiVisibilityOptions;
+}
+
+/**
+ * How the layout treats a CONDITIONALLY visible widget, one whose `visible`
+ * holds an expression a static preview cannot evaluate (`visible =
+ * "[GetPlayer.IsAI]"`). A literal `visible = no` is deterministic and always
+ * collapses; `visible = yes` always shows. Neither is a check.
+ */
+export type GuiVisibilityMode = "showAll" | "hideAll" | "evaluate";
+export interface GuiVisibilityOptions {
+  mode: GuiVisibilityMode;
+  /**
+   * `evaluate` only: per-check assignments. The KEY is the `visible` value
+   * exactly as authored, minus its quotes (`[GetPlayer.IsAI]`). The source
+   * string is the only identity a static preview has, so two widgets written
+   * with the same condition share one toggle, and a key stays stable across
+   * edits that do not touch the condition. A check with no assignment behaves
+   * as `showAll` (shown).
+   */
+  checks?: Record<string, boolean>;
+}
+/** A conditional `visible` the layout met, for building a toggle UI. */
+export interface GuiVisibilityCheck {
+  /** The condition source string, the key {@link GuiVisibilityOptions.checks} takes. */
+  key: string;
+  /** Widgets carrying this condition in this document. */
+  count: number;
+  /** True when THIS run resolved the check to hidden. */
+  hidden: boolean;
+}
+/** Server-side wall clock of one `paradox/guiLayout`, for a stats line. */
+export interface GuiLayoutTimings {
+  /** Parsing the document and collecting its own template/type declarations. */
+  parseMs: number;
+  /** Building the cross-file template/type store; 0 on a cache hit. */
+  defsMs: number;
+  /** Building the widget tree and arranging every rect. */
+  layoutMs: number;
+  /** The whole request, server side. */
+  totalMs: number;
 }
 export interface GuiLayoutFill {
   texture?: string;
@@ -478,6 +520,14 @@ export interface GuiLayoutResult {
   nodeCount: number;
   /** How many .gui files fed the template/type store (0 = no game path). */
   defsFiles: number;
+  /**
+   * Every conditional `visible` the layout met, key-sorted. Reported in ALL
+   * modes, `showAll` included, so a client can build the toggle UI before the
+   * user has switched mode.
+   */
+  visibilityChecks: GuiVisibilityCheck[];
+  /** Per-stage wall clock of this request. */
+  timings: GuiLayoutTimings;
 }
 
 /**
@@ -499,6 +549,13 @@ export interface GuiWidgetInfoParams {
   text: string;
   /** 0-based line of the widget's own statement (`GuiLayoutNode.line`). */
   line: number;
+  /**
+   * Also answer "why is it here": run the layout with an explanation trace on
+   * and return {@link GuiWidgetInfo.placement}. Off by default because it costs
+   * a full layout of the document; the trace itself is what the flag gates, so
+   * an ordinary `paradox/guiLayout` never pays for it.
+   */
+  placement?: boolean;
 }
 /** One step of the chain a property was spliced through. */
 export interface GuiWidgetOrigin {
@@ -521,7 +578,107 @@ export interface GuiWidgetProperty {
    * `setProperties` rewrites in place.
    */
   origin: GuiWidgetOrigin[];
+  /**
+   * The values this key SHADOWED, in expansion order (base-most first), so the
+   * last entry is the one this row directly overrides. Present only when the
+   * key was assigned more than once, which is exactly when the inspector can
+   * say "this overrides `{ 100 50 }` from type px_card". Absent otherwise.
+   */
+  overrides?: GuiWidgetOverride[];
 }
+/** A value a later assignment of the same key replaced. */
+export interface GuiWidgetOverride {
+  /** Rendered the same way {@link GuiWidgetProperty.value} is. */
+  value: string;
+  /** Where the replaced value came from; empty = the widget's own body. */
+  origin: GuiWidgetOrigin[];
+}
+
+/**
+ * One contribution to a widget's final origin, in engine order. The `dx`/`dy`
+ * of the terms sum to the rect's `x`/`y` exactly (see spec.md B1-B/C/D:
+ * `x = parent.x + parentanchor.fx*parent.w - widgetanchor.fx*w + position.x`).
+ */
+export interface GuiPlacementTerm {
+  kind: "parentOrigin" | "parentanchor" | "widgetanchor" | "position";
+  /**
+   * The authored spec behind the term (`bottom|right`, `{ -30 -30 }`). Absent
+   * on `parentOrigin`, which is the parent's rect rather than a property, and
+   * on a `widgetanchor` that was never written (it mirrors `parentanchor`,
+   * B1-B/C) — there `source` names the anchor it mirrored.
+   */
+  source?: string;
+  dx: number;
+  dy: number;
+}
+
+/**
+ * The layout container that assigned a rect outright. The engine DROPS an
+ * authored `position` on such a child and logs "Widget cannot have a position
+ * in a layout" (probe 2026-08-02, parity-checklist L23), which is the single
+ * most common "why is my widget not where I put it".
+ */
+export interface GuiPlacedBy {
+  /** The parent's widget key (`hbox`, `flowcontainer`, `fixedgridbox`, …). */
+  key: string;
+  name?: string;
+  layout: "box" | "flow" | "grid";
+  /** The `position` the engine dropped, when the widget authored one. */
+  droppedPosition?: [number, number];
+}
+
+/** Why a widget's rect is where it is. */
+export interface GuiPlacement {
+  /** The final rect, the same one `GuiLayoutNode.rect` carries. */
+  rect: { x: number; y: number; w: number; h: number };
+  /** What the terms are measured against: the parent's content rect, or the
+   * viewport for a root widget. */
+  parentRect: { x: number; y: number; w: number; h: number };
+  /**
+   * The anchor terms, summing to the rect origin. EMPTY when `placedBy` is
+   * set: a layout container computes the slot, so there is no anchor sum to
+   * show.
+   */
+  terms: GuiPlacementTerm[];
+  placedBy?: GuiPlacedBy;
+  /**
+   * The innermost clipping ancestor (a scrollarea viewport, or any widget with
+   * `scissor = yes`), when one clips this widget. The rect is the clip rect,
+   * NOT the intersection: the geometry is true and the renderer clips.
+   */
+  clippedBy?: { key: string; name?: string; rect: { x: number; y: number; w: number; h: number } };
+}
+
+/**
+ * A texture the widget draws, with its frame-sheet grid when it is one. The
+ * sheet's pixel size comes from the DDS header alone (128 bytes read, no
+ * decode); `columns`/`rows`/`cell` need it, so they are absent when the file
+ * does not resolve under the configured roots.
+ *
+ * The grid is driven by `framesize` — the property the vanilla gui trees
+ * actually carry (CK3 and Vic3 harvests both; neither ships `noofframes`).
+ */
+export interface GuiTextureInfo {
+  /** The path as authored, mod-relative, the way the engine reads it. */
+  path: string;
+  /** Which fill it belongs to. */
+  source: "fill" | "background";
+  /** Absolute file it resolved to: mod, then parent mods (last first), then the game. */
+  file?: string;
+  /** Sheet pixel size from the DDS header. */
+  width?: number;
+  height?: number;
+  /** `framesize = { w h }`: the grid's cell size. */
+  framesize?: [number, number];
+  /** Grid shape, row-major: floor(width/cellW) x floor(height/cellH). */
+  columns?: number;
+  rows?: number;
+  /** The 1-based frame the widget shows (`frame`, default 1), clamped to the grid. */
+  frame?: number;
+  /** That frame's cell in texture pixels. */
+  cell?: { x: number; y: number; w: number; h: number };
+}
+
 export interface GuiWidgetInfo {
   key: string;
   name?: string;
@@ -533,6 +690,82 @@ export interface GuiWidgetInfo {
    * row the canvas did not use.
    */
   properties: GuiWidgetProperty[];
+  /**
+   * Textures the widget draws (its own fill first, then its background), with
+   * frame-sheet geometry. `[]` when it draws none; absent only from a server
+   * that predates the field.
+   */
+  textures?: GuiTextureInfo[];
+  /**
+   * Why the widget's rect is where it is. Present only when the request asked
+   * for it (`placement: true`) AND the layout actually reached the widget: a
+   * declaration inside a `tooltipwidget` or a subtree the engine skips has a
+   * source line but no rect.
+   */
+  placement?: GuiPlacement;
+}
+
+/**
+ * Request: what a `.gui` document reaches on the SCRIPT side;
+ * {@link GuiDependenciesParams} -> {@link GuiDependenciesResult}. The forward
+ * half of the dependency surface; the reverse (script definition -> the .gui
+ * paths using it) is `paradox/dependencies` with `guiUses: true`, so both
+ * directions come out of the same scripted_gui link.
+ */
+export const guiDependenciesRequest = "paradox/guiDependencies";
+export interface GuiDependenciesParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  text: string;
+  /**
+   * Restrict the answer to one widget's SOURCE subtree, addressed by the
+   * 0-based line of its own statement (`GuiLayoutNode.line`). Absent = the
+   * whole document. A line carrying no widget answers with empty lists.
+   */
+  line?: number;
+}
+/** A scripted_gui the document calls, and what it hands control to. */
+export interface GuiScriptedGuiRow {
+  name: string;
+  /** Definition site; absent when the index has no scripted_gui by that name. */
+  file?: string;
+  line?: number;
+  /** 0-based lines in the REQUESTED document that call it. */
+  callLines: number[];
+  /** Call sites across every `.gui` file the layout store scanned. */
+  uses: number;
+  /** Events / on_actions the scripted_gui's own blocks hand control to. */
+  chains: GuiEventChain[];
+}
+/** An event or on_action a scripted_gui reaches, and how. */
+export interface GuiEventChain {
+  name: string;
+  kind: "event" | "on_action";
+  file?: string;
+  line?: number;
+  /**
+   * The scripted effects traversed to get there, outermost first. Empty =
+   * "directly"; `["effect_a", "effect_b"]` renders as "via effect_a -> effect_b".
+   */
+  via: string[];
+}
+/** A localization key the document names, checked against the loc index. */
+export interface GuiLocRow {
+  key: string;
+  /** The gui property that named it (`text`, `tooltip`). */
+  prop: string;
+  /** 0-based line in the requested document. */
+  line: number;
+  /** No `loc_key` definition anywhere in the index. */
+  missing: boolean;
+  /** The resolved text, when the index has one. */
+  value?: string;
+}
+export interface GuiDependenciesResult {
+  /** The widget the answer is scoped to; absent for a whole-document answer. */
+  widget?: { key: string; name?: string; line: number };
+  scriptedGuis: GuiScriptedGuiRow[];
+  locKeys: GuiLocRow[];
 }
 
 /**
@@ -684,6 +917,13 @@ export interface DependenciesParams {
   /** Fallback: look the definition up by name (optionally by kind). */
   name?: string;
   kind?: string;
+  /**
+   * Also resolve {@link DependenciesResult.guiUses}: the `.gui` call sites that
+   * reach this definition through a scripted_gui. Off by default — it walks the
+   * scripted_gui definitions that any .gui file calls, which the plain
+   * dependency answer does not need.
+   */
+  guiUses?: boolean;
 }
 export interface DependencyDef {
   name: string;
@@ -711,6 +951,33 @@ export interface DependenciesResult {
   dependents: DependencyGroup[];
   /** Named definitions referenced inside `def`'s block, grouped by target kind. */
   dependencies: DependencyGroup[];
+  /**
+   * The GUI side of the same question, present only when `guiUses` was asked
+   * for: which `.gui` files reach `def`, and through which scripted_gui. `[]`
+   * is the honest "none found"; the field is absent when it was not requested.
+   */
+  guiUses?: GuiUseSite[];
+}
+
+/**
+ * One `.gui` call site that reaches a script definition. The link is always a
+ * scripted_gui: `.gui` invokes script through `GetScriptedGui('name')` and
+ * nothing else, so the path is `file:line -> scripted_gui -> [effects] -> def`.
+ */
+export interface GuiUseSite {
+  /** Absolute path of the `.gui` file holding the call. */
+  file: string;
+  /** 0-based line of the `GetScriptedGui(...)` call. */
+  line: number;
+  /** The scripted_gui the call names. */
+  scriptedGui: string;
+  /**
+   * The scripted effects between that scripted_gui and the definition,
+   * outermost first. Empty means the scripted_gui's own blocks name it
+   * ("directly"); `["effect_a", "effect_b"]` renders as
+   * "via effect_a -> effect_b".
+   */
+  via: string[];
 }
 
 /**

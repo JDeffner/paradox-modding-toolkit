@@ -9,14 +9,15 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import type { GuiLayoutNode, GuiLayoutResult } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutNode, GuiLayoutResult, GuiVisibilityOptions } from "@px-lsp/protocol/protocol";
 import { collectGuiDefs, emptyGuiDefs, mergeGuiDefs, type GuiDefs } from "./guiDefs";
-import { computeGuiLayout, type LayoutNode } from "./layoutEngine";
+import { computeGuiLayout, type LayoutNode, type LayoutTiming, type VisibilityCheck } from "./layoutEngine";
+import { collectScriptedGuiCalls, emptyGuiScriptLinks, type GuiScriptLinks } from "./guiLinks";
 
 /** Matches the game's UI reference resolution at 100% scaling. */
-const VIEWPORT = { w: 1920, h: 1080 };
+export const VIEWPORT = { w: 1920, h: 1080 };
 
-let cache: { key: string; defs: GuiDefs; files: number } | null = null;
+let cache: { key: string; defs: GuiDefs; files: number; links: GuiScriptLinks } | null = null;
 
 function listGuiFiles(root: string): Map<string, string> {
   // relative path (lowercased, forward slashes) -> absolute path
@@ -45,9 +46,12 @@ function buildStore(
   modPath: string | null,
   parentPaths: string[],
   engineRoots: string[]
-): { defs: GuiDefs; files: number } {
+): { defs: GuiDefs; files: number; links: GuiScriptLinks } {
   const key = `${engineRoots.join(";")}|${gamePath ?? ""}|${parentPaths.join(";")}|${modPath ?? ""}`;
-  if (cache && cache.key === key) return { defs: cache.defs, files: cache.files };
+  if (cache) {
+    if (cache.key === key) return cache;
+    cache = null;
+  }
 
   // Effective file set: later roots win the same relative path (whole-file
   // replacement) — engine (jomini), vanilla, parent mods in load order, then the
@@ -58,18 +62,25 @@ function buildStore(
     for (const [rel, abs] of listGuiFiles(path.join(root, "gui"))) effective.set(rel, abs);
   }
   const defs = emptyGuiDefs();
+  const links = emptyGuiScriptLinks();
   let files = 0;
   for (const rel of [...effective.keys()].sort()) {
     const abs = effective.get(rel)!;
     try {
-      mergeGuiDefs(defs, collectGuiDefs(fs.readFileSync(abs, "utf8"), undefined, abs));
+      const text = fs.readFileSync(abs, "utf8");
+      mergeGuiDefs(defs, collectGuiDefs(text, undefined, abs));
+      // Piggybacked on the one pass that already reads every .gui file: the
+      // scripted_gui call scan is a substring test on all but the few files
+      // that hold one, so the link index is effectively free here and a
+      // second walk of the tree would not be.
+      collectScriptedGuiCalls(text, abs, links);
       files++;
     } catch {
       /* unreadable file: skip */
     }
   }
-  cache = { key, defs, files };
-  return { defs, files };
+  cache = { key, defs, files, links };
+  return cache;
 }
 
 /** The cross-file template/type store (cached), for navigation and hover. */
@@ -82,6 +93,16 @@ export function getGuiDefs(
   return buildStore(gamePath, modPath, parentPaths, engineRoots).defs;
 }
 
+/** The cross-file `GetScriptedGui(...)` call index (cached with the store). */
+export function getGuiScriptLinks(
+  gamePath: string | null,
+  modPath: string | null,
+  parentPaths: string[] = [],
+  engineRoots: string[] = []
+): GuiScriptLinks {
+  return buildStore(gamePath, modPath, parentPaths, engineRoots).links;
+}
+
 /** Drop the cached store (mod .gui saved, settings changed). */
 export function invalidateGuiDefsCache(): void {
   cache = null;
@@ -92,10 +113,15 @@ export function computeGuiLayoutResult(
   gamePath: string | null,
   modPath: string | null,
   parentPaths: string[] = [],
-  engineRoots: string[] = []
+  engineRoots: string[] = [],
+  visibility?: GuiVisibilityOptions
 ): GuiLayoutResult {
+  const t0 = performance.now();
   const { defs, files } = buildStore(gamePath, modPath, parentPaths, engineRoots);
-  const nodes = computeGuiLayout(text, { defs, viewport: VIEWPORT });
+  const defsMs = performance.now() - t0;
+  const checks = new Map<string, VisibilityCheck>();
+  const timing: LayoutTiming = { parseMs: 0, layoutMs: 0 };
+  const nodes = computeGuiLayout(text, { defs, viewport: VIEWPORT, visibility, checks, timing });
   const textures = new Set<string>();
   let nodeCount = 0;
   const visit = (n: LayoutNode): void => {
@@ -111,5 +137,12 @@ export function computeGuiLayoutResult(
     textures: [...textures].sort(),
     nodeCount,
     defsFiles: files,
+    visibilityChecks: [...checks.values()].sort((a, b) => a.key.localeCompare(b.key)),
+    timings: {
+      parseMs: timing.parseMs,
+      defsMs,
+      layoutMs: timing.layoutMs,
+      totalMs: performance.now() - t0,
+    },
   };
 }

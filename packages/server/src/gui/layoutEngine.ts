@@ -131,6 +131,77 @@ export interface LayoutNode {
 }
 
 /**
+ * How a widget's rect came to be, recorded only when a caller asks for it.
+ * Structurally identical to the wire types (`GuiPlacementTerm`, `GuiPlacedBy`,
+ * `GuiPlacement`), like LayoutNode is to GuiLayoutNode.
+ */
+export interface PlacementTerm {
+  kind: "parentOrigin" | "parentanchor" | "widgetanchor" | "position";
+  source?: string;
+  dx: number;
+  dy: number;
+}
+export interface PlacedBy {
+  key: string;
+  name?: string;
+  layout: "box" | "flow" | "grid";
+  droppedPosition?: [number, number];
+}
+export interface Placement {
+  rect: LayoutRect;
+  parentRect: LayoutRect;
+  terms: PlacementTerm[];
+  placedBy?: PlacedBy;
+  clippedBy?: { key: string; name?: string; rect: LayoutRect };
+}
+
+/**
+ * Placement-explanation request AND sink: name the widget's own 0-based line,
+ * read `result` after the run. Passing one is what turns the trace on; without
+ * it `arrange` pays a single truthy test per node and allocates nothing.
+ */
+export interface PlacementExplain {
+  line: number;
+  result?: Placement;
+}
+
+/** Ancestor facts the trace needs, built only while explaining. */
+interface ExplainChain {
+  sink: PlacementExplain;
+  parent?: WNode;
+  /** The rect the parent laid its children in (for a container-placed child). */
+  parentRect?: LayoutRect;
+  /** The innermost clipping ancestor above this node. */
+  clip?: { key: string; name?: string; rect: LayoutRect };
+}
+
+/**
+ * How the layout treats a widget whose `visible` holds an expression a static
+ * preview cannot evaluate. Structurally the wire's `GuiVisibilityOptions`.
+ * `visible = no` / `visible = yes` are deterministic and unaffected.
+ */
+export interface VisibilityOptions {
+  mode: "showAll" | "hideAll" | "evaluate";
+  /** `evaluate` only: condition source string -> shown/hidden. */
+  checks?: Record<string, boolean>;
+}
+
+/** One conditional `visible` the run met (the wire's `GuiVisibilityCheck`). */
+export interface VisibilityCheck {
+  key: string;
+  count: number;
+  hidden: boolean;
+}
+
+/** Per-stage wall clock, filled in when a caller passes one. */
+export interface LayoutTiming {
+  /** Parsing the document and collecting its own template/type declarations. */
+  parseMs: number;
+  /** Building the widget tree and arranging every rect. */
+  layoutMs: number;
+}
+
+/**
  * Number of placeholder rows drawn for a datamodel-driven list (unmeasured:
  * a preview affordance, capped per ghostCount so it never overruns a container
  * whose own size is known). GHOST_OPACITY is applied by the client renderer.
@@ -203,11 +274,20 @@ export interface LayoutOptions {
    * local_templates win locally.
    */
   defs?: GuiDefs;
+  /** Conditional-visibility preview mode; absent = `showAll` (today's rule). */
+  visibility?: VisibilityOptions;
+  /** Filled with every conditional `visible` met, key -> count + outcome. */
+  checks?: Map<string, VisibilityCheck>;
+  /** Record why ONE widget's rect is where it is; absent = no trace. */
+  explain?: PlacementExplain;
+  /** Filled with this run's per-stage wall clock; absent = no measurement. */
+  timing?: LayoutTiming;
 }
 
 export function computeGuiLayout(text: string, options?: LayoutOptions): LayoutNode[] {
   const viewport = options?.viewport ?? { w: 1920, h: 1080 };
   const measurer = options?.measurer ?? calibratedMeasurer;
+  const t0 = options?.timing ? performance.now() : 0;
   const result = parseScript(text);
   const consts = collectConstants(result.root.statements);
   const defs = effectiveDefs(text, options?.defs);
@@ -218,10 +298,19 @@ export function computeGuiLayout(text: string, options?: LayoutOptions): LayoutN
     overrides: new Map(),
     stack: [],
     lineOf: (offset) => lineIndex.positionAt(offset).line,
+    visibility: options?.visibility,
+    checks: options?.checks ?? new Map(),
   };
+  const t1 = options?.timing ? performance.now() : 0;
   const widgets = collectWidgets(result.root.statements, ctx);
   const root: LayoutRect = { x: 0, y: 0, w: viewport.w, h: viewport.h };
-  return widgets.map((w) => arrange(w, root, "plain", measurer));
+  const chain: ExplainChain | undefined = options?.explain ? { sink: options.explain } : undefined;
+  const nodes = widgets.map((w) => arrange(w, root, "plain", measurer, undefined, chain));
+  if (options?.timing) {
+    options.timing.parseMs = t1 - t0;
+    options.timing.layoutMs = performance.now() - t1;
+  }
+  return nodes;
 }
 
 /**
@@ -283,6 +372,8 @@ interface WNode {
   consts: Map<string, number>;
   line?: number;
   ownLine: boolean; // line points at this widget's own statement
+  /** Resolved once in the build phase, per the request's visibility mode. */
+  invisible: boolean;
   bg?: Fill;
   ghost?: boolean; // placeholder copy of a datamodel item template
   /**
@@ -402,6 +493,10 @@ interface BuildCtx {
   stack: string[];
   /** Offset -> 0-based line in the current document. */
   lineOf: (offset: number) => number;
+  /** Conditional-visibility mode; absent = showAll. */
+  visibility?: VisibilityOptions;
+  /** Every conditional `visible` met, accumulated across the whole document. */
+  checks: Map<string, VisibilityCheck>;
 }
 
 /**
@@ -431,6 +526,7 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
     consts: ctx.consts,
     line,
     ownLine,
+    invisible: false,
     children: [],
   };
   // Local block overrides, shadowed by inherited (outer) ones.
@@ -487,7 +583,7 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
         if (SKIP_SUBTREES.has(k)) {
           continue;
         } else if (k === "background") {
-          node.bg = fillFrom(child, ctx.consts, ctx.defs);
+          node.bg = resolveFill(child, ctx.consts, ctx.defs);
         } else if (k === "scrollwidget") {
           // Pass-through: scrollarea content renders at the viewport origin
           // with no rect of its own observed (B3-R1).
@@ -546,6 +642,8 @@ function buildWNode(key: string, block: BlockNode, ctx: BuildCtx, line?: number,
     if (!node.pairs.has("size")) node.pairs.set("size", [45, 45]);
     if (!node.props.has("multiline")) node.props.set("multiline", fakeScalar("yes"));
   }
+  // Resolved once, after expansion has settled `visible` last-in-wins.
+  node.invisible = resolveVisibility(node.props.get("visible")?.text, ctx);
 
   // unmeasured: placeholder presentation, not a calibrated layout rule.
   // A datamodel list has no runtime rows in a static preview, so it would draw
@@ -607,7 +705,12 @@ function fakeScalar(text: string): ScalarNode {
   return { kind: "scalar", text, quoted: false, range: { start: 0, end: 0 } };
 }
 
-function fillFrom(block: BlockNode, consts: Map<string, number>, defs: GuiDefs): Fill {
+/**
+ * The Fill a `background = { ... }` block produces, `using =` templates
+ * spliced. Exported so the inspector reads a background exactly the way the
+ * canvas drew it instead of re-deriving the same attributes.
+ */
+export function resolveFill(block: BlockNode, consts: Map<string, number>, defs: GuiDefs): Fill {
   const fill: Fill = {};
   // `background = { using = Background_Area_Dark }` carries its texture via
   // the template; expandWidget with an unknown key just splices templates.
@@ -796,15 +899,35 @@ function policy(node: WNode, horizontal: boolean): Policy {
 }
 
 /**
- * A statically hidden child. `visible = no` is deterministic and collapses;
- * a `visible = "[binding]"` cannot be evaluated in a static preview, so the
- * widget is KEPT even though the engine collapses a binding that evaluates
- * false at runtime (spec.md `ignoreinvisible`, L27): showing it is the
- * non-destructive default for a preview, and the same unknown makes a
+ * Is this widget hidden for layout purposes? `visible = no` is deterministic
+ * and collapses; a `visible = "[binding]"` cannot be evaluated in a static
+ * preview, so by DEFAULT the widget is KEPT even though the engine collapses a
+ * binding that evaluates false at runtime (spec.md `ignoreinvisible`, L27):
+ * showing it is the non-destructive default, and the same unknown makes a
  * container's content unmeasurable (L11b).
+ *
+ * The preview modes only move that default: `hideAll` collapses every
+ * conditional, `evaluate` collapses the ones the caller assigned false. Every
+ * conditional met is recorded either way, so a client can offer the toggles
+ * before the user has switched mode.
  */
+function resolveVisibility(value: string | undefined, ctx: BuildCtx): boolean {
+  if (value === undefined) return false;
+  const lower = value.toLowerCase();
+  if (lower === "no") return true;
+  if (lower === "yes") return false;
+  const mode = ctx.visibility?.mode ?? "showAll";
+  const hiddenNow =
+    mode === "hideAll" ? true : mode === "evaluate" ? ctx.visibility?.checks?.[value] === false : false;
+  const seen = ctx.checks.get(value);
+  if (seen) seen.count++;
+  else ctx.checks.set(value, { key: value, count: 1, hidden: hiddenNow });
+  return hiddenNow;
+}
+
+/** The resolved flag, decided once per widget in the build phase. */
 function hidden(node: WNode): boolean {
-  return node.props.get("visible")?.text.toLowerCase() === "no";
+  return node.invisible;
 }
 
 /** `ignoreinvisible` defaults to yes on hbox/vbox (spec.md, L27). */
@@ -987,7 +1110,8 @@ function arrange(
   content: LayoutRect,
   parentKind: ParentKind,
   measurer: TextMeasurer,
-  forced?: LayoutRect
+  forced?: LayoutRect,
+  chain?: ExplainChain
 ): LayoutNode {
   const rect = forced ?? placeInParent(node, content, measurer);
   const srcPosition = node.pairs.get("position");
@@ -1042,15 +1166,26 @@ function arrange(
     }
   }
 
+  if (
+    chain &&
+    chain.sink.result === undefined &&
+    node.ownLine &&
+    !node.ghost &&
+    node.line === chain.sink.line
+  ) {
+    chain.sink.result = explainPlacement(node, out, content, forced !== undefined, chain);
+  }
+  const sub = chain && descend(chain, node, out);
+
   switch (node.cls) {
     case "box":
-      out.children = arrangeBoxChildren(node, rect, measurer);
+      out.children = arrangeBoxChildren(node, rect, measurer, sub);
       break;
     case "flow":
-      out.children = arrangeFlowChildren(node, rect, measurer);
+      out.children = arrangeFlowChildren(node, rect, measurer, sub);
       break;
     case "grid":
-      out.children = arrangeGridChildren(node, rect, measurer);
+      out.children = arrangeGridChildren(node, rect, measurer, sub);
       break;
     case "marginwidget": {
       // Margins inset the children's coordinate space; the widget's own rect
@@ -1063,14 +1198,88 @@ function arrange(
         w: Math.max(0, rect.w - ml - mr),
         h: Math.max(0, rect.h - mt - mb),
       };
-      out.children = node.children.map((c) => arrange(c, inner, "plain", measurer));
+      out.children = node.children.map((c) => arrange(c, inner, "plain", measurer, undefined, sub));
       break;
     }
     default:
-      out.children = node.children.map((c) => arrange(c, rect, "plain", measurer));
+      out.children = node.children.map((c) => arrange(c, rect, "plain", measurer, undefined, sub));
       break;
   }
   return out;
+}
+
+/** The chain a node's children see: this node as parent, its clip if it clips. */
+function descend(chain: ExplainChain, node: WNode, out: LayoutNode): ExplainChain {
+  return {
+    sink: chain.sink,
+    parent: node,
+    parentRect: out.rect,
+    clip: out.clip ? { key: node.key, name: out.name, rect: out.rect } : chain.clip,
+  };
+}
+
+/**
+ * "Why is it here": the terms of the anchor sum, or the container that placed
+ * the widget instead, plus the clip rect that bounds it.
+ */
+function explainPlacement(
+  node: WNode,
+  out: LayoutNode,
+  content: LayoutRect,
+  forced: boolean,
+  chain: ExplainChain
+): Placement {
+  const placement: Placement = {
+    rect: out.rect,
+    // A container-placed child was handed its slot as `content`; the rect worth
+    // naming is the container's own, which the chain carries.
+    parentRect: forced ? (chain.parentRect ?? content) : content,
+    terms: forced ? [] : placementTerms(node, content, out.rect),
+  };
+  const parent = chain.parent;
+  if (forced && parent) {
+    const pos = node.pairs.get("position");
+    placement.placedBy = {
+      key: parent.key,
+      name: str(parent, "name"),
+      layout: parent.cls === "box" ? "box" : parent.cls === "flow" ? "flow" : "grid",
+      // The engine logs "Widget cannot have a position in a layout" and drops
+      // it (probe 2026-08-02, L23); naming the dropped value is the point.
+      droppedPosition: pos && pos.length >= 2 ? [pos[0], pos[1]] : undefined,
+    };
+  }
+  if (chain.clip) placement.clippedBy = chain.clip;
+  return placement;
+}
+
+/**
+ * The anchor sum, term by term, mirroring placeInParent's formula (B1-B/C/D).
+ * The dx/dy add up to the rect origin exactly, which the test pins: that
+ * equality is what keeps this readout from drifting from the placement it
+ * explains.
+ */
+function placementTerms(node: WNode, content: LayoutRect, rect: LayoutRect): PlacementTerm[] {
+  const pa = str(node, "parentanchor");
+  const waOwn = str(node, "widgetanchor");
+  const wa = waOwn ?? pa;
+  const [pfx, pfy] = anchorFractions(pa);
+  const [wfx, wfy] = anchorFractions(wa);
+  const pos = node.pairs.get("position");
+  const terms: PlacementTerm[] = [{ kind: "parentOrigin", dx: content.x, dy: content.y }];
+  if (pa !== undefined)
+    terms.push({ kind: "parentanchor", source: pa, dx: pfx * content.w, dy: pfy * content.h });
+  if (wa !== undefined) {
+    terms.push({ kind: "widgetanchor", source: wa, dx: -wfx * rect.w, dy: -wfy * rect.h });
+  }
+  if (pos !== undefined) {
+    terms.push({
+      kind: "position",
+      source: `{ ${pos[0] ?? 0} ${pos[1] ?? 0} }`,
+      dx: pos[0] ?? 0,
+      dy: pos[1] ?? 0,
+    });
+  }
+  return terms;
 }
 
 /** Size + anchor + position for a child of a NON-box parent. */
@@ -1134,7 +1343,12 @@ function placeInParent(node: WNode, content: LayoutRect, measurer: TextMeasurer)
  *    side = residual/(2n) on both sides (B1-E/F);
  * 4. cross axis: fill if the cross policy stretches, else centered (B1-E/F).
  */
-function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer): LayoutNode[] {
+function arrangeBoxChildren(
+  box: WNode,
+  rect: LayoutRect,
+  measurer: TextMeasurer,
+  chain?: ExplainChain
+): LayoutNode[] {
   const vertical = box.vertical;
   const [ml, mt, mr, mb] = margins(box);
   const spacing = num(box, "spacing") ?? 0;
@@ -1220,7 +1434,7 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
       const zero: LayoutRect = vertical
         ? { x: rect.x + ml, y: cursor, w: 0, h: 0 }
         : { x: cursor, y: rect.y + mt, w: 0, h: 0 };
-      out.push(arrange(child, zero, "box", measurer, zero));
+      out.push(arrange(child, zero, "box", measurer, zero, chain));
       continue;
     }
     i++;
@@ -1237,14 +1451,19 @@ function arrangeBoxChildren(box: WNode, rect: LayoutRect, measurer: TextMeasurer
     const forced: LayoutRect = vertical
       ? { x: crossOffset, y: cursor, w: cross, h: main }
       : { x: cursor, y: crossOffset, w: main, h: cross };
-    out.push(arrange(child, forced, "box", measurer, forced));
+    out.push(arrange(child, forced, "box", measurer, forced, chain));
     cursor += main + 2 * side + spacing;
   }
   return out;
 }
 
 /** flowcontainer: pack children from the origin, never wrap (B2-K, B3-Q1). */
-function arrangeFlowChildren(flow: WNode, rect: LayoutRect, measurer: TextMeasurer): LayoutNode[] {
+function arrangeFlowChildren(
+  flow: WNode,
+  rect: LayoutRect,
+  measurer: TextMeasurer,
+  chain?: ExplainChain
+): LayoutNode[] {
   const spacing = num(flow, "spacing") ?? 0;
   const out: LayoutNode[] = [];
   let cursor = flow.vertical ? rect.y : rect.x;
@@ -1261,7 +1480,7 @@ function arrangeFlowChildren(flow: WNode, rect: LayoutRect, measurer: TextMeasur
     const forced: LayoutRect = flow.vertical
       ? { x: crossOffset, y: cursor, w: s.w, h: s.h }
       : { x: cursor, y: crossOffset, w: s.w, h: s.h };
-    out.push(arrange(child, forced, "flow", measurer, forced));
+    out.push(arrange(child, forced, "flow", measurer, forced, chain));
     cursor += (flow.vertical ? s.h : s.w) + spacing;
   }
   return out;
@@ -1358,10 +1577,15 @@ function gridCells(grid: WNode, measurer: TextMeasurer): GridCell[] {
 }
 
 /** fixedgridbox / dynamicgridbox: slot the children, cells relative to the grid. */
-function arrangeGridChildren(grid: WNode, rect: LayoutRect, measurer: TextMeasurer): LayoutNode[] {
+function arrangeGridChildren(
+  grid: WNode,
+  rect: LayoutRect,
+  measurer: TextMeasurer,
+  chain?: ExplainChain
+): LayoutNode[] {
   return gridCells(grid, measurer).map((cell) => {
     const forced: LayoutRect = { x: rect.x + cell.x, y: rect.y + cell.y, w: cell.w, h: cell.h };
-    return arrange(cell.child, forced, "plain", measurer, forced);
+    return arrange(cell.child, forced, "plain", measurer, forced, chain);
   });
 }
 
