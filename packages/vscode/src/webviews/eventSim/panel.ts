@@ -396,6 +396,31 @@ function render(msg) {
   for (const step of steps) bodyEl.appendChild(renderStep(detail, step));
 }
 
+// Middle-mouse drag scrolls the walkthrough: the same gesture that pans the
+// event graph and the designer canvas, applied to the surface this view pans.
+// preventDefault on the press and the auxclick suppresses the browser's own
+// autoscroll, which would fight the drag.
+let panFrom = null;
+bodyEl.addEventListener("mousedown", function (ev) {
+  if (ev.button !== 1) return;
+  ev.preventDefault();
+  panFrom = { x: ev.clientX, y: ev.clientY, left: bodyEl.scrollLeft, top: bodyEl.scrollTop };
+  bodyEl.style.cursor = "grabbing";
+});
+window.addEventListener("mousemove", function (ev) {
+  if (!panFrom) return;
+  bodyEl.scrollLeft = panFrom.left - (ev.clientX - panFrom.x);
+  bodyEl.scrollTop = panFrom.top - (ev.clientY - panFrom.y);
+});
+window.addEventListener("mouseup", function () {
+  if (!panFrom) return;
+  panFrom = null;
+  bodyEl.style.cursor = "";
+});
+bodyEl.addEventListener("auxclick", function (ev) {
+  if (ev.button === 1) ev.preventDefault();
+});
+
 backEl.addEventListener("click", function () { vscode.postMessage({ type: "back" }); });
 document.getElementById("reload").addEventListener("click", function () {
   vscode.postMessage({ type: "reload" });

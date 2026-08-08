@@ -404,7 +404,7 @@ export class EventGraphPanel {
           <li><b>Click</b> a box to open the inspector: read and EDIT its localization, jump to any referenced variable/scope/effect, scaffold a new option.</li>
           <li><b>Double-click</b> (or Ctrl+click) opens the source file beside the graph. <b>Right-click</b> re-centers the graph on that event.</li>
           <li><b>Search box</b>: type an event id (namespace.123) or a namespace and hit Go. <b>All nodes</b> shows the whole mod at once. Typing also highlights matching boxes by id or title text.</li>
-          <li>Drag to pan, scroll to zoom, Export saves the picture as SVG.</li>
+          <li>Drag with the left or middle mouse button to pan, scroll to zoom, Export saves the picture as SVG.</li>
         </ul>
       </div>
     </div>
@@ -649,9 +649,13 @@ function fitToView(pos) {
 }
 
 // --- pan + zoom ---
+// Left OR middle drag pans, the same gesture the designer canvas and the GUI
+// preview use. Middle needs preventDefault on both the press and the auxclick
+// or the browser starts its own autoscroll on top of the pan.
 let dragging = false, dragStart = null;
 svg.addEventListener("mousedown", function (ev) {
-  if (ev.button !== 0) return;
+  if (ev.button !== 0 && ev.button !== 1) return;
+  if (ev.button === 1) ev.preventDefault();
   dragging = true;
   dragStart = { x: ev.clientX - view.x, y: ev.clientY - view.y };
   svg.classList.add("dragging");
@@ -665,6 +669,9 @@ window.addEventListener("mousemove", function (ev) {
 window.addEventListener("mouseup", function () {
   dragging = false;
   svg.classList.remove("dragging");
+});
+svg.addEventListener("auxclick", function (ev) {
+  if (ev.button === 1) ev.preventDefault();
 });
 svg.addEventListener("wheel", function (ev) {
   ev.preventDefault();

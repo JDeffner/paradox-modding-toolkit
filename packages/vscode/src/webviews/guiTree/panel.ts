@@ -397,6 +397,30 @@ function toggleAncestors() {
   applyFilter();
 }
 
+// Middle-mouse drag scrolls the tree, which is what panning means here: the
+// same gesture as the event graph and the designer canvas. preventDefault on
+// the press and the auxclick suppresses the browser's own autoscroll.
+let panFrom = null;
+treeEl.addEventListener("mousedown", (ev) => {
+  if (ev.button !== 1) return;
+  ev.preventDefault();
+  panFrom = { x: ev.clientX, y: ev.clientY, left: treeEl.scrollLeft, top: treeEl.scrollTop };
+  treeEl.style.cursor = "grabbing";
+});
+window.addEventListener("mousemove", (ev) => {
+  if (!panFrom) return;
+  treeEl.scrollLeft = panFrom.left - (ev.clientX - panFrom.x);
+  treeEl.scrollTop = panFrom.top - (ev.clientY - panFrom.y);
+});
+window.addEventListener("mouseup", () => {
+  if (!panFrom) return;
+  panFrom = null;
+  treeEl.style.cursor = "";
+});
+treeEl.addEventListener("auxclick", (ev) => {
+  if (ev.button === 1) ev.preventDefault();
+});
+
 filterEl.addEventListener("input", applyFilter);
 ancestorsBtn.addEventListener("click", toggleAncestors);
 window.addEventListener("keydown", (ev) => {
