@@ -252,32 +252,59 @@ export interface TextMeasurer {
 }
 
 /**
- * Metrics measured for Gitan-Regular (StandardGameFont) at fontsize 15 in
- * batches 01-03. Glyphs outside the measured set use a rough default — fine
- * for layout previews, exact for the fixture strings.
+ * A game's measured default-font text metrics: glyph advance/ink table and
+ * line-box height at the fontsize they were measured at. All metrics scale
+ * exactly linearly with fontsize (B3-S3), so one base size is enough. A game
+ * profile carries one once an in-game probe has measured its font
+ * (docs/gui-designer/calibration/probes/); until then the profile leaves it
+ * absent and the batch-01..03 table below is the assumption.
  */
-const GLYPHS: Record<string, { adv: number; ink: number }> = {
-  M: { adv: 14, ink: 13 }, // B1-G, B2-L
-  i: { adv: 4, ink: 4 }, // B1-G, B2-L
-  " ": { adv: 4, ink: 0 }, // B3-S2
-};
-const DEFAULT_GLYPH = { adv: 9, ink: 8 }; // unmeasured average guess
+export interface GuiTextMetrics {
+  /** fontsize the table was measured at. */
+  baseFontsize: number;
+  /** Line box height at baseFontsize. */
+  lineHeight: number;
+  glyphs: Record<string, { adv: number; ink: number }>;
+  /** Fallback for glyphs outside the measured set — a rough average. */
+  defaultGlyph: { adv: number; ink: number };
+}
 
-export const calibratedMeasurer: TextMeasurer = {
-  lineWidth(text, fontsize) {
-    if (text.length === 0) return 0;
-    const s = fontsize / 15; // metrics scale exactly linearly (B3-S3)
-    let w = 0;
-    for (let n = 0; n < text.length; n++) {
-      const g = GLYPHS[text[n]] ?? DEFAULT_GLYPH;
-      w += n === text.length - 1 ? g.ink : g.adv;
-    }
-    return w * s;
+/** Advance-model measurer over a measured metrics table (B2-L, B3-S3). */
+export function measurerFromMetrics(m: GuiTextMetrics): TextMeasurer {
+  return {
+    lineWidth(text, fontsize) {
+      if (text.length === 0) return 0;
+      const s = fontsize / m.baseFontsize; // linear scaling (B3-S3)
+      let w = 0;
+      for (let n = 0; n < text.length; n++) {
+        const g = m.glyphs[text[n]] ?? m.defaultGlyph;
+        w += n === text.length - 1 ? g.ink : g.adv;
+      }
+      return w * s;
+    },
+    lineHeight(fontsize) {
+      return m.lineHeight * (fontsize / m.baseFontsize); // B1-G, B3-S3
+    },
+  };
+}
+
+/**
+ * Metrics measured for Gitan-Regular (StandardGameFont) at fontsize 15 in
+ * batches 01-03 — the default profile's font, and the assumption for games
+ * whose probe has not run yet.
+ */
+const MEASURED_DEFAULT_METRICS: GuiTextMetrics = {
+  baseFontsize: 15,
+  lineHeight: 21, // B1-G
+  glyphs: {
+    M: { adv: 14, ink: 13 }, // B1-G, B2-L
+    i: { adv: 4, ink: 4 }, // B1-G, B2-L
+    " ": { adv: 4, ink: 0 }, // B3-S2
   },
-  lineHeight(fontsize) {
-    return 21 * (fontsize / 15); // B1-G, B3-S3
-  },
+  defaultGlyph: { adv: 9, ink: 8 }, // unmeasured average guess
 };
+
+export const calibratedMeasurer: TextMeasurer = measurerFromMetrics(MEASURED_DEFAULT_METRICS);
 
 export interface LayoutOptions {
   /** Rect the top-level widgets are laid out against. */

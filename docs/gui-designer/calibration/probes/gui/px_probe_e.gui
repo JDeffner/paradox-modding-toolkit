@@ -1,0 +1,54 @@
+# PX cross-game calibration probe E — the GAME's default text look.
+# Deliberately isolated in its own window: it references the game's own
+# `text_single` template, which may not exist in every title. If this window
+# fails to spawn, that is itself a finding — the core probes A-D are unaffected.
+# Spawn:   gui.createwidget gui/px_probe_e.gui px_probe_e
+# Despawn: gui.clearwidgets px_probe_e
+window = {
+	name = "px_probe_e"
+	parentanchor = center
+	size = { 540 300 }
+	layer = top
+
+	widget = {
+		parentanchor = center
+		size = { 500 260 }
+		background = {
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 0 0 1 }
+		}
+
+		# ---- CASE X1: the game's text_single template, template defaults ----
+		text_single = {
+			position = { 20 60 }
+			raw_text = "MMMMMMMMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.5 0 0.5 1 }
+			}
+		}
+		textbox = {
+			position = { 20 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "X1: text_single default"
+		}
+
+		# ---- CASE X2: bare textbox, NO fontsize (the engine default size) ----
+		textbox = {
+			position = { 20 140 }
+			autoresize = yes
+			raw_text = "MMMMMMMMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 0.4 0.4 1 }
+			}
+		}
+		textbox = {
+			position = { 20 106 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "X2: bare textbox default"
+		}
+	}
+}

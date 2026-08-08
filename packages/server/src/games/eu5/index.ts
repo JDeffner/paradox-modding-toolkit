@@ -59,5 +59,7 @@ export const eu5Profile: GameProfile = {
   modifierPlaceholders: {},
   // No bundled wiki tokens in the preview cut, so nothing ever renders this.
   wikiNote: "",
+  // guiTextMetrics deliberately absent: unmeasured until the external probe
+  // run returns (docs/gui-designer/calibration/eu5-package/).
   diagnosticSource: "eu5-script",
 };

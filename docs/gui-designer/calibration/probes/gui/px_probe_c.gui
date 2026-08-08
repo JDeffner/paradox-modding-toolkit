@@ -1,0 +1,348 @@
+# PX cross-game calibration probe C — flowcontainer, container, margin_widget,
+# scrollarea, sizeless/percent/scale.
+# Game-agnostic: no vanilla templates, no loc keys, mod-local white texture.
+# Spawn:   gui.createwidget gui/px_probe_c.gui px_probe_c
+# Despawn: gui.clearwidgets px_probe_c
+# Predictions are the CK3-measured rules (B2-K, B2-I4, B3-Q2/R1, B4-T1-T4,
+# probe 2026-08-02 L13e/L25); see the package's expectations.md.
+window = {
+	name = "px_probe_c"
+	parentanchor = center
+	size = { 980 690 }
+	layer = top
+
+	widget = {
+		parentanchor = center
+		size = { 940 650 }
+		background = {
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 0 0 1 }
+		}
+
+		# ---- CASE C1: flowcontainer hugs, never wraps, overflows (K1) ----
+		# CK3: one row at the parent ORIGIN; total width 286 overflows the
+		# 220 widget unclipped; bg covers the content extent incl. gaps.
+		widget = {
+			position = { 20 60 }
+			size = { 220 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			flowcontainer = {
+				spacing = 8
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.3 0.3 0.05 1 }
+				}
+				icon = {
+					size = { 100 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 80 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 90 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C1: flow overflow"
+		}
+
+		# ---- CASE C2: flowcontainer KEEPS an explicit size (L13e) ----
+		# CK3 probe 2026-08-02: bg covers the authored 180x100 while children
+		# still flow from the origin (60x40 then 40x60 at x=60).
+		widget = {
+			position = { 260 60 }
+			size = { 220 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			flowcontainer = {
+				size = { 180 100 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.3 0.3 0.05 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 260 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C2: sized flow"
+		}
+
+		# ---- CASE C3: container hugs positioned children (I4) ----
+		# CK3: hug extent 180x110 at the parent origin; children keep positions.
+		widget = {
+			position = { 500 60 }
+			size = { 220 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			container = {
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.05 0.3 0.3 1 }
+				}
+				icon = {
+					position = { 10 10 }
+					size = { 20 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					position = { 150 90 }
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 500 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C3: container hug"
+		}
+
+		# ---- CASE C4: NON-empty container keeps an authored size (L25) ----
+		# CK3 probe 2026-08-02: bg covers the full 150x100.
+		widget = {
+			position = { 740 60 }
+			size = { 180 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			container = {
+				size = { 150 100 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.3 0.05 0.3 1 }
+				}
+				icon = {
+					position = { 10 10 }
+					size = { 20 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 740 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C4: sized container"
+		}
+
+		# ---- CASE C5: EMPTY container collapses to 0 despite a size (L25) ----
+		# CK3: NOTHING renders in the gray widget (the orange bg would be
+		# visible if the size held it open).
+		widget = {
+			position = { 20 260 }
+			size = { 180 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			container = {
+				size = { 150 60 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0.5 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C5: empty container"
+		}
+
+		# ---- CASE C6: margin_widget with 100% size + margins (T3) ----
+		# CK3: rect stays the full 220x140 (bg covers it); the red child's
+		# origin shifts to (20,15).
+		widget = {
+			position = { 240 260 }
+			size = { 220 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			margin_widget = {
+				size = { 100% 100% }
+				margin = { 20 15 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.1 0.3 0.1 1 }
+				}
+				icon = {
+					size = { 30 30 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 240 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C6: margin_widget 100%"
+		}
+
+		# ---- CASE C7: sizeless margin_widget (B3-Q2) ----
+		# CK3: renders zero/hugged; where does the red child land?
+		widget = {
+			position = { 500 260 }
+			size = { 190 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			margin_widget = {
+				margin = { 20 15 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.1 0.3 0.1 1 }
+				}
+				icon = {
+					size = { 30 30 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 500 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C7: sizeless mw"
+		}
+
+		# ---- CASE C8: scrollarea clips (R1) ----
+		# CK3: the cyan 300x300 content shows ONLY inside the 160x100 viewport
+		# at the widget origin.
+		widget = {
+			position = { 720 260 }
+			size = { 200 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			scrollarea = {
+				size = { 160 100 }
+				scrollwidget = {
+					icon = {
+						size = { 300 300 }
+						texture = "gfx/px_probe/white.dds"
+						color = { 0 1 1 1 }
+					}
+				}
+			}
+		}
+		textbox = {
+			position = { 720 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C8: scrollarea"
+		}
+
+		# ---- CASE C9: sizeless plain widget = ZERO rect (T1) ----
+		# CK3: the magenta bg never renders; the red child still renders at
+		# canvas (30,450).
+		widget = {
+			position = { 20 440 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 1 1 }
+			}
+
+			icon = {
+				position = { 10 10 }
+				size = { 40 40 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 0 1 }
+			}
+		}
+		textbox = {
+			position = { 20 406 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C9: sizeless widget"
+		}
+
+		# ---- CASE C10: percent sizes resolve against the parent (T2) ----
+		# CK3: the inner widget renders 100x50 at the parent origin.
+		widget = {
+			position = { 240 440 }
+			size = { 200 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			widget = {
+				size = { 50% 50% }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0.5 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 240 406 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C10: 50% size"
+		}
+
+		# ---- CASE C11: scale multiplies the rect at the same origin (T4) ----
+		# CK3: the green icon renders 80x80 with its top-left at (500,440).
+		icon = {
+			position = { 500 440 }
+			size = { 40 40 }
+			scale = 2.0
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 1 0 1 }
+		}
+		textbox = {
+			position = { 500 406 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C11: scale 2.0"
+		}
+	}
+}

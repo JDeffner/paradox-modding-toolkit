@@ -16,6 +16,9 @@ export const vic3Profile: GameProfile = {
   prefixRefs: VIC3_PREFIX_REFS,
   blockRefFields: VIC3_BLOCK_REF_FIELDS,
   guiSchema: GUI_SCHEMA,
+  // guiTextMetrics deliberately absent: Vic3's default GUI font is Open Sans,
+  // not the engine default's Gitan-Regular, but its metrics are unmeasured
+  // until the probe runs (docs/gui-designer/calibration/vic3-probe.md).
   // No `_*.info` docs exist anywhere in the Vic3 tree (verified 2026-08-01) —
   // the structures layer has no source. The tree does ship ~75 `.md` files
   // (common/buildings/buildings.md and friends), but they are freeform prose

@@ -12,7 +12,8 @@
  */
 import { describe, expect, it } from "vitest";
 import type { GuiVisibilityOptions } from "@px-lsp/protocol/protocol";
-import { computeGuiLayoutResult } from "../src/gui/layoutService";
+import { computeGuiLayoutResult, profileMeasurer } from "../src/gui/layoutService";
+import { activeProfile, setActiveProfile } from "../src/games/active";
 
 const COND_A = "[GetPlayer.IsAI]";
 const COND_B = "[Character.IsAlive]";
@@ -138,5 +139,40 @@ describe("timings", () => {
     // The stages run inside the request, so their sum cannot exceed it (a small
     // slack absorbs the clock reads between them).
     expect(timings.parseMs + timings.defsMs + timings.layoutMs).toBeLessThanOrEqual(timings.totalMs + 1);
+  });
+});
+
+describe("game-profile text metrics", () => {
+  const TEXTBOX = 'textbox = { autoresize = yes fontsize = 15 raw_text = "MMMM" }';
+
+  it("a profile carrying guiTextMetrics changes the measured text rect", () => {
+    const before = computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect;
+    // Calibrated default: (n-1)*14 + 13 = 55 wide, 21 tall (B2-L, B1-G).
+    expect(before.w).toBe(55);
+    expect(before.h).toBe(21);
+
+    const base = activeProfile();
+    setActiveProfile({
+      ...base,
+      // A probe-measured table with doubled M metrics and a 30px line box.
+      guiTextMetrics: {
+        baseFontsize: 15,
+        lineHeight: 30,
+        glyphs: { M: { adv: 28, ink: 26 } },
+        defaultGlyph: { adv: 9, ink: 8 },
+      },
+    });
+    try {
+      const after = computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect;
+      expect(after.w).toBe(3 * 28 + 26);
+      expect(after.h).toBe(30);
+    } finally {
+      setActiveProfile(base);
+    }
+  });
+
+  it("without guiTextMetrics the calibrated default still applies (all shipped profiles today)", () => {
+    expect(activeProfile().guiTextMetrics).toBeUndefined();
+    expect(profileMeasurer()).toBeUndefined();
   });
 });
