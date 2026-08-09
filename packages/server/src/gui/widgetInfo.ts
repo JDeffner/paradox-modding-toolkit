@@ -42,6 +42,7 @@ import {
   type PlacementExplain,
 } from "./layoutEngine";
 import { expandWidgetWithOrigins, typeBaseChain, type GuiDefs } from "./guiDefs";
+import { profileMeasurer } from "./layoutService";
 import { findWidgetAtLine, parseGuiSource, type GuiSourceFile } from "./sourceModel";
 import { describeTexture, type TextureRoots } from "./textureInfo";
 
@@ -130,7 +131,7 @@ export function computeGuiWidgetInfo(
     // The trace is what the flag gates: an ordinary layout never records it,
     // so the default path stays at today's cost.
     const explain: PlacementExplain = { line: target.line };
-    computeGuiLayout(text, { defs: store, viewport: options.viewport, explain });
+    computeGuiLayout(text, { defs: store, viewport: options.viewport, explain, measurer: profileMeasurer() });
     // Placement is structurally the wire type, like LayoutNode is.
     if (explain.result) info.placement = explain.result as unknown as GuiPlacement;
   }

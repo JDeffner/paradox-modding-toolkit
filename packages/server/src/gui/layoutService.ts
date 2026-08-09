@@ -11,8 +11,29 @@ import * as fs from "fs";
 import * as path from "path";
 import type { GuiLayoutNode, GuiLayoutResult, GuiVisibilityOptions } from "@px-lsp/protocol/protocol";
 import { collectGuiDefs, emptyGuiDefs, mergeGuiDefs, type GuiDefs } from "./guiDefs";
-import { computeGuiLayout, type LayoutNode, type LayoutTiming, type VisibilityCheck } from "./layoutEngine";
+import {
+  calibratedMeasurer,
+  computeGuiLayout,
+  measurerFromMetrics,
+  type LayoutEnv,
+  type LayoutNode,
+  type LayoutTiming,
+  type VisibilityCheck,
+} from "./layoutEngine";
 import { collectScriptedGuiCalls, emptyGuiScriptLinks, type GuiScriptLinks } from "./guiLinks";
+import { activeProfile } from "../games/active";
+
+/**
+ * The active game's measured layout environment, when its profile carries
+ * probe results (GameProfile.guiTextMetrics / guiLayoutQuirks); undefined
+ * falls back to the engine's calibrated defaults.
+ */
+export function profileMeasurer(): LayoutEnv | undefined {
+  const { guiTextMetrics, guiLayoutQuirks } = activeProfile();
+  if (!guiTextMetrics && !guiLayoutQuirks) return undefined;
+  const base = guiTextMetrics ? measurerFromMetrics(guiTextMetrics) : calibratedMeasurer;
+  return { ...base, ...guiLayoutQuirks };
+}
 
 /** Matches the game's UI reference resolution at 100% scaling. */
 export const VIEWPORT = { w: 1920, h: 1080 };
@@ -121,7 +142,14 @@ export function computeGuiLayoutResult(
   const defsMs = performance.now() - t0;
   const checks = new Map<string, VisibilityCheck>();
   const timing: LayoutTiming = { parseMs: 0, layoutMs: 0 };
-  const nodes = computeGuiLayout(text, { defs, viewport: VIEWPORT, visibility, checks, timing });
+  const nodes = computeGuiLayout(text, {
+    defs,
+    viewport: VIEWPORT,
+    visibility,
+    checks,
+    timing,
+    measurer: profileMeasurer(),
+  });
   const textures = new Set<string>();
   let nodeCount = 0;
   const visit = (n: LayoutNode): void => {

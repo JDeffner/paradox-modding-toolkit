@@ -122,8 +122,11 @@ expands, so children end up packed from the box origin).
 - `margin = { a b }` offsets the CHILDREN's coordinate origin by (a,b);
   it does NOT shrink the margin_widget's own rect. With
   `size = { 100% 100% }` the rect is the full parent and children start
-  at (a,b). Without a size it renders zero/hugged like B3-Q2 showed.
-  (B3-Q2, B4-T3)
+  at (a,b). Without a size it hugs its children AT the margin offset: the
+  bg renders exactly behind them, never in the (0,0)..(a,b) strips an
+  origin-anchored hug would paint. (B3-Q2; re-confirmed on Vic3, probe
+  2026-08-09. A zero rect also fits both screenshots — a two-child case
+  separating hug-union from zero is queued.)
 - OPEN: whether a box child inside it fills parent-minus-margins (the
   vanilla HUD pattern implies yes; unmeasured).
 
@@ -252,7 +255,10 @@ toolkit's own coverage of each is tracked in
   one collapses to 0, where a fixed size will not hold it open. Same
   warn-yet-apply engine behavior as the flowcontainer. (In-game probe
   2026-08-02; settles the L25 owner question on the NARROW side, and the
-  engine's broad G2 implementation was corrected the same day.)
+  engine's broad G2 implementation was corrected the same day.) GAME-TAGGED:
+  Vic3 measured the BROAD rule — an EMPTY sized container keeps its size too
+  (probe 2026-08-09, warn-yet-apply); carried as the vic3 profile quirk
+  `emptySizedContainerKept`.
 - A percentage WIDTH inside a `vbox` CRASHES the game: the vbox's width is
   content-derived and therefore indeterminate, so the `%` has nothing to
   resolve against. A percentage HEIGHT is the milder case. This is the
@@ -364,6 +370,19 @@ computed rect.
   `ordered_in_global_list = { max = <var> ... }`; a `limit`-gated
   `every_in_global_list` does not work, because the limit is snapshotted
   before the effects run. (Studio, encoded rule)
+
+## Cross-game measurements
+
+The rules above are the DEFAULT profile's, measured on its live install.
+The Vic3 probe of 2026-08-09 (`vic3-expectations.md`) re-measured the core
+model: everything held pixel-exact EXCEPT the empty-sized-container rule
+(game-tagged above), text metrics (per-game font: Vic3's advance re-rounds
+per size, `round(0.9*fs)` for M, line box exactly `1.3*fs`, default
+fontsize 17 — carried in the vic3 profile's `guiTextMetrics`), and
+`max_width` overflow presentation (Vic3 does not elide; the BOX rect is
+identical, ink just overflows). It also newly measured the policy-less
+deficit default (no shrink — the engine's assumption, now with vic3
+provenance) and disambiguated the sizeless margin_widget hug (above).
 
 ## Practical notes for the calibration harness itself
 

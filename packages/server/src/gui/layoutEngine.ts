@@ -252,32 +252,100 @@ export interface TextMeasurer {
 }
 
 /**
- * Metrics measured for Gitan-Regular (StandardGameFont) at fontsize 15 in
- * batches 01-03. Glyphs outside the measured set use a rough default — fine
- * for layout previews, exact for the fixture strings.
+ * A game's measured default-font text metrics: glyph advance/ink table and
+ * line-box height at the fontsize they were measured at. All metrics scale
+ * exactly linearly with fontsize (B3-S3), so one base size is enough. A game
+ * profile carries one once an in-game probe has measured its font
+ * (docs/gui-designer/calibration/probes/); until then the profile leaves it
+ * absent and the batch-01..03 table below is the assumption.
  */
-const GLYPHS: Record<string, { adv: number; ink: number }> = {
-  M: { adv: 14, ink: 13 }, // B1-G, B2-L
-  i: { adv: 4, ink: 4 }, // B1-G, B2-L
-  " ": { adv: 4, ink: 0 }, // B3-S2
-};
-const DEFAULT_GLYPH = { adv: 9, ink: 8 }; // unmeasured average guess
+export interface GuiTextMetrics {
+  /** fontsize the table was measured at. */
+  baseFontsize: number;
+  /** Line box height at baseFontsize. */
+  lineHeight: number;
+  glyphs: Record<string, { adv: number; ink: number }>;
+  /** Fallback for glyphs outside the measured set — a rough average. */
+  defaultGlyph: { adv: number; ink: number };
+  /**
+   * The fontsize a textbox renders at when it sets none. Absent = 15 (the
+   * default profile's Font_Size_Small).
+   */
+  defaultFontsize?: number;
+  /**
+   * When true, each glyph's advance/ink is ROUNDED after scaling to the
+   * requested fontsize instead of scaling the sum linearly. Vic3 measured
+   * this law (probe 2026-08-09): M advance = round(0.9 * fontsize) — 14 at
+   * 15, 15 at 17, 27 at 30 — which no linear table reproduces. Pick
+   * baseFontsize so adv/base is the glyph's true em fraction. lineHeight
+   * still scales linearly (Vic3's 1.3 * fontsize law is exact).
+   */
+  roundPerSize?: boolean;
+}
 
-export const calibratedMeasurer: TextMeasurer = {
-  lineWidth(text, fontsize) {
-    if (text.length === 0) return 0;
-    const s = fontsize / 15; // metrics scale exactly linearly (B3-S3)
-    let w = 0;
-    for (let n = 0; n < text.length; n++) {
-      const g = GLYPHS[text[n]] ?? DEFAULT_GLYPH;
-      w += n === text.length - 1 ? g.ink : g.adv;
-    }
-    return w * s;
+/**
+ * Measured per-game layout rule divergences. Every flag cites the probe that
+ * measured it; absent flags mean the engine's default (in-game-measured for
+ * the default profile) applies.
+ */
+export interface GuiLayoutQuirks {
+  /**
+   * An EMPTY `container` with an authored `size` KEEPS it instead of
+   * collapsing to 0. Measured on Vic3 (probe 2026-08-09: the empty sized
+   * container rendered its full 150x60, engine warning logged yet applied);
+   * the default profile measured the opposite, narrow rule (probe
+   * 2026-08-02, L25).
+   */
+  emptySizedContainerKept?: boolean;
+}
+
+/**
+ * What the engine threads through layout: the text measurer plus the game's
+ * measured defaults and quirks. A plain TextMeasurer is a valid LayoutEnv
+ * (every extra field optional = the default profile's measured behavior).
+ */
+export interface LayoutEnv extends TextMeasurer, GuiLayoutQuirks {
+  defaultFontsize?: number;
+}
+
+/** Advance-model measurer over a measured metrics table (B2-L, B3-S3). */
+export function measurerFromMetrics(m: GuiTextMetrics): LayoutEnv {
+  return {
+    lineWidth(text, fontsize) {
+      if (text.length === 0) return 0;
+      const s = fontsize / m.baseFontsize; // linear scaling (B3-S3)
+      const scaled = m.roundPerSize ? (v: number) => Math.round(v * s) : (v: number) => v * s;
+      let w = 0;
+      for (let n = 0; n < text.length; n++) {
+        const g = m.glyphs[text[n]] ?? m.defaultGlyph;
+        w += scaled(n === text.length - 1 ? g.ink : g.adv);
+      }
+      return w;
+    },
+    lineHeight(fontsize) {
+      return m.lineHeight * (fontsize / m.baseFontsize); // B1-G, B3-S3
+    },
+    defaultFontsize: m.defaultFontsize,
+  };
+}
+
+/**
+ * Metrics measured for Gitan-Regular (StandardGameFont) at fontsize 15 in
+ * batches 01-03 — the default profile's font, and the assumption for games
+ * whose probe has not run yet.
+ */
+const MEASURED_DEFAULT_METRICS: GuiTextMetrics = {
+  baseFontsize: 15,
+  lineHeight: 21, // B1-G
+  glyphs: {
+    M: { adv: 14, ink: 13 }, // B1-G, B2-L
+    i: { adv: 4, ink: 4 }, // B1-G, B2-L
+    " ": { adv: 4, ink: 0 }, // B3-S2
   },
-  lineHeight(fontsize) {
-    return 21 * (fontsize / 15); // B1-G, B3-S3
-  },
+  defaultGlyph: { adv: 9, ink: 8 }, // unmeasured average guess
 };
+
+export const calibratedMeasurer: TextMeasurer = measurerFromMetrics(MEASURED_DEFAULT_METRICS);
 
 export interface LayoutOptions {
   /** Rect the top-level widgets are laid out against. */
@@ -1013,7 +1081,7 @@ function contentSized(cls: WidgetClass): boolean {
 // Natural (content-hug) sizes, bottom-up
 // ---------------------------------------------------------------------------
 
-function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: number } {
+function naturalSize(node: WNode, measurer: LayoutEnv): { w: number; h: number } {
   switch (node.cls) {
     case "expand":
       return { w: 0, h: 0 };
@@ -1078,9 +1146,11 @@ function naturalSize(node: WNode, measurer: TextMeasurer): { w: number; h: numbe
       // children keeps an authored `size` (the engine warns yet applies it);
       // an EMPTY one collapses, a fixed size will not hold it open. Without
       // an authored size it hugs the children's extent at their positions
-      // (B2-I4).
+      // (B2-I4). Vic3 measured the BROAD rule instead — an empty sized
+      // container keeps its size too (probe 2026-08-09) — carried as a
+      // profile quirk.
       const explicit = explicitSize(node);
-      if (explicit && node.children.length > 0) return explicit;
+      if (explicit && (node.children.length > 0 || measurer.emptySizedContainerKept)) return explicit;
       return hugChildren(node, measurer);
     }
     case "item":
@@ -1241,6 +1311,19 @@ function arrange(
         h: Math.max(0, rect.h - mt - mb),
       };
       out.children = node.children.map((c) => arrange(c, inner, "plain", measurer, undefined, sub));
+      // A margin_widget with NO explicit size hugs its children AT the margin
+      // offset: both probes (B3-Q2; Vic3 2026-08-09) saw the bg exactly
+      // behind the child, never in the margin strips an origin-anchored hug
+      // would paint. rect came in margin-inclusive from naturalSize; shift
+      // the box, children stay put.
+      if (!explicitSize(node)) {
+        out.rect = {
+          x: rect.x + ml,
+          y: rect.y + mt,
+          w: Math.max(0, rect.w - ml),
+          h: Math.max(0, rect.h - mt),
+        };
+      }
       break;
     }
     default:
@@ -1657,8 +1740,10 @@ function textContent(node: WNode): string {
   return str(node, "raw_text") ?? str(node, "text") ?? "";
 }
 
-function textSize(node: WNode, measurer: TextMeasurer): { size: { w: number; h: number }; lines: string[] } {
-  const fontsize = num(node, "fontsize") ?? 15; // Font_Size_Small default
+function textSize(node: WNode, measurer: LayoutEnv): { size: { w: number; h: number }; lines: string[] } {
+  // The game's measured default size when the textbox sets none; 15 is the
+  // default profile's Font_Size_Small (Vic3 measured 17, probe 2026-08-09).
+  const fontsize = num(node, "fontsize") ?? measurer.defaultFontsize ?? 15;
   const content = textContent(node);
   const maxWidth = num(node, "max_width");
   const explicit = explicitSize(node);
@@ -1688,8 +1773,8 @@ function textSize(node: WNode, measurer: TextMeasurer): { size: { w: number; h: 
   };
 }
 
-function textInfo(node: WNode, rect: LayoutRect, measurer: TextMeasurer): TextInfo {
-  const fontsize = num(node, "fontsize") ?? 15;
+function textInfo(node: WNode, rect: LayoutRect, measurer: LayoutEnv): TextInfo {
+  const fontsize = num(node, "fontsize") ?? measurer.defaultFontsize ?? 15;
   const { lines } = textSize(node, measurer);
   const textW = Math.max(0, ...lines.map((l) => measurer.lineWidth(l, fontsize)));
   const lineH = measurer.lineHeight(fontsize);

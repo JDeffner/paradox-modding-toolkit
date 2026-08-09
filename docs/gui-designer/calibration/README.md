@@ -65,3 +65,14 @@ Planned next: margin_widget, scrollarea viewport, nine-slice `spriteborder`
 and sprite frames (needs a purpose-built calibration DDS generated with the
 repo's own DDS encoder), fixedgridbox cell math, min_width/max_width on
 text, icon scale/mirror, sub-pixel rasterization rule.
+
+## Cross-game probes (Vic3 / EU5)
+
+The engine's measured defaults are CK3-tuned. `probes/` carries the same
+experiments as game-agnostic probe windows for other titles, with the
+CK3-tuned engine's own output as the prediction column
+(`probes/engine-predictions.txt`). Packages: `eu5-package/` (self-contained,
+for an external runner) and `vic3-probe.md` (run checklist; the mod is
+installed in the local Vic3 mods folder). Results feed
+`GameProfile.guiTextMetrics` and, if a layout rule itself diverges, new
+game-tagged spec entries.

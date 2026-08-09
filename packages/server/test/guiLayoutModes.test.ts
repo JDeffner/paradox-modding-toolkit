@@ -10,9 +10,12 @@
  * the rects the collapse produces, not just on a flag: a mode that reported a
  * check but did not move anything would be useless.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GuiVisibilityOptions } from "@px-lsp/protocol/protocol";
-import { computeGuiLayoutResult } from "../src/gui/layoutService";
+import { computeGuiLayoutResult, profileMeasurer } from "../src/gui/layoutService";
+import { activeProfile, setActiveProfile } from "../src/games/active";
+import { defaultProfile } from "../src/games/registry";
+import { vic3Profile } from "../src/games/vic3";
 
 const COND_A = "[GetPlayer.IsAI]";
 const COND_B = "[Character.IsAlive]";
@@ -138,5 +141,73 @@ describe("timings", () => {
     // The stages run inside the request, so their sum cannot exceed it (a small
     // slack absorbs the clock reads between them).
     expect(timings.parseMs + timings.defsMs + timings.layoutMs).toBeLessThanOrEqual(timings.totalMs + 1);
+  });
+});
+
+describe("game-profile text metrics", () => {
+  const TEXTBOX = 'textbox = { autoresize = yes fontsize = 15 raw_text = "MMMM" }';
+
+  it("a profile carrying guiTextMetrics changes the measured text rect", () => {
+    const before = computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect;
+    // Calibrated default: (n-1)*14 + 13 = 55 wide, 21 tall (B2-L, B1-G).
+    expect(before.w).toBe(55);
+    expect(before.h).toBe(21);
+
+    const base = activeProfile();
+    setActiveProfile({
+      ...base,
+      // A probe-measured table with doubled M metrics and a 30px line box.
+      guiTextMetrics: {
+        baseFontsize: 15,
+        lineHeight: 30,
+        glyphs: { M: { adv: 28, ink: 26 } },
+        defaultGlyph: { adv: 9, ink: 8 },
+      },
+    });
+    try {
+      const after = computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect;
+      expect(after.w).toBe(3 * 28 + 26);
+      expect(after.h).toBe(30);
+    } finally {
+      setActiveProfile(base);
+    }
+  });
+
+  it("without guiTextMetrics or quirks the calibrated default still applies", () => {
+    expect(activeProfile().guiTextMetrics).toBeUndefined();
+    expect(activeProfile().guiLayoutQuirks).toBeUndefined();
+    expect(profileMeasurer()).toBeUndefined();
+  });
+});
+
+describe("vic3 measured calibration (probe 2026-08-09)", () => {
+  const rectOf = (gui: string) => computeGuiLayoutResult(gui, null, null, [], []).nodes[0].rect;
+  const TENM = 'raw_text = "MMMMMMMMMM"';
+
+  beforeEach(() => setActiveProfile(vic3Profile));
+  afterEach(() => setActiveProfile(defaultProfile));
+
+  it("reproduces every measured text box exactly", () => {
+    // px_probe_d T1/T3 and px_probe_e X2, measured at 1920x1080, 100% scaling.
+    const r15 = rectOf(`textbox = { autoresize = yes fontsize = 15 ${TENM} }`);
+    expect([r15.w, r15.h]).toEqual([140, 19.5]); // game ceils the box to 20
+    const r30 = rectOf(`textbox = { autoresize = yes fontsize = 30 ${TENM} }`);
+    expect([r30.w, r30.h]).toEqual([270, 39]);
+    // A bare textbox renders at the measured default fontsize 17.
+    const rDef = rectOf(`textbox = { autoresize = yes ${TENM} }`);
+    expect(rDef.w).toBe(150); // round(0.9*17) = 15 per glyph
+    expect(rDef.h).toBeCloseTo(22.1); // 1.3*17; game ceils to the measured 23
+    // Space advance 3 (T4) and the multiline widest line (T6).
+    expect(rectOf('textbox = { autoresize = yes fontsize = 15 raw_text = "M M M M M" }').w).toBe(82);
+    expect(rectOf('textbox = { autoresize = yes fontsize = 15 raw_text = "MMMM MMMM" }').w).toBe(115);
+  });
+
+  it("an EMPTY container keeps an authored size (quirk; the default profile collapses it)", () => {
+    const gui = "container = { size = { 150 60 } }";
+    const kept = rectOf(gui);
+    expect([kept.w, kept.h]).toEqual([150, 60]); // px_probe_c C5
+    setActiveProfile(defaultProfile);
+    const collapsed = rectOf(gui);
+    expect([collapsed.w, collapsed.h]).toEqual([0, 0]); // L25 narrow, 2026-08-02
   });
 });

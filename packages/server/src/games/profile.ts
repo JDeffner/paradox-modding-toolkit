@@ -10,6 +10,7 @@
  */
 import type { RefField, SchemaEntry } from "../schema/types";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
+import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 
 /**
  * Data-only identity and conventions of a supported game. Kept separate from
@@ -97,6 +98,19 @@ export interface GameProfile extends GameMeta {
   bundledDataTypes?: unknown;
   /** Bundled .gui widget schema (data/<id>/guiSchema.json), when available. */
   guiSchema?: unknown;
+  /**
+   * In-game-measured text metrics for the game's default GUI font, feeding
+   * the layout engine's text measurer. Absent = the engine's calibrated
+   * default table (measured for the default profile's font) is the
+   * assumption. Measured via docs/gui-designer/calibration/probes/.
+   */
+  guiTextMetrics?: GuiTextMetrics;
+  /**
+   * In-game-measured layout rule divergences from the engine's defaults
+   * (which are themselves in-game-measured for the default profile). Each
+   * flag documents its probe in gui/layoutEngine.ts's GuiLayoutQuirks.
+   */
+  guiLayoutQuirks?: GuiLayoutQuirks;
   /** Trailing provenance note on bundled-wiki token hovers. */
   wikiNote: string;
   /** LSP diagnostic `source` label ("ck3-script"). */
