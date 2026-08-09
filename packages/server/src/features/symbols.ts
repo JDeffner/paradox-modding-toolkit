@@ -8,6 +8,8 @@ import { SymbolKind, type DocumentSymbol, type Range as LspRange } from "vscode-
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { AssignmentNode, LineIndex, Range, Statement } from "../parser";
 import { EVENT_ID } from "../index/indexer";
+import { DECL_MARKERS, SLOT_KEYS } from "../gui/declMarkers";
+import { PROPERTY_BLOCKS } from "../gui/layoutEngine";
 import { getLocParse, getParse } from "../parseCache";
 
 function toLspRange(lines: LineIndex, range: Range): LspRange {
@@ -44,7 +46,112 @@ const INTERESTING_CHILD_BLOCKS = new Set([
 
 export function provideDocumentSymbols(document: TextDocument): DocumentSymbol[] {
   if (document.languageId === "paradox-loc") return locSymbols(document);
+  if (document.languageId === "paradox-gui") return guiSymbols(document);
   return scriptSymbols(document);
+}
+
+/**
+ * PdxGui outline: the declaration markers (`types Group`, `template Name`,
+ * `type name = base`) plus the FULL nested widget-block tree. Nesting is what
+ * sticky scroll pins headers from and breadcrumbs navigate by. Property
+ * blocks (`size = {...}`, `state`, `modify_texture`, ... — the engine's
+ * PROPERTY_BLOCKS, the same "data, not children" split guiTree draws) emit no
+ * symbol: measured over vanilla, they were 33% of hud.gui's and 14% of
+ * custom_tooltip.gui's entries, pure noise between the widget headers. The
+ * cap guards degenerate files; with the property filter the largest measured
+ * vanilla file (right_click_menu.gui, ~3.7k widget blocks) fits under it.
+ */
+const GUI_SYMBOL_CAP = 6000;
+
+/** A quoted scalar's text without its quotes (widget `name = "x"` details). */
+function unquote(text: string): string {
+  return text.length >= 2 && text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text;
+}
+
+function guiSymbols(document: TextDocument): DocumentSymbol[] {
+  const { result, lineIndex } = getParse(document);
+  const budget = { left: GUI_SYMBOL_CAP };
+  return guiBlockSymbols(result.root.statements, lineIndex, budget);
+}
+
+function guiBlockSymbols(
+  statements: Statement[],
+  lineIndex: LineIndex,
+  budget: { left: number }
+): DocumentSymbol[] {
+  const symbols: DocumentSymbol[] = [];
+  let marker: { word: string; start: number } | null = null;
+  for (const stmt of statements) {
+    if (budget.left <= 0) break;
+    // `types X { }` / `template X { }` / `type x = base { }` /
+    // `blockoverride "slot" { }` lex as a loose scalar marker followed by the
+    // named assignment (guiDefs and the source model read them the same way).
+    if (stmt.kind === "value") {
+      if (stmt.value.kind === "scalar" && DECL_MARKERS.has(stmt.value.text.toLowerCase())) {
+        marker = { word: stmt.value.text.toLowerCase(), start: stmt.range.start };
+      } else if (stmt.value.kind === "block") {
+        // An anonymous list block: no symbol of its own, but the widgets
+        // inside still reach the outline.
+        marker = null;
+        symbols.push(...guiBlockSymbols(stmt.value.statements, lineIndex, budget));
+      } else {
+        marker = null;
+      }
+      continue;
+    }
+    const declared = marker?.word ?? null;
+    const declaredStart = marker?.start;
+    marker = null;
+    if (stmt.kind !== "assignment") continue;
+    const value = stmt.value;
+    const block = value?.kind === "block" ? value : value?.kind === "tagged-block" ? value.block : null;
+    if (!block) continue;
+    const base = value?.kind === "tagged-block" ? value.tag.text : null;
+    const lower = stmt.key.text.toLowerCase();
+    // Property blocks are data, not structure (guiTree's split): no symbol,
+    // no recursion — unless the key is a declared slot or the assignment
+    // spelling of one (`blockoverride = "name" { ... }`).
+    if (!declared && PROPERTY_BLOCKS.has(lower) && !(SLOT_KEYS.has(lower) && base)) continue;
+    budget.left--;
+    const children = guiBlockSymbols(block.statements, lineIndex, budget);
+    let name = stmt.key.text;
+    let detail: string | undefined;
+    let kind: SymbolKind = SymbolKind.Object;
+    if (declared === "types") {
+      name = `types ${stmt.key.text}`;
+      kind = SymbolKind.Namespace;
+    } else if (declared === "template" || declared === "local_template") {
+      name = `${declared} ${stmt.key.text}`;
+      kind = SymbolKind.Class;
+    } else if (declared === "block" || declared === "blockoverride") {
+      name = `${declared} ${unquote(stmt.key.text)}`;
+      kind = SymbolKind.Field;
+    } else if (SLOT_KEYS.has(lower) && base) {
+      // The assignment spelling of a slot: `blockoverride = "name" { ... }`.
+      name = `${stmt.key.text} ${unquote(base)}`;
+      kind = SymbolKind.Field;
+    } else if (declared === "type" || base) {
+      detail = base ? `= ${base}` : undefined;
+      kind = SymbolKind.Class;
+    } else {
+      // A widget instance: its `name = "..."` property is how modders and the
+      // game's error log identify it.
+      const widgetName = childScalar(block.statements, "name");
+      detail = widgetName ? unquote(widgetName) : undefined;
+    }
+    symbols.push({
+      name,
+      detail,
+      kind,
+      // A declaration's range starts at its marker word (`types`, `template`,
+      // `blockoverride`...) so cursor-on-the-keyword still resolves to the
+      // symbol; the marker is a sibling statement, so containment holds.
+      range: toLspRange(lineIndex, { start: declaredStart ?? stmt.range.start, end: stmt.range.end }),
+      selectionRange: toLspRange(lineIndex, stmt.key.range),
+      children,
+    });
+  }
+  return symbols;
 }
 
 function scriptSymbols(document: TextDocument): DocumentSymbol[] {

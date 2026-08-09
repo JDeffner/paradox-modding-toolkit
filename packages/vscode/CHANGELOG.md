@@ -4,6 +4,22 @@
 
 ### Fixed
 
+- **Code folding works in `.gui` and localization files.** The folding
+  provider only answered for script files and returned nothing for the
+  other languages it was registered on — which actively disabled folding
+  there (a registered provider suppresses VS Code's indentation fallback).
+  `.gui` files now fold every multi-line `{}` block with the closing brace
+  kept visible, plus comment banners; `.yml` loc files fold the
+  `l_<language>:` body and comment banners.
+- **Sticky scroll and breadcrumbs work in `.gui` files.** The outline used
+  to run `.gui` files through the script-events shape, so `types X` /
+  `template X` declarations and nested widget headers never reached it —
+  and sticky scroll had no headers to pin. `.gui` outlines are now the full
+  nested widget tree: declaration markers (`types`, `template`,
+  `blockoverride` in both spellings) labeled as such, widgets carrying
+  their `name = "..."` property as the detail, `type x = base` entries
+  showing their base.
+
 - **Inline `scripted_trigger`/`scripted_effect` declarations in event files
   are indexed** (#5): go-to-definition, hover (with doc comment and
   `$PARAM$`s) and find-references now work on triggers/effects declared
