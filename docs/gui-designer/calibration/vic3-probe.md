@@ -1,5 +1,8 @@
 # Vic3 probe run checklist (Joel)
 
+**STATUS: RUN 2026-08-09, results analyzed and calibrated — see
+`vic3-expectations.md`.** The checklist below is kept for re-runs.
+
 The probe mod is ALREADY INSTALLED at
 `D:\Documents\Paradox Interactive\Victoria 3\mod\px-layout-probe`
 (same five windows as the EU5 package; canonical sources in `probes/`).

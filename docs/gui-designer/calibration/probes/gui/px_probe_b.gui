@@ -249,9 +249,9 @@ window = {
 		}
 
 		# ---- CASE B11: deficit with NO layoutpolicy (default) ----
-		# Unmeasured in every game so far. This repo's engine treats a
-		# policy-less child as fixed (no shrink, row overflows); the game may
-		# shrink it like `preferred`. Whichever way it renders is the data.
+		# Vic3 2026-08-09 MEASURED: a policy-less child is fixed — no shrink,
+		# the row overflows (100/60 kept in the 120 box), exactly the engine's
+		# assumption. Still unmeasured on other games.
 		widget = {
 			position = { 810 260 }
 			size = { 120 100 }
@@ -311,9 +311,11 @@ window = {
 			raw_text = "B8: expand spacer"
 		}
 
-		# ---- CASE B9: minimumsize floor in a deficit (Studio, encoded) ----
-		# Prediction: 100+100 in a 160 box, equal split would give 80/80, but
-		# red's minimumsize floors it at 90, green absorbs the rest -> 90/70.
+		# ---- CASE B9: minimumsize under a deficit — NO policies ----
+		# Design note (post-Vic3-run): with no layoutpolicy the children never
+		# shrink, so the floor cannot engage — this duplicates B11. Vic3
+		# 2026-08-09 measured exactly that (100/100 overflow, the engine's own
+		# prediction). Next probe round: explicit preferred/shrinking children.
 		widget = {
 			position = { 360 420 }
 			size = { 160 80 }

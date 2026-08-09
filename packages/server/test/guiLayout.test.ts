@@ -307,6 +307,10 @@ widget = { size = { 200 120 }
 	margin_widget = { margin = { 20 10 } ${ICON("size = { 40 40 }")} }
 }`).children[0];
     expectRect(bare.children[0], 20, 10, 40, 40);
+    // A sizeless margin_widget hugs its children AT the margin offset: both
+    // probes (B3-Q2; vic3 2026-08-09) saw the bg exactly behind the child,
+    // never in the margin strips an origin-anchored hug would paint.
+    expectRect(bare, 20, 10, 40, 40);
 
     const full = lay(`
 widget = { size = { 200 120 }

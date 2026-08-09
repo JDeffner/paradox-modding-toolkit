@@ -12,24 +12,27 @@ import * as path from "path";
 import type { GuiLayoutNode, GuiLayoutResult, GuiVisibilityOptions } from "@px-lsp/protocol/protocol";
 import { collectGuiDefs, emptyGuiDefs, mergeGuiDefs, type GuiDefs } from "./guiDefs";
 import {
+  calibratedMeasurer,
   computeGuiLayout,
   measurerFromMetrics,
+  type LayoutEnv,
   type LayoutNode,
   type LayoutTiming,
-  type TextMeasurer,
   type VisibilityCheck,
 } from "./layoutEngine";
 import { collectScriptedGuiCalls, emptyGuiScriptLinks, type GuiScriptLinks } from "./guiLinks";
 import { activeProfile } from "../games/active";
 
 /**
- * The active game's measured text measurer, when its profile carries probe
- * results (GameProfile.guiTextMetrics); undefined falls back to the engine's
- * calibrated default table.
+ * The active game's measured layout environment, when its profile carries
+ * probe results (GameProfile.guiTextMetrics / guiLayoutQuirks); undefined
+ * falls back to the engine's calibrated defaults.
  */
-export function profileMeasurer(): TextMeasurer | undefined {
-  const metrics = activeProfile().guiTextMetrics;
-  return metrics ? measurerFromMetrics(metrics) : undefined;
+export function profileMeasurer(): LayoutEnv | undefined {
+  const { guiTextMetrics, guiLayoutQuirks } = activeProfile();
+  if (!guiTextMetrics && !guiLayoutQuirks) return undefined;
+  const base = guiTextMetrics ? measurerFromMetrics(guiTextMetrics) : calibratedMeasurer;
+  return { ...base, ...guiLayoutQuirks };
 }
 
 /** Matches the game's UI reference resolution at 100% scaling. */
