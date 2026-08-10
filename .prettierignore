@@ -9,6 +9,9 @@ packages/server/data/
 packages/vscode/skills/
 # Test fixtures are exact game-file samples; reformatting changes what is under test.
 packages/server/test/fixtures/
+# Calibration probe mods are real game files (BOM'd loc yml, paradox spacing);
+# a formatter would corrupt what the game loads.
+docs/gui-designer/calibration/
 # Prose is written to the conventions in AGENTS.md (no em dashes, hand-wrapped
 # tables, deliberate line breaks); a formatter has no useful opinion about it.
 *.md

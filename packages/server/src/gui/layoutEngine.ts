@@ -274,11 +274,11 @@ export interface GuiTextMetrics {
   defaultFontsize?: number;
   /**
    * When true, each glyph's advance/ink is ROUNDED after scaling to the
-   * requested fontsize instead of scaling the sum linearly. Vic3 measured
-   * this law (probe 2026-08-09): M advance = round(0.9 * fontsize) — 14 at
+   * requested fontsize instead of scaling the sum linearly. The 2026-08-09 probe
+   * measured this law: M advance = round(0.9 * fontsize) — 14 at
    * 15, 15 at 17, 27 at 30 — which no linear table reproduces. Pick
    * baseFontsize so adv/base is the glyph's true em fraction. lineHeight
-   * still scales linearly (Vic3's 1.3 * fontsize law is exact).
+   * still scales linearly (the same probe's 1.3 * fontsize law is exact).
    */
   roundPerSize?: boolean;
 }
@@ -291,7 +291,7 @@ export interface GuiTextMetrics {
 export interface GuiLayoutQuirks {
   /**
    * An EMPTY `container` with an authored `size` KEEPS it instead of
-   * collapsing to 0. Measured on Vic3 (probe 2026-08-09: the empty sized
+   * collapsing to 0. Measured in-game (probe 2026-08-09: the empty sized
    * container rendered its full 150x60, engine warning logged yet applied);
    * the default profile measured the opposite, narrow rule (probe
    * 2026-08-02, L25).
@@ -1146,7 +1146,7 @@ function naturalSize(node: WNode, measurer: LayoutEnv): { w: number; h: number }
       // children keeps an authored `size` (the engine warns yet applies it);
       // an EMPTY one collapses, a fixed size will not hold it open. Without
       // an authored size it hugs the children's extent at their positions
-      // (B2-I4). Vic3 measured the BROAD rule instead — an empty sized
+      // (B2-I4). The 2026-08-09 probe measured the BROAD rule instead — an empty sized
       // container keeps its size too (probe 2026-08-09) — carried as a
       // profile quirk.
       const explicit = explicitSize(node);
@@ -1312,7 +1312,7 @@ function arrange(
       };
       out.children = node.children.map((c) => arrange(c, inner, "plain", measurer, undefined, sub));
       // A margin_widget with NO explicit size hugs its children AT the margin
-      // offset: both probes (B3-Q2; Vic3 2026-08-09) saw the bg exactly
+      // offset: both probes (B3-Q2; 2026-08-09) saw the bg exactly
       // behind the child, never in the margin strips an origin-anchored hug
       // would paint. rect came in margin-inclusive from naturalSize; shift
       // the box, children stay put.
@@ -1742,7 +1742,7 @@ function textContent(node: WNode): string {
 
 function textSize(node: WNode, measurer: LayoutEnv): { size: { w: number; h: number }; lines: string[] } {
   // The game's measured default size when the textbox sets none; 15 is the
-  // default profile's Font_Size_Small (Vic3 measured 17, probe 2026-08-09).
+  // default profile's Font_Size_Small (probe 2026-08-09 measured 17 there).
   const fontsize = num(node, "fontsize") ?? measurer.defaultFontsize ?? 15;
   const content = textContent(node);
   const maxWidth = num(node, "max_width");
