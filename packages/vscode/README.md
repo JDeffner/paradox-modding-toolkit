@@ -162,6 +162,7 @@ The full docs live in the
 [wiki](https://github.com/JDeffner/paradox-modding-toolkit/wiki):
 
 - [Home](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Home)
+- [Feature Overview](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Feature-Overview)
 - [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started)
 - [Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games)
 - [Editor Features](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Editor-Features)

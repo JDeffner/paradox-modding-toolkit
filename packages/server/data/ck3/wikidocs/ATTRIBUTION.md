@@ -11,7 +11,7 @@ repository, which mirrors the official
 The wiki content is licensed under
 [Creative Commons Attribution-Share Alike 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
 These files (and any derivative of their content) remain under that license; the extension's
-own source code is separately licensed under MIT.
+own source code is separately licensed under GPL-3.0-or-later (see `LICENSE`).
 
 To refresh them, copy the same files from a current checkout of the
 ck3-modding-wiki repository into this folder, update the snapshot reference above,
