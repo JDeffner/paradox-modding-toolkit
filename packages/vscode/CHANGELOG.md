@@ -62,6 +62,12 @@ completion ranking. The breaking changes below are all rebrand fallout.
 
 ### Added
 
+- **Clear Game Problems.** The Problems the error.log watcher publishes
+  deliberately survive stopping the watcher — you work through them with the
+  game closed — but until now nothing removed them short of clearing the log
+  in-game or reloading the window. The Project view grows a
+  "Clear Game Problems (N)" row while there is something to clear, and the
+  command palette has `Paradox: Clear Game Problems`.
 - **Bundled script_docs and data-type dumps.** The extension (and the
   standalone server tarball) now ship dump snapshots per game under
   `data/<game>/script_docs` and `data/<game>/data_types`: CK3 (full), Vic3
@@ -345,6 +351,13 @@ completion ranking. The breaking changes below are all rebrand fallout.
   reader could silently skip regions on a short read and then never look at
   them again), and clearing the log from the in-game error tracker, or
   relaunching the game, drops the stale Problems instead of leaving them.
+- **Multi-line `Script system error!` blocks show the error, not the
+  location.** The game splits these entries across three lines: a header, an
+  indented `Error: ...` line, and an indented `Script location: file: ...`
+  line. The line-based parser used to publish the location line as the
+  diagnostic message ("Script location: file: common/... line: 25") and drop
+  the actual error text. The parser now stitches the block together: the
+  `Error:` line becomes the message, the location line supplies file and line.
 
 ### Changed (brand, icons, retired preview)
 

@@ -737,6 +737,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
+    vscode.commands.registerCommand("px.clearGameProblems", () => errorLog.clear()),
     vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg, errorLog)),
     vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)

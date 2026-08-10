@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { provideFormattingEdits } from "../src/features/formatting";
-import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
+import { ErrorLogParser, parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
 
 function applyEdits(text: string, doc: TextDocument): string {
   const edits = provideFormattingEdits(doc);
@@ -80,5 +80,52 @@ describe("error.log parsing", () => {
   it("returns null for lines without a file", () => {
     expect(parseErrorLogLine("[10:00:00][E][x.cpp:1]: generic engine complaint")).toBeNull();
     expect(parseErrorLogLine("")).toBeNull();
+  });
+});
+
+describe("error.log parsing (multi-line blocks)", () => {
+  const BLOCK = [
+    "[18:14:55][E][jomini_script_system.cpp:303]: Script system error!\r",
+    "  Error: is_cultivator trigger [ Scoped object of type 'character' is not valid ((no character)) ]\r",
+    "  Script location: file: common/script_values/cultivation_gui_values.txt line: 25 (cultivation_gui_is_cultivator)\r",
+  ];
+
+  it("uses the Error: line as the message, the location line for file/line", () => {
+    const p = new ErrorLogParser();
+    expect(p.push(BLOCK[0])).toBeNull();
+    expect(p.push(BLOCK[1])).toBeNull();
+    expect(p.push(BLOCK[2])).toMatchObject({
+      message: "is_cultivator trigger [ Scoped object of type 'character' is not valid ((no character)) ]",
+      relFile: "common/script_values/cultivation_gui_values.txt",
+      line: 24,
+      severity: "error",
+    });
+  });
+
+  it("still drops console-command locations", () => {
+    const p = new ErrorLogParser();
+    p.push("[17:50:06][E][jomini_script_system.cpp:303]: Script system error!");
+    p.push("  Error: add_legitimacy effect [ Scoped character doesn't have valid legitimacy type ]");
+    expect(p.push("  Script location: file: effect console command line: 1")).toBeNull();
+  });
+
+  it("a new timestamped entry closes an open block", () => {
+    const p = new ErrorLogParser();
+    p.push(BLOCK[0]);
+    p.push(BLOCK[1]);
+    const single = p.push("[18:15:00][W][x.cpp:1]: something odd in file: common/traits/mine.txt");
+    expect(single).toMatchObject({ relFile: "common/traits/mine.txt", severity: "warning" });
+    // The stale Error: text must not leak into later blocks.
+    p.push("[18:15:01][E][jomini_script_system.cpp:303]: Script system error!");
+    const q = p.push("  Script location: file: events/other.txt line: 3 (name)");
+    expect(q!.message).not.toContain("is_cultivator");
+  });
+
+  it("passes single-line entries through unchanged", () => {
+    const p = new ErrorLogParser();
+    const single = p.push(
+      "[18:33:24][E][dlc_descriptor.cpp:70]: Invalid supported_version in file: mod/ugc_2220326926.mod line: 7\r"
+    );
+    expect(single).toMatchObject({ relFile: "mod/ugc_2220326926.mod", line: 6, severity: "error" });
   });
 });

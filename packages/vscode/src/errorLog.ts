@@ -14,7 +14,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
-import { parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
+import { ErrorLogParser } from "@px-lsp/protocol/errorLogParser";
 import { LogTail } from "./logTail";
 import { metaFor } from "./meta";
 
@@ -24,12 +24,17 @@ export class ErrorLogWatcher implements vscode.Disposable {
   private readonly diagnostics: vscode.DiagnosticCollection;
   private timer: ReturnType<typeof setInterval> | null = null;
   private tail: LogTail | null = null;
+  private readonly parser = new ErrorLogParser();
   private seen = false;
   private entries = 0;
   private byUri = new Map<string, vscode.Diagnostic[]>();
   private readonly statusItem: vscode.StatusBarItem;
   private readonly stateEmitter = new vscode.EventEmitter<boolean>();
-  /** Fires with the new `watching` value on start/stop (Project view switch). */
+  /**
+   * Fires with the current `watching` value whenever the watch starts or stops
+   * OR the published problem count changes — the Project view mirrors both (its
+   * switch and its "Clear Game Problems (N)" row).
+   */
   readonly onDidChangeState = this.stateEmitter.event;
 
   constructor(
@@ -46,6 +51,11 @@ export class ErrorLogWatcher implements vscode.Disposable {
 
   get watching(): boolean {
     return this.timer !== null;
+  }
+
+  /** Diagnostics currently published from the log (survives `stop`). */
+  get problemCount(): number {
+    return this.entries;
   }
 
   private errorLogFile(): string | null {
@@ -70,6 +80,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.diagnostics.clear();
     this.entries = 0;
     // Start from the current end: only NEW entries of this play session matter.
+    this.parser.reset();
     this.tail = new LogTail(file);
     this.seen = this.tail.seekToEnd();
     this.timer = setInterval(() => this.poll(), POLL_MS);
@@ -79,6 +90,22 @@ export class ErrorLogWatcher implements vscode.Disposable {
     void vscode.window.showInformationMessage(
       "Paradox Modding Toolkit: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
     );
+  }
+
+  /**
+   * Drop every diagnostic published from the log, leaving the watch as it is.
+   * `stop` deliberately keeps them (you fix the entries with the game closed),
+   * so without this the only way out is clearing the log in-game or reloading
+   * the window.
+   */
+  clear(): void {
+    const had = this.entries;
+    this.byUri.clear();
+    this.diagnostics.clear();
+    this.entries = 0;
+    if (this.watching) this.showStatus();
+    this.stateEmitter.fire(this.watching);
+    if (had > 0) this.log(`cleared ${had} game diagnostic${had === 1 ? "" : "s"}`);
   }
 
   stop(): void {
@@ -104,7 +131,10 @@ export class ErrorLogWatcher implements vscode.Disposable {
     const file = this.tail?.file ?? "error.log";
     this.statusItem.text = this.seen ? `$(eye) ${name} error.log` : `$(eye) ${name} error.log (waiting)`;
     this.statusItem.tooltip = this.seen
-      ? `Watching ${file} (${this.entries} ${this.entries === 1 ? "entry" : "entries"}). Click to stop.`
+      ? `Watching ${file} (${this.entries} ${this.entries === 1 ? "entry" : "entries"}). Click to stop.` +
+        // The Problems outlive the watch on purpose, so say how to get rid of
+        // them where the count is read.
+        (this.entries > 0 ? `\nRun 'Paradox: Clear Game Problems' to remove them.` : "")
       : `Waiting for ${file}, which the game writes once it runs. Click to stop.`;
     this.statusItem.show();
   }
@@ -129,11 +159,12 @@ export class ErrorLogWatcher implements vscode.Disposable {
       this.byUri.clear();
       this.diagnostics.clear();
       this.entries = 0;
+      this.parser.reset();
       this.log("error.log was cleared or replaced; game diagnostics reset");
     }
     let published = 0;
     for (const rawLine of lines) {
-      const parsed = parseErrorLogLine(rawLine);
+      const parsed = this.parser.push(rawLine);
       if (!parsed) continue;
       const resolved = this.resolve(parsed.relFile);
       if (!resolved) continue;
@@ -162,6 +193,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     if (published > 0 || reset) {
       this.entries += published;
       this.showStatus();
+      this.stateEmitter.fire(true);
     }
   }
 

@@ -79,9 +79,10 @@ export interface DashboardDeps {
  * Format Docs (editor title), Simulate Event (editor context menu). Tiger's
  * occasional commands (baseline, unused, conf, update) do live here. Built per
  * game: labels carry the active game's name. The error.log watcher is a toggle
- * above, not a launcher.
+ * above, not a launcher — but clearing what it published is a launcher, and it
+ * appears only while there is something to clear.
  */
-function actionGroups(meta: GameMeta): ActionGroup[] {
+function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
   return [
     {
       label: "Create",
@@ -148,6 +149,18 @@ function actionGroups(meta: GameMeta): ActionGroup[] {
           icon: "play",
           tip: "Start the game via Steam with -debug_mode -develop, so scripts reload live.",
         },
+        // The watcher's Problems outlive the watch on purpose (you fix them
+        // with the game closed), so this is how they go away once dealt with.
+        ...(gameProblems > 0
+          ? ([
+              {
+                label: `Clear Game Problems (${gameProblems})`,
+                command: "px.clearGameProblems",
+                icon: "dismiss",
+                tip: "Remove the Problems that came from the game's error.log. They stay after you stop the watcher, so you can work through them with the game closed.",
+              },
+            ] satisfies ActionGroup["items"])
+          : []),
         // Tiger quick actions — only for games a tiger exists for. Setup &
         // Health Check has no row: the PX Toolkit status bar item runs it.
         ...(meta.tiger
@@ -201,6 +214,7 @@ const ICONS = {
   search: '<circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.4 3.4"/>',
   gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 2.3v2M8 11.7v2M2.3 8h2M11.7 8h2M4 4l1.4 1.4M10.6 10.6 12 12M12 4l-1.4 1.4M5.4 10.6 4 12"/>',
   download: '<path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 12.5h10"/>',
+  dismiss: '<circle cx="8" cy="8" r="5.8"/><path d="M6 6l4 4M10 6l-4 4"/>',
 } as const;
 
 /**
@@ -269,7 +283,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       watcherAvailable: cfg.logsPath !== null,
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
-      actions: actionGroups(meta),
+      actions: actionGroups(meta, this.deps.errorLog.problemCount),
       collapsed: this.collapsedState(),
     };
   }

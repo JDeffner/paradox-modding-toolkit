@@ -307,6 +307,11 @@
         "title": "Toggle error.log Watcher"
       },
       {
+        "command": "px.clearGameProblems",
+        "category": "Paradox",
+        "title": "Clear Game Problems (error.log)"
+      },
+      {
         "command": "px.launchGame",
         "category": "Paradox",
         "title": "Launch Game (debug mode)"
@@ -759,6 +764,10 @@
         },
         {
           "command": "px.watchErrorLog",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.clearGameProblems",
           "when": "px.isCk3Workspace"
         },
         {
