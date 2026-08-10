@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
