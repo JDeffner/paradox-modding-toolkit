@@ -108,7 +108,9 @@ describe("document symbols", () => {
       "namespace = my",
       "my.1 = {",
       "\ttype = character_event",
-      "\timmediate = { add_gold = 5 }",
+      "\timmediate = {",
+      "\t\tadd_gold = 5",
+      "\t}",
       "\toption = {",
       "\t\tname = my.1.a",
       "\t}",
@@ -119,8 +121,62 @@ describe("document symbols", () => {
     const symbols = provideDocumentSymbols(doc);
     expect(symbols.map((s) => s.name)).toEqual(["my.1", "my_effect"]);
     const event = symbols[0];
+    expect(event.detail).toBe("character_event");
     expect(event.children!.map((c) => c.name)).toEqual(["immediate", "option"]);
     expect(event.children![1].detail).toBe("my.1.a");
+  });
+
+  it("nests script blocks all the way down, so sticky scroll has every header", () => {
+    const text = [
+      "my.1 = {",
+      "\timmediate = {",
+      "\t\tif = {",
+      "\t\t\tlimit = {",
+      "\t\t\t\thas_trait = brave",
+      "\t\t\t}",
+      "\t\t\tadd_gold = 10",
+      "\t\t}",
+      "\t}",
+      "}",
+    ].join("\n");
+    const doc = TextDocument.create(uri(), "paradox", 1, text);
+    const chain: string[] = [];
+    let level = provideDocumentSymbols(doc);
+    // The chain covering the innermost line (`has_trait`, line 4).
+    for (;;) {
+      const hit = level.find((s) => s.range.start.line <= 4 && 4 <= s.range.end.line);
+      if (!hit) break;
+      chain.push(hit.name);
+      level = hit.children ?? [];
+    }
+    expect(chain).toEqual(["my.1", "immediate", "if", "limit"]);
+  });
+
+  it("skips blocks that are data rather than structure", () => {
+    const text = [
+      "my_trait = {",
+      "\ttrack = { name = a }", // single line: can never be a sticky header
+      "\ttraits = {", // multi-line, but only bare values: data
+      "\t\tbrave",
+      "\t\tshy",
+      "\t}",
+      "\tempty = {",
+      "\t}",
+      "\tflavor = {",
+      "\t\tdesc = my_desc",
+      "\t}",
+      "}",
+    ].join("\n");
+    const doc = TextDocument.create(uri(), "paradox", 1, text);
+    const symbols = provideDocumentSymbols(doc);
+    expect(symbols[0].children!.map((c) => c.name)).toEqual(["flavor"]);
+  });
+
+  it("outlines and folds a descriptor file (routed to the server as paradox-mod)", () => {
+    const text = 'version="1.0"\ntags={\n\t"Culture"\n}\nname="My Mod"\n';
+    const doc = TextDocument.create(uri(), "paradox-mod", 1, text);
+    expect(provideDocumentSymbols(doc).map((s) => s.name)).toEqual(["version", "tags", "name"]);
+    expect(provideFoldingRanges(doc)).toEqual([{ startLine: 1, endLine: 2 }]);
   });
 
   it("groups loc entries under the language header", () => {

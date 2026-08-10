@@ -1,8 +1,7 @@
 /**
- * Document symbols (outline / breadcrumbs), free with the CST: top-level
- * definitions with their interesting children (event options with their loc
- * name, immediate/trigger/option blocks), and loc entries grouped under the
- * language header.
+ * Document symbols (outline / breadcrumbs / sticky scroll), free with the CST:
+ * the full nested block tree of a script or `.gui` file, and loc entries
+ * grouped under the language header.
  */
 import { SymbolKind, type DocumentSymbol, type Range as LspRange } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
@@ -31,18 +30,6 @@ function childScalar(statements: Statement[], key: string): string | null {
   }
   return null;
 }
-
-const INTERESTING_CHILD_BLOCKS = new Set([
-  "option",
-  "immediate",
-  "trigger",
-  "after",
-  "effect",
-  "on_actions",
-  "events",
-  "random_events",
-  "first_valid",
-]);
 
 export function provideDocumentSymbols(document: TextDocument): DocumentSymbol[] {
   if (document.languageId === "paradox-loc") return locSymbols(document);
@@ -154,40 +141,74 @@ function guiBlockSymbols(
   return symbols;
 }
 
+/**
+ * Script outline: every top-level definition and, under it, the FULL nested
+ * block tree. The nesting is the point: sticky scroll pins its headers and
+ * breadcrumbs walk it, so a `limit` eight levels down inside an event needs
+ * every block above it named, not just the event.
+ *
+ * The cap guards degenerate files. It is spent on nesting only: top-level
+ * definitions are always emitted, so a file past the budget degrades to the
+ * old flat outline instead of going blank halfway down. Measured over the
+ * vanilla corpus (3785 script files), only four exceed it (the giant history
+ * and landed_titles files, worst case 21,677 blocks in
+ * history/characters/japanese.txt, 103k lines).
+ */
+const SCRIPT_SYMBOL_CAP = 12000;
+
 function scriptSymbols(document: TextDocument): DocumentSymbol[] {
   const { result, lineIndex } = getParse(document);
+  const budget = { left: SCRIPT_SYMBOL_CAP };
   const symbols: DocumentSymbol[] = [];
   for (const stmt of result.root.statements) {
     if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
     const name = stmt.key.text;
     if (name === "namespace") continue;
     const isEvent = EVENT_ID.test(name);
-    const children: DocumentSymbol[] = [];
     const stmts = childBlockStatements(stmt);
-    for (const child of stmts) {
-      if (child.kind !== "assignment" || child.key.quoted) continue;
-      if (!INTERESTING_CHILD_BLOCKS.has(child.key.text)) continue;
-      if (child.value?.kind !== "block") continue;
-      const label = child.key.text;
-      let detail: string | undefined;
-      if (child.key.text === "option") {
-        detail = childScalar(child.value.statements, "name") ?? undefined;
-      }
-      children.push({
-        name: label,
-        detail,
-        kind: child.key.text === "option" ? SymbolKind.EnumMember : SymbolKind.Field,
-        range: toLspRange(lineIndex, child.range),
-        selectionRange: toLspRange(lineIndex, child.key.range),
-      });
-    }
+    const detail = isEvent ? childScalar(stmts, "type") : childScalar(stmts, "name");
     symbols.push({
       name,
-      detail: isEvent ? (childScalar(stmts, "type") ?? undefined) : undefined,
+      detail: detail ? unquote(detail) : undefined,
       kind: isEvent ? SymbolKind.Event : SymbolKind.Function,
       range: toLspRange(lineIndex, stmt.range),
       selectionRange: toLspRange(lineIndex, stmt.key.range),
-      children,
+      children: scriptChildSymbols(stmts, lineIndex, budget),
+    });
+  }
+  return symbols;
+}
+
+function scriptChildSymbols(
+  statements: Statement[],
+  lineIndex: LineIndex,
+  budget: { left: number }
+): DocumentSymbol[] {
+  const symbols: DocumentSymbol[] = [];
+  for (const stmt of statements) {
+    if (budget.left <= 0) break;
+    if (stmt.kind !== "assignment") continue;
+    const value = stmt.value;
+    const block = value?.kind === "block" ? value : value?.kind === "tagged-block" ? value.block : null;
+    if (!block) continue;
+    // Two kinds of block earn no row, the same "data, not structure" split
+    // guiSymbols draws with PROPERTY_BLOCKS: one holding nothing but bare
+    // values (`traits = { brave shy }`, `color = { 0.5 0.5 0.5 }`), and one
+    // that opens and closes on a single line, which can never be a sticky
+    // header and only pads the outline.
+    if (block.statements.length === 0 || block.statements.every((s) => s.kind === "value")) continue;
+    const openLine = lineIndex.positionAt(block.openBrace).line;
+    const closeLine = lineIndex.positionAt(block.closeBrace ?? block.range.end).line;
+    if (closeLine <= openLine) continue;
+    budget.left--;
+    const named = childScalar(block.statements, "name");
+    symbols.push({
+      name: stmt.key.text,
+      detail: named ? unquote(named) : undefined,
+      kind: stmt.key.text === "option" ? SymbolKind.EnumMember : SymbolKind.Field,
+      range: toLspRange(lineIndex, stmt.range),
+      selectionRange: toLspRange(lineIndex, stmt.key.range),
+      children: scriptChildSymbols(block.statements, lineIndex, budget),
     });
   }
   return symbols;

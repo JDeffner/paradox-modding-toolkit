@@ -11,6 +11,25 @@
   `.gui` files now fold every multi-line `{}` block with the closing brace
   kept visible, plus comment banners; `.yml` loc files fold the
   `l_<language>:` body and comment banners.
+- **Sticky scroll and breadcrumbs follow the whole block chain in script
+  files.** The script outline stopped two levels down: a definition, plus a
+  hand-picked handful of child blocks (`option`, `immediate`, `trigger`, a
+  few more). Everything deeper was invisible, so scrolling inside a
+  ten-level-deep event pinned `my_event > immediate` and nothing else.
+  Every multi-line block is now an outline entry, at any depth. In
+  `accolade_events.txt` the innermost line of `accolade.0002` reads
+  `immediate > if > if > send_interface_message > desc > first_valid >
+  triggered_desc > trigger > scope:acclaimed_knight`. Blocks that are data
+  rather than structure emit nothing: one holding only bare values
+  (`traits = { brave shy }`) and one that opens and closes on a single
+  line, which could never be a sticky header anyway. A block's `name`
+  shows as its detail, the way event options already did.
+- **Descriptor and format-doc files fold and outline.** `descriptor.mod`,
+  the outer `<mod>.mod` files and the bundled `_*.info` format docs are
+  jomini script, but the client never routed them to the server, so they
+  had neither folding nor an outline. They now reach the folding and
+  outline providers only; every other feature stays off for them,
+  diagnostics included.
 - **Sticky scroll and breadcrumbs work in `.gui` files.** The outline used
   to run `.gui` files through the script-events shape, so `types X` /
   `template X` declarations and nested widget headers never reached it —

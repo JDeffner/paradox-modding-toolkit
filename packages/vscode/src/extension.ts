@@ -316,6 +316,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { language: "paradox", scheme: "file" },
       { language: "paradox-loc", scheme: "file" },
       { language: "paradox-gui", scheme: "file" },
+      // Descriptor and format-doc files are jomini script too. They reach the
+      // server for folding and the outline only — every other handler keys off
+      // `paradox`/`paradox-gui`/`paradox-loc` and returns nothing for them,
+      // validation included.
+      { language: "paradox-mod", scheme: "file" },
+      { language: "paradox-info", scheme: "file" },
     ],
     initializationOptions: initOptions,
     outputChannel: output,

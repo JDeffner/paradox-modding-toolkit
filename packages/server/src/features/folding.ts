@@ -1,9 +1,10 @@
 /**
  * Folding ranges from the CST: every `{}` block spanning multiple lines, plus
  * runs of consecutive comment lines. Serves every brace language the client
- * routes here (script AND .gui — the provider being registered means VS Code
- * never falls back to indentation folding, so returning [] for a routed
- * language actively disables folding there). Loc files have no braces; they
+ * routes here (script, .gui, and the descriptor/format-doc languages). The
+ * provider being registered means VS Code never falls back to indentation
+ * folding, so returning [] for a routed language actively disables folding
+ * there. Loc files have no braces; they
  * fold the `l_<lang>:` body and comment banners instead.
  */
 import { FoldingRangeKind, type FoldingRange } from "vscode-languageserver/node";
@@ -89,7 +90,10 @@ function locFoldingRanges(document: TextDocument): FoldingRange[] {
   // Vanilla indents body comments by one space, so any whitespace-then-`#`
   // line counts, matching the loc parser's own comment definition; a line-0
   // BOM is stripped first (line numbers are unaffected).
-  const lines = document.getText().replace(/^\uFEFF/, "").split("\n");
+  const lines = document
+    .getText()
+    .replace(/^\uFEFF/, "")
+    .split("\n");
   ranges.push(
     ...commentRuns(
       lines
