@@ -62,10 +62,14 @@ jobs:
 
       - name: Package vsix
         working-directory: packages/vscode
+        # --baseImagesUrl is not optional in a monorepo: vsce resolves relative
+        # image links against the repo root, so the banner and the screenshots
+        # would 404 on the listing without the packages/vscode prefix.
         run: |
           FLAG=""
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
-          npx vsce package $FLAG --no-dependencies
+          npx vsce package $FLAG --no-dependencies \
+            --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode
 
       - name: Build server tarball (standalone --stdio server for other editors)
         run: node scripts/build-server-tarball.mjs
