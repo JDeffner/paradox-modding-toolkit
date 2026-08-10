@@ -672,7 +672,7 @@ export interface GuiPlacement {
  * does not resolve under the configured roots.
  *
  * The grid is driven by `framesize` — the property the vanilla gui trees
- * actually carry (CK3 and Vic3 harvests both; neither ships `noofframes`).
+ * actually carry (both harvested titles ship it; neither ships `noofframes`).
  */
 export interface GuiTextureInfo {
   /** The path as authored, mod-relative, the way the engine reads it. */

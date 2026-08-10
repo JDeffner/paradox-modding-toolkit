@@ -3,9 +3,9 @@
  *
  * PdxGui cannot call an event or an effect. It calls a scripted_gui, whose own
  * blocks then reach the rest of the script database, so every GUI-to-script
- * path starts here. Verified over the vanilla CK3 tree (the only spelling in
- * use is the datafunction, with either quote style); `window_name`, the
- * Imperator-era binding, appears in neither the CK3 nor the Victoria 3 tree.
+ * path starts here. Verified over both supported titles' vanilla trees (the
+ * only spelling in use is the datafunction, with either quote style);
+ * `window_name`, the Imperator-era binding, appears in neither tree.
  *
  * The index is built by the layout service's file walk, which already reads
  * every `.gui` file for the template/type store, so the marginal cost is a

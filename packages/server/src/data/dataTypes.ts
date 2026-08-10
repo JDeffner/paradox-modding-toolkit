@@ -223,8 +223,8 @@ function dumpFilesIn(dir: string): string[] {
  * Bundled baseline upgraded by dumps. `dirs` are searched in order and later
  * directories win on conflicts, so callers list them lowest priority first
  * (bundled dump, then the user's folders). A single string is accepted for
- * convenience. Games whose script_docs live outside logs/ (Vic3, EU5) dump
- * data types to logs/ anyway, so callers pass both folders.
+ * convenience. Games whose script_docs live outside logs/ (newer Jomini
+ * titles) dump data types to logs/ anyway, so callers pass both folders.
  */
 export function loadDataTypes(dirs: string | null | Array<string | null>): DataTypesData {
   const data = loadBundledDataTypes();

@@ -7,10 +7,10 @@
  * never decodes: an inspector row must not cost a 4096x4096 BC7 decode.
  *
  * The grid comes from `framesize = { w h }` plus `frame` (Studio §L, L22),
- * which is what the vanilla trees carry: the CK3 gui tree has 111 files with a
- * `framesize` and neither it nor the Victoria 3 tree (nor either harvested
- * guiSchema.json) contains a `noofframes`, so no second spelling is invented
- * here. The cell math itself is computeFrameCell's, shared with the renderer.
+ * which is what the vanilla trees carry: the default profile's gui tree has
+ * 111 files with a `framesize` and neither harvested vanilla tree (nor either
+ * harvested guiSchema.json) contains a `noofframes`, so no second spelling is
+ * invented here. The cell math itself is computeFrameCell's, shared with the renderer.
  *
  * No `vscode` imports: unit-tested in plain Node.
  */
