@@ -125,7 +125,7 @@ npx vitest run          # fast suite (corpus-gated tests skip without env)
 npx vitest run          # (rank eval alone takes ~4 min; exclude packages/server/test/rankEval.test.ts when iterating)
 
 # Package (vsce runs in the extension package):
-cd packages/vscode && npx vsce package --pre-release --no-dependencies
+cd packages/vscode && pnpm run package
 ```
 
 ## Releasing
@@ -150,9 +150,13 @@ The tag push triggers `.github/workflows/release.yml`: build, test, package,
 GitHub Release with the vsix attached. Publishing to the VS Code Marketplace
 is a manual workflow run with "publish" checked; it needs the `VSCE_PAT` repo
 secret (Azure DevOps PAT, scope Marketplace→Manage) and the publisher
-**JDeffner** created once at marketplace.visualstudio.com/manage. Keep the
-minor version odd while pre-release (0.1.x, 0.3.x — Marketplace convention);
-vsix builds use `--pre-release` until 1.0.
+**JDeffner** created once at marketplace.visualstudio.com/manage. The beta
+ships on the NORMAL channel, not the Marketplace pre-release channel: the
+pre-release channel makes every user opt in inside VS Code, which is not worth
+the friction, so "beta" is said in the README and the changelog instead. Do not
+pass `--pre-release` to `vsce package` or `vsce publish`; the flag is written
+into the vsix manifest at package time, so a vsix built with it lands on the
+pre-release channel no matter how it is published.
 
 Gotchas:
 - **The tag must match `packages/vscode/package.json` version.** `v0.1.3`

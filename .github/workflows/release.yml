@@ -7,8 +7,13 @@
 #    (Azure DevOps PAT with Marketplace > Manage scope) — see AGENTS.md
 #    "Releasing".
 #
-# The "prerelease" input controls the Marketplace pre-release flag (alpha/beta
-# channel users must opt in inside VS Code). Keep it on until 1.0.
+# The "prerelease" input controls the Marketplace pre-release flag. It is OFF by
+# default: the beta ships on the normal channel, because the pre-release channel
+# makes users opt in inside VS Code and is not worth the friction. "Beta" is said
+# in the README and the changelog instead. The flag also has to be set at PACKAGE
+# time, not just at publish time: `vsce package --pre-release` writes
+# Microsoft.VisualStudio.Code.PreRelease into the vsix manifest, and publishing
+# that file puts it on the pre-release channel whatever the publish flags say.
 name: Release
 
 on:
@@ -21,9 +26,9 @@ on:
         type: boolean
         default: false
       prerelease:
-        description: "Mark as pre-release (alpha/beta channel)"
+        description: "Mark as pre-release (users must opt in; off by default)"
         type: boolean
-        default: true
+        default: false
 
 jobs:
   release:
@@ -67,7 +72,7 @@ jobs:
         # would 404 on the listing without the packages/vscode prefix.
         run: |
           FLAG=""
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
+          if [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
           npx vsce package $FLAG --no-dependencies \
             --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode
 
