@@ -22,7 +22,7 @@ export async function translateNextCommand(
 ): Promise<void> {
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+      "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
@@ -30,7 +30,7 @@ export async function translateNextCommand(
   const candidates = coverage.filter((l) => l.untranslated.length + l.missing.length > 0);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
-      "Paradox Toolkit: localization coverage is complete — nothing to translate."
+      "Paradox Modding Toolkit: localization coverage is complete — nothing to translate."
     );
     return;
   }
@@ -70,7 +70,9 @@ export async function translateNextCommand(
         if (replaceLocLineValue(item.file, item.line, value)) onLocFileChanged(item.file);
         written++;
       } catch (err) {
-        void vscode.window.showErrorMessage(`Paradox Toolkit: failed to write ${item.key}: ${String(err)}`);
+        void vscode.window.showErrorMessage(
+          `Paradox Modding Toolkit: failed to write ${item.key}: ${String(err)}`
+        );
         break;
       }
     }
@@ -91,7 +93,9 @@ export async function translateNextCommand(
         onLocFileChanged(file);
         written++;
       } catch (err) {
-        void vscode.window.showErrorMessage(`Paradox Toolkit: failed to create ${item.key}: ${String(err)}`);
+        void vscode.window.showErrorMessage(
+          `Paradox Modding Toolkit: failed to create ${item.key}: ${String(err)}`
+        );
         break;
       }
     }
@@ -100,7 +104,7 @@ export async function translateNextCommand(
 
   if (done > 0) {
     void vscode.window.showInformationMessage(
-      `Paradox Toolkit: ${written} ${langName} entr${written === 1 ? "y" : "ies"} written` +
+      `Paradox Modding Toolkit: ${written} ${langName} entr${written === 1 ? "y" : "ies"} written` +
         `${done > written ? `, ${done - written} skipped` : ""} (${done}/${total} reviewed).`
     );
   }

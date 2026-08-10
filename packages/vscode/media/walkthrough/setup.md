@@ -9,4 +9,4 @@
 
 Re-run it anytime as a health check — it reports what's configured and what's missing, with instructions.
 
-You can watch what the extension is doing in **Output → Paradox Toolkit**.
+You can watch what the extension is doing in **Output → Paradox Modding Toolkit**.

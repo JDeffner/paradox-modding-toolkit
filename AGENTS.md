@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A VS Code extension ("Paradox Toolkit", id `px-toolkit`) that gives Crusader
+A VS Code extension ("Paradox Modding Toolkit", id `px-toolkit`) that gives Crusader
 Kings III mod authors a full language workbench: an LSP server with a
 hand-written tolerant parser for Paradox/Jomini script, grammar-aware
 completion, hover docs, diagnostics for the silent-failure class of bugs,
@@ -23,7 +23,7 @@ game files or a harvest, or don't add it.
   reasons. (Server-side word-filtering/capping is fine — it mirrors what the
   client drops anyway.)
 - **PX names the product, `ck3` names the game.** Everything we invent is
-  `px`/Paradox Toolkit: extension id `px-toolkit`, `px.*` settings and
+  `px`/Paradox Modding Toolkit: extension id `px-toolkit`, `px.*` settings and
   commands, `@px-lsp/*` packages, `# px:ignore`, `px-descriptor`. Everything
   belonging to Crusader Kings III stays `ck3`: the `gameId`, `games/ck3/`,
   `data/ck3/`, `ck3-tiger`, `ck3-script`, `.ck3modding/` in the user's mod,

@@ -1,6 +1,6 @@
 {
   "name": "px-toolkit",
-  "displayName": "Paradox Toolkit",
+  "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
   "version": "0.3.1",
   "publisher": "JDeffner",
@@ -360,7 +360,7 @@
     "walkthroughs": [
       {
         "id": "px.gettingStarted",
-        "title": "Get started with the Paradox Toolkit",
+        "title": "Get started with the Paradox Modding Toolkit",
         "description": "Configure the extension and try its features on your mod.",
         "steps": [
           {
@@ -594,7 +594,7 @@
             "type": "boolean",
             "default": false,
             "order": 4,
-            "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
+            "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Modding Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
           }
         }
       }
@@ -603,7 +603,7 @@
       "activitybar": [
         {
           "id": "px",
-          "title": "Paradox",
+          "title": "Paradox Modding Toolkit",
           "icon": "media/px-view.svg"
         }
       ]

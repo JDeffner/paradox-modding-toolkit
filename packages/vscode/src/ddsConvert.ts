@@ -100,13 +100,15 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
   }
 
   if (failed.length > 0) {
-    void vscode.window.showErrorMessage(`Paradox Toolkit: DDS conversion failed for ${failed.join("; ")}`);
+    void vscode.window.showErrorMessage(
+      `Paradox Modding Toolkit: DDS conversion failed for ${failed.join("; ")}`
+    );
   }
   if (written.length > 0) {
     const openLabel = "Open preview";
     const guideLabel = "Image guidelines";
     const answer = await vscode.window.showInformationMessage(
-      `Paradox Toolkit: wrote ${written.length} DDS file${written.length === 1 ? "" : "s"} (${written
+      `Paradox Modding Toolkit: wrote ${written.length} DDS file${written.length === 1 ? "" : "s"} (${written
         .map((u) => u.path.split("/").pop())
         .join(", ")})`,
       openLabel,

@@ -19,7 +19,7 @@ export interface SetupDeps {
   /** Re-read config and rebuild data (called after settings were written). */
   refresh: () => void;
   log: (msg: string) => void;
-  /** Reveal the Paradox Toolkit output channel (where the report lands). */
+  /** Reveal the Paradox Modding Toolkit output channel (where the report lands). */
   showOutput: () => void;
   /** Whether the extension ships a bundled script_docs snapshot for the game. */
   hasBundledDumps: (gameId: string) => boolean;
@@ -56,7 +56,7 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
   if (!flavor) {
     // No tiger exists for this game: never prompt, never download.
     void vscode.window.showInformationMessage(
-      `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — nothing to download.`
+      `Paradox Modding Toolkit: no tiger validator exists for ${meta.name} yet — nothing to download.`
     );
     return null;
   }
@@ -83,14 +83,14 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
     );
     deps.log(`tiger ${result.version} installed at ${result.binaryPath}`);
     void vscode.window.showInformationMessage(
-      `Paradox Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
+      `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
     );
     deps.refresh();
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const retry = await vscode.window.showErrorMessage(
-      `Paradox Toolkit: tiger download failed — ${msg}`,
+      `Paradox Modding Toolkit: tiger download failed — ${msg}`,
       "Retry"
     );
     if (retry) return downloadTigerCommand(deps, false);
@@ -202,7 +202,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   const checks = flavor ? 4 : 3;
   const ok = Math.min(report.filter((l) => l.startsWith("✓")).length, checks);
   const hasBlocker = report.some((l) => l.startsWith("✗") || l.startsWith("➜"));
-  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${hasBlocker || report.some((l) => l.startsWith("•")) ? "Details in the Paradox Toolkit output." : "All set!"}`;
+  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${hasBlocker || report.some((l) => l.startsWith("•")) ? "Details in the Paradox Modding Toolkit output." : "All set!"}`;
   const buttons = hasBlocker ? ["Show details", "Open Settings"] : ["Show details"];
   const action = await vscode.window.showInformationMessage(summary, ...buttons);
   if (action === "Show details") deps.showOutput();
@@ -221,7 +221,7 @@ export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: PxConfig)
   const meta = metaFor(cfg.gameId);
   void vscode.window
     .showInformationMessage(
-      `The Paradox Toolkit can configure itself (find ${meta.name}${meta.tiger ? ", set up tiger" : ""}).`,
+      `The Paradox Modding Toolkit can configure itself (find ${meta.name}${meta.tiger ? ", set up tiger" : ""}).`,
       "Run Setup & Health Check",
       "Later"
     )

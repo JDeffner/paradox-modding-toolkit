@@ -126,7 +126,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  output = vscode.window.createOutputChannel("Paradox Toolkit", { log: true });
+  output = vscode.window.createOutputChannel("Paradox Modding Toolkit", { log: true });
   context.subscriptions.push(output);
 
   const storageDir = context.globalStorageUri.fsPath;
@@ -145,7 +145,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   cfg = resolveConfig();
   if (cfg.warnings.length > 0) {
     // Fail soft: features degrade, extension still activates.
-    void vscode.window.showWarningMessage(`Paradox Toolkit: ${cfg.warnings.join(" — ")}`);
+    void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${cfg.warnings.join(" — ")}`);
   }
   // One-time honesty note for EU5: the schema is community-sourced and not
   // yet verified against a live install.
@@ -173,7 +173,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!context.workspaceState.get<boolean>("px.bigWorkspaceNotice")) {
         void context.workspaceState.update("px.bigWorkspaceNotice", true);
         void vscode.window
-          .showWarningMessage(`Paradox Toolkit: ${bigWorkspace}`, "Exclude Mods...", "Settings")
+          .showWarningMessage(`Paradox Modding Toolkit: ${bigWorkspace}`, "Exclude Mods...", "Settings")
           .then((choice) => {
             if (choice === "Exclude Mods...") void vscode.commands.executeCommand("px.excludeMods");
             else if (choice === "Settings")
@@ -253,7 +253,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const meta = metaFor(cfg.gameId);
     if (meta.tiger) return true;
     void vscode.window.showInformationMessage(
-      `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — tiger commands do nothing here.`
+      `Paradox Modding Toolkit: no tiger validator exists for ${meta.name} yet — tiger commands do nothing here.`
     );
     return false;
   };
@@ -346,7 +346,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     },
   };
-  const lc = new LanguageClient("px", "Paradox Toolkit", serverOptions, clientOptions);
+  const lc = new LanguageClient("px", "Paradox Modding Toolkit", serverOptions, clientOptions);
   client = lc;
   // Every start/stop transition is logged, so a restart loop is visible in the
   // output channel next to the server's own FATAL line.
@@ -456,7 +456,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.reloadScriptDocs", async () => {
       const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
       void vscode.window.showInformationMessage(
-        `Paradox Toolkit: reloaded script_docs data (${result.tokens} tokens).`
+        `Paradox Modding Toolkit: reloaded script_docs data (${result.tokens} tokens).`
       );
     }),
     vscode.commands.registerCommand("px.dumpIndexStats", async () => {
@@ -567,7 +567,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== "paradox") {
         void vscode.window.showWarningMessage(
-          "Paradox Toolkit: place the cursor on a definition in a script (.txt) file."
+          "Paradox Modding Toolkit: place the cursor on a definition in a script (.txt) file."
         );
         return;
       }
@@ -582,7 +582,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       views.showDependencies(result);
       await vscode.commands.executeCommand("px.dependencies.focus");
       if (!result.def) {
-        void vscode.window.showInformationMessage("Paradox Toolkit: no indexed definition under the cursor.");
+        void vscode.window.showInformationMessage(
+          "Paradox Modding Toolkit: no indexed definition under the cursor."
+        );
       }
     }),
     // The id is optional: the CodeLens and the graph inspector name the event
@@ -616,7 +618,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
-        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
+        void vscode.window.showWarningMessage("Paradox Modding Toolkit: open a .gui file first.");
         return;
       }
       GuiTreePanel.show(
@@ -632,14 +634,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // hovers, diagnostics, the widget tree — stay on for every game.
       if (!isCk3(cfg.gameId)) {
         void vscode.window.showInformationMessage(
-          `Paradox Toolkit: the GUI editor is CK3 only for now — its pixel layout is calibrated against CK3. ` +
+          `Paradox Modding Toolkit: the GUI editor is CK3 only for now — its pixel layout is calibrated against CK3. ` +
             `.gui editing and the GUI Widget Tree work for ${metaFor(cfg.gameId).name}.`
         );
         return;
       }
       const editor = vscode.window.activeTextEditor;
       if (!editor || !editor.document.uri.fsPath.toLowerCase().endsWith(".gui")) {
-        void vscode.window.showWarningMessage("Paradox Toolkit: open a .gui file first.");
+        void vscode.window.showWarningMessage("Paradox Modding Toolkit: open a .gui file first.");
         return;
       }
       GuiEditorPanel.show(
@@ -685,7 +687,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const bl = baselineFileFor(cfgForActive().modPath);
       if (!bl) {
         void vscode.window.showWarningMessage(
-          "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+          "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
         );
         return;
       }
@@ -693,7 +695,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (count !== null) {
         await context.workspaceState.update("px.tigerBaselineEnabled", true);
         void vscode.window.showInformationMessage(
-          `Paradox Toolkit: baseline saved (${count} current reports suppressed). Tiger now shows new problems only.`
+          `Paradox Modding Toolkit: baseline saved (${count} current reports suppressed). Tiger now shows new problems only.`
         );
         tiger.run(false);
       }
@@ -708,7 +710,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (enabled && (!bl || !fs.existsSync(bl))) {
         void vscode.window
           .showInformationMessage(
-            "Paradox Toolkit: tiger baseline is ON, but this mod has no baseline snapshot yet — " +
+            "Paradox Modding Toolkit: tiger baseline is ON, but this mod has no baseline snapshot yet — " +
               "all problems are still shown. Create one to snapshot today's problems.",
             "Create Baseline"
           )
@@ -719,8 +721,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       void vscode.window.showInformationMessage(
         enabled
-          ? "Paradox Toolkit: tiger baseline ON — only problems newer than the baseline are shown."
-          : "Paradox Toolkit: tiger baseline OFF — all problems are shown."
+          ? "Paradox Modding Toolkit: tiger baseline ON — only problems newer than the baseline are shown."
+          : "Paradox Modding Toolkit: tiger baseline OFF — all problems are shown."
       );
       tiger.run(false);
     }),

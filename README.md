@@ -8,7 +8,7 @@ Monorepo for the Paradox-script language tooling:
 - [`packages/protocol`](packages/protocol) — `@px-lsp/protocol`, the wire
   contract (custom requests/notifications, settings types) plus helpers shared
   between server and clients.
-- [`packages/vscode`](packages/vscode) — the **Paradox Toolkit** VS Code
+- [`packages/vscode`](packages/vscode) — the **Paradox Modding Toolkit** VS Code
   extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)),
   the primary client. Its README is the user-facing one.
 

@@ -45,7 +45,7 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
   const candidates = uniqueRoots(cfg).filter((r) => fs.existsSync(path.join(r, "localization")));
   if (candidates.length === 0) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no mod with a localization folder found (open the mod to translate as a workspace folder or list it in px.parentMods)."
+      "Paradox Modding Toolkit: no mod with a localization folder found (open the mod to translate as a workspace folder or list it in px.parentMods)."
     );
     return;
   }
@@ -69,7 +69,7 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
   ].sort();
   if (present.length === 0) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no localization files with a language marker in that mod."
+      "Paradox Modding Toolkit: no localization files with a language marker in that mod."
     );
     return;
   }
@@ -143,7 +143,7 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
     fs.writeFileSync(abs, g.content, "utf8");
   }
   const summary =
-    `Paradox Toolkit: translation mod created at ${dest} — ${result.locFiles} loc file(s), ` +
+    `Paradox Modding Toolkit: translation mod created at ${dest} — ${result.locFiles} loc file(s), ` +
     `${result.entries} entries to translate. TRANSLATE.md has the workflow and AI prompt.`;
   log(summary);
 

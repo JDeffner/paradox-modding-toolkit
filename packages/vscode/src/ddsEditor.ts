@@ -42,7 +42,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     const keep = "Keep DDS preview";
     const builtin = "Use VS Code default";
     const answer = await vscode.window.showInformationMessage(
-      "The Paradox Toolkit now previews .dds textures. Keep it as the default editor for .dds files?",
+      "The Paradox Modding Toolkit now previews .dds textures. Keep it as the default editor for .dds files?",
       keep,
       builtin
     );
@@ -52,7 +52,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
       assoc["*.dds"] = "default";
       await config.update("workbench.editorAssociations", assoc, vscode.ConfigurationTarget.Global);
       void vscode.window.showInformationMessage(
-        "Paradox Toolkit: .dds files will use the VS Code default editor. Right-click a .dds → 'Open With…' to preview one anyway, or edit workbench.editorAssociations to undo."
+        "Paradox Modding Toolkit: .dds files will use the VS Code default editor. Right-click a .dds → 'Open With…' to preview one anyway, or edit workbench.editorAssociations to undo."
       );
     }
   }

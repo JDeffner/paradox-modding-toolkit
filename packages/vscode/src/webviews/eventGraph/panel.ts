@@ -157,7 +157,7 @@ export class EventGraphPanel {
             await this.actions.editLoc(msg.key, msg.value, msg.file, msg.line);
           } catch (err) {
             void vscode.window.showErrorMessage(
-              `Paradox Toolkit: localization write failed: ${err instanceof Error ? err.message : String(err)}`
+              `Paradox Modding Toolkit: localization write failed: ${err instanceof Error ? err.message : String(err)}`
             );
           }
           await this.sendDetail(msg.id);
@@ -169,7 +169,7 @@ export class EventGraphPanel {
             await this.actions.addOption(msg.id, msg.file, msg.endLine, msg.count);
           } catch (err) {
             void vscode.window.showErrorMessage(
-              `Paradox Toolkit: add option failed: ${err instanceof Error ? err.message : String(err)}`
+              `Paradox Modding Toolkit: add option failed: ${err instanceof Error ? err.message : String(err)}`
             );
           }
           await this.sendDetail(msg.id);

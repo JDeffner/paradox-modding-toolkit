@@ -25,7 +25,7 @@ export class PxStatusBar implements vscode.Disposable {
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-    this.item.name = "Paradox Toolkit";
+    this.item.name = "Paradox Modding Toolkit";
     this.item.command = "px.setup";
     this.item.text = "$(loading~spin) PX Toolkit";
   }
@@ -45,7 +45,7 @@ export class PxStatusBar implements vscode.Disposable {
         ? "$(check) PX Toolkit"
         : "$(warning) PX Toolkit";
     const lines = [
-      `**Paradox Toolkit** — click to run setup & health check`,
+      `**Paradox Modding Toolkit** — click to run setup & health check`,
       "",
       `${s.tokens > 0 ? "✓" : "✗"} engine tokens: ${s.tokens}${
         s.tokens > 0

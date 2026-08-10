@@ -273,7 +273,7 @@ export class GuiEditorPanel {
         // sizes collapse and the canvas looks broken for no visible reason.
         storeWarning: this.roots.gamePath
           ? undefined
-          : "game install not found — layout is missing the game's templates. Run “Paradox Toolkit: Setup” or set px.gamePath",
+          : "game install not found — layout is missing the game's templates. Run “Paradox: Run Setup & Health Check” or set px.gamePath",
       });
     } catch (err) {
       if (this.disposed) return;
@@ -679,7 +679,7 @@ export class GuiEditorPanel {
           await this.revealIn(target, message.line);
         } catch {
           void vscode.window.showWarningMessage(
-            `Paradox Toolkit: could not open ${message.file}. The index may be out of date.`
+            `Paradox Modding Toolkit: could not open ${message.file}. The index may be out of date.`
           );
         }
         return;

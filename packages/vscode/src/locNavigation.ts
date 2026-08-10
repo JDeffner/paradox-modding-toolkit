@@ -107,13 +107,13 @@ export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: P
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== "paradox-loc") {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: open a localization yml and place the cursor on a key first."
+      "Paradox Modding Toolkit: open a localization yml and place the cursor on a key first."
     );
     return;
   }
   const key = locKeyOnLine(editor.document.lineAt(editor.selection.active.line).text);
   if (!key) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: no localization key on this line.");
+    void vscode.window.showWarningMessage("Paradox Modding Toolkit: no localization key on this line.");
     return;
   }
 
@@ -128,7 +128,7 @@ export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: P
 
   if (!location) {
     void vscode.window.showInformationMessage(
-      `Paradox Toolkit: no script reference of "${key}" found in the mod.`
+      `Paradox Modding Toolkit: no script reference of "${key}" found in the mod.`
     );
     return;
   }

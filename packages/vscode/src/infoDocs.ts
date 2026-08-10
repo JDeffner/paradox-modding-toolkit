@@ -57,19 +57,19 @@ export function updateInfoDocContext(cfg: PxConfig): void {
 export async function openInfoDocsCommand(cfg: PxConfig): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: open a mod script file first.");
+    void vscode.window.showWarningMessage("Paradox Modding Toolkit: open a mod script file first.");
     return;
   }
   if (!cfg.gamePath) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: set px.gamePath to use the game's .info format docs."
+      "Paradox Modding Toolkit: set px.gamePath to use the game's .info format docs."
     );
     return;
   }
   const candidates = infoDocsForFile(cfg, editor.document.uri.fsPath);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
-      "Paradox Toolkit: no .info format docs found for this folder in the game files."
+      "Paradox Modding Toolkit: no .info format docs found for this folder in the game files."
     );
     return;
   }
@@ -110,7 +110,7 @@ export async function openVanillaExamplesCommand(): Promise<void> {
   }
   if (examples.length === 0) {
     void vscode.window.showInformationMessage(
-      "Paradox Toolkit: no vanilla example files next to this .info doc."
+      "Paradox Modding Toolkit: no vanilla example files next to this .info doc."
     );
     return;
   }

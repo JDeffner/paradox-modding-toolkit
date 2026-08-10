@@ -163,7 +163,7 @@ export class TigerRunner implements vscode.Disposable {
       fs.mkdirSync(path.dirname(tmp), { recursive: true });
       fs.writeFileSync(
         tmp,
-        `# Generated per run by the Paradox Toolkit extension: dependency mods of ${modRoot}\n${deps.conf}`,
+        `# Generated per run by the Paradox Modding Toolkit extension: dependency mods of ${modRoot}\n${deps.conf}`,
         "utf8"
       );
     } catch (err) {
@@ -197,7 +197,7 @@ export class TigerRunner implements vscode.Disposable {
       // No tiger exists for this game: never spawn, never nag on save.
       if (manual) {
         void vscode.window.showInformationMessage(
-          `Paradox Toolkit: no tiger validator exists for ${meta.name} yet — the extension's own diagnostics still run.`
+          `Paradox Modding Toolkit: no tiger validator exists for ${meta.name} yet — the extension's own diagnostics still run.`
         );
       }
       return;
@@ -206,7 +206,7 @@ export class TigerRunner implements vscode.Disposable {
       if (manual) {
         void vscode.window
           .showWarningMessage(
-            `Paradox Toolkit: ${meta.tiger.binaryName} is not set up yet — download it once, or point ` +
+            `Paradox Modding Toolkit: ${meta.tiger.binaryName} is not set up yet — download it once, or point ` +
               `px.tigerPath at your own binary.`,
             `Download ${meta.tiger.binaryName}`
           )
@@ -220,7 +220,7 @@ export class TigerRunner implements vscode.Disposable {
     if (!modRoot) {
       if (manual)
         void vscode.window.showWarningMessage(
-          "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+          "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
         );
       return;
     }
@@ -234,7 +234,7 @@ export class TigerRunner implements vscode.Disposable {
         // instead of describing the fix.
         void vscode.window
           .showErrorMessage(
-            `Paradox Toolkit: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
+            `Paradox Modding Toolkit: tiger needs a mod descriptor in the mod folder (${modRoot}). ` +
               "Mods created via the launcher have one.",
             "Create descriptor.mod"
           )
@@ -273,7 +273,7 @@ export class TigerRunner implements vscode.Disposable {
     try {
       child = spawn(cfg.tigerPath, args, { windowsHide: true });
     } catch (err) {
-      this.notifyError(`Paradox Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
+      this.notifyError(`Paradox Modding Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
       return;
     }
     this.child = child;
@@ -284,7 +284,7 @@ export class TigerRunner implements vscode.Disposable {
       this.child = null;
       this.showDone(null);
       this.notifyError(
-        `Paradox Toolkit: could not run ${meta.tiger?.binaryName ?? "tiger"} (${err.message}). Check px.tigerPath.`
+        `Paradox Modding Toolkit: could not run ${meta.tiger?.binaryName ?? "tiger"} (${err.message}). Check px.tigerPath.`
       );
     });
     child.on("close", (code, signal) => {
@@ -303,7 +303,7 @@ export class TigerRunner implements vscode.Disposable {
         // Non-zero exit with no JSON = broken invocation; parse failures degrade to
         // a notification, never a crash.
         this.notifyError(
-          `Paradox Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced no readable JSON report (exit code ${code}).` +
+          `Paradox Modding Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced no readable JSON report (exit code ${code}).` +
             (stderr ? ` stderr: ${stderr.slice(0, 300)}` : "")
         );
         return;
@@ -324,14 +324,14 @@ export class TigerRunner implements vscode.Disposable {
       const meta = metaFor(cfg.gameId);
       if (!meta.tiger) {
         void vscode.window.showInformationMessage(
-          `Paradox Toolkit: no tiger validator exists for ${meta.name} yet, so there is no baseline to create.`
+          `Paradox Modding Toolkit: no tiger validator exists for ${meta.name} yet, so there is no baseline to create.`
         );
         resolve(null);
         return;
       }
       if (!cfg.tigerPath || !cfg.modPath) {
         void vscode.window.showWarningMessage(
-          "Paradox Toolkit: tiger and a mod folder are required for a baseline."
+          "Paradox Modding Toolkit: tiger and a mod folder are required for a baseline."
         );
         resolve(null);
         return;
@@ -351,7 +351,7 @@ export class TigerRunner implements vscode.Disposable {
       try {
         child = spawn(cfg.tigerPath, args, { windowsHide: true });
       } catch (err) {
-        this.notifyError(`Paradox Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
+        this.notifyError(`Paradox Modding Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
         resolve(null);
         return;
       }
@@ -360,7 +360,7 @@ export class TigerRunner implements vscode.Disposable {
       child.on("close", () => {
         const reports = parseTigerJson(stdout);
         if (reports === null) {
-          this.notifyError("Paradox Toolkit: tiger produced no readable JSON for the baseline.");
+          this.notifyError("Paradox Modding Toolkit: tiger produced no readable JSON for the baseline.");
           resolve(null);
           return;
         }
@@ -368,7 +368,7 @@ export class TigerRunner implements vscode.Disposable {
           fs.mkdirSync(path.dirname(outFile), { recursive: true });
           fs.writeFileSync(outFile, stdout);
         } catch (err) {
-          this.notifyError(`Paradox Toolkit: could not write the baseline file: ${String(err)}`);
+          this.notifyError(`Paradox Modding Toolkit: could not write the baseline file: ${String(err)}`);
           resolve(null);
           return;
         }

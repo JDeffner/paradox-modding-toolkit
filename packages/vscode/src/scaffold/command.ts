@@ -238,9 +238,9 @@ async function materialize(
   if (appended.length) parts.push(`appended to ${appended.join(", ")}`);
   if (skipped.length) parts.push(`skipped existing ${skipped.join(", ")}`);
   if (skipped.length && !created.length && !appended.length) {
-    void vscode.window.showWarningMessage(`Paradox Toolkit: ${parts.join("; ")}.`);
+    void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${parts.join("; ")}.`);
   } else {
-    void vscode.window.showInformationMessage(`Paradox Toolkit: ${parts.join("; ")}.`);
+    void vscode.window.showInformationMessage(`Paradox Modding Toolkit: ${parts.join("; ")}.`);
   }
 }
 
@@ -250,7 +250,7 @@ export async function newContentCommand(
 ): Promise<void> {
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+      "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
@@ -304,6 +304,6 @@ export async function newContentCommand(
   try {
     await materialize(result, cfg, onFileChanged);
   } catch (err) {
-    void vscode.window.showErrorMessage(`Paradox Toolkit: failed to create content: ${String(err)}`);
+    void vscode.window.showErrorMessage(`Paradox Modding Toolkit: failed to create content: ${String(err)}`);
   }
 }

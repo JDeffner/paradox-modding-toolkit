@@ -30,14 +30,14 @@ function languagesInMod(locDir: string): string[] {
 export async function createTranslationCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+      "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
   const locDir = path.join(cfg.modPath, "localization");
   if (!fs.existsSync(locDir)) {
     void vscode.window.showWarningMessage(
-      `Paradox Toolkit: the mod has no localization folder yet (${locDir}).`
+      `Paradox Modding Toolkit: the mod has no localization folder yet (${locDir}).`
     );
     return;
   }
@@ -45,7 +45,7 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
   const present = languagesInMod(locDir);
   if (present.length === 0) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no localization files with a language marker found in the mod."
+      "Paradox Modding Toolkit: no localization files with a language marker found in the mod."
     );
     return;
   }
@@ -111,7 +111,7 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     }
   }
 
-  const summary = `Paradox Toolkit: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
+  const summary = `Paradox Modding Toolkit: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
   log(summary);
   void vscode.window.showInformationMessage(summary);
   if (firstFile) {

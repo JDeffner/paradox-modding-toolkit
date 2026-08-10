@@ -203,12 +203,14 @@ export async function editLocalizationCommand(
 ): Promise<void> {
   const key = await resolveKeyFromEditor(lookup, arg);
   if (!key) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: place the cursor on a localization key first.");
+    void vscode.window.showWarningMessage(
+      "Paradox Modding Toolkit: place the cursor on a localization key first."
+    );
     return;
   }
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
-      "Paradox Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+      "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
@@ -232,19 +234,25 @@ export async function editLocalizationCommand(
     const file = await writeLocSmart(cfg, lookup, key, newValue);
     onLocFileChanged(file);
   } catch (err) {
-    void vscode.window.showErrorMessage(`Paradox Toolkit: failed to write localization: ${String(err)}`);
+    void vscode.window.showErrorMessage(
+      `Paradox Modding Toolkit: failed to write localization: ${String(err)}`
+    );
   }
 }
 
 export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown): Promise<void> {
   const key = await resolveKeyFromEditor(lookup, arg);
   if (!key) {
-    void vscode.window.showWarningMessage("Paradox Toolkit: place the cursor on a localization key first.");
+    void vscode.window.showWarningMessage(
+      "Paradox Modding Toolkit: place the cursor on a localization key first."
+    );
     return;
   }
   const def = (await lookup(key))[0];
   if (!def) {
-    void vscode.window.showWarningMessage(`Paradox Toolkit: no localization entry found for "${key}".`);
+    void vscode.window.showWarningMessage(
+      `Paradox Modding Toolkit: no localization entry found for "${key}".`
+    );
     return;
   }
   const doc = await vscode.workspace.openTextDocument(def.file);

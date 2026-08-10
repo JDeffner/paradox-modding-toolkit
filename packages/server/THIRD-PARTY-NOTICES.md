@@ -1,6 +1,6 @@
 # Third-party notices
 
-Paradox Toolkit is GPL-3.0-or-later (see `LICENSE`). It additionally contains
+Paradox Modding Toolkit is GPL-3.0-or-later (see `LICENSE`). It additionally contains
 material derived from the MIT-licensed projects below. Their license texts are
 reproduced verbatim as required.
 

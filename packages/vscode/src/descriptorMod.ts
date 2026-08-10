@@ -319,7 +319,7 @@ export function registerDescriptorMod(
       missingNotified = true;
       void vscode.window
         .showErrorMessage(
-          `Paradox Toolkit: this mod has no descriptor.mod (${modPath}).`,
+          `Paradox Modding Toolkit: this mod has no descriptor.mod (${modPath}).`,
           "Create descriptor.mod"
         )
         .then((choice) => {
@@ -332,7 +332,7 @@ export function registerDescriptorMod(
     const cfg = getConfig();
     if (!cfg.modPath) {
       void vscode.window.showWarningMessage(
-        "Paradox Toolkit: open the folder that should become the mod as a workspace folder first."
+        "Paradox Modding Toolkit: open the folder that should become the mod as a workspace folder first."
       );
       return;
     }

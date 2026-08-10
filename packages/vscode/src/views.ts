@@ -1,5 +1,5 @@
 /**
- * The Paradox Toolkit activity-bar container (rework plan AD-7): native tree views —
+ * The Paradox Modding Toolkit activity-bar container (rework plan AD-7): native tree views —
  * Mod Overview, Problems by Type, Localization Coverage, Overrides &
  * Conflicts, Dependencies. All data comes from the language server via paradox/*
  * requests (except Problems, which slices the editor's own diagnostics); views
@@ -500,7 +500,7 @@ export function registerPxViews(
     vscode.commands.registerCommand("px.pickFocusMod", async () => {
       const roots = focus.roots();
       if (roots.length === 0) {
-        void vscode.window.showInformationMessage("Paradox Toolkit: no workspace mods to focus.");
+        void vscode.window.showInformationMessage("Paradox Modding Toolkit: no workspace mods to focus.");
         return;
       }
       type Item = vscode.QuickPickItem & { root: string | null };
@@ -517,7 +517,7 @@ export function registerPxViews(
         })),
       ];
       const picked = await vscode.window.showQuickPick(items, {
-        title: "Focus mod for the Paradox Toolkit sidebar views",
+        title: "Focus mod for the Paradox Modding Toolkit sidebar views",
         placeHolder: "Which mod should Mod Overview, Localization Coverage and Overrides show?",
       });
       if (!picked) return;
@@ -538,7 +538,7 @@ export function registerPxViews(
         if (!known.has(p.toLowerCase())) candidates.push(p);
       }
       if (candidates.length === 0) {
-        void vscode.window.showInformationMessage("Paradox Toolkit: no workspace mods found.");
+        void vscode.window.showInformationMessage("Paradox Modding Toolkit: no workspace mods found.");
         return;
       }
       const excluded = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));

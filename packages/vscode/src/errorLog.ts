@@ -61,7 +61,9 @@ export class ErrorLogWatcher implements vscode.Disposable {
   start(): void {
     const file = this.errorLogFile();
     if (!file) {
-      void vscode.window.showWarningMessage("Paradox Toolkit: logs folder not found (set px.logsPath).");
+      void vscode.window.showWarningMessage(
+        "Paradox Modding Toolkit: logs folder not found (set px.logsPath)."
+      );
       return;
     }
     this.byUri.clear();
@@ -75,7 +77,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.stateEmitter.fire(true);
     this.log(`watching ${file}`);
     void vscode.window.showInformationMessage(
-      "Paradox Toolkit: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
+      "Paradox Modding Toolkit: watching error.log — new game errors appear in Problems. Run the game with debug mode for live script reloads."
     );
   }
 
@@ -88,7 +90,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     if (wasWatching) {
       this.stateEmitter.fire(false);
       this.log("error.log watch stopped");
-      void vscode.window.showInformationMessage("Paradox Toolkit: stopped watching error.log.");
+      void vscode.window.showInformationMessage("Paradox Modding Toolkit: stopped watching error.log.");
     }
   }
 
@@ -193,7 +195,7 @@ export async function launchGameDebugCommand(cfg: PxConfig, errorLog: ErrorLogWa
   const watch = errorLog.watching ? [] : ["Watch error.log"];
   void vscode.window
     .showInformationMessage(
-      `Paradox Toolkit: launching ${meta.name} via Steam with -debug_mode -develop (scripts reload live).`,
+      `Paradox Modding Toolkit: launching ${meta.name} via Steam with -debug_mode -develop (scripts reload live).`,
       ...watch
     )
     .then((choice) => {

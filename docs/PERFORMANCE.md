@@ -1,6 +1,6 @@
 # What a workspace costs
 
-Paradox Toolkit indexes every definition and every reference in the game plus
+Paradox Modding Toolkit indexes every definition and every reference in the game plus
 every mod your workspace points at, and it keeps that index in memory for as
 long as the window is open. On an ordinary mod nobody notices. On a workspace
 holding a total conversion or a dozen mods, the index is the whole performance
@@ -83,7 +83,7 @@ to `"save"`.
 
 Set **`px.trace.perf`** to `true` and reproduce. Every request, file rescan,
 index change and indexing phase is then logged with its wall clock to the
-*Paradox Toolkit* output channel, and a Ctrl+S turns into a millisecond
+*Paradox Modding Toolkit* output channel, and a Ctrl+S turns into a millisecond
 timeline. That output channel plus the window's memory reading is what a useful
 report is made of. `px.trace.server` logs the raw LSP traffic if the timeline is
 not enough.

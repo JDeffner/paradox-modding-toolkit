@@ -5,7 +5,7 @@
 Language server for Paradox script, localization (`.yml`) and `.gui` files,
 covering **Crusader Kings III**, **Victoria 3** and **Europa Universalis V**.
 This is the engine behind the
-[Paradox Toolkit](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
+[Paradox Modding Toolkit](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
 VS Code extension, usable standalone from **any LSP-capable editor** over
 `--stdio` (neovim, Zed, Helix, ...).
 

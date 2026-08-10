@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="media/banner.png" alt="Paradox Toolkit">
+<img src="media/banner.png" alt="Paradox Modding Toolkit">
 
-# Paradox Toolkit for VS Code
+# Paradox Modding Toolkit for VS Code
 
 Mod development for **Crusader Kings III**, **Victoria 3** and **Europa
 Universalis V**: a language server with a real Paradox-script parser,
