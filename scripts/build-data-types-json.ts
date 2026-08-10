@@ -2,7 +2,7 @@
  * Build-time harvest of data types (for [ ... ] datafunction completion) from
  * the bundled wiki page wikidocs/Data_types.md: the Global Promotes and
  * Global Functions tables plus each `### TypeName` member table under
- * `## Types`. Output: shared/data/dataTypes.json (bundled baseline; the
+ * `## Types`. Output: packages/server/data/ck3/dataTypes.json (bundled baseline; the
  * user's own data_types.log upgrades it at runtime — see
  * server/src/data/dataTypes.ts).
  *
@@ -14,8 +14,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 const root = path.join(__dirname, "..");
-const input = path.join(root, "wikidocs", "Data_types.md");
-const output = path.join(root, "shared", "data", "dataTypes.json");
+const input = path.join(root, "packages", "server", "data", "ck3", "wikidocs", "Data_types.md");
+const output = path.join(root, "packages", "server", "data", "ck3", "dataTypes.json");
 
 const text = fs.readFileSync(input, "utf8");
 
@@ -25,7 +25,8 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 function cleanRet(cell: string): string | null {
   const linked = /^\[([^\]]+)\]\([^)]*\)$/.exec(cell);
   const value = (linked ? linked[1] : cell).trim();
-  if (value.length === 0 || value === "[unregistered]" || value === "unregistered" || value === "void") return null;
+  if (value.length === 0 || value === "[unregistered]" || value === "unregistered" || value === "void")
+    return null;
   return NAME.test(value) ? value : null;
 }
 
@@ -82,7 +83,8 @@ function put(into: Record<string, string | null>, name: string, ret: string | nu
 }
 
 for (const [name, ret] of tableRows(h2.get("List of Global Promotes") ?? [])) put(globalPromotes, name, ret);
-for (const [name, ret] of tableRows(h2.get("List of Global Functions") ?? [])) put(globalFunctions, name, ret);
+for (const [name, ret] of tableRows(h2.get("List of Global Functions") ?? []))
+  put(globalFunctions, name, ret);
 
 const typesBody = h2.get("Types") ?? [];
 for (const [typeName, body] of sections(typesBody, "### ")) {

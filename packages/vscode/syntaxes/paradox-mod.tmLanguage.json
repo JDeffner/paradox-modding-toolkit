@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Mod Descriptor",
+  "scopeName": "source.paradox-mod",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#tags-block" },
+    { "include": "#version-value" },
+    { "include": "#path-value" },
+    { "include": "#known-key" },
+    { "include": "#unknown-key" },
+    { "include": "#string" },
+    { "include": "#operator" },
+    { "include": "#braces" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.paradox-mod",
+      "match": "#.*$"
+    },
+    "tags-block": {
+      "comment": "tags/dependencies = { \"...\" \"...\" } - entries colored as tags",
+      "begin": "\\b(tags|dependencies)\\s*(=)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "support.type.property-name.paradox-mod" },
+        "2": { "name": "keyword.operator.assignment.paradox-mod" },
+        "3": { "name": "punctuation.section.block.begin.paradox-mod" }
+      },
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.paradox-mod" } },
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "name": "string.quoted.double.paradox-mod",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "name": "entity.name.tag.paradox-mod", "match": "[^\"]+" }]
+        }
+      ]
+    },
+    "version-value": {
+      "comment": "version numbers get numeric coloring so they stand out from names",
+      "match": "\\b(version|supported_version|remote_file_id)\\s*(=)\\s*(\")([^\"]*)(\")",
+      "captures": {
+        "1": { "name": "support.type.property-name.paradox-mod" },
+        "2": { "name": "keyword.operator.assignment.paradox-mod" },
+        "3": { "name": "punctuation.definition.string.begin.paradox-mod" },
+        "4": { "name": "constant.numeric.version.paradox-mod" },
+        "5": { "name": "punctuation.definition.string.end.paradox-mod" }
+      }
+    },
+    "path-value": {
+      "match": "\\b(path|picture|replace_path)\\s*(=)\\s*(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "support.type.property-name.paradox-mod" },
+        "2": { "name": "keyword.operator.assignment.paradox-mod" },
+        "3": { "name": "string.quoted.double.path.paradox-mod" }
+      }
+    },
+    "known-key": {
+      "name": "support.type.property-name.paradox-mod",
+      "match": "\\b(name|version|supported_version|path|remote_file_id|picture|tags|replace_path|dependencies)\\s*(?==)"
+    },
+    "unknown-key": {
+      "name": "variable.other.property.paradox-mod",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\s*(?==)"
+    },
+    "string": {
+      "name": "string.quoted.double.paradox-mod",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [{ "name": "constant.character.escape.paradox-mod", "match": "\\\\." }]
+    },
+    "operator": {
+      "name": "keyword.operator.assignment.paradox-mod",
+      "match": "="
+    },
+    "braces": {
+      "patterns": [
+        { "name": "punctuation.section.block.begin.paradox-mod", "match": "\\{" },
+        { "name": "punctuation.section.block.end.paradox-mod", "match": "\\}" }
+      ]
+    }
+  }
+}

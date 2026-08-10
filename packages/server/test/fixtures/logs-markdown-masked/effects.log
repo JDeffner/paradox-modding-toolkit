@@ -1,0 +1,27 @@
+# Effect Documentation
+## abandon_revolution
+Removes interest group from revolution  
+abandon_revolution = yes/no
+**Supported Scopes**: interest_group  
+
+## add_amendment
+Adds an amendment to the scoped law.
+add_amendment = {  
+	type = amendment_example  
+	sponsor = interest_group  
+}
+**Supported Scopes**: law  
+
+## add_banned_goods
+Adds a total ban of a good to a country  
+add_banned_goods = <goods key/scope>
+**Supported Scopes**: country  
+**Supported Targets**: goods  
+
+## switch
+Switch on a trigger for the evaluation of another trigger with an optional fallback trigger.  
+switch = {  
+	trigger = simple_assign_trigger  
+	case_1 = { <effects> }  
+	fallback = { <effects> }
+**Supported Scopes**: none  

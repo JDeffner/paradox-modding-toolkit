@@ -2,8 +2,8 @@
  * Build-time harvest of the FULL structure-key layer: every documented
  * `key = value` line in every `_*.info` schema doc the game ships, validated
  * against real usage counts in that folder's vanilla files, emitted as
- * shared/data/structures.json (bundled; merged UNDER the hand-curated
- * shared/src/schema/structures.ts at load time — curated docs always win).
+ * packages/server/data/ck3/structures.json (bundled; merged UNDER the hand-curated
+ * packages/server/src/games/ck3/structures.ts at load time — curated docs always win).
  *
  * Keys are kept when they are actually used in vanilla (count >= 3) or carry
  * a doc comment and appear at least once — this filters the .info files'
@@ -16,9 +16,9 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { CK3_SCHEMA } from "../shared/src/schema/ck3Schema";
-import { parseScript } from "../server/src/parser";
-import { requireDevPath } from "../test/devPaths";
+import { CK3_SCHEMA } from "../packages/server/src/games/ck3/schema";
+import { parseScript } from "../packages/server/src/parser";
+import { requireDevPath } from "./devPaths";
 
 const gamePath = process.argv[2] ?? requireDevPath("gamePath", "build-structures-json");
 
@@ -26,9 +26,34 @@ const KEY_LINE = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/;
 const NAME_OK = /^[a-z][a-z0-9_]*$/;
 /** Grammar/logic words that completion serves through the context layer, not as structure keys. */
 const STOPLIST = new Set([
-  "if", "else", "else_if", "limit", "and", "or", "not", "nor", "nand", "this", "root", "prev", "from",
-  "yes", "no", "value", "add", "multiply", "divide", "subtract", "min", "max", "factor", "base",
-  "first_valid", "triggered_desc", "random_list", "e_g",
+  "if",
+  "else",
+  "else_if",
+  "limit",
+  "and",
+  "or",
+  "not",
+  "nor",
+  "nand",
+  "this",
+  "root",
+  "prev",
+  "from",
+  "yes",
+  "no",
+  "value",
+  "add",
+  "multiply",
+  "divide",
+  "subtract",
+  "min",
+  "max",
+  "factor",
+  "base",
+  "first_valid",
+  "triggered_desc",
+  "random_list",
+  "e_g",
 ]);
 const MAX_KEYS_PER_KIND = 60;
 const MAX_DOC = 240;
@@ -60,8 +85,10 @@ const ROOT_PHRASES: Array<[RegExp, string]> = [
   [/travel plan owner/, "character"],
   [/travel plan/, "travel_plan"],
   [/casus belli/, "casus_belli"],
-  [/character|ruler|player\b|owner|host\b|councillor|liege|attacker|defender|claimant|employer|employee|courtier|agent\b|knight|promoter|vassal|recipient|actor|founder|holder|creator|schemer|guest|governor|spouse|heir/,
-    "character"],
+  [
+    /character|ruler|player\b|owner|host\b|councillor|liege|attacker|defender|claimant|employer|employee|courtier|agent\b|knight|promoter|vassal|recipient|actor|founder|holder|creator|schemer|guest|governor|spouse|heir/,
+    "character",
+  ],
   [/\bcontract\b/, "task_contract"],
   [/\bmemory\b/, "character_memory"],
   [/\bhouse\b/, "dynasty_house"],
@@ -130,10 +157,18 @@ function harvestInfo(text: string): Map<string, KeySpecJson> {
         let inlineDoc = "";
         const hash = rhs.indexOf("#");
         if (hash >= 0) {
-          inlineDoc = rhs.slice(hash + 1).replace(/^#+\s?/, "").trim();
+          inlineDoc = rhs
+            .slice(hash + 1)
+            .replace(/^#+\s?/, "")
+            .trim();
           rhs = rhs.slice(0, hash);
         }
-        const doc = [...pending, inlineDoc].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, MAX_DOC);
+        const doc = [...pending, inlineDoc]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, MAX_DOC);
         // Nearest root-scope declaration above (or inline with) the key wins.
         let scope: string | undefined;
         for (const line of [...pending, inlineDoc]) {
@@ -289,7 +324,7 @@ const out = {
   sources,
   kinds,
 };
-const target = path.join(__dirname, "..", "shared", "data", "structures.json");
+const target = path.join(__dirname, "..", "packages", "server", "data", "ck3", "structures.json");
 fs.writeFileSync(target, JSON.stringify(out, null, 1), "utf8");
 const total = Object.values(kinds).reduce((n, k) => n + k.topLevel.length, 0);
 console.log(`wrote ${target}: ${Object.keys(kinds).length} kinds, ${total} keys`);

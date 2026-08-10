@@ -1,0 +1,21 @@
+# px fixture: duplicate keys and compound values. Rows: W07, W08.
+#
+# CK3 override semantics inside one body are last-in-wins, so a property write
+# must rewrite the LAST occurrence of the key, not the first, and a key lookup
+# is case-insensitive. A compound `a|b` value is normalized in the model but
+# must be replaced WHOLE: the recorded span has to cover both sides of the pipe.
+# A quoted value's span includes its quotes, and a block value's span is the raw
+# block text, braces included.
+
+widget = {
+	name = "px_duplicate_target"
+	size = { 1 1 }
+	size = { 2 2 }
+	SIZE = { 3 3 }
+
+	parentanchor = top|left
+	widgetanchor = bottom|right
+	alpha = 0.5
+	tooltip = "PX_FIXTURE_TOOLTIP"
+	datacontext = "[GetPxFixtureContext]"
+}

@@ -1,0 +1,139 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Format Docs",
+  "scopeName": "source.paradox-info",
+  "patterns": [
+    { "include": "#heading" },
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#macro-param" },
+    { "include": "#inline-math" },
+    { "include": "#script-constant" },
+    { "include": "#placeholder" },
+    { "include": "#date" },
+    { "include": "#event-id" },
+    { "include": "#value-alternatives" },
+    { "include": "#value-constant" },
+    { "include": "#value-scope" },
+    { "include": "#number" },
+    { "include": "#saved-scope" },
+    { "include": "#iterator" },
+    { "include": "#control-key" },
+    { "include": "#block-key" },
+    { "include": "#property" },
+    { "include": "#operator" },
+    { "include": "#braces" }
+  ],
+  "repository": {
+    "heading": {
+      "comment": "== Section == / === Section === headers used throughout the .info docs",
+      "name": "markup.heading.paradox-info",
+      "match": "^\\x{FEFF}?\\s*(={2,})([^=]+)(={2,})\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.heading.paradox-info" },
+        "2": { "name": "entity.name.section.paradox-info" },
+        "3": { "name": "punctuation.definition.heading.paradox-info" }
+      }
+    },
+    "comment": {
+      "name": "comment.line.number-sign.paradox",
+      "match": "#.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.paradox",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.paradox", "match": "\\\\." },
+        { "name": "variable.other.substitution.paradox", "match": "\\$[A-Za-z0-9_.|\\-]+\\$" },
+        { "name": "support.function.databinding.paradox", "match": "\\[[^\\]]*\\]" },
+        { "name": "constant.other.formatting.paradox", "match": "#[!A-Za-z_;]+" }
+      ]
+    },
+    "macro-param": {
+      "name": "variable.parameter.macro.paradox",
+      "match": "\\$[A-Za-z0-9_.|\\-]+\\$"
+    },
+    "inline-math": {
+      "name": "meta.inline-math.paradox",
+      "begin": "@\\[",
+      "end": "\\]",
+      "beginCaptures": { "0": { "name": "punctuation.section.math.begin.paradox" } },
+      "endCaptures": { "0": { "name": "punctuation.section.math.end.paradox" } },
+      "patterns": [
+        { "name": "constant.numeric.paradox", "match": "-?\\d+(\\.\\d+)?" },
+        { "name": "keyword.operator.arithmetic.paradox", "match": "[-+*/%()]" },
+        { "name": "variable.other.constant.script.paradox", "match": "[A-Za-z_][A-Za-z0-9_]*" }
+      ]
+    },
+    "script-constant": {
+      "name": "variable.other.constant.script.paradox",
+      "match": "@[A-Za-z_][A-Za-z0-9_]*\\b"
+    },
+    "placeholder": {
+      "comment": "<key>, <triggers>, <scripted value>… — the docs' fill-in-the-blank tokens",
+      "name": "variable.parameter.placeholder.paradox",
+      "match": "<[A-Za-z_][A-Za-z0-9_ .|/\\-]*>"
+    },
+    "date": {
+      "name": "constant.numeric.date.paradox",
+      "match": "\\b\\d{1,4}\\.\\d{1,2}\\.\\d{1,2}(?:\\.\\d{1,2})?\\b"
+    },
+    "event-id": {
+      "name": "entity.name.function.event-id.paradox",
+      "match": "\\b[A-Za-z][A-Za-z0-9_\\-]*\\.\\d+\\b(?!\\.\\d)"
+    },
+    "value-alternatives": {
+      "comment": "slash-separated allowed values right of =, e.g. valid_sex = all/male/female",
+      "match": "(?<==)[ \\t]*([A-Za-z_][A-Za-z0-9_]*(?:/[A-Za-z_][A-Za-z0-9_]*)+)\\b",
+      "captures": { "1": { "name": "constant.language.paradox" } }
+    },
+    "value-constant": {
+      "comment": "constants and type placeholders right of = only, so prose yes/no/all stays plain",
+      "match": "(?<==)[ \\t]*(yes|no|none|all|X|int|float|bool)\\b",
+      "captures": { "1": { "name": "constant.language.paradox" } }
+    },
+    "value-scope": {
+      "comment": "scope words right of = only (exists = this, court_owner = root, …)",
+      "match": "(?<==)[ \\t]*(root|this|prev(prev)*|from(from)*|liege|holder|mother|father|primary_spouse|primary_title|primary_heir|player_heir|capital_province|capital_county|capital_barony|top_liege|court_owner|employer|county|duchy|kingdom|empire|barony|province|location|culture_head|faith|culture|religion|dynasty|house|betrothed|host|killer|imprisoner|realm_priest|designated_heir|ghw_beneficiary|involved_activity|activity|activity_host|story_owner|secret_owner|secret_target|scheme_owner|scheme_target|title_province|county_controller|barony_controller|province_owner|current_travel_plan|court_position_employer|accolade_owner)\\b",
+      "captures": { "1": { "name": "variable.language.scope.paradox" } }
+    },
+    "number": {
+      "name": "constant.numeric.paradox",
+      "match": "(?<![\\w.])-?\\d+(\\.\\d+)?(?![\\w.])"
+    },
+    "saved-scope": {
+      "name": "variable.other.saved-scope.paradox",
+      "match": "\\b(scope|var|local_var|global_var|flag|event_target|define|list|title|character|province|culture|faith|dynasty|house|religion|trait|vassal_contract|struggle|epidemic):[A-Za-z0-9_.\\-]+\\b"
+    },
+    "iterator": {
+      "name": "keyword.operator.iterator.paradox",
+      "match": "\\b(any|every|random|ordered)_[a-z0-9_]+\\b"
+    },
+    "control-key": {
+      "comment": "control words only in key position (NOT = { … }); bare if/or/not in prose stays plain",
+      "name": "keyword.control.paradox",
+      "match": "\\b(if|else_if|else|while|switch|trigger_if|trigger_else_if|trigger_else|AND|OR|NOT|NOR|NAND|and|or|not|nor|nand|limit|alternative_limit|filter|namespace|first_valid|random_valid|triggered_desc|hidden_effect|hidden_trigger|show_as_tooltip|custom_description|custom_tooltip|calc_true_if|exists|always|save_scope_as|save_scope_value_as|save_temporary_scope_as|save_temporary_scope_value_as|clear_saved_scope|add_to_list|add_to_temporary_list|remove_from_list|is_in_list|random_list|duel|send_interface_toast|send_interface_message|trigger_event)\\b(?=\\s*\\??=)"
+    },
+    "block-key": {
+      "name": "entity.name.tag.block.paradox",
+      "match": "\\b(type|hidden|trigger|immediate|effect|option|after|potential|allow|can_pick|ai_chance|ai_will_do|ai_potential|is_shown|is_valid|is_valid_showing_failures_only|on_accept|on_decline|on_send|on_start|on_end|on_complete|on_invalidated|modifier|compare_modifier|opinion_modifier|weight|weight_multiplier|desc|title|theme|override_background|left_portrait|right_portrait|center_portrait|lower_left_portrait|lower_center_portrait|lower_right_portrait|animation|scaled_by|min|max|value|add|multiply|divide|subtract|factor|base|days|weeks|months|years|duration|target|order_by|position|chance|cost|gold|piety|prestige)\\s*(?=\\??=)"
+    },
+    "property": {
+      "comment": "any key left of =, incl. slashed key alternatives like days/weeks/months/years =",
+      "name": "variable.other.property.paradox",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_.\\-/]*\\s*(?=\\??=)"
+    },
+    "operator": {
+      "name": "keyword.operator.comparison.paradox",
+      "match": "(\\?=|>=|<=|!=|==|=|<|>)"
+    },
+    "braces": {
+      "patterns": [
+        { "name": "punctuation.section.block.begin.paradox", "match": "\\{" },
+        { "name": "punctuation.section.block.end.paradox", "match": "\\}" },
+        { "name": "punctuation.section.brackets.paradox", "match": "[\\[\\]]" }
+      ]
+    }
+  }
+}

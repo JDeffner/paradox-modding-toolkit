@@ -1,7 +1,7 @@
 /**
- * Schema-coverage audit: compare the extension's knowledge (CK3_SCHEMA +
- * structures.json) against what the game actually ships — every `_*.info`
- * schema doc and every common/ subfolder — and report the gaps.
+ * Schema-coverage audit: compare the extension's knowledge (the profile's
+ * schema table + structures.json) against what the game actually ships — every
+ * `_*.info` schema doc and every common/ subfolder — and report the gaps.
  *
  * For each uncovered folder the script also PROBES the on-disk layout
  * (parsing up to 3 vanilla files) to say whether the standard top-level
@@ -10,18 +10,31 @@
  *
  * Run (see AGENTS.md "Regenerating bundled data"):
  *   npx esbuild scripts/audit-schema-coverage.ts --bundle --platform=node \
- *     --outfile=dist/audit-schema-coverage.cjs && node dist/audit-schema-coverage.cjs [gamePath]
+ *     --outfile=dist/audit-schema-coverage.cjs && node dist/audit-schema-coverage.cjs \
+ *     [--game <id>] [gamePath]
+ *   (--game defaults to ck3; gamePath falls back to dev-paths.json / PX_<GAME>_GAME_PATH)
  */
 import * as fs from "fs";
 import * as path from "path";
-import { CK3_SCHEMA } from "../shared/src/schema/ck3Schema";
-import { parseScript } from "../server/src/parser";
-import structuresJson from "../shared/data/structures.json";
-import { requireDevPath } from "../test/devPaths";
+import { resolveProfile } from "../packages/server/src/games/registry";
+import { parseScript } from "../packages/server/src/parser";
+import { parseGameArg, requireDevPath } from "./devPaths";
 
-const gamePath = process.argv[2] ?? requireDevPath("gamePath", "audit-schema-coverage");
+const { gameId, rest } = parseGameArg(process.argv.slice(2));
+const schema = resolveProfile(gameId).schema;
+const gamePath = rest[0] ?? requireDevPath("gamePath", "audit-schema-coverage", gameId);
 
-/** Folders the schema deliberately skips (see ck3Schema.ts "Not covered"). */
+// structures.json is harvested per game by build-structures-json.ts (CK3-only
+// today); missing means section 3 of the report is simply empty.
+const structuresFile = path.join(__dirname, "..", "packages", "server", "data", gameId, "structures.json");
+let structuresJson: { kinds: Record<string, unknown> } = { kinds: {} };
+try {
+  structuresJson = JSON.parse(fs.readFileSync(structuresFile, "utf8"));
+} catch {
+  console.error(`(no structures.json for ${gameId} — skipping the harvest cross-check)`);
+}
+
+/** Folders the schema deliberately skips (CK3 list; see ck3/schema.ts "Not covered"). */
 const INTENTIONAL = [
   "common/defines",
   "common/named_colors",
@@ -85,9 +98,8 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const covered = (dir: string): boolean =>
-  CK3_SCHEMA.some((e) => dir === e.path || dir.startsWith(e.path + "/") || e.path.startsWith(dir + "/"));
-const intentional = (dir: string): boolean =>
-  INTENTIONAL.some((e) => dir === e || dir.startsWith(e + "/"));
+  schema.some((e) => dir === e.path || dir.startsWith(e.path + "/") || e.path.startsWith(dir + "/"));
+const intentional = (dir: string): boolean => INTENTIONAL.some((e) => dir === e || dir.startsWith(e + "/"));
 
 /** Does the folder's layout fit the standard `name = { ... }` extraction? */
 function probeFolder(dir: string): { files: number; defs: number; standard: boolean; sample: string[] } {
@@ -105,7 +117,7 @@ function probeFolder(dir: string): { files: number; defs: number; standard: bool
       for (const stmt of result.root.statements) {
         if (stmt.kind !== "assignment") continue;
         const isBlock = stmt.value?.kind === "block" || stmt.value?.kind === "tagged-block";
-        const nameOk = /^[A-Za-z][A-Za-z0-9_.\-]*$/.test(stmt.key.text) && !stmt.key.text.startsWith("@");
+        const nameOk = /^[A-Za-z][A-Za-z0-9_.-]*$/.test(stmt.key.text) && !stmt.key.text.startsWith("@");
         if (isBlock && nameOk) {
           defs++;
           if (sample.length < 3) sample.push(stmt.key.text);
@@ -154,10 +166,10 @@ for (const dir of commonDirs) {
 gaps.sort((a, b) => b.defs - a.defs);
 
 // ---- 3. schema kinds whose folder ships an .info but structures.json lacks them
-const harvestedKinds = new Set(Object.keys((structuresJson as { kinds: Record<string, unknown> }).kinds));
+const harvestedKinds = new Set(Object.keys(structuresJson.kinds));
 const infoDirs = new Set(infoFiles.map((p) => rel(path.dirname(p))));
 const kindsMissingHarvest: string[] = [];
-for (const entry of CK3_SCHEMA) {
+for (const entry of schema) {
   if (harvestedKinds.has(entry.kind)) continue;
   if (infoDirs.has(entry.path) || [...infoDirs].some((d) => entry.path.startsWith(d + "/"))) {
     kindsMissingHarvest.push(`${entry.kind} (${entry.path})`);
@@ -166,8 +178,8 @@ for (const entry of CK3_SCHEMA) {
 
 // ---- report ------------------------------------------------------------------
 console.log(`# Schema coverage audit — ${new Date().toISOString().slice(0, 10)}`);
-console.log(`game: ${gamePath}`);
-console.log(`schema entries: ${CK3_SCHEMA.length} · .info files in game: ${infoFiles.length}`);
+console.log(`game: ${gameId} @ ${gamePath}`);
+console.log(`schema entries: ${schema.length} · .info files in game: ${infoFiles.length}`);
 console.log(`structures.json kinds: ${harvestedKinds.size}`);
 console.log("");
 console.log(`## common/ folders with definitions but NO schema entry (${gaps.length})`);

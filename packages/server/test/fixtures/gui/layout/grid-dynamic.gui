@@ -1,0 +1,57 @@
+# px fixture: dynamicgridbox flow. Rows: L15.
+#
+# A dynamicgridbox flows its `item` template VERTICALLY by default: items go
+# DOWN a column and wrap into a new column after `datamodel_wrap` items, so
+# datamodel_wrap is items-per-COLUMN. Items pack at their OWN size:
+# addcolumn/addrow are NOT the stride here (that is the fixedgridbox rule).
+# `flipdirection = yes` transposes the fill to horizontal (across a row,
+# wrapping down) and does NOT mirror anything: the flipped grid still starts at
+# the top-left. `maxhorizontalslots` caps columns only while filling
+# horizontally.
+
+widget = {
+	name = "px_dyn_frame"
+	size = { 300 300 }
+
+	dynamicgridbox = {
+		name = "px_dyn_vertical"
+		datamodel = "[GetPxFixtureList]"
+		datamodel_wrap = 3
+		addcolumn = 70
+		item = {
+			widget = { name = "px_dyn_cell" size = { 40 40 } }
+		}
+	}
+}
+
+widget = {
+	name = "px_dyn_flip_frame"
+	position = { 0 320 }
+	size = { 300 300 }
+
+	dynamicgridbox = {
+		name = "px_dyn_horizontal"
+		datamodel = "[GetPxFixtureList]"
+		datamodel_wrap = 3
+		flipdirection = yes
+		item = {
+			widget = { name = "px_dyn_flip_cell" size = { 40 40 } }
+		}
+	}
+}
+
+widget = {
+	name = "px_dyn_cap_frame"
+	position = { 320 320 }
+	size = { 300 300 }
+
+	dynamicgridbox = {
+		name = "px_dyn_capped"
+		datamodel = "[GetPxFixtureList]"
+		flipdirection = yes
+		maxhorizontalslots = 2
+		item = {
+			widget = { name = "px_dyn_capped_cell" size = { 40 40 } }
+		}
+	}
+}

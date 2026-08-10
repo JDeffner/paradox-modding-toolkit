@@ -1,0 +1,17 @@
+# px fixture: two declarations sharing one line. Rows: W14, W16, W19.
+#
+# Where two widget declarations sit on the same source line, a line-granular
+# move would corrupt the line, so REORDER is refused and COPY (block text) has
+# nothing well-formed to hand out. DELETE is still allowed: removing the
+# declaration's exact bytes, plus one adjacent separator space, cannot corrupt
+# the neighbour and leaves the surviving one intact.
+
+vbox = {
+	widget = { name = "px_share_a" } widget = { name = "px_share_b" }
+	widget = { name = "px_share_c" size = { 1 1 } } widget = { name = "px_share_d" size = { 2 2 } }
+
+	widget = {
+		name = "px_share_own_line"
+		size = { 3 3 }
+	}
+}

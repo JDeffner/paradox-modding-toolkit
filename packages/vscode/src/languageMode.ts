@@ -1,0 +1,91 @@
+/**
+ * Scoped language registration: instead of claiming every *.txt on the system
+ * through package.json, switch documents to the `paradox` / `paradox-loc`
+ * languages only when they live under the configured mod or game paths.
+ */
+import * as vscode from "vscode";
+import type { PxConfig } from "./config";
+import { isUnder } from "./config";
+
+/**
+ * The explorer resolves file icons from static language associations only, so
+ * dynamically-detected documents get their icon when opened but never in the
+ * tree. In workspaces that are actually CK3 mods, persist the associations at
+ * workspace scope: same reach as the dynamic detection, but visible to the
+ * explorer, and other workspaces stay untouched. Existing associations (any
+ * scope) win; we only fill gaps, once.
+ */
+export async function ensureFileAssociations(cfg: PxConfig): Promise<void> {
+  if (!cfg.isCk3Workspace) return;
+  if (!vscode.workspace.workspaceFolders?.length) return;
+  const wanted: Record<string, string> = {
+    "*.txt": "paradox",
+    "*.gui": "paradox-gui",
+    "*.mod": "paradox-mod",
+    "**/localization/**/*.yml": "paradox-loc",
+  };
+  const files = vscode.workspace.getConfiguration("files");
+  const existing = files.get<Record<string, string>>("associations") ?? {};
+  const missing = Object.entries(wanted).filter(([glob]) => !(glob in existing));
+  if (missing.length === 0) return;
+  const workspaceValue = files.inspect<Record<string, string>>("associations")?.workspaceValue ?? {};
+  try {
+    await files.update(
+      "associations",
+      { ...workspaceValue, ...Object.fromEntries(missing) },
+      vscode.ConfigurationTarget.Workspace
+    );
+  } catch {
+    // Settings not writable (e.g. virtual workspace); dynamic detection still works.
+  }
+}
+
+export function wireLanguageDetection(
+  context: vscode.ExtensionContext,
+  getConfig: () => PxConfig
+): () => void {
+  const apply = async (doc: vscode.TextDocument) => {
+    if (doc.uri.scheme !== "file") return;
+    const cfg = getConfig();
+    if (!cfg.enableForWorkspace) return;
+    const file = doc.uri.fsPath;
+    if (
+      !isUnder(cfg.modPath, file) &&
+      !isUnder(cfg.gamePath, file) &&
+      !cfg.parentPaths.some((p) => isUnder(p, file))
+    )
+      return;
+
+    const lower = file.toLowerCase();
+    try {
+      if (lower.endsWith(".txt") && doc.languageId === "plaintext") {
+        await vscode.languages.setTextDocumentLanguage(doc, "paradox");
+      } else if (lower.endsWith(".mod") && doc.languageId === "plaintext") {
+        // descriptor.mod is matched by filename in package.json; this catches
+        // the outer <name>.mod files when a mod-collection folder is opened.
+        await vscode.languages.setTextDocumentLanguage(doc, "paradox-mod");
+      } else if (lower.endsWith(".gui") && doc.languageId === "plaintext") {
+        // PdxGui shares the jomini syntax; highlighting via the same grammar,
+        // but a distinct language id keeps the script LSP out of .gui files.
+        await vscode.languages.setTextDocumentLanguage(doc, "paradox-gui");
+      } else if (
+        lower.endsWith(".yml") &&
+        /[\\/]localization[\\/]/.test(lower) &&
+        (doc.languageId === "yaml" || doc.languageId === "plaintext")
+      ) {
+        await vscode.languages.setTextDocumentLanguage(doc, "paradox-loc");
+      }
+    } catch {
+      // Document may have been closed in the meantime; harmless.
+    }
+  };
+
+  const applyAll = () => {
+    for (const doc of vscode.workspace.textDocuments) void apply(doc);
+  };
+  context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(apply));
+  applyAll();
+  // Returned so the caller can re-run detection after the root set changes
+  // (workspace folders added/removed, px.parentMods edited).
+  return applyAll;
+}

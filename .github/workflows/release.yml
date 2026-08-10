@@ -7,8 +7,13 @@
 #    (Azure DevOps PAT with Marketplace > Manage scope) — see AGENTS.md
 #    "Releasing".
 #
-# The "prerelease" input controls the Marketplace pre-release flag (alpha/beta
-# channel users must opt in inside VS Code). Keep it on until 1.0.
+# The "prerelease" input controls the Marketplace pre-release flag. It is OFF by
+# default: the beta ships on the normal channel, because the pre-release channel
+# makes users opt in inside VS Code and is not worth the friction. "Beta" is said
+# in the README and the changelog instead. The flag also has to be set at PACKAGE
+# time, not just at publish time: `vsce package --pre-release` writes
+# Microsoft.VisualStudio.Code.PreRelease into the vsix manifest, and publishing
+# that file puts it on the pre-release channel whatever the publish flags say.
 name: Release
 
 on:
@@ -21,9 +26,9 @@ on:
         type: boolean
         default: false
       prerelease:
-        description: "Mark as pre-release (alpha/beta channel)"
+        description: "Mark as pre-release (users must opt in; off by default)"
         type: boolean
-        default: true
+        default: false
 
 jobs:
   release:
@@ -46,35 +51,63 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Same gate as CI: a tag build must not ship a boundary violation.
+      - name: Game boundary (no game strings outside games/ and vscode/)
+        run: node scripts/check-game-boundary.mjs
+
+      # Compile BEFORE the tests: the LSP/stdio/vic3 smoke tests fork
+      # dist/server.js and silently skip when it does not exist.
+      - run: pnpm run compile
+
       # Corpus-gated tests skip automatically (no game files in CI).
       - run: pnpm test
 
-      - run: pnpm run compile
-
-      # Everything in dist/ ships in the vsix; stray harvest bundles must not.
-      - run: rm -f dist/*.cjs
+      # Everything in the package's dist/ ships in the vsix; stray bundles must not.
+      - run: rm -f packages/vscode/dist/*.cjs
 
       - name: Package vsix
+        working-directory: packages/vscode
+        # --baseImagesUrl is not optional in a monorepo: vsce resolves relative
+        # image links against the repo root, so the banner and the screenshots
+        # would 404 on the listing without the packages/vscode prefix.
         run: |
           FLAG=""
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
-          npx vsce package $FLAG --no-dependencies
+          if [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
+          npx vsce package $FLAG --no-dependencies \
+            --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode
+
+      - name: Build server tarball (standalone --stdio server for other editors)
+        run: node scripts/build-server-tarball.mjs
+
+      # Self-contained Windows artifact: the same payload plus the pinned,
+      # checksum-verified official node.exe and px-lsp.cmd, so an embedder
+      # needs no Node on the target machine. No --local-node here: a release
+      # must carry the official binary.
+      - name: Build Windows server zip (bundled node.exe)
+        run: node scripts/build-server-zip.mjs
 
       - uses: actions/upload-artifact@v4
         with:
           name: vsix
-          path: "*.vsix"
+          path: |
+            packages/vscode/*.vsix
+            px-lsp-server-*.tar.gz
+            px-lsp-win-x64-*.zip
 
       - name: GitHub Release (tag builds)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.vsix"
+          files: |
+            packages/vscode/*.vsix
+            px-lsp-server-*.tar.gz
+            px-lsp-win-x64-*.zip
           prerelease: true
           generate_release_notes: true
 
       - name: Publish to Marketplace
         if: github.event_name == 'workflow_dispatch' && inputs.publish
+        working-directory: packages/vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |

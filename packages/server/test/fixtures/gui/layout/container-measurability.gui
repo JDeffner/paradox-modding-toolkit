@@ -1,0 +1,100 @@
+# px fixture: container content sizing and its measurability guard.
+# Rows: L11, L25, L10.
+#
+# A container hugs the extent of its absolutely-positioned children exactly and
+# sits at the parent's origin; the children keep their positions. An EMPTY
+# container collapses to 0 in game: a fixed `size` will not hold it open (use a
+# plain widget for a spacer).
+#
+# A static preview can only content-size a container when the content is
+# statically MEASURABLE. Each `px_unmeasurable_*` case below is one where the
+# estimate would be a guess, so a preview must keep a visible default rather
+# than collapse: children sized { 0 0 }, a child of a type the file never
+# defines, a runtime `datamodel`, and a child whose visibility is a binding.
+# A child with a plain `visible = no` is different: it is simply skipped, and
+# the remaining children still content-size the container.
+#
+# A datamodel gridbox `item` content-sizes the same way (bounding box of its
+# children, including a positioned child's far edge), rather than taking a
+# generic widget default.
+
+widget = {
+	name = "px_container_frame"
+	size = { 500 500 }
+
+	container = {
+		name = "px_container_measurable"
+		widget = { name = "px_container_a" size = { 40 30 } }
+		widget = { name = "px_container_b" position = { 60 15 } size = { 20 20 } }
+	}
+
+	container = {
+		name = "px_container_empty"
+		position = { 0 100 }
+		size = { 120 60 }
+	}
+
+	container = {
+		name = "px_unmeasurable_zero"
+		position = { 0 200 }
+		button = { name = "px_zero_child" size = { 0 0 } }
+	}
+
+	container = {
+		name = "px_unmeasurable_unknown_type"
+		position = { 0 260 }
+		px_type_this_file_never_defines = { }
+	}
+
+	container = {
+		name = "px_unmeasurable_datamodel"
+		position = { 0 320 }
+		datamodel = "[GetPxFixtureList]"
+		widget = { name = "px_datamodel_child" size = { 10 10 } }
+	}
+
+	container = {
+		name = "px_unmeasurable_binding"
+		position = { 0 380 }
+		widget = { name = "px_binding_child" size = { 50 50 } visible = "[IsPxFixtureShown]" }
+	}
+
+	container = {
+		name = "px_container_hidden_skipped"
+		position = { 200 200 }
+		widget = { name = "px_hidden_big" size = { 300 300 } visible = no }
+		widget = { name = "px_shown_small" size = { 25 25 } }
+	}
+
+	fixedgridbox = {
+		name = "px_item_content_size"
+		position = { 200 300 }
+		addcolumn = 160
+		addrow = 48
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_item_inner" size = { 23 23 } }
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_item_content_offset"
+		position = { 200 380 }
+		addcolumn = 160
+		addrow = 48
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_item_offset" position = { 30 10 } size = { 20 20 } }
+		}
+	}
+
+	# In-game probe 2026-08-02 (L25 narrow): a NON-empty container KEEPS an
+	# authored size; the engine warns about it yet applies it.
+	container = {
+		name = "px_container_sized_kept"
+		position = { 200 460 }
+		size = { 250 120 }
+		widget = { position = { 0 0 } size = { 40 30 } }
+		widget = { position = { 50 0 } size = { 40 30 } }
+	}
+}

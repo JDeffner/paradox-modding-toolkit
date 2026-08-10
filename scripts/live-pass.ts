@@ -33,8 +33,8 @@ async function main(): Promise<void> {
     path.join(userDataDir, "User", "settings.json"),
     JSON.stringify(
       {
-        "ck3.gamePath": devPaths.gamePath,
-        "ck3.logsPath": devPaths.logsPath ?? null,
+        "px.gamePath": devPaths.gamePath,
+        "px.logsPath": devPaths.logsPath ?? null,
         "security.workspace.trust.enabled": false,
         "extensions.autoCheckUpdates": false,
         "extensions.autoUpdate": false,
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   try {
     await runTests({
       vscodeExecutablePath: fs.existsSync(VSCODE_EXE) ? VSCODE_EXE : undefined,
-      extensionDevelopmentPath: repoRoot,
+      extensionDevelopmentPath: path.join(repoRoot, "packages", "vscode"),
       extensionTestsPath: path.join(repoRoot, "dist", "live-pass-suite.cjs"),
       launchArgs: [
         devPaths.modPath,
@@ -82,4 +82,4 @@ async function main(): Promise<void> {
   process.exit(failed ? 1 : 2);
 }
 
-main();
+void main();

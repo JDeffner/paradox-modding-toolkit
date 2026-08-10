@@ -3,18 +3,20 @@
  * which keys are used as widget/container blocks, and which properties each
  * carries (with usage counts for ranking). `type X = base { }` declarations
  * fold their property stats into the base type, so derived types enrich the
- * base vocabulary. Output: shared/data/guiSchema.json (bundled).
+ * base vocabulary. Output: packages/server/data/<gameId>/guiSchema.json (bundled).
  *
  * Run:
  *   npx esbuild scripts/build-gui-schema.ts --bundle --platform=node \
- *     --outfile=dist/build-gui-schema.cjs && node dist/build-gui-schema.cjs [gamePath]
+ *     --outfile=dist/build-gui-schema.cjs && node dist/build-gui-schema.cjs [--game <id>] [gamePath]
+ *   (--game defaults to ck3; gamePath falls back to dev-paths.json / PX_<GAME>_GAME_PATH)
  */
 import * as fs from "fs";
 import * as path from "path";
-import { decode, parseScript, type BlockNode, type Statement } from "../server/src/parser";
-import { requireDevPath } from "../test/devPaths";
+import { decode, parseScript, type BlockNode, type Statement } from "../packages/server/src/parser";
+import { parseGameArg, requireDevPath } from "./devPaths";
 
-const gamePath = process.argv[2] ?? requireDevPath("gamePath", "build-gui-schema");
+const { gameId, rest } = parseGameArg(process.argv.slice(2));
+const gamePath = rest[0] ?? requireDevPath("gamePath", "build-gui-schema", gameId);
 
 const NAME_OK = /^[a-z][a-z0-9_]*$/;
 const MAX_PROPS_PER_TYPE = 100;
@@ -66,9 +68,23 @@ function recordValue(key: string, value: string): void {
 
 /** Attribute blocks (`size = { 100% 100% }`) — data, never widget types. */
 const ATTRIBUTE_BLOCKS = new Set([
-  "size", "position", "framesize", "spriteborder", "color", "disabledcolor", "uv_scale",
-  "margin", "padding", "mipmaplodbias", "modify_texture", "resizeparent", "cursor_properties",
-  "min_width", "max_width", "spriteborder_top", "spriteborder_bottom",
+  "size",
+  "position",
+  "framesize",
+  "spriteborder",
+  "color",
+  "disabledcolor",
+  "uv_scale",
+  "margin",
+  "padding",
+  "mipmaplodbias",
+  "modify_texture",
+  "resizeparent",
+  "cursor_properties",
+  "min_width",
+  "max_width",
+  "spriteborder_top",
+  "spriteborder_bottom",
 ]);
 
 const typeCount = new Map<string, number>();
@@ -115,7 +131,10 @@ function walk(statements: Statement[]): void {
   let pendingDecl: string | null = null;
   for (const stmt of statements) {
     if (stmt.kind !== "assignment") {
-      if (stmt.value.kind === "scalar" && ["type", "template", "types", "block", "blockoverride"].includes(stmt.value.text.toLowerCase())) {
+      if (
+        stmt.value.kind === "scalar" &&
+        ["type", "template", "types", "block", "blockoverride"].includes(stmt.value.text.toLowerCase())
+      ) {
         pendingDecl = stmt.value.text.toLowerCase();
       } else if (stmt.value.kind === "block") {
         walk(stmt.value.statements);
@@ -179,9 +198,7 @@ for (const [name, count] of [...typeCount.entries()].sort((a, b) => b[1] - a[1])
     .slice(0, MAX_PROPS_PER_TYPE);
   types[name] = { count, props: Object.fromEntries(kept) };
 }
-const global = Object.fromEntries(
-  [...globalProps.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200)
-);
+const global = Object.fromEntries([...globalProps.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200));
 
 // Enum properties: pure (never dirty) keys whose frequent value tokens form a
 // small bounded set. Values sorted alphabetically for a stable, readable list.
@@ -206,7 +223,8 @@ const out = {
   enums,
   enumCombinable,
 };
-const target = path.join(__dirname, "..", "shared", "data", "guiSchema.json");
+const target = path.join(__dirname, "..", "packages", "server", "data", gameId, "guiSchema.json");
+fs.mkdirSync(path.dirname(target), { recursive: true });
 fs.writeFileSync(target, JSON.stringify(out, null, 1), "utf8");
 console.log(
   `wrote ${target}: ${Object.keys(types).length} widget types, ` +

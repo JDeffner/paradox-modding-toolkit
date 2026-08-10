@@ -16,7 +16,7 @@ lack one. The diagnostic is anchored to the missing file's path in the mod
 root.
 
 ## How to fix
-Run **CK3: Create descriptor.mod** (also offered in the error notification).
+Run **Paradox: Create descriptor.mod** (also offered in the error notification).
 It writes a launcher-correct starter file with the mod name derived from the
 folder and `supported_version` matching your installed game:
 

@@ -1,0 +1,92 @@
+# px fixture: fixedgridbox cell math. Rows: L14, L29.
+#
+# A fixedgridbox has the SAME flow as a dynamicgridbox (vertical single column
+# by default, flipdirection = yes transposes to horizontal, maxhorizontalslots
+# caps columns only while horizontal) but it uses addcolumn/addrow as the CELL
+# SIZE, which is also the stride: a 14px item in a 60x40 cell stays 14px and
+# sits at the cell origin, and the next item is a whole cell away.
+#
+# An item with NO concrete size anywhere in its chain takes the CELL size
+# instead of a widget default, which is how a row whose only content is a
+# 100%-fill child fills its cell in game.
+#
+# `setitemsizefromcell = yes` forces every cell to the WIDEST item's size, so
+# ragged rows go uniform. It needs a datamodel; hand-written static children
+# cannot produce it.
+#
+# A fixedgridbox with no `item` template at all still lays out decorative slots.
+
+widget = {
+	name = "px_fixed_frame"
+	size = { 700 400 }
+
+	fixedgridbox = {
+		name = "px_fixed_vertical"
+		addcolumn = 60
+		addrow = 40
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_fixed_cell" size = { 14 14 } }
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_fixed_horizontal"
+		position = { 100 0 }
+		addcolumn = 60
+		addrow = 40
+		flipdirection = yes
+		datamodel_wrap = 3
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_fixed_flip_cell" size = { 14 14 } }
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_fixed_capped"
+		position = { 320 0 }
+		addcolumn = 60
+		addrow = 40
+		flipdirection = yes
+		maxhorizontalslots = 2
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_fixed_capped_cell" size = { 14 14 } }
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_fixed_no_intrinsic"
+		position = { 0 200 }
+		addcolumn = 350
+		addrow = 57
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			button = {
+				name = "px_fixed_fill_button"
+				widget = { name = "px_fixed_fill_inner" size = { 100% 100% } }
+			}
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_fixed_uniform"
+		position = { 380 200 }
+		addcolumn = 120
+		addrow = 24
+		datamodel_wrap = 6
+		setitemsizefromcell = yes
+		datamodel = "[GetPxFixtureList]"
+		item = {
+			widget = { name = "px_fixed_uniform_cell" size = { 40 20 } }
+		}
+	}
+
+	fixedgridbox = {
+		name = "px_fixed_decorative"
+		position = { 560 200 }
+		addcolumn = 60
+		addrow = 40
+	}
+}

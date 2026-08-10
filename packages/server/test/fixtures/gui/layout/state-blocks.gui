@@ -1,0 +1,38 @@
+# px fixture: state blocks are inert for layout. Rows: L07.
+#
+# A `state = { ... }` block describes an animated transition (alpha, position
+# and size deltas over a duration), not the resting layout. The base widget's
+# own properties win and nothing inside a state leaks into the rect, so a state
+# is never a child widget either.
+#
+# In-game probe 2026-08-02 settled the once-disputed half (L07c): a state does
+# NOT supply a resting position either. px_state_only, whose only position
+# lives in its state block, renders at its parent's origin; px_state_static
+# keeps its static position untouched.
+
+widget = {
+	name = "px_state_frame"
+	size = { 300 200 }
+
+	icon = {
+		name = "px_state_static"
+		position = { 10 10 }
+		size = { 40 40 }
+		texture = "gfx/px_fixtures/flat.dds"
+		state = {
+			name = hover
+			position = { 999 999 }
+			size = { 5 5 }
+			alpha = 0
+		}
+	}
+
+	widget = {
+		name = "px_state_only"
+		size = { 40 40 }
+		state = {
+			name = idle
+			position = { 10 20 }
+		}
+	}
+}

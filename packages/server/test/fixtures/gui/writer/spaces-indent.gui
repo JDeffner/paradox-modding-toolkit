@@ -1,0 +1,19 @@
+# px fixture: space indentation. Rows: W06, W15.
+#
+# Four-space indent throughout. Every write must follow the FILE's indent unit,
+# not the writer's preference: an inserted entry, an inserted child widget and a
+# pasted fragment all come out space-indented here, one level deeper than the
+# body they land in.
+
+window = {
+    name = "px_spaced_window"
+    size = { 100 200 }
+
+    vbox = {
+        spacing = 5
+
+        widget = {
+            name = "px_spaced_a"
+        }
+    }
+}

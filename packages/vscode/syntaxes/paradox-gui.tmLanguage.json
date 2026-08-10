@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox GUI",
+  "scopeName": "source.paradox-gui",
+  "patterns": [
+    { "include": "#gui-keyword" },
+    { "include": "#gui-state-name" },
+    { "include": "#gui-enum" },
+    { "include": "#gui-string" },
+    { "include": "source.paradox-datafunction" },
+    { "include": "source.paradox" }
+  ],
+  "repository": {
+    "gui-string": {
+      "comment": "Double-quoted gui value with datafunction support: text = \"[Character.GetName]\". Declared before the core source.paradox include so its plain string rule does not swallow the [ ... ] interior.",
+      "name": "string.quoted.double.paradox",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "include": "source.paradox-datafunction" },
+        { "name": "constant.character.escape.paradox", "match": "\\\\." },
+        { "name": "variable.other.substitution.paradox", "match": "\\$[A-Za-z0-9_.|\\-]+\\$" },
+        { "name": "constant.other.formatting.paradox", "match": "#[!A-Za-z_;]*" },
+        { "name": "constant.other.icon.paradox", "match": "@[A-Za-z0-9_]+!" }
+      ]
+    },
+    "gui-keyword": {
+      "comment": "Structural declarations: template X { }, type X = base { }, types Group { }, block/blockoverride \"name\" { }",
+      "name": "keyword.control.gui.paradox",
+      "match": "\\b(template|types|type|block|blockoverride|item)\\b(?!\\s*=)"
+    },
+    "gui-state-name": {
+      "comment": "Engine state names (_show, _hide, _mouse_enter, …) used as state name = / start = / trigger targets",
+      "name": "constant.language.state.paradox",
+      "match": "\\b_[A-Za-z0-9_]+\\b"
+    },
+    "gui-enum": {
+      "comment": "Fixed gui enum vocabulary (case-insensitive, matching the engine): anchors, layout policies, blend modes, sprite types, orientations. Guarded against key position.",
+      "name": "constant.language.gui.paradox",
+      "match": "(?i:\\b(expanding|shrinking|growing|preferred|top|bottom|left|right|hcenter|vcenter|center|middle|nobaseline|vertical|horizontal|horizontal_vertical|alphamultiply|colordodge|multiply|overlay|darken|lighten|screen|mask|normal|add|corneredtiled|corneredstretched|tiled|stretched|all)\\b)(?!\\s*=)"
+    }
+  }
+}

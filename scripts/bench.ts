@@ -5,8 +5,8 @@
  *
  * Run: npx esbuild scripts/bench.ts --bundle --platform=node --outfile=dist/bench.cjs && node dist/bench.cjs <gamePath>
  */
-import { DefinitionIndex, scanRoot } from "../server/src/index/indexer";
-import { requireDevPath } from "../test/devPaths";
+import { DefinitionIndex, scanRoot } from "../packages/server/src/index/indexer";
+import { requireDevPath } from "./devPaths";
 
 const gamePath = process.argv[2] ?? requireDevPath("gamePath", "bench");
 
@@ -25,4 +25,10 @@ console.log(`cold vanilla scan: ${scanMs} ms`);
 console.log(`definitions: ${stats.total} across ${stats.files} files`);
 console.log(`rss with index resident: ${(rss / 1024 / 1024).toFixed(0)} MB`);
 const byKind = Object.entries(stats.byKind).sort((a, b) => b[1] - a[1]);
-console.log("top kinds:", byKind.slice(0, 12).map(([k, n]) => `${k}=${n}`).join(" "));
+console.log(
+  "top kinds:",
+  byKind
+    .slice(0, 12)
+    .map(([k, n]) => `${k}=${n}`)
+    .join(" ")
+);

@@ -1,0 +1,64 @@
+# px fixture: every shape a gesture must REFUSE. Rows: W10, W18.
+#
+# A property CK3 would ignore looks applied in the preview and does nothing in
+# game, which is the worst outcome a visual editor can produce. Each widget
+# here is one refusal case, named after the gesture that must be turned down
+# with a reason instead of written:
+#
+#   px_refuse_drag_*     a box child: the box owns the slot, `position` is
+#                        dropped, so a drag is refused. A free widget in a
+#                        plain parent (px_allow_drag) is allowed.
+#   px_refuse_size_box   an hbox/vbox/flowcontainer is content-sized, so a
+#                        resize is refused on both axes.
+#   px_refuse_size_both  layoutpolicy expanding on BOTH axes inside a layout
+#                        container: the box owns the size on both, refuse.
+#   px_refuse_size_one   expanding on ONE axis: the write goes ahead and the
+#                        status says which axis the box owns.
+#   px_outside_container the same policy OUTSIDE a layout container means
+#                        nothing, so the guard must NOT fire here, or else
+#                        it starts refusing resizes the engine would honour.
+#   px_type_definition   a `type` definition: other files may use it, refuse.
+
+types PxRefusalTypes {
+	type px_type_definition = widget {
+		size = { 10 10 }
+	}
+}
+
+window = {
+	name = "px_refusal_root"
+	size = { 400 300 }
+
+	widget = { name = "px_allow_drag" position = { 10 10 } size = { 40 40 } }
+
+	widget = {
+		name = "px_outside_container"
+		layoutpolicy_horizontal = expanding
+		layoutpolicy_vertical = expanding
+		size = { 40 40 }
+	}
+
+	vbox = {
+		name = "px_refuse_size_box"
+
+		widget = { name = "px_refuse_drag_in_vbox" position = { 5 5 } size = { 40 40 } }
+
+		widget = {
+			name = "px_refuse_size_both"
+			layoutpolicy_horizontal = expanding
+			layoutpolicy_vertical = expanding
+			size = { 40 40 }
+		}
+
+		widget = {
+			name = "px_refuse_size_one"
+			layoutpolicy_horizontal = expanding
+			size = { 40 40 }
+		}
+	}
+
+	flowcontainer = {
+		name = "px_refuse_size_flow"
+		widget = { name = "px_refuse_drag_in_flow" position = { 5 5 } size = { 40 40 } }
+	}
+}

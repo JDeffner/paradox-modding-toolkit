@@ -1,0 +1,15 @@
+# px fixture: the paste DESTINATION half of copy/paste. Rows: W20.
+#
+# A deeper, space-indented body. A tab-indented fragment pasted in here must
+# come out fully space-indented at this body's depth, with its interior nesting
+# preserved and no tab left inside; and paste-then-delete must restore this file
+# byte for byte. A fragment that is blank, or that does not parse as widget
+# declarations, is refused rather than spliced in.
+
+window = {
+    name = "px_paste_target"
+
+    vbox = {
+        spacing = 5
+    }
+}

@@ -1,0 +1,31 @@
+# px fixture: a body whose children are NOT contiguous. Rows: W14, S03.
+#
+# Between px_inter_a and px_inter_b sit entries that are not child widgets: a
+# scalar property, a property block and a comment. A reorder still lands the
+# moved widget correctly relative to the sibling the user aimed at, but
+# move-to-end-then-back is legitimately NOT the identity there, because the
+# widget hops that content one way and comes back on the other side of it. A
+# sweep that asserts round-trip identity must therefore SKIP interleaved bodies
+# and report how many it skipped, rather than assert the wrong thing.
+
+vbox = {
+	widget = {
+		name = "px_inter_a"
+	}
+
+	spacing = 5
+
+	background = {
+		texture = "gfx/px_fixtures/flat.dds"
+	}
+
+	# a comment that is not attached to the next widget
+
+	widget = {
+		name = "px_inter_b"
+	}
+
+	widget = {
+		name = "px_inter_c"
+	}
+}

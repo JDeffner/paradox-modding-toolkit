@@ -1,0 +1,85 @@
+# px fixture: end-to-end window. Rows: L09.
+#
+# The closest headless mirror of a real preview: one window whose subtree walks
+# through the whole pipeline in one pass: a filling vbox, a nested hugging box,
+# an expanding child next to a small spacer, a flowcontainer run, a text label,
+# a scrollarea, a datamodel list and a template instance. Nothing here is a new
+# rule; it exists so a regression that only shows up in COMBINATION (the classic
+# one is a spacer collapsing an outer column and dragging the button row off its
+# neighbour's left edge) has a fixture of its own.
+
+types PxFixtureWindowTypes {
+	type px_button = widget {
+		size = { 300 40 }
+	}
+	type px_label = textbox {
+		autoresize = yes
+		fontsize = 15
+	}
+}
+
+window = {
+	name = "px_end_to_end"
+	size = { 500 700 }
+
+	vbox = {
+		name = "px_page"
+		spacing = 4
+		margin = { 10 10 }
+
+		px_label = { name = "px_page_title" raw_text = "MMMM MMMM" }
+
+		hbox = {
+			name = "px_toolbar"
+			widget = { name = "px_toolbar_left" size = { 60 24 } }
+			expand = {}
+			widget = { name = "px_toolbar_right" size = { 60 24 } }
+		}
+
+		# Section A: expanding text over a button column, no spacer.
+		vbox = {
+			name = "px_section_a"
+			widget = { name = "px_section_a_text" layoutpolicy_vertical = expanding size = { 200 20 } }
+			vbox = {
+				name = "px_section_a_buttons"
+				px_button = { name = "px_button_a1" }
+				px_button = { name = "px_button_a2" }
+			}
+		}
+
+		# Section B: the same, with a 5px spacer between text and buttons. Both
+		# button columns are 300 wide, so they must share one left edge.
+		vbox = {
+			name = "px_section_b"
+			widget = { name = "px_section_b_text" layoutpolicy_vertical = expanding size = { 200 20 } }
+			widget = { name = "px_section_b_spacer" size = { 5 5 } }
+			vbox = {
+				name = "px_section_b_buttons"
+				px_button = { name = "px_button_b1" }
+				px_button = { name = "px_button_b2" }
+			}
+		}
+
+		flowcontainer = {
+			name = "px_chips"
+			spacing = 6
+			widget = { name = "px_chip_a" size = { 40 18 } }
+			widget = { name = "px_chip_b" size = { 40 18 } }
+			widget = { name = "px_chip_c" size = { 40 18 } }
+		}
+
+		scrollarea = {
+			name = "px_scroll"
+			size = { 460 200 }
+			scrollwidget = {
+				vbox = {
+					name = "px_scroll_list"
+					datamodel = "[GetPxFixtureList]"
+					item = {
+						widget = { name = "px_scroll_row" size = { 440 32 } }
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,378 @@
+# PX cross-game calibration probe B — box sizing, layout policies, slots.
+# Game-agnostic: no vanilla templates, no loc keys, mod-local white texture.
+# Spawn:   gui.createwidget gui/px_probe_b.gui px_probe_b
+# Despawn: gui.clearwidgets px_probe_b
+# Predictions are the CK3-measured rules (B2-I/J, B3-P, B4-T7/T8, probe
+# 2026-08-02 L23); see the package's expectations.md.
+window = {
+	name = "px_probe_b"
+	parentanchor = center
+	size = { 980 690 }
+	layer = top
+
+	widget = {
+		parentanchor = center
+		size = { 940 650 }
+		background = {
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 0 0 1 }
+		}
+
+		# ---- CASE B1: explicit size on a box inside a fixed widget ----
+		# CK3: the hbox IGNORES size = { 100 80 } and stretches to 200x140.
+		widget = {
+			position = { 20 60 }
+			size = { 200 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				size = { 100 80 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.4 0.1 0.1 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B1: size on box"
+		}
+
+		# ---- CASE B2: box nested in a box hugs its content ----
+		# CK3: outer hbox stretches to 220x140; inner vbox hugs 60x100 and is
+		# centered (space-around) at (80,20).
+		widget = {
+			position = { 250 60 }
+			size = { 220 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.3 0.1 0.1 1 }
+				}
+				vbox = {
+					background = {
+						texture = "gfx/px_probe/white.dds"
+						color = { 0.1 0.1 0.4 1 }
+					}
+					icon = {
+						size = { 60 40 }
+						texture = "gfx/px_probe/white.dds"
+						color = { 1 0 0 1 }
+					}
+					icon = {
+						size = { 40 60 }
+						texture = "gfx/px_probe/white.dds"
+						color = { 0 1 0 1 }
+					}
+				}
+			}
+		}
+		textbox = {
+			position = { 250 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B2: box in box"
+		}
+
+		# ---- CASE B3: position on a box child (L23) ----
+		# CK3 probe 2026-08-02: the box DROPS the green child's position; it
+		# sits exactly in its slot (red x=30, green x=130, both y=50), and the
+		# error log says "Widget cannot have a position in a layout".
+		widget = {
+			position = { 500 60 }
+			size = { 200 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					position = { 30 30 }
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 500 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B3: pos in box"
+		}
+
+		# ---- CASE B4: directional margin (margin_top) ----
+		# CK3 B4-T7: margin_top insets one side, distribution runs in the rest:
+		# child at y = 30 + (110-40)/2 = 65, x = (190-40)/2 = 75.
+		widget = {
+			position = { 730 60 }
+			size = { 190 140 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			vbox = {
+				margin_top = 30
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.1 0.1 0.4 1 }
+				}
+				icon = {
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 730 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B4: margin_top 30"
+		}
+
+		# ---- CASE B5: two expanding children, unequal floors (J1) ----
+		# CK3: each gets floor + free/k: 40->120, 100->180.
+		widget = {
+			position = { 20 260 }
+			size = { 300 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					layoutpolicy_horizontal = expanding
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					layoutpolicy_horizontal = expanding
+					size = { 100 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B5: expanding 40 + 100"
+		}
+
+		# ---- CASE B6: growing next to a fixed sibling (J2) ----
+		# CK3: growing alone takes ALL free space: 40 -> 220, fixed stays 80.
+		widget = {
+			position = { 340 260 }
+			size = { 300 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					size = { 80 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					layoutpolicy_horizontal = growing
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 340 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B6: growing + fixed"
+		}
+
+		# ---- CASE B7: deficit, equal delta (J3, explicit policies) ----
+		# CK3: 100+60 in a 120 box: each loses deficit/k = 20 -> 80/40.
+		widget = {
+			position = { 660 260 }
+			size = { 120 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					layoutpolicy_horizontal = preferred
+					size = { 100 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					layoutpolicy_horizontal = shrinking
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 660 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B7: deficit"
+		}
+
+		# ---- CASE B11: deficit with NO layoutpolicy (default) ----
+		# Unmeasured in every game so far. This repo's engine treats a
+		# policy-less child as fixed (no shrink, row overflows); the game may
+		# shrink it like `preferred`. Whichever way it renders is the data.
+		widget = {
+			position = { 810 260 }
+			size = { 120 100 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					size = { 100 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 810 226 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B11: no policy"
+		}
+
+		# ---- CASE B8: expand = {} spacer (T8) ----
+		# CK3: the spacer absorbs all free space; blue lands flush right (x=240).
+		widget = {
+			position = { 20 420 }
+			size = { 300 80 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				expand = {}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 386 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B8: expand spacer"
+		}
+
+		# ---- CASE B9: minimumsize floor in a deficit (Studio, encoded) ----
+		# Prediction: 100+100 in a 160 box, equal split would give 80/80, but
+		# red's minimumsize floors it at 90, green absorbs the rest -> 90/70.
+		widget = {
+			position = { 360 420 }
+			size = { 160 80 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					size = { 100 40 }
+					minimumsize = { 90 0 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 100 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 360 386 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B9: minimumsize 90"
+		}
+
+		# ---- CASE B10: growing receives NOTHING beside an expanding (J1) ----
+		# CK3: red (expanding) takes all 220 free -> 260; green stays 40.
+		widget = {
+			position = { 560 420 }
+			size = { 300 80 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				icon = {
+					layoutpolicy_horizontal = expanding
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					layoutpolicy_horizontal = growing
+					size = { 40 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 560 386 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B10: expanding beats growing"
+		}
+	}
+}

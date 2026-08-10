@@ -1,0 +1,37 @@
+# px fixture: anchoring model. Rows: L05.
+#
+# parentanchor picks a point on the PARENT rect; widgetanchor picks the point on
+# the CHILD that lands on it and defaults to the value of parentanchor, so a bare
+# parentanchor = bottom|right sits flush inside the corner. `position` is added
+# AFTER anchoring and is always screen-space +right/+down. A plain widget does not
+# clip, so a child may land fully outside it.
+
+widget = {
+	name = "px_anchor_frame"
+	size = { 300 200 }
+
+	widget = { name = "px_a_tl" size = { 20 20 } }
+	widget = { name = "px_a_tc" parentanchor = top|hcenter size = { 20 20 } }
+	widget = { name = "px_a_tr" parentanchor = top|right size = { 20 20 } }
+	widget = { name = "px_a_ml" parentanchor = vcenter|left size = { 20 20 } }
+	widget = { name = "px_a_mc" parentanchor = center size = { 20 20 } }
+	widget = { name = "px_a_mr" parentanchor = vcenter|right size = { 20 20 } }
+	widget = { name = "px_a_bl" parentanchor = bottom|left size = { 20 20 } }
+	widget = { name = "px_a_bc" parentanchor = bottom|hcenter size = { 20 20 } }
+	widget = { name = "px_a_br" parentanchor = bottom|right size = { 20 20 } }
+
+	# Explicit widgetanchor must equal the implicit default.
+	widget = { name = "px_a_explicit" parentanchor = center widgetanchor = center size = { 40 40 } }
+
+	# position is screen-space regardless of the anchors.
+	widget = { name = "px_a_inset" parentanchor = bottom|right position = { -30 -30 } size = { 20 20 } }
+	widget = { name = "px_a_outside" parentanchor = bottom|right position = { 30 30 } size = { 20 20 } }
+
+	# Nested offsets accumulate linearly, with no implicit padding.
+	widget = {
+		name = "px_a_mid"
+		position = { 30 20 }
+		size = { 100 60 }
+		widget = { name = "px_a_leaf" position = { 10 10 } size = { 20 20 } }
+	}
+}

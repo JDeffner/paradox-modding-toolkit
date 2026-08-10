@@ -1,0 +1,14 @@
+.vscode/**
+node_modules/**
+src/**
+test/**
+skills/**
+**/*.map
+*.vsix
+tsconfig.json
+media/banner.png
+media/screenshots/**
+# Harvest/eval bundles land in dist/ and everything in dist/ ships otherwise.
+dist/*.cjs
+# Build-time input for dataTypes.json (bundled into dist/server.js).
+data/*/wikidocs/Data_types.md

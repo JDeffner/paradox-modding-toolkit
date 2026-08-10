@@ -1,0 +1,202 @@
+white.dds written, 384 bytes
+
+=== px_probe_a.gui (canvas at 490,215) ===
+window @ (-20,-20) 980x690
+widget @ (0,0) 940x650 color=(0,0,0,1)
+icon @ (20,12) 200x12 color=(1,1,1,1)
+icon @ (240,12) 100x12 color=(1,0,1,1)
+icon @ (360,12) 50x12 color=(0,1,1,1)
+textbox @ (430,8) 127x21 text="A: 200 / 100 / 50"
+widget @ (20,60) 300x200 color=(0.2,0.2,0.2,1)
+icon @ (20,60) 20x20 color=(0.7,0.7,0.7,1)
+icon @ (160,60) 20x20 color=(1,0,0,1)
+icon @ (300,60) 20x20 color=(1,0.5,0,1)
+icon @ (20,150) 20x20 color=(0,1,0,1)
+icon @ (160,150) 20x20 color=(1,1,0,1)
+icon @ (300,150) 20x20 color=(0,1,1,1)
+icon @ (20,240) 20x20 color=(0,0,1,1)
+icon @ (160,240) 20x20 color=(1,0,1,1)
+icon @ (300,240) 20x20 color=(0.5,0,1,1)
+textbox @ (20,26) 129x21 text="B: parentanchor"
+widget @ (360,60) 300x200 color=(0.1,0.1,0.3,1)
+icon @ (490,140) 40x40 color=(0,1,0,1)
+icon @ (490,140) 40x40 color=(1,0,0,1)
+icon @ (620,220) 40x40 color=(0,1,1,1)
+icon @ (620,220) 40x40 color=(1,1,0,1)
+textbox @ (360,26) 124x21 text="C: widgetanchor"
+widget @ (700,60) 220x200 color=(0.1,0.25,0.1,1)
+icon @ (730,90) 20x20 color=(1,0,0,1)
+icon @ (870,210) 20x20 color=(0,1,0,1)
+icon @ (930,270) 20x20 color=(1,1,0,1)
+icon @ (840,150) 20x20 color=(0,1,1,1)
+textbox @ (700,26) 83x21 text="D: position"
+widget @ (20,320) 180x120 color=(0.15,0.15,0.15,1)
+hbox @ (20,320) 180x120 color=(0.4,0.1,0.1,1)
+icon @ (28.33,360) 60x40 color=(1,0,0,1)
+icon @ (105,350) 40x60 color=(0,1,0,1)
+icon @ (161.67,370) 30x20 color=(0,0,1,1)
+textbox @ (20,286) 66x21 text="E1: hbox"
+widget @ (220,320) 180x120 color=(0.15,0.15,0.15,1)
+hbox @ (220,320) 180x120 color=(0.4,0.1,0.1,1)
+icon @ (225.67,360) 60x40 color=(1,0,0,1)
+icon @ (305,350) 40x60 color=(0,1,0,1)
+icon @ (364.33,370) 30x20 color=(0,0,1,1)
+textbox @ (220,286) 101x21 text="E2: spacing 8"
+widget @ (420,320) 180x120 color=(0.15,0.15,0.15,1)
+hbox @ (420,320) 180x120 color=(0.4,0.1,0.1,1)
+icon @ (436.33,360) 60x40 color=(1,0,0,1)
+icon @ (505,350) 40x60 color=(0,1,0,1)
+icon @ (553.67,370) 30x20 color=(0,0,1,1)
+textbox @ (420,286) 114x21 text="E3: margin 12 6"
+widget @ (640,320) 140x160 color=(0.15,0.15,0.15,1)
+vbox @ (640,320) 140x160 color=(0.1,0.1,0.4,1)
+icon @ (680,326.67) 60x40 color=(1,0,0,1)
+icon @ (690,380) 40x60 color=(0,1,0,1)
+icon @ (695,453.33) 30x20 color=(0,0,1,1)
+textbox @ (640,286) 66x21 text="F1: vbox"
+widget @ (795,320) 140x160 color=(0.15,0.15,0.15,1)
+vbox @ (795,320) 140x160 color=(0.1,0.1,0.4,1)
+icon @ (835,324) 60x40 color=(1,0,0,1)
+icon @ (845,380) 40x60 color=(0,1,0,1)
+icon @ (850,456) 30x20 color=(0,0,1,1)
+textbox @ (795,286) 101x21 text="F2: spacing 8"
+widget @ (300,530) 200x110 color=(0.25,0.25,0.25,1)
+widget @ (330,550) 100x60 color=(0.5,0.5,0.5,1)
+icon @ (340,560) 20x20 color=(1,0,0,1)
+textbox @ (300,496) 79x21 text="H: nesting"
+
+=== px_probe_b.gui (canvas at 490,215) ===
+window @ (-20,-20) 980x690
+widget @ (0,0) 940x650 color=(0,0,0,1)
+widget @ (20,60) 200x140 color=(0.15,0.15,0.15,1)
+hbox @ (20,60) 200x140 color=(0.4,0.1,0.1,1)
+icon @ (90,110) 60x40 color=(1,0,0,1)
+textbox @ (20,26) 114x21 text="B1: size on box"
+widget @ (250,60) 220x140 color=(0.15,0.15,0.15,1)
+hbox @ (250,60) 220x140 color=(0.3,0.1,0.1,1)
+vbox @ (330,80) 60x100 color=(0.1,0.1,0.4,1)
+icon @ (330,80) 60x40 color=(1,0,0,1)
+icon @ (340,120) 40x60 color=(0,1,0,1)
+textbox @ (250,26) 105x21 text="B2: box in box"
+widget @ (500,60) 200x140 color=(0.15,0.15,0.15,1)
+hbox @ (500,60) 200x140
+icon @ (530,110) 40x40 color=(1,0,0,1)
+icon @ (630,110) 40x40 color=(0,1,0,1)
+textbox @ (500,26) 105x21 text="B3: pos in box"
+widget @ (730,60) 190x140 color=(0.15,0.15,0.15,1)
+vbox @ (730,60) 190x140 color=(0.1,0.1,0.4,1)
+icon @ (805,125) 40x40 color=(1,0,0,1)
+textbox @ (730,26) 137x21 text="B4: margin_top 30"
+widget @ (20,260) 300x100 color=(0.15,0.15,0.15,1)
+hbox @ (20,260) 300x100
+icon @ (20,290) 120x40 color=(1,0,0,1)
+icon @ (140,290) 180x40 color=(0,1,0,1)
+textbox @ (20,226) 172x21 text="B5: expanding 40 + 100"
+widget @ (340,260) 300x100 color=(0.15,0.15,0.15,1)
+hbox @ (340,260) 300x100
+icon @ (340,290) 80x40 color=(1,0,0,1)
+icon @ (420,290) 220x40 color=(0,1,0,1)
+textbox @ (340,226) 145x21 text="B6: growing + fixed"
+widget @ (660,260) 120x100 color=(0.15,0.15,0.15,1)
+hbox @ (660,260) 120x100
+icon @ (660,290) 80x40 color=(1,0,0,1)
+icon @ (740,290) 40x40 color=(0,1,0,1)
+textbox @ (660,226) 83x21 text="B7: deficit"
+widget @ (810,260) 120x100 color=(0.15,0.15,0.15,1)
+hbox @ (810,260) 120x100
+icon @ (810,290) 100x40 color=(1,0,0,1)
+icon @ (910,290) 60x40 color=(0,1,0,1)
+textbox @ (810,226) 110x21 text="B11: no policy"
+widget @ (20,420) 300x80 color=(0.15,0.15,0.15,1)
+hbox @ (20,420) 300x80
+icon @ (20,440) 60x40 color=(1,0,0,1)
+expand @ (80,420) 180x80
+icon @ (260,440) 60x40 color=(0,0,1,1)
+textbox @ (20,386) 142x21 text="B8: expand spacer"
+widget @ (360,420) 160x80 color=(0.15,0.15,0.15,1)
+hbox @ (360,420) 160x80
+icon @ (360,440) 100x40 color=(1,0,0,1)
+icon @ (460,440) 100x40 color=(0,1,0,1)
+textbox @ (360,386) 136x21 text="B9: minimumsize 90"
+widget @ (560,420) 300x80 color=(0.15,0.15,0.15,1)
+hbox @ (560,420) 300x80
+icon @ (560,440) 260x40 color=(1,0,0,1)
+icon @ (820,440) 40x40 color=(0,1,0,1)
+textbox @ (560,386) 226x21 text="B10: expanding beats gro"
+
+=== px_probe_c.gui (canvas at 490,215) ===
+window @ (-20,-20) 980x690
+widget @ (0,0) 940x650 color=(0,0,0,1)
+widget @ (20,60) 220x140 color=(0.15,0.15,0.15,1)
+flowcontainer @ (20,60) 286x60 color=(0.3,0.3,0.05,1)
+icon @ (20,60) 100x40 color=(1,0,0,1)
+icon @ (128,60) 80x60 color=(0,1,0,1)
+icon @ (216,60) 90x20 color=(0,0,1,1)
+textbox @ (20,26) 142x21 text="C1: flow overflow"
+widget @ (260,60) 220x140 color=(0.15,0.15,0.15,1)
+flowcontainer @ (260,60) 180x100 color=(0.3,0.3,0.05,1)
+icon @ (260,60) 60x40 color=(1,0,0,1)
+icon @ (320,60) 40x60 color=(0,1,0,1)
+textbox @ (260,26) 110x21 text="C2: sized flow"
+widget @ (500,60) 220x140 color=(0.15,0.15,0.15,1)
+container @ (500,60) 180x110 color=(0.05,0.3,0.3,1)
+icon @ (510,70) 20x20 color=(1,0,0,1)
+icon @ (650,150) 30x20 color=(0,1,0,1)
+textbox @ (500,26) 137x21 text="C3: container hug"
+widget @ (740,60) 180x140 color=(0.15,0.15,0.15,1)
+container @ (740,60) 150x100 color=(0.3,0.05,0.3,1)
+icon @ (750,70) 20x20 color=(1,0,0,1)
+textbox @ (740,26) 150x21 text="C4: sized container"
+widget @ (20,260) 180x100 color=(0.15,0.15,0.15,1)
+container @ (20,260) 0x0 color=(1,0.5,0,1)
+textbox @ (20,226) 155x21 text="C5: empty container"
+widget @ (240,260) 220x140 color=(0.15,0.15,0.15,1)
+margin_widget @ (240,260) 220x140 color=(0.1,0.3,0.1,1)
+icon @ (260,275) 30x30 color=(1,0,0,1)
+textbox @ (240,226) 177x21 text="C6: margin_widget 100%"
+widget @ (500,260) 190x140 color=(0.15,0.15,0.15,1)
+margin_widget @ (500,260) 50x45 color=(0.1,0.3,0.1,1)
+icon @ (520,275) 30x30 color=(1,0,0,1)
+textbox @ (500,226) 119x21 text="C7: sizeless mw"
+widget @ (720,260) 200x140 color=(0.15,0.15,0.15,1)
+scrollarea @ (720,260) 160x100
+icon @ (720,260) 300x300 color=(0,1,1,1)
+textbox @ (720,226) 120x21 text="C8: scrollarea"
+widget @ (20,440) 0x0 color=(1,0,1,1)
+icon @ (30,450) 40x40 color=(1,0,0,1)
+textbox @ (20,406) 150x21 text="C9: sizeless widget"
+widget @ (240,440) 200x100 color=(0.15,0.15,0.15,1)
+widget @ (240,440) 100x50 color=(0,0.5,1,1)
+textbox @ (240,406) 101x21 text="C10: 50% size"
+icon @ (500,440) 80x80 color=(0,1,0,1)
+textbox @ (500,406) 115x21 text="C11: scale 2.0"
+
+=== px_probe_d.gui (canvas at 490,215) ===
+window @ (-20,-20) 980x690
+widget @ (0,0) 940x650 color=(0,0,0,1)
+textbox @ (20,60) 139x21 color=(0.5,0,0.5,1) text="MMMMMMMMMM"
+textbox @ (20,26) 102x21 text="T1: 10xM @15"
+textbox @ (20,130) 40x21 color=(0,0.4,0.4,1) text="iiiiiiiiii"
+textbox @ (20,96) 92x21 text="T2: 10xi @15"
+textbox @ (20,200) 278x42 color=(0.5,0,0.25,1) text="MMMMMMMMMM"
+textbox @ (20,166) 102x21 text="T3: 10xM @30"
+textbox @ (20,280) 85x21 color=(0.25,0.25,0,1) text="M M M M M"
+textbox @ (20,246) 147x21 text="T4: M M M M M @15"
+textbox @ (400,60) 80x21 color=(0.5,0.25,0,1) text="MMMMMMMMMM"
+textbox @ (400,26) 128x21 text="T5: max_width 80"
+textbox @ (400,150) 115x42 color=(0,0.25,0.5,1) text="MMMM MMMM MMMM"
+textbox @ (400,116) 132x21 text="T6: multiline 120"
+textbox @ (400,280) 180x40 color=(0.2,0.2,0.2,1) text="MMMM"
+textbox @ (400,340) 180x40 color=(0.2,0.2,0.3,1) text="MMMM"
+textbox @ (400,400) 180x40 color=(0.3,0.2,0.2,1) text="MMMM"
+textbox @ (400,246) 265x21 text="T7: align default / cent"
+textbox @ (660,60) 116x21 color=(0,0.5,0.25,1) text="px_probe_tenm"
+textbox @ (660,26) 88x21 text="T8: loc key"
+
+=== px_probe_e.gui (canvas at 710,410) ===
+window @ (-20,-20) 540x300
+widget @ (0,0) 500x260 color=(0,0,0,1)
+text_single @ (20,60) 139x21 color=(0.5,0,0.5,1) text="MMMMMMMMMM"
+textbox @ (20,26) 191x21 text="X1: text_single default"
+textbox @ (20,140) 139x21 color=(0,0.4,0.4,1) text="MMMMMMMMMM"
+textbox @ (20,106) 200x21 text="X2: bare textbox default"

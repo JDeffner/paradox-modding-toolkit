@@ -1,0 +1,15 @@
+# Effect Documentation
+## abandon_colonial_charter
+Abandons a colonial charter
+**Supported Scopes**: none  
+**Supported Targets**: colonial_charter  
+
+## add_antagonism
+Adds an antagonism modifier, add_antagonism = { modifier = X  target = Z scale = {script value} }  
+X is a scripted modifier name.
+**Supported Scopes**: country  
+
+## add_army_tradition
+Adds army tradition
+add_army_tradition = <value>
+**Supported Scopes**: country  

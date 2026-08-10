@@ -1,0 +1,101 @@
+# px fixture: sprite fill mode and nine-slice. Rows: L21.
+#
+# Nine-slicing needs BOTH a Cornered* spriteType AND a non-zero spriteborder.
+#   px_ns_native       no type, no border          -> plain stretch (the default)
+#   px_ns_tiled_border Corneredtiled + border      -> nine-slice, edges TILE
+#   px_ns_stretch_bord Corneredstretched + border  -> nine-slice, edges STRETCH
+#   px_ns_border_only  border, no Cornered* type   -> border IGNORED, whole
+#                                                     texture plain stretches
+#   px_ns_corner_clamp 2*border > size on an axis  -> the four corners clamp to
+#                                                     size/2 and meet, no centre
+#   px_ns_type_only    Corneredtiled, no border    -> whole texture plain TILES
+#   px_ns_tiled_type   a bare Tiled type, no border-> whole texture plain TILES
+#   px_ns_asymmetric   { 16 8 }                    -> still nine-slices; x is the
+#                                                     left/right corner WIDTH,
+#                                                     y the top/bottom HEIGHT
+# The per-side `spriteborder_<side>` scalars override the pair on that side.
+
+widget = {
+	name = "px_nineslice_frame"
+	size = { 700 400 }
+
+	icon = {
+		name = "px_ns_native"
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+	}
+
+	icon = {
+		name = "px_ns_tiled_border"
+		position = { 220 0 }
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteType = Corneredtiled
+		spriteborder = { 16 16 }
+	}
+
+	icon = {
+		name = "px_ns_stretch_bord"
+		position = { 440 0 }
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteType = Corneredstretched
+		spriteborder = { 16 16 }
+	}
+
+	icon = {
+		name = "px_ns_border_only"
+		position = { 0 220 }
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteborder = { 16 16 }
+	}
+
+	icon = {
+		name = "px_ns_corner_clamp"
+		position = { 220 220 }
+		size = { 24 24 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteType = Corneredstretched
+		spriteborder = { 16 16 }
+	}
+
+	icon = {
+		name = "px_ns_type_only"
+		position = { 260 220 }
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteType = Corneredtiled
+	}
+
+	icon = {
+		name = "px_ns_tiled_type"
+		position = { 480 220 }
+		size = { 200 200 }
+		texture = "gfx/px_fixtures/nineslice.dds"
+		spriteType = Tiled
+	}
+
+	widget = {
+		name = "px_ns_asymmetric"
+		position = { 0 440 }
+		size = { 200 200 }
+		background = {
+			texture = "gfx/px_fixtures/nineslice.dds"
+			spriteType = Corneredtiled
+			spriteborder = { 16 8 }
+		}
+	}
+
+	widget = {
+		name = "px_ns_per_side"
+		position = { 220 440 }
+		size = { 200 200 }
+		background = {
+			texture = "gfx/px_fixtures/nineslice.dds"
+			spriteType = Corneredstretched
+			spriteborder = { 10 20 }
+			spriteborder_top = 5
+		}
+	}
+}

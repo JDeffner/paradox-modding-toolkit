@@ -1,0 +1,60 @@
+# px fixture: margins. Rows: L34, L26.
+#
+# On a box, `margin = { a b }` is a = horizontal inset, b = vertical inset, and
+# the space-around distribution then runs inside the remaining content area.
+# A directional margin insets ONE side only, and the distribution again runs in
+# what is left (margin_top = 30 in a 120-tall box puts a lone 40-tall child at
+# 30 + (90-40)/2 = 55). `margin_widget` offsets its CHILDREN's coordinate origin
+# without shrinking its own rect. `margin` on a plain widget is ignored.
+
+widget = {
+	name = "px_margin_frame"
+	size = { 180 120 }
+
+	hbox = {
+		name = "px_margin_row"
+		margin = { 12 6 }
+		widget = { name = "px_margin_a" size = { 60 40 } }
+		widget = { name = "px_margin_b" size = { 40 60 } }
+		widget = { name = "px_margin_c" size = { 30 20 } }
+	}
+}
+
+widget = {
+	name = "px_directional_frame"
+	position = { 0 140 }
+	size = { 180 120 }
+
+	hbox = {
+		name = "px_directional_row"
+		margin_top = 30
+		widget = { name = "px_directional_kid" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_margin_widget_frame"
+	position = { 0 280 }
+	size = { 200 120 }
+
+	margin_widget = {
+		name = "px_margin_widget_full"
+		size = { 100% 100% }
+		margin = { 20 10 }
+		widget = { name = "px_margin_widget_kid" size = { 40 40 } }
+	}
+}
+
+widget = {
+	name = "px_plain_margin_frame"
+	position = { 0 420 }
+	size = { 200 120 }
+
+	# `margin` here is dropped by the engine: the child starts at the origin.
+	widget = {
+		name = "px_plain_margin"
+		size = { 100% 100% }
+		margin = { 20 10 }
+		widget = { name = "px_plain_margin_kid" size = { 40 40 } }
+	}
+}

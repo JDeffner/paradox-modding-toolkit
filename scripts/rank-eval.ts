@@ -9,14 +9,14 @@
  *   (or set CK3_MOD_CORPUS / CK3_GAME_PATH)
  */
 import * as path from "path";
-import { buildEvalEnv, runRankEval, formatMetrics } from "../test/rankEvalCore";
-import { devPath, requireDevPath } from "../test/devPaths";
+import { buildEvalEnv, runRankEval, formatMetrics } from "../packages/server/test/rankEvalCore";
+import { devPath, requireDevPath } from "./devPaths";
 
 const modPath = process.argv[2] ?? requireDevPath("corpusPath", "rank-eval");
 const gamePath = process.argv[3] ?? devPath("gamePath");
 
-const wikidocsDir = path.join(__dirname, "..", "wikidocs");
-const freqsDir = path.join(__dirname, "..", "shared", "data");
+const wikidocsDir = path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs");
+const freqsDir = path.join(__dirname, "..", "packages", "server", "data", "ck3");
 
 const t0 = Date.now();
 const env = buildEvalEnv({ wikidocsDir, freqsDir, gamePath, modPath });

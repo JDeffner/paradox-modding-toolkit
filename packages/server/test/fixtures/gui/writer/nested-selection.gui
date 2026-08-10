@@ -1,0 +1,32 @@
+# px fixture: nested multi-select batches. Rows: W23.
+#
+# One batch is several edits computed against the SAME text and applied
+# end-first, never N sequential rewrites whose offsets go stale.
+#
+# An ancestor's delete span CONTAINS its descendant's, and an end-first apply
+# drops an overlapping edit, so a selection holding both px_outer and
+# px_inner_one must collapse to the outermost before the batch is built (which
+# is also what the user means: deleting a box deletes its contents). Property
+# writes do NOT collapse: two inserts at different offsets do not overlap, and
+# setting a key on both is exactly what was asked.
+
+vbox = {
+	widget = {
+		name = "px_outer"
+		size = { 100 100 }
+
+		widget = {
+			name = "px_inner_one"
+			size = { 20 20 }
+		}
+		widget = {
+			name = "px_inner_two"
+			size = { 20 20 }
+		}
+	}
+
+	widget = {
+		name = "px_sibling"
+		size = { 100 100 }
+	}
+}

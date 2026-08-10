@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Datafunction Expression",
+  "scopeName": "source.paradox-datafunction",
+  "patterns": [{ "include": "#expression" }],
+  "repository": {
+    "expression": {
+      "comment": "A [ ... ] data-function expression as used in .gui files and localization. The meta.embedded scope resets VS Code's standard token type to 'other' even when the expression sits inside a double-quoted string, which is what makes quote auto-closing and native bracket-pair colorization work inside the brackets.",
+      "name": "meta.embedded.expression.paradox-datafunction",
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.expression.begin.paradox-datafunction" }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.expression.end.paradox-datafunction" }
+      },
+      "patterns": [{ "include": "#inner" }]
+    },
+    "inner": {
+      "patterns": [
+        {
+          "comment": "String argument: 'localize_key' or '(int32)3'. May itself contain a bracketed expression; the begin/end machinery keeps the ] inside the quotes from ending the outer expression.",
+          "name": "string.quoted.single.paradox-datafunction",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.paradox-datafunction", "match": "\\\\." },
+            {
+              "comment": "Cast prefix inside string arguments: '(int32)3', '(hex)ff0000'",
+              "name": "storage.type.cast.paradox-datafunction",
+              "match": "^\\((?i:int32|int64|uint32|uint64|float|double|bool|hex|CString|CFixedPoint)\\)"
+            }
+          ]
+        },
+        {
+          "comment": "Format suffix before the closing bracket: [x.GetName|U], [GetValue|2=%.0f]",
+          "name": "constant.other.formatting.paradox-datafunction",
+          "match": "\\|[^\\]']*"
+        },
+        {
+          "comment": "Function call name (segment directly before an opening paren)",
+          "name": "entity.name.function.paradox-datafunction",
+          "match": "[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
+        },
+        { "name": "punctuation.section.arguments.begin.paradox-datafunction", "match": "\\(" },
+        { "name": "punctuation.section.arguments.end.paradox-datafunction", "match": "\\)" },
+        { "name": "punctuation.separator.arguments.paradox-datafunction", "match": "," },
+        { "name": "punctuation.accessor.paradox-datafunction", "match": "\\." },
+        { "name": "constant.numeric.paradox-datafunction", "match": "\\b\\d+(?:\\.\\d+)?\\b" },
+        {
+          "comment": "Plain chain segment: a data type, promote or function (Character, GetPlayer, IsAlive)",
+          "name": "support.function.datafunction.paradox-datafunction",
+          "match": "[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    }
+  }
+}

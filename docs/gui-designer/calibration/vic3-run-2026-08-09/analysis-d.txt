@@ -1,0 +1,13 @@
+﻿RULER NOT FOUND - reporting raw pixel coords, scale=1
+gray20         canvas=(    0.0,    0.0    9.0x763.0 ) px=(0,0) area=5691 rgb=(38,44,44)
+gray23         canvas=(  516.0,   14.0   19.0x11.0  ) px=(516,14) area=119 rgb=(180,190,192)
+gray22         canvas=(  340.0,   47.0    9.0x10.0  ) px=(340,47) area=64 rgb=(132,132,122)
+gray20         canvas=(  519.0,   69.0   50.0x3.0   ) px=(519,69) area=139 rgb=(30,32,32)
+bg-darkmagenta canvas=(   94.0,  132.0  140.0x20.0  ) px=(94,132) area=1864 rgb=(119,2,118)
+bg-darkred     canvas=(  474.0,  132.0   80.0x20.0  ) px=(474,132) area=1201 rgb=(113,56,0)
+bg-darkgreen   canvas=(  734.0,  132.0  140.0x20.0  ) px=(734,132) area=2180 rgb=(2,112,56)
+bg-teal        canvas=(   94.0,  202.0   40.0x20.0  ) px=(94,202) area=620 rgb=(2,91,91)
+bg-darkblue    canvas=(  474.0,  222.0  115.0x39.0  ) px=(474,222) area=3633 rgb=(0,58,117)
+bg-darkred     canvas=(   94.0,  272.0  270.0x39.0  ) px=(94,272) area=7872 rgb=(116,0,58)
+gray20         canvas=(  474.0,  352.0  180.0x40.0  ) px=(474,352) area=6944 rgb=(50,50,50)
+gray20         canvas=(    0.0,  569.0    2.0x194.0 ) px=(0,569) area=378 rgb=(51,47,51)

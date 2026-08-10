@@ -1,0 +1,200 @@
+# PX cross-game calibration probe D — text metrics at EXPLICIT fontsize.
+# Game-agnostic: raw `textbox` only (no game text templates), raw_text (no
+# loc keys), mod-local white texture. The background rect IS the measured
+# text extent on an autoresize textbox (CK3 B1-G).
+# Spawn:   gui.createwidget gui/px_probe_d.gui px_probe_d
+# Despawn: gui.clearwidgets px_probe_d
+# CK3 fontsize-15 numbers for comparison: advance(M)=14 ink(M)=13,
+# advance(i)=ink(i)=4, advance(space)=4, line box 21, all linear in fontsize.
+window = {
+	name = "px_probe_d"
+	parentanchor = center
+	size = { 980 690 }
+	layer = top
+
+	widget = {
+		parentanchor = center
+		size = { 940 650 }
+		background = {
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 0 0 1 }
+		}
+
+		# ---- CASE T1: 10xM at fontsize 15 (advance + ink + line box) ----
+		textbox = {
+			position = { 20 60 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "MMMMMMMMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.5 0 0.5 1 }
+			}
+		}
+		textbox = {
+			position = { 20 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T1: 10xM @15"
+		}
+
+		# ---- CASE T2: 10xi at fontsize 15 ----
+		textbox = {
+			position = { 20 130 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "iiiiiiiiii"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 0.4 0.4 1 }
+			}
+		}
+		textbox = {
+			position = { 20 96 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T2: 10xi @15"
+		}
+
+		# ---- CASE T3: 10xM at fontsize 30 (linear scaling check) ----
+		textbox = {
+			position = { 20 200 }
+			autoresize = yes
+			fontsize = 30
+			raw_text = "MMMMMMMMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.5 0 0.25 1 }
+			}
+		}
+		textbox = {
+			position = { 20 166 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T3: 10xM @30"
+		}
+
+		# ---- CASE T4: spaces (5xM separated by 4 spaces) ----
+		textbox = {
+			position = { 20 280 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "M M M M M"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.25 0.25 0 1 }
+			}
+		}
+		textbox = {
+			position = { 20 246 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T4: M M M M M @15"
+		}
+
+		# ---- CASE T5: max_width clamp + elision ----
+		# CK3: box clamps to exactly 80 wide, right-elided (odd 16px-tall box).
+		# A game may SHRINK the font instead of eliding — that is the data.
+		textbox = {
+			position = { 400 60 }
+			autoresize = yes
+			fontsize = 15
+			max_width = 80
+			raw_text = "MMMMMMMMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.5 0.25 0 1 }
+			}
+		}
+		textbox = {
+			position = { 400 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T5: max_width 80"
+		}
+
+		# ---- CASE T6: multiline wrap at word boundaries ----
+		# CK3: wraps into 3 lines; line advance = single-line box height; box
+		# width = widest line.
+		textbox = {
+			position = { 400 150 }
+			autoresize = yes
+			fontsize = 15
+			multiline = yes
+			max_width = 120
+			raw_text = "MMMM MMMM MMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 0.25 0.5 1 }
+			}
+		}
+		textbox = {
+			position = { 400 116 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T6: multiline 120"
+		}
+
+		# ---- CASE T7: align inside a fixed-size box ----
+		# CK3 B4-T6: exact horizontal placement, zero internal padding.
+		# T7a default, T7b align = center, T7c align = right.
+		textbox = {
+			position = { 400 280 }
+			size = { 180 40 }
+			fontsize = 15
+			raw_text = "MMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.2 0.2 0.2 1 }
+			}
+		}
+		textbox = {
+			position = { 400 340 }
+			size = { 180 40 }
+			fontsize = 15
+			align = center
+			raw_text = "MMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.2 0.2 0.3 1 }
+			}
+		}
+		textbox = {
+			position = { 400 400 }
+			size = { 180 40 }
+			fontsize = 15
+			align = right
+			raw_text = "MMMM"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.3 0.2 0.2 1 }
+			}
+		}
+		textbox = {
+			position = { 400 246 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T7: align default / center / right"
+		}
+
+		# ---- CASE T8: localized text (the mod ships the key) ----
+		# Same 10xM string via a loc key instead of raw_text — insurance in
+		# case a game handles raw_text differently, and a loc-loading check.
+		textbox = {
+			position = { 660 60 }
+			autoresize = yes
+			fontsize = 15
+			text = "px_probe_tenm"
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 0.5 0.25 1 }
+			}
+		}
+		textbox = {
+			position = { 660 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "T8: loc key"
+		}
+	}
+}

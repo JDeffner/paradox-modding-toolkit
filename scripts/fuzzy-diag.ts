@@ -13,16 +13,16 @@
  */
 import * as path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { buildEvalEnv } from "../test/rankEvalCore";
-import { simulateSuggest } from "../test/vscodeFuzzy";
-import { classifyFile } from "../server/src/index/indexer";
-import { devPath, requireDevPath } from "../test/devPaths";
+import { buildEvalEnv } from "../packages/server/test/rankEvalCore";
+import { simulateSuggest } from "../packages/server/test/vscodeFuzzy";
+import { classifyFile } from "../packages/server/src/index/indexer";
+import { devPath, requireDevPath } from "./devPaths";
 
 const modPath = process.argv[2] ?? requireDevPath("corpusPath", "fuzzy-diag");
 const gamePath = process.argv[3] ?? devPath("gamePath");
 
-const wikidocsDir = path.join(__dirname, "..", "wikidocs");
-const freqsDir = path.join(__dirname, "..", "shared", "data");
+const wikidocsDir = path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs");
+const freqsDir = path.join(__dirname, "..", "packages", "server", "data", "ck3");
 
 const t0 = Date.now();
 const env = buildEvalEnv({ wikidocsDir, freqsDir, gamePath, modPath });

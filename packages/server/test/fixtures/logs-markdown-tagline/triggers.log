@@ -1,0 +1,12 @@
+# Trigger Documentation
+## active_religious_focus
+Checks if a country is researching a certain religious focus
+Reads gamestate for all scopes.
+**Supported Scopes**: country  
+
+## adjacent_to_owned_by
+is the area/location adjacent to an area with a country's presence in it?
+Traits: country tag/country scope
+Reads gamestate for all scopes.
+**Supported Scopes**: location, area  
+**Supported Targets**: country  

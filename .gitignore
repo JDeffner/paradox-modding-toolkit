@@ -10,5 +10,21 @@ docs/*
 !docs/diagnostics/
 !docs/gui-designer/
 !docs/guides/
+# The wire contract external clients code against — public, versioned.
+!docs/PROTOCOL.md
+# The guide for applications embedding the server; public, linked from the
+# server README.
+!docs/EMBEDDING.md
+# What a workspace costs and how to configure a big one; public, linked from
+# the extension README and the CHANGELOG.
+!docs/PERFORMANCE.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
+# Build-time copy of the server bundle data (scripts/copy-server.mjs).
+packages/vscode/data/
+packages/vscode/THIRD-PARTY-NOTICES.md
+*.tar.gz
+px-lsp-win-x64-*.zip
+# Checksum-verified nodejs.org download cached by scripts/build-server-zip.mjs.
+.cache/
+scripts/nvim-parity/results.json

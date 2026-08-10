@@ -6,7 +6,7 @@
  * the game ships (leading `#` comment block and/or trailing inline comment).
  *
  * The OUTPUT IS NOT SHIPPED. It is a first pass for a human to check and curate
- * into shared/src/schema/structures.ts — the shipped data must be static
+ * into packages/server/src/games/ck3/structures.ts — the shipped data must be static
  * TypeScript, because users may not have gamePath set. Regenerate per patch.
  *
  * Run: npx esbuild scripts/build-structure.ts --bundle --platform=node \
@@ -72,7 +72,10 @@ function harvest(text: string): { topLevel: KeySpec[]; blocks: Record<string, Ke
       let inlineDoc = "";
       const hash = rhs.indexOf("#");
       if (hash >= 0) {
-        inlineDoc = rhs.slice(hash + 1).replace(/^#+\s?/, "").trim();
+        inlineDoc = rhs
+          .slice(hash + 1)
+          .replace(/^#+\s?/, "")
+          .trim();
         rhs = rhs.slice(0, hash);
       }
       const docParts = [...pending, inlineDoc].filter(Boolean);

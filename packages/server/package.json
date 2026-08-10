@@ -1,0 +1,50 @@
+{
+  "name": "@px-lsp/server",
+  "version": "0.3.0",
+  "license": "GPL-3.0-or-later",
+  "description": "Language server for Paradox script (Crusader Kings III first), usable over node-ipc or stdio from any LSP client.",
+  "keywords": [
+    "lsp",
+    "language-server",
+    "paradox",
+    "crusader-kings-3",
+    "ck3",
+    "modding"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JDeffner/paradox-modding-toolkit.git",
+    "directory": "packages/server"
+  },
+  "bin": {
+    "px-lsp": "./dist/server.js"
+  },
+  "files": [
+    "dist",
+    "data",
+    "media",
+    "src",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    "./dds": "./src/dds/index.ts",
+    "./parser": "./src/parser/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "compile": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --banner:js=\"#!/usr/bin/env node\"",
+    "watch": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --watch",
+    "prepublishOnly": "npm run compile"
+  },
+  "dependencies": {
+    "@px-lsp/protocol": "workspace:*",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-uri": "^3.1.0"
+  }
+}

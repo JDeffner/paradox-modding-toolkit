@@ -19,6 +19,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import { devPath } from "./devPaths";
 
 export interface DevPaths {
   gamePath: string;
@@ -102,17 +103,16 @@ export function generateSkill(paths: DevPaths, srcDir: string, destDir: string):
 
 function main(): void {
   const repoRoot = path.join(__dirname, "..");
-  const srcDir = path.join(repoRoot, "skills", "ck3-modding");
+  const srcDir = path.join(repoRoot, "packages", "vscode", "skills", "ck3-modding");
   const destDir = process.argv[2] ?? "C:/Users/joeld/.claude/skills/ck3-modding";
-  const cfgFile = path.join(repoRoot, "dev-paths.json");
 
-  let cfg: DevPaths;
-  try {
-    cfg = JSON.parse(fs.readFileSync(cfgFile, "utf8"));
-  } catch {
-    console.error("gen-skill: no readable dev-paths.json at repo root (copy dev-paths.example.json).");
-    process.exit(1);
-  }
+  // Via devPaths so env-var overrides work here like everywhere else; reading
+  // dev-paths.json directly is what let tigerPath drift out of its schema.
+  const cfg: DevPaths = {
+    gamePath: devPath("gamePath") ?? "",
+    logsPath: devPath("logsPath") ?? "",
+    tigerPath: devPath("tigerPath") ?? undefined,
+  };
   if (!cfg.gamePath || !cfg.logsPath) {
     console.error("gen-skill: dev-paths.json needs gamePath and logsPath.");
     process.exit(1);

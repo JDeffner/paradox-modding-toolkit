@@ -1,0 +1,435 @@
+# PX cross-game calibration probe A — coordinates, anchors, plain boxes.
+# Game-agnostic: no vanilla templates, no loc keys, mod-local white texture.
+# Spawn:   gui.createwidget gui/px_probe_a.gui px_probe_a
+# Despawn: gui.clearwidgets px_probe_a
+# Case geometry mirrors CK3 calibration batch-01 so the CK3-measured numbers
+# are the predictions; see the package's expectations.md for the color legend.
+window = {
+	name = "px_probe_a"
+	parentanchor = center
+	size = { 980 690 }
+	layer = top
+
+	# The canvas: black 940x650 rectangle, doubles as the ruler (940 units wide).
+	# All case positions are relative to its top-left corner.
+	widget = {
+		parentanchor = center
+		size = { 940 650 }
+		background = {
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 0 0 1 }
+		}
+
+		# ---- CASE A: ruler bars (linear scale check) ----
+		icon = {
+			position = { 20 12 }
+			size = { 200 12 }
+			texture = "gfx/px_probe/white.dds"
+			color = { 1 1 1 1 }
+		}
+		icon = {
+			position = { 240 12 }
+			size = { 100 12 }
+			texture = "gfx/px_probe/white.dds"
+			color = { 1 0 1 1 }
+		}
+		icon = {
+			position = { 360 12 }
+			size = { 50 12 }
+			texture = "gfx/px_probe/white.dds"
+			color = { 0 1 1 1 }
+		}
+		textbox = {
+			position = { 430 8 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "A: 200 / 100 / 50"
+		}
+
+		# ---- CASE B: parentanchor matrix (no widgetanchor, no position) ----
+		# Container 300x200 at (20,60); nine 20x20 markers, one per anchor.
+		# No pure-white marker (the label above must not merge with one).
+		widget = {
+			position = { 20 60 }
+			size = { 300 200 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.2 0.2 0.2 1 }
+			}
+
+			icon = {
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.7 0.7 0.7 1 }
+			}
+			icon = {
+				parentanchor = top|hcenter
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 0 1 }
+			}
+			icon = {
+				parentanchor = top|right
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0.5 0 1 }
+			}
+			icon = {
+				parentanchor = vcenter|left
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 0 1 }
+			}
+			icon = {
+				parentanchor = center
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 1 0 1 }
+			}
+			icon = {
+				parentanchor = vcenter|right
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 1 1 }
+			}
+			icon = {
+				parentanchor = bottom|left
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 0 1 1 }
+			}
+			icon = {
+				parentanchor = bottom|hcenter
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 1 1 }
+			}
+			icon = {
+				parentanchor = bottom|right
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.5 0 1 1 }
+			}
+		}
+		textbox = {
+			position = { 20 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "B: parentanchor"
+		}
+
+		# ---- CASE C: widgetanchor implicit default (== parentanchor?) ----
+		# Explicit-widgetanchor marker drawn FIRST so the implicit one covers
+		# it exactly if the default is "mirror the parentanchor".
+		widget = {
+			position = { 360 60 }
+			size = { 300 200 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.1 0.1 0.3 1 }
+			}
+
+			icon = {
+				parentanchor = center
+				widgetanchor = center
+				size = { 40 40 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 0 1 }
+			}
+			icon = {
+				parentanchor = center
+				size = { 40 40 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 0 1 }
+			}
+			icon = {
+				parentanchor = bottom|right
+				widgetanchor = bottom|right
+				size = { 40 40 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 1 1 }
+			}
+			icon = {
+				parentanchor = bottom|right
+				size = { 40 40 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 1 0 1 }
+			}
+		}
+		textbox = {
+			position = { 360 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "C: widgetanchor"
+		}
+
+		# ---- CASE D: position offsets combined with anchors + clip check ----
+		widget = {
+			position = { 700 60 }
+			size = { 220 200 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.1 0.25 0.1 1 }
+			}
+
+			icon = {
+				position = { 30 30 }
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 0 0 1 }
+			}
+			icon = {
+				parentanchor = bottom|right
+				widgetanchor = bottom|right
+				position = { -30 -30 }
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 0 1 }
+			}
+			icon = {
+				parentanchor = bottom|right
+				widgetanchor = bottom|right
+				position = { 30 30 }
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 1 1 0 1 }
+			}
+			icon = {
+				parentanchor = center
+				position = { 40 0 }
+				size = { 20 20 }
+				texture = "gfx/px_probe/white.dds"
+				color = { 0 1 1 1 }
+			}
+		}
+		textbox = {
+			position = { 700 26 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "D: position"
+		}
+
+		# ---- CASE E: hbox in a fixed widget (stretch + space-around) ----
+		# Children everywhere: red 60x40, green 40x60, blue 30x20.
+		widget = {
+			position = { 20 320 }
+			size = { 180 120 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.4 0.1 0.1 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 20 286 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "E1: hbox"
+		}
+
+		widget = {
+			position = { 220 320 }
+			size = { 180 120 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				spacing = 8
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.4 0.1 0.1 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 220 286 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "E2: spacing 8"
+		}
+
+		widget = {
+			position = { 420 320 }
+			size = { 180 120 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			hbox = {
+				margin = { 12 6 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.4 0.1 0.1 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 420 286 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "E3: margin 12 6"
+		}
+
+		# ---- CASE F: vbox mirror ----
+		widget = {
+			position = { 640 320 }
+			size = { 140 160 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			vbox = {
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.1 0.1 0.4 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 640 286 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "F1: vbox"
+		}
+
+		widget = {
+			position = { 795 320 }
+			size = { 140 160 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.15 0.15 0.15 1 }
+			}
+
+			vbox = {
+				spacing = 8
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.1 0.1 0.4 1 }
+				}
+				icon = {
+					size = { 60 40 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+				icon = {
+					size = { 40 60 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 1 0 1 }
+				}
+				icon = {
+					size = { 30 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 0 0 1 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 795 286 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "F2: spacing 8"
+		}
+
+		# ---- CASE H: nested offset accumulation ----
+		widget = {
+			position = { 300 530 }
+			size = { 200 110 }
+			background = {
+				texture = "gfx/px_probe/white.dds"
+				color = { 0.25 0.25 0.25 1 }
+			}
+
+			widget = {
+				position = { 30 20 }
+				size = { 100 60 }
+				background = {
+					texture = "gfx/px_probe/white.dds"
+					color = { 0.5 0.5 0.5 1 }
+				}
+
+				icon = {
+					position = { 10 10 }
+					size = { 20 20 }
+					texture = "gfx/px_probe/white.dds"
+					color = { 1 0 0 1 }
+				}
+			}
+		}
+		textbox = {
+			position = { 300 496 }
+			autoresize = yes
+			fontsize = 15
+			raw_text = "H: nesting"
+		}
+	}
+}

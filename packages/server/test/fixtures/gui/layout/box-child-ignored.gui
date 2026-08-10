@@ -1,0 +1,40 @@
+# px fixture: what a box ignores on its children. Rows: L23, L12, L31.
+#
+# A box places its children itself, so on a box child the engine drops
+#   - `position`      (the slot is the box's business)
+#   - `parentanchor`  (cross placement is unconditionally centred)
+#   - `align`         (a text-INTERNAL property; it positions text inside a
+#                      fixed-size text widget's own rect, never a box slot)
+# All three widgets below must land on the same cross-axis coordinate as a
+# plain sibling of the same size. An expanding child takes the box's leftover
+# space on that axis and must NOT define the box's cross size: only fixed
+# children do.
+
+widget = {
+	name = "px_ignored_frame"
+	size = { 420 300 }
+
+	vbox = {
+		name = "px_ignored_column"
+
+		widget = { name = "px_plain" size = { 100 30 } }
+		widget = { name = "px_positioned" position = { 40 40 } size = { 100 30 } }
+		widget = { name = "px_anchored" parentanchor = right size = { 100 30 } }
+		widget = { name = "px_align_left" align = left size = { 100 30 } }
+		widget = { name = "px_align_right" align = right size = { 100 30 } }
+	}
+}
+
+widget = {
+	name = "px_cross_frame"
+	position = { 0 320 }
+	size = { 420 200 }
+
+	vbox = {
+		name = "px_cross_column"
+		# The 300-wide fixed child defines the cross size; the expanding one
+		# takes the leftover main-axis space and must not widen the column.
+		widget = { name = "px_cross_fixed" size = { 300 30 } }
+		widget = { name = "px_cross_expander" layoutpolicy_vertical = expanding size = { 60 30 } }
+	}
+}
