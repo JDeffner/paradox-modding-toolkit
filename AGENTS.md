@@ -130,13 +130,14 @@ cd packages/vscode && npx vsce package --pre-release --no-dependencies
 
 ## Releasing
 
-Branch model: `dev` = full working history, LOCAL-ONLY (never push it; the
-remote was deliberately purged of history). `main` = the public face: the
-initial commit plus ONE commit per release. To cut a release from dev:
+Branch model: `monorepo` = full working history, pushed to `origin/monorepo`.
+`main` = the public face: the initial commit plus ONE commit per release.
+(`dev` and `devold` were the pre-monorepo working branches; both are retired
+and archived in a git bundle.) To cut a release:
 
 ```bash
 git checkout main
-git read-tree -u --reset dev      # main's tree becomes exactly dev's tree
+git read-tree -u --reset monorepo   # main's tree becomes exactly monorepo's tree
 git commit -m "v<version>: <summary>"
 git push origin main
 git tag v<version> && git push origin v<version>
