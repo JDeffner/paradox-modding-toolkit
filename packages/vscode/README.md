@@ -11,12 +11,12 @@ bugs, deep [tiger](https://github.com/amtep/tiger) integration, a live mod
 overview, and a localization workflow no other tool has.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)
+![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.90-007ACC.svg?logo=visualstudiocode)
 
 </div>
 
-> **Early alpha (0.3.0).** This is a young project and things will change. It is
+> **Beta (0.3.0).** This is a young project and things will change. It is
 > already useful day to day, but you will hit rough edges. Feedback is not just
 > welcome, it is the point: see [Contributing](#contributing--feedback) below.
 
@@ -117,6 +117,23 @@ reports are very welcome.
   and runs from neovim, Zed, Helix or your own application — see
   [Outside VS Code](#outside-vs-code).
 
+## A quick look
+
+![The Project panel](media/screenshots/project-panel-compact.png)
+
+*The Project panel: the game is auto-detected, and every workspace mod has its
+own toggles for what gets indexed and which mod the views follow.*
+
+![Event simulator](media/screenshots/event-simulator.png)
+
+*Simulate Event walks an event beside its source, options and the effects they
+run included.*
+
+![Event graph](media/screenshots/event-graph-focus.png)
+
+*Select a node in the event graph: blue is what it fires, orange is what fires
+it.*
+
 ## Quick start
 
 1. Install the extension, open your mod folder, and run **Run Setup & Health
@@ -146,8 +163,10 @@ The full docs live in the
 
 - [Home](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Home)
 - [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started)
+- [Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games)
 - [Editor Features](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Editor-Features)
 - [Sidebar Views](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Sidebar-Views)
+- [GUI Editor](https://github.com/JDeffner/paradox-modding-toolkit/wiki/GUI-Editor)
 - [DDS and Images](https://github.com/JDeffner/paradox-modding-toolkit/wiki/DDS-and-Images)
 - [Configuration](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Configuration)
 - [Multi-Mod and Translation](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Multi-Mod-and-Translation)
@@ -178,7 +197,7 @@ as the method-by-method reference.
 
 ## Contributing & feedback
 
-This is an alpha shaped by the people who use it. The best thing you can do is
+This is a beta shaped by the people who use it. The best thing you can do is
 tell me what breaks and what is missing:
 
 - **File an [issue](https://github.com/JDeffner/paradox-modding-toolkit/issues)** for
