@@ -16,10 +16,18 @@ import { colorSwatch, kindBadge, scopePill } from "../src/features/hoverRender";
 import { provideCodeActions, type LocEditContext } from "../src/features/codeActions";
 import type { ServerData } from "../src/serverData";
 import type { Diagnostic } from "vscode-languageserver/node";
+import { URI } from "vscode-uri";
 
 /** Install the capabilities a client declaring `init` would get. */
 const asClient = (init: Partial<ParadoxInitOptions>): void =>
   setClientCapabilities(resolveClientCapabilities(init));
+
+/**
+ * A real OS path as a file URI. Hand-building `"file:///" + p` only works where
+ * paths start with a drive letter: on POSIX it yields `file:////tmp/...`, whose
+ * path opens with `//` and no authority, which vscode-uri rejects outright.
+ */
+const fileUri = (p: string): string => URI.file(p).toString();
 
 afterEach(() => asClient({ clientCommands: true }));
 
@@ -128,7 +136,7 @@ describe("code actions per client mode", () => {
         modRootOf: () => modRoot,
         locRoots: ["localization"],
       };
-      const uri = "file:///" + path.join(modRoot, "common", "decisions", "d.txt").replace(/\\/g, "/");
+      const uri = fileUri(path.join(modRoot, "common", "decisions", "d.txt"));
       const actions = provideCodeActions(stubData, doc(uri), missingLoc.range, [missingLoc], ctx);
       expect(actions).toHaveLength(1);
       const [action] = actions;
@@ -158,7 +166,7 @@ describe("code actions per client mode", () => {
         modRootOf: () => modRoot,
         locRoots: ["localization"],
       };
-      const uri = "file:///" + path.join(modRoot, "common", "decisions", "d.txt").replace(/\\/g, "/");
+      const uri = fileUri(path.join(modRoot, "common", "decisions", "d.txt"));
       const actions = provideCodeActions(stubData, doc(uri), missingLoc.range, [missingLoc], ctx);
       expect(actions).toHaveLength(1);
       const changes = actions[0].edit!.documentChanges!;
@@ -196,7 +204,7 @@ describe("code actions per client mode", () => {
         modRootOf: () => modRoot,
         locRoots: ["localization"],
       };
-      const uri = "file:///" + path.join(modRoot, "common", "decisions", "d.txt").replace(/\\/g, "/");
+      const uri = fileUri(path.join(modRoot, "common", "decisions", "d.txt"));
       const actions = provideCodeActions(indexedKey, doc(uri), keyRange, [missingLoc], ctx);
       const create = actions.find((a) => a.title.includes("Create localization"))!;
       expect(create.command).toBeUndefined();

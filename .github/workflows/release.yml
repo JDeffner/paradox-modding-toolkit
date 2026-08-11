@@ -44,7 +44,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Must match ci.yml: jsdom declares node ^22.22.2 || ^24.15.0 || >=26,
+          # and the jsdom suites fail at import on 20. This is the build/test
+          # runtime only; the shipped bundles still target node18.
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

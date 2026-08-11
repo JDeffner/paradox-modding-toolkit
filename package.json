@@ -3,6 +3,9 @@
   "version": "0.3.0",
   "private": true,
   "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=22.22.2"
+  },
   "author": {
     "name": "Joël Deffner"
   },

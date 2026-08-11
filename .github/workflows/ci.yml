@@ -15,7 +15,10 @@ jobs:
           version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # jsdom (the webview tests) declares node ^22.22.2 || ^24.15.0 || >=26,
+          # and undici reaches for worker_threads.markAsUncloneable, which does
+          # not exist before 22. On 20 the jsdom suites fail at import.
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck

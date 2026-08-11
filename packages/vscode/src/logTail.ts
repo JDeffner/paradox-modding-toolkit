@@ -18,6 +18,17 @@
  *   the file. The size shrinks, or the NTFS file index changes under the same
  *   path; either way everything published so far describes a log that is gone,
  *   so the read reports `reset` and the caller drops its diagnostics.
+ *
+ *   KNOWN GAP on POSIX: `ino` is the whole identity signal here, and POSIX
+ *   hands back the inode it just freed, so a delete-then-recreate can land on
+ *   the same number. A replacement that is also SHORTER than the old offset
+ *   still trips the shrink test; one that is longer is invisible, and the next
+ *   read continues mid-file. Windows is unaffected (fresh file index per file).
+ *   The fixes that actually close it are a POSIX-only open-fd pin (an open
+ *   descriptor makes the inode unreusable) or a fingerprint of the file head;
+ *   `birthtimeMs` is NOT one of them, because where the kernel has no statx
+ *   libuv fills birthtime from ctime, which moves on every append and would
+ *   report a reset on every poll.
  * - Appends land mid-line and multi-byte UTF-8 sequences straddle reads, so the
  *   trailing partial line and the decoder state carry over to the next read.
  */
