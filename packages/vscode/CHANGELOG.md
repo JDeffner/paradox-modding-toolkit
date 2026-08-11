@@ -619,6 +619,11 @@ file the editor writes, `ck3-tiger` itself, the `ck3-script` diagnostic source
 
 ### Fixed
 
+- **Localization values close at the LAST quote, the way the game reads them.**
+  A value containing a quote (`hello:0 "He said "no" and left"`) was cut at the
+  first inner quote, so the rest of the text vanished from hovers, inlay hints
+  and the coverage view, and the translation tools wrote it back truncated. The
+  parser now ends the value at the last quote on the line.
 - **Symlinked mods are indexed.** Every directory walker skipped symlinks and
   Windows junctions outright, so a mod linked into the Paradox `mod/` folder,
   the standard Linux workflow, was silently invisible along with everything in

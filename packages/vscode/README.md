@@ -20,44 +20,9 @@ overview, and a localization workflow no other tool has.
 > already useful day to day, but you will hit rough edges. Feedback is not just
 > welcome, it is the point: see [Contributing](#contributing--feedback) below.
 
-## Which games
-
 CK3 is the game this toolkit grew up on and is where every feature exists. The
-other two get the same language core, and the table says exactly where they
-stop.
-
-| | Crusader Kings III | Victoria 3 | Europa Universalis V |
-|---|---|---|---|
-| Language support (completion, hover, navigation, references, rename, diagnostics) | full | full | full |
-| Folder schema | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
-| Engine vocabulary before you dump `script_docs` | bundled wiki + dump snapshot | bundled dump snapshot | none yet |
-| Deep validation | ck3-tiger, auto-download | vic3-tiger, auto-download | none exists yet |
-| Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
-| `.gui` language support and Widget Tree | yes | yes | yes |
-| `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | no (calibrated against CK3 only) | no |
-| Bundled AI modding skill | yes | no (CK3 content) | no (CK3 content) |
-
-**Existing CK3 users need to change nothing.** `px.gameId` defaults to `auto`
-and the detection ladder ends in CK3: a mod folder with a `descriptor.mod` is
-CK3, a folder with `.metadata/` plus `in_game/`-style stage folders is EU5,
-`.metadata/` alone is Victoria 3, and anything else stays CK3. Set `px.gameId`
-explicitly if that ever guesses wrong.
-
-**First run on Vic3 or EU5:** dump your own game data before judging the
-completion. Launch with `-debug_mode`, run `script_docs` in the console, then
-run **Reload Game Data (script_docs)** from the command palette. Only CK3
-ships bundled wiki tables to fall back on, so for the other two this is the
-step that fills in effects, triggers, event targets and modifiers. **Run Setup
-& Health Check** puts it at the top of the report when it is missing.
-
-**EU5 honesty note:** the EU5 folder-to-definition table is imported from the
-community [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config)
-rules (MIT, pinned commit) and has not been checked against a live install. The
-damage a wrong entry can do is bounded on purpose: a minimal hand-verified set
-of reference fields and **zero** required-localization patterns, so a mistake
-costs you navigation, never a false error squiggle. Gaps are fixable without
-waiting for a release through the `<mod>/.eu5modding/schema.json` overlay, and
-reports are very welcome.
+other two get the same language core; [Game support](#game-support) at the
+bottom says exactly where they stop.
 
 ## Highlights
 
@@ -195,6 +160,51 @@ covers the process contract, initialization options, and the `paradox/*` wire
 methods beyond standard LSP (event graph, mod overview, GUI layout, scope
 inference), with [`docs/PROTOCOL.md`](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PROTOCOL.md)
 as the method-by-method reference.
+
+## Game support
+
+Every game gets the same language core. This table is where the differences
+live, and it is deliberately blunt about them.
+
+| | Crusader Kings III | Victoria 3 | Europa Universalis V |
+|---|---|---|---|
+| Language support (completion, hover, navigation, references, rename, diagnostics) | full | full | full |
+| Folder schema | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
+| Engine vocabulary before you dump `script_docs` | bundled wiki + dump snapshot | bundled dump snapshot | none yet |
+| Deep validation | ck3-tiger, auto-download | vic3-tiger, auto-download | none exists yet |
+| Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
+| `.gui` language support and Widget Tree | yes | yes | yes |
+| `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | no (calibrated against CK3 only) | no |
+| Bundled AI modding skill | yes | no (CK3 content) | no (CK3 content) |
+| Mod descriptor | `descriptor.mod` | `.metadata/metadata.json` | `.metadata/metadata.json` |
+
+**Existing CK3 users need to change nothing.** `px.gameId` defaults to `auto`
+and the detection ladder ends in CK3: a mod folder with a `descriptor.mod` is
+CK3, a folder with `.metadata/` plus `in_game/`-style stage folders is EU5,
+`.metadata/` alone is Victoria 3, and anything else stays CK3. Set `px.gameId`
+explicitly if that ever guesses wrong.
+
+**First run on Vic3 or EU5:** dump your own game data before judging the
+completion. Launch with `-debug_mode`, run `script_docs` in the console, then
+run **Reload Game Data (script_docs)** from the command palette. Only CK3
+ships bundled wiki tables to fall back on, so for the other two this is the
+step that fills in effects, triggers, event targets and modifiers. **Run Setup
+& Health Check** puts it at the top of the report when it is missing. Vic3 and
+EU5 write their dumps to `Documents/.../<game>/docs`, not to `logs/`.
+
+**EU5 honesty note:** the EU5 folder-to-definition table is imported from the
+community [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config)
+rules (MIT, pinned commit) and has not been checked against a live install. The
+damage a wrong entry can do is bounded on purpose: a minimal hand-verified set
+of reference fields and **zero** required-localization patterns, so a mistake
+costs you navigation, never a false error squiggle. Gaps are fixable without
+waiting for a release through the `<mod>/.eu5modding/schema.json` overlay, and
+reports are very welcome.
+
+The same table with the detection ladder, the per-game dump paths and the
+schema-overlay recipe is on the
+[Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games)
+wiki page.
 
 ## Contributing & feedback
 
