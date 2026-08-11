@@ -358,6 +358,15 @@ completion ranking. The breaking changes below are all rebrand fallout.
   diagnostic message ("Script location: file: common/... line: 25") and drop
   the actual error text. The parser now stitches the block together: the
   `Error:` line becomes the message, the location line supplies file and line.
+- **Relaunching the game drops the stale Problems on Linux and macOS too.**
+  The fix above held on Windows, where a replaced file always gets a fresh file
+  index, but not on POSIX, where the kernel hands back the inode it just freed.
+  A new error.log that reused the inode and was longer than the old read offset
+  passed for an append: the stale diagnostics stayed in Problems, and the next
+  read continued into the middle of a file it had never seen the start of. The
+  tail now holds the log's descriptor open between polls, which makes the inode
+  unreusable and the identity check exact. Windows is unchanged, where a held
+  handle would only get in the game's way.
 
 ### Changed (brand, icons, retired preview)
 

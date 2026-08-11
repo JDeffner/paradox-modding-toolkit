@@ -81,6 +81,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.entries = 0;
     // Start from the current end: only NEW entries of this play session matter.
     this.parser.reset();
+    this.tail?.close();
     this.tail = new LogTail(file);
     this.seen = this.tail.seekToEnd();
     this.timer = setInterval(() => this.poll(), POLL_MS);
@@ -112,6 +113,11 @@ export class ErrorLogWatcher implements vscode.Disposable {
     const wasWatching = this.watching;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    // On POSIX the tail holds the log's inode open between polls so a relaunch's
+    // new error.log cannot pass for an append (see logTail.ts). Dropping the
+    // reference without closing would leak the descriptor and keep a deleted
+    // log's blocks alive for as long as the window stays open.
+    this.tail?.close();
     this.tail = null;
     this.statusItem.hide();
     if (wasWatching) {

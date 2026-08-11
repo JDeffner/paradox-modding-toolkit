@@ -3,7 +3,8 @@
  * when the game loaded and then went silent, and clearing the log from the
  * in-game error tracker left the stale Problems behind. Both halves live in the
  * offset/truncation bookkeeping, so these exercise it against real files on
- * disk (the failure was Windows filesystem behavior, not logic in a mock).
+ * disk (the failure was filesystem behavior, not logic in a mock, and the two
+ * platforms replace a file differently enough that only real files show it).
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
@@ -152,21 +153,63 @@ describe("LogTail", () => {
     expect(tail.read().lines).toEqual(["session one"]);
 
     // A relaunch deletes error.log and creates a new one at the same path. The
-    // replacement is longer than the old offset, so only the changed file index
-    // gives it away. POSIX may hand the freed inode straight back, and then
-    // there is no signal at all: assert against what the filesystem actually
-    // did rather than against the platform we happen to run on. See the KNOWN
-    // GAP note in logTail.ts.
-    const before = fs.statSync(file);
+    // replacement is LONGER than the old offset, so the shrink test says
+    // nothing and the file's identity is the only thing left to go on. POSIX
+    // hands the freed inode straight back, which is what the open-fd pin in
+    // logTail.ts is for; without it this read continues mid-file and reports
+    // no reset, so the caller keeps diagnostics for a log that is gone. How
+    // readily the inode comes back is the filesystem's call, though: measured
+    // on Linux, overlayfs and ext4 recycle it every single time and tmpfs never
+    // does, so a build without the pin fails this on a normal tmpdir and only
+    // looks healthy on a RAM disk.
     fs.rmSync(file);
     fs.writeFileSync(file, "session two, and a longer first line than before\n");
-    const identityChanged = Number(before.ino) !== Number(fs.statSync(file).ino);
 
-    const after = tail.read();
-    expect(after.reset).toBe(identityChanged);
-    if (identityChanged) {
-      expect(after.lines).toEqual(["session two, and a longer first line than before"]);
+    expect(tail.read()).toEqual({
+      lines: ["session two, and a longer first line than before"],
+      reset: true,
+      missing: false,
+    });
+    tail.close();
+  });
+
+  it("signals reset on every replacement in a row, not only the first", () => {
+    fs.writeFileSync(file, "");
+    const tail = new LogTail(file);
+    tail.seekToEnd();
+
+    // Three relaunches back to back. Each one has to re-pin, or on POSIX the
+    // second replacement gets the inode the first one freed and passes for an
+    // append. Windows catches all three either way (fresh file index per file).
+    for (const session of ["one", "two", "three"]) {
+      fs.rmSync(file, { force: true });
+      fs.writeFileSync(file, `session ${session}, padded out past every earlier offset\n`);
+      const got = tail.read();
+      expect(got.reset).toBe(true);
+      expect(got.lines).toEqual([`session ${session}, padded out past every earlier offset`]);
     }
+    tail.close();
+  });
+
+  it("keeps detecting replacement after close() releases the descriptor", () => {
+    fs.writeFileSync(file, "");
+    const tail = new LogTail(file);
+    tail.seekToEnd();
+    fs.appendFileSync(file, "before the stop\n");
+    expect(tail.read().lines).toEqual(["before the stop"]);
+
+    // stop() closes, and dispose() calls stop() again: the second is a no-op.
+    tail.close();
+    tail.close();
+
+    // Reading on is still allowed, and re-establishes the pin for what follows.
+    fs.appendFileSync(file, "after the stop\n");
+    expect(tail.read()).toEqual({ lines: ["after the stop"], reset: false, missing: false });
+
+    fs.rmSync(file);
+    fs.writeFileSync(file, "a replacement longer than both lines that came before it\n");
+    expect(tail.read().reset).toBe(true);
+    tail.close();
   });
 
   it("discards a half-written line when the log is cleared under it", () => {
