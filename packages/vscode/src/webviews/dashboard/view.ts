@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
-import type { GameMeta } from "@px-lsp/server/games/profile";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
 import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
+import { ICONS, visibleActionGroups, type ActionGroup } from "./actions";
 
 /** The three collapsible sections, in render order. */
 type SectionId = "mods" | "toggles" | "tools";
@@ -36,11 +36,6 @@ interface ModState {
   missing: boolean;
 }
 
-interface ActionGroup {
-  label: string;
-  items: Array<{ label: string; command: string; icon: keyof typeof ICONS; tip?: string }>;
-}
-
 interface DashboardState {
   /** Active game (full name) and whether it came from auto-detection. */
   gameName: string;
@@ -69,153 +64,6 @@ export interface DashboardDeps {
   errorLog: ErrorLogWatcher;
   workspaceState: vscode.Memento;
 }
-
-/**
- * Command launchers that have no button of their own anywhere else in the UI.
- * Anything reachable from an editor-title button, a view-title button or the
- * status bar is deliberately absent: tiger RUNS (status bar), Setup & Health
- * Check (the PX Toolkit status bar item), the GUI tree, the GUI editor and the
- * event graph (editor title), Add Language (Localization Coverage view title),
- * Format Docs (editor title), Simulate Event (editor context menu). Tiger's
- * occasional commands (baseline, unused, conf, update) do live here. Built per
- * game: labels carry the active game's name. The error.log watcher is a toggle
- * above, not a launcher — but clearing what it published is a launcher, and it
- * appears only while there is something to clear.
- */
-function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
-  return [
-    {
-      label: "Create",
-      items: [
-        {
-          label: "New Content…",
-          command: "px.newContent",
-          icon: "plus",
-          tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
-        },
-      ],
-    },
-    {
-      label: "Localization",
-      items: [
-        {
-          label: "Translate Missing Keys",
-          command: "px.translateNext",
-          icon: "arrowRight",
-          tip: "Walk the missing localization keys one by one, side by side with the source language.",
-        },
-        {
-          label: "New Translation Mod",
-          command: "px.createTranslationMod",
-          icon: "clone",
-          tip: "Create a standalone mod that translates another mod, including an AI translation prompt.",
-        },
-      ],
-    },
-    {
-      label: "Images",
-      items: [
-        {
-          label: "Convert Image to DDS",
-          command: "px.convertToDds",
-          icon: "image",
-          tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
-        },
-        {
-          label: "Image Guidelines",
-          command: "px.imageGuidelines",
-          icon: "book",
-          tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
-        },
-      ],
-    },
-    {
-      label: "Inspect",
-      items: [
-        {
-          label: "Mod Report",
-          command: "px.modReport",
-          icon: "report",
-          tip: "Summary of the focused mod: content counts, localization coverage, problems.",
-        },
-      ],
-    },
-    {
-      label: "Test & Troubleshoot",
-      items: [
-        {
-          label: `Launch ${meta.shortName} (debug mode)`,
-          command: "px.launchGame",
-          icon: "play",
-          tip: "Start the game via Steam with -debug_mode -develop, so scripts reload live.",
-        },
-        // The watcher's Problems outlive the watch on purpose (you fix them
-        // with the game closed), so this is how they go away once dealt with.
-        ...(gameProblems > 0
-          ? ([
-              {
-                label: `Clear Game Problems (${gameProblems})`,
-                command: "px.clearGameProblems",
-                icon: "dismiss",
-                tip: "Remove the Problems that came from the game's error.log. They stay after you stop the watcher, so you can work through them with the game closed.",
-              },
-            ] satisfies ActionGroup["items"])
-          : []),
-        // Tiger quick actions — only for games a tiger exists for. Setup &
-        // Health Check has no row: the PX Toolkit status bar item runs it.
-        ...(meta.tiger
-          ? ([
-              {
-                label: "Create Tiger Baseline",
-                command: "px.tigerCreateBaseline",
-                icon: "camera",
-                tip: "Snapshot today's tiger problems. With the 'new problems only' toggle on, only problems newer than the snapshot show.",
-              },
-              {
-                label: "Find Unused Definitions",
-                command: "px.tigerUnused",
-                icon: "search",
-                tip: "One tiger run that also reports definitions nothing references.",
-              },
-              {
-                label: `Generate ${meta.tiger.confName}`,
-                command: "px.tigerGenerateConf",
-                icon: "gear",
-                tip: "Write a tiger config for this mod, with its dependency mods declared as load_mod entries.",
-              },
-              {
-                label: `Update ${meta.tiger.binaryName}`,
-                command: "px.downloadTiger",
-                icon: "download",
-                tip: "Download the latest tiger release into the extension's storage (also how you update after a game patch).",
-              },
-            ] satisfies ActionGroup["items"])
-          : []),
-      ],
-    },
-  ];
-}
-
-/** 16×16 stroke icons (currentColor), hand-kept so the webview stays asset-free. */
-const ICONS = {
-  plus: '<path d="M8 3.5v9M3.5 8h9"/>',
-  arrowRight: '<path d="M2.5 8h10M9 4.5 12.5 8 9 11.5"/>',
-  clone: '<rect x="2.5" y="2.5" width="8" height="8" rx="1"/><path d="M5.5 13.5h7a1 1 0 0 0 1-1v-7"/>',
-  image:
-    '<rect x="2" y="3" width="12" height="10" rx="1"/><circle cx="5.5" cy="6.5" r="1"/><path d="M4 12l3-3 2 2 2.5-2.5L14 11"/>',
-  book: '<path d="M8 4C6.4 3 4.4 3 2.5 3.5v9C4.4 12 6.4 12 8 13c1.6-1 3.6-1 5.5-.5v-9C11.6 3 9.6 3 8 4Zm0 0v9"/>',
-  report: '<rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3"/>',
-  chevron: '<path d="M6 3.5 10.5 8 6 12.5"/>',
-  info: '<circle cx="8" cy="8" r="6"/><path d="M8 7.2v4"/><circle cx="8" cy="4.9" r=".5" fill="currentColor"/>',
-  play: '<path d="M5.5 3.8v8.4L12.5 8Z" fill="currentColor" stroke="none"/>',
-  check: '<path d="M8 2 13 4v4.3c0 3-2 5.2-5 5.7-3-.5-5-2.7-5-5.7V4Z"/><path d="M5.8 8.1l1.6 1.6 3-3.2"/>',
-  camera:
-    '<path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h1.6l1-1.5h3.8l1 1.5h1.6A1.5 1.5 0 0 1 14 5.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5Z"/><circle cx="8" cy="8.4" r="2.4"/>',
-  search: '<circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.4 3.4"/>',
-  gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 2.3v2M8 11.7v2M2.3 8h2M11.7 8h2M4 4l1.4 1.4M10.6 10.6 12 12M12 4l-1.4 1.4M5.4 10.6 4 12"/>',
-  download: '<path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 12.5h10"/>',
-  dismiss: '<circle cx="8" cy="8" r="5.8"/><path d="M6 6l4 4M10 6l-4 4"/>',
-} as const;
 
 /**
  * `px.tools` as a sidebar webview ("Project"): what the workspace looks like
@@ -283,7 +131,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       watcherAvailable: cfg.logsPath !== null,
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
-      actions: actionGroups(meta, this.deps.errorLog.problemCount),
+      actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
       collapsed: this.collapsedState(),
     };
   }
@@ -348,6 +196,16 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         return;
     }
   }
+}
+
+/**
+ * `px.sidebar.hidden`: the command ids the user removed from the Tools
+ * section. Read straight from the configuration (not from PxConfig): it is
+ * panel taste, and nothing outside this view and the Customize command cares.
+ */
+export function hiddenRows(): string[] {
+  const value = vscode.workspace.getConfiguration("px").get<unknown>("sidebar.hidden");
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 /** Trailing-separator-free lowercase key for path comparisons (as in config.ts). */
@@ -611,7 +469,7 @@ function buildHtml(): string {
   ${sectionHead(
     "tools",
     "Tools",
-    "Commands that have no button anywhere else. Everything else lives on an editor tab, a view title, or the status bar."
+    "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
   )}
   <div class="section-body" id="body-tools"><div id="tools"></div></div>
 </div>

@@ -38,7 +38,8 @@ import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
-import { registerDashboardView } from "./webviews/dashboard/view";
+import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
+import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
@@ -525,6 +526,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     errorLog,
     workspaceState: context.workspaceState,
   });
+  context.subscriptions.push(
+    // A wrapper, because a menu contribution cannot pass the filter query to
+    // the built-in command. The `@ext:` query filters the Shortcuts UI to this
+    // extension; if a VS Code build ever shows an empty list, "px." is the
+    // fallback query.
+    vscode.commands.registerCommand("px.openKeybindings", () =>
+      vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
+    ),
+    // Checked = visible, so the setting stores the INVERSE of the picks. The
+    // catalog is the panel's own row list for the active game, which is why it
+    // is built with the live problem count. Global scope: panel taste is
+    // personal, not per project. The config listener refreshes the panel.
+    vscode.commands.registerCommand("px.customizeSidebar", async () => {
+      type Item = vscode.QuickPickItem & { command: string };
+      const hidden = new Set(hiddenRows());
+      const items: Item[] = actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
+        g.items.map((it) => ({
+          label: `${g.label}: ${it.label}`,
+          description: it.command,
+          picked: !hidden.has(it.command),
+          command: it.command,
+        }))
+      );
+      const picked = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        title: "Customize the Project panel rows",
+        placeHolder: "Checked rows show in the Tools section; unchecked ones are hidden",
+      });
+      if (!picked) return;
+      const visible = new Set(picked.map((i) => i.command));
+      const next = items.filter((i) => !visible.has(i.command)).map((i) => i.command);
+      // Ids for rows this game never shows (another game's tiger rows) are
+      // kept, so switching games back restores what was hidden there.
+      const unknown = hiddenRows().filter((id) => !items.some((i) => i.command === id));
+      await vscode.workspace
+        .getConfiguration("px")
+        .update("sidebar.hidden", [...next, ...unknown], vscode.ConfigurationTarget.Global);
+    })
+  );
   // Event-graph fetches carry the focus mod (unless a call already scoped it),
   // so the graph shows the mod the sidebar shows.
   const fetchGraph = (params: EventGraphParams) =>

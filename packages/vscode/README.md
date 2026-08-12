@@ -46,9 +46,17 @@ bottom says exactly where they stop.
   creates. EU5 has no tiger build, so the toolkit says so instead of
   pretending.
 - **Sidebar**: mod overview, localization coverage, overrides and conflicts
-  (with the LIOS/FIOS winner), an interactive event graph with a node inspector,
-  and a GUI widget tree.
-- **Event simulator** (**Simulate Event**): a static walkthrough of what happens
+  (with the LIOS/FIOS winner), an interactive event graph with a node inspector
+  (Ctrl+Alt+G), a GUI widget tree (Ctrl+Alt+W) and a mod report (Ctrl+Alt+R).
+- **The Project panel is the home of every tool**: each one has a row there, so
+  you never have to remember which tab or status bar item hides the button.
+  Editor buttons and the chords stay as the fast path while you work: the
+  game's own `_*.info` format docs for the file you are editing, for one, are
+  **Open Format Docs** or Ctrl+Alt+D. Rows you
+  never use go away with **Customize Project Panel Rows**, and the panel's
+  keyboard icon opens the Keyboard Shortcuts UI filtered to this extension, so
+  every chord below is rebindable in two clicks.
+- **Event simulator** (**Simulate Event**, Ctrl+Alt+S): a static walkthrough of what happens
   when an event fires (trigger, immediate, each option with its localized text,
   after) where every onward `trigger_event` is a step-into link, so you can
   walk a whole chain with a breadcrumb and a Back button. It reads each game's

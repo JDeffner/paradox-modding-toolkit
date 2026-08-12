@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased (0.4.0)
+
+### Added
+
+- **Every tool has a row in the Project panel.** The panel used to omit
+  anything that had a button elsewhere, which meant the features with the
+  best buttons were the hardest to find. A new **Open** group at the top
+  launches the event graph, the GUI widget tree, the GUI editor, the format
+  docs and the event simulator. Editor-title buttons, the status bar and the
+  keyboard chords stay exactly as they are: they are the fast path in
+  context, the panel is where you go when you do not already know where the
+  button lives.
+- **Five keyboard chords**, all rebindable like any VS Code shortcut and all
+  inert outside a Paradox workspace: Ctrl+Alt+G (event graph), Ctrl+Alt+D
+  (format docs for this file), Ctrl+Alt+W (GUI widget tree), Ctrl+Alt+S
+  (simulate the event at the cursor) and Ctrl+Alt+R (mod report).
+- **A keyboard button on the Project view title** (`Paradox: Keyboard
+  Shortcuts (this extension)`) opens the Keyboard Shortcuts UI filtered to
+  this extension, so rebinding a chord is two clicks.
+- **The panel rows are customizable.** `Paradox: Customize Project Panel
+  Rows` is a checklist of every row; unchecking one hides it, and a group
+  whose rows are all hidden disappears with them. Stored in your user
+  settings as `px.sidebar.hidden` (command ids), empty by default, so rows
+  added by a later version always show up.
+
 ## 0.3.0 (beta) - Paradox Modding Toolkit: rebrand and three games
 
 The extension is now **Paradox Modding Toolkit** (`JDeffner.px-toolkit`), a new

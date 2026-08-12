@@ -354,6 +354,18 @@
         "command": "px.createDescriptor",
         "category": "Paradox",
         "title": "Create descriptor.mod"
+      },
+      {
+        "command": "px.openKeybindings",
+        "category": "Paradox",
+        "title": "Keyboard Shortcuts (this extension)",
+        "icon": "$(record-keys)"
+      },
+      {
+        "command": "px.customizeSidebar",
+        "category": "Paradox",
+        "title": "Customize Project Panel Rows",
+        "icon": "$(list-selection)"
       }
     ],
     "customEditors": [
@@ -590,6 +602,15 @@
             "order": 2,
             "markdownDescription": "Escape hatch: set to false to stop this workspace's txt/yml files from being switched to the Paradox language modes."
           },
+          "px.sidebar.hidden": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "order": 3,
+            "markdownDescription": "Command ids to hide from the Tools section of the sidebar Project panel, e.g. `px.imageGuidelines`. A group whose rows are all hidden disappears with them.\n\nEasiest via `Paradox: Customize Project Panel Rows`, which shows a checklist of every row."
+          },
           "px.trace.server": {
             "type": "string",
             "enum": [
@@ -598,13 +619,13 @@
               "verbose"
             ],
             "default": "off",
-            "order": 3,
+            "order": 4,
             "markdownDescription": "Trace the communication between VS Code and the language server (for debugging / bug reports)."
           },
           "px.trace.perf": {
             "type": "boolean",
             "default": false,
-            "order": 4,
+            "order": 5,
             "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Modding Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
           }
         }
@@ -803,6 +824,14 @@
         {
           "command": "px.imageGuidelines",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openKeybindings",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.customizeSidebar",
+          "when": "px.isCk3Workspace"
         }
       ],
       "view/title": [
@@ -825,6 +854,16 @@
           "command": "px.createTranslation",
           "when": "view == px.locCoverage",
           "group": "navigation"
+        },
+        {
+          "command": "px.openKeybindings",
+          "when": "view == px.tools",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.customizeSidebar",
+          "when": "view == px.tools",
+          "group": "1_configure"
         }
       ],
       "view/item/context": [
@@ -918,6 +957,31 @@
         "command": "px.jumpToScriptReference",
         "key": "ctrl+alt+j",
         "when": "editorTextFocus && editorLangId == paradox-loc"
+      },
+      {
+        "command": "px.showEventGraph",
+        "key": "ctrl+alt+g",
+        "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.openInfoDocs",
+        "key": "ctrl+alt+d",
+        "when": "px.isCk3Workspace && px.hasInfoDoc && editorTextFocus"
+      },
+      {
+        "command": "px.showGuiTree",
+        "key": "ctrl+alt+w",
+        "when": "px.isCk3Workspace && editorLangId == paradox-gui"
+      },
+      {
+        "command": "px.simulateEvent",
+        "key": "ctrl+alt+s",
+        "when": "px.isCk3Workspace && editorTextFocus && editorLangId == paradox"
+      },
+      {
+        "command": "px.modReport",
+        "key": "ctrl+alt+r",
+        "when": "px.isCk3Workspace"
       }
     ]
   },
