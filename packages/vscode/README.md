@@ -181,12 +181,13 @@ live, and it is deliberately blunt about them.
 | | Crusader Kings III | Victoria 3 | Europa Universalis V |
 |---|---|---|---|
 | Language support (completion, hover, navigation, references, rename, diagnostics) | full | full | full |
-| Folder schema | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
+| Folder schema | 156 entries, verified against a live install | 83 entries, verified against a live install | 518 entries, **community-sourced and not yet verified against a live install** |
 | Engine vocabulary before you dump `script_docs` | bundled wiki + dump snapshot | bundled dump snapshot | none yet |
 | Deep validation | ck3-tiger, auto-download | vic3-tiger, auto-download | none exists yet |
+| error.log watcher (in-game errors as squiggles) | yes | yes | expected to work; path and line format not yet verified on a live install |
 | Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
-| `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | no (calibrated against CK3 only) | no |
+| `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | yes (measured in-game 2026-08) | no (not calibrated yet) |
 | Bundled AI modding skill | yes | no (CK3 content) | no (CK3 content) |
 | Mod descriptor | `descriptor.mod` | `.metadata/metadata.json` | `.metadata/metadata.json` |
 

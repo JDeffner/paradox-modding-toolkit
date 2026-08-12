@@ -1,8 +1,80 @@
 # Changelog
 
-## Unreleased (0.4.0)
+## 0.4.0 (beta) - Victoria 3 feels right, and the panel learns some manners
+
+0.3.0 made Victoria 3 and EU5 first-class on paper; this release makes the
+daily loops actually work there. Everything below was found by auditing the
+toolkit against a live Victoria 3 install and three real workshop mods,
+including the Community Mod Framework.
+
+### Fixed (Victoria 3 and EU5)
+
+- **The error.log watcher works on Victoria 3 and EU5.** It watched a file
+  that never exists: those games dump `script_docs` into `docs/` and the
+  toolkit joined `error.log` onto that folder, while the engine writes it to
+  `logs/`. On top of that, the parser only understood CK3's line format
+  (`[12:00:00][E] ... file: x.txt line: 3`) and dropped every line Victoria 3
+  writes (`[12:00:00][source.cpp:186]: gui/x.gui:110 - message`). Both ends
+  are fixed; in-game script and GUI errors now land as squiggles while the
+  game runs.
+- **The GUI editor opens on Victoria 3.** It refused with "CK3 only" even
+  though the Vic3 text metrics and layout quirks were measured in-game and
+  ship in the profile. The gate now asks "is this game calibrated" instead of
+  "is this CK3". EU5 still refuses, for the honest reason (no measurements
+  yet), and says so.
+- **Workshop mods show their real names.** A Victoria 3 mod appeared as its
+  folder id ("3385002128") in the setup report, the sidebar, the pickers and
+  the Project panel, because only `descriptor.mod` was read for names. One
+  shared reader now falls back to `.metadata/metadata.json`, so it reads
+  "[1.13] Community Mod Framework" everywhere.
+- **New Content scaffolds per game.** It wrote CK3 events (`type =
+  character_event`, portrait fields) and offered CK3 `on_action` names into
+  Victoria 3 mods, creating silently dead hooks, the exact failure the
+  command exists to prevent. Templates and on_action lists now live in the
+  game profile: Victoria 3 gets `country_event` shapes and its real vanilla
+  on_actions, EU5 gets its `in_game/` stage prefix on every scaffold path.
+  Content types that have no verified template for a game are not offered for
+  that game.
+- **Create Mod Descriptor speaks both descriptor families.** It wrote a CK3
+  `descriptor.mod` into any workspace; for Victoria 3 and EU5 it now writes
+  `.metadata/metadata.json` (and mentions the `thumbnail.png` the launcher
+  wants). The missing-descriptor warning fires for metadata games too, so a
+  new Vic3 mod without metadata no longer loads silently as nothing.
+- **Translation mods load on Victoria 3.** The translation-mod scaffold
+  emitted `descriptor.mod` regardless of game, producing a mod Victoria 3
+  refuses to load; it now emits the metadata descriptor with the source mod
+  declared as a relationship.
+- **Dependency mods feed every completion layer.** Mods listed in
+  `px.parentMods` contributed definitions but not `data_binding` macros or
+  text-formatting tags; the Community Mod Framework alone carries 40 macros
+  that were invisible. Parent mods are now a full layer between game and mod.
+- **83 Victoria 3 folders indexed** (up from 72): combat units, mobilization,
+  ship types/modifications/names, AI strategies, buy packages, console
+  command macros, plus `.gui` `type`/`template` names as definitions for both
+  Victoria 3 and EU5 (2371 GUI types on a live install). Each new folder was
+  shape-checked against vanilla before being added; folders whose layout
+  would produce wrong definitions (defines, history) stay deliberately out.
+- **A UTF-8 BOM no longer swallows the first block of a file.** The lexer
+  treated U+FEFF as an identifier character, so a file starting with a BOM
+  lost its first top-level block. Latent, found while indexing the framework
+  corpus.
+- Copy that said CK3 to everyone: the walkthrough claimed "nothing is
+  bundled" for Victoria 3 (false, a full `script_docs` snapshot ships), tiger
+  commands were offered on EU5 where no tiger exists (they now hide), the
+  tiger conf command dropped its hardcoded `ck3-` prefix, and the loc
+  quick-edit file is `zzz_px_edits_l_<lang>.yml` outside CK3 (the CK3 name
+  stays for existing mods and old files are still honored).
 
 ### Added
+
+- **`Paradox: Add Dependency Mod`** reads the dependencies your mod declares
+  (`descriptor.mod` or metadata `relationships`), scans the Steam workshop
+  folder of the active game, and writes `px.parentMods` for you. Declared but
+  uninstalled dependencies are flagged instead of guessed at. Until now that
+  setting was hand-edited JSON.
+- **`.metadata/metadata.json` gets completion and validation** via a JSON
+  schema: field names, types, and the `relationships` shape, checked against
+  real workshop mods.
 
 - **Crusader Kings III script files get the crown icon back**, and the other
   games keep the box, now with "PX" letters. Behind it: the script language is
