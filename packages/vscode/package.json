@@ -213,6 +213,12 @@
         "icon": "$(eye-closed)"
       },
       {
+        "command": "px.addDependencyMod",
+        "category": "Paradox",
+        "title": "Add Dependency Mod (parent mod)",
+        "icon": "$(references)"
+      },
+      {
         "command": "px.setup",
         "category": "Paradox",
         "title": "Run Setup & Health Check"
@@ -299,7 +305,7 @@
       {
         "command": "px.tigerGenerateConf",
         "category": "Paradox Tiger",
-        "title": "Generate ck3-tiger.conf"
+        "title": "Generate tiger.conf"
       },
       {
         "command": "px.watchErrorLog",
@@ -371,7 +377,7 @@
           {
             "id": "px.step.setup",
             "title": "Run automatic setup",
-            "description": "Detects your CK3 install via Steam, checks the logs folder and offers to download the ck3-tiger validator.\n[Run Setup & Health Check](command:px.setup)",
+            "description": "Detects your game install via Steam, checks the logs folder and offers to download the tiger validator.\n[Run Setup & Health Check](command:px.setup)",
             "media": {
               "markdown": "media/walkthrough/setup.md"
             },
@@ -404,7 +410,7 @@
           {
             "id": "px.step.tiger",
             "title": "Enable tiger diagnostics",
-            "description": "ck3-tiger validates your whole mod and shows problems as squiggles. Run it with Ctrl+Alt+V or from the tiger item in the status bar; set px.tigerRunOn to 'save' to run it on every save.\n[Download ck3-tiger](command:px.downloadTiger)",
+            "description": "tiger validates your whole mod and shows problems as squiggles. Run it with Ctrl+Alt+V or from the tiger item in the status bar; set px.tigerRunOn to 'save' to run it on every save. EU5 has no tiger build yet.\n[Download tiger](command:px.downloadTiger)",
             "media": {
               "markdown": "media/walkthrough/tiger.md"
             },
@@ -540,7 +546,7 @@
             ],
             "default": "manual",
             "order": 1,
-            "markdownDescription": "When the ck3-tiger validator runs."
+            "markdownDescription": "When the tiger validator runs (`ck3-tiger` / `vic3-tiger`, whichever matches the active game)."
           },
           "px.diagnostics.ignore": {
             "type": "array",
@@ -549,7 +555,7 @@
             },
             "default": [],
             "order": 2,
-            "markdownDescription": "Diagnostic codes to suppress everywhere. Applies to the extension's own structural/localization codes (e.g. `missing-bom`, `unknown-event`) and to ck3-tiger report keys (e.g. `unknown-field`).\n\nFor single lines, an inline `# px:ignore <code>` comment does the same."
+            "markdownDescription": "Diagnostic codes to suppress everywhere. Applies to the extension's own structural/localization codes (e.g. `missing-bom`, `unknown-event`) and to tiger report keys (e.g. `unknown-field`).\n\nFor single lines, an inline `# px:ignore <code>` comment does the same."
           },
           "px.diagnostics.ignorePatterns": {
             "type": "array",
@@ -680,7 +686,7 @@
         },
         {
           "command": "px.runTiger",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.hasTiger"
         },
         {
           "command": "px.editLocalization",
@@ -708,6 +714,10 @@
         },
         {
           "command": "px.excludeMods",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.addDependencyMod",
           "when": "px.isCk3Workspace"
         },
         {
@@ -740,7 +750,7 @@
         },
         {
           "command": "px.openGuiEditor",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.guiEditorSupported"
         },
         {
           "command": "px.modReport",
@@ -748,19 +758,23 @@
         },
         {
           "command": "px.tigerCreateBaseline",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.hasTiger"
         },
         {
           "command": "px.tigerToggleBaseline",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.hasTiger"
         },
         {
           "command": "px.tigerUnused",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.hasTiger"
         },
         {
           "command": "px.tigerGenerateConf",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.hasTiger"
+        },
+        {
+          "command": "px.downloadTiger",
+          "when": "px.hasTiger"
         },
         {
           "command": "px.watchErrorLog",
@@ -840,7 +854,7 @@
         },
         {
           "command": "px.openGuiEditor",
-          "when": "resourceExtname == .gui && px.isCk3Workspace",
+          "when": "resourceExtname == .gui && px.isCk3Workspace && px.guiEditorSupported",
           "group": "navigation"
         },
         {
@@ -871,6 +885,12 @@
       {
         "language": "paradox",
         "path": "./snippets/paradox.json"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "**/.metadata/metadata.json",
+        "url": "./schemas/pdx-metadata.schema.json"
       }
     ],
     "keybindings": [

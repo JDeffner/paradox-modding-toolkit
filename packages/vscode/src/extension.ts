@@ -37,6 +37,7 @@ import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
+import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView } from "./webviews/dashboard/view";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
@@ -567,6 +568,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.refreshViews", () => views.refreshAll()),
+    // Reads the FOCUSED mod's declared dependencies, so in a multi-mod
+    // workspace the picker flags the right mod's parents.
+    vscode.commands.registerCommand("px.addDependencyMod", () =>
+      addDependencyModCommand(cfg, views.focusRoot())
+    ),
     vscode.commands.registerCommand("px.showDependencies", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== "paradox") {

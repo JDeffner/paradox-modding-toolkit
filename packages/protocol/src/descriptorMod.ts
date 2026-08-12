@@ -315,6 +315,25 @@ export function readDescriptorName(dir: string): string | null {
   return value === "" ? null : value;
 }
 
+/**
+ * The mod names inside `<dir>/descriptor.mod`'s `dependencies={ "A" "B" }`
+ * block, in file order; empty when the file or the block is missing. The
+ * launcher matches these against the other mods' `name=`, not against their
+ * Workshop id, so that is what the caller compares them with.
+ */
+export function readDescriptorDependencies(dir: string): string[] {
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(dir, "descriptor.mod"), "utf8");
+  } catch {
+    return [];
+  }
+  // Comments first: a commented-out dependency is not a dependency.
+  const block = /(?:^|\n)[ \t]*dependencies[ \t]*=[ \t]*\{([^}]*)\}/.exec(text.replace(/#[^\n]*/g, ""));
+  if (!block) return [];
+  return [...block[1].matchAll(/"([^"]*)"/g)].map((m) => m[1].trim()).filter((s) => s !== "");
+}
+
 /** "1.19.0.6" -> "1.19.*" (the wildcard form that survives hotfixes). */
 export function wildcardVersion(raw: string): string | null {
   const m = /^(\d+)\.(\d+)/.exec(raw.trim());

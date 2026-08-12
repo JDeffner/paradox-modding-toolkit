@@ -5,7 +5,7 @@
 - finds your game installation (CK3, Victoria 3 or EU5 — whichever this workspace mods) by reading Steam's library folders, on any drive
 - writes `px.gamePath` into your settings
 - locates the Paradox logs folder (redirected Documents folders included)
-- offers to download the **ck3-tiger** validator (~15 MB, from github.com/amtep/tiger)
+- offers to download the **tiger** validator for that game (~15 MB, from github.com/amtep/tiger; EU5 has no build yet)
 
 Re-run it anytime as a health check — it reports what's configured and what's missing, with instructions.
 

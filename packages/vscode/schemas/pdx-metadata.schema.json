@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/JDeffner/paradox-modding-toolkit/schemas/pdx-metadata.schema.json",
+  "title": "Paradox mod metadata (.metadata/metadata.json)",
+  "description": "Descriptor of the newer Paradox convention (Victoria 3, EU5). The field set is the one three real workshop mods use; the schema stays permissive on purpose: unknown keys are allowed so a game-specific field never turns into a false error. The point is completion and typo surfacing, not validation.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name in the launcher and on the Workshop."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable identifier other mods point their relationships at. NOT the Workshop number."
+    },
+    "version": {
+      "type": "string",
+      "description": "Your mod's own version, not the game's."
+    },
+    "supported_game_version": {
+      "type": "string",
+      "description": "Game version the mod is for, e.g. \"1.9.*\". Use \"*\" when unknown."
+    },
+    "game_id": {
+      "type": "string",
+      "description": "Which game the mod is for. Written by some launchers, optional: mods load without it.",
+      "examples": ["victoria3", "eu5"]
+    },
+    "short_description": {
+      "type": "string",
+      "description": "One-line summary shown in the launcher."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Launcher / Workshop category tags.",
+      "items": { "type": "string" }
+    },
+    "relationships": {
+      "type": "array",
+      "description": "Links to other mods: dependencies, load order, incompatibilities.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The other mod's `id` field (NOT its Workshop number)."
+          },
+          "rel_type": {
+            "type": "string",
+            "description": "How this mod relates to the other one.",
+            "enum": ["dependency", "incompatible_with", "load_before", "load_after"]
+          },
+          "resource_type": {
+            "type": "string",
+            "description": "What the relationship points at. Only \"mod\" is supported by the launcher today.",
+            "enum": ["mod"]
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Shown when the other mod is not on disk."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the other mod, \"*\" for any."
+          }
+        }
+      }
+    },
+    "game_custom_data": {
+      "type": "object",
+      "description": "Per-game extras the launcher passes through.",
+      "additionalProperties": true,
+      "properties": {
+        "multiplayer_synchronized": {
+          "type": "boolean",
+          "description": "False marks the mod as checksum-irrelevant (cosmetic only)."
+        },
+        "replace_paths": {
+          "type": "array",
+          "description": "Vanilla folders the mod unloads wholesale. Total conversions only.",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

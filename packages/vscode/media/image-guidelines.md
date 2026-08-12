@@ -1,4 +1,4 @@
-# CK3 image guidelines — sizes & formats
+# Image guidelines (CK3 folders; the DDS formats apply to all games)
 
 Every number below was **measured from the vanilla 1.19 game files** (most
 common size and format per folder), so match them and your art will drop into
@@ -7,7 +7,7 @@ Rows the measurement did not cover are filled from the community "Graphical
 DDS FAQ" (thanks to Sparc).
 
 Convert PNG/JPEG/WebP to DDS with **Paradox: Convert Image to DDS** (also in the
-right-click menu on image files and the CK3 Tools view). Preview any `.dds` by
+right-click menu on image files and the Project view). Preview any `.dds` by
 just clicking it.
 
 ## Which DDS format?
