@@ -81,6 +81,25 @@ describe("error.log parsing", () => {
     expect(parseErrorLogLine("[10:00:00][E][x.cpp:1]: generic engine complaint")).toBeNull();
     expect(parseErrorLogLine("")).toBeNull();
   });
+
+  // Vic3 writes no [E]/[W] tag and no `file:` keyword.
+  it("parses the Vic3 bare `path.gui:NN - message` shape as an error", () => {
+    const p = parseErrorLogLine(
+      "[01:30:39][pdx_gui_layout.cpp:186]: gui/px_probe_b.gui:110 - Widget cannot have a position in a layout"
+    );
+    expect(p).toMatchObject({
+      message: "Widget cannot have a position in a layout",
+      relFile: "gui/px_probe_b.gui",
+      line: 109,
+      severity: "error",
+    });
+  });
+
+  it("needs the ` - ` separator, so a bare path in prose is not a location", () => {
+    expect(
+      parseErrorLogLine("[01:30:39][x.cpp:1]: could not open gui/px_probe_b.gui:110 for reading")
+    ).toBeNull();
+  });
 });
 
 describe("error.log parsing (multi-line blocks)", () => {
@@ -119,6 +138,21 @@ describe("error.log parsing (multi-line blocks)", () => {
     p.push("[18:15:01][E][jomini_script_system.cpp:303]: Script system error!");
     const q = p.push("  Script location: file: events/other.txt line: 3 (name)");
     expect(q!.message).not.toContain("is_cultivator");
+  });
+
+  // Same block shape as CK3, but with no [E] tag on the header line.
+  it("stitches an untagged Vic3 script-system block", () => {
+    const p = new ErrorLogParser();
+    expect(p.push("[15:35:19][jomini_script_system.cpp:265]: Script system error!")).toBeNull();
+    expect(p.push("  Error: Undefined event target 'government_petition_ig'")).toBeNull();
+    expect(
+      p.push("  Script location: file: common/journal_entries/03_ig_agendas.txt line: 35")
+    ).toMatchObject({
+      message: "Undefined event target 'government_petition_ig'",
+      relFile: "common/journal_entries/03_ig_agendas.txt",
+      line: 34,
+      severity: "error",
+    });
   });
 
   it("passes single-line entries through unchanged", () => {

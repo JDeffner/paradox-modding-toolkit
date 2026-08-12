@@ -28,8 +28,10 @@ export interface Token {
 // Character classification helpers ----------------------------------------
 
 function isWhitespace(c: number): boolean {
-  // space, tab, newline, carriage return, form feed, vertical tab
-  return c === 32 || c === 9 || c === 10 || c === 13 || c === 12 || c === 11;
+  // space, tab, newline, carriage return, form feed, vertical tab, and the BOM.
+  // Callers strip a leading BOM where they can, but not every one does, and a
+  // BOM glued to the first top-level key would swallow that whole block.
+  return c === 32 || c === 9 || c === 10 || c === 13 || c === 12 || c === 11 || c === 0xfeff;
 }
 
 // Characters that terminate a bare word.

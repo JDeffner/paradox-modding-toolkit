@@ -323,6 +323,28 @@ export const VIC3_SCHEMA: SchemaEntry[] = [
   // situation as CK3's common/laws. rule_$ 100% (15/15) confirms the top-level
   // key is the category (the settings use `setting_$`).
   { path: "common/game_rules", kind: "game_rule_category", requiredLoc: ["rule_$"] },
+
+  // --- Military ---
+  // Plain top-level-key folders, each re-checked against the install for 0.4.0
+  // because the mod corpus edits them (they were skipped in 0.3.0 as
+  // low-traffic). No requiredLoc claimed: the hit rates were never measured.
+  { path: "common/combat_unit_types", kind: "combat_unit_type" },
+  { path: "common/mobilization_options", kind: "mobilization_option" },
+  { path: "common/mobilization_option_groups", kind: "mobilization_option_group" },
+  { path: "common/ship_types", kind: "ship_type" },
+  { path: "common/ship_modifications", kind: "ship_modification" },
+  { path: "common/ship_modification_slots", kind: "ship_modification_slot" },
+  // Named fleet-naming tables (`ship_names_historical_brazilian_capital_ships`),
+  // not the ship names themselves.
+  { path: "common/ship_name_definitions", kind: "ship_name_definition" },
+
+  // --- AI, economy & tooling ---
+  { path: "common/ai_strategies", kind: "ai_strategy" },
+  { path: "common/buy_packages", kind: "buy_package" },
+  { path: "common/console_command_macros", kind: "console_command_macro" },
+
+  // --- GUI ---
+  { path: "gui", kind: "gui_type", ext: ".gui", extraction: "gui-type" },
 ];
 
 // Not covered (layout doesn't fit any extraction mode, or wrong-data risk):
@@ -345,25 +367,26 @@ export const VIC3_SCHEMA: SchemaEntry[] = [
 //    country_definitions — three "definitions" per tag would make navigation
 //    worse, not better. Revisit if a tag-aware mode lands.
 //  - Deliberate low-traffic skips (standard layout, would just add noise):
-//    achievements, ai_strategies, ai_strategic_region_stance_types,
+//    achievements, ai_strategic_region_stance_types,
 //    acceptance_statuses, alert_types, alert_groups, amendments,
-//    battle_conditions, buy_packages, cohesion_levels, combat_unit_types,
+//    battle_conditions, cohesion_levels,
 //    combat_unit_groups, combat_unit_experience_levels, commander_orders,
-//    commander_ranks, console_command_macros, country_ranks,
+//    commander_ranks, country_ranks,
 //    diplomatic_catalyst_categories, dynamic_company_names,
 //    dynamic_country_names, dynamic_country_map_colors, dynamic_treaty_names,
 //    harvest_condition_types, interest_tier_types, labels, legitimacy_levels,
 //    liberty_desire_levels, map_interaction_types, map_notification_types,
-//    messages, military_formation_flags, mobilization_options,
-//    mobilization_option_groups, naval_battle_conditions, naval_mission_types,
+//    messages, military_formation_flags,
+//    naval_battle_conditions, naval_mission_types,
 //    objectives, objective_subgoals, objective_subgoal_categories,
 //    political_lobby_appeasement, political_movement_pop_support,
-//    power_bloc_map_textures, proposal_types, ship_groups, ship_modifications,
-//    ship_modification_slots, ship_name_definitions, ship_types,
+//    power_bloc_map_textures, proposal_types, ship_groups,
 //    ship_veterancy_levels, themes, tutorial_lessons, tutorial_lesson_chains.
-//  - gui/ and gfx/: the Vic3 profile ships no gui/data-type layer (PLAN.md M4
-//    cut), and unlike CK3 no gfx/ subfolder holds script-referenced names —
-//    gfx/portraits, gfx/map/* etc. are pure art config.
+//    (The 10 of these the mod corpus actually edits moved into the table for
+//    0.4.0, see the "Military" and "AI, economy & tooling" sections.)
+//  - gfx/: unlike CK3 no gfx/ subfolder holds script-referenced names —
+//    gfx/portraits, gfx/map/* etc. are pure art config. gui/ IS indexed (the
+//    gui_type row): `type`/`template` names are what .gui files reference.
 //
 // Where the CWT config disagreed with the install (install wins):
 //  - CWT declares type[old_combat_unit_type] at common/old_combat_unit_types
@@ -441,9 +464,11 @@ export const VIC3_REF_FIELDS: RefField[] = [
  * Scalar-value prefixes that reference definitions (`cu:czech` → culture).
  * These are Vic3's dominant cross-reference idiom; counts are vanilla
  * occurrences of `<prefix>:<name>` across common/ + events/. Prefixes whose
- * target folder is not in the table above (`s:` state regions, `unit_type:`,
- * `ship_type:`, `amendment_type:`, `mobilization_option:`, `rank_value:`) are
- * left out — an unresolvable reference is worse than none.
+ * target folder is not in the table above (`s:` state regions,
+ * `amendment_type:`, `rank_value:`) are left out (an unresolvable reference is
+ * worse than none). `unit_type:`, `ship_type:` and `mobilization_option:` now
+ * have target folders, but their occurrences were never counted, so they wait
+ * for the same measurement every other entry here got.
  */
 export const VIC3_PREFIX_REFS: Record<string, string[]> = {
   c: ["country_definition"], // 23543

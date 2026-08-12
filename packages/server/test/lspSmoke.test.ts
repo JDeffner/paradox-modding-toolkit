@@ -126,6 +126,15 @@ psmoke.1 = {
 }
 `;
 
+// Dependency-parent fixture: a read-only parent that is NOT a workspace mod,
+// so it only reaches the harvests through settings.parentPaths.
+const DEP_MACRO_TXT = `macro = {
+	description = "Smoke macro from a dependency parent."
+	definition = "PxSmokeParentMacro(Value)"
+	replace_with = "EqualTo_int32(Value, '(int32)0')"
+}
+`;
+
 const GUI_TXT = `widget = {
 	name = "smoke_root"
 	flowcontainer = {
@@ -175,7 +184,8 @@ const LOC_YML =
   "﻿l_english:\n" +
   ' smoke.1.t:0 "Smoke"\n' +
   ' smoke.1.a:0 "OK"\n' +
-  " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n";
+  " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n" +
+  ' smoke.1.macro:0 "[PxSmokeParentMac"\n';
 
 function toUri(p: string): string {
   return "file:///" + p.replace(/\\/g, "/").replace(/^\//, "");
@@ -186,6 +196,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let conn: MessageConnection;
   let modDir: string;
   let parentDir: string;
+  let depDir: string;
   let eventsFile: string;
   let eventsUri: string;
   let locFile: string;
@@ -197,6 +208,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   beforeAll(async () => {
     modDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-"));
     parentDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-parent-"));
+    depDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-dep-"));
     const fxIn = (root: string, rel: string, content: string) => {
       const full = path.join(root, rel);
       fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -206,6 +218,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     const fx = (rel: string, content: string) => fxIn(modDir, rel, content);
     fxIn(parentDir, "common/scripted_effects/parent_effects.txt", PARENT_EFFECTS_TXT);
     fxIn(parentDir, "events/parent_events.txt", PARENT_EVENTS_TXT);
+    fxIn(depDir, "data_binding/px_smoke_macros.txt", DEP_MACRO_TXT);
     fx("common/scripted_effects/smoke_effects.txt", EFFECTS_TXT);
     eventsFile = fx("events/smoke_events.txt", EVENTS_TXT);
     fx("common/customizable_localization/smoke_cloc.txt", CLOC_TXT);
@@ -240,7 +253,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
           gamePath: null, // vanilla scan skipped: keep the smoke fast
           logsPath: null,
           modPath: modDir,
-          parentPaths: [parentDir],
+          parentPaths: [parentDir, depDir],
           workspaceMods: [parentDir],
           locLanguage: "english",
           scopeInlayHints: false,
@@ -281,6 +294,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     if (child && !child.killed) child.kill();
     fs.rmSync(modDir, { recursive: true, force: true });
     fs.rmSync(parentDir, { recursive: true, force: true });
+    fs.rmSync(depDir, { recursive: true, force: true });
   });
 
   it("initialize announces serverInfo (PROTOCOL.md §Initialization)", () => {
@@ -404,6 +418,21 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       position: { line: 6, character: 2 },
     })) as { items: Array<{ label: string }> };
     expect(result.items.map((i) => i.label)).toContain("my_parent_effect");
+  });
+
+  // The dependency parent is not a workspace mod, so this passes only while
+  // the macro harvest carries the parent layer between game and mod.
+  it("completion offers a data_binding macro from a dependency parent", async () => {
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: locUri, languageId: "paradox-loc", version: 1, text: LOC_YML },
+    });
+    const line = 4; // the smoke.1.macro line
+    const result = (await conn.sendRequest("textDocument/completion", {
+      textDocument: { uri: locUri },
+      // Cursor right after the "PxSmokeParentMac" prefix, inside the [ … ].
+      position: { line, character: LOC_YML.split("\n")[line].indexOf('Mac"') + 3 },
+    })) as { items: Array<{ label: string }> };
+    expect(result.items.map((i) => i.label)).toContain("PxSmokeParentMacro");
   });
 
   it("find-references spans every workspace mod", async () => {

@@ -187,6 +187,18 @@ describe("GUI style", () => {
     expect(guiAssign.value?.kind).toBe("block");
   });
 
+  it("a leading BOM does not swallow the first block", () => {
+    // Callers that read bytes strip the BOM, but a text that still carries one
+    // used to glue it onto the first word, so a `types MyTypes { … }` file
+    // saved with a BOM lost its whole types block from the index.
+    const { root, errors } = parseScript("\uFEFFtypes MyTypes {\n\ttype px_x = widget { }\n}\n");
+    expect(errors).toHaveLength(0);
+    expect((root.statements[0] as ValueStatementNode).kind).toBe("value");
+    const types = root.statements[1] as AssignmentNode;
+    expect(types.key.text).toBe("MyTypes");
+    expect(types.value?.kind).toBe("block");
+  });
+
   it("quoted value with a following block forms a tagged block", () => {
     // e.g. name = "MyName" is a plain quoted value
     const a = firstAssignment('name = "My Name"');

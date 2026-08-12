@@ -11,7 +11,7 @@
  * `<mod>/.eu5modding/schema.json` overlay.
  */
 import type { GameProfile } from "../profile";
-import type { RefField } from "../../schema/types";
+import type { RefField, SchemaEntry } from "../../schema/types";
 import { JOMINI_VARIABLE_BLOCK_REFS } from "../jomini/variables";
 import { eu5Meta } from "./meta";
 import { EU5_SCHEMA } from "./schema.generated";
@@ -46,9 +46,21 @@ const EU5_REF_FIELDS: RefField[] = [
   { key: "has_trait", kinds: ["trait"] },
 ];
 
+/**
+ * Hand-written rows on top of the imported table. The CWT config has no gui
+ * types, so the `gui` row is added here: `type X = base { … }` /
+ * `template X { … }` extraction is engine behaviour, the same in every Jomini
+ * title, so it holds without a live install. Only the flat root is claimed;
+ * whether EU5 also loads `<stage>/gui` is one of the open questions in the
+ * calibration package (docs/gui-designer/calibration/eu5-package/).
+ */
+const EU5_HAND_ENTRIES: SchemaEntry[] = [
+  { path: "gui", kind: "gui_type", ext: ".gui", extraction: "gui-type" },
+];
+
 export const eu5Profile: GameProfile = {
   ...eu5Meta,
-  schema: EU5_SCHEMA,
+  schema: [...EU5_SCHEMA, ...EU5_HAND_ENTRIES],
   refFields: EU5_REF_FIELDS,
   // No verified scalar-prefix references yet (EU5's `culture:x`-style links come
   // from the CWT scope_links table, which the importer does not read).

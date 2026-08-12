@@ -249,10 +249,10 @@ function refreshModOrigin(): void {
 const lazyRefs = new LazyReferenceScanner();
 
 function refreshLazyRefs(): void {
-  const wsMods = new Set(workspaceModRoots().map((r) => r.toLowerCase()));
-  const roots: LazyRefRoot[] = parentRoots()
-    .filter((r) => !wsMods.has(r.toLowerCase()))
-    .map((root) => ({ root, source: "parent" as const }));
+  const roots: LazyRefRoot[] = dependencyParentRoots().map((root) => ({
+    root,
+    source: "parent" as const,
+  }));
   if (settings.gamePath) roots.push({ root: settings.gamePath, source: "vanilla" });
   lazyRefs.setRoots(roots, isEngineToken);
 }
@@ -287,6 +287,13 @@ function parentRoots(): string[] {
     for (const p of readPlaysetCached(mod)) add(p);
   }
   return roots;
+}
+
+/** parentRoots() minus the workspace mods: the read-only dependency layer,
+ * which the game loads after vanilla and before the mods being edited. */
+function dependencyParentRoots(): string[] {
+  const wsMods = new Set(workspaceModRoots().map((r) => r.toLowerCase()));
+  return parentRoots().filter((r) => !wsMods.has(r.toLowerCase()));
 }
 
 /** parentRoots() runs on every request (via contentRoots); with 20 workspace
@@ -539,10 +546,15 @@ function loadDocs(force: boolean): void {
     dataTypeDirs.push(settings.logsPath);
   }
   data.dataTypes = loadDataTypes(dataTypeDirs);
-  // Promote game (+ every workspace mod's) data_binding macros as global [ … ] functions.
-  const macroRoots = [settings.gamePath, settings.modPath, ...workspaceModRoots()].filter(
-    (r): r is string => r !== null
-  );
+  // Promote game, dependency-parent and mod data_binding macros as global
+  // [ … ] functions, in load order (a framework mod's macros are the case that
+  // matters: the mod being edited calls them but does not define them).
+  const macroRoots = [
+    settings.gamePath,
+    ...dependencyParentRoots(),
+    settings.modPath,
+    ...workspaceModRoots(),
+  ].filter((r): r is string => r !== null);
   const macros = loadDataBindingMacros(macroRoots, data.dataTypes);
   if (macros > 0) log(`data_binding macros: ${macros} promoted into data-function completion/hover`);
   if (data.dataTypes.source === "bundled wiki") {
@@ -587,7 +599,7 @@ function guiPaths(): GuiPaths {
 }
 
 /**
- * In-memory harvest of engine/game/mod `define:` constants and `#tag` loc
+ * In-memory harvest of engine/game/parent/mod `define:` constants and `#tag` loc
  * text-formats (small — a few thousand entries; not persisted into the vanilla
  * index cache). Rebuilt fresh so a paths change / mod edit cannot leave stale
  * layers. Engine (jomini) is the lowest layer, the mod the highest (last-wins).
@@ -595,11 +607,13 @@ function guiPaths(): GuiPaths {
 function harvestEngineData(): void {
   const t0 = Date.now();
   // Every workspace mod is a "mod" layer (multi-mod workspaces), added after
-  // engine + game so mod definitions win.
+  // engine + game + dependency parents so mod definitions win.
+  const parentLayerRoots = dependencyParentRoots();
   const modLayerRoots = [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()];
   const defines = new DefinesIndex();
   for (const root of engineRoots()) defines.addLayer(root, "jomini");
   if (settings.gamePath) defines.addLayer(settings.gamePath, "game");
+  for (const root of parentLayerRoots) defines.addLayer(root, "parent");
   for (const root of modLayerRoots) defines.addLayer(root, "mod");
   data.defines = defines;
   const tDef = Date.now() - t0;
@@ -608,6 +622,7 @@ function harvestEngineData(): void {
   const textFormatting = new TextFormattingIndex();
   for (const root of engineRoots()) textFormatting.addLayer(root, "jomini");
   if (settings.gamePath) textFormatting.addLayer(settings.gamePath, "game");
+  for (const root of parentLayerRoots) textFormatting.addLayer(root, "parent");
   for (const root of modLayerRoots) textFormatting.addLayer(root, "mod");
   data.textFormatting = textFormatting;
   log(

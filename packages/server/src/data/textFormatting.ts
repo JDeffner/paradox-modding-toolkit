@@ -2,7 +2,8 @@
  * Loc text-formatting tag harvest: `#G`, `#bold`, … tags come from
  * `textformatting = { format = { name = G format = "color:{0,1,0}" } … }`
  * blocks in .gui files. Layers in load order: jomini
- * (gui/jomini/basetextformatting.gui base set), game (gui/**), then the mod.
+ * (gui/jomini/basetextformatting.gui base set), game (gui/**), read-only
+ * dependency parents, then the mod.
  *
  * Resolution is gui FIOS (AGENTS.md): the FIRST-loaded definition of a name
  * wins, and `override = no` (the base set's default) confirms that; a later
@@ -21,7 +22,7 @@ import { LineIndex, parseScript, type BlockNode } from "../parser";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import * as path from "path";
 
-export type FormatLayer = "jomini" | "game" | "mod" | "builtin";
+export type FormatLayer = "jomini" | "game" | "parent" | "mod" | "builtin";
 
 export interface FormatEntry {
   name: string;

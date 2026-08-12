@@ -3,7 +3,8 @@
  * pipe separator) resolve against top-level namespace blocks in
  * `common/defines/**\/*.txt`. Layers lowest→highest priority: jomini (6 files
  * exist only here), game (00_defines.txt + ai/audio/graphic/jomini subdirs),
- * then the mod. Last-wins per (namespace, constant).
+ * read-only dependency parents, then the mod. Last-wins per (namespace,
+ * constant).
  *
  * In-memory only — a few thousand entries; NOT persisted into the vanillaIndex
  * cache. No `vscode` imports: unit-tested in plain Node.
@@ -13,9 +14,9 @@ import * as path from "path";
 import { LineIndex, parseScript, type ValueNode } from "../parser";
 import { walkDir } from "@px-lsp/protocol/fsWalk";
 
-export type DefineLayer = "jomini" | "game" | "mod";
+export type DefineLayer = "jomini" | "game" | "parent" | "mod";
 
-const LAYER_RANK: Record<DefineLayer, number> = { jomini: 0, game: 1, mod: 2 };
+const LAYER_RANK: Record<DefineLayer, number> = { jomini: 0, game: 1, parent: 2, mod: 3 };
 
 export interface DefineEntry {
   namespace: string;
