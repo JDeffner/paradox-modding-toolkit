@@ -69,6 +69,7 @@ import {
   buildScene,
   childIndices,
   parentIndex,
+  setLineHeightRatio,
   subtreeEnd,
   type Scene,
   type SceneItem,
@@ -1950,6 +1951,9 @@ const host = connectHost((message) => {
       statusEl.textContent = `Laying out ${message.file}…`;
       return;
     case "layout":
+      // Before the scene is built: the canvas measures its text boxes with the
+      // same law the server laid the widgets out with.
+      setLineHeightRatio(message.lineHeightRatio);
       onLayout(
         message.result,
         message.textures,

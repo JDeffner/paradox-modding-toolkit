@@ -18,6 +18,7 @@ import {
   validateDescriptor,
   wildcardVersion,
 } from "@px-lsp/protocol/descriptorMod";
+import { METADATA_REL_PATH, scaffoldMetadata } from "@px-lsp/protocol/descriptorMetadata";
 import { metaFor } from "./meta";
 
 const MOD_SELECTOR: vscode.DocumentSelector = { language: "paradox-mod", scheme: "file" };
@@ -30,6 +31,11 @@ const MOD_CONTENT_DIRS = ["common", "events", "localization", "gui", "history", 
 
 function isDescriptorFile(fsPath: string): boolean {
   return path.basename(fsPath).toLowerCase() === "descriptor.mod";
+}
+
+/** The descriptor file the active game reads, as path segments. */
+function descriptorRelPath(gameId: string): string[] {
+  return metaFor(gameId).descriptor === "metadata" ? METADATA_REL_PATH.split("/") : ["descriptor.mod"];
 }
 
 /** Game version from <install>/launcher/launcher-settings.json, e.g. "1.19.0.6". */
@@ -267,16 +273,11 @@ export function registerDescriptorMod(
     }
 
     if (!modPath) return;
-    const descriptorPath = path.join(modPath, "descriptor.mod");
+    // Each game wants exactly one of the two descriptor conventions, and a mod
+    // without the one its game reads does not load at all.
+    const isMetadata = metaFor(cfg.gameId).descriptor === "metadata";
+    const descriptorPath = path.join(modPath, ...descriptorRelPath(cfg.gameId));
     const descriptorUri = vscode.Uri.file(descriptorPath);
-
-    // descriptor.mod is the launcher convention of `descriptor: "mod"` games.
-    // Vic3/EU5 mods carry .metadata/metadata.json instead, so demanding a .mod
-    // there would be a false error.
-    if (metaFor(cfg.gameId).descriptor !== "mod") {
-      diagnostics.delete(descriptorUri);
-      return;
-    }
 
     // A game install shares the mod content dirs but is not a mod: never demand
     // a descriptor for it, even if it slipped through as modPath.
@@ -287,7 +288,11 @@ export function registerDescriptorMod(
 
     if (fs.existsSync(descriptorPath)) {
       missingNotified = false;
-      // Validate from disk unless the file is open (open docs validate live).
+      // Only the .mod format has structural checks of ours; metadata.json is
+      // JSON, validated by VS Code's own JSON support against the contributed
+      // schema. Validate from disk unless the file is open (open docs validate
+      // live).
+      if (isMetadata) return;
       const open = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === descriptorPath);
       if (!open) {
         try {
@@ -300,15 +305,16 @@ export function registerDescriptorMod(
     }
 
     if (!looksLikeModContent(modPath)) {
-      // Not a CK3 workspace: no descriptor is expected, stay silent.
+      // Not a mod workspace: no descriptor is expected, stay silent.
       diagnostics.delete(descriptorUri);
       return;
     }
 
-    log(`descriptor.mod missing in ${modPath}`);
+    const name = descriptorRelPath(cfg.gameId).join("/");
+    log(`${name} missing in ${modPath}`);
     const d = new vscode.Diagnostic(
       new vscode.Range(0, 0, 0, 1),
-      "descriptor.mod is missing from the mod root. Every mod needs one: the launcher, " +
+      `${name} is missing from the mod root. Every mod needs one: the launcher, ` +
         `Steam Workshop uploads${metaFor(cfg.gameId).tiger ? ` and ${metaFor(cfg.gameId).tiger?.binaryName}` : ""} all read it.`,
       vscode.DiagnosticSeverity.Error
     );
@@ -318,10 +324,7 @@ export function registerDescriptorMod(
     if (!missingNotified) {
       missingNotified = true;
       void vscode.window
-        .showErrorMessage(
-          `Paradox Modding Toolkit: this mod has no descriptor.mod (${modPath}).`,
-          "Create descriptor.mod"
-        )
+        .showErrorMessage(`Paradox Modding Toolkit: this mod has no ${name} (${modPath}).`, `Create ${name}`)
         .then((choice) => {
           if (choice) void vscode.commands.executeCommand("px.createDescriptor");
         });
@@ -336,14 +339,31 @@ export function registerDescriptorMod(
       );
       return;
     }
-    const file = path.join(cfg.modPath, "descriptor.mod");
+    const meta = metaFor(cfg.gameId);
+    const file = path.join(cfg.modPath, ...descriptorRelPath(cfg.gameId));
     if (!fs.existsSync(file)) {
       const folderName = path.basename(cfg.modPath);
       const modName = folderName.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
       const detected = detectGameVersion(cfg.gamePath);
       const version = (detected && wildcardVersion(detected)) ?? "1.*";
-      fs.writeFileSync(file, scaffoldDescriptor(modName, version), "utf8");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(
+        file,
+        meta.descriptor === "metadata"
+          ? scaffoldMetadata({ name: modName, id: folderName, supportedGameVersion: version })
+          : scaffoldDescriptor(modName, version),
+        "utf8"
+      );
       log(`created ${file}`);
+      // A metadata mod also needs a square thumbnail.png in its root: the
+      // launcher lists the mod without one, the Workshop upload refuses. We do
+      // not fabricate an image, so say it once, here.
+      if (meta.descriptor === "metadata" && !fs.existsSync(path.join(cfg.modPath, "thumbnail.png"))) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${descriptorRelPath(cfg.gameId).join("/")} created. ` +
+            `Add a square thumbnail.png to the mod root as well: ${meta.name} needs one for the Workshop upload.`
+        );
+      }
     }
     refresh();
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));

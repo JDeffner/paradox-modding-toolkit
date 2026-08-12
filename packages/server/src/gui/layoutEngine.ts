@@ -34,6 +34,7 @@ import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
 // The anchor table is a leaf so the webview's anchor picker offers exactly the
 // words this engine parses (B1-B/C).
 import { anchorFractions } from "./anchorSpec";
+import { GITAN_MEASURED_METRICS } from "./measuredMetrics";
 
 // ---------------------------------------------------------------------------
 // Public model
@@ -330,22 +331,10 @@ export function measurerFromMetrics(m: GuiTextMetrics): LayoutEnv {
 }
 
 /**
- * Metrics measured for Gitan-Regular (StandardGameFont) at fontsize 15 in
- * batches 01-03 — the default profile's font, and the assumption for games
- * whose probe has not run yet.
+ * The default profile's measured font table (gui/measuredMetrics.ts) is also
+ * the assumption for games whose probe has not run yet.
  */
-const MEASURED_DEFAULT_METRICS: GuiTextMetrics = {
-  baseFontsize: 15,
-  lineHeight: 21, // B1-G
-  glyphs: {
-    M: { adv: 14, ink: 13 }, // B1-G, B2-L
-    i: { adv: 4, ink: 4 }, // B1-G, B2-L
-    " ": { adv: 4, ink: 0 }, // B3-S2
-  },
-  defaultGlyph: { adv: 9, ink: 8 }, // unmeasured average guess
-};
-
-export const calibratedMeasurer: TextMeasurer = measurerFromMetrics(MEASURED_DEFAULT_METRICS);
+export const calibratedMeasurer: TextMeasurer = measurerFromMetrics(GITAN_MEASURED_METRICS);
 
 export interface LayoutOptions {
   /** Rect the top-level widgets are laid out against. */

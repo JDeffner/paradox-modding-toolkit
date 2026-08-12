@@ -1,13 +1,15 @@
 /**
- * Pure content scaffolds — NO vscode imports, unit-testable. The domain rule is
- * "copy a working vanilla example": every generated file is shaped so it passes
- * the game's silent-failure checklist (correct folder, UTF-8-with-BOM loc with a
- * matching `l_<lang>:` header and `_l_<lang>.yml` filename, event namespace
- * declared, and the on_action APPEND pattern rather than an override).
+ * Generic writer for the per-game "New Content" templates. NO vscode imports,
+ * unit-tested. The CONTENT of every template lives in its game's profile
+ * (GameMeta.scaffolds); what lives here are the rules that hold for all of
+ * them: the file layout a game silently needs (correct folder, UTF-8-with-BOM
+ * loc whose `l_<lang>:` header and `_l_<lang>.yml` filename match, event
+ * namespace declared) plus the load-stage prefix of games that have one.
  *
  * Template strings use tabs for indentation and LF only; the writer converts EOL
  * and prepends the BOM per the `bom` flag.
  */
+import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
 
 export interface ScaffoldFile {
   /** Mod-relative path with forward slashes (e.g. `events/foo_events.txt`). */
@@ -44,6 +46,18 @@ export interface ScaffoldResult {
   cursor: { relPath: string; line: number; character: number };
 }
 
+/** What a template's placeholders expand to for this one invocation. */
+export interface ScaffoldVars {
+  /** The mod prefix (`$PREFIX$`). */
+  prefix: string;
+  /** The event id or key the user gave (`$NAME$`). */
+  name: string;
+  /** Loc language (`$LANG$`). */
+  locLanguage: string;
+  /** The game's load-stage folder, prefixed onto every path when it has one. */
+  stageRoot?: string;
+}
+
 /** 0-based line index of the first line whose (trimmed) text equals `needle`. */
 function lineOf(content: string, needle: string): number {
   const lines = content.split("\n");
@@ -53,272 +67,66 @@ function lineOf(content: string, needle: string): number {
   return 0;
 }
 
-// --- events -------------------------------------------------------------------
-
-export function scaffoldEvent(prefix: string, eventId: string, locLanguage: string): ScaffoldResult {
-  const titleKey = `${eventId.replace(/\./g, "_")}_t`;
-  const descKey = `${eventId.replace(/\./g, "_")}_desc`;
-  const optionKey = `${eventId.replace(/\./g, "_")}_a`;
-
-  // A minimal working vanilla-shaped character event.
-  const eventBlock = `${eventId} = {
-	type = character_event
-	title = ${titleKey}
-	desc = ${descKey}
-	theme = default
-
-	left_portrait = root
-
-	immediate = {
-		# effects that run when the event fires
-	}
-
-	option = {
-		name = ${optionKey}
-		# trigger = { }
-		# effects for this option
-	}
-}
-`;
-
-  const content = `namespace = ${prefix}
-
-${eventBlock}`;
-
-  const locBody = ` ${titleKey}:0 "${eventId} title"
- ${descKey}:0 "${eventId} description"
- ${optionKey}:0 "Option text"
-`;
-  const locContent = `l_${locLanguage}:
-${locBody}`;
-
-  // Cursor: inside the immediate block of the full new-file content.
-  const cursorLine = lineOf(content, "# effects that run when the event fires");
-
-  return {
-    files: [
-      {
-        relPath: `events/${prefix}_events.txt`,
-        content,
-        bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
-        appendIfExists: true,
-        appendContent: eventBlock,
-        requiredHeader: `namespace = ${prefix}`,
-      },
-      {
-        relPath: `localization/${locLanguage}/${prefix}_events_l_${locLanguage}.yml`,
-        content: locContent,
-        bom: true,
-        appendIfExists: true,
-        appendContent: locBody,
-      },
-    ],
-    cursor: { relPath: `events/${prefix}_events.txt`, line: cursorLine, character: 2 },
-  };
-}
-
-// --- decisions ----------------------------------------------------------------
-
-export function scaffoldDecision(prefix: string, name: string, locLanguage: string): ScaffoldResult {
-  const decisionBlock = `${name} = {
-	picture = "gfx/interface/illustrations/decisions/decision_misc.dds"
-
-	desc = ${name}_desc
-
-	is_shown = {
-		# who can see this decision
-	}
-
-	is_valid_showing_failures_only = {
-		# validity requirements shown as tooltip failures
-	}
-
-	cost = {
-		gold = 50
-	}
-
-	effect = {
-		# effects that run when the decision is taken
-		custom_tooltip = ${name}_tooltip
-	}
-
-	ai_potential = {
-		always = no
-	}
-
-	ai_will_do = {
-		base = 0
-	}
-}
-`;
-
-  const content = decisionBlock;
-
-  const locBody = ` ${name}:0 "Decision name"
- ${name}_desc:0 "Decision description"
- ${name}_tooltip:0 "What the effect does"
- ${name}_confirm:0 "Confirm"
-`;
-  const locContent = `l_${locLanguage}:
-${locBody}`;
-
-  const cursorLine = lineOf(content, "# effects that run when the decision is taken");
-
-  return {
-    files: [
-      {
-        relPath: `common/decisions/${prefix}_decisions.txt`,
-        content,
-        bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
-        appendIfExists: true,
-        appendContent: decisionBlock,
-      },
-      {
-        relPath: `localization/${locLanguage}/${prefix}_decisions_l_${locLanguage}.yml`,
-        content: locContent,
-        bom: true,
-        appendIfExists: true,
-        appendContent: locBody,
-      },
-    ],
-    cursor: { relPath: `common/decisions/${prefix}_decisions.txt`, line: cursorLine, character: 2 },
-  };
-}
-
-// --- character interactions ---------------------------------------------------
-
-export function scaffoldInteraction(prefix: string, name: string, locLanguage: string): ScaffoldResult {
-  const interactionBlock = `${name} = {
-	category = interaction_category_friendly
-
-	desc = ${name}_desc
-
-	is_shown = {
-		# who can use this interaction (scope = actor, recipient = target)
-	}
-
-	on_accept = {
-		# effects that run when the recipient accepts
-		send_interface_toast = {
-			title = ${name}
-			left_icon = scope:recipient
-		}
-	}
-}
-`;
-
-  const content = interactionBlock;
-
-  const locBody = ` ${name}:0 "Interaction name"
- ${name}_desc:0 "Interaction description"
-`;
-  const locContent = `l_${locLanguage}:
-${locBody}`;
-
-  const cursorLine = lineOf(content, "# effects that run when the recipient accepts");
-
-  return {
-    files: [
-      {
-        relPath: `common/character_interactions/${prefix}_interactions.txt`,
-        content,
-        bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
-        appendIfExists: true,
-        appendContent: interactionBlock,
-      },
-      {
-        relPath: `localization/${locLanguage}/${prefix}_interactions_l_${locLanguage}.yml`,
-        content: locContent,
-        bom: true,
-        appendIfExists: true,
-        appendContent: locBody,
-      },
-    ],
-    cursor: {
-      relPath: `common/character_interactions/${prefix}_interactions.txt`,
-      line: cursorLine,
-      character: 2,
-    },
-  };
-}
-
-// --- scripted effects / triggers ----------------------------------------------
-
 /**
- * A scripted effect or trigger, prefaced with a PdxDoc stub (§E) so the
- * documentation convention spreads by default: a prose line plus a `@scope`
- * tag the modder fills in. Effects get an `@param` placeholder; triggers a
- * `@returns`-shaped hint is not emitted (triggers implicitly return yes/no).
+ * Expand the four template placeholders. `$KEY$` is `$NAME$` with dots turned
+ * into underscores, for games whose loc keys cannot carry the dot an event id
+ * has. Anything else in `$...$` form is content (a scripted effect's own
+ * `$PARAM$`) and is left alone.
  */
-export function scaffoldScripted(prefix: string, name: string, isEffect: boolean): ScaffoldResult {
-  const kind = isEffect ? "scripted_effects" : "scripted_triggers";
-  const cursorMarker = isEffect ? "# effects here" : "# conditions here";
-  const docStub = isEffect
-    ? `# What this does.
-# @scope character — root is the character affected
-# @param EXAMPLE_PARAM describe each $PARAM$ the caller must pass`
-    : `# What this checks.
-# @scope character — root is the character tested`;
-
-  const block = `${docStub}
-${name} = {
-	${cursorMarker}
+function expand(text: string, vars: ScaffoldVars): string {
+  return text.replace(/\$(PREFIX|NAME|KEY|LANG)\$/g, (_match, token: string) => {
+    switch (token) {
+      case "PREFIX":
+        return vars.prefix;
+      case "NAME":
+        return vars.name;
+      case "KEY":
+        return vars.name.replace(/\./g, "_");
+      default:
+        return vars.locLanguage;
+    }
+  });
 }
-`;
 
-  return {
-    files: [
-      {
-        relPath: `common/${kind}/${prefix}_${kind}.txt`,
-        content: block,
-        bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
-        appendIfExists: true,
-        appendContent: block,
-      },
-    ],
-    cursor: {
-      relPath: `common/${kind}/${prefix}_${kind}.txt`,
-      line: lineOf(block, cursorMarker),
-      character: 1,
+/** Turn one game template into the files to write. */
+export function renderScaffold(template: ScaffoldTemplate, vars: ScaffoldVars): ScaffoldResult {
+  // Content of a game with load-stage roots is only loaded under one of them,
+  // so a scaffold written at the mod root would be dead on arrival.
+  const at = (relPath: string): string =>
+    vars.stageRoot ? `${vars.stageRoot}/${expand(relPath, vars)}` : expand(relPath, vars);
+
+  const block = expand(template.block, vars);
+  const header = template.requiredHeader ? expand(template.requiredHeader, vars) : undefined;
+  const scriptPath = at(template.scriptPath);
+  const files: ScaffoldFile[] = [
+    {
+      relPath: scriptPath,
+      content: header ? `${header}\n\n${block}` : block,
+      bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
+      appendIfExists: true,
+      appendContent: block,
+      requiredHeader: header,
     },
-  };
-}
+  ];
 
-// --- on_action hooks ----------------------------------------------------------
+  if (template.locPath && template.locBody) {
+    const locBody = expand(template.locBody, vars);
+    files.push({
+      relPath: at(template.locPath),
+      content: `l_${vars.locLanguage}:\n${locBody}`,
+      bom: true,
+      appendIfExists: true,
+      appendContent: locBody,
+    });
+  }
 
-export function scaffoldOnActionHook(
-  prefix: string,
-  vanillaOnAction: string,
-  _locLanguage: string
-): ScaffoldResult {
-  // The APPEND pattern: hook into the vanilla on_action by adding a mod-owned
-  // on_action to its `on_actions` list, instead of redefining the vanilla block
-  // (which would OVERRIDE it and break every other mod + vanilla content). This
-  // directly targets the #1 compatibility bug.
-  const hookBlock = `${vanillaOnAction} = {
-	on_actions = { ${prefix}_${vanillaOnAction} }
-}
-
-${prefix}_${vanillaOnAction} = {
-	effect = {
-		# your effects here
-	}
-}
-`;
-
-  const content = hookBlock;
-  const cursorLine = lineOf(content, "# your effects here");
-
+  // The cursor lands on the template's marker comment, indented as deeply as
+  // the marker itself is.
+  const content = files[0].content;
+  const line = lineOf(content, expand(template.cursorMarker, vars));
+  const text = content.split("\n")[line] ?? "";
   return {
-    files: [
-      {
-        relPath: `common/on_action/${prefix}_on_actions.txt`,
-        content,
-        bom: true, // vanilla script files all carry a UTF-8 BOM; tiger warns without it
-        appendIfExists: true,
-        appendContent: hookBlock,
-      },
-    ],
-    cursor: { relPath: `common/on_action/${prefix}_on_actions.txt`, line: cursorLine, character: 2 },
+    files,
+    cursor: { relPath: scriptPath, line, character: text.length - text.trimStart().length },
   };
 }

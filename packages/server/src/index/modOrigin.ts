@@ -6,14 +6,7 @@
  * No `vscode` imports: unit-tested in plain Node.
  */
 import * as path from "path";
-import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
-import { readMetadataName } from "@px-lsp/protocol/descriptorMetadata";
-
-/** Display name from either descriptor convention (launcher .mod file, else
- *  .metadata/metadata.json), so labels work for every supported game. */
-function readModName(root: string): string | null {
-  return readDescriptorName(root) ?? readMetadataName(root);
-}
+import { readModName } from "@px-lsp/protocol/modName";
 
 /** Hover head lines stay compact: clip pathological descriptor names. */
 const MAX_LABEL = 40;
@@ -37,7 +30,7 @@ export class ModOriginResolver {
             .normalize(root)
             .toLowerCase()
             .replace(/[\\/]+$/, "") + path.sep,
-        label: clip(readModName(root) ?? path.basename(root)),
+        label: clip(readModName(root)),
       }))
       .sort((a, b) => b.prefix.length - a.prefix.length);
   }
@@ -71,6 +64,6 @@ export class ModOriginResolver {
     for (const r of this.roots) {
       if (r.prefix === lower + path.sep) return r.label;
     }
-    return clip(readModName(root) ?? path.basename(root));
+    return clip(readModName(root));
   }
 }

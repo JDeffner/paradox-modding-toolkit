@@ -16,6 +16,7 @@ import { computeGuiLayoutResult, profileMeasurer } from "../src/gui/layoutServic
 import { activeProfile, setActiveProfile } from "../src/games/active";
 import { defaultProfile } from "../src/games/registry";
 import { vic3Profile } from "../src/games/vic3";
+import { GITAN_MEASURED_METRICS } from "../src/gui/measuredMetrics";
 
 const COND_A = "[GetPlayer.IsAI]";
 const COND_B = "[Character.IsAlive]";
@@ -173,10 +174,21 @@ describe("game-profile text metrics", () => {
     }
   });
 
-  it("without guiTextMetrics or quirks the calibrated default still applies", () => {
-    expect(activeProfile().guiTextMetrics).toBeUndefined();
+  it("the default profile's own table IS the engine's fallback, so it changes nothing", () => {
+    // The batch-01..03 measurements are of this profile's font, so naming them
+    // on the profile (which is what tells the client the game is calibrated)
+    // must measure exactly like the fallback an uncalibrated profile gets.
+    expect(activeProfile().guiTextMetrics).toEqual(GITAN_MEASURED_METRICS);
     expect(activeProfile().guiLayoutQuirks).toBeUndefined();
-    expect(profileMeasurer()).toBeUndefined();
+    const calibrated = computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect;
+
+    setActiveProfile({ ...activeProfile(), guiTextMetrics: undefined });
+    try {
+      expect(profileMeasurer()).toBeUndefined();
+      expect(computeGuiLayoutResult(TEXTBOX, null, null, [], []).nodes[0].rect).toEqual(calibrated);
+    } finally {
+      setActiveProfile(defaultProfile);
+    }
   });
 });
 

@@ -8,7 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { LOG_FILES } from "@px-lsp/protocol/constants";
-import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { readModName } from "@px-lsp/protocol/modName";
 import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 import { isCk3, metaFor, scriptDocsDir } from "./meta";
@@ -121,7 +121,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   }
 
   // 2. Mod folder(s). Descriptor names, so a 20-mod workspace report reads well.
-  const modLabel = (p: string) => readDescriptorName(p) ?? path.basename(p);
+  const modLabel = (p: string) => readModName(p);
   const editedMods = [cfg.modPath, ...cfg.workspaceMods].filter((p): p is string => p !== null);
   report.push(
     editedMods.length > 0

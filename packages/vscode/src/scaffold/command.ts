@@ -10,34 +10,11 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "../config";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
-import {
-  scaffoldDecision,
-  scaffoldEvent,
-  scaffoldInteraction,
-  scaffoldOnActionHook,
-  scaffoldScripted,
-  type ScaffoldFile,
-  type ScaffoldResult,
-} from "./templates";
+import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
+import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
+import { metaFor } from "../meta";
 
 const BOM = "﻿";
-
-const COMMON_ON_ACTIONS = [
-  "on_birth",
-  "on_death",
-  "on_marriage",
-  "on_divorce",
-  "on_yearly_pulse",
-  "on_five_year_pulse",
-  "on_game_start",
-  "on_game_start_after_lobby",
-  "on_character_culture_change",
-  "on_character_faith_change",
-  "on_title_gain",
-  "on_war_won_attacker",
-];
-
-type Kind = "event" | "decision" | "interaction" | "on_action" | "scripted_effect" | "scripted_trigger";
 
 /** Remembers the last-used prefix within a session so repeat scaffolds are quick. */
 let lastPrefix: string | null = null;
@@ -55,39 +32,20 @@ function sanitizePrefix(raw: string): string {
 }
 
 interface KindItem extends vscode.QuickPickItem {
-  value: Kind;
+  template: ScaffoldTemplate;
 }
 
-async function pickKind(): Promise<Kind | undefined> {
-  const items: KindItem[] = [
-    { value: "event", label: "$(zap) Event", detail: "events/<prefix>_events.txt (+ loc stubs)" },
-    { value: "decision", label: "$(checklist) Decision", detail: "common/decisions/ (+ loc stubs)" },
-    {
-      value: "interaction",
-      label: "$(person) Character interaction",
-      detail: "common/character_interactions/ (+ loc stubs)",
-    },
-    {
-      value: "on_action",
-      label: "$(git-merge) on_action hook",
-      detail: "common/on_action/ — append pattern, no override",
-    },
-    {
-      value: "scripted_effect",
-      label: "$(symbol-method) Scripted effect",
-      detail: "common/scripted_effects/ — with a PdxDoc stub",
-    },
-    {
-      value: "scripted_trigger",
-      label: "$(symbol-boolean) Scripted trigger",
-      detail: "common/scripted_triggers/ — with a PdxDoc stub",
-    },
-  ];
+async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate | undefined> {
+  const items: KindItem[] = templates.map((template) => ({
+    template,
+    label: template.label,
+    detail: template.detail,
+  }));
   const pick = await vscode.window.showQuickPick<KindItem>(items, {
     title: "New Content",
     placeHolder: "What do you want to create?",
   });
-  return pick?.value;
+  return pick?.template;
 }
 
 const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
@@ -127,24 +85,32 @@ async function askName(prefix: string, label: string): Promise<string | undefine
   });
 }
 
-async function askVanillaOnAction(): Promise<string | undefined> {
+/** The template's own choices (this game's vanilla on_actions), plus a way out. */
+async function askFromPicks(template: ScaffoldTemplate): Promise<string | undefined> {
   const items: vscode.QuickPickItem[] = [
-    ...COMMON_ON_ACTIONS.map((a) => ({ label: a })),
-    { label: "$(edit) Other…", detail: "Type another vanilla on_action name" },
+    ...(template.picks ?? []).map((a) => ({ label: a })),
+    { label: "$(edit) Other…", detail: `Type another ${template.nameLabel} name` },
   ];
   const pick = await vscode.window.showQuickPick(items, {
-    title: "New on_action Hook",
-    placeHolder: "Pick the vanilla on_action to hook into",
+    title: "New Hook",
+    placeHolder: `Pick the ${template.nameLabel} to hook into`,
   });
   if (!pick) return undefined;
   if (pick.label.startsWith("$(edit)")) {
     return vscode.window.showInputBox({
-      title: "New on_action Hook — vanilla on_action",
-      prompt: "Vanilla on_action name (e.g. on_county_faith_change).",
+      title: `New Hook: ${template.nameLabel}`,
+      prompt: `Name of the ${template.nameLabel} (e.g. ${template.picks?.[0] ?? "on_something"}).`,
       validateInput: (v) => (/^on_[a-z0-9_]+$/.test(v.trim()) ? null : "Expected an on_<name> identifier"),
     });
   }
   return pick.label;
+}
+
+/** What `$NAME$` becomes: a fixed choice, an event id, or a plain identifier. */
+async function askTemplateName(template: ScaffoldTemplate, prefix: string): Promise<string | undefined> {
+  if (template.picks && template.picks.length > 0) return askFromPicks(template);
+  if (template.nameKind === "eventId") return askEventId(prefix);
+  return askName(prefix, template.nameLabel);
 }
 
 /** Detect a UTF-8 BOM on the first three bytes of an existing file. */
@@ -255,51 +221,31 @@ export async function newContentCommand(
     return;
   }
 
-  const kind = await pickKind();
-  if (!kind) return;
+  const meta = metaFor(cfg.gameId);
+  const templates = meta.scaffolds ?? [];
+  if (templates.length === 0) {
+    void vscode.window.showWarningMessage(
+      `Paradox Modding Toolkit: no content templates are verified for ${meta.name} yet, ` +
+        `so this command would only guess at the game's own file shapes.`
+    );
+    return;
+  }
+
+  const template = await pickKind(templates);
+  if (!template) return;
 
   const prefix = await askPrefix(cfg);
   if (!prefix) return;
 
-  let result: ScaffoldResult;
-  switch (kind) {
-    case "event": {
-      const id = await askEventId(prefix);
-      if (!id) return;
-      result = scaffoldEvent(prefix, id.trim(), cfg.locLanguage);
-      break;
-    }
-    case "decision": {
-      const name = await askName(prefix, "decision");
-      if (!name) return;
-      result = scaffoldDecision(prefix, name.trim(), cfg.locLanguage);
-      break;
-    }
-    case "interaction": {
-      const name = await askName(prefix, "interaction");
-      if (!name) return;
-      result = scaffoldInteraction(prefix, name.trim(), cfg.locLanguage);
-      break;
-    }
-    case "on_action": {
-      const vanilla = await askVanillaOnAction();
-      if (!vanilla) return;
-      result = scaffoldOnActionHook(prefix, vanilla.trim(), cfg.locLanguage);
-      break;
-    }
-    case "scripted_effect": {
-      const name = await askName(prefix, "effect");
-      if (!name) return;
-      result = scaffoldScripted(prefix, name.trim(), true);
-      break;
-    }
-    case "scripted_trigger": {
-      const name = await askName(prefix, "trigger");
-      if (!name) return;
-      result = scaffoldScripted(prefix, name.trim(), false);
-      break;
-    }
-  }
+  const name = await askTemplateName(template, prefix);
+  if (!name) return;
+
+  const result: ScaffoldResult = renderScaffold(template, {
+    prefix,
+    name: name.trim(),
+    locLanguage: cfg.locLanguage,
+    stageRoot: meta.stageRoots?.[0],
+  });
 
   try {
     await materialize(result, cfg, onFileChanged);

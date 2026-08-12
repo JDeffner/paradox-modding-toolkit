@@ -14,6 +14,7 @@
  * No `vscode` imports: unit-tested in plain Node.
  */
 import { buildTranslation, detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
+import { METADATA_REL_PATH, scaffoldMetadata } from "@px-lsp/protocol/descriptorMetadata";
 
 export interface SourceLocFile {
   /** Path relative to the source mod root, forward or back slashes. */
@@ -31,9 +32,14 @@ export interface TranslationModOptions {
   tigerName: string | null;
   /** Per-game config dir (".ck3modding") the playset overlay goes into. */
   configDirName: string;
+  /** Which descriptor the game reads, which is the one the new mod gets. */
+  descriptorKind: "mod" | "metadata";
   /** The source mod's launcher name (descriptor `name=`), used for the new
    * mod's name and its `dependencies` entry. */
   sourceName: string;
+  /** The source mod's metadata `id`, which is what a `relationships` entry
+   * points at. Null when it has none (or uses the .mod convention). */
+  sourceId?: string | null;
   /** `supported_version` copied from the source descriptor, if known. */
   supportedVersion: string | null;
   sourceLang: string;
@@ -78,13 +84,53 @@ export function targetLocPath(relPath: string, sourceLang: string, targetLang: s
   return ["localization", targetLang, "replace", ...rest.slice(0, -1), filename].join("/");
 }
 
-function descriptor(opts: TranslationModOptions): string {
+/** The new mod's display name, e.g. "Big Mod (German Translation)". */
+function translationName(opts: TranslationModOptions): string {
   const displayLang = opts.targetLang.replace(/_/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
-  const safeName = `${opts.sourceName} (${displayLang} Translation)`.replace(/"/g, "'");
-  const lines = ['version="0.1.0"', "tags={", '\t"Translation"', "}", `name="${safeName}"`];
+  return `${opts.sourceName} (${displayLang} Translation)`;
+}
+
+function descriptor(opts: TranslationModOptions): string {
+  const lines = [
+    'version="0.1.0"',
+    "tags={",
+    '\t"Translation"',
+    "}",
+    `name="${translationName(opts).replace(/"/g, "'")}"`,
+  ];
   if (opts.supportedVersion) lines.push(`supported_version="${opts.supportedVersion.replace(/"/g, "'")}"`);
   lines.push("dependencies={", `\t"${opts.sourceName.replace(/"/g, "'")}"`, "}", "");
   return lines.join("\n");
+}
+
+/**
+ * The metadata-convention twin of `descriptor`. The load-order dependency is a
+ * `relationships` entry, which links by the source mod's `id`; without one
+ * (a source mod that set no id) the entry is left out rather than guessed, and
+ * the playset overlay plus the guide still tie the two mods together.
+ */
+function metadataDescriptor(opts: TranslationModOptions): string {
+  const name = translationName(opts);
+  return scaffoldMetadata({
+    name,
+    id: name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, ""),
+    supportedGameVersion: opts.supportedVersion ?? "*",
+    tags: ["Translation"],
+    relationships: opts.sourceId
+      ? [
+          {
+            rel_type: "dependency",
+            id: opts.sourceId,
+            display_name: opts.sourceName,
+            resource_type: "mod",
+            version: "*",
+          },
+        ]
+      : [],
+  });
 }
 
 function translateGuide(
@@ -147,8 +193,8 @@ untranslated so you can track progress.
    every still-untranslated key of this mod.
 4. Before testing, sanity-check the format: the extension flags encoding/header
    mistakes${tigerName ? `, and ${tigerName} validates the mod` : ""}.
-5. In the launcher, enable both mods; the dependency in descriptor.mod makes
-   this mod load after ${sourceName}.
+5. In the launcher, enable both mods; the dependency in \`${opts.descriptorKind === "metadata" ? METADATA_REL_PATH : "descriptor.mod"}\`
+   makes this mod load after ${sourceName}.
 
 ## AI translation prompt
 
@@ -192,7 +238,11 @@ export function buildTranslationMod(opts: TranslationModOptions): {
   generated.sort((a, b) => a.relPath.localeCompare(b.relPath));
   out.sort((a, b) => a.relPath.localeCompare(b.relPath));
 
-  out.unshift({ relPath: "descriptor.mod", content: descriptor(opts) });
+  out.unshift(
+    opts.descriptorKind === "metadata"
+      ? { relPath: METADATA_REL_PATH, content: metadataDescriptor(opts) }
+      : { relPath: "descriptor.mod", content: descriptor(opts) }
+  );
   if (opts.sourceRootRelative) {
     out.push({
       relPath: `${opts.configDirName}/playset.json`,

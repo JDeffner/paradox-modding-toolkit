@@ -21,7 +21,7 @@ import {
   type ModScopedParams,
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
-import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
 
 /**
@@ -88,7 +88,7 @@ export class FocusMod {
 
   label(root: string | null = this.current()): string {
     if (!root) return "";
-    return readDescriptorName(root) ?? path.basename(root);
+    return readModName(root);
   }
 
   params(): ModScopedParams {
@@ -544,7 +544,7 @@ export function registerPxViews(
       const excluded = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
       type Item = vscode.QuickPickItem & { root: string };
       const items: Item[] = candidates.map((r) => ({
-        label: readDescriptorName(r) ?? path.basename(r),
+        label: readModName(r),
         description: r,
         picked: excluded.has(r.toLowerCase()),
         root: r,

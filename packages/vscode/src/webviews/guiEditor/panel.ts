@@ -36,6 +36,7 @@ import type {
   GuiVocabularyResult,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
+import type { GameMeta } from "@px-lsp/server/games/profile";
 import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp, type TextureEntry } from "./messages";
 import { guiEditorHtml } from "./html";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "./textureCache";
@@ -109,6 +110,8 @@ export class GuiEditorPanel {
   private readonly storageDir: string;
   private textures: GuiTextureCache;
   private roots: TextureRoots;
+  /** The active game: its font, its stage root, its measured text metrics. */
+  private meta: GameMeta;
   /** The gfx walk's answer, built once per panel per root set. */
   private textureIndex: TextureEntry[] | null = null;
   private disposables: vscode.Disposable[] = [];
@@ -125,7 +128,8 @@ export class GuiEditorPanel {
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
     source: vscode.TextDocument,
-    roots: TextureRoots
+    roots: TextureRoots,
+    meta: GameMeta
   ) {
     this.fetchLayout = fetchLayout;
     this.fetchWidgetInfo = fetchWidgetInfo;
@@ -136,6 +140,7 @@ export class GuiEditorPanel {
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
     this.roots = roots;
+    this.meta = meta;
     this.textures = new GuiTextureCache(this.storageDir, roots);
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
@@ -163,7 +168,7 @@ export class GuiEditorPanel {
     this.panel.webview.html = buildHtml(
       this.panel.webview,
       vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "guiEditor.js"),
-      loadGameFont(roots.gamePath)
+      loadGameFont(roots.gamePath, meta.uiFont)
     );
 
     this.panel.webview.onDidReceiveMessage(
@@ -199,7 +204,8 @@ export class GuiEditorPanel {
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
     source: vscode.TextDocument,
-    roots: TextureRoots
+    roots: TextureRoots,
+    meta: GameMeta
   ): void {
     const existing = GuiEditorPanel.instance;
     if (existing) {
@@ -210,6 +216,7 @@ export class GuiEditorPanel {
       existing.debounce = undefined;
       existing.sourceUri = source.uri;
       existing.roots = roots;
+      existing.meta = meta;
       existing.textures = new GuiTextureCache(existing.storageDir, roots);
       // The browser lists the roots the document resolves against, so the walk
       // is thrown away with the cache it belongs to.
@@ -226,7 +233,8 @@ export class GuiEditorPanel {
       fetchVocabulary,
       fetchDependencies,
       source,
-      roots
+      roots,
+      meta
     );
   }
 
@@ -269,6 +277,9 @@ export class GuiEditorPanel {
         textures,
         visibility,
         ui: readUiState(this.state.get(UI_KEY)),
+        lineHeightRatio: this.meta.guiTextMetrics
+          ? this.meta.guiTextMetrics.lineHeight / this.meta.guiTextMetrics.baseFontsize
+          : undefined,
         // No game root means the store holds mod files alone: vanilla-template
         // sizes collapse and the canvas looks broken for no visible reason.
         storeWarning: this.roots.gamePath
@@ -329,7 +340,9 @@ export class GuiEditorPanel {
       [this.roots.gamePath, "game"],
     ] as const) {
       if (!root) continue;
-      const gfx = path.join(root, "gfx");
+      // Games with load-stage roots keep their content under one of them, so
+      // the walk starts there rather than at the mod root.
+      const gfx = path.join(root, ...stagePrefix(this.meta), "gfx");
       const walk = (dir: string, rel: string, depth: number): void => {
         if (budget <= 0 || depth > TEXTURE_WALK_DEPTH) return;
         let entries: fs.Dirent[];
@@ -747,15 +760,25 @@ function requestOf(
   }
 }
 
-/** The game's standard UI font, embedded so text metrics roughly match. */
-function loadGameFont(gamePath: string | null): string | null {
-  if (!gamePath) return null;
+/**
+ * The game's standard UI font, embedded so canvas text looks like the game's.
+ * Null when the game has no verified font file (meta.uiFont absent): the
+ * webview then falls back to a system serif.
+ */
+function loadGameFont(gamePath: string | null, uiFont: string | undefined): string | null {
+  if (!gamePath || !uiFont) return null;
   try {
-    const otf = path.join(gamePath, "fonts", "Gitan", "GitanLatin-Regular.otf");
-    return `data:font/otf;base64,${fs.readFileSync(otf).toString("base64")}`;
+    const file = path.join(gamePath, ...uiFont.split("/"));
+    return `data:font/otf;base64,${fs.readFileSync(file).toString("base64")}`;
   } catch {
     return null;
   }
+}
+
+/** The active game's load-stage prefix for a content path, if it has one. */
+function stagePrefix(meta: GameMeta): string[] {
+  const stage = meta.stageRoots?.[0];
+  return stage ? [stage] : [];
 }
 
 function buildHtml(webview: vscode.Webview, script: vscode.Uri, fontDataUri: string | null): string {

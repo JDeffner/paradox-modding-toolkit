@@ -17,6 +17,15 @@ export function isCk3(gameId: string): boolean {
   return gameId === ck3Meta.id;
 }
 
+/**
+ * Whether the GUI editor may open for this game: it draws measured pixels, so
+ * it needs the game's own in-game-measured text metrics. Data, not a game list,
+ * so a game becomes supported the moment its probe results land in its meta.
+ */
+export function guiEditorSupported(gameId: string): boolean {
+  return metaFor(gameId).guiTextMetrics !== undefined;
+}
+
 /** Subfolder of `Documents/Paradox Interactive/<game>/` holding script_docs dumps. */
 export function scriptDocsDir(meta: GameMeta): string {
   return meta.scriptDocsSubdir ?? "logs";

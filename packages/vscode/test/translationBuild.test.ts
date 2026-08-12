@@ -15,18 +15,23 @@ const SRC = `${BOM}l_english:
  my_mod_empty:0 ""
 `;
 
-function build(files: Array<{ relPath: string; content: string }>) {
+function build(
+  files: Array<{ relPath: string; content: string }>,
+  overrides: Partial<Parameters<typeof buildTranslationMod>[0]> = {}
+) {
   return buildTranslationMod({
     gameName: "Crusader Kings III",
     gameShortName: "CK3",
     tigerName: "ck3-tiger",
     configDirName: ".ck3modding",
+    descriptorKind: "mod",
     sourceName: "Big Mod",
     supportedVersion: "1.19.*",
     sourceLang: "english",
     targetLang: "german",
     sourceRootRelative: "../big_mod",
     files,
+    ...overrides,
   });
 }
 
@@ -95,5 +100,58 @@ describe("buildTranslationMod", () => {
     expect(md).toContain("l_german:");
     expect(md).toContain("Output ONLY the file content");
     expect(md).toContain("from english to german");
+  });
+});
+
+describe("buildTranslationMod, metadata-descriptor game", () => {
+  const result = build([{ relPath: "localization/english/big_l_english.yml", content: SRC }], {
+    gameName: "Victoria 3",
+    gameShortName: "Vic3",
+    tigerName: "vic3-tiger",
+    configDirName: ".vic3modding",
+    descriptorKind: "metadata",
+    sourceId: "com.github.example.Big-Mod",
+    supportedVersion: "1.13.*",
+  });
+  const byPath = new Map(result.files.map((f) => [f.relPath, f.content]));
+
+  it("writes metadata.json instead of descriptor.mod", () => {
+    expect(byPath.has("descriptor.mod")).toBe(false);
+    const meta = JSON.parse(byPath.get(".metadata/metadata.json")!);
+    expect(meta.name).toBe("Big Mod (German Translation)");
+    // Copied from the source mod, under the metadata convention's own key.
+    expect(meta.supported_game_version).toBe("1.13.*");
+    expect(meta.tags).toEqual(["Translation"]);
+    expect(meta.relationships).toEqual([
+      {
+        rel_type: "dependency",
+        id: "com.github.example.Big-Mod",
+        display_name: "Big Mod",
+        resource_type: "mod",
+        version: "*",
+      },
+    ]);
+  });
+
+  it("leaves relationships empty when the source mod has no id to point at", () => {
+    const noId = build([{ relPath: "localization/english/big_l_english.yml", content: SRC }], {
+      descriptorKind: "metadata",
+      sourceId: null,
+    });
+    const meta = JSON.parse(
+      new Map(noId.files.map((f) => [f.relPath, f.content])).get(".metadata/metadata.json")!
+    );
+    expect(meta.relationships).toEqual([]);
+  });
+
+  it("the guide names the descriptor the game actually reads", () => {
+    const md = byPath.get("TRANSLATE.md")!;
+    expect(md).toContain(".metadata/metadata.json");
+    expect(md).not.toContain("descriptor.mod");
+  });
+
+  it("loc files and playset are unchanged by the descriptor convention", () => {
+    expect(byPath.has("localization/german/replace/big_l_german.yml")).toBe(true);
+    expect(JSON.parse(byPath.get(".vic3modding/playset.json")!).parents).toEqual(["../big_mod"]);
   });
 });

@@ -13,6 +13,47 @@ import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 
 /**
+ * One "New Content" template: the content of a scaffold, as data, so the writer
+ * (packages/vscode/src/scaffold/) stays game-neutral. Every text field expands
+ * four placeholders: `$PREFIX$` (the mod prefix), `$NAME$` (the key or event id
+ * the user gave), `$KEY$` (`$NAME$` with dots turned into underscores, for
+ * games whose loc keys cannot carry a dot) and `$LANG$` (the loc language).
+ *
+ * Every template must be written from the game's OWN vanilla files: a scaffold
+ * that names a key the game does not know is exactly the silent failure this
+ * command exists to prevent.
+ */
+export interface ScaffoldTemplate {
+  /** Stable kind id, also the quick-pick value ("event", "on_action"). */
+  id: string;
+  /** Quick-pick label including its codicon ("$(zap) Event"). */
+  label: string;
+  /** Quick-pick detail: where the content lands. */
+  detail: string;
+  /** Word for the name prompt ("event id", "decision"). */
+  nameLabel: string;
+  /** Shape `$NAME$` must have: a plain identifier or a `<prefix>.<number>` id. */
+  nameKind: "identifier" | "eventId";
+  /**
+   * Fixed choices for `$NAME$` (the vanilla on_action names to hook), offered
+   * as a quick-pick with a free-text escape instead of a bare input box.
+   */
+  picks?: string[];
+  /** Script file, mod-relative with forward slashes. */
+  scriptPath: string;
+  /** The block written, and appended when the file already exists. */
+  block: string;
+  /** The (expanded) line inside `block` the cursor lands on. */
+  cursorMarker: string;
+  /** Line the script file MUST start with (the event namespace). */
+  requiredHeader?: string;
+  /** Loc file, when the content type needs loc keys. */
+  locPath?: string;
+  /** Loc entry lines (without the `l_<lang>:` header). */
+  locBody?: string;
+}
+
+/**
  * Data-only identity and conventions of a supported game. Kept separate from
  * the knowledge tables so clients (the VSCode extension) can import a game's
  * meta without pulling the bundled schema/data into their bundle.
@@ -46,6 +87,32 @@ export interface GameMeta {
   steamAppId: number;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
+  /**
+   * Subfolder of docsFolderName the ENGINE writes error.log into. Absent =
+   * "logs", which is where both live installs checked (2026-08-12) write it.
+   * Independent of scriptDocsSubdir, which newer titles point at docs/.
+   */
+  errorLogSubdir?: string;
+  /**
+   * The game's default UI font file, relative to the game data dir, embedded by
+   * the GUI editor so its canvas text looks like the game's. Absent = no font
+   * is embedded and the webview falls back to a system serif.
+   */
+  uiFont?: string;
+  /**
+   * In-game-measured text metrics for the game's default GUI font, feeding the
+   * layout engine's text measurer and the editor canvas. Absent = the game is
+   * NOT calibrated: the engine assumes the default table
+   * (gui/measuredMetrics.ts) and the GUI editor refuses to open. Measured via
+   * docs/gui-designer/calibration/probes/.
+   */
+  guiTextMetrics?: GuiTextMetrics;
+  /**
+   * "New Content" templates offered for this game, in quick-pick order. Absent
+   * or empty = no content type has been verified against the game's own files,
+   * and the command says so instead of writing a guess.
+   */
+  scaffolds?: ScaffoldTemplate[];
   /**
    * Load-stage folders at the mod root under which all content lives (EU5's
    * `in_game/` etc.). Schema paths carry the prefix explicitly; this list is
@@ -98,13 +165,6 @@ export interface GameProfile extends GameMeta {
   bundledDataTypes?: unknown;
   /** Bundled .gui widget schema (data/<id>/guiSchema.json), when available. */
   guiSchema?: unknown;
-  /**
-   * In-game-measured text metrics for the game's default GUI font, feeding
-   * the layout engine's text measurer. Absent = the engine's calibrated
-   * default table (measured for the default profile's font) is the
-   * assumption. Measured via docs/gui-designer/calibration/probes/.
-   */
-  guiTextMetrics?: GuiTextMetrics;
   /**
    * In-game-measured layout rule divergences from the engine's defaults
    * (which are themselves in-game-measured for the default profile). Each

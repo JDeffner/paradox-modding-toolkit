@@ -11,7 +11,9 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
-import { parseDescriptor, readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { parseDescriptor } from "@px-lsp/protocol/descriptorMod";
+import { readMetadata } from "@px-lsp/protocol/descriptorMetadata";
+import { readModName } from "@px-lsp/protocol/modName";
 import { LOC_LANGUAGES, detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
 import { buildTranslationMod, type SourceLocFile } from "./translationBuild";
 import { metaFor } from "./meta";
@@ -29,7 +31,10 @@ function uniqueRoots(cfg: PxConfig): string[] {
   return out;
 }
 
+/** The source mod's game version, from whichever descriptor it carries. */
 function supportedVersionOf(root: string): string | null {
+  const fromMetadata = readMetadata(root)?.supported_game_version?.trim();
+  if (fromMetadata) return fromMetadata;
   try {
     const text = fs.readFileSync(path.join(root, "descriptor.mod"), "utf8");
     const entry = parseDescriptor(text).find((e) => e.key === "supported_version");
@@ -52,7 +57,7 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
   type RootItem = vscode.QuickPickItem & { root: string };
   const sourcePick = await vscode.window.showQuickPick<RootItem>(
     candidates.map((r) => ({
-      label: readDescriptorName(r) ?? path.basename(r),
+      label: readModName(r),
       description: r,
       root: r,
     })),
@@ -130,7 +135,10 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
     gameShortName: meta.shortName,
     tigerName: meta.tiger?.binaryName ?? null,
     configDirName: meta.configDirName,
+    descriptorKind: meta.descriptor,
     sourceName,
+    // The metadata convention links mods by id, not by display name.
+    sourceId: readMetadata(sourceRoot)?.id?.trim() || null,
     supportedVersion: supportedVersionOf(sourceRoot),
     sourceLang,
     targetLang,

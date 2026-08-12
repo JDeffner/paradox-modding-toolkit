@@ -284,6 +284,12 @@ export type HostToApp =
        */
       textures: Record<string, string | null>;
       /**
+       * The active game's measured line-box height as a multiple of fontsize
+       * (`lineHeight / baseFontsize`), so the canvas centres glyphs in the box
+       * the layout engine measured. Absent = the calibrated default (21 at 15).
+       */
+      lineHeightRatio?: number;
+      /**
        * The conditional-visibility options this layout was computed with, as
        * the host has them stored for this document. Absent means the default
        * (`showAll`). It rides on the layout rather than being pushed separately

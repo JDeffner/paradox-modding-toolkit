@@ -6,6 +6,7 @@
  * against a live install.
  */
 import type { GameMeta } from "../profile";
+import { EU5_SCAFFOLDS } from "./scaffolds";
 
 export const eu5Meta: GameMeta = {
   id: "eu5",
@@ -22,6 +23,11 @@ export const eu5Meta: GameMeta = {
   dataTypesCommand: "dump_data_types",
   steamAppId: 3450310,
   eventNamespaces: true,
+  scaffolds: EU5_SCAFFOLDS,
+  // uiFont and guiTextMetrics deliberately absent: neither the font file nor
+  // any text box has been measured, so the GUI editor refuses to open for this
+  // game until the calibration pack returns
+  // (docs/gui-designer/calibration/eu5-package/).
   // All EU5 content sits under one of three load-stage folders at the mod
   // root; gameplay script lives under in_game/. Schema paths carry the
   // prefix; this list drives mod detection.

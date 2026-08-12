@@ -68,7 +68,10 @@ function buildStore(
   parentPaths: string[],
   engineRoots: string[]
 ): { defs: GuiDefs; files: number; links: GuiScriptLinks } {
-  const key = `${engineRoots.join(";")}|${gamePath ?? ""}|${parentPaths.join(";")}|${modPath ?? ""}`;
+  // The stage prefix is part of the key: switching game changes which folder of
+  // the same roots the store was built from.
+  const stage = activeProfile().stageRoots?.[0] ?? "";
+  const key = `${stage}|${engineRoots.join(";")}|${gamePath ?? ""}|${parentPaths.join(";")}|${modPath ?? ""}`;
   if (cache) {
     if (cache.key === key) return cache;
     cache = null;
@@ -78,9 +81,16 @@ function buildStore(
   // replacement) — engine (jomini), vanilla, parent mods in load order, then the
   // mod — and FIOS applies across the sorted result.
   const effective = new Map<string, string>();
-  for (const root of [...engineRoots, gamePath, ...parentPaths, modPath]) {
-    if (!root) continue;
+  // Content roots of a game with load-stage folders carry the stage prefix
+  // (`in_game/gui/`); the engine layer next to the install never does, since it
+  // is shared by every stage.
+  const stagePrefix = stage ? [stage] : [];
+  for (const root of engineRoots) {
     for (const [rel, abs] of listGuiFiles(path.join(root, "gui"))) effective.set(rel, abs);
+  }
+  for (const root of [gamePath, ...parentPaths, modPath]) {
+    if (!root) continue;
+    for (const [rel, abs] of listGuiFiles(path.join(root, ...stagePrefix, "gui"))) effective.set(rel, abs);
   }
   const defs = emptyGuiDefs();
   const links = emptyGuiScriptLinks();

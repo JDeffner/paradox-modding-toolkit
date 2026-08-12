@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { readDescriptorName } from "@px-lsp/protocol/descriptorMod";
+import { readModName } from "@px-lsp/protocol/modName";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
 import { metaFor } from "../../meta";
@@ -256,7 +256,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
     const known = new Set(candidates.map(normKey));
     const mods: ModState[] = candidates.map((root) => ({
       root,
-      name: readDescriptorName(root) ?? path.basename(root),
+      name: readModName(root),
       excluded: excluded.has(normKey(root)),
       missing: false,
     }));
@@ -265,7 +265,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       if (!known.has(normKey(p))) {
         mods.push({
           root: p,
-          name: readDescriptorName(p) ?? path.basename(p),
+          name: readModName(p),
           excluded: true,
           missing: true,
         });

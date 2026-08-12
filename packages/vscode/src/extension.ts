@@ -19,7 +19,7 @@ import {
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { isCk3, metaFor } from "./meta";
+import { guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -211,7 +211,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.commands.executeCommand("setContext", "px.isCk3Workspace", cfg.isCk3Workspace);
     // Context keys for anything a `when` clause may want to gate on later.
     void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
-    void vscode.commands.executeCommand("setContext", "px.guiEditorSupported", isCk3(cfg.gameId));
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.guiEditorSupported",
+      guiEditorSupported(cfg.gameId)
+    );
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -629,13 +633,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("px.guiTreeToggleParents", () => GuiTreePanel.toggleParents()),
     vscode.commands.registerCommand("px.openGuiEditor", () => {
-      // The editor's pixel engine (fonts, sprite lookup, widget defaults) is
-      // calibrated against CK3 only. The .gui LANGUAGE features — completion,
-      // hovers, diagnostics, the widget tree — stay on for every game.
-      if (!isCk3(cfg.gameId)) {
+      // The editor draws real pixels, so it needs the game's own measured text
+      // metrics; without them every text box would be sized by another game's
+      // font. The .gui LANGUAGE features (completion, hovers, diagnostics, the
+      // widget tree) need no calibration and stay on for every game.
+      if (!guiEditorSupported(cfg.gameId)) {
+        const meta = metaFor(cfg.gameId);
         void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: the GUI editor is CK3 only for now — its pixel layout is calibrated against CK3. ` +
-            `.gui editing and the GUI Widget Tree work for ${metaFor(cfg.gameId).name}.`
+          `Paradox Modding Toolkit: the GUI editor is not calibrated for ${meta.name} yet, ` +
+            `so its canvas would place widgets wrongly. ` +
+            `.gui editing and the GUI Widget Tree work for ${meta.name}.`
         );
         return;
       }
@@ -677,7 +684,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             line,
           } satisfies GuiDependenciesParams),
         editor.document,
-        { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath }
+        { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
+        metaFor(cfg.gameId)
       );
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),

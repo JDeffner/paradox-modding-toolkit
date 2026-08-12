@@ -11,6 +11,7 @@ import type { PxConfig } from "./config";
 import type { LocEntryInfo } from "@px-lsp/protocol/protocol";
 import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
+import { isCk3 } from "./meta";
 
 const BOM = "﻿";
 
@@ -69,10 +70,18 @@ function escapeLocValue(value: string): string {
   return value.replace(/\\"/g, '"').replace(/"/g, '\\"');
 }
 
-/** The mod's replace file — reserved for OVERRIDING vanilla keys (game semantics). */
+/**
+ * The mod's replace file, reserved for OVERRIDING vanilla keys (game
+ * semantics). The default profile keeps the file name it has always written, so
+ * no existing mod grows a second edits file; other games get the neutral name,
+ * and an existing legacy file still wins so a mod never ends up with both.
+ */
 function modReplaceFile(cfg: PxConfig, language?: string): string {
   const lang = language ?? cfg.locLanguage;
-  return path.join(cfg.modPath!, "localization", "replace", lang, `zzz_ck3_modding_edits_l_${lang}.yml`);
+  const dir = path.join(cfg.modPath!, "localization", "replace", lang);
+  const legacy = path.join(dir, `zzz_ck3_modding_edits_l_${lang}.yml`);
+  if (isCk3(cfg.gameId) || fs.existsSync(legacy)) return legacy;
+  return path.join(dir, `zzz_px_edits_l_${lang}.yml`);
 }
 
 export function upsertInReplaceFile(cfg: PxConfig, key: string, value: string, language?: string): string {

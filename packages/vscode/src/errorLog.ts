@@ -14,6 +14,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
+import { gameDocsSubdir } from "./config";
 import { ErrorLogParser } from "@px-lsp/protocol/errorLogParser";
 import { LogTail } from "./logTail";
 import { metaFor } from "./meta";
@@ -58,9 +59,22 @@ export class ErrorLogWatcher implements vscode.Disposable {
     return this.entries;
   }
 
+  /**
+   * error.log is the ENGINE's log, not a script_docs dump, and the two folders
+   * are not the same one: newer titles dump script_docs into the user dir's
+   * `docs/` while error.log stays in `logs/`. So resolve it from the game's
+   * user directory plus `errorLogSubdir`, never by joining onto logsPath.
+   *
+   * An explicitly set px.logsPath still pins the user dir (it may be a moved
+   * Documents folder or a Proton prefix the auto-detection cannot find), so the
+   * sibling probe comes first, exactly as setup.ts resolves the data_types dump.
+   */
   private errorLogFile(): string | null {
-    const logs = this.getConfig().logsPath;
-    return logs ? path.join(logs, "error.log") : null;
+    const cfg = this.getConfig();
+    const meta = metaFor(cfg.gameId);
+    const subdir = meta.errorLogSubdir ?? "logs";
+    const dir = cfg.logsPath ? path.resolve(cfg.logsPath, "..", subdir) : gameDocsSubdir(meta, subdir);
+    return dir ? path.join(dir, "error.log") : null;
   }
 
   toggle(): void {
@@ -71,8 +85,10 @@ export class ErrorLogWatcher implements vscode.Disposable {
   start(): void {
     const file = this.errorLogFile();
     if (!file) {
+      const meta = metaFor(this.getConfig().gameId);
       void vscode.window.showWarningMessage(
-        "Paradox Modding Toolkit: logs folder not found (set px.logsPath)."
+        `Paradox Modding Toolkit: no user folder found for ${meta.name} ` +
+          `(Documents/Paradox Interactive/${meta.docsFolderName}). Set px.logsPath to its script_docs folder.`
       );
       return;
     }

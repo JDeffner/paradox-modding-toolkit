@@ -7,6 +7,7 @@ import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { findGameFolder } from "./steamDetect";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import type { GameMeta } from "@px-lsp/server/games/profile";
 import { detectGameId, GAME_METAS } from "./gameDetect";
 
 export interface PxConfig {
@@ -87,12 +88,10 @@ function windowsDocumentsFolder(): string {
   return path.join(os.homedir(), "Documents");
 }
 
-function defaultLogsPath(
-  docsFolderName: string,
-  steamAppId: number,
-  scriptDocsSubdir = "logs"
-): string | null {
-  const suffix = ["Paradox Interactive", docsFolderName, scriptDocsSubdir];
+/** Every place `Documents/Paradox Interactive/<game>/<subdir>` can live on this
+ * platform, most likely first. */
+function docsSubdirCandidates(docsFolderName: string, steamAppId: number, subdir: string): string[] {
+  const suffix = ["Paradox Interactive", docsFolderName, subdir];
   const candidates: string[] = [];
   if (process.platform === "win32") {
     candidates.push(path.join(windowsDocumentsFolder(), ...suffix));
@@ -109,10 +108,28 @@ function defaultLogsPath(
       )
     );
   }
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
+  return candidates;
+}
+
+function defaultLogsPath(
+  docsFolderName: string,
+  steamAppId: number,
+  scriptDocsSubdir = "logs"
+): string | null {
+  return (
+    docsSubdirCandidates(docsFolderName, steamAppId, scriptDocsSubdir).find((c) => fs.existsSync(c)) ?? null
+  );
+}
+
+/**
+ * A folder under the game's user directory, whether or not it exists yet: the
+ * first candidate that does, else the most likely one. Unlike `defaultLogsPath`
+ * this never returns null for a folder the game creates on first run, which is
+ * what lets the error.log watcher wait for a log that is not there yet.
+ */
+export function gameDocsSubdir(meta: GameMeta, subdir: string): string | null {
+  const candidates = docsSubdirCandidates(meta.docsFolderName, meta.steamAppId, subdir);
+  return candidates.find((c) => fs.existsSync(c)) ?? candidates[0] ?? null;
 }
 
 export function readConfig(): PxConfig {

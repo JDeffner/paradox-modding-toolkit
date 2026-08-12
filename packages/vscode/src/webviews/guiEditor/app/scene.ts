@@ -122,11 +122,21 @@ export interface Scene {
 }
 
 /**
- * Line box height: 21 at fontsize 15, linear (the engine's calibrated
- * measurer, B1-G/B3-S3). Glyphs sit centred in their line box.
+ * Line box height as a multiple of fontsize. The height is linear in fontsize
+ * for every measured game (B3-S3), so one ratio describes the whole law; the
+ * host sends the active game's own (`lineHeight / baseFontsize` from its
+ * measured metrics) and this default is the calibrated measurer's (21 at 15).
  */
+let lineHeightRatio = 21 / 15;
+
+/** The host's per-game ratio; undefined keeps the calibrated default. */
+export function setLineHeightRatio(ratio: number | undefined): void {
+  if (ratio !== undefined && ratio > 0) lineHeightRatio = ratio;
+}
+
+/** Line box height at `fontsize`. Glyphs sit centred in their line box. */
 function lineHeight(fontsize: number): number {
-  return 21 * (fontsize / 15);
+  return lineHeightRatio * fontsize;
 }
 
 function textLinesOf(rect: SceneRect, text: GuiLayoutText | undefined): SceneTextLine[] {
