@@ -8,6 +8,7 @@ import {
 } from "../src/features/diagnostics";
 import { provideDocumentSymbols } from "../src/features/symbols";
 import { provideFoldingRanges } from "../src/features/folding";
+import { isScriptLanguage } from "../src/documents";
 
 let uriCounter = 0;
 /** Unique per test: the parse cache keys by uri+version. */
@@ -349,5 +350,27 @@ describe("gui document symbols", () => {
     const list = window.children![0];
     expect(list.name).toBe("list");
     expect(list.children!.map((c) => c.name)).toEqual(["item"]);
+  });
+});
+
+describe("script language normalization", () => {
+  /**
+   * Clients may suffix the script language id to get a per-game icon and label
+   * (the VS Code extension sends `paradox-<game>`, neovim sends plain
+   * `paradox`). Every request handler in server.ts gates on this, so a client
+   * whose id does not pass loses completion, hover and definitions without any
+   * error to show for it.
+   */
+  it("accepts a suffixed script id and still accepts the plain one", () => {
+    for (const id of ["paradox", "paradox-ck3", "paradox-vic3", "paradox-eu5"]) {
+      const doc = TextDocument.create(uri(), id, 1, "my.1 = { type = character_event }\n");
+      expect(isScriptLanguage(doc.languageId), id).toBe(true);
+    }
+  });
+
+  it("keeps the other Paradox languages out", () => {
+    for (const id of ["paradox-loc", "paradox-gui", "paradox-mod", "paradox-info", "plaintext"]) {
+      expect(isScriptLanguage(id), id).toBe(false);
+    }
   });
 });

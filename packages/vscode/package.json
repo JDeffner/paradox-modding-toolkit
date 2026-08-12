@@ -37,6 +37,39 @@
         }
       },
       {
+        "id": "paradox-ck3",
+        "aliases": [
+          "Paradox Script (Crusader Kings III)"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/paradox-ck3-light.svg",
+          "dark": "./media/fileicons/paradox-ck3-dark.svg"
+        }
+      },
+      {
+        "id": "paradox-vic3",
+        "aliases": [
+          "Paradox Script (Victoria 3)"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/paradox-light.svg",
+          "dark": "./media/fileicons/paradox-dark.svg"
+        }
+      },
+      {
+        "id": "paradox-eu5",
+        "aliases": [
+          "Paradox Script (Europa Universalis V)"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/paradox-light.svg",
+          "dark": "./media/fileicons/paradox-dark.svg"
+        }
+      },
+      {
         "id": "paradox-loc",
         "aliases": [
           "Paradox Localization"
@@ -111,6 +144,21 @@
         "path": "./syntaxes/paradox.tmLanguage.json"
       },
       {
+        "language": "paradox-ck3",
+        "scopeName": "source.paradox-ck3",
+        "path": "./syntaxes/paradox-ck3.tmLanguage.json"
+      },
+      {
+        "language": "paradox-vic3",
+        "scopeName": "source.paradox-vic3",
+        "path": "./syntaxes/paradox-vic3.tmLanguage.json"
+      },
+      {
+        "language": "paradox-eu5",
+        "scopeName": "source.paradox-eu5",
+        "path": "./syntaxes/paradox-eu5.tmLanguage.json"
+      },
+      {
         "language": "paradox-loc",
         "scopeName": "source.paradox-loc",
         "path": "./syntaxes/paradox-loc.tmLanguage.json"
@@ -137,6 +185,15 @@
     ],
     "configurationDefaults": {
       "[paradox]": {
+        "editor.wordBasedSuggestions": "off"
+      },
+      "[paradox-ck3]": {
+        "editor.wordBasedSuggestions": "off"
+      },
+      "[paradox-vic3]": {
+        "editor.wordBasedSuggestions": "off"
+      },
+      "[paradox-eu5]": {
         "editor.wordBasedSuggestions": "off"
       },
       "[paradox-loc]": {
@@ -881,7 +938,7 @@
       "editor/context": [
         {
           "command": "px.simulateEvent",
-          "when": "editorLangId == paradox && px.isCk3Workspace",
+          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.isCk3Workspace",
           "group": "1_modification"
         }
       ],
@@ -903,7 +960,7 @@
         },
         {
           "command": "px.openInfoDocs",
-          "when": "px.hasInfoDoc && (resourceLangId == paradox || resourceLangId == paradox-gui || resourceLangId == paradox-loc)",
+          "when": "px.hasInfoDoc && (resourceLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || resourceLangId == paradox-gui || resourceLangId == paradox-loc)",
           "group": "navigation"
         },
         {
@@ -924,6 +981,22 @@
       {
         "language": "paradox",
         "path": "./snippets/paradox.json"
+      },
+      {
+        "language": "paradox-ck3",
+        "path": "./snippets/ck3.json"
+      },
+      {
+        "language": "paradox-vic3",
+        "path": "./snippets/paradox.json"
+      },
+      {
+        "language": "paradox-vic3",
+        "path": "./snippets/vic3.json"
+      },
+      {
+        "language": "paradox-eu5",
+        "path": "./snippets/paradox.json"
       }
     ],
     "jsonValidation": [
@@ -936,7 +1009,7 @@
       {
         "command": "px.editLocalization",
         "key": "ctrl+alt+t",
-        "when": "editorTextFocus && (editorLangId == paradox || editorLangId == paradox-loc)"
+        "when": "editorTextFocus && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || editorLangId == paradox-loc)"
       },
       {
         "command": "px.openGuiEditor",
@@ -951,7 +1024,7 @@
       {
         "command": "px.runTiger",
         "key": "ctrl+alt+v",
-        "when": "editorLangId == paradox || editorLangId == paradox-loc || editorLangId == paradox-gui"
+        "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || editorLangId == paradox-loc || editorLangId == paradox-gui"
       },
       {
         "command": "px.jumpToScriptReference",
@@ -976,7 +1049,7 @@
       {
         "command": "px.simulateEvent",
         "key": "ctrl+alt+s",
-        "when": "px.isCk3Workspace && editorTextFocus && editorLangId == paradox"
+        "when": "px.isCk3Workspace && editorTextFocus && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
       },
       {
         "command": "px.modReport",

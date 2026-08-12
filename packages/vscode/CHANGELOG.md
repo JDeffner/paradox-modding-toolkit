@@ -4,6 +4,23 @@
 
 ### Added
 
+- **Crusader Kings III script files get the crown icon back**, and the other
+  games keep the box, now with "PX" letters. Behind it: the script language is
+  contributed once per game (`paradox-ck3`, `paradox-vic3`, `paradox-eu5`,
+  plus the generic `paradox`), because a VS Code language carries exactly one
+  icon and one name. They are the same language: same grammar, same
+  completion, same validation, same server. What changes is the icon in the
+  Explorer and the label in the status bar, which now reads e.g. "Paradox
+  Script (Victoria 3)". A workspace set up by an earlier version has its
+  `files.associations` entry for `*.txt` rewritten once; an association you
+  wrote yourself is left alone.
+- **Per-game snippets.** The CK3 effect snippets (`add_opinion`,
+  `add_character_modifier`, …) no longer offer themselves in a Victoria 3 or
+  EU5 file. Victoria 3 gets a small set of its own, checked against the game
+  files: `event`, `te`, `mod` and the `..._scope_...` iterators. Snippets that
+  are the script language itself (`if`, `else_if`, `else`, blocks, PdxDoc
+  comments) stay available everywhere.
+
 - **Every tool has a row in the Project panel.** The panel used to omit
   anything that had a button elsewhere, which meant the features with the
   best buttons were the hardest to find. A new **Open** group at the top

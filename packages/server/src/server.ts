@@ -87,7 +87,7 @@ import { computeGuiDependencies, computeGuiUses } from "./gui/guiDependencies";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
 import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
-import { getLineText } from "./documents";
+import { getLineText, isScriptLanguage } from "./documents";
 import { computeEventDetail } from "./overview/eventDetail";
 import { loadTokenData, parseOnActionsLog } from "./data/docsParser";
 import { loadDataTypes } from "./data/dataTypes";
@@ -1308,7 +1308,7 @@ connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | nu
   // Open documents only: the client's text is the authority, and a status bar
   // asking about a closed/loc/gui document gets "nothing to show", not an error.
   const doc = params?.uri ? documents.get(params.uri) : undefined;
-  if (!doc || doc.languageId !== "paradox" || !params.position) return null;
+  if (!doc || !isScriptLanguage(doc.languageId) || !params.position) return null;
   const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
   return computeScopeAt(
     data,
@@ -1347,7 +1347,7 @@ connection.onCompletion((params) =>
         provideFormatTagCompletion(data.textFormatting, linePrefix);
       return result ? { isIncomplete: result.isIncomplete, items: result.items } : [];
     }
-    if (doc.languageId !== "paradox") return [];
+    if (!isScriptLanguage(doc.languageId)) return [];
     const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
     const result = completion.provide(
       doc,
@@ -1393,7 +1393,7 @@ connection.onHover((params) =>
         },
       };
     }
-    if (doc.languageId !== "paradox") return null;
+    if (!isScriptLanguage(doc.languageId)) return null;
     const fsPath = URI.parse(doc.uri).fsPath;
     const entry = schemaEntryForFile(fsPath);
     const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
@@ -1441,7 +1441,7 @@ connection.onDefinition((params) =>
     // Loc files: navigate [ ... ] datafunction names (custom loc, saved scopes).
     // Plain loc-key jumps stay with the client-side script-usage provider.
     if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position);
-    if (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui") return [];
+    if (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui") return [];
     if (doc.languageId === "paradox-gui") {
       // Types, templates and blockoverride targets resolve through the FIOS
       // store first (what the game actually uses); loc keys etc. fall through.
@@ -1462,14 +1462,14 @@ connection.onSignatureHelp((params) => {
     const lineText = getLineText(doc, params.position.line);
     return provideDataFnSignature(data.dataTypes, data.dataFnUsage, lineText, params.position.character);
   }
-  if (doc.languageId !== "paradox") return null;
+  if (!isScriptLanguage(doc.languageId)) return null;
   return provideSignatureHelp(data, doc, params.position);
 });
 
 connection.onCodeAction((params) => {
   flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
-  if (!doc || doc.languageId !== "paradox") return [];
+  if (!doc || !isScriptLanguage(doc.languageId)) return [];
   return provideCodeActions(data, doc, params.range, params.context.diagnostics, {
     locLanguage: settings.locLanguage,
     modRootOf: workspaceRootOf,
@@ -1493,8 +1493,8 @@ connection.languages.semanticTokens.on((params) =>
   indexRead(`semanticTokens ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     // gui files benefit too: template/type names classify via the index.
-    if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-gui")) return { data: [] };
-    const entry = doc.languageId === "paradox" ? schemaEntryForFile(URI.parse(doc.uri).fsPath) : null;
+    if (!doc || (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui")) return { data: [] };
+    const entry = isScriptLanguage(doc.languageId) ? schemaEntryForFile(URI.parse(doc.uri).fsPath) : null;
     return provideSemanticTokens(data, doc, schema.refFields, entry, schema.structures);
   })
 );
@@ -1503,7 +1503,7 @@ connection.onReferences((params) =>
   indexRead(`references ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     // Loc files too: references on a loc key line list its script usage sites.
-    if (!doc || (doc.languageId !== "paradox" && doc.languageId !== "paradox-loc")) return [];
+    if (!doc || (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-loc")) return [];
     return provideReferences(data, doc, params.position, params.context.includeDeclaration, (name) =>
       lazyRefs.lookup(name)
     );
@@ -1513,14 +1513,14 @@ connection.onReferences((params) =>
 connection.onPrepareRename((params) => {
   flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
-  if (!doc || doc.languageId !== "paradox") return null;
+  if (!doc || !isScriptLanguage(doc.languageId)) return null;
   return prepareRename(data, doc, params.position);
 });
 
 connection.onRenameRequest((params) => {
   flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
-  if (!doc || doc.languageId !== "paradox") return null;
+  if (!doc || !isScriptLanguage(doc.languageId)) return null;
   return provideRename(data, doc, params.position, params.newName, (uri) => documents.get(uri));
 });
 
@@ -1537,7 +1537,7 @@ connection.onDocumentSymbol((params) => {
 
 connection.onDocumentFormatting((params) => {
   const doc = documents.get(params.textDocument.uri);
-  if (!doc || doc.languageId !== "paradox") return [];
+  if (!doc || !isScriptLanguage(doc.languageId)) return [];
   return provideFormattingEdits(doc);
 });
 
@@ -1620,7 +1620,7 @@ function validateDocumentNow(doc: TextDocument): void {
     // Structural checks only (unbalanced braces silently break FIOS gui files).
     const { result, lineIndex } = getParse(doc);
     diagnostics = computeScriptDiagnostics(result, lineIndex, ctx);
-  } else if (doc.languageId === "paradox") {
+  } else if (isScriptLanguage(doc.languageId)) {
     const { result, lineIndex } = getParse(doc);
     diagnostics = computeScriptDiagnostics(result, lineIndex, ctx);
     // Conservative index-backed checks, for workspace mod files only.

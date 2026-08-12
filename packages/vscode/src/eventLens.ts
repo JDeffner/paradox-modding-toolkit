@@ -13,6 +13,7 @@
  * own to check.
  */
 import * as vscode from "vscode";
+import { PARADOX_SCRIPT_LANGS } from "./langIds";
 
 class SimulateEventLensProvider implements vscode.CodeLensProvider {
   constructor(private readonly enabled: () => boolean) {}
@@ -49,7 +50,7 @@ class SimulateEventLensProvider implements vscode.CodeLensProvider {
 /** Register the lens for script documents; disposed with the extension. */
 export function registerSimulateEventLens(enabled: () => boolean): vscode.Disposable {
   return vscode.languages.registerCodeLensProvider(
-    { language: "paradox", scheme: "file" },
+    PARADOX_SCRIPT_LANGS.map((language) => ({ language, scheme: "file" })),
     new SimulateEventLensProvider(enabled)
   );
 }

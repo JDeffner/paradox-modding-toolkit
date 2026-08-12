@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Script (Europa Universalis V)",
+  "scopeName": "source.paradox-eu5",
+  "patterns": [{ "include": "source.paradox" }]
+}

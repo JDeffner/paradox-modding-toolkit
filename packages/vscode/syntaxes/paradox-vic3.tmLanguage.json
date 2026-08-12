@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Script (Victoria 3)",
+  "scopeName": "source.paradox-vic3",
+  "patterns": [{ "include": "source.paradox" }]
+}

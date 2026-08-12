@@ -1,0 +1,51 @@
+{
+  "country_event": {
+    "prefix": "event",
+    "body": [
+      "${1:namespace}.${2:1} = {",
+      "\ttype = country_event",
+      "\tplacement = root",
+      "",
+      "\ttitle = $1.$2.t",
+      "\tdesc = $1.$2.d",
+      "\tflavor = $1.$2.f",
+      "",
+      "\tduration = 3",
+      "",
+      "\ttrigger = {",
+      "\t\t$3",
+      "\t}",
+      "",
+      "\timmediate = {",
+      "\t\t$0",
+      "\t}",
+      "",
+      "\toption = {",
+      "\t\tdefault_option = yes",
+      "\t\tname = $1.$2.a",
+      "\t}",
+      "}"
+    ],
+    "description": "Country event, vanilla shape (loc keys use dots)"
+  },
+  "trigger_event": {
+    "prefix": "te",
+    "body": ["trigger_event = { id = ${1:namespace.1} days = ${2:7} popup = yes }$0"],
+    "description": "trigger_event with a delay"
+  },
+  "add_modifier": {
+    "prefix": "mod",
+    "body": ["add_modifier = {", "\tname = ${1:modifier_key}", "\tdays = ${2:normal_modifier_time}", "}"],
+    "description": "Timed add_modifier"
+  },
+  "scope iterator": {
+    "prefix": "every",
+    "body": [
+      "${1|every,random,ordered,any|}_scope_${2|state,character,pop,country|} = {",
+      "\tlimit = { ${3:condition} }",
+      "\t$0",
+      "}"
+    ],
+    "description": "every_/random_/ordered_/any_scope_ iterator with a limit"
+  }
+}

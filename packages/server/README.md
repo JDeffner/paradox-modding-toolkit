@@ -125,6 +125,11 @@ vim.filetype.add({
 `after/ftdetect/paradox.lua` — see neovim/neovim#29468. The patterns above are
 suffix matches, so they also catch EU5's `in_game/common/...` layout.)
 
+The plain `paradox` filetype stays correct for every game: the VS Code
+extension sends per-game ids (`paradox-ck3`, `paradox-vic3`, `paradox-eu5`)
+only to get a per-game file icon and label, and the server treats every one of
+them, and plain `paradox`, as the same script language.
+
 **Failure mode to recognize:** if a file opens with no diagnostics, no
 highlighting and an empty completion popup, check `:set filetype?` first. A
 `.txt` that stayed `text` never reaches the server at all, and the server

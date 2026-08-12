@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
+import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 import { guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
@@ -319,13 +320,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const clientOptions: LanguageClientOptions = {
     errorHandler,
     documentSelector: [
-      { language: "paradox", scheme: "file" },
+      // Every per-game script id, not just the generic one: the server treats
+      // them all as the script language (packages/server/src/documents.ts).
+      ...PARADOX_SCRIPT_LANGS.map((language) => ({ language, scheme: "file" })),
       { language: "paradox-loc", scheme: "file" },
       { language: "paradox-gui", scheme: "file" },
       // Descriptor and format-doc files are jomini script too. They reach the
       // server for folding and the outline only — every other handler keys off
-      // `paradox`/`paradox-gui`/`paradox-loc` and returns nothing for them,
-      // validation included.
+      // the script ids / `paradox-gui` / `paradox-loc` and returns nothing for
+      // them, validation included.
       { language: "paradox-mod", scheme: "file" },
       { language: "paradox-info", scheme: "file" },
     ],
@@ -615,7 +618,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("px.showDependencies", async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== "paradox") {
+      if (!editor || !isScriptLang(editor.document.languageId)) {
         void vscode.window.showWarningMessage(
           "Paradox Modding Toolkit: place the cursor on a definition in a script (.txt) file."
         );
@@ -650,7 +653,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // namespace — so opening from an applicable file shows related nodes.
       const editor = vscode.window.activeTextEditor;
       let params: EventGraphParams = {};
-      if (editor && editor.document.languageId === "paradox") {
+      if (editor && isScriptLang(editor.document.languageId)) {
         const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
         const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
         const word = range ? editor.document.getText(range) : "";
@@ -834,7 +837,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {
   const editor = vscode.window.activeTextEditor;
   let word = "";
-  if (editor && editor.document.languageId === "paradox") {
+  if (editor && isScriptLang(editor.document.languageId)) {
     const params: DependenciesParams = {
       uri: editor.document.uri.toString(),
       position: {

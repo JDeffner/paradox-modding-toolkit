@@ -1,25 +1,33 @@
 /**
  * Scoped language registration: instead of claiming every *.txt on the system
- * through package.json, switch documents to the `paradox` / `paradox-loc`
- * languages only when they live under the configured mod or game paths.
+ * through package.json, switch documents to the per-game script language
+ * (`paradox-ck3` and friends) or `paradox-loc` only when they live under the
+ * configured mod or game paths.
  */
 import * as vscode from "vscode";
 import type { PxConfig } from "./config";
 import { isUnder } from "./config";
+import { isScriptLang, scriptLangFor, shouldRewriteAssociation } from "./langIds";
 
 /**
  * The explorer resolves file icons from static language associations only, so
  * dynamically-detected documents get their icon when opened but never in the
- * tree. In workspaces that are actually CK3 mods, persist the associations at
+ * tree. In workspaces that are actually mods, persist the associations at
  * workspace scope: same reach as the dynamic detection, but visible to the
  * explorer, and other workspaces stay untouched. Existing associations (any
  * scope) win; we only fill gaps, once.
+ *
+ * The one exception is `*.txt`, which now names a per-game script id: a value
+ * we ourselves wrote for another game is rewritten once (see
+ * `shouldRewriteAssociation`), or a workspace set up by an older version would
+ * keep showing the wrong icon forever.
  */
 export async function ensureFileAssociations(cfg: PxConfig): Promise<void> {
   if (!cfg.isCk3Workspace) return;
   if (!vscode.workspace.workspaceFolders?.length) return;
+  const script = scriptLangFor(cfg.gameId);
   const wanted: Record<string, string> = {
-    "*.txt": "paradox",
+    "*.txt": script,
     "*.gui": "paradox-gui",
     "*.mod": "paradox-mod",
     "**/localization/**/*.yml": "paradox-loc",
@@ -27,12 +35,13 @@ export async function ensureFileAssociations(cfg: PxConfig): Promise<void> {
   const files = vscode.workspace.getConfiguration("files");
   const existing = files.get<Record<string, string>>("associations") ?? {};
   const missing = Object.entries(wanted).filter(([glob]) => !(glob in existing));
-  if (missing.length === 0) return;
   const workspaceValue = files.inspect<Record<string, string>>("associations")?.workspaceValue ?? {};
+  const stale = shouldRewriteAssociation(workspaceValue["*.txt"], script) ? { "*.txt": script } : {};
+  if (missing.length === 0 && Object.keys(stale).length === 0) return;
   try {
     await files.update(
       "associations",
-      { ...workspaceValue, ...Object.fromEntries(missing) },
+      { ...workspaceValue, ...Object.fromEntries(missing), ...stale },
       vscode.ConfigurationTarget.Workspace
     );
   } catch {
@@ -57,9 +66,16 @@ export function wireLanguageDetection(
       return;
 
     const lower = file.toLowerCase();
+    const script = scriptLangFor(cfg.gameId);
     try {
-      if (lower.endsWith(".txt") && doc.languageId === "plaintext") {
-        await vscode.languages.setTextDocumentLanguage(doc, "paradox");
+      // Also retargets a document already on ANOTHER script id: that is what a
+      // persisted association from an older version (or from a workspace for a
+      // different game) leaves behind on the open editors.
+      if (
+        lower.endsWith(".txt") &&
+        (doc.languageId === "plaintext" || (isScriptLang(doc.languageId) && doc.languageId !== script))
+      ) {
+        await vscode.languages.setTextDocumentLanguage(doc, script);
       } else if (lower.endsWith(".mod") && doc.languageId === "plaintext") {
         // descriptor.mod is matched by filename in package.json; this catches
         // the outer <name>.mod files when a mod-collection folder is opened.

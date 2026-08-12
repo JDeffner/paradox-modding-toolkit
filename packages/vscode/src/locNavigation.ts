@@ -14,6 +14,7 @@ import { wholeNamePattern } from "@px-lsp/protocol/regex";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { findLocKeyRefs, locKeyOnLine } from "@px-lsp/protocol/locRefs";
+import { isScriptLang } from "./langIds";
 
 export { locKeyOnLine };
 
@@ -43,7 +44,7 @@ export class LocReferenceTracker {
     context.subscriptions.push(
       vscode.window.onDidChangeTextEditorSelection((e) => {
         const doc = e.textEditor.document;
-        if (doc.languageId !== "paradox") return;
+        if (!isScriptLang(doc.languageId)) return;
         const line = e.selections[0]?.active.line;
         if (line === undefined || line >= doc.lineCount) return;
         for (const ref of findLocKeyRefs(doc.lineAt(line).text)) {

@@ -1,5 +1,5 @@
 /**
- * Generates the file-type icons (6 glyphs x light/dark) into
+ * Generates the file-type icons (7 glyphs x light/dark) into
  * packages/vscode/media/fileicons/ (see docs/file-icons.md).
  *
  * Run: npx esbuild scripts/gen-icons.ts --bundle --platform=node \
@@ -13,7 +13,18 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { CREAM, glyph, INK, toPathData, WEIGHT, WIDTH, type Stroke } from "./brandGeometry";
+import {
+  CAP,
+  CREAM,
+  glyph,
+  inkBounds,
+  INK,
+  toPathData,
+  WEIGHT,
+  WIDTH,
+  type Band,
+  type Stroke,
+} from "./brandGeometry";
 
 const outDir = path.join(__dirname, "..", "packages", "vscode", "media", "fileicons");
 fs.mkdirSync(outDir, { recursive: true });
@@ -21,25 +32,44 @@ fs.mkdirSync(outDir, { recursive: true });
 /**
  * The script icon follows the JS-icon convention: a filled box with the
  * letters anchored bottom-right — but the letters are still brandGeometry's
- * own "PS", so the file icon and the product lockup cannot drift apart.
+ * own "PX", so the file icon and the product lockup cannot drift apart.
  * Colors are the brand's cream and ink, never pure white or black: on a dark
  * UI the box is cream with ink letters, on a light UI the inverse.
  */
-function psBody(box: string): string {
+function pxBody(box: string): string {
   const ink = box === CREAM ? INK : CREAM;
   const GAP16 = 4;
-  const strokes: Stroke[] = [...glyph("P", 0, 0), ...glyph("S", WIDTH.P + GAP16, 0)];
-  const inkW = WIDTH.P + GAP16 + WIDTH.S; // PS has no diagonal overshoot: ink = advance
-  const inkH = 34; // CAP; the S's arcs are designed to the same ink height
-  const scale = 6.3 / inkH; // letters at ~48% of the box; the leftover space
-  // lands on the left and top, which is what reads as the JS-style anchor
+  const strokes: Stroke[] = [...glyph("P", 0, 0), ...glyph("X", WIDTH.P + GAP16, 0)];
+  // The X's diagonals overshoot cap height and baseline on purpose; the lockup
+  // cuts them flat with a band clip, and so must the icon, or the pair reads
+  // taller than the P. Measure the CLIPPED ink instead of the advance table:
+  // a diagonal's butt cap pushes ink sideways, so the X is wider than its
+  // advance and an advance-based anchor would push letters out of the box.
+  const band: Band = { top: 0, bottom: CAP };
+  const b = inkBounds(strokes, band);
+  const inkW = b.x1 - b.x0;
   const MARGIN = 1.55; // from the box's right and bottom edges to the ink
-  const tx = 14.6 - MARGIN - inkW * scale;
-  const ty = 14.6 - MARGIN - inkH * scale;
+  const farEdge = 14.6 - MARGIN; // where the ink ends, right and bottom
+  const leftLimit = 1.4 + 0.9; // the P's stem keeps 0.9px off the box's left edge
+  // Same bottom-right anchor and cap height as the other glyphs, but capped so
+  // the wide PX pair cannot grow past leftLimit into the box's rounded corner.
+  const scale = Math.min(6.3 / CAP, (farEdge - leftLimit) / inkW);
+  const tx = farEdge - b.x1 * scale;
+  const ty = farEdge - b.y1 * scale;
   const d = strokes.map((s) => `  <path d="${toPathData(s)}" />`).join("\n");
+  // The clip is there for the vertical overshoot only, so it keeps a unit of
+  // slack sideways rather than shaving the outer edge of the diagonals.
+  const clip =
+    `<rect x="${(b.x0 - 1).toFixed(3)}" y="${band.top}"` +
+    ` width="${(inkW + 2).toFixed(3)}" height="${band.bottom - band.top}"/>`;
+  const g =
+    `<g clip-path="url(#cap)" transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)})` +
+    ` scale(${scale.toFixed(5)})" fill="none" stroke="${ink}" stroke-width="${WEIGHT}"` +
+    ` stroke-linecap="butt" stroke-linejoin="miter">`;
   return `
   <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="1.8" fill="${box}"/>
-  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(5)})" fill="none" stroke="${ink}" stroke-width="${WEIGHT}" stroke-linecap="butt" stroke-linejoin="miter">
+  <clipPath id="cap">${clip}</clipPath>
+  ${g}
 ${d}
   </g>`;
 }
@@ -52,11 +82,22 @@ interface IconDef {
 
 const icons: Record<string, IconDef> = {
   // Paradox Script: the brand letterforms in a JS-style box. The theme color
-  // is the BOX fill; the letters take the opposite brand neutral (see psBody).
+  // is the BOX fill; the letters take the opposite brand neutral (see pxBody).
+  // Shared by the generic, the Victoria 3 and the Europa Universalis V script
+  // language ids; only Crusader Kings III has a glyph of its own.
   paradox: {
     dark: CREAM,
     light: INK,
-    body: psBody,
+    body: pxBody,
+  },
+  // Crusader Kings III script: the crown this extension shipped while it was
+  // CK3-only. Kept as the one per-game script glyph (docs/file-icons.md).
+  "paradox-ck3": {
+    dark: "#E3B341",
+    light: "#A87B0F",
+    body: (c) => `
+  <path fill="${c}" d="M2 3.9 5 6.9 8 2.6l3 4.3 3-3v6.5H2Z"/>
+  <rect fill="${c}" x="2" y="11.6" width="12" height="1.8" rx="0.6"/>`,
   },
   // Localization: speech bubble with two text lines cut out
   "paradox-loc": {
