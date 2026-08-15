@@ -1,9 +1,10 @@
 {
   "name": "PX Layout Probe",
-  "id": "px-layout-probe",
+  "id": "",
   "version": "1",
-  "supported_game_version": "*",
+  "supported_game_version": "1.0.*",
   "short_description": "GUI layout calibration probe windows (spawned via console, no gameplay changes)",
   "tags": [],
-  "relationships": []
+  "relationships": [],
+  "game_custom_data": { "multiplayer_synchronized": false }
 }
