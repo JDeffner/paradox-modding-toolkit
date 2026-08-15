@@ -50,11 +50,11 @@ $game = "D:\Games\steamapps\common\Europa Universalis V"
 
 ---
 
-## Step 2: copy the interface files
+## Step 2: copy files out of the game folder
 
 The game does not need to run for this step.
 
-### 2a. Every vanilla .gui file (the most valuable item)
+### 2a. Every vanilla .gui file (the most valuable item for the layout work)
 
 This copies all `.gui` files into one zip and keeps the folder names they
 have in the game. It is a block and not a single line, because the folder
@@ -71,7 +71,56 @@ Write-Host "written: $out\eu5-gui-files.zip"
 
 Result: `EU5-for-PX\eu5-gui-files.zip`.
 
-### 2b. A two-level listing of the game folder
+### 2b. The vanilla script files and the schema docs
+
+This is the item that teaches the toolkit which keys are legal inside which
+block, and how often each one is used. Without it, the code completion for
+EU5 stays almost useless.
+
+The block copies three things, and keeps the folder names they have in the
+game:
+
+- every `.txt` file that sits under a `common` or an `events` folder,
+- every `.md` file anywhere in the game folder,
+- every `.info` file anywhere in the game folder.
+
+The `.md` and `.info` files are the schema docs the game ships. We do not
+know whether EU5 ships any. Please run the block even if you think there
+are none, and report the count.
+
+The block leaves out `map_data` and the other large data folders on purpose.
+They are big and they teach us nothing.
+
+```powershell
+$stage = Join-Path $out "script-corpus"
+Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $stage | Out-Null
+Get-ChildItem -LiteralPath $game -Recurse -File | Where-Object { $r = $_.FullName.Substring($game.Length + 1); ($_.Extension -eq ".txt" -and $r -match '(^|\\)(common|events)\\') -or ($_.Extension -eq ".md") -or ($_.Extension -eq ".info") } | ForEach-Object { $d = Join-Path $stage $_.FullName.Substring($game.Length + 1); New-Item -ItemType Directory -Force -Path (Split-Path $d) | Out-Null; Copy-Item -LiteralPath $_.FullName -Destination $d }
+Write-Host ("script files copied: " + (Get-ChildItem -LiteralPath $stage -Recurse -File).Count)
+Write-Host ("of those, schema docs (.md and .info): " + (Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object { $_.Extension -eq ".md" -or $_.Extension -eq ".info" }).Count)
+Compress-Archive -Path (Join-Path $stage "*") -DestinationPath (Join-Path $out "eu5-script-corpus.zip") -Force
+Remove-Item -Recurse -Force $stage
+Write-Host "written: $out\eu5-script-corpus.zip"
+```
+
+The last part takes a minute or two, and PowerShell prints nothing while it
+zips. That is normal. Wait for the `written:` line.
+
+Result: `EU5-for-PX\eu5-script-corpus.zip`, usually between 3 MB and 20 MB.
+If it comes out at several hundred MB, too much was copied. Say so in the
+notes.
+
+Write both printed numbers into the notes in Step 7.
+
+Two more things:
+
+- The folder names inside the zip must stay as they are. EU5 keeps its
+  files under a stage folder such as `in_game`, and we need that prefix.
+  Please do not flatten or reorganise the zip.
+- This is game script text only. It holds no personal data, no save games
+  and no account details.
+
+### 2c. A two-level listing of the game folder
 
 ```powershell
 Get-ChildItem -LiteralPath $game -Recurse -Depth 1 | ForEach-Object { $_.FullName.Substring($game.Length + 1) } | Out-File -Encoding utf8 (Join-Path $out "game-folder-listing.txt")
@@ -80,7 +129,7 @@ Write-Host "written: $out\game-folder-listing.txt"
 
 Result: `EU5-for-PX\game-folder-listing.txt`.
 
-### 2c. The fonts listing and the default UI font
+### 2d. The fonts listing and the default UI font
 
 ```powershell
 $fontOut = Join-Path $out "fonts"
@@ -214,6 +263,8 @@ UI scaling %:
 Game version (shown on the main menu):
 Steam app id from the store page address:
 Launch options that worked (-debug_mode -develop, or only -debug_mode):
+Script files copied in Step 2b (the number the block printed):
+Schema docs found in Step 2b (.md and .info, the second number):
 Probe windows that failed to spawn (a b c d e, or none):
 Did the script_docs command work (yes / no / unknown command):
 Did the dump_data_types command work (yes / no / unknown command):
@@ -237,8 +288,9 @@ WeTransfer, Google Drive, or Dropbox.
 The zip should hold:
 
 - [ ] `eu5-gui-files.zip` (Step 2a)
-- [ ] `game-folder-listing.txt` (Step 2b)
-- [ ] `fonts-listing.txt` and the `fonts` folder (Step 2c)
+- [ ] `eu5-script-corpus.zip` (Step 2b)
+- [ ] `game-folder-listing.txt` (Step 2c)
+- [ ] `fonts-listing.txt` and the `fonts` folder (Step 2d)
 - [ ] `px_probe_a.png` up to `px_probe_e.png` (Step 5)
 - [ ] the `docs` folder (Step 6)
 - [ ] the `logs` folder, with `error.log` inside (Step 6)
