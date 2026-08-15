@@ -24,20 +24,35 @@ import { loadWikiTokens } from "../src/data/wikiDocs";
 import { loadFreqs } from "../src/schema/freqs";
 import { classifyFile, DefinitionIndex, scanRoot } from "../src/index/indexer";
 import { extractReferences } from "../src/index/references";
-import { CK3_SCHEMA } from "../src/games/ck3/schema";
+import { resolveProfile } from "../src/games/registry";
+import { setActiveProfile } from "../src/games/active";
+import { loadTokenDataFromLogs } from "../src/data/docsParser";
+import { mergeWikiTokens } from "../src/data/wikiDocs";
 import { walkStatements, parseScript, decode, type Statement } from "../src/parser";
 import { classifyKeyword } from "../src/contextKeywords";
 import type { SchemaEntry } from "../src/schema/types";
 
-/** The completion contexts we sample and report separately. */
+/**
+ * The completion contexts we sample and report separately. The four structural
+ * ones are named after the CK3 kinds that motivated them; `definition_top` is
+ * the game-neutral catch-all (depth-1 in ANY indexed definition kind), which is
+ * where a game whose structure layer covers dozens of kinds actually shows up.
+ */
 export type EvalContext =
-  "event_top" | "event_option" | "interaction_top" | "decision_top" | "effect_block" | "trigger_block";
+  | "event_top"
+  | "event_option"
+  | "interaction_top"
+  | "decision_top"
+  | "definition_top"
+  | "effect_block"
+  | "trigger_block";
 
 export const EVAL_CONTEXTS: EvalContext[] = [
   "event_top",
   "event_option",
   "interaction_top",
   "decision_top",
+  "definition_top",
   "effect_block",
   "trigger_block",
 ];
@@ -55,7 +70,16 @@ export interface ContextMetrics {
   n: number;
   top1: number;
   top5: number;
+  /**
+   * Fraction ranked in the first 20, one scroll of the popup. top-5 saturates
+   * by construction (every context has more than five equally-common keys in one
+   * slot tier) and MRR is dominated by the two or three hottest keys, so neither
+   * can see a long-tail key moving from rank 3963 to rank 111. This can.
+   */
+  top20: number;
   mrr: number;
+  /** Median rank (missing counts as the worst rank): the long-tail summary. */
+  median: number;
   /** Fraction of samples where the key was not offered at all (rank -1). */
   missing: number;
 }
@@ -99,18 +123,30 @@ export interface EvalEnv {
 
 /**
  * Build a server-shaped environment: bundled wiki tokens + a full definition and
- * reference index over the vanilla tree (if present) and the mod corpus — exactly
+ * reference index over the vanilla tree (if present) and the mod corpus, exactly
  * what the live completion provider consumes.
  */
 export function buildEvalEnv(opts: {
+  /** Game profile id; absent = the registry default. Set before the schema loads. */
+  gameId?: string;
   wikidocsDir: string;
-  /** Directory holding freqs.json (packages/server/data/ck3). Omit to eval with neutral F. */
+  /** Directory holding freqs.json (packages/server/data/<id>). Omit to eval with neutral F. */
   freqsDir?: string;
+  /**
+   * Bundled script_docs dump dir (packages/server/data/<id>/script_docs). These are
+   * what the live server falls back to when the user has no own dump, and for a
+   * game with no bundled wiki they are the ONLY engine-token source, omit them and
+   * the eval measures a server nobody runs.
+   */
+  scriptDocsDir?: string;
   gamePath?: string | null;
-  modPath: string;
+  modPath: string | string[];
 }): EvalEnv {
+  setActiveProfile(resolveProfile(opts.gameId));
   const data = new ServerData();
-  data.setTokens(loadWikiTokens(opts.wikidocsDir));
+  const wikiTokens = loadWikiTokens(opts.wikidocsDir);
+  const scriptTokens = opts.scriptDocsDir ? loadTokenDataFromLogs(opts.scriptDocsDir).tokens : [];
+  data.setTokens(scriptTokens.length > 0 ? mergeWikiTokens(scriptTokens, wikiTokens) : wikiTokens);
   const schema = loadSchema(opts.modPath);
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),
@@ -122,12 +158,14 @@ export function buildEvalEnv(opts: {
   if (opts.gamePath) {
     index.addAll(scanRoot(opts.gamePath, "vanilla", { locLanguage: "english" }));
   }
-  const modDefs = scanRoot(opts.modPath, "mod", { locLanguage: "english" });
-  index.addAll(modDefs);
+  const modRoots = Array.isArray(opts.modPath) ? opts.modPath : [opts.modPath];
+  for (const root of modRoots) index.addAll(scanRoot(root, "mod", { locLanguage: "english" }));
 
-  // Mod references + implicit defs (save_scope_as, set_variable) — usageCount source.
+  // Mod references + implicit defs (save_scope_as, set_variable), usageCount source.
   const scriptFiles: string[] = [];
-  for (const d of ["common", "events"]) collect(path.join(opts.modPath, d), ".txt", scriptFiles);
+  for (const root of modRoots) {
+    for (const d of ["common", "events"]) collect(path.join(root, d), ".txt", scriptFiles);
+  }
   for (const file of scriptFiles) {
     const buf = safeRead(file);
     if (!buf) continue;
@@ -182,7 +220,7 @@ const NAME_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * Keys that completion deliberately does NOT offer as items, so they are excluded
  * from sampling: boolean/logic connectors, transparent control-flow wrappers, and
  * scope-chain words. Completion handles these through the grammar/context layer,
- * not as ranked trigger/effect items — sampling them would only measure a rank of
+ * not as ranked trigger/effect items, sampling them would only measure a rank of
  * "not offered" that reflects design, not ranking quality (they dominate the raw
  * effect/trigger "missing" counts: limit, modifier, NOT, this, OR, …).
  */
@@ -255,7 +293,7 @@ function candidatesInFile(text: string, entryKind: string | null): Candidate[] {
 /**
  * Map an enclosing-keyword chain to one of the reported contexts. Structural
  * contexts are decided by the file kind + block depth; effect/trigger blocks by
- * the nearest classifying keyword — mirroring what completion's own context
+ * the nearest classifying keyword, mirroring what completion's own context
  * detection sees.
  */
 function classifyPosition(entryKind: string | null, enclosing: string[], depth: number): EvalContext | null {
@@ -265,6 +303,8 @@ function classifyPosition(entryKind: string | null, enclosing: string[], depth: 
     if (entryKind === "event") return "event_top";
     if (entryKind === "character_interaction") return "interaction_top";
     if (entryKind === "decision") return "decision_top";
+    // Every other indexed kind: the game-neutral definition-body bucket.
+    if (entryKind) return "definition_top";
   }
   // Event option body: `option = { | }` (depth 2, parent is option).
   if (entryKind === "event" && depth === 2 && enclosing[enclosing.length - 1] === "option") {
@@ -290,7 +330,7 @@ function classifyPosition(entryKind: string | null, enclosing: string[], depth: 
  */
 export function runRankEval(
   env: EvalEnv,
-  modPath: string,
+  modPath: string | string[],
   opts: { seed?: number; perContext?: number } = {}
 ): { samples: EvalSample[]; metrics: ContextMetrics[] } {
   const seed = opts.seed ?? 1234567;
@@ -298,8 +338,17 @@ export function runRankEval(
   const rng = new Rng(seed);
 
   // Collect script files under common/ and events/, sorted for determinism.
+  // Each file remembers the mod root it came from, so classifyFile sees the
+  // right relative path in a multi-mod corpus.
+  const roots = Array.isArray(modPath) ? modPath : [modPath];
+  const rootOf = new Map<string, string>();
   const files: string[] = [];
-  for (const d of ["common", "events"]) collect(path.join(modPath, d), ".txt", files);
+  for (const root of roots) {
+    const mine: string[] = [];
+    for (const d of ["common", "events"]) collect(path.join(root, d), ".txt", mine);
+    for (const f of mine) rootOf.set(f, root);
+    files.push(...mine);
+  }
   files.sort();
 
   const byContext = new Map<EvalContext, EvalSample[]>();
@@ -314,7 +363,7 @@ export function runRankEval(
 
   for (const file of files) {
     if (!need()) break;
-    const entry = classifyFile(modPath, file, CK3_SCHEMA);
+    const entry = classifyFile(rootOf.get(file)!, file, env.schema.entries);
     const buf = safeRead(file);
     if (!buf) continue;
     const { text } = decode(buf);
@@ -375,28 +424,36 @@ export function metricsOf(samples: EvalSample[]): ContextMetrics[] {
     const group = samples.filter((s) => s.context === context);
     const n = group.length;
     if (n === 0) {
-      out.push({ context, n: 0, top1: 0, top5: 0, mrr: 0, missing: 0 });
+      out.push({ context, n: 0, top1: 0, top5: 0, top20: 0, mrr: 0, median: 0, missing: 0 });
       continue;
     }
     let top1 = 0;
     let top5 = 0;
+    let top20 = 0;
     let mrr = 0;
     let missing = 0;
+    const ranks: number[] = [];
     for (const s of group) {
       if (s.rank < 0) {
         missing++;
+        ranks.push(Number.POSITIVE_INFINITY);
         continue;
       }
+      ranks.push(s.rank);
       if (s.rank === 0) top1++;
       if (s.rank < 5) top5++;
+      if (s.rank < 20) top20++;
       mrr += 1 / (s.rank + 1);
     }
+    ranks.sort((a, b) => a - b);
     out.push({
       context,
       n,
       top1: top1 / n,
       top5: top5 / n,
+      top20: top20 / n,
       mrr: mrr / n,
+      median: ranks[Math.floor((n - 1) / 2)],
       missing: missing / n,
     });
   }
@@ -407,7 +464,8 @@ export function formatMetrics(metrics: ContextMetrics[]): string {
   const rows = metrics.map(
     (m) =>
       `  ${m.context.padEnd(16)} n=${String(m.n).padStart(4)}  ` +
-      `top1=${pct(m.top1)}  top5=${pct(m.top5)}  MRR=${m.mrr.toFixed(3)}  missing=${pct(m.missing)}`
+      `top1=${pct(m.top1)}  top5=${pct(m.top5)}  top20=${pct(m.top20)}  MRR=${m.mrr.toFixed(3)}  ` +
+      `median=${String(Number.isFinite(m.median) ? m.median : "-").padStart(5)}  missing=${pct(m.missing)}`
   );
   return rows.join("\n");
 }

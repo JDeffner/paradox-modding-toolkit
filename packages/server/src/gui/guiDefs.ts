@@ -16,6 +16,12 @@ export interface GuiTypeDef {
   /** The base widget/type key after `=`, e.g. `textbox` in `type text_single = textbox {}`. */
   base: string;
   block: BlockNode;
+  /**
+   * Offset of the declared NAME token in the text this def was collected from.
+   * Always present (unlike `line`, which needs a file path), so a caller
+   * holding the same text can turn a declaration back into a position.
+   */
+  keyOffset: number;
   /** Declaration site, present when the collector was given a file path. */
   file?: string;
   line?: number;
@@ -107,6 +113,7 @@ function collectFrom(
         defs.types.set(lower, {
           base: stmt.value.tag.text,
           block: stmt.value.block,
+          keyOffset: stmt.key.range.start,
           ...siteOf(stmt.key.range.start),
         });
       }
@@ -258,7 +265,7 @@ export interface GuiBlockSite {
 /**
  * All block names a widget built from `root` can override with
  * `blockoverride "name"`: `block` declarations in the body itself, in
- * templates spliced via `using =` (recursively), and — for types — up the
+ * templates spliced via `using =` (recursively), and, for types, up the
  * base-type chain. First site found per name wins (derived-most, matching
  * FIOS spirit); `blockoverride` declarations inside templates re-expose the
  * same name and count too.

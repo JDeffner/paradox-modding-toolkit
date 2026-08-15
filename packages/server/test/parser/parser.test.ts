@@ -18,7 +18,7 @@ function firstAssignment(text: string): AssignmentNode {
   return stmt as AssignmentNode;
 }
 
-describe("parseScript — round-trip offsets", () => {
+describe("parseScript, round-trip offsets", () => {
   it("every node range slices out exactly the source text", () => {
     const text = `# header comment
 my_event = {
@@ -308,6 +308,24 @@ describe("error recovery", () => {
     const { root, errors } = parseScript('a = "unterminated\nb = 2');
     expect(errors.some((e) => e.code === "unterminated-string")).toBe(true);
     expect(root.statements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Victoria 3's gui tree writes data functions across lines and the game
+  // accepts them; CK3 never does, which is why this went unnoticed. An open
+  // `[` is what licenses the newline, so the case above is untouched.
+  it("a [ ... ] data function may span lines", () => {
+    const text = 'visible = "[And(\n\tA,\n\tB\n)]"\nnext = 2';
+    const { root, errors } = parseScript(text);
+    expect(errors).toHaveLength(0);
+    expect(root.statements).toHaveLength(2);
+    const first = root.statements[0];
+    if (first.kind !== "assignment" || first.value?.kind !== "scalar") throw new Error("not a scalar");
+    expect(first.value.text).toBe("[And(\n\tA,\n\tB\n)]");
+  });
+
+  it("an open [ still gives up rather than swallowing the file", () => {
+    const { errors } = parseScript('a = "[Broken(\n' + "x = 1\n".repeat(40) + "b = 2\n");
+    expect(errors.some((e) => e.code === "unterminated-string")).toBe(true);
   });
 
   it("empty file", () => {

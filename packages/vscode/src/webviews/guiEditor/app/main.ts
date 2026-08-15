@@ -1,7 +1,7 @@
 /**
  * The GUI editor app: the thin DOM shell around the pure modules (scene,
  * hit-test, selection, tree, layers, snap, inspector) and the canvas painter.
- * It owns the camera, the panels and the DOM, and nothing else — layout, text
+ * It owns the camera, the panels and the DOM, and nothing else, layout, text
  * and the inspector's rows all come from the host (../messages.ts).
  *
  * G3.1 rendered; G3.2 selects and inspects: click picks the smallest rect,
@@ -33,7 +33,7 @@
  * G5 stage 2 is the DEVTOOLS HALO and the browsers, and it adds a fourth rule
  * that only applies to them: A CLOSED PANEL COSTS NOTHING. Every surface below
  * is behind a toggle, and while the toggle is off no request is sent, no scene
- * is walked and no overlay is drawn — which is why the placement trace is a
+ * is walked and no overlay is drawn, which is why the placement trace is a
  * flag on `requestWidgetInfo` rather than a second request, why the heatmap is
  * a mode the painter tests once, and why the halo's own requests are debounced
  * on selection change and never fire inside a drag frame.
@@ -150,7 +150,7 @@ const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
-let scene: Scene = { items: [], count: 0 };
+let scene: Scene = { items: [], count: 0, declaredRoots: 0 };
 let images: Images = {};
 let file = "";
 let defsFiles = 0;
@@ -445,7 +445,12 @@ function renderTree(): void {
     node.appendChild(twisty);
     node.appendChild(el("span", undefined, row.key));
     if (row.name) node.appendChild(el("span", "rowName", `#${row.name}`));
-    if (row.synthetic) {
+    if (row.declared) {
+      const tag = el("span", "tag", "declaration");
+      tag.title =
+        "This file declares this type and instantiates nothing, so the declaration is previewed as one instance of itself. Its children are this file's own statements and are editable.";
+      node.appendChild(tag);
+    } else if (row.synthetic) {
       const tag = el("span", "tag", "synthetic");
       tag.title = "Spliced in from a template or a type: no source of its own in this file.";
       node.appendChild(tag);
@@ -629,7 +634,11 @@ function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   );
   const label = el("span", "label", widgetTitle(row));
   node.appendChild(label);
-  if (row.synthetic) {
+  if (row.declared) {
+    const tag = el("span", "tag", "declaration");
+    tag.title = "A type this file declares, previewed as one instance of itself: there is no slot to move.";
+    node.appendChild(tag);
+  } else if (row.synthetic) {
     const tag = el("span", "tag", "synthetic");
     tag.title = "Spliced in from a template or a type: no source of its own to move.";
     node.appendChild(tag);
@@ -1755,11 +1764,17 @@ function statusLine(): string {
     others.length > 0
       ? ` · ${others.length + 1} selected, ${item ? widgetTitle(item) : "none"} is the primary`
       : item
-        ? ` · selected ${widgetTitle(item)}${item.editable ? "" : " (synthetic)"}`
+        ? ` · selected ${widgetTitle(item)}${item.editable ? "" : item.declared ? " (declaration)" : " (synthetic)"}`
         : "";
   const focused = focusIndex === null ? "" : ` · focused on ${widgetTitle(scene.items[focusIndex])}`;
   const moved = pulseNoteText ? ` · ${pulseNoteText}` : "";
-  return `${scene.count} widgets · ${file}${estimated}${focused}${picked}${moved}`;
+  // Why several panels are stacked at the origin: the file instantiates none of
+  // them, so every type it declares is previewed as one instance of itself.
+  const declared =
+    scene.declaredRoots > 0
+      ? ` · previewing ${scene.declaredRoots} declared type${scene.declaredRoots === 1 ? "" : "s"}`
+      : "";
+  return `${scene.count} widgets · ${file}${declared}${estimated}${focused}${picked}${moved}`;
 }
 
 function loadTextures(urls: Record<string, string | null>): void {
@@ -1823,7 +1838,7 @@ function onLayout(
   // The warning is the host's own words, shown verbatim: the app cannot know
   // how many files a complete store holds, only the host knows why it is short.
   metaEl.textContent = storeWarning
-    ? `${defsFiles} gui files in template store — ${storeWarning}`
+    ? `${defsFiles} gui files in template store, ${storeWarning}`
     : `${defsFiles} gui files in template store`;
   metaEl.style.color = storeWarning
     ? "var(--vscode-editorWarning-foreground)"
@@ -2663,7 +2678,7 @@ let paletteDrag: PaletteDrag | null = null;
  * The nearest container a drop can be written into: the widget under the
  * cursor, or the first ancestor of it with a declaration in this file. Null
  * when there is none, which is the honest answer over a template-spliced
- * subtree — the server would refuse that insert, and the drop affordance must
+ * subtree, the server would refuse that insert, and the drop affordance must
  * not promise it.
  */
 function dropTargetAt(world: { x: number; y: number }): DropTarget | null {
@@ -2742,8 +2757,8 @@ function dropLineIn(target: DropTarget, rank: number): Guide {
 
 /**
  * Release: ONE `insert` op, and the new widget becomes the selection. The body
- * is empty on purpose — a size this editor invented would be a number the
- * author never chose and the engine never measured — so the status line says
+ * is empty on purpose, a size this editor invented would be a number the
+ * author never chose and the engine never measured, so the status line says
  * the widget draws nothing until it is given one.
  */
 function endPaletteDrag(commit: boolean): void {

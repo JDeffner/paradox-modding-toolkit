@@ -21,11 +21,11 @@ export interface ParadoxSettings {
   logsPath: string | null;
   modPath: string | null;
   /** Parent/dependency mod roots (load order, base first) indexed as source "parent"
-   * — the submod / compatibility-patch workflow. */
+   *, the submod / compatibility-patch workflow. */
   parentPaths: string[];
   /** Workspace mod roots (subset of parentPaths): mods the user is EDITING in
-   * this workspace, so they get the mod treatment — reference indexing and
-   * reference diagnostics — on top of the parent definition scan. */
+   * this workspace, so they get the mod treatment, reference indexing and
+   * reference diagnostics, on top of the parent definition scan. */
   workspaceMods?: string[];
   locLanguage: string;
   /** Show inferred scope after scope-changing block openers (off by default). */
@@ -97,7 +97,7 @@ export interface ParadoxInitOptions {
   dataDir?: string;
   /**
    * @deprecated Send {@link ParadoxInitOptions.dataDir} instead. Overrides the
-   * wikidocs/ folder ALONE — freqs.json still comes from `dataDir`/the bundle —
+   * wikidocs/ folder ALONE, freqs.json still comes from `dataDir`/the bundle,
    * and, being one fixed folder, it does NOT follow a `gameId` change.
    */
   wikidocsDir?: string;
@@ -526,6 +526,15 @@ export interface GuiLayoutNode {
    * never editable. Presentation only, not a measured layout rule.
    */
   ghost?: boolean;
+  /**
+   * A root that is a `type name = base { }` DECLARATION laid out as one
+   * instance of itself. Set only on roots, and only for a document that
+   * instantiates nothing at top level, the shape whole panels are written in
+   * by the games whose engine instantiates a window by name from code. The
+   * declaration header is not editable; the children under it are ordinary
+   * statements of the document and are.
+   */
+  declared?: boolean;
   children: GuiLayoutNode[];
 }
 export interface GuiLayoutResult {
@@ -621,7 +630,7 @@ export interface GuiPlacementTerm {
    * The authored spec behind the term (`bottom|right`, `{ -30 -30 }`). Absent
    * on `parentOrigin`, which is the parent's rect rather than a property, and
    * on a `widgetanchor` that was never written (it mirrors `parentanchor`,
-   * B1-B/C) — there `source` names the anchor it mirrored.
+   * B1-B/C), there `source` names the anchor it mirrored.
    */
   source?: string;
   dx: number;
@@ -671,7 +680,7 @@ export interface GuiPlacement {
  * decode); `columns`/`rows`/`cell` need it, so they are absent when the file
  * does not resolve under the configured roots.
  *
- * The grid is driven by `framesize` — the property the vanilla gui trees
+ * The grid is driven by `framesize`, the property the vanilla gui trees
  * actually carry (both harvested titles ship it; neither ships `noofframes`).
  */
 export interface GuiTextureInfo {
@@ -1036,7 +1045,7 @@ export interface DependenciesParams {
   kind?: string;
   /**
    * Also resolve {@link DependenciesResult.guiUses}: the `.gui` call sites that
-   * reach this definition through a scripted_gui. Off by default — it walks the
+   * reach this definition through a scripted_gui. Off by default, it walks the
    * scripted_gui definitions that any .gui file calls, which the plain
    * dependency answer does not need.
    */
@@ -1063,7 +1072,7 @@ export interface DependenciesResult {
   /** The resolved definition, or null when nothing matches the cursor/name. */
   def: DependencyDef | null;
   /** Mod definitions/sites that reference `def` (mod files only; vanilla
-   * references aren't indexed — AD-4). Grouped by the containing definition's
+   * references aren't indexed, AD-4). Grouped by the containing definition's
    * kind, else by file. */
   dependents: DependencyGroup[];
   /** Named definitions referenced inside `def`'s block, grouped by target kind. */
@@ -1148,7 +1157,7 @@ export interface ScopeAtResult {
   /**
    * Saved scopes visible in the document, name-sorted: every `save_scope_as` /
    * `save_scope_value_as` site in the file plus the engine-provided ambient
-   * scopes of its definition kind. NOT flow-sensitive — a save further down
+   * scopes of its definition kind. NOT flow-sensitive, a save further down
    * the file is listed too, matching what completion and hover already offer.
    */
   savedScopes: SavedScopeInfo[];

@@ -98,6 +98,7 @@ describe("the base a gesture adds its delta to", () => {
       opacity: 1,
       ghost: false,
       editable: true,
+      declared: false,
     };
     expect(baseOf(item)).toEqual({ position: [0, 0], size: [70, 30] });
   });

@@ -29,6 +29,8 @@ export interface LayerRow {
   name?: string;
   /** Spliced in from a template or a type: no source of its own here. */
   synthetic: boolean;
+  /** A type DECLARATION of this file drawn as an instance (scene.ts `declared`). */
+  declared: boolean;
   ghost: boolean;
   /**
    * The widget's index among its parent body's SOURCE children, straight from
@@ -58,6 +60,7 @@ export function layerRows(scene: Scene, container: number | null): LayerRow[] {
       key: item.key,
       name: item.name,
       synthetic: !(item.editable && item.line !== undefined),
+      declared: item.declared,
       ghost: item.ghost,
       source: movable ? item.srcIndex! : -1,
       rank: movable ? rank++ : -1,
@@ -68,7 +71,7 @@ export function layerRows(scene: Scene, container: number | null): LayerRow[] {
 /**
  * The `to` a `reorder` op takes, from the rank a drop landed on among the
  * movable rows. The op removes the block at `from` and re-inserts it so it ENDS
- * UP at `to`, counting the container's SOURCE children — so a rank has to be
+ * UP at `to`, counting the container's SOURCE children, so a rank has to be
  * translated through `sources` (their source indices, ascending) and the two
  * only agree when nothing else shares the body.
  *

@@ -1,6 +1,6 @@
 /**
  * The game type schema (rework plan AD-3): a *small*, declarative,
- * community-editable table describing what lives in each game folder — how
+ * community-editable table describing what lives in each game folder, how
  * definitions are named, which loc keys a type requires, what scope its
  * script blocks run in, and which assignment keys cross-reference other
  * definitions.
@@ -45,7 +45,7 @@ export interface KeySpec {
    * deliberate and outranks any harvested key. Harvested `.info` freqs count
    * usage at ANY depth in the folder, so re-sorting curated top-level keys by
    * them lets option-level keys (name, modifier…) bury the real top-level
-   * vocabulary — the completion regression rank-eval caught in 2026-07.
+   * vocabulary, the completion regression rank-eval caught in 2026-07.
    */
   curated?: boolean;
 }
@@ -55,6 +55,28 @@ export interface StructureSpec {
   topLevel: KeySpec[];
   /** Named sub-blocks (option, send_option, cost…) with their own keys. */
   blocks?: Record<string, KeySpec[]>;
+}
+
+/**
+ * How one definition kind declares the root scope of its own script blocks
+ * (scopes/inference.ts). Games disagree on both the key and the vocabulary: one
+ * writes `scope = character` inside an event, another writes `type = X_event`.
+ * That is why this table lives on the game profile and not in the engine,
+ * assuming one game's spelling everywhere puts every event of the other game in
+ * the wrong root scope, which demotes every correct effect to "other scope" and
+ * sinks it to the bottom of completion.
+ */
+export interface DefRootKey {
+  /** Key inside the definition body that names the root scope. */
+  key: string;
+  /** Scope when the key is absent. Omit = fall back to the schema's rootScopes. */
+  default?: string;
+  /**
+   * Declared value → scope name, for games that do not spell the value as the
+   * scope (`country_event` → country). Absent = the value IS the scope name.
+   * A value the map does not list falls back to `default`.
+   */
+  values?: Record<string, string>;
 }
 
 /** An engine-provided saved scope available in a kind's script blocks (v1.1 §B3). */
@@ -76,7 +98,7 @@ export interface SchemaEntry {
   /**
    * Loc keys the game requires per definition; `$` is the definition name
    * (e.g. "trait_$", "$_desc"). Used for conservative missing-loc diagnostics
-   * and loc coverage — only include patterns that ≥95% of vanilla definitions
+   * and loc coverage, only include patterns that ≥95% of vanilla definitions
    * of this kind actually define.
    */
   requiredLoc?: string[];

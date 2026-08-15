@@ -17,13 +17,21 @@ export interface Token {
   start: number;
   end: number;
   // For "op": the operator text ("=", "?=", ...).
-  // For "word"/"string"/"comment": not populated (slice the source instead) —
+  // For "word"/"string"/"comment": not populated (slice the source instead),
   // but we DO record `unterminated` on unterminated strings.
   value?: string;
   // Only meaningful for "string" tokens: true if the closing quote was missing
   // and the token was terminated at end-of-line / EOF.
   unterminated?: boolean;
 }
+
+/**
+ * How many newlines one quoted string may cross while a `[` inside it is still
+ * open. The longest multi-line data function measured across the shipped gui
+ * trees is four lines; this is the backstop that keeps a genuinely broken `"[`
+ * from turning the remainder of a file into one token.
+ */
+const MAX_STRING_SPAN = 32;
 
 // Character classification helpers ----------------------------------------
 
@@ -100,6 +108,15 @@ export function tokenize(text: string): Token[] {
       const start = i;
       i++;
       let unterminated = false;
+      // A `[ … ]` data-function expression may be written across several lines
+      //, `visible = "[And(\n\tA,\n\tB\n)]"`, and the games accept it: one
+      // shipped gui tree writes it, and the largest community framework on it
+      // does so in 23 of its 52 .gui files. A newline therefore continues the
+      // string ONLY while a `[` is still open: an ordinary unterminated string
+      // recovers at end of line exactly as before, and a stray `"[` gives up
+      // after MAX_STRING_SPAN lines instead of swallowing the rest of the file.
+      let brackets = 0;
+      let spanned = 0;
       while (true) {
         if (i >= len) {
           unterminated = true;
@@ -116,10 +133,17 @@ export function tokenize(text: string): Token[] {
           break;
         }
         if (cc === 10 || cc === 13) {
-          // Unterminated: recover at end of line.
-          unterminated = true;
-          break;
+          if (brackets === 0 || spanned >= MAX_STRING_SPAN) {
+            // Unterminated: recover at end of line.
+            unterminated = true;
+            break;
+          }
+          if (cc === 10) spanned++;
+          i++;
+          continue;
         }
+        if (cc === 91 /* [ */) brackets++;
+        else if (cc === 93 /* ] */ && brackets > 0) brackets--;
         i++;
       }
       const tok: Token = { kind: "string", start, end: i };
@@ -145,7 +169,7 @@ export function tokenize(text: string): Token[] {
         i += 2;
         continue;
       }
-      // Lone `!` — treat as a one-char word (rare; be tolerant).
+      // Lone `!`, treat as a one-char word (rare; be tolerant).
       tokens.push({ kind: "word", start: i, end: i + 1 });
       i += 1;
       continue;
@@ -176,7 +200,7 @@ export function tokenize(text: string): Token[] {
         i += 2;
         continue;
       }
-      // Lone `?` not followed by `=` — fall through and treat as a word char.
+      // Lone `?` not followed by `=`, fall through and treat as a word char.
       // (Do not `continue`; let the word scanner below pick it up.)
     }
 
@@ -207,7 +231,7 @@ export function tokenize(text: string): Token[] {
         i++;
       }
       if (i === start) {
-        // Defensive: unknown char we didn't advance past — consume one char as a
+        // Defensive: unknown char we didn't advance past, consume one char as a
         // word so we never loop forever on pathological input.
         i++;
       }

@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseScript } from "../src/parser";
 import { ScopeModel } from "../src/scopes/model";
-import { collectSavedScopeTypes, inferScopeAt } from "../src/scopes/inference";
+import { collectSavedScopeTypes, inferScopeAt, rootScopesAt } from "../src/scopes/inference";
+import { activeProfile, setActiveProfile } from "../src/games/active";
+import { resolveProfile } from "../src/games/registry";
 import type { TokenData } from "@px-lsp/protocol/types";
 
 /** A miniature link table shaped like real script_docs output. */
@@ -141,5 +143,46 @@ describe("collectSavedScopeTypes", () => {
     const parse = parseScript(text);
     const saved = collectSavedScopeTypes(parse, model, CHARACTER);
     expect(saved.get("thing")).toEqual(new Set(["landed_title", "character"]));
+  });
+});
+
+/**
+ * Per-definition root scopes come from the active profile (profile.defRootKeys),
+ * not from a constant in the engine. This was a real, measured completion bug:
+ * one game's events declare `scope = character` and default to character when
+ * the key is absent, another's carry no `scope` at all and name their root
+ * through `type = <x>_event`. Assuming the first spelling for both put every
+ * event of the second game in a character scope, which pushed every correct
+ * country effect and trigger into the "other scope" tier at the bottom of the
+ * completion list (measured median rank 3963 → 111 once fixed).
+ */
+describe("per-definition root scope (profile.defRootKeys)", () => {
+  const defaultProfileBefore = activeProfile();
+  afterEach(() => setActiveProfile(defaultProfileBefore));
+
+  function rootAt(gameId: string, kind: string, text: string): string[] | null {
+    setActiveProfile(resolveProfile(gameId));
+    const parse = parseScript(text);
+    const entry = resolveProfile(gameId).schema.find((e) => e.kind === kind)!;
+    const fallback = entry.rootScopes?.length ? new Set(entry.rootScopes) : null;
+    const scopes = rootScopesAt(parse, text.indexOf("|"), fallback, { entry });
+    return scopes ? [...scopes].sort() : null;
+  }
+
+  it("maps a declared value through the profile's vocabulary", () => {
+    const text = "e.1 = {\n\ttype = country_event\n\timmediate = {\n\t\t|\n\t}\n}";
+    expect(rootAt("vic3", "event", text)).toEqual(["country"]);
+    expect(rootAt("vic3", "event", text.replace("country_event", "state_event"))).toEqual(["state"]);
+  });
+
+  it("falls back to the profile's default when the key is absent", () => {
+    const text = "e.1 = {\n\timmediate = {\n\t\t|\n\t}\n}";
+    expect(rootAt("ck3", "event", text)).toEqual(["character"]);
+    expect(rootAt("vic3", "event", text)).toEqual(["country"]);
+  });
+
+  it("takes the declared value verbatim where the game spells it as the scope", () => {
+    const text = "my_gui = {\n\tscope = country\n\teffect = {\n\t\t|\n\t}\n}";
+    expect(rootAt("vic3", "scripted_gui", text)).toEqual(["country"]);
   });
 });

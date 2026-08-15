@@ -25,6 +25,8 @@ export interface TreeRow {
   name?: string;
   /** Spliced in from a template or a type: no source of its own in this file. */
   synthetic: boolean;
+  /** A type DECLARATION of this file drawn as an instance (scene.ts `declared`). */
+  declared: boolean;
   /** A datamodel placeholder row: no runtime data exists in a static preview. */
   ghost: boolean;
   hasChildren: boolean;
@@ -69,6 +71,7 @@ export function treeRows(
       key: item.key,
       name: item.name,
       synthetic: !item.editable,
+      declared: item.declared,
       ghost: item.ghost,
       hasChildren,
       collapsed: isCollapsed,

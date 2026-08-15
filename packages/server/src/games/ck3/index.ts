@@ -20,6 +20,14 @@ export const ck3Profile: GameProfile = {
   prefixRefs: PREFIX_REFS,
   blockRefFields: BLOCK_REF_FIELDS,
   structureSources: STRUCTURE_SOURCES,
+  // Events declare `scope = character|landed_title|…` and default to character
+  // when the key is absent (events/_events.info); custom loc `type = all` → any
+  // scope; scripted_guis declare `scope = X`.
+  defRootKeys: {
+    event: { key: "scope", default: "character" },
+    customizable_localization: { key: "type" },
+    scripted_gui: { key: "scope", default: "character" },
+  },
   modifierPlaceholders: CK3_MODIFIER_PLACEHOLDERS,
   bundledDataTypes: BUNDLED_DATA_TYPES,
   guiSchema: GUI_SCHEMA,

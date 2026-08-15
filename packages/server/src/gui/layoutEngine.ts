@@ -5,7 +5,7 @@
  * Every layout rule here is MEASURED, not guessed: the authority is
  * docs/gui-designer/calibration/spec.md, and rule comments cite their batch
  * ("B2-I1" = calibration batch 02, case I1). Where the spec is silent the
- * comment says "unmeasured" and names the assumption — those are the first
+ * comment says "unmeasured" and names the assumption, those are the first
  * candidates for a future calibration batch when a rendering looks wrong.
  *
  * Scope (phase 1): structural widgets, boxes with layout policies,
@@ -29,7 +29,14 @@
  * holds the golden fixtures derived from the calibration screenshots).
  */
 import { LineIndex, parseScript, type BlockNode, type ScalarNode, type Statement } from "../parser";
-import { collectBlockOverrides, collectGuiDefs, emptyGuiDefs, expandWidget, type GuiDefs } from "./guiDefs";
+import {
+  collectBlockOverrides,
+  collectGuiDefs,
+  collectGuiDefsParsed,
+  emptyGuiDefs,
+  expandWidget,
+  type GuiDefs,
+} from "./guiDefs";
 import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
 // The anchor table is a leaf so the webview's anchor picker offers exactly the
 // words this engine parses (B1-B/C).
@@ -97,7 +104,7 @@ export interface LayoutNode {
   name?: string;
   /** Absolute rect in canvas coordinates. */
   rect: LayoutRect;
-  /** True for scrollarea viewports — the only measured clipper (B3-R1). */
+  /** True for scrollarea viewports, the only measured clipper (B3-R1). */
   clip: boolean;
   bg?: Fill;
   /** The widget's own texture fill (icon, textured widgets/buttons). */
@@ -118,13 +125,13 @@ export interface LayoutNode {
   /**
    * True when `line` is the widget's OWN statement in the current document
    * (safe to edit). False for children spliced from type definitions, whose
-   * `line` is the instance ancestor's — editing those would modify the
+   * `line` is the instance ancestor's, editing those would modify the
    * wrong widget.
    */
   editable: boolean;
   /** Raw `position = { x y }` source values, when present. */
   srcPosition?: [number, number];
-  /** Raw `size = { w h }` source values, when present (may be % — see sizePct). */
+  /** Raw `size = { w h }` source values, when present (may be %, see sizePct). */
   srcSize?: [number, number];
   /**
    * The widget's index among its parent body's REORDER SIBLINGS, which is what
@@ -144,6 +151,14 @@ export interface LayoutNode {
    * stand in. Presentation only, propagated to the whole ghost subtree.
    */
   ghost?: boolean;
+  /**
+   * True for a root that is a `type name = base { }` DECLARATION laid out as
+   * one instance of itself, which is what a document that instantiates nothing
+   * at top level shows (see {@link declaredRoots}). The declaration header
+   * itself is not an editable widget, its children, which are real statements
+   * in this document, are.
+   */
+  declared?: boolean;
   children: LayoutNode[];
 }
 
@@ -266,7 +281,7 @@ export interface GuiTextMetrics {
   /** Line box height at baseFontsize. */
   lineHeight: number;
   glyphs: Record<string, { adv: number; ink: number }>;
-  /** Fallback for glyphs outside the measured set — a rough average. */
+  /** Fallback for glyphs outside the measured set, a rough average. */
   defaultGlyph: { adv: number; ink: number };
   /**
    * The fontsize a textbox renders at when it sets none. Absent = 15 (the
@@ -276,8 +291,8 @@ export interface GuiTextMetrics {
   /**
    * When true, each glyph's advance/ink is ROUNDED after scaling to the
    * requested fontsize instead of scaling the sum linearly. The 2026-08-09 probe
-   * measured this law: M advance = round(0.9 * fontsize) — 14 at
-   * 15, 15 at 17, 27 at 30 — which no linear table reproduces. Pick
+   * measured this law: M advance = round(0.9 * fontsize), 14 at
+   * 15, 15 at 17, 27 at 30, which no linear table reproduces. Pick
    * baseFontsize so adv/base is the glyph's true em fraction. lineHeight
    * still scales linearly (the same probe's 1.3 * fontsize law is exact).
    */
@@ -375,10 +390,18 @@ export function computeGuiLayout(text: string, options?: LayoutOptions): LayoutN
     checks: options?.checks ?? new Map(),
   };
   const t1 = options?.timing ? performance.now() : 0;
-  const widgets = collectWidgets(result.root.statements, ctx);
+  let widgets = collectWidgets(result.root.statements, ctx);
+  // Nothing is instantiated here: preview what the file DECLARES instead of an
+  // empty canvas (see `declaredRoots`).
+  let declared = false;
+  if (widgets.length === 0) {
+    widgets = declaredRoots(result.root.statements, ctx);
+    declared = widgets.length > 0;
+  }
   const root: LayoutRect = { x: 0, y: 0, w: viewport.w, h: viewport.h };
   const chain: ExplainChain | undefined = options?.explain ? { sink: options.explain } : undefined;
   const nodes = widgets.map((w) => arrange(w, root, "plain", measurer, undefined, chain));
+  if (declared) for (const n of nodes) n.declared = true;
   if (options?.timing) {
     options.timing.parseMs = t1 - t0;
     options.timing.layoutMs = performance.now() - t1;
@@ -561,7 +584,7 @@ interface BuildCtx {
   /**
    * blockoverride map inherited from ancestor instances; outer overrides win
    * over inner ones (an instance override reaches into blocks declared deep
-   * inside the type's subtree — the PoD resource-bar pattern).
+   * inside the type's subtree, the PoD resource-bar pattern).
    */
   overrides: Map<string, BlockNode>;
   /** Type keys currently being instantiated, to break recursion cycles. */
@@ -652,7 +675,7 @@ function buildWNode(
       if (child) {
         if (k === "item") {
           // Datamodel item template: `item = { <widget> }` holds one instance
-          // of the per-row widget (the universal vanilla pattern — verified in
+          // of the per-row widget (the universal vanilla pattern, verified in
           // window_character.gui skills hbox + modifiers fixedgridbox: item is
           // always a plain wrapper whose children are the row widget). Captured
           // here, stamped out as ghost copies after process(). The wrapper node
@@ -903,6 +926,42 @@ function collectWidgets(statements: Statement[], ctx: BuildCtx): WNode[] {
 }
 
 /**
+ * The fallback roots for a document that instantiates NOTHING at top level:
+ * one laid-out instance per `type name = base { }` the document declares, in
+ * declaration order.
+ *
+ * Where the engine instantiates a window BY NAME from code, that is how whole
+ * panels are written: one `types Group { type panel = base_window { … } }` and
+ * no instance at all. Two thirds of one shipped game's vanilla gui tree (132 of
+ * 204 files) and three quarters of the largest community framework built on it
+ * are that shape, and every one of them laid out to nothing.
+ *
+ * The declaration is expanded as its BASE plus its own body, which is exactly
+ * one instantiation: passing the declared name would splice the definition into
+ * itself. `ownLine` is false because the `type X = base` header is a
+ * declaration, not an editable widget (`guiSourceEdit` and `guiWidgetInfo` both
+ * refuse one); the body's children are ordinary statements of this document and
+ * stay editable, since `buildWNode` measures them against the block it is given.
+ */
+function declaredRoots(statements: Statement[], ctx: BuildCtx): WNode[] {
+  const out: WNode[] = [];
+  for (const [name, def] of collectGuiDefsParsed(statements).types) {
+    // The declared name guards the cycle here; `buildWNode` pushes the base.
+    if (ctx.stack.includes(name)) continue;
+    const node = buildWNode(
+      def.base,
+      def.block,
+      { ...ctx, stack: [...ctx.stack, name] },
+      ctx.lineOf(def.keyOffset),
+      false
+    );
+    node.key = name;
+    out.push(node);
+  }
+  return out;
+}
+
+/**
  * Every DECLARATION entry of one body, ranked by the index a `reorder`,
  * `insert` or `delete` op counts in. That list is `GuiBody.children` in
  * `sourceModel.ts`: widgets AND decl entries, properties skipped. The marker
@@ -911,8 +970,8 @@ function collectWidgets(statements: Statement[], ctx: BuildCtx): WNode[] {
  * takes a slot here exactly as it does there, which is what a client counting
  * only the widgets it can see gets wrong.
  *
- * Only widget entries end up in the map — a decl has no layout node to carry a
- * rank — but every decl still advances the counter.
+ * Only widget entries end up in the map, a decl has no layout node to carry a
+ * rank, but every decl still advances the counter.
  */
 function siblingRanks(statements: readonly Statement[]): Map<Statement, number> {
   const ranks = new Map<Statement, number>();
@@ -1135,8 +1194,8 @@ function naturalSize(node: WNode, measurer: LayoutEnv): { w: number; h: number }
       // children keeps an authored `size` (the engine warns yet applies it);
       // an EMPTY one collapses, a fixed size will not hold it open. Without
       // an authored size it hugs the children's extent at their positions
-      // (B2-I4). The 2026-08-09 probe measured the BROAD rule instead — an empty sized
-      // container keeps its size too (probe 2026-08-09) — carried as a
+      // (B2-I4). The 2026-08-09 probe measured the BROAD rule instead, an empty sized
+      // container keeps its size too (probe 2026-08-09), carried as a
       // profile quirk.
       const explicit = explicitSize(node);
       if (explicit && (node.children.length > 0 || measurer.emptySizedContainerKept)) return explicit;
@@ -1152,7 +1211,7 @@ function naturalSize(node: WNode, measurer: LayoutEnv): { w: number; h: number }
       return hugChildren(node, measurer);
     }
     default: {
-      // Plain widget/icon/window: explicit size or ZERO — no hug (B4-T1),
+      // Plain widget/icon/window: explicit size or ZERO, no hug (B4-T1),
       // unless a `resizeparent = yes` child dictates the size instead (L28).
       const resizer = resizeParentSource(node);
       if (resizer) return hugChildren(resizer, measurer);
@@ -1402,7 +1461,7 @@ function placeInParent(node: WNode, content: LayoutRect, measurer: TextMeasurer)
   let h: number;
   if (node.cls === "box") {
     // Boxes FILL a non-box parent, explicit size ignored entirely
-    // (B1-E/F, B2-I1, B3-P1). Inside another box they hug — but that path
+    // (B1-E/F, B2-I1, B3-P1). Inside another box they hug, but that path
     // goes through arrangeBoxChildren, not here.
     w = content.w;
     h = content.h;
@@ -1500,7 +1559,7 @@ function arrangeBoxChildren(
     const expanders = mainPolicies.map((p, i) => ({ p, i })).filter(({ p }) => p === "expanding");
     // Without expanding siblings, growing AND preferred take the space; the
     // growing case is measured (B3-P2), preferred sharing with growing is
-    // unmeasured — treated as the same tier.
+    // unmeasured, treated as the same tier.
     const growers = mainPolicies
       .map((p, i) => ({ p, i }))
       .filter(({ p }) => p === "growing" || p === "preferred");
@@ -1737,7 +1796,7 @@ function textSize(node: WNode, measurer: LayoutEnv): { size: { w: number; h: num
   const maxWidth = num(node, "max_width");
   const explicit = explicitSize(node);
   // Vanilla `textbox` does not autoresize; text_single opts in (labels.gui).
-  // A fixed-size textbox ignores max_width entirely — that is exactly the
+  // A fixed-size textbox ignores max_width entirely, that is exactly the
   // measured text_multi 45x45 behavior (B2-L).
   const autoresize = yes(node, "autoresize");
 

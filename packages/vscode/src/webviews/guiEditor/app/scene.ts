@@ -2,7 +2,7 @@
  * Scene building: the server's `GuiLayoutNode` tree flattened into a
  * back-to-front draw list.
  *
- * PURE by design. No DOM, no canvas, no host — so the scene-dump harness runs
+ * PURE by design. No DOM, no canvas, no host, so the scene-dump harness runs
  * it headless (test/guiEditorScene.test.ts) and the canvas shell stays a thin
  * painter over it.
  *
@@ -90,6 +90,13 @@ export interface SceneItem {
   /** True when `line` is this widget's own statement (safe to edit). */
   editable: boolean;
   /**
+   * A `type name = base { }` DECLARATION drawn as one instance of itself,
+   * which is what a file that instantiates nothing at top level shows. Not
+   * editable, the header is a declaration, not a widget, but it is the
+   * file's own content, so the panels say "declaration" and not "synthetic".
+   */
+  declared: boolean;
+  /**
    * `position` / `size` as the ENGINE resolved them through the template and
    * type chain, absent when the widget declares neither anywhere. These are the
    * base an edit gesture adds its delta to (gesture.ts): the rect is where the
@@ -119,6 +126,8 @@ export interface Scene {
   items: SceneItem[];
   /** Total widgets, which is items.length: every node is drawn exactly once. */
   count: number;
+  /** Roots that are previewed type declarations; 0 for an ordinary file. */
+  declaredRoots: number;
 }
 
 /**
@@ -200,6 +209,7 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
       ghostBox: ghostBoxOf(node),
       line: node.line,
       editable: node.editable,
+      declared: node.declared === true,
       srcPosition: node.srcPosition,
       srcSize: node.srcSize,
       srcIndex: node.srcIndex,
@@ -211,7 +221,7 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
     node.children.forEach((child, i) => visit(child, [...path, i], childClip, isGhost));
   };
   nodes.forEach((node, i) => visit(node, [i], undefined, false));
-  return { items, count: items.length };
+  return { items, count: items.length, declaredRoots: nodes.filter((n) => n.declared).length };
 }
 
 /**

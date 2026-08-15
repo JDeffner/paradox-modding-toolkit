@@ -1,14 +1,14 @@
 /**
  * The GameProfile boundary (docs/PLAN.md §3): everything game-specific lives
  * behind this interface, in one module per game under games/. The engine and
- * features never name a game — they read the active profile (games/active.ts)
+ * features never name a game, they read the active profile (games/active.ts)
  * or the SchemaData built from it (schema/loader.ts).
  *
  * CI enforces the boundary: outside packages/server/src/games/ and
  * packages/vscode/, game-name strings may not appear in source
  * (scripts/check-game-boundary.mjs).
  */
-import type { RefField, SchemaEntry } from "../schema/types";
+import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 
@@ -155,6 +155,19 @@ export interface GameProfile extends GameMeta {
   blockRefFields: Record<string, Record<string, string[]>>;
   /** Hover provenance labels per definition kind (`_*.info` folder names). */
   structureSources: Record<string, string>;
+  /**
+   * Block-schema `structure` layer per definition kind, attached to the matching
+   * schema entries at load (schema/loader.ts). A game whose schema table already
+   * carries `structure` on its entries (a hand-curated layer) needs nothing here;
+   * those entries always win.
+   */
+  structures?: Record<string, StructureSpec>;
+  /**
+   * Definition kinds that declare their own root scope in their body, keyed by
+   * kind (scopes/inference.ts). Absent = every kind's root scope comes from the
+   * schema table alone.
+   */
+  defRootKeys?: Record<string, DefRootKey>;
   /** Templated-modifier placeholder table (data/modifierTemplates.ts). */
   modifierPlaceholders: Record<string, PlaceholderSpec>;
   /**

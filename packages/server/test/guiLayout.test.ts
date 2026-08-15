@@ -602,7 +602,7 @@ types B { type thing = widget { size = { 99 99 } } }`);
       nodes.forEach(visit);
       expect(ghosts).toBeGreaterThan(0);
       // GHOST_COUNT (3) copies per list, capped, must not explode the tree even
-      // with nested datamodels — guards the preview's per-keystroke budget.
+      // with nested datamodels, guards the preview's per-keystroke budget.
       // window_character (the heaviest vanilla case) measures ~13.5k nodes.
       expect(total).toBeLessThan(20000);
     }
@@ -610,7 +610,7 @@ types B { type thing = widget { size = { 99 99 } } }`);
 });
 
 // Phase 2 (Stream C): presentation / deterministic additions. These are NOT
-// calibrated pixel truth — datamodel and state cases assert structure only
+// calibrated pixel truth, datamodel and state cases assert structure only
 // (documented unmeasured in spec.md); nine-slice geometry is exact math.
 describe("phase 2: datamodel list placeholders (unmeasured presentation)", () => {
   it("stamps GHOST_COUNT ghost copies of the item template, stacked per policy", () => {
@@ -796,5 +796,54 @@ widget = {
     expect(root.bg?.color).toEqual([0.2, 0.2, 0.2, 1]);
     expect(root.children[0].fill?.color).toEqual([1, 0, 0, 0.5]);
     expect(root.children[0].fill?.texture).toBe("gfx/interface/colors/white.dds");
+  });
+});
+
+/**
+ * Victoria 3 and EU5 write nearly every panel as a `types` block with no
+ * instance anywhere in the file, which laid out to nothing: 132 of Victoria 3's
+ * 204 vanilla gui files, and 39 of the Community Mod Framework's 52, drew a
+ * blank canvas. A file that instantiates nothing previews what it declares.
+ */
+describe("declaration-only documents", () => {
+  const DECL = `
+types PxDeclTypes {
+	type px_decl_panel = widget {
+		size = { 300 200 }
+		widget = { name = "px_decl_child" size = { 40 30 } }
+	}
+	type px_decl_row = widget {
+		size = { 100 20 }
+	}
+}`;
+
+  it("lays out each declared type as one instance of itself", () => {
+    const nodes = computeGuiLayout(DECL, { viewport: { w: 1000, h: 1000 } });
+    expect(nodes.map((n) => n.key)).toEqual(["px_decl_panel", "px_decl_row"]);
+    expect(nodes.every((n) => n.declared)).toBe(true);
+    expectRect(nodes[0], 0, 0, 300, 200);
+    expectRect(nodes[1], 0, 0, 100, 20);
+    // Exactly ONE expansion: the body is not spliced in twice.
+    expect(nodes[0].children).toHaveLength(1);
+    expect(nodes[0].children[0].name).toBe("px_decl_child");
+  });
+
+  it("the declaration header is not editable, its body's children are", () => {
+    const [panel] = computeGuiLayout(DECL, { viewport: { w: 1000, h: 1000 } });
+    // `guiWidgetInfo` and `guiSourceEdit` both refuse a declaration header, so
+    // claiming it is editable would be a lie the client acts on.
+    expect(panel.editable).toBe(false);
+    expect(panel.line).toBe(2);
+    expect(panel.children[0].editable).toBe(true);
+    expect(panel.children[0].line).toBe(4);
+  });
+
+  it("a document that instantiates anything keeps today's roots", () => {
+    const nodes = computeGuiLayout(`${DECL}\nwidget = { name = "px_decl_real" size = { 10 10 } }`, {
+      viewport: { w: 1000, h: 1000 },
+    });
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].name).toBe("px_decl_real");
+    expect(nodes[0].declared).toBeUndefined();
   });
 });

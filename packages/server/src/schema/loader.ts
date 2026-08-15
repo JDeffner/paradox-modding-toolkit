@@ -71,7 +71,7 @@ export function loadSchema(modPath: string | string[] | null, log?: (msg: string
 
   // Multi-mod workspaces: every workspace mod may carry an overlay; later
   // roots win on collisions (roots are passed in load order, mod-of-record
-  // first — collisions are rare and per-path).
+  // first, collisions are rare and per-path).
   const roots = modPath === null ? [] : Array.isArray(modPath) ? modPath : [modPath];
   for (const root of roots) {
     const overlayFile = path.join(root, profile.configDirName, "schema.json");
@@ -95,6 +95,17 @@ export function loadSchema(modPath: string | string[] | null, log?: (msg: string
       log?.(`schema overlay loaded from ${overlayFile}`);
     } catch (err) {
       log?.(`schema overlay ignored (${overlayFile}): ${String(err)}`);
+    }
+  }
+
+  // Profile-level structure layer (a fully harvested one, as opposed to a schema
+  // table that already carries curated `structure` on its entries). Applied last
+  // so workspace-overlay folders of a known kind get it too; an entry that
+  // already declares its own structure keeps it.
+  if (profile.structures) {
+    for (let i = 0; i < entries.length; i++) {
+      const structure = profile.structures[entries[i].kind];
+      if (structure && !entries[i].structure) entries[i] = { ...entries[i], structure };
     }
   }
 

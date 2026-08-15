@@ -1,10 +1,10 @@
 /**
  * Block-schema `structure` layer (update plan v1.1 §B2): the document shape of a
- * few high-value definition kinds — the structural keys every modder types most,
+ * few high-value definition kinds, the structural keys every modder types most,
  * which come from neither script_docs tokens nor the definition index.
  *
  * SOURCE: hand-curated from the game's own `_*.info` files (harvested by
- * scripts/build-structure.ts — regenerate there, curate here). Doc prose is the
+ * scripts/build-structure.ts, regenerate there, curate here). Doc prose is the
  * game's own, trimmed. `freq` values are the AGOT per-context counts from the
  * plan's §B1 tables where available (used for ranking in Workstream C; a leading
  * subset here). This is STATIC TypeScript on purpose: users may not have gamePath
@@ -15,12 +15,12 @@
 import type { KeySpec, StructureSpec } from "../../schema/types";
 // Bundled full harvest of every _*.info schema doc (scripts/build-structures-json.ts):
 // ~70 kinds, ~1300 documented keys with vanilla usage counts. Merged UNDER the
-// hand-curated specs below — curated docs always win on key collisions.
+// hand-curated specs below, curated docs always win on key collisions.
 import HARVESTED_JSON from "../../../data/ck3/structures.json";
 
 interface HarvestedShape {
   sources: Record<string, string>;
-  kinds: Record<string, { topLevel: KeySpec[] }>;
+  kinds: Record<string, { topLevel: KeySpec[]; blocks?: Record<string, KeySpec[]> }>;
 }
 const HARVESTED = HARVESTED_JSON as unknown as HarvestedShape;
 
@@ -104,7 +104,7 @@ const CHARACTER_INTERACTION: StructureSpec = {
       key: "is_shown",
       values: "block",
       freq: 535,
-      doc: "Trigger: is the interaction available and visible. Available scopes: scope:actor, scope:recipient. Avoid actor-only or global tests here — put those in is_available.",
+      doc: "Trigger: is the interaction available and visible. Available scopes: scope:actor, scope:recipient. Avoid actor-only or global tests here, put those in is_available.",
     },
     {
       key: "is_valid",
@@ -163,7 +163,7 @@ const CHARACTER_INTERACTION: StructureSpec = {
     {
       key: "ai_potential",
       values: "block",
-      doc: "Trigger: will the AI consider trying this interaction. Deprecated — use is_available.",
+      doc: "Trigger: will the AI consider trying this interaction. Deprecated, use is_available.",
     },
     // Kept curated even though the harvest now carries it (cap fix, 2026-07):
     // the .info comment omits the unit and the 0-disables rule.
@@ -229,7 +229,7 @@ const CHARACTER_INTERACTION: StructureSpec = {
       {
         key: "is_shown",
         values: "block",
-        doc: "Trigger: is this option shown. Independent — don't reference other option flags.",
+        doc: "Trigger: is this option shown. Independent, don't reference other option flags.",
       },
       { key: "is_valid", values: "block", doc: "Trigger: is this option selectable." },
       { key: "localization", values: "loc", doc: "Loc key for the option label." },
@@ -264,11 +264,11 @@ const CHARACTER_INTERACTION: StructureSpec = {
       },
       {
         key: "chance",
-        doc: "0–1: chance each candidate is actually checked — a low value randomly excludes characters (performance).",
+        doc: "0–1: chance each candidate is actually checked, a low value randomly excludes characters (performance).",
       },
       {
         key: "parameter",
-        doc: "Extra detail for specific targets — for situation_participant_group, the situation key.",
+        doc: "Extra detail for specific targets, for situation_participant_group, the situation key.",
       },
     ],
     // highlighted_reason etc. support dynamic descriptions per the .info.
@@ -305,7 +305,7 @@ const DECISION: StructureSpec = {
     {
       key: "is_valid_showing_failures_only",
       values: "block",
-      doc: "Trigger: can execute — failures shown in the confirm tooltip. Scope: character.",
+      doc: "Trigger: can execute, failures shown in the confirm tooltip. Scope: character.",
     },
     {
       key: "ai_will_do",
@@ -359,7 +359,7 @@ const DECISION: StructureSpec = {
     {
       key: "minimum_cost",
       values: "block",
-      doc: "Like cost, but not applied — only blocks taking the decision if unaffordable.",
+      doc: "Like cost, but not applied, only blocks taking the decision if unaffordable.",
     },
     { key: "decision_group_type", doc: "Foldable decision group to place this in. Default: decisions." },
     { key: "sort_order", doc: "Sort order in the decision view (higher first)." },
@@ -702,7 +702,7 @@ const CUSTOMIZABLE_LOCALIZATION: StructureSpec = {
       {
         key: "setup_scope",
         values: "block",
-        doc: "Interface effects run before the trigger — save scopes here to use in the trigger and the loc key.",
+        doc: "Interface effects run before the trigger, save scopes here to use in the trigger and the loc key.",
       },
       { key: "fallback", values: "bool", doc: "Picked when no other entry is valid." },
     ],
@@ -730,7 +730,7 @@ const STORY_CYCLE: StructureSpec = {
     {
       key: "on_owner_death",
       values: "block",
-      doc: "Effect run when the story owner dies — a good time to set a new owner.",
+      doc: "Effect run when the story owner dies, a good time to set a new owner.",
     },
     {
       key: "effect_group",
@@ -848,7 +848,11 @@ const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: stri
 export const STRUCTURES: Record<string, StructureSpec> = (() => {
   const merged: Record<string, StructureSpec> = {};
   for (const [kind, spec] of Object.entries(HARVESTED.kinds)) {
-    merged[kind] = { topLevel: [...spec.topLevel] };
+    // Harvested sub-blocks are carried through; a curated `blocks` for the same
+    // kind replaces them wholesale below. The committed structures.json predates
+    // the harvester's sub-block pass and has none, so this is inert until it is
+    // regenerated (see scripts/build-structures-json.ts).
+    merged[kind] = { topLevel: [...spec.topLevel], ...(spec.blocks && { blocks: spec.blocks }) };
   }
   for (const [kind, spec] of Object.entries(CURATED)) {
     const harvested = merged[kind]?.topLevel ?? [];

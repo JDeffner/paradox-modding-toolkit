@@ -3,7 +3,7 @@
  * the CST key stack from the schema-declared root scope through iterators,
  * links, dot-chains and scope:x references.
  *
- * The result RANKS and ANNOTATES — it never hides a completion and never
+ * The result RANKS and ANNOTATES, it never hides a completion and never
  * produces a diagnostic. "unknown" is a first-class outcome.
  *
  * No `vscode` imports: unit-tested in plain Node.
@@ -12,6 +12,7 @@ import { classifyKeyword, isExplicitKeyword } from "../contextKeywords";
 import { walkStatements, type ParseResult, type Statement } from "../parser";
 import { blockPathFromParse } from "../context";
 import type { SchemaEntry, KeySpec } from "../schema/types";
+import { activeProfile } from "../games/active";
 import type { Scope, ScopeModel } from "./model";
 
 export interface ScopeInference {
@@ -48,7 +49,7 @@ export interface InferenceContext {
   defScopeTag?: (name: string) => Set<Scope> | null;
 }
 
-/** Kinds whose root scope is the CALL SITE's — a PdxDoc `@scope` tag declares it. */
+/** Kinds whose root scope is the CALL SITE's, a PdxDoc `@scope` tag declares it. */
 const SCOPE_TAG_KINDS = new Set(["scripted_effect", "scripted_trigger", "script_value", "scripted_modifier"]);
 
 /** Keys that never change scope (grammar keywords, control flow, weights). */
@@ -67,7 +68,7 @@ const IN_LIST_ITERATOR = /^(?:every|any|random|ordered)_in_(?:global_|local_)?li
 
 /**
  * Script-value math keys: as BLOCK keys they open math/desc blocks whose
- * triggers evaluate in the CALLING scope — they must never be resolved as the
+ * triggers evaluate in the CALLING scope, they must never be resolved as the
  * same-named event-target links (`value` is a wildcard number link, `max` etc.).
  */
 const MATH_KEYS = new Set([
@@ -91,16 +92,10 @@ const MATH_KEYS = new Set([
 const VAR_PREFIX = /^(var|local_var|global_var):(.+)$/;
 
 /**
- * Per-definition root-scope declarations: `key` inside the top-level definition
- * body names the root scope of that definition's script blocks.
- * Events default to character when the key is absent (see events/_events.info);
- * custom loc `type = all` means "any scope" → null.
+ * Per-definition root-scope declarations, per game (profile.defRootKeys): a key
+ * inside the top-level definition body names the root scope of that definition's
+ * script blocks. A declared value of `none`/`all` means "any scope" → null.
  */
-const DEF_ROOT_KEYS: Record<string, { key: string; default?: string }> = {
-  event: { key: "scope", default: "character" },
-  customizable_localization: { key: "type" },
-  scripted_gui: { key: "scope", default: "character" },
-};
 
 /**
  * Effective root scopes for the definition enclosing `offset`: per-definition
@@ -114,7 +109,7 @@ export function rootScopesAt(
 ): Set<Scope> | null {
   const kind = ctx?.entry?.kind;
   if (!kind) return fallback;
-  const spec = DEF_ROOT_KEYS[kind];
+  const spec = activeProfile().defRootKeys?.[kind];
   if (!spec && kind !== "on_action" && !SCOPE_TAG_KINDS.has(kind)) return fallback;
 
   // Find the enclosing top-level statement.
@@ -144,7 +139,9 @@ export function rootScopesAt(
       if (s.value?.kind !== "scalar" || s.value.quoted) continue;
       const declared = s.value.text.toLowerCase();
       if (declared === "none" || declared === "all") return null;
-      return new Set([declared]);
+      const scope = spec!.values ? spec!.values[declared] : declared;
+      if (scope) return new Set([scope]);
+      break;
     }
   }
   return spec!.default ? new Set([spec!.default]) : fallback;
@@ -283,7 +280,7 @@ export function inferScopeAt(
       prevStack.push(current);
       // This file's save sites first; scopes saved elsewhere in the mod fall
       // back to the mod-wide static analysis (`??` also covers a local save
-      // the walk could not type — the global merge includes that site too).
+      // the walk could not type, the global merge includes that site too).
       const saved = savedScopes.get(name) ?? ctx?.savedScopeTypes?.get(name);
       current = saved ? new Set(saved) : null;
       chain.push(`scope:${name} → ${fmt(current)}`);
@@ -347,7 +344,7 @@ export function inferScopeAt(
         return;
       }
       // Unknown every_/any_/random_/ordered_ name: most are structure keys or
-      // scripted lists we could not resolve — keep the scope (never fatal).
+      // scripted lists we could not resolve, keep the scope (never fatal).
       return;
     }
     const link = model.links.get(lower);
@@ -358,7 +355,7 @@ export function inferScopeAt(
       return;
     }
     // Data links used with an argument: `culture:czech`, `special_guest:host`,
-    // `title:k_france` … — the link table is keyed by the bare prefix.
+    // `title:k_france` …, the link table is keyed by the bare prefix.
     const colon = seg.indexOf(":");
     if (colon > 0) {
       const dataLink = model.links.get(lower.slice(0, colon));
@@ -371,7 +368,7 @@ export function inferScopeAt(
     }
     if (isScopeTransparent(lower)) return;
     // Unknown block key (scripted effect call, block-argument effect like
-    // add_opinion): assume it keeps the scope — best effort, never fatal.
+    // add_opinion): assume it keeps the scope, best effort, never fatal.
   };
 
   for (const node of path) {
@@ -384,7 +381,7 @@ export function inferScopeAt(
  * Statically resolve a chain of enclosing block keys (outermost first, dotted
  * segments allowed) from a root-scope seed: the resolver behind ad-hoc list
  * item typing (`add_to_list` sites, varTypes.ts). Mirrors inferScopeAt's key
- * handling minus the CST/saved-scope/structure context — scope:/var: anchors
+ * handling minus the CST/saved-scope/structure context, scope:/var: anchors
  * resolve to unknown, unknown keys keep the scope (best effort, never fatal).
  */
 export function resolveKeyChainScopes(
@@ -415,7 +412,7 @@ export function resolveKeyChainScopes(
       return;
     }
     if (seg.startsWith("scope:") || VAR_PREFIX.test(seg)) {
-      // Saved scopes / variables are per-file runtime context — unknowable here.
+      // Saved scopes / variables are per-file runtime context, unknowable here.
       prevStack.push(current);
       current = null;
       return;
