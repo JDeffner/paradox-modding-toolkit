@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 (beta) - Victoria 3 feels right, and the panel learns some manners
+## 0.3.1 (beta) - Victoria 3 feels right, and the panel learns some manners
 
 0.3.0 made Victoria 3 and EU5 first-class on paper; this release makes the
 daily loops actually work there. Everything below was found by auditing the
