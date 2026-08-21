@@ -67,6 +67,20 @@ including the Community Mod Framework.
 
 ### Added
 
+- **Color swatches and a multi-format color picker** (issue #11). Every color
+  in script and `.gui` gets a swatch; click it and the editor's native picker
+  opens. Clicking the notation label cycles the formats, so one color can be
+  written as `rgb { 174 169 166 }`, `hsv { 0.6 0.5 0.7 }`, `hsv360 { 216 50
+  70 }`, `hex { 50779b }`, `{ 0.9 0.8 0.2 1 }` or `{ 180 75 80 }`. Your own
+  notation is offered first, so a nudge never silently rewrites `hsv` as
+  `rgb`. The forms are the ones measured in vanilla CK3 and Victoria 3, which
+  differ from what HOI4/EU4 tools assume: Jomini `hsv` takes hue in 0..1, not
+  0..360, and `hex` has no `0x` prefix. Untagged blocks count only under a
+  `color` key (or inside a `named_colors` table); portrait genes like
+  `hair_color = { 32 235 66 229 }` are palette coordinates and stay
+  swatch-free. Ships on the standard LSP `documentColor` request, so every
+  client gets it, not just VS Code. 20,817 sites in vanilla CK3 `common/` +
+  `gui/`, 3,387 in Victoria 3, zero false positives in the audit.
 - **`Paradox: Add Dependency Mod`** reads the dependencies your mod declares
   (`descriptor.mod` or metadata `relationships`), scans the Steam workshop
   folder of the active game, and writes `px.parentMods` for you. Declared but

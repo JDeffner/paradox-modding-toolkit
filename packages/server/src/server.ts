@@ -130,6 +130,7 @@ import { provideCodeActions } from "./features/codeActions";
 import { provideSignatureHelp } from "./features/signatureHelp";
 import { provideDocumentSymbols } from "./features/symbols";
 import { provideFoldingRanges } from "./features/folding";
+import { provideColorPresentations, provideDocumentColors } from "./features/colors";
 import { provideFormattingEdits } from "./features/formatting";
 import {
   computeLocDiagnostics,
@@ -1043,6 +1044,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       inlayHintProvider: true,
       documentSymbolProvider: true,
       foldingRangeProvider: true,
+      colorProvider: true,
       referencesProvider: true,
       documentFormattingProvider: true,
       renameProvider: { prepareProvider: true },
@@ -1545,6 +1547,22 @@ connection.onFoldingRanges((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
   return provideFoldingRanges(doc);
+});
+
+// Color swatches + the native picker (issue #11). Script and .gui only: the
+// descriptor and format-doc languages carry no colors.
+function colorLanguage(languageId: string): boolean {
+  return isScriptLanguage(languageId) || languageId === "paradox-gui";
+}
+connection.onDocumentColor((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc || !colorLanguage(doc.languageId)) return [];
+  return provideDocumentColors(doc);
+});
+connection.onColorPresentation((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc || !colorLanguage(doc.languageId)) return [];
+  return provideColorPresentations(doc, params.color, params.range);
 });
 
 // ---- structural diagnostics -----------------------------------------------------
