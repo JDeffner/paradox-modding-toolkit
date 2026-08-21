@@ -108,6 +108,22 @@ jobs:
           prerelease: true
           generate_release_notes: true
 
+      # Announce the release in the Discord server's #toolkit-updates, pinging
+      # the @Paradox Toolkit role. DISCORD_RELEASE_WEBHOOK is a plain Discord
+      # webhook URL (repo secret). Missing secret = silent skip; a failed post
+      # warns but never fails a release that already shipped.
+      - name: Announce on Discord (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+        run: |
+          [ -z "$WEBHOOK" ] && exit 0
+          jq -n --arg tag "$GITHUB_REF_NAME" --arg repo "$GITHUB_REPOSITORY" \
+            '{content: "<@&1534329963933864079> **Paradox Toolkit \($tag)** is out.\nhttps://github.com/\($repo)/releases/tag/\($tag)",
+              allowed_mentions: {roles: ["1534329963933864079"]}}' \
+            | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" \
+            || echo "::warning::Discord release announcement failed"
+
       - name: Publish to Marketplace
         if: github.event_name == 'workflow_dispatch' && inputs.publish
         working-directory: packages/vscode
