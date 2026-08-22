@@ -3,11 +3,11 @@
  * LSP documentColor / colorPresentation pair so the editor's native picker
  * drives it.
  *
- * The recognised forms are the ones measured in vanilla CK3 and Victoria 3
- * (2026-08), not the HOI4/EU4 habits other tools assume:
+ * The recognised forms are the ones measured in the vanilla files of the two
+ * calibrated games (2026-08), not the habits older-engine tools assume:
  *   rgb { 174 169 166 }        ints 0..255
- *   hsv { 0.6 0.5 0.7 }        hue 0..1, NOT 0..360 (998 uses in CK3)
- *   hsv360 { 358 70 65 }       hue 0..360, s and v 0..100 (179 uses in Vic3)
+ *   hsv { 0.6 0.5 0.7 }        hue 0..1, NOT 0..360 (998 vanilla uses)
+ *   hsv360 { 358 70 65 }       hue 0..360, s and v 0..100 (179 vanilla uses)
  *   hex { 50779b }             six hex digits, no 0x prefix
  *   { 0.9 0.8 0.2 1 }          untagged floats 0..1, alpha optional (.gui, named colors)
  *   { 180 75 80 }              untagged ints 0..255
@@ -138,7 +138,7 @@ function decode(value: ValueNode, keyIsColor: boolean): Decoded | null {
     }
     const c = numbers(value.block);
     if (!c) return null;
-    // Vic3 named_colors spells `rgb { 1 0.4 0.6 }`, so rgb follows the untagged split too.
+    // Vanilla named_colors spells `rgb { 1 0.4 0.6 }`, so rgb follows the untagged split too.
     if (tag === "rgb") return rgbComponents(c, "rgb");
     const alpha = c.length === 4;
     const format: ColorFormat = tag === "hsv360" ? "hsv360" : "hsv";
