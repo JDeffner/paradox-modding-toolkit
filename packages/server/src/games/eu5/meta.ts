@@ -40,4 +40,5 @@ export const eu5Meta: GameMeta = {
   scriptDocs: { format: "markdown", modifiers: "tag-line" },
   // No eu5-tiger exists (amtep/tiger covers ck3/vic3/imperator only).
   cacheSuffix: "-eu5",
+  flagBuilder: true,
 };

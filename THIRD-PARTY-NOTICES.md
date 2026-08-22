@@ -85,6 +85,47 @@ SOFTWARE.
 
 ---
 
+## pdx-flag-builder
+
+- Upstream: https://github.com/kaiser-chris/pdx-flag-builder
+- Reference commit: `75d442b794f20c75010a68ea3bc18d8316296793`
+- Consulted: 2026-08-22
+
+**What it is used for.** The Flag Builder
+(`packages/vscode/src/webviews/flagBuilder/`) is a reimplementation in
+TypeScript of this Odin application's approach: its coat-of-arms model
+(pattern + colored/textured emblems + subs, with instances), the placeholder
+colors the game paints patterns and colored emblems with, and the recolor
+rule of its `recolor.fs` shader (tolerance, blue-channel shading, pattern
+masks) are ported into `packages/server/src/coa/coa.ts` and
+`app/render.ts`. No source file is copied; no asset is redistributed.
+
+```
+MIT License
+
+Copyright (c) 2026 Chris Kaiser
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## Node.js
 
 - Upstream: https://nodejs.org

@@ -24,6 +24,7 @@ export const ICONS = {
   tree: '<path d="M2.5 3.5h11M3.5 3.5v9M3.5 8h3M3.5 12.5h3M6.5 8h7M6.5 12.5h7"/>',
   layout: '<rect x="2" y="2.5" width="12" height="11" rx="1"/><path d="M2 6h12M6.5 6v7.5"/>',
   docs: '<path d="M4 2h5l3 3v9H4Z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h3"/>',
+  flag: '<path d="M3.5 14V2.5"/><path d="M3.5 3h9l-2 3 2 3h-9"/>',
   flask:
     '<path d="M6.5 2v4.2L3.2 12a1.2 1.2 0 0 0 1 1.9h7.6a1.2 1.2 0 0 0 1-1.9L9.5 6.2V2"/><path d="M5.8 2h4.4M4.8 9.5h6.4"/>',
 } as const;
@@ -75,6 +76,16 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "layout",
           tip: "Pixel-accurate rendering of the .gui window you are editing, with click-to-select, drag, resize and property edits.",
         },
+        ...(meta.flagBuilder
+          ? [
+              {
+                label: "Flag Builder",
+                command: "px.openFlagBuilder",
+                icon: "flag" as const,
+                tip: "Compose a coat of arms from the game's patterns and emblems, preview it, and write it into the mod.",
+              },
+            ]
+          : []),
         {
           label: "Format Docs",
           command: "px.openInfoDocs",

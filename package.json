@@ -11,7 +11,7 @@
   },
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
-    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app",
+    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app && tsc -p packages/vscode/src/webviews/flagBuilder/app",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",

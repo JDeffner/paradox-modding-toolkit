@@ -340,6 +340,11 @@
         "icon": "$(preview)"
       },
       {
+        "command": "px.openFlagBuilder",
+        "category": "Paradox",
+        "title": "Open Flag Builder"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report"
@@ -837,6 +842,10 @@
           "when": "px.isCk3Workspace && px.guiEditorSupported"
         },
         {
+          "command": "px.openFlagBuilder",
+          "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
           "command": "px.modReport",
           "when": "px.isCk3Workspace"
         },
@@ -1067,7 +1076,7 @@
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",

@@ -30,3 +30,8 @@ export function guiEditorSupported(gameId: string): boolean {
 export function scriptDocsDir(meta: GameMeta): string {
   return meta.scriptDocsSubdir ?? "logs";
 }
+
+/** Whether the Flag Builder opens for this game: its meta declares the coat-of-arms layout. */
+export function flagBuilderSupported(gameId: string): boolean {
+  return metaFor(gameId).flagBuilder === true;
+}

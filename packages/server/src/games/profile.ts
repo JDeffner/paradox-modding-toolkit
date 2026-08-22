@@ -120,6 +120,13 @@ export interface GameMeta {
    */
   stageRoots?: string[];
   /**
+   * The game composes flags from `common/coat_of_arms` definitions over
+   * `gfx/coat_of_arms/{patterns,colored_emblems,textured_emblems}` textures,
+   * in the layout the flag builder renders. Absent = the Flag Builder does
+   * not open for this game.
+   */
+  flagBuilder?: boolean;
+  /**
    * Database entry-mode prefixes legal on top-level definition keys
    * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before
    * treating the rest as the definition name. Absent = no such syntax.

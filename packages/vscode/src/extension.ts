@@ -20,7 +20,7 @@ import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { guiEditorSupported, metaFor } from "./meta";
+import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -45,6 +45,8 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
+import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
@@ -218,6 +220,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "setContext",
       "px.guiEditorSupported",
       guiEditorSupported(cfg.gameId)
+    );
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.flagBuilderSupported",
+      flagBuilderSupported(cfg.gameId)
     );
     statusBar.update({
       tokens: lastServerStatus.tokens,
@@ -736,6 +743,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)
       );
+    }),
+    vscode.commands.registerCommand("px.openFlagBuilder", () => {
+      const meta = metaFor(cfg.gameId);
+      if (!flagBuilderSupported(cfg.gameId)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${meta.name}.`
+        );
+        return;
+      }
+      // Game first, then dependency mods, then the workspace's own mods: the
+      // load order, so a mod's flag of the same name wins like in the game.
+      const roots: FlagRoot[] = [];
+      if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
+      for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
+        if (!roots.some((r) => r.path === p)) roots.push({ label: path.basename(p), path: p });
+      }
+      FlagBuilderPanel.show(context, {
+        meta,
+        roots,
+        modPath: cfg.modPath,
+        gameMissing: cfg.gamePath === null,
+      });
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
