@@ -36,6 +36,40 @@ const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
 
 const DEBOUNCE_MS = 1500;
 
+/** Past this much output from one run the bytes are dropped and the run is reported as unreadable. */
+const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
+
+/**
+ * A child stream kept as buffers and decoded once, at close.
+ *
+ * `stdout += chunk.toString("utf8")` had two faults: it grew until V8's ~512 MB
+ * string ceiling with nothing to stop it, and it decoded each chunk on its own,
+ * so a multi-byte character split across a chunk boundary was corrupted before
+ * parseTigerJson ever saw it.
+ */
+function collectOutput(stream: NodeJS.ReadableStream | null | undefined): {
+  text(): string;
+  overflowed: boolean;
+} {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  const out = {
+    overflowed: false,
+    text: () => Buffer.concat(chunks).toString("utf8"),
+  };
+  stream?.on("data", (chunk: Buffer) => {
+    if (out.overflowed) return;
+    bytes += chunk.length;
+    if (bytes > MAX_OUTPUT_BYTES) {
+      out.overflowed = true;
+      chunks.length = 0;
+      return;
+    }
+    chunks.push(chunk);
+  });
+  return out;
+}
+
 function hasDescriptor(root: string): boolean {
   try {
     return fs.existsSync(path.join(root, "descriptor.mod")) || hasMetadataDescriptor(root);
@@ -267,8 +301,6 @@ export class TigerRunner implements vscode.Disposable {
     args.push(modRoot);
 
     this.log(`tiger: ${cfg.tigerPath} ${args.join(" ")}`);
-    let stdout = "";
-    let stderr = "";
     let child: ChildProcess;
     try {
       child = spawn(cfg.tigerPath, args, { windowsHide: true });
@@ -278,8 +310,8 @@ export class TigerRunner implements vscode.Disposable {
     }
     this.child = child;
     this.showRunning();
-    child.stdout?.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
-    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
+    const stdout = collectOutput(child.stdout);
+    const stderr = collectOutput(child.stderr);
     child.on("error", (err) => {
       this.child = null;
       this.showDone(null);
@@ -298,13 +330,21 @@ export class TigerRunner implements vscode.Disposable {
         return;
       }
       if (signal) return; // killed by us
-      const reports = parseTigerJson(stdout);
+      if (stdout.overflowed) {
+        this.notifyError(
+          `Paradox Modding Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced more than ` +
+            `${MAX_OUTPUT_BYTES / (1024 * 1024)} MB of output, so the report was discarded.`
+        );
+        return;
+      }
+      const reports = parseTigerJson(stdout.text());
       if (reports === null) {
         // Non-zero exit with no JSON = broken invocation; parse failures degrade to
         // a notification, never a crash.
+        const err = stderr.text();
         this.notifyError(
           `Paradox Modding Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced no readable JSON report (exit code ${code}).` +
-            (stderr ? ` stderr: ${stderr.slice(0, 300)}` : "")
+            (err ? ` stderr: ${err.slice(0, 300)}` : "")
         );
         return;
       }
@@ -346,7 +386,6 @@ export class TigerRunner implements vscode.Disposable {
       }
       args.push(cfg.modPath);
       this.log(`tiger baseline: ${cfg.tigerPath} ${args.join(" ")}`);
-      let stdout = "";
       let child: ChildProcess;
       try {
         child = spawn(cfg.tigerPath, args, { windowsHide: true });
@@ -355,10 +394,19 @@ export class TigerRunner implements vscode.Disposable {
         resolve(null);
         return;
       }
-      child.stdout?.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
+      const stdout = collectOutput(child.stdout);
       child.on("error", () => resolve(null));
       child.on("close", () => {
-        const reports = parseTigerJson(stdout);
+        if (stdout.overflowed) {
+          this.notifyError(
+            `Paradox Modding Toolkit: tiger produced more than ${MAX_OUTPUT_BYTES / (1024 * 1024)} MB ` +
+              `of output, so no baseline was written.`
+          );
+          resolve(null);
+          return;
+        }
+        const text = stdout.text();
+        const reports = parseTigerJson(text);
         if (reports === null) {
           this.notifyError("Paradox Modding Toolkit: tiger produced no readable JSON for the baseline.");
           resolve(null);
@@ -366,7 +414,7 @@ export class TigerRunner implements vscode.Disposable {
         }
         try {
           fs.mkdirSync(path.dirname(outFile), { recursive: true });
-          fs.writeFileSync(outFile, stdout);
+          fs.writeFileSync(outFile, text);
         } catch (err) {
           this.notifyError(`Paradox Modding Toolkit: could not write the baseline file: ${String(err)}`);
           resolve(null);
