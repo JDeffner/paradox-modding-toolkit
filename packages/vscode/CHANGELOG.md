@@ -9,6 +9,25 @@ including the Community Mod Framework.
 
 ### Fixed (Victoria 3 and EU5)
 
+- **Victoria 3 completion offers the right key.** Measured on 1215 cursor
+  positions across three real workshop mods, the correct key was never
+  offered in 77.1 percent of positions before, 0.2 percent after. Three
+  causes: Victoria 3 had no structures layer (its 91 `*.md` docs were
+  dismissed as prose, 71 of them are `key = value # doc` listings and now
+  feed `data/vic3/structures.json`, 116 kinds, 1179 keys); scope inference
+  hardcoded CK3's "event root is a character" rule, so every country effect
+  was demoted (`change_infamy` ranked 3963); and 12 reference prefixes
+  (`unit_type`, `rank_value`, `ship_type`, nine more) were not wired,
+  which left 446 reference sites dead. The CK3 rank-eval confirms no
+  regression.
+- **The GUI editor draws Victoria 3 files.** It laid out top-level
+  instances only, and Vic3 writes 65 percent of vanilla gui (75 percent of
+  the Community Mod Framework) as type declarations with no instance, so
+  the canvas was empty. Declared types are previewed when a file
+  instantiates nothing. The lexer also ended quoted strings at end of line,
+  while Vic3 writes multi-line data functions: 202 parse errors in 23 of
+  CMF's 52 gui files, editor read-only there. A newline now continues a
+  string while a bracket is open, capped at 32 lines.
 - **The error.log watcher works on Victoria 3 and EU5.** It watched a file
   that never exists: those games dump `script_docs` into `docs/` and the
   toolkit joined `error.log` onto that folder, while the engine writes it to
@@ -48,7 +67,7 @@ including the Community Mod Framework.
   `px.parentMods` contributed definitions but not `data_binding` macros or
   text-formatting tags; the Community Mod Framework alone carries 40 macros
   that were invisible. Parent mods are now a full layer between game and mod.
-- **83 Victoria 3 folders indexed** (up from 72): combat units, mobilization,
+- **129 Victoria 3 folders indexed** (up from 72, +2186 vanilla definitions): combat units, mobilization,
   ship types/modifications/names, AI strategies, buy packages, console
   command macros, plus `.gui` `type`/`template` names as definitions for both
   Victoria 3 and EU5 (2371 GUI types on a live install). Each new folder was
