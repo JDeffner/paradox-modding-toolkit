@@ -86,12 +86,19 @@ type StoredVisibility = Record<string, GuiVisibilityOptions>;
 /**
  * Bounds on the texture walk. A game's `gfx/` tree is tens of thousands of
  * files deep in places, and the browser is a picker, not an asset database: the
- * walk stops at a depth no vanilla sprite path exceeds and at a file count that
- * still holds every texture either root realistically ships, and the answer
+ * walk stops at a depth no vanilla sprite path exceeds and at an entry count
+ * that still holds every texture either root realistically ships, and the answer
  * itself is capped far lower because the panel thumbnails what it lists.
+ *
+ * TEXTURE_WALK_MAX counts every entry the walk MEETS, not the `.dds` it keeps:
+ * models, meshes, `.asset` and portrait data are the bulk of a `gfx/` tree and
+ * they cost the same readdirSync work. Counting hits instead left the walk
+ * unbounded on exactly the trees it was meant to bound (a 22,314-entry tree with
+ * zero `.dds` measured 5,290 ms cold, 776 ms warm, all of it on the extension
+ * host). The value is raised to match the new unit.
  */
 const TEXTURE_WALK_DEPTH = 10;
-const TEXTURE_WALK_MAX = 20000;
+const TEXTURE_WALK_MAX = 200_000;
 const TEXTURE_ANSWER_MAX = 200;
 /** One page of thumbnails is what the app asks for; a longer batch is truncated. */
 const THUMBNAIL_BATCH_MAX = 60;
@@ -353,11 +360,11 @@ export class GuiEditorPanel {
         }
         for (const entry of entries) {
           if (budget <= 0) return;
+          budget--;
           const next = rel === "" ? entry.name : `${rel}/${entry.name}`;
           if (entry.isDirectory()) {
             walk(path.join(dir, entry.name), next, depth + 1);
           } else if (entry.name.toLowerCase().endsWith(".dds")) {
-            budget--;
             const key = `gfx/${next}`;
             if (!seen.has(key)) seen.set(key, { path: key, source });
           }
