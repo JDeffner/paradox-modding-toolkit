@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseLibraryFoldersVdf } from "../src/steamDetect";
-import { pickTigerAsset, preferPlainBinary, tigerFlavorFor } from "../src/tigerDownload";
+import { checkedDownloadUrl, pickTigerAsset, preferPlainBinary, tigerFlavorFor } from "../src/tigerDownload";
 
 describe("parseLibraryFoldersVdf", () => {
   it("extracts every library path with unescaped backslashes", () => {
@@ -77,5 +77,23 @@ describe("preferPlainBinary", () => {
   it("falls back to the only binary present and to null when empty", () => {
     expect(preferPlainBinary(["/x/ck3-tiger-auto.exe"])).toBe("/x/ck3-tiger-auto.exe");
     expect(preferPlainBinary([])).toBeNull();
+  });
+});
+
+describe("checkedDownloadUrl", () => {
+  it("accepts the two hosts a GitHub release download resolves to", () => {
+    expect(checkedDownloadUrl("https://github.com/amtep/ck3-tiger/releases/download/v1/a.zip")?.host).toBe(
+      "github.com"
+    );
+    expect(checkedDownloadUrl("https://objects.githubusercontent.com/x/a.zip")?.host).toBe(
+      "objects.githubusercontent.com"
+    );
+  });
+
+  it("refuses anything else, since the bytes are unpacked and executed", () => {
+    expect(checkedDownloadUrl("http://github.com/a.zip")).toBeNull();
+    expect(checkedDownloadUrl("https://github.com.evil.test/a.zip")).toBeNull();
+    expect(checkedDownloadUrl("file:///C:/a.zip")).toBeNull();
+    expect(checkedDownloadUrl("not a url")).toBeNull();
   });
 });

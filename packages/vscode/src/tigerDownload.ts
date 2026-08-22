@@ -12,9 +12,45 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { createHash } from "crypto";
+import { promisify } from "util";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { isCk3, metaFor } from "./meta";
+
+/**
+ * Both child processes run on the extension host thread. execFileSync blocked
+ * every other extension in the window for as long as tar took, and again for as
+ * long as the freshly written binary took to answer `--version` (up to its 15 s
+ * timeout; a first run on Windows with Defender scanning 20 MB is the slow
+ * case). The function is already async and already reports progress.
+ */
+const execFileAsync = promisify(execFile);
+
+const ALLOWED_DOWNLOAD_HOSTS = new Set(["github.com", "objects.githubusercontent.com"]);
+
+/**
+ * The parsed asset URL, or null when it is not a GitHub release URL.
+ *
+ * `browser_download_url` is a field of the GitHub API answer, and what comes
+ * back is written to disk, unpacked and then executed. There is no checksum to
+ * verify against (tiger publishes none), so the host is the one thing that can
+ * be asserted, and it is asserted before the bytes are fetched.
+ */
+export function checkedDownloadUrl(raw: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !ALLOWED_DOWNLOAD_HOSTS.has(url.hostname)) return null;
+  return url;
+}
+
+/** Hang guards: without them a stalled connection leaves the progress notification up forever. */
+const API_TIMEOUT_MS = 20_000;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 
 /** Which tiger to fetch/run. The tiger releases ship one archive per game
  * (ck3-tiger-*, vic3-tiger-*); flavors keep the downloads apart. */
@@ -146,6 +182,7 @@ export async function downloadLatestTiger(
   report("querying latest release...");
   const apiRes = await fetch(`https://api.github.com/repos/${flavor.repoSlug}/releases/latest`, {
     headers: { "User-Agent": "ck3-modding-vscode", Accept: "application/vnd.github+json" },
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
   if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status} for the tiger releases feed.`);
   const release = (await apiRes.json()) as { tag_name?: string; assets?: ReleaseAsset[] };
@@ -159,12 +196,26 @@ export async function downloadLatestTiger(
     );
   }
 
-  report(`downloading ${asset.name}...`);
-  const dlRes = await fetch(asset.browser_download_url, {
+  const assetUrl = checkedDownloadUrl(asset.browser_download_url);
+  if (!assetUrl) {
+    throw new Error(
+      `refusing to download ${asset.name}: ${asset.browser_download_url} is not an https GitHub release URL.`
+    );
+  }
+
+  report(`downloading ${assetUrl.href}...`);
+  const dlRes = await fetch(assetUrl, {
     headers: { "User-Agent": "ck3-modding-vscode" },
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
   });
   if (!dlRes.ok) throw new Error(`download failed with HTTP ${dlRes.status}.`);
   const buffer = Buffer.from(await dlRes.arrayBuffer());
+  // tiger publishes no checksums, so there is nothing to verify against. The
+  // hash goes to the output channel instead, where it can be compared with the
+  // release page by hand.
+  report(
+    `${asset.name}: ${buffer.length} bytes, sha256 ${createHash("sha256").update(buffer).digest("hex")}`
+  );
 
   const destDir = path.join(tigerStorageDir(storageDir, flavor), tag);
   fs.rmSync(destDir, { recursive: true, force: true });
@@ -175,7 +226,7 @@ export async function downloadLatestTiger(
   report("unpacking...");
   // bsdtar ships with Windows 10+ and handles zip; GNU/bsd tar handles tar.gz.
   try {
-    execFileSync("tar", ["-xf", archivePath, "-C", destDir], { windowsHide: true });
+    await execFileAsync("tar", ["-xf", archivePath, "-C", destDir], { windowsHide: true });
   } catch (err) {
     throw new Error(`could not unpack ${asset.name}: ${String(err)}`);
   } finally {
@@ -203,7 +254,7 @@ export async function downloadLatestTiger(
 
   // Sanity check the binary runs.
   try {
-    execFileSync(binaryPath, ["--version"], { windowsHide: true, timeout: 15000 });
+    await execFileAsync(binaryPath, ["--version"], { windowsHide: true, timeout: 15000 });
   } catch (err) {
     throw new Error(`downloaded tiger does not run: ${String(err)}`);
   }
