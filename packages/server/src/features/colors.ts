@@ -30,7 +30,9 @@ import {
 } from "../parser";
 import { getParse } from "../parseCache";
 
-export type ColorFormat = "rgb" | "hsv" | "hsv360" | "hex" | "float" | "int";
+/** `rgbf` is a tagged rgb block written with 0..1 components (vanilla named_colors
+ *  does this); it is offered back in the same notation, never as 0..255. */
+export type ColorFormat = "rgb" | "rgbf" | "hsv" | "hsv360" | "hex" | "float" | "int";
 
 const TAGS: ReadonlySet<string> = new Set(["rgb", "hsv", "hsv360", "hex"]);
 
@@ -114,7 +116,7 @@ function rgbComponents(c: number[], format: ColorFormat): Decoded {
       blue: clamp01(c[2] / k),
       alpha: alpha ? clamp01(c[3] / k) : 1,
     },
-    format: format === "rgb" ? "rgb" : floats ? "float" : "int",
+    format: format === "rgb" ? (floats ? "rgbf" : "rgb") : floats ? "float" : "int",
     alpha,
   };
 }
@@ -126,7 +128,8 @@ function decode(value: ValueNode, keyIsColor: boolean): Decoded | null {
     if (!TAGS.has(tag)) return null;
     if (tag === "hex") {
       const s = value.block.statements;
-      if (s.length !== 1 || s[0].kind !== "value" || s[0].value.kind !== "scalar") return null;
+      if (s.length !== 1 || s[0].kind !== "value" || s[0].value.kind !== "scalar" || s[0].value.quoted)
+        return null;
       const m = /^(?:0x)?([0-9a-fA-F]{6})$/.exec(s[0].value.text);
       if (!m) return null;
       const n = parseInt(m[1], 16);
@@ -192,6 +195,8 @@ export function renderColor(color: Color, format: ColorFormat, alpha: boolean): 
   switch (format) {
     case "rgb":
       return `rgb { ${i(r)} ${i(g)} ${i(b)}${withAlpha ? ` ${i(a)}` : ""} }`;
+    case "rgbf":
+      return `rgb { ${f(r)} ${f(g)} ${f(b)}${withAlpha ? ` ${f(a)}` : ""} }`;
     case "int":
       return `{ ${i(r)} ${i(g)} ${i(b)}${withAlpha ? ` ${i(a)}` : ""} }`;
     case "float":

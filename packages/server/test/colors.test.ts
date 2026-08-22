@@ -54,9 +54,20 @@ describe("documentColor, the vanilla forms", () => {
     ]);
   });
 
-  it("ignores blocks that are not three or four numbers", () => {
-    const d = doc('color = { 1 2 }\ncolor = { a b c }\ncolor = { 1 2 3 4 5 }\ncolor = rgb { "1" 2 3 }');
+  it("ignores blocks that are not three or four numbers, and quoted hex", () => {
+    const d = doc(
+      'color = { 1 2 }\ncolor = { a b c }\ncolor = { 1 2 3 4 5 }\ncolor = rgb { "1" 2 3 }\ncolor = hex { "50779b" }'
+    );
     expect(provideDocumentColors(d)).toEqual([]);
+  });
+
+  it("a normalized rgb block keeps its 0..1 notation as the author's form", () => {
+    const d = doc("todo = rgb { 1 0.4 0.6 }");
+    const [site] = provideDocumentColors(d);
+    expect(site.format).toBe("rgbf");
+    const labels = provideColorPresentations(d, site.color, site.range).map((p) => p.label);
+    expect(labels[0]).toBe("rgb { 1 0.4 0.6 }");
+    expect(labels).toContain("rgb { 255 102 153 }");
   });
 });
 
