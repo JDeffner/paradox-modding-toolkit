@@ -73,14 +73,29 @@ export function indexedModRoots(cfg: {
 }
 
 /**
- * Script files under `roots`, stopping at `cap`. Bounded on purpose: this runs
- * on the activation path, and a total conversion holds thousands of files whose
- * exact number does not change the answer. Symlinked subtrees are not followed
- * (the indexer's walk does, with cycle guards; here a cheap count must not be
- * able to loop), and dot-directories are skipped like everywhere else.
+ * Entries the walk may visit per file of `cap`. The file cap bounds the
+ * MATCHES; this bounds the WORK, which is the thing that runs on the activation
+ * path. Without it a mod root carrying a large non-script tree (art source, a
+ * bundled asset dump) has no `.txt`/`.yml` to count and is traversed in full,
+ * with readdirSync, before the extension finishes activating. Ten entries per
+ * counted file leaves room for the art a real mod ships beside its script, so
+ * the file threshold is still what decides an ordinary workspace.
+ */
+const ENTRIES_PER_FILE = 10;
+
+/**
+ * Script files under `roots`, stopping at `cap` matches or at
+ * `cap * ENTRIES_PER_FILE` entries visited, whichever comes first. Bounded on
+ * purpose: this runs on the activation path, and a total conversion holds
+ * thousands of files whose exact number does not change the answer. Symlinked
+ * subtrees are not followed (the indexer's walk does, with cycle guards; here a
+ * cheap count must not be able to loop), and dot-directories are skipped like
+ * everywhere else.
  */
 export function countScriptFiles(roots: string[], cap: number): { files: number; partial: boolean } {
   let files = 0;
+  let visited = 0;
+  const entryCap = cap * ENTRIES_PER_FILE;
   const stack = [...roots];
   while (stack.length > 0) {
     const dir = stack.pop()!;
@@ -92,6 +107,7 @@ export function countScriptFiles(roots: string[], cap: number): { files: number;
     }
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
+      if (++visited > entryCap) return { files, partial: true };
       if (entry.isDirectory()) stack.push(path.join(dir, entry.name));
       else if (entry.isFile() && /\.(txt|yml)$/i.test(entry.name)) {
         if (++files >= cap) return { files, partial: true };
