@@ -18,6 +18,9 @@ docs/*
 # What a workspace costs and how to configure a big one; public, linked from
 # the extension README and the CHANGELOG.
 !docs/PERFORMANCE.md
+# Per-release notes: release.yml reads docs/release-notes-<version>.md as the
+# GitHub Release body and the Discord announcement.
+!docs/release-notes-*.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).

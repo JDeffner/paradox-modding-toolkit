@@ -97,6 +97,24 @@ jobs:
             px-lsp-server-*.tar.gz
             px-lsp-win-x64-*.zip
 
+      # The human-written notes (docs/release-notes-<version>.md) are the
+      # release body AND the Discord post. The H1 and the trailing "Full
+      # changelog" pointer are dropped: the release page shows the version
+      # already, and the Discord embed appends its own changelog link. A tag
+      # with no notes file falls back to GitHub's generated commit list.
+      - name: Collect release notes (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: notes
+        run: |
+          FILE="docs/release-notes-${GITHUB_REF_NAME#v}.md"
+          if [ -f "$FILE" ]; then
+            sed -e '1{/^# /d}' -e '/^### Full changelog/,$d' "$FILE" | sed -e '/./,$!d' > release-body.md
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::$FILE missing, release body falls back to generated notes"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: GitHub Release (tag builds)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -106,7 +124,39 @@ jobs:
             px-lsp-server-*.tar.gz
             px-lsp-win-x64-*.zip
           prerelease: true
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.found == 'true' && 'release-body.md' || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
+
+      # Announce the release in the Discord server's #toolkit-updates, pinging
+      # the @Paradox Toolkit role. DISCORD_RELEASE_WEBHOOK is a plain Discord
+      # webhook URL (repo secret). The notes ride in an embed (4096-char
+      # description cap; longer notes are cut at 3900 on a line boundary), the
+      # ping and the link stay in `content` so they render above the embed.
+      # Missing secret = silent skip; a failed post warns but never fails a
+      # release that already shipped.
+      - name: Announce on Discord (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          NOTES_FOUND: ${{ steps.notes.outputs.found }}
+        run: |
+          [ -z "$WEBHOOK" ] && exit 0
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
+          if [ "$NOTES_FOUND" = "true" ]; then
+            NOTES=$(head -c 3900 release-body.md)
+            if [ "$(wc -c < release-body.md)" -gt 3900 ]; then
+              NOTES=$(printf '%s' "$NOTES" | sed '$d')
+            fi
+          else
+            NOTES="See the release page for the changes."
+          fi
+          jq -n --arg tag "$GITHUB_REF_NAME" --arg url "$URL" --arg notes "$NOTES" \
+            '{content: "<@&1534329963933864079> **Paradox Toolkit \($tag)** is out.\n\($url)",
+              allowed_mentions: {roles: ["1534329963933864079"]},
+              embeds: [{title: "What changed in \($tag)", url: $url, color: 7506394,
+                        description: ($notes + "\n\n[Full changelog](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/vscode/CHANGELOG.md)")}]}' \
+            | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" \
+            || echo "::warning::Discord release announcement failed"
 
       - name: Publish to Marketplace
         if: github.event_name == 'workflow_dispatch' && inputs.publish

@@ -62,6 +62,9 @@ bottom says exactly where they stop.
   walk a whole chain with a breadcrumb and a Back button. It reads each game's
   own event vocabulary, so a Victoria 3 event shows its `flavor` line and its
   `cancellation_trigger` in place.
+- **Color picker**: a swatch on every `rgb { }`, `hsv { }`, `hsv360 { }`,
+  `hex { }` and `color = { }` value, in script and `.gui`. Click it for the
+  native picker; click the label to cycle between the formats.
 - **DDS and images**: zoomable `.dds` preview, a PNG/JPEG/WebP to DDS converter
   in the explorer right-click menu, and **Show Image Guidelines** with the
   sizes vanilla actually uses.

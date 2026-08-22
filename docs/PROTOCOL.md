@@ -33,7 +33,7 @@ a client written against 0.3.0 keeps working unchanged.
 - Standard LSP: the server implements completion (+resolve), signatureHelp,
   hover, definition, references, rename (+prepare), documentSymbol,
   workspaceSymbol, codeAction, inlayHint, foldingRange, documentFormatting,
-  semanticTokens (full), publishDiagnostics, and workDoneProgress for the
+  documentColor + colorPresentation, semanticTokens (full), publishDiagnostics, and workDoneProgress for the
   vanilla scan.
 - Document sync: `Incremental`, with `openClose` and `save`. A `didChange`
   content change carrying no `range` (a full-document replacement) is accepted

@@ -454,6 +454,32 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(tokens.data.length).toBeGreaterThan(0);
   });
 
+  it("documentColor + colorPresentation round-trip over the wire (issue #11)", async () => {
+    expect((initResult as { capabilities: { colorProvider?: boolean } }).capabilities.colorProvider).toBe(
+      true
+    );
+    const uri = "file:///smoke-colors.txt";
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text: "color = hsv { 0.6 0.5 0.7 }\n" },
+    });
+    const colors = (await conn.sendRequest("textDocument/documentColor", {
+      textDocument: { uri },
+    })) as Array<{
+      range: unknown;
+      color: { red: number; green: number; blue: number; alpha: number };
+    }>;
+    expect(colors).toHaveLength(1);
+    expect(Math.round(colors[0].color.blue * 255)).toBe(179);
+    const presentations = (await conn.sendRequest("textDocument/colorPresentation", {
+      textDocument: { uri },
+      color: colors[0].color,
+      range: colors[0].range,
+    })) as Array<{ label: string }>;
+    // The author's notation leads; the other formats follow.
+    expect(presentations[0].label).toBe("hsv { 0.6 0.5 0.7 }");
+    expect(presentations.map((p) => p.label)).toContain("rgb { 89 125 179 }");
+  });
+
   it("paradox/eventDetail answers with loc, options and refs", async () => {
     const detail = (await conn.sendRequest("paradox/eventDetail", { id: "smoke.1" })) as {
       id: string;
