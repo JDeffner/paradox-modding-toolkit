@@ -640,6 +640,12 @@
             "default": false,
             "order": 4,
             "markdownDescription": "Diagnose files under `px.gamePath` (vanilla game content). Off by default: the extension only ever diagnoses your mod's files."
+          },
+          "px.diagnostics.requireDescriptor": {
+            "type": "boolean",
+            "default": false,
+            "order": 5,
+            "markdownDescription": "Report an error (and offer to create one) when a mod folder has no `descriptor.mod` / `.metadata/metadata.json`. Off by default."
           }
         }
       },
