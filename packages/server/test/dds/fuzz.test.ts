@@ -105,4 +105,23 @@ describe("fuzz / robustness", () => {
     expect(ddsFormatInfo(buf)).toBeNull();
     expect(() => decodeDds(buf)).toThrow();
   });
+
+  it("refuses an oversized header without allocating for it", () => {
+    // A 128-byte file declaring 65535x65535 DXT1. The old per-axis bound let it
+    // through and reserved 16.1 GB of RGBA (measured) before the data-length
+    // check could say "truncated".
+    const buf = new Uint8Array(128);
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(0, fourCC("DDS "), true);
+    dv.setUint32(4, 124, true);
+    dv.setUint32(12, 65535, true);
+    dv.setUint32(16, 65535, true);
+    dv.setUint32(80, 0x4, true);
+    dv.setUint32(84, fourCC("DXT1"), true);
+
+    expect(() => decodeDds(buf)).toThrow(/too large/);
+    // The header peek still reports what the file claims, so the caller can say
+    // why the preview is missing instead of "not a DDS".
+    expect(ddsFormatInfo(buf)).toEqual({ format: "unsupported", width: 65535, height: 65535 });
+  });
 });
