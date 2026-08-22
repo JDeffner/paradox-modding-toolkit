@@ -179,8 +179,21 @@ export class GuiEditorPanel {
       loadGameFont(roots.gamePath, meta.uiFont)
     );
 
+    // onMessage awaits openTextDocument outside its own try, and the .gui can
+    // stop being openable while the panel is up (a branch switch, a rename, a
+    // mod rebuild that moves the folder). A rejection dropped here answers
+    // nothing, so the app's `committing` stays set forever: the canvas keeps
+    // drawing the stale live preview and every later gesture is swallowed by an
+    // `if (committing) return;` guard. Answer the message instead, verbatim.
     this.panel.webview.onDidReceiveMessage(
-      (message: AppToHost) => void this.onMessage(message),
+      (message: AppToHost) => {
+        void this.onMessage(message).catch((err: unknown) => {
+          const id = (message as { id?: number }).id;
+          const refused = err instanceof Error ? err.message : String(err);
+          if (id !== undefined) this.post({ type: "editVerdict", id, refused });
+          else this.post({ type: "error", message: refused });
+        });
+      },
       undefined,
       this.disposables
     );
