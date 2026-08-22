@@ -1070,9 +1070,7 @@
   "devDependencies": {
     "@px-lsp/protocol": "workspace:*",
     "@px-lsp/server": "workspace:*",
-    "@types/node": "^20.14.0",
-    "@types/vscode": "^1.90.0",
-    "esbuild": "^0.24.0"
+    "@types/vscode": "^1.90.0"
   },
   "dependencies": {
     "vscode-languageclient": "^10.1.0",

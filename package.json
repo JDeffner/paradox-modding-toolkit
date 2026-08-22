@@ -44,6 +44,11 @@
   "pnpm": {
     "overrides": {
       "brace-expansion@<5.0.8": ">=5.0.8"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@vscode/vsce-sign",
+      "esbuild",
+      "keytar"
+    ]
   }
 }
