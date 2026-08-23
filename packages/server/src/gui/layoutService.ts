@@ -40,6 +40,15 @@ export const VIEWPORT = { w: 1920, h: 1080 };
 
 let cache: { key: string; defs: GuiDefs; files: number; links: GuiScriptLinks } | null = null;
 
+/**
+ * Per-file parse results, keyed by absolute path and kept across store
+ * rebuilds. A store rebuild used to re-read and re-parse every .gui of the
+ * game (about a thousand files) whenever ONE mod .gui was saved, which is
+ * exactly what autosave does after every editor gesture; now a rebuild
+ * re-parses only the files whose mtime moved and re-merges the rest.
+ */
+const fileCache = new Map<string, { mtimeMs: number; defs: GuiDefs; text: string }>();
+
 function listGuiFiles(root: string): Map<string, string> {
   // relative path (lowercased, forward slashes) -> absolute path
   const out = new Map<string, string>();
@@ -95,21 +104,31 @@ function buildStore(
   const defs = emptyGuiDefs();
   const links = emptyGuiScriptLinks();
   let files = 0;
+  const seen = new Set<string>();
   for (const rel of [...effective.keys()].sort()) {
     const abs = effective.get(rel)!;
     try {
-      const text = fs.readFileSync(abs, "utf8");
-      mergeGuiDefs(defs, collectGuiDefs(text, undefined, abs));
+      const mtimeMs = fs.statSync(abs).mtimeMs;
+      let entry = fileCache.get(abs);
+      if (!entry || entry.mtimeMs !== mtimeMs) {
+        const text = fs.readFileSync(abs, "utf8");
+        entry = { mtimeMs, defs: collectGuiDefs(text, undefined, abs), text };
+        fileCache.set(abs, entry);
+      }
+      seen.add(abs);
+      mergeGuiDefs(defs, entry.defs);
       // Piggybacked on the one pass that already reads every .gui file: the
       // scripted_gui call scan is a substring test on all but the few files
       // that hold one, so the link index is effectively free here and a
       // second walk of the tree would not be.
-      collectScriptedGuiCalls(text, abs, links);
+      collectScriptedGuiCalls(entry.text, abs, links);
       files++;
     } catch {
       /* unreadable file: skip */
     }
   }
+  // A file that left the effective set (deleted, or shadowed by another root) drops out.
+  for (const abs of fileCache.keys()) if (!seen.has(abs)) fileCache.delete(abs);
   cache = { key, defs, files, links };
   return cache;
 }

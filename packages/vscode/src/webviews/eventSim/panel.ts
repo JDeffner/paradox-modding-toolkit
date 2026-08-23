@@ -4,6 +4,7 @@ import { simulationSteps } from "./steps";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
 type InboundMessage =
@@ -46,6 +47,7 @@ export class EventSimPanel {
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
+    this.panel.iconPath = tabIcon("event-sim");
     this.panel.webview.html = buildHtml(this.panel.webview);
 
     this.panel.webview.onDidReceiveMessage(

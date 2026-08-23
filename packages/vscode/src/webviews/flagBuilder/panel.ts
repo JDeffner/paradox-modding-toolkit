@@ -8,6 +8,7 @@
  * and save an exported PNG. Rendering and editing live in app/.
  */
 import * as vscode from "vscode";
+import { tabIcon } from "../tabIcons";
 import * as fs from "fs";
 import * as path from "path";
 import type { GameMeta } from "@px-lsp/server/games/profile";
@@ -59,10 +60,7 @@ export class FlagBuilderPanel {
         ],
       }
     );
-    this.panel.iconPath = {
-      light: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-light.svg"),
-      dark: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-dark.svg"),
-    };
+    this.panel.iconPath = tabIcon("flag-builder");
     const nonce = makeNonce();
     this.panel.webview.html = flagBuilderHtml({
       scriptSrc: this.panel.webview

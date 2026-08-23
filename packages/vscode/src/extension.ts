@@ -45,6 +45,7 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
+import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -144,6 +145,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  setTabIconRoot(context.extensionUri);
   output = vscode.window.createOutputChannel("Paradox Modding Toolkit", { log: true });
   context.subscriptions.push(output);
 

@@ -23,7 +23,7 @@ const KINDS: { kind: string; label: string; tip: string }[] = [
 const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; label: string; tip: string }[] = [
   {
     id: "toolSimulate",
-    icon: "play",
+    icon: "flaskConical",
     label: "Simulate",
     tip: "Walk through the selected event block by block, in the order the game runs them",
   },

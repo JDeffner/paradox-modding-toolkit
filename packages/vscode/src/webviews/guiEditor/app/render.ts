@@ -11,7 +11,7 @@ import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeome
 import type { GuiLayoutFill, GuiTextSegment } from "@px-lsp/protocol/protocol";
 import { handlePoints, HANDLE_SIZE } from "./gesture";
 import type { ConstraintOverlay } from "./placement";
-import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
+import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect, type SceneTextLine } from "./scene";
 import type { Guide, SpacingBar } from "./snap";
 
 export interface Camera {
@@ -113,6 +113,28 @@ function sourceFor(fill: GuiLayoutFill, img: HTMLImageElement): HTMLCanvasElemen
   return canvas;
 }
 
+/**
+ * Run widths per text line, measured once per scene item: every textbox with
+ * a variable in it would otherwise call measureText per run per frame, and a
+ * window has hundreds of them.
+ */
+const widthCache = new WeakMap<SceneItem, Map<SceneTextLine, number[]>>();
+function runWidths(
+  ctx: CanvasRenderingContext2D,
+  item: SceneItem,
+  line: SceneTextLine,
+  runs: readonly GuiTextSegment[]
+): number[] {
+  let perLine = widthCache.get(item);
+  if (!perLine) widthCache.set(item, (perLine = new Map()));
+  let widths = perLine.get(line);
+  if (!widths || widths.length !== runs.length) {
+    widths = runs.map((run) => ctx.measureText(run.text).width);
+    perLine.set(line, widths);
+  }
+  return widths;
+}
+
 function sizeOf(src: HTMLCanvasElement | HTMLImageElement): { w: number; h: number } {
   return src instanceof HTMLImageElement
     ? { w: src.naturalWidth || src.width, h: src.naturalHeight || src.height }
@@ -160,16 +182,21 @@ function paintFill(
   if (mask) {
     // The mask's alpha multiplies the fill's over the whole rect: draw the
     // fill into an offscreen of the rect's size, cut it with the mask, and
-    // composite the result. Integer-sized so the two drawImages line up.
+    // composite the result. Integer-sized so the two drawImages line up, and
+    // cached per rect size: a header band is repainted on every frame.
     const w = Math.max(1, Math.round(rect.w));
     const h = Math.max(1, Math.round(rect.h));
-    const { canvas: off, ctx: octx } = offscreen(w, h);
-    paintFill(octx, { x: 0, y: 0, w, h }, { ...fill, mask: undefined }, images);
-    octx.globalCompositeOperation = "destination-in";
-    octx.drawImage(mask, 0, 0, w, h);
-    ctx.save();
+    const key = `mask|${fill.texture}|${fill.mask}|${w}x${h}|${fill.color?.join(",") ?? ""}|${fill.alpha ?? 1}|${fill.mode ?? ""}|${fill.fit ?? ""}|${fill.frame ?? ""}`;
+    let off = derived.get(key);
+    if (!off) {
+      const made = offscreen(w, h);
+      paintFill(made.ctx, { x: 0, y: 0, w, h }, { ...fill, mask: undefined }, images);
+      made.ctx.globalCompositeOperation = "destination-in";
+      made.ctx.drawImage(mask, 0, 0, w, h);
+      off = made.canvas;
+      derived.set(key, off);
+    }
     ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h);
-    ctx.restore();
     return;
   }
   ctx.save();
@@ -266,8 +293,10 @@ function paintItem(
           ? segments!
           : [{ text: line.text, kind: "datafn", source: "", resolved: false } as GuiTextSegment];
       let x = line.x;
-      for (const run of runs) {
-        const w = ctx.measureText(run.text).width;
+      const widths = runWidths(ctx, item, line, runs);
+      for (let r = 0; r < runs.length; r++) {
+        const run = runs[r];
+        const w = widths[r];
         // Variables keep the text's own colour: on a busy background a muted
         // run is unreadable, and the underline alone says what it is. Only a
         // loc key nobody defined is muted, because the game prints the key.

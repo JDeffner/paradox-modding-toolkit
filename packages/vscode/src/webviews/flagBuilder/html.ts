@@ -42,8 +42,14 @@ ${uiCss}
   #viewport { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform-origin: 0 0; }
   #canvas { max-width: 92%; max-height: 92%; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 12px 40px rgba(0,0,0,.35); }
   #stage[data-panning], #stage[data-panning] #canvas { cursor: grabbing; }
-  #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 4px; }
-  #stageInfo { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  /* The same translucent group the GUI editor's stage controls sit in. */
+  #stageTools, #stageInfo {
+    position: absolute; bottom: 8px; display: flex; align-items: center; gap: 2px;
+    padding: 2px; border-radius: var(--px-radius);
+    background: color-mix(in oklch, var(--px-bg) 75%, transparent);
+  }
+  #stageTools { left: 8px; }
+  #stageInfo { right: 8px; gap: 8px; }
   #resetName[hidden] { display: none; }
   [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }

@@ -1212,13 +1212,27 @@ function indexRead<T>(label: string, fn: () => T): T {
   return perfSpan(label, fn);
 }
 
+function mentionsTextFormatting(fsPath: string): boolean {
+  try {
+    return fs.readFileSync(fsPath, "utf8").includes("textformatting");
+  } catch {
+    return false;
+  }
+}
+
 function applyModFileChange(fsPath: string): void {
   rescanModFile(fsPath);
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
   if (lower.endsWith(".gui")) invalidateGuiDefsCache();
-  // Cheap full re-harvest when a mod defines file or a gui textformatting file changed.
-  if (lower.replace(/\\/g, "/").includes("common/defines/") || lower.endsWith(".gui")) harvestEngineData();
+  // Full re-harvest when a mod defines file or a gui file WITH textformatting
+  // changed. Not on every .gui: the harvest reads only those out of gui/, and
+  // autosave fires this after every GUI editor gesture.
+  if (
+    lower.replace(/\\/g, "/").includes("common/defines/") ||
+    (lower.endsWith(".gui") && mentionsTextFormatting(fsPath))
+  )
+    harvestEngineData();
 }
 
 connection.onNotification(modFileChangedNotification, (params: ModFileChangeParams) => {

@@ -3,6 +3,7 @@ import type { GuiTree } from "@px-lsp/protocol/protocol";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
 type InboundMessage = { type: "open"; line: number; focus?: boolean } | { type: "refresh" };
@@ -50,6 +51,7 @@ export class GuiTreePanel {
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
+    this.panel.iconPath = tabIcon("gui-tree");
     this.panel.webview.html = buildHtml(this.panel.webview);
 
     this.panel.webview.onDidReceiveMessage(

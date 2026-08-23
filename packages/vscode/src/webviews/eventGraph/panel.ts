@@ -12,6 +12,7 @@ import { eventGraphHtml } from "./html";
 import type { GraphState, PendingEdit } from "./history";
 import type { AppToHost, HostToApp, UiState } from "./messages";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 const UI_KEY = "px.eventGraph.ui";
 
@@ -86,6 +87,7 @@ export class EventGraphPanel {
       }
     );
 
+    this.panel.iconPath = tabIcon("event-graph");
     this.panel.webview.html = this.buildHtml(context, this.panel.webview);
     this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY) });
 

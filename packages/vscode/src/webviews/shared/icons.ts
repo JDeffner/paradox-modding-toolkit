@@ -4,7 +4,7 @@
  * button is `<button class="px-btn">${icon("plus")} Add</button>`. Plain
  * strings: usable from host html builders and from browser code alike.
  */
-const PATHS = {
+export const PATHS = {
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',

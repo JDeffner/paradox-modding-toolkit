@@ -62,6 +62,7 @@ import {
   type StoredPresets,
 } from "./userData";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 export type FetchLayout = (
   uri: vscode.Uri,
@@ -205,13 +206,7 @@ export class GuiEditorPanel {
         ],
       }
     );
-    // The tab reads as a GUI editor rather than as a generic webview: the
-    // paradox-gui file icon's window frame with a pointer in it, so a tab and
-    // the .gui file it belongs to are recognisably the same thing.
-    this.panel.iconPath = {
-      light: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-light.svg"),
-      dark: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-dark.svg"),
-    };
+    this.panel.iconPath = tabIcon("gui-editor");
     this.panel.webview.html = buildHtml(
       this.panel.webview,
       vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "guiEditor.js"),
