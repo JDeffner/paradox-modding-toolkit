@@ -669,6 +669,7 @@ function buildWNode(
   // `ov` is threaded explicitly: an override is CONSUMED when applied, so a
   // block re-declaring its own name inside override content (vanilla's
   // cooltip chaining pattern) falls back to the default instead of recursing.
+  let usingDepth = 0;
   const process = (stmts: Statement[], ov: Map<string, BlockNode>): void => {
     let marker: "block" | "blockoverride" | null = null;
     for (const stmt of stmts) {
@@ -682,6 +683,19 @@ function buildWNode(
       if (m === "blockoverride") continue; // consumed by collectBlockOverrides
       const k = stmt.key.text.toLowerCase();
       const child = blockOf(stmt);
+      if (k === "using" && stmt.value?.kind === "scalar" && !m) {
+        // expandWidget spliced the top-level `using`s; one inside a block's
+        // content (vanilla: `block "scrollbox_margins" { using =
+        // Scrollbox_Margins }`) or an override body reaches here and is
+        // spliced the same way, in place.
+        const tpl = ctx.defs.templates.get(stmt.value.text);
+        if (tpl && usingDepth < 8) {
+          usingDepth++;
+          process(tpl.block.statements, ov);
+          usingDepth--;
+        }
+        continue;
+      }
       if (m === "block") {
         // Named slot: overridden content (or its own default), spliced inline.
         const override = ov.get(stmt.key.text);
@@ -874,7 +888,7 @@ export function resolveFill(
   // A `block "illustration_texture" { texture = ... }` inside it takes the
   // instance's blockoverride, the way a widget's own slots do: vanilla's
   // widget_header_with_picture names its picture exactly so.
-  const statements = spliceBlocks(expandWidget("#background", block, defs).statements, overrides);
+  const statements = spliceBlocks(expandWidget("#background", block, defs).statements, overrides, defs);
   let sprite: number[] | undefined;
   let spriteType: string | undefined;
   let framesize: number[] | undefined;
@@ -937,7 +951,12 @@ export function resolveFill(
  * override (or its own default content), recursively, an override consumed
  * once it is applied (the same rule buildWNode's process() follows).
  */
-function spliceBlocks(statements: Statement[], overrides: ReadonlyMap<string, BlockNode>): Statement[] {
+function spliceBlocks(
+  statements: Statement[],
+  overrides: ReadonlyMap<string, BlockNode>,
+  defs?: GuiDefs,
+  depth = 0
+): Statement[] {
   const out: Statement[] = [];
   let marker: "block" | "blockoverride" | null = null;
   for (const stmt of statements) {
@@ -959,7 +978,12 @@ function spliceBlocks(statements: Statement[], overrides: ReadonlyMap<string, Bl
         next.delete(stmt.key.text);
         sub = next;
       }
-      out.push(...spliceBlocks(content.statements, sub));
+      out.push(...spliceBlocks(content.statements, sub, defs, depth + 1));
+      continue;
+    }
+    if (stmt.key.text.toLowerCase() === "using" && stmt.value?.kind === "scalar" && defs && depth < 8) {
+      const tpl = defs.templates.get(stmt.value.text);
+      if (tpl) out.push(...spliceBlocks(tpl.block.statements, overrides, defs, depth + 1));
       continue;
     }
     out.push(stmt);

@@ -911,3 +911,36 @@ px_hdr = {
     expect(root.children.find((c) => c.name === "illustration")!.bg?.texture).toBe("gfx/default.dds");
   });
 });
+
+describe("a `using` inside a block's content is spliced (vanilla's scrollbox margins)", () => {
+  const TEXT = `
+template PxMargins {
+	margin_top = 15
+	margin_left = 15
+}
+types px_u_types {
+	type px_u_list = vbox {
+		block "margins" { using = PxMargins }
+		block "content" { }
+	}
+}
+vbox = {
+	px_u_list = {
+		blockoverride "content" {
+			icon = { size = { 40 20 } texture = "a.dds" }
+		}
+	}
+}`;
+  it("the template's margins move the content", () => {
+    const [root] = computeGuiLayout(TEXT, { viewport: { w: 1000, h: 1000 } });
+    const list = root.children[0];
+    const icon = list.children[0];
+    // A box in a box hugs its content: the margins are what grow it past the
+    // icon and push the icon off its top-left corner (the outer vbox centres
+    // the pair in the viewport, so only the relative geometry is pinned).
+    expect(list.rect.w).toBeCloseTo(55, 5);
+    expect(list.rect.h).toBeCloseTo(35, 5);
+    expect(icon.rect.x - list.rect.x).toBeCloseTo(15, 5);
+    expect(icon.rect.y - list.rect.y).toBeCloseTo(15, 5);
+  });
+});
