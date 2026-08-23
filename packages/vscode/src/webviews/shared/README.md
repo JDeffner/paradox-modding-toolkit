@@ -27,6 +27,11 @@ set per `body.vscode-dark` / `body.vscode-light`. `--px-primary` is the
 theme's accent (VS Code button colors). Never hardcode a color; never read a
 `--vscode-*` variable outside `ui.css`.
 
+`--px-tok-*` colors game script printed back to the user (keys, strings,
+numbers, booleans, comments, braces). A webview cannot read a theme's TextMate
+colors, so they follow the one family VS Code publishes per theme, the debug
+token expressions, with the editor foreground as the fallback.
+
 Sizes: controls are 32px (`--px-h`), 28px (`data-size="sm"`), 24px (`xs`).
 Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
 

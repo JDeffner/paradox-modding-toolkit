@@ -74,14 +74,20 @@ import {
   type LocEntryInfo,
   type LookupLocParams,
   type ReloadDocsResult,
+  eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
   type EventDetail,
+  type EventBannerParams,
+  type EventBannerResult,
   type EventDetailParams,
   type EventGraph,
   type EventGraphParams,
+  type EventVocabularyParams,
+  type EventVocabularyResult,
   type GuiTree,
   type GuiTreeParams,
   type GuiLayoutParams,
@@ -592,7 +598,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // option scaffold inserts before the event's closing brace and creates loc.
   const graphActions = {
     fetchDetail: fetchEventDetail,
-    simulate: (id: string) => EventSimPanel.show(fetchEventDetail, id),
+    // The dropdowns in the graph inspector offer only what the server knows:
+    // the profile's structure table, the schema's reference fields resolved
+    // through the index, and the script_docs tokens.
+    fetchVocabulary: () =>
+      lc.sendRequest<EventVocabularyResult>(eventVocabularyRequest, {
+        modRoot: views.focusRoot(),
+      } satisfies EventVocabularyParams),
+    fetchBanner: (theme: string) =>
+      lc.sendRequest<EventBannerResult>(eventBannerRequest, { theme } satisfies EventBannerParams),
+    textureRoots: () => ({ gamePath: cfg.gamePath, modPath: cfg.modPath }),
+    notifyChanged: notifyModFileChanged,
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
         if (!replaceLocLineValue(file, line, value))
@@ -662,25 +678,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       EventSimPanel.show(fetchEventDetail, id);
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
-      // Seed the graph from where the user is: the event id under the cursor,
-      // an on_action/decision name in the matching folders, or the file's
-      // namespace — so opening from an applicable file shows related nodes.
-      const editor = vscode.window.activeTextEditor;
-      let params: EventGraphParams = {};
-      if (editor && isScriptLang(editor.document.languageId)) {
-        const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
-        const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
-        const word = range ? editor.document.getText(range) : "";
-        if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) {
-          params = { root: word };
-        } else if (/\/(on_action|decisions)\//.test(fsPath) && /^[A-Za-z0-9_-]{3,}$/.test(word)) {
-          params = { root: word };
-        } else {
-          const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
-          if (ns) params = { namespace: ns[1] };
-        }
-      }
-      EventGraphPanel.show(context, fetchGraph, params, graphActions);
+      EventGraphPanel.show(context, fetchGraph, seedGraphParams(), graphActions);
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
@@ -887,6 +885,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * When that is not an event the user is asked, pre-filled with the word under
  * the cursor when it is shaped like an id.
  */
+/**
+ * Where to open the event graph from. In order: the id the cursor sits ON, the
+ * definition the cursor sits INSIDE (the common case, since you are editing an
+ * event body and not its id line), then the file's namespace.
+ *
+ * The enclosing definition is read from the text rather than from the index: a
+ * top-level `name = {` at column zero is exactly what the indexer calls a
+ * definition in these folders, and this way the command answers without a round
+ * trip to a server that may still be indexing.
+ */
+function seedGraphParams(): EventGraphParams {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !isScriptLang(editor.document.languageId)) return {};
+  const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
+  const named = /\/(on_action|decisions)\//.test(fsPath);
+  const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
+  const word = range ? editor.document.getText(range) : "";
+  if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) return { root: word };
+  if (named && /^[A-Za-z0-9_-]{3,}$/.test(word)) return { root: word };
+
+  for (let line = editor.selection.active.line; line >= 0; line--) {
+    const match = /^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*\{/.exec(editor.document.lineAt(line).text);
+    if (!match) continue;
+    if (/^[A-Za-z0-9_-]+\.\d+$/.test(match[1]) || named) return { root: match[1] };
+    break;
+  }
+  const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
+  return ns ? { namespace: ns[1] } : {};
+}
+
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {
   const editor = vscode.window.activeTextEditor;
   let word = "";

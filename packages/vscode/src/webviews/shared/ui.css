@@ -56,6 +56,20 @@
   --px-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
   --px-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
 
+  /* Script token colors, for a page that prints game script back to the user
+     (the event simulator). A webview cannot read a theme's TextMate colors, so
+     these follow the one family VS Code does publish per theme, the debug
+     token expressions, with the editor foreground as the fallback so an
+     unstyled theme still reads. Categories only: keys, values, strings,
+     numbers, booleans, comments, braces. */
+  --px-tok-key: var(--vscode-debugTokenExpression-name, var(--px-fg));
+  --px-tok-op: var(--px-muted-fg);
+  --px-tok-string: var(--vscode-debugTokenExpression-string, var(--px-fg));
+  --px-tok-number: var(--vscode-debugTokenExpression-number, var(--px-fg));
+  --px-tok-bool: var(--vscode-debugTokenExpression-boolean, var(--px-fg));
+  --px-tok-comment: var(--px-muted-fg);
+  --px-tok-brace: var(--px-fg-60);
+
   --px-radius: 10px;
   --px-radius-md: 8px;
   --px-radius-sm: 6px;

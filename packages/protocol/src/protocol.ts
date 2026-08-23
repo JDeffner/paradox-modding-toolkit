@@ -312,6 +312,19 @@ export interface EventStepTarget {
   firesTotal?: number;
 }
 
+/**
+ * A scalar `key = value` written directly in an event body or an option body,
+ * with the line it sits on, so an editor can rewrite it in place instead of
+ * re-parsing the file. Blocks are not fields: they are `sections` / `options`.
+ */
+export interface EventFieldInfo {
+  key: string;
+  value: string;
+  /** 0-based source line. */
+  line: number;
+  /** The value was written in quotes and must be rewritten that way. */
+  quoted?: boolean;
+}
 export interface EventSectionInfo {
   name: string;
   /** 0-based line of the section key. */
@@ -328,6 +341,10 @@ export interface EventSectionInfo {
 }
 export interface EventOptionInfo {
   line: number;
+  /** Line the option's first statement may be inserted before (0-based). */
+  bodyLine: number;
+  /** Scalar keys written in the option body, editable in place. */
+  fields: EventFieldInfo[];
   name?: EventLocField;
   effectKeys: string[];
   hasTrigger: boolean;
@@ -357,6 +374,10 @@ export interface EventDetail {
   line: number;
   /** Line of the event's closing brace (option-scaffold insertion point). */
   endLine: number;
+  /** Line a new top-level statement may be inserted before (0-based). */
+  bodyLine: number;
+  /** Scalar keys written at the event's top level, editable in place. */
+  fields: EventFieldInfo[];
   type?: string;
   hidden?: boolean;
   theme?: string;
@@ -1106,6 +1127,9 @@ export interface EventGraphParams {
   /** Restrict to one workspace mod (absolute root path). */
   modRoot?: string | null;
   maxNodes?: number;
+  /** Also read each mod event's `theme`. Off by default: it costs one parse per
+   *  event file, and only a client that draws the theme's art needs it. */
+  themes?: boolean;
 }
 export interface EventGraphNode {
   id: string;
@@ -1115,6 +1139,8 @@ export interface EventGraphNode {
   line?: number;
   /** Localized title (best-effort: <id>.t / <id>_t / <id>.title lookups). */
   title?: string;
+  /** The event's declared `theme`, when the request asked for themes. */
+  theme?: string;
 }
 export interface EventGraphEdge {
   from: string;
@@ -1141,6 +1167,77 @@ export interface EventGraph {
   truncated: boolean;
   /** Absent from servers that predate it; a client must tolerate that. */
   suggestions?: EventGraphSuggestions;
+}
+
+/**
+ * Request: the value sets an event editor may offer; {@link EventVocabularyParams}
+ * to {@link EventVocabularyResult}.
+ *
+ * Everything in the answer is DERIVED: the key lists come from the active
+ * profile's structure table, the field value sets from the schema's reference
+ * fields resolved through the definition index, and the effect/trigger lists
+ * from the user's script_docs (or the bundled wiki fallback). Nothing here is a
+ * hand-written name list, so a game patch that adds a theme or an effect shows
+ * up without a release.
+ */
+/**
+ * Request: the illustration an event theme puts behind its window;
+ * {@link EventBannerParams} to {@link EventBannerResult}.
+ *
+ * Resolved through the game's own two hops (event_themes -> event_backgrounds),
+ * taking the last `background` block that carries no `trigger`, which is the
+ * file's own unconditional fallback. `texture` is the engine's mod-relative
+ * path, exactly as a `.gui` file would spell it, so a client resolves it with
+ * the same mod-then-game lookup it uses for any other texture. A theme that
+ * resolves to nothing answers `reason` instead: the caller is expected to say
+ * so rather than draw a picture that is not the event's.
+ */
+export const eventBannerRequest = "paradox/eventBanner";
+export interface EventBannerParams {
+  /** Theme name as the event writes it (`theme = intrigue`). */
+  theme: string;
+}
+export interface EventBannerResult {
+  theme: string;
+  /** Mod-relative texture path, absent when nothing resolved. */
+  texture?: string;
+  /** Why nothing resolved. Present exactly when `texture` is absent. */
+  reason?: string;
+}
+
+export const eventVocabularyRequest = "paradox/eventVocabulary";
+export interface EventVocabularyParams {
+  /** Restrict definition-backed value sets to one workspace mod (plus vanilla). */
+  modRoot?: string | null;
+}
+/** One offerable value with the one-line docs an editor shows beside it. */
+export interface EventVocabularyItem {
+  value: string;
+  /** Documentation, capped. Empty when the source has none; never invented. */
+  doc?: string;
+  /** Dimmer right-hand label: where the value comes from (mod / vanilla / a kind). */
+  hint?: string;
+}
+/** Caps: an editor lists a page at a time, and these ride on every open. */
+export const EVENT_VOCABULARY_MAX_TOKENS = 600;
+export const EVENT_VOCABULARY_MAX_VALUES = 400;
+export interface EventVocabularyResult {
+  /** Keys valid at an event's top level, most used first. */
+  eventKeys: EventVocabularyItem[];
+  /** Keys valid inside an `option` block, most used first. */
+  optionKeys: EventVocabularyItem[];
+  /**
+   * Key to the values that key accepts, for the keys whose value set is known:
+   * a declared enumeration, or a reference field resolved through the index
+   * (`theme` gives every indexed event_theme). Keys with a free value are absent.
+   */
+  values: Record<string, EventVocabularyItem[]>;
+  /** Effect tokens, most used first, capped at EVENT_VOCABULARY_MAX_TOKENS. */
+  effects: EventVocabularyItem[];
+  /** Trigger tokens, same ordering and cap. */
+  triggers: EventVocabularyItem[];
+  /** Saved scopes the mod writes (`save_scope_as`), sorted. */
+  savedScopes: EventVocabularyItem[];
 }
 
 /**

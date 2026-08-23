@@ -44,14 +44,18 @@ import {
   type ModScopedParams,
   type ReloadDocsParams,
   type ReloadDocsResult,
+  eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  eventVocabularyRequest,
   guiTreeRequest,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
+  type EventVocabularyParams,
   type GuiTreeParams,
   guiLayoutRequest,
   type GuiLayoutParams,
@@ -160,6 +164,8 @@ import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
+import { computeEventVocabulary } from "./overview/eventVocabulary";
+import { computeEventBanner } from "./overview/eventBanner";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -1222,6 +1228,19 @@ connection.onRequest(overridesRequest, (params: ModScopedParams | null) =>
 
 connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
   computeEventGraph(data, params ?? {}, focusFilter(params?.modRoot))
+);
+
+// What an event editor may offer: the profile's structure table, the schema's
+// reference fields resolved through the index, and the script_docs tokens.
+// Never a hand-written name list.
+connection.onRequest(eventVocabularyRequest, (params: EventVocabularyParams | null) =>
+  computeEventVocabulary(data, schema, focusFilter(params?.modRoot))
+);
+
+// The theme's illustration, through the game's own event_themes ->
+// event_backgrounds hops. Answering "nothing resolved" is a real answer.
+connection.onRequest(eventBannerRequest, (params: EventBannerParams) =>
+  computeEventBanner(data, params?.theme ?? "")
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));

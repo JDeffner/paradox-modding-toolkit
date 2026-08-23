@@ -1,36 +1,57 @@
+import * as fs from "fs";
 import * as vscode from "vscode";
-import type { EventDetail, EventGraph, EventGraphParams } from "@px-lsp/protocol/protocol";
+import type {
+  EventBannerResult,
+  EventDetail,
+  EventGraph,
+  EventGraphParams,
+  EventVocabularyResult,
+} from "@px-lsp/protocol/protocol";
+import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "../guiEditor/textureCache";
 import { eventGraphHtml } from "./html";
+import type { GraphState, PendingEdit } from "./history";
 import type { AppToHost, HostToApp, UiState } from "./messages";
 
 const UI_KEY = "px.eventGraph.ui";
 
-/** Host-side actions the inspector needs (loc writes, option scaffolding). */
+/** Host-side actions the graph needs. Everything that touches disk is here. */
 export interface EventGraphActions {
   fetchDetail(id: string): Promise<EventDetail | null>;
-  /** Open the event simulator on this event. */
-  simulate(id: string): void;
+  fetchVocabulary(): Promise<EventVocabularyResult>;
+  /** Resolve one event theme to the texture behind its window. */
+  fetchBanner(theme: string): Promise<EventBannerResult>;
   /** Write a loc value: in place when file/line given, else via the replace file. */
   editLoc(key: string, value: string, file?: string, line?: number): Promise<void>;
   /** Insert a scaffolded option before `endLine` and create its loc key. */
   addOption(id: string, file: string, endLine: number, count: number): Promise<void>;
+  /** Mod root and game root, for resolving a texture path. */
+  textureRoots(): TextureRoots;
+  /** A mod file changed on disk (re-index). */
+  notifyChanged(file: string): void;
 }
 
 /**
- * Singleton interactive event-graph webview. Renders the CWTools-style event /
- * on_action / decision reference graph with a hand-rolled layered layout, pan +
- * zoom, click-to-open, double-click-to-refocus, and SVG export.
+ * Singleton interactive event-graph webview.
+ *
+ * The panel writes nothing on its own: the app holds the whole editing session
+ * and sends `save` when the user asks for it. The host mirrors that session
+ * (`state`) for one reason only - a webview panel cannot cancel its own close,
+ * so the unsaved work has to be here already when the tab goes away.
  */
 export class EventGraphPanel {
   private static instance: EventGraphPanel | undefined;
   private static readonly viewType = "px.eventGraph";
 
   private readonly panel: vscode.WebviewPanel;
+  private readonly context: vscode.ExtensionContext;
   private readonly fetchGraph: (params: EventGraphParams) => Promise<EventGraph>;
   private readonly actions: EventGraphActions | null;
   private readonly state: vscode.Memento;
+  private textures: GuiTextureCache;
   private disposables: vscode.Disposable[] = [];
   private lastParams: EventGraphParams;
+  /** The app's session as of its last message; empty until it sends one. */
+  private session: GraphState = { focus: {}, positions: {}, pending: [] };
   private disposed = false;
 
   private constructor(
@@ -39,10 +60,16 @@ export class EventGraphPanel {
     params: EventGraphParams,
     actions: EventGraphActions | null
   ) {
+    this.context = context;
     this.fetchGraph = fetchGraph;
     this.actions = actions;
     this.lastParams = params;
     this.state = context.workspaceState;
+    this.textures = new GuiTextureCache(
+      context.globalStorageUri.fsPath,
+      actions?.textureRoots() ?? { gamePath: null, modPath: null }
+    );
+    fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
     this.panel = vscode.window.createWebviewPanel(
       EventGraphPanel.viewType,
@@ -51,7 +78,10 @@ export class EventGraphPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "webview")],
+        localResourceRoots: [
+          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
+          vscode.Uri.file(this.textures.cacheDir),
+        ],
       }
     );
 
@@ -63,10 +93,10 @@ export class EventGraphPanel {
       undefined,
       this.disposables
     );
-
-    this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.panel.onDidDispose(() => void this.onDispose(), undefined, this.disposables);
 
     void this.load(params);
+    void this.sendVocabulary();
   }
 
   /** Create or reveal the singleton panel and load the graph for `params`. */
@@ -75,17 +105,23 @@ export class EventGraphPanel {
     fetchGraph: (params: EventGraphParams) => Promise<EventGraph>,
     params: EventGraphParams,
     actions: EventGraphActions | null = null
-  ): void {
-    if (EventGraphPanel.instance) {
-      const inst = EventGraphPanel.instance;
-      inst.panel.reveal(vscode.ViewColumn.Active);
-      void inst.load(params);
-      return;
+  ): EventGraphPanel {
+    const existing = EventGraphPanel.instance;
+    if (existing) {
+      existing.panel.reveal(vscode.ViewColumn.Active);
+      void existing.load(params);
+      return existing;
     }
-    EventGraphPanel.instance = new EventGraphPanel(context, fetchGraph, params, actions);
+    const created = new EventGraphPanel(context, fetchGraph, params, actions);
+    EventGraphPanel.instance = created;
+    return created;
   }
 
-  private dispose(): void {
+  /**
+   * The tab closed. A webview cannot veto that, so unsaved work is offered here
+   * instead: write it, drop it, or reopen the graph with the session intact.
+   */
+  private async onDispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     EventGraphPanel.instance = undefined;
@@ -96,7 +132,25 @@ export class EventGraphPanel {
         /* ignore */
       }
     }
-    this.panel.dispose();
+    const pending = this.session.pending;
+    if (pending.length === 0) return;
+    const answer = await vscode.window.showWarningMessage(
+      `The event graph has ${pending.length} unsaved change${pending.length === 1 ? "" : "s"}.`,
+      { modal: true, detail: "Cancel reopens the graph with your changes still in it." },
+      "Save",
+      "Discard"
+    );
+    if (answer === "Save") {
+      const result = await this.applyEdits(pending);
+      if (result.error) void vscode.window.showErrorMessage(`Paradox Event Graph: ${result.error}`);
+      return;
+    }
+    if (answer === "Discard") return;
+    // Cancel (or dismissed): put the graph back exactly as it was.
+    const session = this.session;
+    const reopened = EventGraphPanel.show(this.context, this.fetchGraph, this.lastParams, this.actions);
+    reopened.session = session;
+    reopened.post({ type: "restore", state: session });
   }
 
   /** Fetch a graph and push it (or an error) to the webview. */
@@ -109,8 +163,17 @@ export class EventGraphPanel {
       this.post({ type: "graph", graph, params });
     } catch (err) {
       if (this.disposed) return;
-      const message = err instanceof Error ? err.message : String(err);
-      this.post({ type: "error", message });
+      this.post({ type: "error", message: message(err) });
+    }
+  }
+
+  private async sendVocabulary(): Promise<void> {
+    if (!this.actions) return;
+    try {
+      const vocabulary = await this.actions.fetchVocabulary();
+      this.post({ type: "vocabulary", vocabulary });
+    } catch {
+      /* the inspector falls back to plain inputs */
     }
   }
 
@@ -124,9 +187,6 @@ export class EventGraphPanel {
       case "open":
         await this.openDocument(msg.file, msg.line);
         break;
-      case "refocus":
-        await this.load({ root: msg.id, maxNodes: this.lastParams.maxNodes });
-        break;
       case "fetch":
         await this.load(msg.params);
         break;
@@ -134,58 +194,117 @@ export class EventGraphPanel {
         await this.exportSvg(msg.svg);
         break;
       case "select":
-        await this.sendDetail(msg.id);
+        await this.sendDetail(msg.id, "detail");
         break;
       case "simulate":
-        this.actions?.simulate(msg.id);
+        await this.sendDetail(msg.id, "sim");
         break;
-      case "editLoc":
-        if (this.actions) {
-          try {
-            await this.actions.editLoc(msg.key, msg.value, msg.file, msg.line);
-          } catch (err) {
-            void vscode.window.showErrorMessage(
-              `Paradox Modding Toolkit: localization write failed: ${err instanceof Error ? err.message : String(err)}`
-            );
-          }
-          await this.sendDetail(msg.id);
-        }
+      case "state":
+        this.session = msg.state;
         break;
+      case "banner":
+        await this.sendBanner(msg.theme);
+        break;
+      case "save": {
+        const result = await this.applyEdits(msg.edits);
+        this.post({ type: "saved", applied: result.applied, error: result.error });
+        break;
+      }
       case "uiState":
         await this.state.update(UI_KEY, msg.state);
-        break;
-      case "addOption":
-        if (this.actions) {
-          try {
-            await this.actions.addOption(msg.id, msg.file, msg.endLine, msg.count);
-          } catch (err) {
-            void vscode.window.showErrorMessage(
-              `Paradox Modding Toolkit: add option failed: ${err instanceof Error ? err.message : String(err)}`
-            );
-          }
-          await this.sendDetail(msg.id);
-        }
         break;
     }
   }
 
-  private async sendDetail(id: string): Promise<void> {
+  /**
+   * Apply the pending edits. Stops at the first failure and reports it: a
+   * half-applied batch the user knows about beats a silent one, and the app
+   * keeps whatever it still holds.
+   */
+  private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number; error?: string }> {
+    if (!this.actions) return { applied: 0, error: "this graph is read-only" };
+    let applied = 0;
+    for (const edit of writeOrder(edits)) {
+      try {
+        if (edit.kind === "editLoc") {
+          await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
+        } else if (edit.kind === "addOption") {
+          await this.actions.addOption(edit.id, edit.file, edit.endLine, edit.count);
+        } else {
+          await this.setField(edit);
+        }
+        applied++;
+      } catch (err) {
+        return { applied, error: `${describe(edit)} failed: ${message(err)}` };
+      }
+    }
+    this.session = { ...this.session, pending: [] };
+    return { applied };
+  }
+
+  /**
+   * Rewrite one `key = value` statement, or insert it. A rewrite keeps the
+   * line's own indentation: the file's style is the author's, not ours.
+   */
+  private async setField(edit: Extract<PendingEdit, { kind: "setField" }>): Promise<void> {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(edit.file));
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    if (edit.line === null) {
+      const at = Math.min(Math.max(0, edit.insertLine), doc.lineCount);
+      workspaceEdit.insert(
+        doc.uri,
+        new vscode.Position(at, 0),
+        `${"\t".repeat(edit.indent)}${edit.key} = ${edit.value}\n`
+      );
+    } else {
+      if (edit.line >= doc.lineCount) throw new Error(`line ${edit.line + 1} is past the end of the file`);
+      const line = doc.lineAt(edit.line);
+      const indent = /^[\t ]*/.exec(line.text)?.[0] ?? "";
+      workspaceEdit.replace(doc.uri, line.range, `${indent}${edit.key} = ${edit.value}`);
+    }
+    if (!(await vscode.workspace.applyEdit(workspaceEdit))) throw new Error("edit rejected");
+    await doc.save();
+    this.actions?.notifyChanged(edit.file);
+  }
+
+  private async sendDetail(id: string, as: "detail" | "sim"): Promise<void> {
     if (!this.actions) return;
     try {
       const detail = await this.actions.fetchDetail(id);
-      this.post({ type: "detail", detail, id });
+      this.post(as === "detail" ? { type: "detail", detail, id } : { type: "sim", detail, id });
     } catch {
-      this.post({ type: "detail", detail: null, id });
+      this.post(as === "detail" ? { type: "detail", detail: null, id } : { type: "sim", detail: null, id });
     }
+  }
+
+  /**
+   * A theme's illustration as a webview url. `null` is a real answer: the app
+   * draws a labeled placeholder rather than an empty card, which would read as
+   * "this theme has no art".
+   */
+  private async sendBanner(theme: string): Promise<void> {
+    if (!this.actions) return;
+    let result: EventBannerResult = { theme, reason: "not resolved" };
+    try {
+      result = await this.actions.fetchBanner(theme);
+    } catch (err) {
+      result = { theme, reason: message(err) };
+    }
+    let url: string | null = null;
+    if (result.texture) {
+      const png = this.textures.resolve(result.texture, THUMBNAIL_MAX_DIM);
+      if (png) url = this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString();
+    }
+    this.post({ type: "banner", result, url });
   }
 
   private async openDocument(file: string, line?: number): Promise<void> {
     try {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
       const zero = Math.max(0, (line ?? 1) - 1);
-      const position = new vscode.Position(zero, 0);
-      // Open in the OTHER editor group so the graph tab stays visible; reuse
-      // an existing text group when there is one.
+      const position = new vscode.Position(Math.min(zero, Math.max(0, doc.lineCount - 1)), 0);
+      // Open in the OTHER editor group so the graph tab stays visible; reuse an
+      // existing text group when there is one.
       const textGroup = vscode.window.visibleTextEditors.find(
         (e) => e.document.uri.scheme === "file"
       )?.viewColumn;
@@ -195,8 +314,7 @@ export class EventGraphPanel {
         selection: new vscode.Range(position, position),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`Paradox Event Graph: cannot open ${file}: ${message}`);
+      void vscode.window.showErrorMessage(`Paradox Event Graph: cannot open ${file}: ${message(err)}`);
     }
   }
 
@@ -211,12 +329,9 @@ export class EventGraphPanel {
       await vscode.workspace.fs.writeFile(target, Buffer.from(svg, "utf8"));
       void vscode.window.showInformationMessage(`Event graph exported to ${target.fsPath}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`Paradox Event Graph: export failed: ${message}`);
+      void vscode.window.showErrorMessage(`Paradox Event Graph: export failed: ${message(err)}`);
     }
   }
-
-  // --- HTML -----------------------------------------------------------------
 
   private buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview): string {
     const nonce = makeNonce();
@@ -234,6 +349,42 @@ export class EventGraphPanel {
       ].join("; "),
     });
   }
+}
+
+/**
+ * The order the edits have to be WRITTEN in, which is not the order they were
+ * made in. Every edit carries the line numbers of the file as it was when the
+ * user made it, and an insertion moves every line under it. So: replacements
+ * first (they move nothing), then insertions from the bottom of each file
+ * upwards, so an earlier insertion cannot invalidate a later one's line. Two
+ * insertions at the same point are written back to front, which leaves them in
+ * the file in the order they were added.
+ */
+function writeOrder(edits: PendingEdit[]): PendingEdit[] {
+  const at = (edit: PendingEdit): number | null => {
+    if (edit.kind === "addOption") return edit.endLine;
+    if (edit.kind === "setField" && edit.line === null) return edit.insertLine;
+    return null;
+  };
+  const keep: PendingEdit[] = [];
+  const inserts: Array<{ edit: PendingEdit; line: number; index: number }> = [];
+  edits.forEach((edit, index) => {
+    const line = at(edit);
+    if (line === null) keep.push(edit);
+    else inserts.push({ edit, line, index });
+  });
+  inserts.sort((a, b) => b.line - a.line || b.index - a.index);
+  return [...keep, ...inserts.map((i) => i.edit)];
+}
+
+function describe(edit: PendingEdit): string {
+  if (edit.kind === "editLoc") return `localization ${edit.key}`;
+  if (edit.kind === "addOption") return `new option on ${edit.id}`;
+  return `${edit.key} on ${edit.id}`;
+}
+
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function makeNonce(): string {
