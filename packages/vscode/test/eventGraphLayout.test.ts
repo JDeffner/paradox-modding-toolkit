@@ -1,82 +1,92 @@
+/**
+ * The event graph's radial layout. What matters to a reader is checked here,
+ * because it is what a screenshot cannot prove: the focused event really is in
+ * the middle, no two cards overlap (the failure the old layered layout hid
+ * behind a wide canvas), what the focus fires and what fires it land on
+ * opposite sides, and two runs of the same graph agree.
+ */
 import { describe, expect, it } from "vitest";
-import { layoutGraph, type LayoutEdgeInput, type LayoutNodeInput } from "../src/webviews/eventGraph/layout";
+import {
+  NODE_H,
+  NODE_W,
+  radialLayout,
+  type LayoutEdgeInput,
+  type LayoutNodeInput,
+  type LayoutPos,
+} from "../src/webviews/eventGraph/layout";
 
 const n = (...ids: string[]): LayoutNodeInput[] => ids.map((id) => ({ id }));
 const e = (from: string, to: string): LayoutEdgeInput => ({ from, to });
 
-function allFinite(pos: Map<string, { x: number; y: number }>): boolean {
-  for (const p of pos.values()) {
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return false;
+/** The first overlapping pair, or null. Boxes touching exactly is not overlap. */
+function overlap(pos: Map<string, LayoutPos>): [string, string] | null {
+  const entries = [...pos.entries()];
+  for (let a = 0; a < entries.length; a++) {
+    for (let b = a + 1; b < entries.length; b++) {
+      const [idA, pa] = entries[a];
+      const [idB, pb] = entries[b];
+      if (Math.abs(pa.x - pb.x) < NODE_W && Math.abs(pa.y - pb.y) < NODE_H) return [idA, idB];
+    }
   }
+  return null;
+}
+
+function allFinite(pos: Map<string, LayoutPos>): boolean {
+  for (const p of pos.values()) if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return false;
   return true;
 }
 
-describe("layoutGraph", () => {
-  it("layers a chain a->b->c with strictly increasing x", () => {
-    const pos = layoutGraph(n("a", "b", "c"), [e("a", "b"), e("b", "c")], "a");
-    const a = pos.get("a")!;
-    const b = pos.get("b")!;
-    const c = pos.get("c")!;
-    expect(a.x).toBeLessThan(b.x);
-    expect(b.x).toBeLessThan(c.x);
+describe("radialLayout", () => {
+  it("pins the focused node at the centre", () => {
+    const pos = radialLayout(n("a", "b", "c"), [e("a", "b"), e("a", "c")], "a");
+    expect(pos.get("a")).toEqual({ x: 0, y: 0 });
   });
 
-  it("respects edge direction even without an explicit root", () => {
-    const pos = layoutGraph(n("a", "b", "c"), [e("a", "b"), e("b", "c")]);
-    expect(pos.get("a")!.x).toBeLessThan(pos.get("b")!.x);
-    expect(pos.get("b")!.x).toBeLessThan(pos.get("c")!.x);
+  it("puts what the focus fires opposite what fires the focus", () => {
+    const pos = radialLayout(n("root", "child", "parent"), [e("root", "child"), e("parent", "root")], "root");
+    expect(pos.get("child")!.x).toBeGreaterThan(0);
+    expect(pos.get("parent")!.x).toBeLessThan(0);
   });
 
-  it("gives every disconnected node a position", () => {
-    const pos = layoutGraph(n("a", "b", "island1", "island2"), [e("a", "b")]);
-    expect(pos.size).toBe(4);
-    expect(pos.has("island1")).toBe(true);
-    expect(pos.has("island2")).toBe(true);
-    expect(allFinite(pos)).toBe(true);
+  it("keeps every card clear of every other card", () => {
+    const nodes = n("root", ...Array.from({ length: 40 }, (_, i) => `evt.${i}`));
+    const edges = [
+      ...Array.from({ length: 20 }, (_, i) => e("root", `evt.${i}`)),
+      ...Array.from({ length: 15 }, (_, i) => e(`evt.${i}`, `evt.${i + 20}`)),
+      ...Array.from({ length: 5 }, (_, i) => e(`evt.${i + 35}`, "root")),
+    ];
+    const pos = radialLayout(nodes, edges, "root");
+    expect(pos.size).toBe(41);
+    expect(overlap(pos)).toBeNull();
   });
 
-  it("does not hang on cycles and stays finite", () => {
-    const pos = layoutGraph(n("a", "b", "c"), [e("a", "b"), e("b", "c"), e("c", "a")], "a");
+  it("gives disconnected nodes a place of their own without overlapping", () => {
+    const pos = radialLayout(n("a", "b", "lonely1", "lonely2", "lonely3"), [e("a", "b")], "a");
+    expect(pos.size).toBe(5);
+    expect(overlap(pos)).toBeNull();
+  });
+
+  it("survives cycles, self-loops, unknown edge ends and duplicate ids", () => {
+    const pos = radialLayout(
+      n("a", "a", "b", "c"),
+      [e("a", "a"), e("a", "b"), e("b", "c"), e("c", "a"), e("a", "ghost")],
+      "a"
+    );
     expect(pos.size).toBe(3);
     expect(allFinite(pos)).toBe(true);
-  });
-
-  it("handles a self-loop without hanging", () => {
-    const pos = layoutGraph(n("a", "b"), [e("a", "a"), e("a", "b")], "a");
-    expect(pos.size).toBe(2);
-    expect(pos.get("a")!.x).toBeLessThan(pos.get("b")!.x);
-  });
-
-  it("ignores edges to unknown nodes", () => {
-    const pos = layoutGraph(n("a", "b"), [e("a", "ghost"), e("a", "b")]);
-    expect(pos.size).toBe(2);
-    expect(allFinite(pos)).toBe(true);
-  });
-
-  it("dedupes repeated node ids", () => {
-    const pos = layoutGraph(n("a", "a", "b"), [e("a", "b")]);
-    expect(pos.size).toBe(2);
-  });
-
-  it("produces all-finite positions on a diamond", () => {
-    const pos = layoutGraph(n("a", "b", "c", "d"), [e("a", "b"), e("a", "c"), e("b", "d"), e("c", "d")], "a");
-    expect(allFinite(pos)).toBe(true);
-    expect(pos.get("a")!.x).toBeLessThan(pos.get("d")!.x);
   });
 
   it("is deterministic across two runs", () => {
     const nodes = n("root", "x", "y", "z", "w", "orphan");
     const edges = [e("root", "x"), e("root", "y"), e("x", "z"), e("y", "z"), e("z", "w")];
-    const a = layoutGraph(nodes, edges, "root");
-    const b = layoutGraph(nodes, edges, "root");
-    expect(a.size).toBe(b.size);
-    for (const [id, p] of a) {
-      expect(b.get(id)).toEqual(p);
-    }
+    const first = radialLayout(nodes, edges, "root");
+    const second = radialLayout(nodes, edges, "root");
+    for (const [id, p] of first) expect(second.get(id)).toEqual(p);
   });
 
-  it("handles an empty graph", () => {
-    const pos = layoutGraph([], []);
-    expect(pos.size).toBe(0);
+  it("centres the busiest node when there is no focus, and handles an empty graph", () => {
+    const pos = radialLayout(n("hub", "a", "b", "c"), [e("hub", "a"), e("hub", "b"), e("hub", "c")]);
+    expect(pos.get("hub")).toEqual({ x: 0, y: 0 });
+    expect(radialLayout([], []).size).toBe(0);
   });
 });
