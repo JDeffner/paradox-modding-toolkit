@@ -94,6 +94,22 @@ export type GuiValueMode = "full" | "abbreviated" | "hidden";
  */
 export interface GuiEditorUiState {
   valueMode: GuiValueMode;
+  /**
+   * The two side panels (tree/layers/palette on the left, inspector/halo on
+   * the right), as sidePanel.ts reports them. Absent until the user has moved
+   * or hidden one, so a fresh install opens with the page's own defaults.
+   */
+  panels?: GuiPanelStates;
+}
+
+export interface GuiPanelState {
+  width: number;
+  collapsed: boolean;
+}
+
+export interface GuiPanelStates {
+  left: GuiPanelState;
+  right: GuiPanelState;
 }
 
 /** Messages the editor app sends UP to its host. */
@@ -263,7 +279,7 @@ export type AppToHost =
    * and echoed it back mid-session would fight a user who changed it twice
    * before the first write landed.
    */
-  | { type: "setUiState"; valueMode: GuiValueMode }
+  | { type: "setUiState"; valueMode: GuiValueMode; panels?: GuiPanelStates }
   /** Remember these properties under a name. The host answers by pushing `userData`. */
   | { type: "savePreset"; name: string; properties: EditProperty[] }
   /** Forget a saved component or preset. The host answers by pushing `userData`. */

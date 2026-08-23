@@ -225,13 +225,18 @@ must not reach the inspector.
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
 these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
-`inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `toast`, `meta`,
-`zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`, `heatmap`,
-`zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`, `haloToggle`, `halo`,
-`haloTabs`, `haloBody`, `refresh`. `snap`, `grid`, `constraints` and `pulses`
-are checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app
-fills its own options into. `palette` and `halo` start `hidden` and their
-toggles are what show them. The stage needs pointer events and, ideally, pointer
+`inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `meta`,
+`fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`,
+`heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`,
+`haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `side`, `right`,
+`toggleSide`, `toggleRight`. `snap`, `grid`, `constraints` and `pulses` are
+checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app fills
+its own options into and keeps hidden behind `heatmapMenu`, the px-dropdown
+that opens them as a menu. `palette` and `halo` start `hidden` and their
+toggles are what show them. `side` and `right` are the two `px-sidepanel`s
+(../shared/sidePanel.ts); their width and collapsed state ride on
+`setUiState.panels` and come back on `layout.ui.panels`. Toasts are the shared
+px-ui `toast()`, so the page needs no element for them. The stage needs pointer events and, ideally, pointer
 capture (`app/` guards its absence, so a host without it loses only the ability
 to finish a drag off-canvas). A layers row drag needs no capture at all: it
 follows `pointermove` on the rows and ends on a window `pointerup`.

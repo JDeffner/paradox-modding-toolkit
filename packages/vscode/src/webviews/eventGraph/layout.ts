@@ -1,16 +1,6 @@
 /**
- * Pure, dependency-free layered graph layout (Sugiyama-lite).
- *
- * IMPORTANT: this function ships twice. It is unit-tested here as a normal
- * import, and its *source* is serialized (`layoutGraph.toString()`) into the
- * webview script by panel.ts so the tested code is the shipped code. It must
- * therefore stay self-contained:
- *   - reference nothing outside its own parameters and locally declared names,
- *   - no imports/closures/module globals,
- *   - plain ES2020 that survives `.toString()`.
- *
- * The type annotations here are erased by tsc before the body is emitted, so
- * `.toString()` yields plain JS (verify: no `: Type` or `as` survives runtime).
+ * Pure, dependency-free layered graph layout (Sugiyama-lite). Unit-tested
+ * here and bundled into the webview app (app/main.ts) as a normal import.
  */
 
 export interface LayoutNodeInput {

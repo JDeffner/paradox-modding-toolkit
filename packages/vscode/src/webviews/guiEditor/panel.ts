@@ -665,7 +665,11 @@ export class GuiEditorPanel {
       case "setUiState": {
         // Stored, not echoed: the app has already applied it, and the next
         // panel picks it up from the `ui` field of its first layout.
-        await this.state.update(UI_KEY, { valueMode: message.valueMode });
+        const stored = readUiState(this.state.get(UI_KEY));
+        await this.state.update(UI_KEY, {
+          valueMode: message.valueMode,
+          panels: message.panels ?? stored?.panels,
+        });
         return;
       }
       case "savePreset": {

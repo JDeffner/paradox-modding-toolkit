@@ -59,12 +59,18 @@ import type {
   AppToHost,
   EditProperty,
   GuiEditorUiState,
+  GuiPanelStates,
   GuiValueMode,
   SavedComponent,
   SavedPreset,
   TextureEntry,
 } from "../messages";
 import { connectHost } from "./host";
+import { iconEl, type IconName } from "../../shared/icons";
+import { sidePanel } from "../../shared/sidePanel";
+import { menu, toast as pxToast, type MenuItem } from "../../shared/overlay";
+import { scrubbable } from "../../shared/scrub";
+import { colorPicker, type Rgb } from "../../shared/colorPicker";
 import {
   buildScene,
   childIndices,
@@ -132,8 +138,9 @@ const inspectorEl = document.getElementById("inspector") as HTMLDivElement;
 const statusEl = document.getElementById("status") as HTMLSpanElement;
 const statsEl = document.getElementById("stats") as HTMLSpanElement;
 const visibilityBadgeEl = document.getElementById("visibilityBadge") as HTMLSpanElement;
-const toastEl = document.getElementById("toast") as HTMLDivElement;
 const metaEl = document.getElementById("meta") as HTMLSpanElement;
+const infoEl = document.getElementById("info") as HTMLButtonElement;
+const fileNameEl = document.getElementById("fileName") as HTMLSpanElement;
 const zoomLabel = document.getElementById("zoomLabel") as HTMLSpanElement;
 const outlinesEl = document.getElementById("outlines") as HTMLInputElement;
 const snapToggle = document.getElementById("snap") as HTMLInputElement;
@@ -141,6 +148,7 @@ const gridToggle = document.getElementById("grid") as HTMLInputElement;
 const constraintsToggle = document.getElementById("constraints") as HTMLInputElement;
 const pulsesToggle = document.getElementById("pulses") as HTMLInputElement;
 const heatmapSelect = document.getElementById("heatmap") as HTMLSelectElement;
+const heatmapMenuEl = document.getElementById("heatmapMenu") as HTMLButtonElement;
 const paletteEl = document.getElementById("palette") as HTMLDivElement;
 const paletteToggleEl = document.getElementById("paletteToggle") as HTMLButtonElement;
 const haloEl = document.getElementById("halo") as HTMLDivElement;
@@ -311,6 +319,14 @@ function draw(): void {
     paintMs: lastPaintMs,
     widgets: scene.count,
   });
+  syncInfo();
+}
+
+/** The store line and the stats live behind the info button at the stage's edge, not in a bar. */
+function syncInfo(): void {
+  infoEl.dataset.tip = [metaEl.textContent, statsEl.textContent].filter((t) => t).join("\n");
+  if (metaEl.hasAttribute("data-warning")) infoEl.setAttribute("data-warning", "");
+  else infoEl.removeAttribute("data-warning");
 }
 
 function paintScene(): void {
@@ -426,14 +442,118 @@ function el(tag: string, className?: string, text?: string): HTMLElement {
   return node;
 }
 
+interface ButtonOptions {
+  icon?: IconName;
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive";
+  size?: "sm" | "xs" | "icon" | "icon-sm" | "icon-xs";
+  /** The tooltip. Every icon-only button has one; a labelled one may. */
+  tip?: string;
+  className?: string;
+}
+
+/** A px-btn. The label is the button's whole text, so a test can find it by label. */
+function button(label: string, onClick: () => void, o: ButtonOptions = {}): HTMLButtonElement {
+  const node = document.createElement("button");
+  node.className = o.className ? `px-btn ${o.className}` : "px-btn";
+  node.dataset.variant = o.variant ?? "ghost";
+  if (o.size) node.dataset.size = o.size;
+  if (o.icon) node.appendChild(iconEl(o.icon));
+  if (label) node.appendChild(document.createTextNode(label));
+  if (o.tip) {
+    node.dataset.tip = o.tip;
+    if (o.tip.length > 40) node.dataset.tipWrap = "";
+  }
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+/** A text field: px-input, small, with the keystrokes kept off the canvas. */
+function textInput(placeholder: string, value: string, className = ""): HTMLInputElement {
+  const input = document.createElement("input");
+  input.className = className ? `px-input ${className}` : "px-input";
+  input.dataset.size = "sm";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.spellcheck = false;
+  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  return input;
+}
+
+/**
+ * A choice that reads as a field: a `<select>` holds the value (so the page's
+ * host contract and the harness still see a select) and a px-dropdown button
+ * opens its options as a `menu()`, because a native option list cannot be
+ * styled and breaks in dark themes. Picking writes the select and fires its
+ * `change`, so the owner listens to the select alone.
+ */
+function dropdownSelect(
+  items: MenuItem[],
+  value: string,
+  o: { tip?: string; search?: boolean } = {}
+): { wrap: HTMLElement; select: HTMLSelectElement } {
+  const wrap = el("span", "dropdownWrap");
+  const select = document.createElement("select");
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    select.appendChild(option);
+  }
+  select.value = value;
+  const label = el("span", "px-truncate");
+  const trigger = button("", () => undefined, {
+    variant: "outline",
+    size: "sm",
+    tip: o.tip,
+    className: "px-dropdown",
+  });
+  trigger.appendChild(label);
+  trigger.appendChild(iconEl("chevronDown"));
+  const sync = (): void => {
+    label.textContent = items.find((i) => i.value === select.value)?.label ?? select.value;
+  };
+  trigger.addEventListener("click", () =>
+    menu(trigger, items, {
+      value: select.value,
+      search: o.search,
+      onPick: (picked) => {
+        if (picked === select.value) return;
+        select.value = picked;
+        sync();
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    })
+  );
+  select.addEventListener("change", sync);
+  sync();
+  wrap.appendChild(select);
+  wrap.appendChild(trigger);
+  return { wrap, select };
+}
+
+/** A px-badge in its quiet outline form, for the row tags (declaration, synthetic, a count). */
+function badge(text: string, title?: string): HTMLElement {
+  const node = el("span", "px-badge tag", text);
+  node.dataset.variant = "outline";
+  if (title) node.title = title;
+  return node;
+}
+
+/** A section header inside a panel. */
+function sectionTitle(text: string): HTMLElement {
+  return el("div", "section", text);
+}
+
 function renderTree(): void {
   const fragment = document.createDocumentFragment();
   rowEls.clear();
   for (const row of treeRows(scene, collapsed, focusIndex)) {
-    const node = el("div", "row");
+    const node = el("div", "px-item row");
     node.style.paddingLeft = `${4 + row.depth * 12}px`;
-    const twisty = el("span", "twisty", row.hasChildren ? (row.collapsed ? "▸" : "▾") : "");
+    const twisty = el("span", "twisty");
     if (row.hasChildren) {
+      twisty.appendChild(iconEl("chevronRight"));
+      if (!row.collapsed) twisty.dataset.open = "";
       twisty.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const key = rowKey(scene.items[row.index].path);
@@ -443,22 +563,24 @@ function renderTree(): void {
       });
     }
     node.appendChild(twisty);
-    node.appendChild(el("span", undefined, row.key));
+    node.appendChild(el("span", "rowKey", row.key));
     if (row.name) node.appendChild(el("span", "rowName", `#${row.name}`));
     if (row.declared) {
-      const tag = el("span", "tag", "declaration");
-      tag.title =
-        "This file declares this type and instantiates nothing, so the declaration is previewed as one instance of itself. Its children are this file's own statements and are editable.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge(
+          "declaration",
+          "This file declares this type and instantiates nothing, so the declaration is previewed as one instance of itself. Its children are this file's own statements and are editable."
+        )
+      );
     } else if (row.synthetic) {
-      const tag = el("span", "tag", "synthetic");
-      tag.title = "Spliced in from a template or a type: no source of its own in this file.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge("synthetic", "Spliced in from a template or a type: no source of its own in this file.")
+      );
     }
     if (row.ghost) {
-      const tag = el("span", "tag", "ghost");
-      tag.title = "A datamodel placeholder: the list has no runtime rows in a static preview.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge("ghost", "A datamodel placeholder: the list has no runtime rows in a static preview.")
+      );
     }
     node.addEventListener("click", () => select(row.index, { reveal: false }));
     rowEls.set(row.index, node);
@@ -469,11 +591,17 @@ function renderTree(): void {
   highlightTree(false);
 }
 
+/** The px-item selected state, which is also what the harness reads. */
+function setSelected(node: HTMLElement, on: boolean): void {
+  if (on) node.setAttribute("aria-selected", "true");
+  else node.removeAttribute("aria-selected");
+}
+
 function highlightTree(scrollTo: boolean): void {
   const members = new Set(others);
   for (const [index, node] of rowEls) {
     const isPrimary = index === selected;
-    node.classList.toggle("selected", isPrimary || members.has(index));
+    setSelected(node, isPrimary || members.has(index));
     if (isPrimary && scrollTo) node.scrollIntoView({ block: "nearest" });
   }
 }
@@ -506,13 +634,15 @@ function setFocus(index: number | null): void {
 function renderFocusBar(): void {
   focusBarEl.textContent = "";
   if (focusIndex === null) {
-    const button = el("button", undefined, "Focus subtree") as HTMLButtonElement;
-    button.title = "Show only the selected widget and what is inside it (f)";
-    button.disabled = selected === null;
-    button.addEventListener("click", () => {
-      if (selected !== null) setFocus(selected);
-    });
-    focusBarEl.appendChild(button);
+    const focus = button(
+      "Focus subtree",
+      () => {
+        if (selected !== null) setFocus(selected);
+      },
+      { icon: "focus", size: "sm", tip: "Show only the selected widget and what is inside it (f)" }
+    );
+    focus.disabled = selected === null;
+    focusBarEl.appendChild(focus);
     return;
   }
   // The ancestors are no longer rows, so the crumbs are the only way up.
@@ -527,10 +657,10 @@ function renderFocusBar(): void {
     focusBarEl.appendChild(el("span", "sepArrow", "›"));
   }
   focusBarEl.appendChild(el("span", undefined, widgetTitle(scene.items[focusIndex])));
-  const button = el("button", undefined, "Unfocus");
-  button.style.marginLeft = "auto";
-  button.addEventListener("click", () => setFocus(null));
-  focusBarEl.appendChild(button);
+  focusBarEl.appendChild(el("span", "px-grow"));
+  focusBarEl.appendChild(
+    button("Unfocus", () => setFocus(null), { size: "xs", tip: "Show the whole document again (f)" })
+  );
 }
 
 // ---- the layers panel ------------------------------------------------------
@@ -567,11 +697,17 @@ function renderLayers(): void {
   const reorderable = layersContainer !== null && container !== null && canEdit(container);
 
   const head = el("div", "head");
-  head.appendChild(el("div", "title", container ? `In ${widgetTitle(container)}` : "Document root"));
+  const title = el("div", "px-panel-title");
+  title.appendChild(iconEl("layers"));
+  title.appendChild(el("span", undefined, "Layers"));
+  title.appendChild(
+    el("span", "where px-truncate", container ? `In ${widgetTitle(container)}` : "Document root")
+  );
+  head.appendChild(title);
   head.appendChild(
     el(
       "div",
-      "hint",
+      "hint px-muted px-xs",
       reorderable
         ? "Source order: later rows paint on top, and in a box that is the layout order. Drag to reorder."
         : "Source order. These are the file's root widgets: there is no parent widget to reorder them inside."
@@ -609,40 +745,48 @@ function visibleWindow(rows: readonly LayerRow[]): { start: number; end: number 
 
 function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   const key = rowKey(scene.items[row.index].path);
-  const node = el("div", "row");
+  const node = el("div", "px-item row");
   node.classList.toggle("hiddenWidget", hiddenPaths.has(key));
-  node.appendChild(el("span", "grip", reorderable && row.rank >= 0 ? "⠿" : ""));
-  node.appendChild(
-    toggle("◉", "◌", hiddenPaths.has(key), "Hide this widget in the preview", () => {
+  const grip = el("span", "grip");
+  if (reorderable && row.rank >= 0) grip.appendChild(iconEl("grip"));
+  node.appendChild(grip);
+  const label = el("span", "label", widgetTitle(row));
+  node.appendChild(label);
+  if (row.declared) {
+    node.appendChild(
+      badge(
+        "declaration",
+        "A type this file declares, previewed as one instance of itself: there is no slot to move."
+      )
+    );
+  } else if (row.synthetic) {
+    node.appendChild(
+      badge("synthetic", "Spliced in from a template or a type: no source of its own to move.")
+    );
+  }
+  node.appendChild(el("span", "px-grow"));
+  const tools = el("span", "layerTools");
+  tools.appendChild(
+    toggle("eye", "eyeOff", hiddenPaths.has(key), "Hide this widget in the preview", () => {
       if (hiddenPaths.has(key)) hiddenPaths.delete(key);
       else hiddenPaths.add(key);
       afterToggle();
     })
   );
-  node.appendChild(
-    toggle("▢", "▣", lockedPaths.has(key), "Lock: the canvas stops picking this widget", () => {
+  tools.appendChild(
+    toggle("unlock", "lock", lockedPaths.has(key), "Lock: the canvas stops picking this widget", () => {
       if (lockedPaths.has(key)) lockedPaths.delete(key);
       else lockedPaths.add(key);
       afterToggle();
     })
   );
-  node.appendChild(
-    toggle("○", "◍", soloPath === key, "Solo: dim everything that is not this widget", () => {
+  tools.appendChild(
+    toggle("circle", "circleDot", soloPath === key, "Solo: dim everything that is not this widget", () => {
       soloPath = soloPath === key ? null : key;
       afterToggle();
     })
   );
-  const label = el("span", "label", widgetTitle(row));
-  node.appendChild(label);
-  if (row.declared) {
-    const tag = el("span", "tag", "declaration");
-    tag.title = "A type this file declares, previewed as one instance of itself: there is no slot to move.";
-    node.appendChild(tag);
-  } else if (row.synthetic) {
-    const tag = el("span", "tag", "synthetic");
-    tag.title = "Spliced in from a template or a type: no source of its own to move.";
-    node.appendChild(tag);
-  }
+  node.appendChild(tools);
 
   node.addEventListener("pointerdown", (ev) => onLayerPointerDown(ev as PointerEvent, row, reorderable));
   node.addEventListener("pointermove", (ev) => onLayerPointerMove(ev as PointerEvent, row));
@@ -659,15 +803,13 @@ function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   return node;
 }
 
-/** One glyph column: `on` when the state is set, `off` when it is not. */
-function toggle(off: string, on: string, active: boolean, title: string, run: () => void): HTMLElement {
-  const node = el("span", `toggle${active ? " on" : ""}`, active ? on : off);
-  node.title = title;
+/** One row tool: `on` when the state is set, `off` when it is not. */
+function toggle(off: IconName, on: IconName, active: boolean, tip: string, run: () => void): HTMLElement {
+  const node = button("", run, { icon: active ? on : off, size: "icon-xs", tip, className: "toggle" });
+  node.setAttribute("aria-pressed", active ? "true" : "false");
+  node.dataset.tipSide = "left";
   node.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-  node.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    run();
-  });
+  node.addEventListener("click", (ev) => ev.stopPropagation());
   return node;
 }
 
@@ -680,7 +822,7 @@ function afterToggle(): void {
 function highlightLayers(): void {
   const members = new Set(others);
   for (const [index, node] of layerEls) {
-    node.classList.toggle("selected", index === selected || members.has(index));
+    setSelected(node, index === selected || members.has(index));
   }
 }
 
@@ -720,8 +862,10 @@ function paletteOpen(): boolean {
 
 function togglePalette(): void {
   paletteEl.hidden = !paletteEl.hidden;
-  paletteToggleEl.classList.toggle("on", paletteOpen());
+  paletteToggleEl.setAttribute("aria-pressed", paletteOpen() ? "true" : "false");
   if (paletteOpen()) {
+    // The palette lives in the left panel: showing it in a hidden panel would show nothing.
+    if (sidePanels.left.collapsed) sidePanels.left.toggle(false);
     // The document's own templates and types change as it is edited, so the
     // list is re-asked for whenever the panel is showing (onLayout does the
     // same); a closed panel asks once and lives with what it got.
@@ -741,17 +885,16 @@ function renderPalette(): void {
   paletteEls.clear();
 
   const head = el("div", "head");
-  const filter = document.createElement("input");
-  filter.placeholder = "Filter widgets";
-  filter.value = paletteQuery;
-  filter.spellcheck = false;
-  filter.addEventListener("keydown", (ev) => ev.stopPropagation());
+  const group = el("div", "px-input-group");
+  group.appendChild(iconEl("search"));
+  const filter = textInput("Filter widgets", paletteQuery);
   filter.addEventListener("input", () => {
     paletteQuery = filter.value;
     renderPalette();
     filter.focus();
   });
-  head.appendChild(filter);
+  group.appendChild(filter);
+  head.appendChild(group);
   paletteEl.appendChild(head);
 
   if (vocabulary.length === 0) {
@@ -764,18 +907,16 @@ function renderPalette(): void {
     return;
   }
   for (const entry of rows) {
-    const node = el("div", "row");
-    node.appendChild(el("span", undefined, paletteLabel(entry)));
+    const node = el("div", "px-item row");
+    node.appendChild(el("span", "label", paletteLabel(entry)));
     if (entry.count !== undefined) {
-      const tag = el("span", "tag", String(entry.count));
-      tag.title = `${entry.count} uses in the game's own gui files`;
-      node.appendChild(tag);
+      node.appendChild(badge(String(entry.count), `${entry.count} uses in the game's own gui files`));
     }
     node.title = "Drag onto the canvas to insert it";
     node.addEventListener("pointerdown", (ev) => {
       if ((ev as PointerEvent).button !== 0 || committing) return;
       paletteDrag = { entry, target: null, rank: 0, line: null };
-      node.classList.add("dragging");
+      node.setAttribute("data-dragging", "");
     });
     paletteEls.set(entry.name, node);
     paletteEl.appendChild(node);
@@ -949,7 +1090,11 @@ function renderInspector(): void {
   pendingFocus = focus;
   pendingTyped = typed;
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, widgetTitle(item)));
+  const titleRow = el("div", "px-row");
+  titleRow.appendChild(el("span", "title px-truncate", widgetTitle(item)));
+  titleRow.appendChild(el("span", "px-grow"));
+  titleRow.appendChild(valueModeButton());
+  head.appendChild(titleRow);
   const r = item.rect;
   head.appendChild(el("div", "chain", `${round(r.x)}, ${round(r.y)} · ${round(r.w)} x ${round(r.h)}`));
   if (info && infoLine === item.line && info.typeChain.length > 0) {
@@ -967,7 +1112,6 @@ function renderInspector(): void {
       )
     );
   }
-  head.appendChild(valueModeButton());
   inspectorEl.appendChild(head);
   renderTools(item);
 
@@ -988,6 +1132,8 @@ function renderInspector(): void {
   const rows = inspectorRows(info);
   if (rows.length === 0) {
     inspectorEl.appendChild(el("div", "note", "This widget sets no properties."));
+  } else {
+    inspectorEl.appendChild(sectionTitle("Properties"));
   }
   for (const row of rows) {
     inspectorEl.appendChild(propRow(row, item.line));
@@ -1009,7 +1155,9 @@ function propRow(row: InspectorRow, line: number): HTMLElement {
   const entries = blockEntries(row.value);
   const expanded = expandedBlocks.has(row.key);
   if (entries) {
-    const twisty = el("span", "twisty", expanded ? "▾" : "▸");
+    const twisty = el("span", "twisty");
+    twisty.appendChild(iconEl("chevronRight"));
+    if (expanded) twisty.dataset.open = "";
     twisty.title = "Edit this block one key at a time";
     twisty.addEventListener("click", () => {
       if (expanded) expandedBlocks.delete(row.key);
@@ -1041,9 +1189,10 @@ function valueCell(row: InspectorRow, line: number): HTMLElement | null {
   if (valueMode === "full" || short === row.value.trim() || editingRows.has(row.key)) {
     const input = rowInput(row, line);
     inspectorInputs.set(row.key, input);
-    return input;
+    const color = parseColor(row.key, row.value);
+    return color ? colorCell(input, color.rgb, color.alpha) : input;
   }
-  const label = el("span", "val short", short);
+  const label = el("span", "val short px-sm", short);
   label.title = `${row.value} (click to edit)`;
   label.addEventListener("click", () => {
     editingRows.add(row.key);
@@ -1056,11 +1205,12 @@ function valueCell(row: InspectorRow, line: number): HTMLElement | null {
 
 /** The three-way cycle, in the header because it is a statement about all the rows. */
 function valueModeButton(): HTMLElement {
-  const button = el("button", "modeButton", `Values: ${valueMode}`) as HTMLButtonElement;
-  button.title =
-    "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.";
-  button.addEventListener("click", () => setValueMode(nextValueMode(valueMode)));
-  return button;
+  const node = button(`Values: ${valueMode}`, () => setValueMode(nextValueMode(valueMode)), {
+    size: "xs",
+    tip: "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.",
+  });
+  node.dataset.tipSide = "left";
+  return node;
 }
 
 function setValueMode(mode: GuiValueMode): void {
@@ -1098,9 +1248,13 @@ function blockEditor(row: InspectorRow, entries: readonly BlockEntry[], line: nu
         commit(next);
       })
     );
-    const remove = el("span", "toggle", "✕");
-    remove.title = `Remove ${entry.key} from ${row.key}`;
-    remove.addEventListener("click", () => commit(entries.filter((_, i) => i !== index)));
+    const remove = button("", () => commit(entries.filter((_, i) => i !== index)), {
+      icon: "x",
+      size: "icon-xs",
+      tip: `Remove ${entry.key} from ${row.key}`,
+      className: "toggle",
+    });
+    remove.dataset.tipSide = "left";
     sub.appendChild(remove);
     wrap.appendChild(sub);
   });
@@ -1110,15 +1264,17 @@ function blockEditor(row: InspectorRow, entries: readonly BlockEntry[], line: nu
   const value = blockInput(`${row.key}.new.value`, "", "val", () => undefined);
   key.placeholder = "key";
   value.placeholder = "value";
-  const go = el("button", undefined, "Add key") as HTMLButtonElement;
-  go.title = `Add a key to ${row.key}`;
-  go.addEventListener("click", () => {
-    if (key.value.trim().length === 0 || value.value.trim().length === 0) {
-      toast(`A ${row.key} entry needs both a key and a value.`, "info");
-      return;
-    }
-    commit([...entries, { key: key.value.trim(), value: value.value.trim() }]);
-  });
+  const go = button(
+    "Add key",
+    () => {
+      if (key.value.trim().length === 0 || value.value.trim().length === 0) {
+        toast(`A ${row.key} entry needs both a key and a value.`, "info");
+        return;
+      }
+      commit([...entries, { key: key.value.trim(), value: value.value.trim() }]);
+    },
+    { variant: "outline", size: "xs", tip: `Add a key to ${row.key}` }
+  );
   add.appendChild(key);
   add.appendChild(value);
   add.appendChild(go);
@@ -1133,14 +1289,10 @@ function blockInput(
   className: string,
   onCommit: (text: string) => void
 ): HTMLInputElement {
-  const input = document.createElement("input");
-  input.className = className === "key" ? "val key" : "val";
-  input.value = value;
-  input.spellcheck = false;
+  const input = textInput("", value, className === "key" ? "val key" : "val");
   input.dataset.row = rowId;
   input.dataset.baseline = value;
   input.addEventListener("keydown", (ev) => {
-    ev.stopPropagation();
     if (ev.key !== "Enter") return;
     ev.preventDefault();
     input.blur();
@@ -1172,16 +1324,13 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
   const taken = new Set(rows.map((row) => row.key.toLowerCase()));
   const chain = [item.key, ...(info?.typeChain ?? [])];
 
-  inspectorEl.appendChild(el("div", "section", "Add a property"));
+  inspectorEl.appendChild(sectionTitle("Add a property"));
   const wrap = el("div", "addProp");
   const fields = el("div", "line");
-  const name = document.createElement("input");
-  name.className = "val key";
-  name.placeholder = "property";
-  name.spellcheck = false;
+  const name = textInput("property", "", "val key");
   name.dataset.row = "+name";
-  const suggestions = el("div", "suggest");
-  let value: HTMLInputElement | HTMLSelectElement = valueControl(name.value);
+  const suggestions = el("div", "suggest px-list");
+  let value: ValueControl = valueControl(name.value);
 
   const commit = (): void => {
     const key = name.value.trim().toLowerCase();
@@ -1203,15 +1352,15 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
 
   const syncValue = (): void => {
     const next = valueControl(name.value);
-    if (next.tagName === value.tagName) return;
-    fields.replaceChild(next, value);
+    if (next.kind === value.kind) return;
+    fields.replaceChild(next.element, value.element);
     value = next;
   };
   const syncSuggestions = (): void => {
     suggestions.textContent = "";
     if (document.activeElement !== name) return;
     for (const choice of propertyChoices(chain, vocabularyProps, vocabularyCommon, taken, name.value)) {
-      const node = el("div", "row", choice);
+      const node = el("div", "px-item row", choice);
       node.addEventListener("mousedown", (ev) => {
         // mousedown, not click: the input's blur would clear the list first.
         ev.preventDefault();
@@ -1225,7 +1374,6 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
   };
 
   name.addEventListener("keydown", (ev) => {
-    ev.stopPropagation();
     if (ev.key === "Enter") {
       ev.preventDefault();
       const first = suggestions.firstElementChild?.textContent;
@@ -1250,11 +1398,14 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
     suggestions.textContent = "";
   });
 
-  const go = el("button", undefined, "Add") as HTMLButtonElement;
-  go.title = "Write this property into the widget's own body, through the same guards every edit passes.";
-  go.addEventListener("click", commit);
+  const go = button("Add", commit, {
+    variant: "outline",
+    size: "sm",
+    tip: "Write this property into the widget's own body, through the same guards every edit passes.",
+  });
+  go.dataset.tipSide = "left";
   fields.appendChild(name);
-  fields.appendChild(value);
+  fields.appendChild(value.element);
   fields.appendChild(go);
   wrap.appendChild(fields);
   wrap.appendChild(suggestions);
@@ -1264,31 +1415,46 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
 /** The nine anchor words the engine parses, from the layout engine's own table. */
 const ANCHOR_SPECS = ANCHOR_Y.flatMap((y) => ANCHOR_X.map((x) => anchorSpec(x as AnchorX, y as AnchorY)));
 
+/** The add-property row's value half: what to put in the row, and what it holds. */
+interface ValueControl {
+  kind: "choice" | "text";
+  element: HTMLElement;
+  readonly value: string;
+  focus(): void;
+}
+
 /**
- * A `<select>` where the engine's vocabulary for the property is known, a plain
+ * A menu where the engine's vocabulary for the property is known, a plain
  * field where it is not. Anchors are the known case: their words are the layout
  * engine's, so a picked one always parses.
  */
-function valueControl(key: string): HTMLInputElement | HTMLSelectElement {
+function valueControl(key: string): ValueControl {
   const lower = key.trim().toLowerCase();
   if (lower === "parentanchor" || lower === "widgetanchor") {
-    const select = document.createElement("select");
+    const { wrap, select } = dropdownSelect(
+      ANCHOR_SPECS.map((spec) => ({ value: spec, label: spec })),
+      ANCHOR_SPECS[0]
+    );
     select.dataset.row = "+value";
-    for (const spec of ANCHOR_SPECS) {
-      const option = document.createElement("option");
-      option.value = spec;
-      option.textContent = spec;
-      select.appendChild(option);
-    }
-    return select;
+    return {
+      kind: "choice",
+      element: wrap,
+      get value() {
+        return select.value;
+      },
+      focus: () => (wrap.querySelector("button") as HTMLButtonElement | null)?.focus(),
+    };
   }
-  const input = document.createElement("input");
-  input.className = "val";
-  input.placeholder = "value";
-  input.spellcheck = false;
+  const input = textInput("value", "", "val");
   input.dataset.row = "+value";
-  input.addEventListener("keydown", (ev) => ev.stopPropagation());
-  return input;
+  return {
+    kind: "text",
+    element: input,
+    get value() {
+      return input.value;
+    },
+    focus: () => input.focus(),
+  };
 }
 
 /**
@@ -1319,16 +1485,14 @@ function writeProperty(line: number, key: string, value: string): void {
 function renderTools(item: SceneItem): void {
   const members = allSelected();
   const tools = el("div", "tools");
-  const button = (label: string, title: string, enabled: boolean, run: () => void): void => {
-    const node = el("button", undefined, label) as HTMLButtonElement;
-    node.title = title;
+  const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
+    const node = button(label, run, { variant: "outline", size: "icon-sm", tip });
     node.disabled = !enabled;
-    node.addEventListener("click", run);
     tools.appendChild(node);
   };
 
   if (members.length >= 2) {
-    inspectorEl.appendChild(el("div", "section", "Align the selection"));
+    inspectorEl.appendChild(sectionTitle("Align the selection"));
     const aligns: [string, AlignMode, string][] = [
       ["⇤", "left", "Align left edges"],
       ["⇔", "hcenter", "Align horizontal centres"],
@@ -1338,12 +1502,12 @@ function renderTools(item: SceneItem): void {
       ["⇣", "bottom", "Align bottom edges"],
     ];
     for (const [label, mode, title] of aligns) {
-      button(label, title, true, () => commitMoves(members, alignDeltas(members.map(rectOf), mode), title));
+      tool(label, title, true, () => commitMoves(members, alignDeltas(members.map(rectOf), mode), title));
     }
-    button("↔", "Distribute horizontally: equal gaps left to right", members.length >= 3, () =>
+    tool("↔", "Distribute horizontally: equal gaps left to right", members.length >= 3, () =>
       commitMoves(members, distributeDeltas(members.map(rectOf), "x"), "Distribute horizontally")
     );
-    button("↕", "Distribute vertically: equal gaps top to bottom", members.length >= 3, () =>
+    tool("↕", "Distribute vertically: equal gaps top to bottom", members.length >= 3, () =>
       commitMoves(members, distributeDeltas(members.map(rectOf), "y"), "Distribute vertically")
     );
     inspectorEl.appendChild(tools);
@@ -1352,54 +1516,53 @@ function renderTools(item: SceneItem): void {
   const wrapTools = el("div", "tools");
   const containers = containerRows(vocabulary);
   if (containers.length > 0 && canEdit(item)) {
-    const select = document.createElement("select");
-    select.title = "Wrap the selection in a fresh container";
-    for (const entry of containers) {
-      const option = document.createElement("option");
-      option.value = entry.name;
-      option.textContent = paletteLabel(entry);
-      select.appendChild(option);
-    }
-    wrapTools.appendChild(el("span", undefined, "Wrap in"));
-    wrapTools.appendChild(select);
-    const go = el("button", undefined, "Wrap") as HTMLButtonElement;
-    go.addEventListener("click", () => commitWrap(members, select.value));
-    wrapTools.appendChild(go);
+    const { wrap, select } = dropdownSelect(
+      containers.map((entry) => ({ value: entry.name, label: paletteLabel(entry) })),
+      containers[0].name,
+      { tip: "Wrap the selection in a fresh container", search: containers.length > 8 }
+    );
+    wrapTools.appendChild(el("span", "px-label", "Wrap in"));
+    wrapTools.appendChild(wrap);
+    wrapTools.appendChild(
+      button("Wrap", () => commitWrap(members, select.value), { variant: "outline", size: "sm" })
+    );
     inspectorEl.appendChild(wrapTools);
   } else if (canEdit(item)) {
     // The palette is where the vocabulary comes from, so say that rather than
     // showing a menu with nothing in it.
-    inspectorEl.appendChild(el("div", "section", "Open the palette to wrap this in a container."));
+    inspectorEl.appendChild(el("div", "note", "Open the palette to wrap this in a container."));
   }
 
   // A preset is saved FROM the inspector because the rows it saves are the ones
   // shown here: the widget's own, the ones it authored rather than inherited.
   const local = localProperties();
   if (local.length > 0) {
+    inspectorEl.appendChild(sectionTitle("Preset"));
     const presetTools = el("div", "tools");
-    const nameInput = document.createElement("input");
-    nameInput.className = "val";
-    nameInput.style.textAlign = "left";
-    nameInput.placeholder = "Preset name";
-    nameInput.value = presetName;
-    nameInput.spellcheck = false;
+    const nameInput = textInput("Preset name", presetName);
     nameInput.dataset.row = "+preset";
-    nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
     nameInput.addEventListener("input", () => {
       presetName = nameInput.value;
     });
     presetTools.appendChild(nameInput);
-    const save = el("button", undefined, `Save ${local.length} as preset`) as HTMLButtonElement;
-    save.title = `Store this widget's OWN ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`;
-    save.addEventListener("click", () => {
-      const name = presetName.trim();
-      if (name.length === 0) {
-        toast("Give the preset a name first.", "info");
-        return;
+    const save = button(
+      `Save ${local.length} as preset`,
+      () => {
+        const name = presetName.trim();
+        if (name.length === 0) {
+          toast("Give the preset a name first.", "info");
+          return;
+        }
+        host.send({ type: "savePreset", name, properties: local });
+        toast(`Saved ${local.length} propert${local.length === 1 ? "y" : "ies"} as "${name}".`, "info");
+      },
+      {
+        variant: "outline",
+        size: "sm",
+        tip: `Store this widget's own ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`,
       }
-      host.send({ type: "savePreset", name, properties: local });
-      toast(`Saved ${local.length} propert${local.length === 1 ? "y" : "ies"} as "${name}".`, "info");
-    });
+    );
+    save.dataset.tipSide = "left";
     presetTools.appendChild(save);
     inspectorEl.appendChild(presetTools);
   }
@@ -1424,7 +1587,7 @@ function localProperties(): EditProperty[] {
  */
 function renderAnchors(line: number, rows: readonly InspectorRow[]): void {
   const valueOf = (key: string) => rows.find((r) => r.key === key)?.value;
-  inspectorEl.appendChild(el("div", "section", "Anchors"));
+  inspectorEl.appendChild(sectionTitle("Anchors"));
   const wrap = el("div", "anchors");
   for (const key of ["parentanchor", "widgetanchor"] as const) {
     const column = el("div");
@@ -1529,10 +1692,7 @@ function commitWrap(members: readonly number[], type: string): void {
  * which is what the "from …" label under the row is there to explain.
  */
 function rowInput(row: InspectorRow, line: number): HTMLInputElement {
-  const input = document.createElement("input");
-  input.className = "val";
-  input.value = row.value;
-  input.spellcheck = false;
+  const input = textInput("", row.value, "val");
   // Named so a rebuild can put the caret back where the user left it: a commit
   // re-lays the document out and every row here is a new element. The baseline
   // is what dirty-detection compares against when a sibling's commit rebuilds.
@@ -1573,9 +1733,8 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
   };
 
   input.addEventListener("keydown", (ev) => {
-    // Typing must not reach the canvas: Escape here reverts the row, it does
-    // not clear the selection the row belongs to.
-    ev.stopPropagation();
+    // Typing must not reach the canvas (textInput stops it): Escape here
+    // reverts the row, it does not clear the selection the row belongs to.
     if (ev.key === "Enter") {
       ev.preventDefault();
       commit();
@@ -1585,7 +1744,56 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
     }
   });
   input.addEventListener("change", commit);
+  // A plain number drags sideways like every other numeric field; the drag
+  // ends in the same commit a typed value gets, so one drag is one undo step.
+  if (/^-?\d+(\.\d+)?$/.test(row.value.trim())) {
+    scrubbable(input, {
+      step: row.value.includes(".") ? 0.01 : 1,
+      onChange: () => undefined,
+      onCommit: commit,
+    });
+  }
   return input;
+}
+
+/**
+ * The value half of a color row: the input plus a swatch that opens the shared
+ * color picker. A color is written the way the engine reads one, `{ r g b a }`
+ * in 0..1, and the picker's close is the commit, so a drag through the square
+ * is one write and one undo step.
+ */
+function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTMLElement {
+  const wrap = el("span", "valRow");
+  const swatch = document.createElement("button");
+  swatch.className = "px-swatch";
+  swatch.dataset.tip = "Pick a color";
+  swatch.dataset.tipSide = "left";
+  swatch.style.setProperty("--px-swatch", `rgb(${rgb.join(" ")})`);
+  swatch.addEventListener("click", () => {
+    const start = input.value;
+    colorPicker(swatch, rgb, {
+      onChange: (next) => {
+        rgb = next;
+        swatch.style.setProperty("--px-swatch", `rgb(${next.join(" ")})`);
+        input.value = `{ ${next.map((v) => round(v / 255)).join(" ")}${alpha === null ? "" : ` ${alpha}`} }`;
+      },
+      onClose: () => {
+        if (input.value !== start) input.dispatchEvent(new Event("change"));
+      },
+    });
+  });
+  wrap.appendChild(input);
+  wrap.appendChild(swatch);
+  return wrap;
+}
+
+/** `{ r g b [a] }` in 0..1 on a `*color*` property, as the picker's 0..255 triple plus the alpha text. */
+function parseColor(key: string, value: string): { rgb: Rgb; alpha: string | null } | null {
+  if (!/color/i.test(key)) return null;
+  const m = /^\{\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s+([\d.]+))?\s*\}$/.exec(value.trim());
+  if (!m) return null;
+  const channel = (v: string): number => Math.max(0, Math.min(255, Math.round(Number(v) * 255)));
+  return { rgb: [channel(m[1]), channel(m[2]), channel(m[3])], alpha: m[4] ?? null };
 }
 
 /** `"px_card"` -> `px_card`: the scene reports names unquoted, the source quotes them. */
@@ -1604,29 +1812,21 @@ function round(v: number): string {
 
 /** How long a message stays up. Refusals are sentences; they need reading time. */
 const TOAST_MS = 8000;
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * A refusal reason is the SERVER'S sentence and is shown verbatim: it says what
  * the engine would do with the write, which is knowledge this app does not have
- * and must not paraphrase into something friendlier and wrong.
+ * and must not paraphrase into something friendlier and wrong. The surface is
+ * the shared px-toast, so it reads like every other webview's.
  */
 function toast(message: string, kind: "refused" | "warned" | "info"): void {
-  toastEl.textContent = message;
-  toastEl.className = kind;
-  toastEl.hidden = false;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, TOAST_MS);
+  pxToast(message, kind === "refused" ? "destructive" : "default", TOAST_MS);
 }
 
+/** Take every message down at once (an abandoned gesture's warning is moot). */
 function hideToast(): void {
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = undefined;
-  toastEl.hidden = true;
-  toastEl.textContent = "";
+  for (const node of Array.from(document.querySelectorAll<HTMLElement>(".px-toast"))) node.remove();
 }
-
-toastEl.addEventListener("click", hideToast);
 
 // ---- edits -----------------------------------------------------------------
 
@@ -1810,8 +2010,11 @@ function onLayout(
   if (!uiAdopted) {
     uiAdopted = true;
     if (ui) valueMode = ui.valueMode;
+    if (ui?.panels) adoptPanels(ui.panels);
   }
   file = name;
+  fileNameEl.textContent = name;
+  fileNameEl.title = name;
   defsFiles = result.defsFiles;
   previousScene = scene.items.length > 0 ? scene : null;
   const t0 = performance.now();
@@ -1840,9 +2043,9 @@ function onLayout(
   metaEl.textContent = storeWarning
     ? `${defsFiles} gui files in template store, ${storeWarning}`
     : `${defsFiles} gui files in template store`;
-  metaEl.style.color = storeWarning
-    ? "var(--vscode-editorWarning-foreground)"
-    : "var(--vscode-descriptionForeground)";
+  if (storeWarning) metaEl.setAttribute("data-warning", "");
+  else metaEl.removeAttribute("data-warning");
+  syncInfo();
   seedCollapse();
   // Every path-keyed view (eye, lock, solo, focus) re-resolves against the new
   // draw indices before anything reads a mask.
@@ -2597,7 +2800,7 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
     drag.engaged = true;
     // Same discipline as a canvas drag: the guards answer before the row moves.
     probeReorder(drag.ctx, drag);
-    layerEls.get(drag.index)?.classList.add("dragging");
+    layerEls.get(drag.index)?.setAttribute("data-dragging", "");
     announceGesture(drag);
   }
   if (drag.status === "blocked" || row.rank < 0) return;
@@ -2605,21 +2808,49 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
   markDropRow(drag);
 }
 
-/** The drop line, as a border on the row the widget would land at. */
+/**
+ * The drop preview: the dragged row moves to where it would land and the rows
+ * between slide out of its way (FLIP, the same look as sortable.ts), so the
+ * list reads as the order a release would write. The rows go back to the
+ * order the file has when the drag ends: the fresh layout is the answer.
+ */
 function markDropRow(drag: RowDrag): void {
-  for (const node of layerEls.values()) node.classList.remove("dropBefore", "dropAfter");
-  if (drag.to === null || drag.to === drag.ctx.from) return;
-  const target = layerEls.get(drag.ctx.children[drag.to]);
-  target?.classList.add(drag.to < drag.ctx.from ? "dropBefore" : "dropAfter");
+  const moving = layerEls.get(drag.index);
+  if (!moving || drag.to === null) return;
+  const rows = drag.ctx.children.map((i) => layerEls.get(i)).filter((n): n is HTMLElement => !!n);
+  const others = rows.filter((n) => n !== moving);
+  const anchor = others[drag.to] ?? null;
+  if ((anchor ? anchor.previousElementSibling : others[others.length - 1]) === moving) return;
+  const before = new Map(rows.map((n) => [n, n.getBoundingClientRect().top]));
+  if (anchor) layersEl.insertBefore(moving, anchor);
+  else others[others.length - 1]?.after(moving);
+  for (const [row, top] of before) {
+    if (row === moving) continue;
+    const delta = top - row.getBoundingClientRect().top;
+    if (!delta) continue;
+    row.style.transition = "none";
+    row.style.transform = `translateY(${delta}px)`;
+    requestAnimationFrame(() => {
+      row.style.transition = "transform 140ms cubic-bezier(0.2, 0, 0, 1)";
+      row.style.transform = "";
+    });
+  }
 }
 
 function endRowDrag(): void {
   const drag = rowDrag;
   rowDrag = null;
   if (!drag) return;
-  layerEls.get(drag.index)?.classList.remove("dragging");
-  for (const node of layerEls.values()) node.classList.remove("dropBefore", "dropAfter");
-  if (!drag.engaged || drag.status === "blocked" || drag.to === null || drag.to === drag.ctx.from) return;
+  layerEls.get(drag.index)?.removeAttribute("data-dragging");
+  for (const node of layerEls.values()) {
+    node.style.transition = "";
+    node.style.transform = "";
+  }
+  if (!drag.engaged || drag.status === "blocked" || drag.to === null || drag.to === drag.ctx.from) {
+    // Nothing was written, so the rows go back to the order the file still has.
+    if (drag.engaged) renderLayers();
+    return;
+  }
   commitReorder(drag.ctx, drag.to);
 }
 
@@ -2765,7 +2996,7 @@ function endPaletteDrag(commit: boolean): void {
   const drag = paletteDrag;
   paletteDrag = null;
   flashIndex = null;
-  for (const node of paletteEls.values()) node.classList.remove("dragging");
+  for (const node of paletteEls.values()) node.removeAttribute("data-dragging");
   if (!drag) return;
   const target = drag.target;
   if (!commit || !target) {
@@ -2992,8 +3223,9 @@ function wantsPlacement(): boolean {
 
 function toggleHalo(): void {
   haloEl.hidden = !haloEl.hidden;
-  haloToggleEl.classList.toggle("on", haloOpen());
+  haloToggleEl.setAttribute("aria-pressed", haloOpen() ? "true" : "false");
   if (!haloOpen()) return;
+  if (sidePanels.right.collapsed) sidePanels.right.toggle(false);
   renderHaloTabs();
   askForTab();
   renderHalo();
@@ -3069,7 +3301,10 @@ function askTextures(): void {
 function renderHaloTabs(): void {
   haloTabsEl.textContent = "";
   for (const entry of HALO_TABS) {
-    const node = el("button", entry.tab === haloTab ? "on" : undefined, entry.label) as HTMLButtonElement;
+    const node = el("button", "px-tab", entry.label) as HTMLButtonElement;
+    node.setAttribute("role", "tab");
+    node.setAttribute("aria-selected", entry.tab === haloTab ? "true" : "false");
+    // A native title: the line tab's underline is its ::after, which a data-tip would take over.
     node.title = entry.title;
     node.addEventListener("click", () => setHaloTab(entry.tab));
     haloTabsEl.appendChild(node);
@@ -3144,7 +3379,7 @@ function renderWhy(): void {
   }
 
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, widgetTitle(item)));
+  head.appendChild(el("div", "title", widgetTitle(item)));
   head.appendChild(
     el(
       "div",
@@ -3155,7 +3390,7 @@ function renderWhy(): void {
   haloBodyEl.appendChild(head);
 
   if (report.rows.length > 0) {
-    haloBodyEl.appendChild(el("div", "section", "Where the origin comes from"));
+    haloBodyEl.appendChild(sectionTitle("Where the origin comes from"));
     const terms = el("div", "terms");
     report.rows.forEach((row, i) => {
       const line = el("div", i === report.rows.length - 1 ? "term sum" : "term");
@@ -3169,7 +3404,7 @@ function renderWhy(): void {
 
   const overrides = overrideRows(widgetInfo.properties);
   if (overrides.length === 0) return;
-  haloBodyEl.appendChild(el("div", "section", "What overrides what"));
+  haloBodyEl.appendChild(sectionTitle("What overrides what"));
   for (const row of overrides) {
     const prose = el("div", "prose");
     prose.appendChild(el("span", undefined, `${row.key} = ${row.value}`));
@@ -3207,7 +3442,7 @@ function renderTextureTab(): void {
   }
   for (const texture of textures) {
     const head = el("div", "head");
-    head.appendChild(el("div", undefined, `${texture.source}: ${textureName(texture.path)}`));
+    head.appendChild(el("div", "title", `${texture.source}: ${textureName(texture.path)}`));
     head.appendChild(el("div", "chain", texture.path));
     head.appendChild(el("div", "chain", textureSummary(texture)));
     haloBodyEl.appendChild(head);
@@ -3281,7 +3516,7 @@ const VISIBILITY_MODES: { mode: GuiVisibilityMode; label: string; title: string 
  */
 function renderVisible(): void {
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, "Conditional visibility"));
+  head.appendChild(el("div", "title", "Conditional visibility"));
   head.appendChild(
     el(
       "div",
@@ -3292,42 +3527,51 @@ function renderVisible(): void {
   haloBodyEl.appendChild(head);
 
   const tools = el("div", "tools");
+  const group = el("div", "px-toggle-group");
+  group.dataset.spacing = "0";
   for (const entry of VISIBILITY_MODES) {
-    const node = el(
-      "button",
-      entry.mode === visibilityMode ? "on" : undefined,
-      entry.label
-    ) as HTMLButtonElement;
-    node.title = entry.title;
-    if (entry.mode === visibilityMode) node.style.borderColor = "var(--vscode-focusBorder, #007fd4)";
+    const node = el("button", "px-toggle", entry.label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.setAttribute("aria-pressed", entry.mode === visibilityMode ? "true" : "false");
+    node.dataset.tip = entry.title;
+    node.dataset.tipWrap = "";
     node.addEventListener("click", () => sendVisibility(entry.mode, visibilityChecks));
-    tools.appendChild(node);
+    group.appendChild(node);
   }
+  tools.appendChild(group);
   haloBodyEl.appendChild(tools);
 
   if (visibilityFound.length === 0) {
     note("No widget in this file has a conditional `visible`, so the mode changes nothing here.");
     return;
   }
-  haloBodyEl.appendChild(el("div", "section", `${visibilityFound.length} condition(s) the layout met`));
+  haloBodyEl.appendChild(sectionTitle(`${visibilityFound.length} condition(s) the layout met`));
   for (const check of visibilityFound) {
-    const label = el("label", "check") as HTMLLabelElement;
-    const box = document.createElement("input");
-    box.type = "checkbox";
     // Unassigned behaves as shown (the wire's rule), so an unticked box means
     // "assume false" and a ticked one means "assume true".
-    box.checked = visibilityChecks[check.key] !== false;
+    const label = switchRow(check.key, visibilityChecks[check.key] !== false, (on) =>
+      sendVisibility("evaluate", { ...visibilityChecks, [check.key]: on })
+    );
+    const box = label.querySelector("input") as HTMLInputElement;
     box.disabled = visibilityMode !== "evaluate";
-    box.addEventListener("change", () => {
-      sendVisibility("evaluate", { ...visibilityChecks, [check.key]: box.checked });
-    });
-    label.appendChild(box);
-    const text = el("span", undefined, check.key);
-    text.title = `${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
-    label.appendChild(text);
-    if (check.hidden) label.appendChild(el("span", "tag", "hidden"));
+    label.title = `${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
+    if (check.hidden) label.appendChild(badge("hidden"));
     haloBodyEl.appendChild(label);
   }
+}
+
+/** A labelled px-switch: `<label class="px-switch check"><input><span></span><span>text</span></label>`. */
+function switchRow(text: string, on: boolean, onChange: (on: boolean) => void): HTMLLabelElement {
+  const label = el("label", "px-switch check") as HTMLLabelElement;
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = on;
+  box.addEventListener("change", () => onChange(box.checked));
+  label.appendChild(box);
+  label.appendChild(el("span"));
+  label.appendChild(el("span", "px-grow px-sm", text));
+  return label;
 }
 
 function sendVisibility(mode: GuiVisibilityMode, checks: Record<string, boolean>): void {
@@ -3367,31 +3611,26 @@ function renderUses(): void {
   head.appendChild(
     el(
       "div",
-      undefined,
+      "title",
       dependenciesLine === undefined ? `Whole file: ${file}` : `Inside ${widgetTitle(item!)}`
     )
   );
   haloBodyEl.appendChild(head);
 
-  const scope = el("label", "check") as HTMLLabelElement;
-  const box = document.createElement("input");
-  box.type = "checkbox";
-  box.checked = dependenciesWholeFile;
-  box.addEventListener("change", () => {
-    dependenciesWholeFile = box.checked;
-    askDependencies();
-    renderHalo();
-  });
-  scope.appendChild(box);
-  scope.appendChild(el("span", undefined, "The whole file, not just the selection"));
-  haloBodyEl.appendChild(scope);
+  haloBodyEl.appendChild(
+    switchRow("The whole file, not just the selection", dependenciesWholeFile, (on) => {
+      dependenciesWholeFile = on;
+      askDependencies();
+      renderHalo();
+    })
+  );
 
   if (!dependencies) {
     note(dependenciesPending ? "Reading what this reaches…" : "The host could not answer that.");
     return;
   }
 
-  haloBodyEl.appendChild(el("div", "section", `scripted_gui (${dependencies.scriptedGuis.length})`));
+  haloBodyEl.appendChild(sectionTitle(`scripted_gui (${dependencies.scriptedGuis.length})`));
   if (dependencies.scriptedGuis.length === 0) {
     note("This calls no scripted_gui, so it hands control to no script.");
   }
@@ -3420,7 +3659,7 @@ function renderUses(): void {
     }
   }
 
-  haloBodyEl.appendChild(el("div", "section", `localization (${dependencies.locKeys.length})`));
+  haloBodyEl.appendChild(sectionTitle(`localization (${dependencies.locKeys.length})`));
   if (dependencies.locKeys.length === 0) note("This names no localization key.");
   for (const row of dependencies.locKeys) {
     const line = el("div", "prose");
@@ -3432,7 +3671,7 @@ function renderUses(): void {
     key.addEventListener("click", () => host.send({ type: "reveal", line: row.line }));
     line.appendChild(key);
     line.appendChild(el("span", "chain", ` · ${row.prop}`));
-    if (row.missing) line.appendChild(el("span", "tag", "missing"));
+    if (row.missing) line.appendChild(badge("missing"));
     else if (row.value) line.appendChild(el("span", "chain", ` · ${row.value}`));
     haloBodyEl.appendChild(line);
   }
@@ -3474,11 +3713,12 @@ function renderTypes(): void {
     return;
   }
   for (const group of groups) {
-    haloBodyEl.appendChild(el("div", "section", group.title));
+    haloBodyEl.appendChild(sectionTitle(group.title));
     for (const entry of group.entries) {
-      const row = el("div", browserPick === entry.name ? "row picked" : "row");
-      row.appendChild(el("span", undefined, paletteLabel(entry)));
-      if (entry.count !== undefined) row.appendChild(el("span", "tag", String(entry.count)));
+      const row = el("div", "px-item row");
+      setSelected(row, browserPick === entry.name);
+      row.appendChild(el("span", "label", paletteLabel(entry)));
+      if (entry.count !== undefined) row.appendChild(badge(String(entry.count)));
       row.addEventListener("click", () => {
         browserPick = browserPick === entry.name ? null : entry.name;
         renderHalo();
@@ -3506,41 +3746,52 @@ function browserActions(entry: GuiVocabularyEntry): HTMLElement {
   const tools = el("div", "tools");
   const writable = canEdit(selectedItem());
   if (entry.kind === "template") {
-    const apply = el("button", undefined, `Apply as using = ${entry.name}`) as HTMLButtonElement;
-    apply.title = "Write `using` on the selected widget. Its own properties still win over the template's.";
-    apply.disabled = !writable;
-    apply.addEventListener("click", () => {
-      const target = selectedItem();
-      if (!canEdit(target)) {
-        toast("Select a widget with a declaration in this file first.", "info");
-        return;
+    const apply = button(
+      `Apply as using = ${entry.name}`,
+      () => {
+        const target = selectedItem();
+        if (!canEdit(target)) {
+          toast("Select a widget with a declaration in this file first.", "info");
+          return;
+        }
+        guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
+      },
+      {
+        variant: "outline",
+        size: "sm",
+        tip: "Write `using` on the selected widget. Its own properties still win over the template's.",
       }
-      guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
-    });
+    );
+    apply.disabled = !writable;
     tools.appendChild(apply);
     return tools;
   }
-  const insert = el("button", undefined, "Insert here") as HTMLButtonElement;
-  insert.title = "Insert an instance next to the selected widget, through the same op a palette drop uses.";
-  insert.disabled = !writable;
-  insert.addEventListener("click", () => {
-    const at = pasteTarget();
-    if (!at) return;
-    sendOps(
-      "applyOps",
-      [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
-      (verdict) => {
-        if (verdict.refused) toast(verdict.refused, "refused");
-        else
-          toast(
-            `${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
-            "info"
-          );
-      }
-    );
+  const insert = button("Insert here", () => insertType(entry), {
+    variant: "outline",
+    size: "sm",
+    tip: "Insert an instance next to the selected widget, through the same op a palette drop uses.",
   });
+  insert.disabled = !writable;
   tools.appendChild(insert);
   return tools;
+}
+
+/** The browser's insert: the same op a palette drop sends, at the paste target. */
+function insertType(entry: GuiVocabularyEntry): void {
+  const at = pasteTarget();
+  if (!at) return;
+  sendOps(
+    "applyOps",
+    [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
+    (verdict) => {
+      if (verdict.refused) toast(verdict.refused, "refused");
+      else
+        toast(
+          `${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
+          "info"
+        );
+    }
+  );
 }
 
 /**
@@ -3574,7 +3825,7 @@ function renderArt(): void {
   const item = selectedItem();
   const keys = textureKeys();
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, "Textures under gfx/"));
+  head.appendChild(el("div", "title", "Textures under gfx/"));
   head.appendChild(
     el(
       "div",
@@ -3588,19 +3839,16 @@ function renderArt(): void {
 
   if (canEdit(item) && keys.length > 1) {
     const tools = el("div", "tools");
-    tools.appendChild(el("span", undefined, "Write to"));
-    const select = document.createElement("select");
-    for (const key of keys) {
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = key;
-      if (key === texturePropertyKey) option.selected = true;
-      select.appendChild(option);
-    }
+    tools.appendChild(el("span", "px-label", "Write to"));
+    const { wrap, select } = dropdownSelect(
+      keys.map((key) => ({ value: key, label: key })),
+      texturePropertyKey,
+      { tip: "Which texture property a pick writes" }
+    );
     select.addEventListener("change", () => {
       texturePropertyKey = select.value;
     });
-    tools.appendChild(select);
+    tools.appendChild(wrap);
     haloBodyEl.appendChild(tools);
   }
 
@@ -3628,7 +3876,7 @@ function renderArt(): void {
   if (wanted.length > 0) host.send({ type: "requestThumbnails", paths: wanted });
 
   for (const entry of page.rows) {
-    const row = el("div", "texRow");
+    const row = el("div", "px-item texRow");
     const url = thumbUrls[entry.path];
     if (url) {
       const img = document.createElement("img");
@@ -3640,7 +3888,7 @@ function renderArt(): void {
     }
     const names = el("div", "names");
     names.appendChild(el("div", undefined, textureName(entry.path)));
-    names.appendChild(el("div", "chain", `${entry.source} · ${textureFolder(entry.path)}`));
+    names.appendChild(el("div", "chain px-xs", `${entry.source} · ${textureFolder(entry.path)}`));
     row.appendChild(names);
     row.title = entry.path;
     row.addEventListener("click", () => {
@@ -3689,22 +3937,20 @@ function textureKeys(): string[] {
 function renderSaved(): void {
   const item = selectedItem();
 
-  haloBodyEl.appendChild(el("div", "section", `Components (${components.length})`));
+  haloBodyEl.appendChild(sectionTitle(`Components (${components.length})`));
   const saveTools = el("div", "tools");
-  const nameInput = document.createElement("input");
-  nameInput.className = "text";
-  nameInput.placeholder = "Name";
-  nameInput.value = componentName;
-  nameInput.spellcheck = false;
-  nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
+  const nameInput = textInput("Name", componentName, "text");
   nameInput.addEventListener("input", () => {
     componentName = nameInput.value;
   });
   saveTools.appendChild(nameInput);
-  const save = el("button", undefined, "Save selection") as HTMLButtonElement;
-  save.title = "Store the selected widgets' verbatim block text under that name.";
+  const save = button("Save selection", () => saveSelectionAsComponent(), {
+    variant: "outline",
+    size: "sm",
+    tip: "Store the selected widgets' verbatim block text under that name.",
+  });
+  save.dataset.tipSide = "left";
   save.disabled = selected === null;
-  save.addEventListener("click", () => saveSelectionAsComponent());
   saveTools.appendChild(save);
   haloBodyEl.appendChild(saveTools);
 
@@ -3712,32 +3958,41 @@ function renderSaved(): void {
     note("Nothing saved yet. Select one or more widgets, name them, and save.");
   }
   for (const component of components) {
-    const row = el("div", "row");
-    row.appendChild(el("span", undefined, component.name));
-    row.appendChild(el("span", "tag", `${component.widgets}w`));
-    const insert = el("button", undefined, "Insert") as HTMLButtonElement;
+    const row = el("div", "px-item row");
+    row.appendChild(el("span", "label", component.name));
+    row.appendChild(badge(`${component.widgets}w`, `${component.widgets} widget(s)`));
+    row.appendChild(el("span", "px-grow"));
+    const tools = el("span", "px-item-tools");
+    const insert = button("Insert", () => insertComponent(component.name), {
+      size: "xs",
+      tip: "Insert it next to the selected widget",
+    });
     insert.disabled = !canEdit(item);
-    insert.addEventListener("click", () => insertComponent(component.name));
-    row.appendChild(insert);
-    row.appendChild(forgetButton("component", component.name));
+    tools.appendChild(insert);
+    tools.appendChild(forgetButton("component", component.name));
+    row.appendChild(tools);
     haloBodyEl.appendChild(row);
   }
 
-  haloBodyEl.appendChild(el("div", "section", `Property presets (${presets.length})`));
+  haloBodyEl.appendChild(sectionTitle(`Property presets (${presets.length})`));
   if (presets.length === 0) {
     note('Nothing saved yet. Use "Save preset" in the inspector to store a widget\'s own properties.');
   }
   for (const preset of presets) {
-    const row = el("div", "row");
-    row.appendChild(el("span", undefined, preset.name));
-    row.appendChild(el("span", "tag", `${preset.properties.length}`));
+    const row = el("div", "px-item row");
+    row.appendChild(el("span", "label", preset.name));
+    row.appendChild(badge(`${preset.properties.length}`, `${preset.properties.length} propert(ies)`));
     row.title = preset.properties.map((p) => `${p.key} = ${p.value}`).join("\n");
-    const apply = el("button", undefined, "Apply") as HTMLButtonElement;
-    apply.title = "Write every property of this preset onto the selection, as one undo step.";
+    row.appendChild(el("span", "px-grow"));
+    const tools = el("span", "px-item-tools");
+    const apply = button("Apply", () => applyPreset(preset), {
+      size: "xs",
+      tip: "Write every property of this preset onto the selection, as one undo step.",
+    });
     apply.disabled = selected === null;
-    apply.addEventListener("click", () => applyPreset(preset));
-    row.appendChild(apply);
-    row.appendChild(forgetButton("preset", preset.name));
+    tools.appendChild(apply);
+    tools.appendChild(forgetButton("preset", preset.name));
+    row.appendChild(tools);
     haloBodyEl.appendChild(row);
   }
 }
@@ -3745,9 +4000,11 @@ function renderSaved(): void {
 let componentName = "";
 
 function forgetButton(kind: "component" | "preset", name: string): HTMLElement {
-  const node = el("button", undefined, "Forget") as HTMLButtonElement;
-  node.title = `Remove "${name}" from your saved ${kind}s. The document is not touched.`;
-  node.addEventListener("click", () => host.send({ type: "forgetSaved", kind, name }));
+  const node = button("Forget", () => host.send({ type: "forgetSaved", kind, name }), {
+    size: "xs",
+    tip: `Remove "${name}" from your saved ${kind}s. The document is not touched.`,
+  });
+  node.dataset.tipSide = "left";
   return node;
 }
 
@@ -3801,14 +4058,12 @@ function applyPreset(preset: SavedPreset): void {
 /** A filter box, the palette's, reused by the two browsers. */
 function filterBox(placeholder: string, value: string, onInput: (value: string) => void): HTMLElement {
   const wrap = el("div", "filter");
-  const input = document.createElement("input");
-  input.className = "text";
-  input.placeholder = placeholder;
-  input.value = value;
-  input.spellcheck = false;
-  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  const group = el("div", "px-input-group");
+  group.appendChild(iconEl("search"));
+  const input = textInput(placeholder, value, "text");
   input.addEventListener("input", () => onInput(input.value));
-  wrap.appendChild(input);
+  group.appendChild(input);
+  wrap.appendChild(group);
   return wrap;
 }
 
@@ -4099,12 +4354,96 @@ for (const entry of HEATMAP_MODES) {
   option.title = entry.title;
   heatmapSelect.appendChild(option);
 }
+/** The select holds the mode; the toolbar shows it as a px-dropdown whose list is a menu. */
+function syncHeatmapMenu(): void {
+  const label = heatmapMenuEl.querySelector(".px-truncate") as HTMLElement;
+  label.textContent = HEATMAP_MODES.find((m) => m.mode === heatmapSelect.value)?.label ?? "Heatmap";
+  heatmapMenuEl.setAttribute("aria-pressed", heatmapSelect.value === "off" ? "false" : "true");
+}
+heatmapMenuEl.addEventListener("click", () =>
+  menu(
+    heatmapMenuEl,
+    HEATMAP_MODES.map((m) => ({ value: m.mode, label: m.label, description: m.title })),
+    {
+      value: heatmapSelect.value,
+      width: 260,
+      onPick: (mode) => {
+        if (mode === heatmapSelect.value) return;
+        heatmapSelect.value = mode;
+        heatmapSelect.dispatchEvent(new Event("change"));
+      },
+    }
+  )
+);
 heatmapSelect.addEventListener("change", () => {
+  syncHeatmapMenu();
   rebuildHeatmap();
   if (heat) toast(heat.legend, "info");
   draw();
 });
+syncHeatmapMenu();
+
+// ---- side panels ------------------------------------------------------------
+
+/**
+ * The two side columns: resizable, hideable from the toolbar, and remembered
+ * by the host under the same ui key as the value display mode. A change is
+ * sent with the CURRENT value mode, since the host stores the two together.
+ */
+const sidePanels = {
+  left: sidePanel(document.getElementById("side") as HTMLElement, {
+    width: 280,
+    min: 200,
+    max: 560,
+    onChange: sendPanels,
+  }),
+  right: sidePanel(document.getElementById("right") as HTMLElement, {
+    width: 320,
+    min: 240,
+    max: 640,
+    onChange: sendPanels,
+  }),
+};
+
+function panelStates(): GuiPanelStates {
+  const of = (p: (typeof sidePanels)["left"]) => ({
+    width: parseInt(p.element.style.getPropertyValue("--px-sidepanel-width"), 10) || 0,
+    collapsed: p.collapsed,
+  });
+  return { left: of(sidePanels.left), right: of(sidePanels.right) };
+}
+
+/** True while the host's remembered state is being applied: that is not a change to send back. */
+let adoptingPanels = false;
+
+function sendPanels(): void {
+  updatePanelToggles();
+  if (!adoptingPanels) host.send({ type: "setUiState", valueMode, panels: panelStates() });
+}
+
+function adoptPanels(panels: GuiPanelStates): void {
+  adoptingPanels = true;
+  sidePanels.left.setWidth(panels.left.width);
+  sidePanels.left.toggle(panels.left.collapsed);
+  sidePanels.right.setWidth(panels.right.width);
+  sidePanels.right.toggle(panels.right.collapsed);
+  adoptingPanels = false;
+}
+
+function updatePanelToggles(): void {
+  const left = document.getElementById("toggleSide") as HTMLButtonElement;
+  left.replaceChildren(iconEl(sidePanels.left.collapsed ? "panelLeftOpen" : "panelLeftClose"));
+  left.dataset.tip = sidePanels.left.collapsed ? "Show the tree" : "Hide the tree";
+  const right = document.getElementById("toggleRight") as HTMLButtonElement;
+  right.replaceChildren(iconEl(sidePanels.right.collapsed ? "panelRightOpen" : "panelRightClose"));
+  right.dataset.tip = sidePanels.right.collapsed ? "Show the inspector" : "Hide the inspector";
+}
+
+document.getElementById("toggleSide")!.addEventListener("click", () => sidePanels.left.toggle());
+document.getElementById("toggleRight")!.addEventListener("click", () => sidePanels.right.toggle());
 window.addEventListener("resize", draw);
+// A panel drag or fold resizes the stage without a window resize; the canvas follows.
+if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => requestDraw()).observe(stage);
 
 /**
  * The heatmap is rebuilt on a mode change and on every layout push, and never

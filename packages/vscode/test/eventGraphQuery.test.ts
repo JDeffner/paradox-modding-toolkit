@@ -1,7 +1,7 @@
 /**
- * The event graph's query box, booted in jsdom from the REAL panel markup and
- * the REAL inlined script (the template literal `buildHtml` returns), with the
- * host stubbed by a message recorder.
+ * The event graph's query box, booted in jsdom from the REAL page markup
+ * (html.ts) and the REAL app bundle (built from app/main.ts the way
+ * compile:webview builds it), with the host stubbed by a message recorder.
  *
  * What it pins is the part a reader cannot check by eye: which params a pick
  * produces. An on_action or decision id has no dot, and the box's fallback
@@ -10,26 +10,34 @@
  * chose from the list.
  */
 import { describe, expect, it } from "vitest";
-import * as fs from "fs";
 import * as path from "path";
 import { JSDOM } from "jsdom";
+import { buildSync } from "esbuild";
+import { eventGraphHtml } from "../src/webviews/eventGraph/html";
 
-const PANEL = path.join(__dirname, "..", "src", "webviews", "eventGraph", "panel.ts");
-const OPEN = "return /* html */ `";
+const PKG_ROOT = path.join(__dirname, "..");
 
-/** The shipped page, with the host-side interpolations filled in. */
+/** The shipped app bundle, built the way `compile:webview` builds it. */
+let cachedBundle: string | null = null;
+function appBundle(): string {
+  if (cachedBundle) return cachedBundle;
+  const result = buildSync({
+    entryPoints: [path.join(PKG_ROOT, "src", "webviews", "eventGraph", "app", "main.ts")],
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2020",
+    absWorkingDir: PKG_ROOT,
+    write: false,
+  });
+  cachedBundle = result.outputFiles[0].text;
+  return cachedBundle;
+}
+
+/** The shipped page with the bundle inlined in place of its script tag. */
 function panelHtml(): string {
-  const source = fs.readFileSync(PANEL, "utf8");
-  const start = source.indexOf(OPEN);
-  const rest = source.slice(start + OPEN.length);
-  const html = rest
-    .slice(0, rest.indexOf("`;"))
-    .replace(/\$\{csp\}/g, "")
-    .replace(/\$\{nonce\}/g, "test")
-    // The layout function is irrelevant here: the graph under test has no nodes.
-    .replace(/\$\{layoutSource\}/g, "function () { return new Map(); }");
-  expect(html).not.toContain("${");
-  return html;
+  const html = eventGraphHtml({ scriptSrc: "app.js", nonce: "test", csp: "" });
+  return html.replace(/<script nonce="test" src="app.js"><\/script>/, `<script>${appBundle()}</script>`);
 }
 
 const SUGGESTIONS = {
@@ -83,7 +91,9 @@ function boot(): Booted {
       query.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true }));
     },
     items() {
-      return [...document.querySelectorAll("#suggest li")].map((li) => li.firstChild?.textContent ?? "");
+      return [...document.querySelectorAll("#suggest .px-menu-item")].map(
+        (row) => row.firstChild?.textContent ?? ""
+      );
     },
   };
 }

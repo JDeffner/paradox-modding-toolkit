@@ -13,7 +13,7 @@
  * presets would be guessing at what a mod's widgets look like; the panels say
  * they are empty instead.
  */
-import type { EditProperty, GuiEditorUiState, GuiValueMode } from "./messages";
+import type { EditProperty, GuiEditorUiState, GuiPanelState, GuiValueMode } from "./messages";
 
 /** Storage keys, so both halves of a host agree on them without a string literal. */
 export const COMPONENTS_KEY = "px.guiEditor.components";
@@ -48,8 +48,23 @@ const VALUE_MODES: readonly GuiValueMode[] = ["full", "abbreviated", "hidden"];
  * and a mode this build does not know must not reach the inspector.
  */
 export function readUiState(stored: unknown): GuiEditorUiState | undefined {
-  const mode = (stored as { valueMode?: unknown } | undefined)?.valueMode;
-  return VALUE_MODES.includes(mode as GuiValueMode) ? { valueMode: mode as GuiValueMode } : undefined;
+  const record = stored as { valueMode?: unknown; panels?: unknown } | undefined;
+  const mode = record?.valueMode;
+  if (!VALUE_MODES.includes(mode as GuiValueMode)) return undefined;
+  const panels = record?.panels as { left?: unknown; right?: unknown } | undefined;
+  const left = readPanelState(panels?.left);
+  const right = readPanelState(panels?.right);
+  return left && right
+    ? { valueMode: mode as GuiValueMode, panels: { left, right } }
+    : { valueMode: mode as GuiValueMode };
+}
+
+/** One side panel's remembered width and collapsed state, or undefined when the bytes are not that. */
+function readPanelState(stored: unknown): GuiPanelState | undefined {
+  const record = stored as { width?: unknown; collapsed?: unknown } | undefined;
+  return typeof record?.width === "number" && typeof record.collapsed === "boolean"
+    ? { width: record.width, collapsed: record.collapsed }
+    : undefined;
 }
 
 /**

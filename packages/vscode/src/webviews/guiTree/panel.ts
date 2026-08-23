@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import type { GuiTree } from "@px-lsp/protocol/protocol";
+import uiCss from "../shared/ui.css";
+import { icon } from "../shared/icons";
 
 /** Messages the webview sends to the host. */
 type InboundMessage = { type: "open"; line: number; focus?: boolean } | { type: "refresh" };
@@ -177,88 +179,51 @@ function buildHtml(webview: vscode.Webview): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Paradox GUI Tree</title>
 <style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    font-family: var(--vscode-font-family, sans-serif);
-    font-size: var(--vscode-font-size, 13px);
-    color: var(--vscode-editor-foreground);
-    background: var(--vscode-editor-background);
-  }
+${uiCss}
+  body { overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100%; }
   #toolbar {
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 8px; flex: 0 0 auto;
-    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
-  #filter {
-    flex: 1 1 auto; min-width: 60px; padding: 3px 6px;
-    color: var(--vscode-input-foreground);
-    background: var(--vscode-input-background);
-    border: 1px solid var(--vscode-input-border, rgba(128,128,128,0.4));
-    border-radius: 2px;
-  }
-  #toolbar button {
-    padding: 3px 10px; border: none; border-radius: 2px; cursor: pointer;
-    color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-    background: var(--vscode-button-secondaryBackground, transparent);
-    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
-  }
-  #tree { flex: 1 1 auto; overflow: auto; padding: 4px 0; }
+  #toolbar .px-input-group { flex: 1 1 auto; min-width: 80px; }
+  #toolbar .px-separator { height: 20px; align-self: center; }
+  #tree { flex: 1 1 auto; overflow: auto; padding: 4px; }
   #status {
-    flex: 0 0 auto; padding: 4px 8px; font-size: 0.9em;
-    border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
-    color: var(--vscode-descriptionForeground);
+    flex: 0 0 auto; padding: 4px 10px; font-size: var(--px-text-xs); color: var(--px-muted-fg);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   ul.branch { list-style: none; margin: 0; padding-left: 16px; }
-  #tree > ul.branch { padding-left: 6px; }
-  .row {
-    display: flex; align-items: center; gap: 6px;
-    padding: 1px 4px; border-radius: 3px; cursor: pointer;
-    white-space: nowrap;
-  }
-  .row:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15)); }
-  .row.selected {
-    background: var(--vscode-list-activeSelectionBackground, rgba(64,128,255,0.35));
-    color: var(--vscode-list-activeSelectionForeground, inherit);
-  }
-  .twist { width: 14px; flex: 0 0 auto; text-align: center; user-select: none; opacity: 0.75; }
-  .badge {
-    padding: 0 6px; border-radius: 8px; font-size: 0.85em; flex: 0 0 auto;
-    color: var(--vscode-badge-foreground, #fff);
-    background: var(--vscode-charts-blue, #3794ff);
-  }
-  .badge.decl { background: var(--vscode-charts-purple, #b180d7); }
-  .badge.state { background: var(--vscode-charts-yellow, #cca700); color: #222; }
+  #tree > ul.branch { padding-left: 0; }
+  .row { padding-left: 4px; white-space: nowrap; }
+  .twist { display: flex; flex: 0 0 auto; width: 16px; height: 16px; border-radius: var(--px-radius-sm); color: var(--px-muted-fg); }
+  .twist[data-leaf] { visibility: hidden; }
+  .twist > .caret { transition: transform var(--px-ease); }
+  .row[data-open] > .twist > .caret { transform: rotate(90deg); }
+  .px-badge[data-kind="decl"] { font-family: var(--px-font-mono); }
   .wname { font-weight: 600; }
-  .meta { color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+  .meta { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
   .hidden { display: none; }
   /* Filtering without parents flattens the indentation of the matches. */
   #tree.noparents ul.branch { padding-left: 0; }
-  #toolbar button.active {
-    color: var(--vscode-button-foreground, #fff);
-    background: var(--vscode-button-background, #0e639c);
-    border-color: transparent;
-  }
-  #toolbar button:disabled { opacity: 0.45; cursor: default; }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <input id="filter" type="text" placeholder="filter by type or name…  (/)" />
-    <button id="ancestors" aria-pressed="true">Hide ancestors</button>
-    <button id="expand">Expand all</button>
-    <button id="collapse">Collapse</button>
-    <button id="refresh">Refresh</button>
+    <div class="px-input-group">${icon("search")}<input id="filter" class="px-input" data-size="sm" placeholder="Filter by type or name (/)" spellcheck="false" /></div>
+    <button id="ancestors" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Hide ancestors" data-tip-wrap>${icon("listFilter")}</button>
+    <div class="px-separator" data-orientation="vertical"></div>
+    <button id="expand" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Expand all">${icon("chevronsUpDown")}</button>
+    <button id="collapse" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Collapse all">${icon("chevronsDownUp")}</button>
+    <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Rebuild the tree from the file" data-tip-side="left">${icon("rotate")}</button>
   </div>
   <div id="tree"></div>
   <div id="status">Loading…</div>
 </div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
+const ICON_CARET = ${JSON.stringify(icon("chevronRight", "px-icon caret"))};
 const treeEl = document.getElementById("tree");
 const statusEl = document.getElementById("status");
 const filterEl = document.getElementById("filter");
@@ -281,30 +246,35 @@ function selectedRow() {
 }
 
 function updateSelection() {
-  treeEl.querySelectorAll(".row.selected").forEach((r) => r.classList.remove("selected"));
+  treeEl.querySelectorAll('.row[aria-selected="true"]').forEach((r) => r.removeAttribute("aria-selected"));
   const row = selectedRow();
-  if (row) row.classList.add("selected");
+  if (row) row.setAttribute("aria-selected", "true");
   else selectedLine = null;
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function setOpen(ul, open) {
+  ul.classList.toggle("hidden", !open);
+  ul.parentElement.firstElementChild.toggleAttribute("data-open", open);
 }
 
 function renderNode(node) {
   const li = document.createElement("li");
   const row = document.createElement("div");
-  row.className = "row";
+  row.className = "px-item row";
   row.dataset.line = String(node.line);
   row.dataset.text = (node.key + " " + (node.name || "") + " " + (node.base || "")).toLowerCase();
+  if (node.children.length > 0) row.setAttribute("data-open", "");
 
   const twist = document.createElement("span");
   twist.className = "twist";
-  twist.textContent = node.children.length > 0 ? "▾" : "";
+  twist.innerHTML = ICON_CARET;
+  if (node.children.length === 0) twist.setAttribute("data-leaf", "");
   row.appendChild(twist);
 
   const badge = document.createElement("span");
-  badge.className = "badge" + (node.kind !== "widget" ? " " + node.kind : "");
+  badge.className = "px-badge";
+  badge.dataset.variant = node.kind === "widget" ? "secondary" : "outline";
+  badge.dataset.kind = node.kind;
   badge.textContent = node.key + (node.base ? " : " + node.base : "");
   row.appendChild(badge);
 
@@ -346,8 +316,7 @@ function renderNode(node) {
     li.appendChild(ul);
     twist.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      const hidden = ul.classList.toggle("hidden");
-      twist.textContent = hidden ? "▸" : "▾";
+      setOpen(ul, ul.classList.contains("hidden"));
     });
   }
   return li;
@@ -373,13 +342,11 @@ function applyFilter() {
   if (focusRoot === null) focusLine = null;
   ancestorsBtn.disabled = !q && !selectedRow() && !focusRoot;
   const active = q ? hideAncestors : !!focusRoot;
-  ancestorsBtn.textContent = q ? "Hide ancestors" : "Focus subtree";
-  ancestorsBtn.classList.toggle("active", active);
   ancestorsBtn.setAttribute("aria-pressed", String(active));
-  ancestorsBtn.title = q
+  ancestorsBtn.dataset.tip = q
     ? "Show only the filter matches, without their ancestor rows (h)"
     : focusRoot
-      ? "Focused on this subtree — click around inside it freely. h on a node re-focuses there, Esc zooms back out."
+      ? "Focused on this subtree. Click around inside it freely; h on a node re-focuses there, Esc zooms back out."
       : selectedRow()
         ? "Show only the selected node's subtree (h); clicks inside keep the focus"
         : "Type a filter or select a node first (h)";
@@ -485,12 +452,10 @@ window.addEventListener("keydown", (ev) => {
   }
 });
 document.getElementById("expand").addEventListener("click", () => {
-  treeEl.querySelectorAll("ul.branch").forEach((ul) => ul.classList.remove("hidden"));
-  treeEl.querySelectorAll(".twist").forEach((t) => { if (t.textContent) t.textContent = "▾"; });
+  treeEl.querySelectorAll("#tree > ul.branch ul.branch").forEach((ul) => setOpen(ul, true));
 });
 document.getElementById("collapse").addEventListener("click", () => {
-  treeEl.querySelectorAll("#tree > ul.branch ul.branch").forEach((ul) => ul.classList.add("hidden"));
-  treeEl.querySelectorAll(".twist").forEach((t) => { if (t.textContent) t.textContent = "▸"; });
+  treeEl.querySelectorAll("#tree > ul.branch ul.branch").forEach((ul) => setOpen(ul, false));
 });
 document.getElementById("refresh").addEventListener("click", () => vscode.postMessage({ type: "refresh" }));
 

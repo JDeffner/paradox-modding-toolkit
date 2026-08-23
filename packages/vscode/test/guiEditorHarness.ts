@@ -277,8 +277,9 @@ export function bootEditor(): EditorHarness {
       return node.hasAttribute("hidden") ? null : (node.textContent ?? "");
     },
     toast() {
-      const toast = el("toast");
-      return toast.hasAttribute("hidden") ? null : (toast.textContent ?? "");
+      // The shared px-toast: the newest one still up (a leaving one is on its way out).
+      const toasts = [...doc.querySelectorAll(".px-toast:not([data-leaving])")];
+      return toasts.length ? (toasts[toasts.length - 1].textContent ?? "") : null;
     },
     rowInput(key) {
       for (const prop of doc.querySelectorAll("#inspector .prop")) {
@@ -338,7 +339,7 @@ export function bootEditor(): EditorHarness {
       );
     },
     selectedRow() {
-      return el("tree").querySelector(".row.selected")?.textContent ?? null;
+      return el("tree").querySelector('.row[aria-selected="true"]')?.textContent ?? null;
     },
     rows() {
       return [...el("tree").querySelectorAll(".row")].map((r) => r.textContent ?? "");
@@ -353,7 +354,7 @@ export function bootEditor(): EditorHarness {
       throw new Error(`no layers row for ${name}`);
     },
     selectedRows(id) {
-      return [...el(id).querySelectorAll(".row.selected")].map((r) => r.textContent ?? "");
+      return [...el(id).querySelectorAll('.row[aria-selected="true"]')].map((r) => r.textContent ?? "");
     },
     paletteRows() {
       return [...el("palette").querySelectorAll(".row")].map((r) => r.textContent ?? "");
