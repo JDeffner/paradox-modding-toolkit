@@ -131,6 +131,7 @@ instead.
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
 | `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
 | `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph, plus the `suggestions` catalog a query box completes against |
+| `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -161,6 +162,27 @@ completes a query box from the answer it already has instead of asking again.
 `modRoot` scopes it like the graph. The field is optional: a server that
 predates it simply omits it.
 
+`paradox/eventGraph` reports a namespace (or the whole mod) as its
+DEFINITIONS, not as the endpoints of the edges between them: an event nothing
+calls yet is still part of its namespace, and deriving the node set from edges
+hid exactly the event the author had just written. Edges that pass through a
+scripted effect are followed transitively (visited-guarded, three hops) and
+answered as a direct `from` -> `to` edge whose `label` reads
+`via effect_a -> effect_b`, so an event whose `trigger_event` sits inside a
+scripted effect is not reported as firing nothing.
+
+`paradox/eventVocabulary` is what an event editor is allowed to offer. Every
+list in it is derived, never hand-written: `eventKeys` / `optionKeys` from the
+active profile's structure table ordered by its usage counts, `values` from a
+key's declared `enum:` spec or from the schema's reference field resolved
+through the definition index (`theme` gives every indexed event_theme, this
+mod's entries first), `effects` / `triggers` from the parsed script_docs (or
+the bundled wiki fallback) with the log's own description, and `savedScopes`
+from the mod's own `save_scope_as` sites. Docs are capped to one line for a
+menu row. A key whose value is free text is simply absent from `values`; that
+is the signal to render an input instead of a dropdown. `modRoot` scopes the
+definition-backed sets like the graph.
+
 `paradox/eventDetail` carries an event's blocks twice over: `keys` /
 `effectKeys` summarize them for an inspector, and `lines` / `totalLines` /
 `targets` render them for a walkthrough. `lines` is the block flattened back
@@ -176,6 +198,13 @@ than a per-game payload, since the names do not collide: `sections` may hold a
 the game has one (absent otherwise). An option's `effectKeys` summary drops
 that game's option markers (`default_option`, `highlighted_option`) the same
 way it drops `custom_tooltip`; `lines` still renders them.
+
+`fields` (on the detail and on each option) is the scalar `key = value`
+statements written directly in that block, each with its line, so an editor can
+rewrite one in place instead of re-parsing the file; `bodyLine` is where a new
+statement may be inserted. Blocks are not fields: they are `sections` and
+`options`. A key written twice keeps the LAST site, because that is the one the
+game reads.
 
 `targets` are the references that hand control on: the step-into edges of an
 event chain. They come from the active profile's event/on_action reference
