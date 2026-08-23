@@ -910,6 +910,41 @@ export interface GuiPreviewResult {
 }
 
 /**
+ * Preview values read out of a save game, so a designer draws
+ * `[GetPlayer.GetName]` as "Great Britain" instead of a placeholder chip.
+ *
+ * `values` is keyed by datafunction chain WITHOUT brackets, exactly the shape
+ * {@link GuiLayoutParams.previewValues} takes, so a client hands the answer
+ * straight back to the next layout request. A chain the save has no field for
+ * is absent: a preview shows what is knowable and never invents a value.
+ *
+ * The server streams the file and parses only the few blocks it needs (a
+ * Victoria 3 campaign is ~115 MB), and caches the answer per file and mtime.
+ * Ironman and binary saves are refused with `error` set; melting them is a
+ * different tool.
+ */
+export const guiSaveValuesRequest = "paradox/guiSaveValues";
+export interface GuiSaveValuesParams {
+  /** Absolute path to the save file. */
+  path: string;
+}
+export interface GuiSaveValuesResult {
+  /** Datafunction chain without brackets -> display text. */
+  values: Record<string, string>;
+  /** What the values came from, for a UI to name the save it is showing. */
+  source: {
+    /** The campaign's name as the save's meta data states it. */
+    name: string;
+    /** The in-game date, already formatted ("21 January 1836"). */
+    date: string;
+    /** The game the values were read for. */
+    game: string;
+  };
+  /** Set when the save cannot be read (ironman, binary, unreadable). */
+  error?: string;
+}
+
+/**
  * Request: source edits for a `.gui` designer gesture;
  * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
  * request itself makes no sense (an unknown op). The server never writes: it

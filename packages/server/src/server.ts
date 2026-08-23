@@ -68,6 +68,9 @@ import {
   GUI_PREVIEW_MAX,
   type GuiPreviewParams,
   type GuiPreviewResult,
+  guiSaveValuesRequest,
+  type GuiSaveValuesParams,
+  type GuiSaveValuesResult,
   type GuiVocabularyParams,
   dependenciesRequest,
   type DependenciesParams,
@@ -78,6 +81,7 @@ import {
 import { buildGuiTree } from "./features/guiTree";
 import { resolveGuiText, type ResolvedText } from "./gui/textResolve";
 import { previewEntries } from "./gui/previewService";
+import { readSaveValues } from "./gui/saveValues";
 import {
   computeGuiLayoutResult,
   getGuiDefs,
@@ -1223,11 +1227,13 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));
 
 /** Loc keys resolve through the index (configured language, english files as fallback). */
+function locValue(key: string): string | undefined {
+  return data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
+}
+
 function guiTextResolver(params: GuiLayoutParams): ((raw: string) => ResolvedText) | undefined {
   if (params.loc === "raw") return undefined;
-  const loc = (key: string): string | undefined =>
-    data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
-  return (raw) => resolveGuiText(raw, { loc, previewValues: params.previewValues });
+  return (raw) => resolveGuiText(raw, { loc: locValue, previewValues: params.previewValues });
 }
 
 connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
@@ -1296,6 +1302,27 @@ connection.onRequest(guiPreviewRequest, (params: GuiPreviewParams): GuiPreviewRe
     profileMeasurer()
   ),
 }));
+
+// Real values for the designer's `[...]` chips, read out of a save game.
+// Cached per file and mtime: a re-layout asks again and pays nothing, while a
+// save written since the last read is picked up on its own.
+let saveValues: { key: string; result: GuiSaveValuesResult } | null = null;
+connection.onRequest(
+  guiSaveValuesRequest,
+  async (params: GuiSaveValuesParams): Promise<GuiSaveValuesResult> => {
+    const file = params?.path ?? "";
+    let key = file;
+    try {
+      key = `${file}:${fs.statSync(file).mtimeMs}`;
+    } catch {
+      // Unreadable: the read below reports why, and every attempt asks again.
+    }
+    if (saveValues?.key === key) return saveValues.result;
+    const result = await readSaveValues(file, { gameId: activeProfile().id, loc: locValue });
+    saveValues = { key, result };
+    return result;
+  }
+);
 
 // The GUI half of the dependency explorer. Same document text the canvas is
 // showing, so a selection answers about what the editor has, not what disk has.
