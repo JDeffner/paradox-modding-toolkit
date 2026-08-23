@@ -128,9 +128,7 @@ export function radialLayout(
     if (members.length === 0) continue;
     const radius = Math.max(RING_0 + (ring - 1) * RING_GAP, (members.length * ARC) / TAU);
     const angles =
-      ring === 1
-        ? evenAngles(members, placed)
-        : clusteredAngles(members, placed, out, inc, ARC / radius);
+      ring === 1 ? evenAngles(members, placed) : clusteredAngles(members, placed, out, inc, ARC / radius);
     for (let i = 0; i < members.length; i++) {
       const id = members[i];
       placed.get(id)!.angle = angles[i];
@@ -168,7 +166,10 @@ function evenAngles(members: string[], placed: Map<string, Placed>): number[] {
   const slice = TAU / members.length;
   let downstream = 0;
   for (const id of members) if (placed.get(id)!.side === 1) downstream++;
-  const offset = -((downstream - 1) / 2) * slice;
+  // Rotate so the fired-by block straddles angle 0, which leaves the fires-me
+  // block around PI. A ring with no downstream side has nothing to centre and
+  // simply starts at 0.
+  const offset = downstream > 0 ? -((downstream - 1) / 2) * slice : 0;
   return members.map((_, i) => offset + i * slice);
 }
 

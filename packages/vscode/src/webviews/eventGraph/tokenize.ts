@@ -10,15 +10,7 @@
  * and it cannot disagree with the parse the lines came from.
  */
 
-export type ScriptTokenKind =
-  | "comment"
-  | "key"
-  | "op"
-  | "string"
-  | "number"
-  | "bool"
-  | "brace"
-  | "text";
+export type ScriptTokenKind = "comment" | "key" | "op" | "string" | "number" | "bool" | "brace" | "text";
 
 export interface ScriptToken {
   text: string;

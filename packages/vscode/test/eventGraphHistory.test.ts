@@ -8,8 +8,7 @@ import { describe, expect, it } from "vitest";
 import { GraphHistory, type GraphState } from "../src/webviews/eventGraph/history";
 
 const start = (): GraphState => ({ focus: { root: "ns.1" }, positions: {}, pending: [] });
-const locEdit = (key: string, value: string) =>
-  ({ kind: "editLoc", id: "ns.1", key, value }) as const;
+const locEdit = (key: string, value: string) => ({ kind: "editLoc", id: "ns.1", key, value }) as const;
 
 describe("GraphHistory", () => {
   it("walks back and forward through focus and layout steps", () => {
