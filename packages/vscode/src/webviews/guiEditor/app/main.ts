@@ -2496,12 +2496,27 @@ function statusLine(): string {
   return `${scene.count} widgets · ${file}${declared}${estimated}${focused}${picked}${moved}`;
 }
 
+/** The URL each loaded texture came from: a push that names the same URL keeps the decoded image. */
+const imageUrls = new Map<string, string>();
+
+/**
+ * Load the textures a layout names, REUSING every image whose URL did not
+ * change. A push after each editor gesture used to drop and re-decode all of
+ * them (a window has a hundred and more), which stalled the canvas and drew a
+ * textureless frame before the images came back.
+ */
 function loadTextures(urls: Record<string, string | null>): void {
-  images = {};
-  resetImageCache();
+  const next: Images = {};
+  let changed = false;
   let pending = 0;
   for (const [texture, url] of Object.entries(urls)) {
     if (!url) continue;
+    if (imageUrls.get(texture) === url && images[texture]) {
+      next[texture] = images[texture];
+      continue;
+    }
+    changed = true;
+    imageUrls.set(texture, url);
     const img = new Image();
     pending++;
     const done = () => {
@@ -2514,6 +2529,11 @@ function loadTextures(urls: Record<string, string | null>): void {
     img.onerror = done;
     img.src = url;
   }
+  for (const texture of Object.keys(images)) if (!(texture in urls)) changed = true;
+  images = next;
+  // The tint and cell caches key on the texture path: only a re-decoded
+  // image can invalidate them.
+  if (changed) resetImageCache();
 }
 
 function onLayout(
