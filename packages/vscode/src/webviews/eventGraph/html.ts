@@ -113,7 +113,7 @@ ${uiCss}
   #changes[disabled] .count { display: none; }
   /* Compact kind chips: a swatch, a word, one row. */
   #kinds { gap: 6px; }
-  #kinds .px-toggle { height: 26px; padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
+  #kinds .px-toggle { height: var(--px-h-sm); padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
   #kinds .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
   #kinds .px-toggle[aria-pressed="false"] { color: var(--px-muted-fg); }
   #kinds .px-toggle[aria-pressed="false"] .swatch { opacity: 0.35; }
@@ -297,7 +297,7 @@ ${uiCss}
 <div id="app">
   <div id="toolbar">
     <div id="queryWrap">
-      <div class="px-input-group">${icon("search")}<input id="query" class="px-input" autocomplete="off" spellcheck="false" placeholder="Event id or namespace" data-tip="An event id (namespace.123), an on_action or decision name, or a namespace. Enter loads it; / focuses this box" data-tip-wrap /></div>
+      <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Event id or namespace" data-tip="An event id (namespace.123), an on_action or decision name, or a namespace. Enter loads it; / focuses this box" data-tip-wrap /></div>
       <div id="suggest" role="listbox"><div class="px-menu-list"></div></div>
     </div>
     <button id="go" class="px-btn" data-variant="outline" data-size="sm" data-tip="Load the graph for the id or namespace">Go</button>
