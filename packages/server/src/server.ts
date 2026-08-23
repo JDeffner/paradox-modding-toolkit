@@ -64,6 +64,10 @@ import {
   guiDependenciesRequest,
   type GuiDependenciesParams,
   guiVocabularyRequest,
+  guiPreviewRequest,
+  GUI_PREVIEW_MAX,
+  type GuiPreviewParams,
+  type GuiPreviewResult,
   type GuiVocabularyParams,
   dependenciesRequest,
   type DependenciesParams,
@@ -73,9 +77,11 @@ import {
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
 import { resolveGuiText, type ResolvedText } from "./gui/textResolve";
+import { previewEntries } from "./gui/previewService";
 import {
   computeGuiLayoutResult,
   getGuiDefs,
+  profileMeasurer,
   getGuiScriptLinks,
   invalidateGuiDefsCache,
   VIEWPORT,
@@ -1280,6 +1286,16 @@ connection.onRequest(guiWidgetInfoRequest, (params: GuiWidgetInfoParams) =>
 connection.onRequest(guiVocabularyRequest, (params: GuiVocabularyParams) =>
   computeGuiVocabulary(params.text ?? "", activeProfile().guiSchema)
 );
+
+// Library tiles: one instance per entry, same store and measurer as the canvas.
+connection.onRequest(guiPreviewRequest, (params: GuiPreviewParams): GuiPreviewResult => ({
+  previews: previewEntries(
+    params.text ?? "",
+    (params.entries ?? []).slice(0, GUI_PREVIEW_MAX),
+    guiDefsForEdits(),
+    profileMeasurer()
+  ),
+}));
 
 // The GUI half of the dependency explorer. Same document text the canvas is
 // showing, so a selection answers about what the editor has, not what disk has.

@@ -876,6 +876,40 @@ export interface GuiVocabularyResult {
 }
 
 /**
+ * Render-ready previews of palette entries: one instance of each entry laid
+ * out in a synthetic document that keeps the requested document's own
+ * declarations (so a local template previews with its real base). The
+ * result is an ordinary node tree the client draws with the same painter as
+ * the canvas. Entries a synthetic document cannot stand up (nothing to show,
+ * zero size, a type the store lacks) come back with `node: null` and a
+ * `reason`. Capped per request (GUI_PREVIEW_MAX); ask for the visible page.
+ */
+export const guiPreviewRequest = "paradox/guiPreview";
+export const GUI_PREVIEW_MAX = 48;
+export interface GuiPreviewEntry {
+  name: string;
+  /** `raw`: `fragment` is `.gui` text (a saved component) laid out as is. */
+  kind: "builtin" | "type" | "template" | "raw";
+  fragment?: string;
+}
+export interface GuiPreviewParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  text: string;
+  entries: GuiPreviewEntry[];
+}
+export interface GuiPreview {
+  name: string;
+  node: GuiLayoutNode | null;
+  /** Texture paths the node tree references (mod-relative). */
+  textures: string[];
+  reason?: string;
+}
+export interface GuiPreviewResult {
+  previews: GuiPreview[];
+}
+
+/**
  * Request: source edits for a `.gui` designer gesture;
  * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
  * request itself makes no sense (an unknown op). The server never writes: it
