@@ -1108,6 +1108,9 @@ export interface EventGraphParams {
   /** Restrict to one workspace mod (absolute root path). */
   modRoot?: string | null;
   maxNodes?: number;
+  /** Also read each mod event's `theme`. Off by default: it costs one parse per
+   *  event file, and only a client that draws the theme's art needs it. */
+  themes?: boolean;
 }
 export interface EventGraphNode {
   id: string;
@@ -1117,6 +1120,8 @@ export interface EventGraphNode {
   line?: number;
   /** Localized title (best-effort: <id>.t / <id>_t / <id>.title lookups). */
   title?: string;
+  /** The event's declared `theme`, when the request asked for themes. */
+  theme?: string;
 }
 export interface EventGraphEdge {
   from: string;
@@ -1156,6 +1161,31 @@ export interface EventGraph {
  * hand-written name list, so a game patch that adds a theme or an effect shows
  * up without a release.
  */
+/**
+ * Request: the illustration an event theme puts behind its window;
+ * {@link EventBannerParams} to {@link EventBannerResult}.
+ *
+ * Resolved through the game's own two hops (event_themes -> event_backgrounds),
+ * taking the last `background` block that carries no `trigger`, which is the
+ * file's own unconditional fallback. `texture` is the engine's mod-relative
+ * path, exactly as a `.gui` file would spell it, so a client resolves it with
+ * the same mod-then-game lookup it uses for any other texture. A theme that
+ * resolves to nothing answers `reason` instead: the caller is expected to say
+ * so rather than draw a picture that is not the event's.
+ */
+export const eventBannerRequest = "paradox/eventBanner";
+export interface EventBannerParams {
+  /** Theme name as the event writes it (`theme = intrigue`). */
+  theme: string;
+}
+export interface EventBannerResult {
+  theme: string;
+  /** Mod-relative texture path, absent when nothing resolved. */
+  texture?: string;
+  /** Why nothing resolved. Present exactly when `texture` is absent. */
+  reason?: string;
+}
+
 export const eventVocabularyRequest = "paradox/eventVocabulary";
 export interface EventVocabularyParams {
   /** Restrict definition-backed value sets to one workspace mod (plus vanilla). */

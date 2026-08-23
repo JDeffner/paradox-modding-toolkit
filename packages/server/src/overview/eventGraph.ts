@@ -316,20 +316,64 @@ export function computeEventGraph(
   labelEdges(data, graphEdges, sites);
 
   const nodes: EventGraphNode[] = [];
+  const themeReader = params.themes ? themeLookup() : null;
   for (const id of selected) {
     const defs = data.index.lookup(id);
     const def = defs[0];
-    nodes.push({
+    const node: EventGraphNode = {
       id,
       kind: def?.kind ?? "unknown",
       source: def?.source ?? "vanilla",
       file: def?.file,
       line: def?.line,
       title: titleOf(data, id),
-    });
+    };
+    if (themeReader && def?.kind === "event" && def.file) {
+      const theme = themeReader(def.file, id);
+      if (theme) node.theme = theme;
+    }
+    nodes.push(node);
   }
   nodes.sort((a, b) => a.id.localeCompare(b.id));
   return { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
+}
+
+/**
+ * `theme = X` of one event, read from its own file. Each file is parsed once
+ * per request; a file that cannot be read simply has no themes, which the
+ * caller renders as "unresolved" rather than as a wrong picture.
+ */
+function themeLookup(): (file: string, id: string) => string | undefined {
+  const byFile = new Map<string, Map<string, string>>();
+  return (file, id) => {
+    const key = file.toLowerCase();
+    let themes = byFile.get(key);
+    if (!themes) {
+      themes = new Map<string, string>();
+      byFile.set(key, themes);
+      try {
+        const root = parseScript(decode(fs.readFileSync(file)).text).root;
+        for (const stmt of root.statements) {
+          if (stmt.kind !== "assignment") continue;
+          const block =
+            stmt.value?.kind === "block"
+              ? stmt.value
+              : stmt.value?.kind === "tagged-block"
+                ? stmt.value.block
+                : null;
+          if (!block) continue;
+          for (const child of block.statements) {
+            if (child.kind !== "assignment") continue;
+            if (child.key.text.toLowerCase() !== "theme") continue;
+            if (child.value?.kind === "scalar") themes.set(stmt.key.text, child.value.text);
+          }
+        }
+      } catch {
+        /* unreadable: memoized as empty so it is attempted once */
+      }
+    }
+    return themes.get(id);
+  };
 }
 
 /** The mod's own graph ids and the namespaces they imply, both sorted. */
