@@ -105,13 +105,14 @@ ${uiCss}
   /* The pending count rides the Changes button: one place says how much is
      unsaved, and it is the button that lists it. */
   #changes .count {
-    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 10px; font-variant-numeric: tabular-nums;
+    font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums;
     background: var(--px-primary); color: var(--px-primary-fg);
   }
   #changes[disabled] .count { display: none; }
   /* Compact kind chips: a swatch, a word, one row. */
+  #kinds { gap: 6px; }
   #kinds .px-toggle { height: 26px; padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
   #kinds .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
   #kinds .px-toggle[aria-pressed="false"] { color: var(--px-muted-fg); }
@@ -126,8 +127,12 @@ ${uiCss}
   #main { display: flex; flex: 1 1 auto; min-height: 0; }
   /* The rail is a fixed strip of icons, so it has no resizer: there is nothing
      to make wider. It still collapses, and its handle lives on the canvas. */
-  #rail { --px-sidepanel-width: 40px; }
-  #rail > .px-sidepanel-body { padding: 6px 4px; gap: 2px; align-items: center; overflow: hidden; }
+  /* The rail's body must not clip: a tool's tooltip opens to the right of a
+     40px strip, so overflow: hidden on the body swallowed it. The z-index
+     puts the escaped tooltip over the canvas (a disabled tool's own opacity
+     makes it a stacking context, which would otherwise paint it underneath). */
+  #rail { --px-sidepanel-width: 40px; z-index: 7; }
+  #rail > .px-sidepanel-body { padding: 6px 4px; gap: 2px; align-items: center; overflow: visible; }
   .tool[aria-pressed="true"] { background: var(--px-muted); }
   .tool[aria-disabled="true"] { opacity: 0.45; }
 
@@ -172,8 +177,17 @@ ${uiCss}
   .node:hover .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 0.55; }
   .node.selected .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 1; stroke-width: 2; }
   .node-outline { fill: none; stroke: var(--px-primary); stroke-width: 2; pointer-events: none; }
-  .node-title { pointer-events: none; fill: var(--px-fg); font-size: 13px; font-weight: 600; font-family: var(--px-font); }
-  .node-sub { pointer-events: none; fill: var(--px-muted-fg); font-size: 11px; font-family: var(--px-font); }
+  .node-title { pointer-events: none; fill: var(--px-fg); font-size: 15px; font-weight: 600; font-family: var(--px-font); }
+  .node-sub { pointer-events: none; fill: var(--px-muted-fg); font-size: 12px; font-family: var(--px-font); }
+  /* The card's own "open the source" button: a ghost button in its top right
+     corner, drawn in SVG, on the card's hover only. */
+  .card-open { opacity: 0; cursor: pointer; transition: opacity var(--px-ease); }
+  .node:hover .card-open, .card-open:focus-visible { opacity: 1; }
+  .card-open-bg { fill: transparent; pointer-events: all; transition: fill var(--px-ease); }
+  .card-open:hover .card-open-bg { fill: var(--px-muted); }
+  .card-open-icon { color: var(--px-muted-fg); pointer-events: none; }
+  .node.on-banner .card-open-bg { fill: color-mix(in oklch, #000 45%, transparent); }
+  .node.on-banner .card-open-icon { color: #e4e4e4; }
   /* Over an illustration the theme's colors no longer apply: the scrim below
      is dark in every theme, so the text is light in every theme. */
   .node.on-banner .node-title { fill: #f4f4f4; }
@@ -219,8 +233,10 @@ ${uiCss}
   #simBody h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; word-break: break-all; }
   .step { margin: 2px 0; }
   .step > .px-panel-title { padding-left: 2px; border-radius: var(--px-radius-sm); }
-  .step > .px-panel-title .caret { transition: transform var(--px-ease); }
-  .step[data-collapsed] > .px-panel-title .caret { transform: rotate(-90deg); }
+  /* The caret here is a button, and its tooltip is that button's ::after, so
+     rotating the button turned the words on their side. Rotate the icon. */
+  .step > .px-panel-title .caret > svg { transition: transform var(--px-ease); }
+  .step[data-collapsed] > .px-panel-title .caret > svg { transform: rotate(-90deg); }
   .step[data-collapsed] > .step-body { display: none; }
   .step > .px-panel-title .t { color: var(--px-fg); }
   .step > .px-panel-title .s {
@@ -293,11 +309,11 @@ ${uiCss}
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to undo" disabled>${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
-    <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-wrap>${kindToggles}</div>
     <span class="px-grow"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reload the current graph from the index">${icon("rotate")}</button>
+    <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
     <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="No changes to save yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="export" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Export the graph as SVG" data-tip-side="left">${icon("download")}</button>

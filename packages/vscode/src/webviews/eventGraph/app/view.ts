@@ -6,6 +6,7 @@
  */
 import type { EventGraph, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
 import { NODE_H, NODE_W, radialLayout, type LayoutPos } from "../layout";
+import { iconEl } from "../../shared/icons";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 /**
@@ -18,7 +19,7 @@ const LABELS_ALWAYS_MAX = 25;
 const DRAG_SLOP = 4;
 /**
  * How far out and in the canvas goes: out far enough for a whole namespace of
- * 240 px cards, in far enough to read a card's third line unaided.
+ * 260 px cards, in far enough to read a card's third line unaided.
  */
 const ZOOM_MIN = 0.08;
 const ZOOM_MAX = 5;
@@ -324,13 +325,15 @@ export class GraphView {
     }
 
     const primary = this.options.titleMode === "loc" && node.title ? node.title : node.id;
-    const title = svgEl("text", { class: "node-title", x: "16", y: "22" });
-    title.textContent = clip(primary, 30);
-    const meta = svgEl("text", { class: "node-sub", x: "16", y: "39" });
-    meta.textContent = clip(metaLine(node), 40);
-    const sub = svgEl("text", { class: "node-sub", x: "16", y: "54" });
-    sub.textContent = clip(subLine(node), 40);
+    const title = svgEl("text", { class: "node-title", x: "16", y: "24" });
+    // The title stops short of the corner the hover button sits in.
+    title.textContent = clip(primary, 25);
+    const meta = svgEl("text", { class: "node-sub", x: "16", y: "44" });
+    meta.textContent = clip(metaLine(node), 35);
+    const sub = svgEl("text", { class: "node-sub", x: "16", y: "61" });
+    sub.textContent = clip(subLine(node), 35);
     group.append(title, meta, sub);
+    if (node.file) group.appendChild(this.drawOpenButton(node));
 
     group.addEventListener("dblclick", (ev) => {
       ev.stopPropagation();
@@ -343,6 +346,38 @@ export class GraphView {
     });
     group.addEventListener("pointerdown", (ev) => this.beginNodeDrag(ev, node));
     return group;
+  }
+
+  /**
+   * The card's own "open the source" button, in its top right corner and only
+   * while the pointer is on the card. It is drawn in SVG rather than as an
+   * HTML button in a foreignObject: a foreignObject clips its content, which
+   * would cut the tooltip off, and the card already tells the rest of its
+   * story through SVG <title>. Pressing it neither selects nor drags the card.
+   */
+  private drawOpenButton(node: EventGraphNode): SVGGElement {
+    const button = svgEl("g", { class: "card-open", transform: `translate(${NODE_W - 26},6)` });
+    button.appendChild(svgEl("rect", { class: "card-open-bg", width: "20", height: "20", rx: "6", ry: "6" }));
+    const glyph = iconEl("fileText", "card-open-icon");
+    for (const [k, v] of [
+      ["x", "4"],
+      ["y", "4"],
+      ["width", "12"],
+      ["height", "12"],
+    ]) {
+      glyph.setAttribute(k, v);
+    }
+    button.appendChild(glyph);
+    const tip = svgEl("title");
+    tip.textContent = "Open the event's source";
+    button.appendChild(tip);
+    button.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    button.addEventListener("dblclick", (ev) => ev.stopPropagation());
+    button.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (node.file) this.cb.onOpen(node.file, node.line);
+    });
+    return button;
   }
 
   /**
@@ -629,9 +664,14 @@ export class GraphView {
   serializeSvg(): string {
     const clone = this.svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute("xmlns", SVG_NS);
+    // The hover button belongs to the canvas, not to a file: a picture cannot
+    // open anything.
+    for (const button of Array.from(clone.querySelectorAll(".card-open"))) button.remove();
     // Bake the computed colors in: the exported file has no stylesheet, and the
     // live one paints through CSS variables.
-    const live = this.svg.querySelectorAll<SVGElement>("rect, path, text");
+    const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text")).filter(
+      (node) => node.closest(".card-open") === null
+    );
     const copies = clone.querySelectorAll<SVGElement>("rect, path, text");
     live.forEach((node, i) => {
       const cs = getComputedStyle(node);

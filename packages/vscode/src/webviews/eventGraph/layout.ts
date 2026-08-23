@@ -32,8 +32,8 @@ export interface LayoutPos {
 }
 
 /** The card the renderer draws; the layout keeps these boxes apart. */
-export const NODE_W = 240;
-export const NODE_H = 62;
+export const NODE_W = 260;
+export const NODE_H = 70;
 /** Clear space demanded between two cards, on both axes. */
 export const GAP = 24;
 /** Centre-to-centre distance two cards need, per axis. */
