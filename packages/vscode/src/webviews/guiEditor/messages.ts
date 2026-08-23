@@ -38,6 +38,8 @@
 import type {
   GuiDependenciesResult,
   GuiLayoutResult,
+  GuiPreview,
+  GuiPreviewEntry,
   GuiSourceOp,
   GuiVisibilityMode,
   GuiVisibilityOptions,
@@ -64,13 +66,16 @@ export interface TextureEntry {
 }
 
 /**
- * A selection saved for reuse, host-side. The app never sees the block text: it
- * is the document's bytes, which are the host's, exactly like the clipboard.
+ * A selection saved for reuse, host-side. The host stores and inserts the
+ * text; the app only reads it to ask for a preview (`requestPreviews`, kind
+ * `raw`), never to write it.
  */
 export interface SavedComponent {
   name: string;
   /** How many top-level widgets the saved text holds, for the row's label. */
   widgets: number;
+  /** The verbatim block text, for the library tile's preview. */
+  text: string;
 }
 
 /** A named bundle of property writes, applied as ONE batched `setProperties`. */
@@ -94,6 +99,44 @@ export type GuiValueMode = "full" | "abbreviated" | "hidden";
  */
 export interface GuiEditorUiState {
   valueMode: GuiValueMode;
+  /**
+   * The two side panels (tree/layers/palette on the left, inspector/halo on
+   * the right), as sidePanel.ts reports them. Absent until the user has moved
+   * or hidden one, so a fresh install opens with the page's own defaults.
+   */
+  panels?: GuiPanelStates;
+  /**
+   * The two canvas toggles a drag reads: smart guides (on by default) and the
+   * 8 px grid (off by default). Absent means the page's own default, so a
+   * store written before they existed changes nothing.
+   */
+  snap?: boolean;
+  grid?: boolean;
+  /**
+   * How a textbox's `text =` is shown: `resolve` (the default) localizes keys
+   * and fills in what `[datafunctions]` can be known; `raw` shows the file's
+   * own value verbatim. It is `GuiLayoutParams.loc`, remembered by the host
+   * like the snap and grid toggles, and every layout request carries it.
+   */
+  loc?: GuiLocMode;
+  /**
+   * The collapsed panel sections (`tree`, `layers`, `inspector`, `devtools`).
+   * Absent means the page's own defaults (devtools folded, the rest open).
+   */
+  sections?: string[];
+}
+
+/** The two ways a layout shows textbox text (`GuiLayoutParams.loc`). */
+export type GuiLocMode = "resolve" | "raw";
+
+export interface GuiPanelState {
+  width: number;
+  collapsed: boolean;
+}
+
+export interface GuiPanelStates {
+  left: GuiPanelState;
+  right: GuiPanelState;
 }
 
 /** Messages the editor app sends UP to its host. */
@@ -200,6 +243,14 @@ export type AppToHost =
    */
   | { type: "requestVocabulary" }
   /**
+   * Render-ready previews for the library tiles on screen
+   * (`paradox/guiPreview`): at most `GUI_PREVIEW_MAX` entries per message,
+   * sent for the visible page only, never for a whole listing. A saved
+   * component goes as kind `raw` with its stored text. The host answers
+   * `previews`.
+   */
+  | { type: "requestPreviews"; entries: GuiPreviewEntry[] }
+  /**
    * Lay the document out in this conditional-visibility mode from now on
    * (`GuiLayoutParams.visibility`), and REMEMBER it for this document: a widget
    * the user hid must still be hidden when they come back to the file, and a
@@ -263,11 +314,75 @@ export type AppToHost =
    * and echoed it back mid-session would fight a user who changed it twice
    * before the first write landed.
    */
-  | { type: "setUiState"; valueMode: GuiValueMode }
+  | {
+      type: "setUiState";
+      valueMode: GuiValueMode;
+      panels?: GuiPanelStates;
+      /** The snap and grid toggles; absent leaves what the host has stored alone. */
+      snap?: boolean;
+      grid?: boolean;
+      /** The collapsed panel sections; absent leaves the stored list alone. */
+      sections?: string[];
+      /**
+       * The textbox display mode. Unlike the other fields the host does not
+       * only store it: it re-lays the document out with it, because the mode
+       * changes what the server measures and draws. The app asks for that
+       * layout itself (`requestLayout`) right after this message.
+       */
+      loc?: GuiLocMode;
+    }
+  /**
+   * Open the host's localization flow for `key`, which a textbox names and the
+   * loc index does not have: the host asks for the value and writes it where
+   * the mod's sibling keys live, then pushes a fresh layout so the textbox
+   * shows the new text. Nothing is written to the .gui document.
+   */
+  | { type: "editLoc"; key: string }
+  /**
+   * Remember `value` as the preview text for the `[expression]` a textbox
+   * holds and the game would only evaluate at runtime. The host keeps the
+   * table per mod (`<mod>/<configDir>/gui-preview-values.json`), sends it with
+   * every layout request as `GuiLayoutParams.previewValues`, and answers this
+   * message with a fresh layout. `expression` is the segment's `source`: the
+   * chain without its brackets.
+   */
+  /**
+   * Choose a plain-text save whose real values (played country name, ruler,
+   * date, ...) stand in for datafunctions; the host shows a file picker and
+   * remembers the choice per workspace. `clearSave` forgets it.
+   */
+  | { type: "pickSave" }
+  | { type: "clearSave" }
+  | { type: "setPreviewValue"; expression: string; value: string }
+  /** Drop the preview text for `expression` from that table, then push a fresh layout. */
+  | { type: "clearPreviewValue"; expression: string }
   /** Remember these properties under a name. The host answers by pushing `userData`. */
   | { type: "savePreset"; name: string; properties: EditProperty[] }
   /** Forget a saved component or preset. The host answers by pushing `userData`. */
-  | { type: "forgetSaved"; kind: "component" | "preset"; name: string };
+  | { type: "forgetSaved"; kind: "component" | "preset"; name: string }
+  /**
+   * Undo (or redo) the last change to the SOURCE DOCUMENT. The editor holds no
+   * history of its own (README: one gesture is one document change is one undo
+   * step), so these are requests for the host's own undo, which it runs on the
+   * document's text editor: it shows that editor with focus (an editor command
+   * acts on the active editor, and a panel is not one), runs the command, and
+   * the changed document comes back down through the normal `layout` push. No
+   * answer message: the layout IS the answer, and a step with nothing to undo
+   * changes nothing and pushes nothing.
+   */
+  | { type: "undo" }
+  | { type: "redo" }
+  /**
+   * Read one loc key through the host's index (a widget's `tooltip`, which
+   * the layout never resolves). The host answers `loc` with the value, null
+   * when no definition exists.
+   */
+  | { type: "requestLoc"; key: string }
+  /**
+   * Let the user pick an image file (an in-game screenshot) and answer
+   * `reference` with a URL the page can load, or `url: null` when they cancelled.
+   */
+  | { type: "pickReference" };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =
@@ -313,6 +428,15 @@ export type HostToApp =
        * complete and the app shows the file count alone.
        */
       storeWarning?: string;
+      /**
+       * The preview table this layout was computed with, keyed exactly as
+       * the file has it (`[expression]`). The inspector reads it to tell a
+       * datafunction the modder gave a value from one the loc index
+       * resolved, which the segment alone does not say.
+       */
+      previewValues?: Record<string, string>;
+      /** The save the preview values partly come from, when one is chosen. */
+      save?: { name: string; date: string; file: string } | null;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an
@@ -363,6 +487,13 @@ export type HostToApp =
       commonProperties: string[];
     }
   /**
+   * Answer to `requestPreviews`, one preview per asked entry in the same
+   * order. `textures` maps every path the previews reference to a URL or
+   * null, resolved through the same cache the canvas fills use, at thumbnail
+   * size.
+   */
+  | { type: "previews"; previews: GuiPreview[]; textures: Record<string, string | null> }
+  /**
    * Answer to `requestDependencies`. `line` is echoed (absent for a
    * whole-document answer) so the app can drop an answer the selection has
    * moved past; `result` is null when the host could not ask.
@@ -383,6 +514,8 @@ export type HostToApp =
    * with nothing stored answers with two empty lists, and the panel says so.
    */
   | { type: "userData"; components: SavedComponent[]; presets: SavedPreset[] }
+  | { type: "loc"; key: string; value: string | null }
+  | { type: "reference"; name: string; url: string | null }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 

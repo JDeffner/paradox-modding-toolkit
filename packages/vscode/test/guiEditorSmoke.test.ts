@@ -57,6 +57,8 @@ import { collectScriptedGuiCalls, emptyGuiScriptLinks } from "../../server/src/g
 import { loadSchema } from "../../server/src/schema/loader";
 import { ServerData } from "../../server/src/serverData";
 import { applyAll } from "../../server/src/gui/sourceEdit";
+import { resolveGuiText } from "../../server/src/gui/textResolve";
+import { UNRESOLVED_TEXT } from "../src/webviews/guiEditor/app/render";
 import { countTopLevelBlocks } from "../src/webviews/guiEditor/userData";
 import type {
   AppToHost,
@@ -359,7 +361,12 @@ function serveHalo(message: AppToHost): boolean {
     case "setUiState":
       // Stored and never echoed back mid-session, exactly like panel.ts: the
       // app has already applied it and the next panel reads it from its layout.
-      storedUi = { valueMode: message.valueMode };
+      storedUi = {
+        valueMode: message.valueMode,
+        snap: message.snap ?? storedUi?.snap,
+        grid: message.grid ?? storedUi?.grid,
+        loc: message.loc ?? storedUi?.loc,
+      };
       return true;
     case "savePreset":
       savedPresets[message.name] = message.properties;
@@ -384,6 +391,7 @@ function pushUserData(): void {
     components: Object.entries(savedComponents).map(([name, text]) => ({
       name,
       widgets: countTopLevelBlocks(text),
+      text,
     })),
     presets: Object.entries(savedPresets).map(([name, properties]) => ({ name, properties })),
   });
@@ -757,6 +765,9 @@ describe("dragging on the canvas", () => {
 
   it("a resize the box only half owns warns which axis it keeps, and writes the other", () => {
     const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+    // The case is about the op's numbers, so the guides (which would match the
+    // height to a sibling's) are off, as in every other case about an op.
+    withoutGuides();
     const one = rectOf(layout, "px_refuse_size_one");
     const inside = pointIn(one);
     editor.click(inside.x, inside.y);
@@ -1111,8 +1122,8 @@ describe("smart guides", () => {
     editor.move(CARD_CENTER.x + 43, CARD_CENTER.y + 27);
     editor.up(CARD_CENTER.x + 43, CARD_CENTER.y + 27);
 
-    // { 53 37 } raw; the grid takes the widget's own top left to the lattice.
-    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 50 40 }" }]);
+    // { 53 37 } raw; the 8 px grid takes the widget's own top left to the lattice.
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 56 40 }" }]);
   });
 });
 
@@ -1379,24 +1390,137 @@ describe("align and distribute", () => {
   });
 });
 
-describe("the palette", () => {
-  it("offers the game's own widgets and filters them", () => {
-    openGroup();
-    editor.button("Palette").click();
-    serveEdits();
+/** Open the library the way the toolbar does, with the vocabulary and the saved data served. */
+function openLibrary(): void {
+  editor.button("Library").click();
+  serveEdits();
+}
 
-    expect(editor.paletteRows().length).toBeGreaterThan(5);
-    editor.filterPalette("vbo");
-    expect(editor.paletteRows()[0]).toContain("vbox");
+/** A mouse click on a panel element. */
+function clickOn(node: Element): void {
+  node.dispatchEvent(new editor.document.defaultView!.MouseEvent("click", { bubbles: true }));
+}
+
+const CHIP = 'widget = { name = "px_chip" size = { 10 10 } }';
+
+describe("the library", () => {
+  it("lists the vocabulary by section and searches across it", () => {
+    openGroup();
+    openLibrary();
+
+    expect(editor.libraryTiles().length).toBeGreaterThan(5);
+    editor.librarySection("This file");
+    expect(editor.libraryTiles()).toEqual([]);
+    editor.librarySection("Widgets");
+    const widgets = editor.libraryTiles();
+    expect(widgets).toContain("vbox");
+    expect(widgets).toContain("hbox");
+    editor.librarySection("All");
+    editor.searchLibrary("vbo");
+    expect(editor.libraryTiles()[0]).toBe("vbox");
+    expect(editor.libraryTiles().every((name) => name.includes("vbo"))).toBe(true);
+    editor.searchLibrary("nothing-like-this");
+    expect(editor.text("library")).toContain("Nothing matches");
+  });
+
+  it("this file's declarations and the saved pieces each have a section", () => {
+    savedComponents = { chip: CHIP };
+    openDoc(TEXT, "templates-types.gui");
+    openLibrary();
+    editor.librarySection("This file");
+    expect(editor.libraryTiles().length).toBeGreaterThan(0);
+    expect(editor.text("library")).toContain("this file");
+    editor.librarySection("Saved");
+    expect(editor.libraryTiles()).toEqual(["chip"]);
+    expect(editor.text("library")).toContain("saved · 1 widget");
+  });
+
+  it("asks for previews only for the tiles on screen, in batches of at most 48, each once", () => {
+    openGroup();
+    openLibrary();
+    expect(editor.sent.filter((m) => m.type === "requestPreviews")).toHaveLength(0);
+
+    editor.scrollLibrary();
+    const requests = editor.sent.filter((m) => m.type === "requestPreviews");
+    expect(requests.length).toBeGreaterThan(0);
+    let asked = 0;
+    for (const request of requests) {
+      if (request.type !== "requestPreviews") continue;
+      expect(request.entries.length).toBeLessThanOrEqual(48);
+      asked += request.entries.length;
+    }
+    // The first page of 60, every tile of it. The second scroll pages on and
+    // asks nothing twice.
+    expect(asked).toBe(60);
+    editor.scrollLibrary();
+    const names = editor.sent.flatMap((m) =>
+      m.type === "requestPreviews" ? m.entries.map((e) => e.name) : []
+    );
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.length).toBeGreaterThan(60);
+  });
+
+  it("a saved component previews as raw text, and a preview the server cannot stand up says why", () => {
+    savedComponents = { chip: CHIP };
+    openGroup();
+    openLibrary();
+    editor.librarySection("Saved");
+    editor.scrollLibrary();
+    const request = lastOfType(editor, "requestPreviews")!;
+    expect(request.entries).toEqual([{ name: "chip", kind: "raw", fragment: CHIP }]);
+    editor.push({
+      type: "previews",
+      previews: [{ name: "chip", node: null, textures: [], reason: "nothing to lay out" }],
+      textures: {},
+    });
+    const tile = editor.libraryTile("chip");
+    expect(tile.hasAttribute("data-empty")).toBe(true);
+    expect(tile.title).toContain("nothing to lay out");
+  });
+
+  it("a click on a tile inserts next to the selection through the same insert op", () => {
+    const layout = openGroup();
+    openLibrary();
+    const inner = centreOf(layout, "px_g5_inner");
+    editor.click(inner.x, inner.y);
+    clickOn(editor.libraryTile("vbox"));
+    serveEdits();
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([
+      { kind: "insert", line: 3, widget: { type: "vbox" }, index: 1 },
+    ]);
+    expect(editor.selectedRow()).toContain("vbox");
+  });
+
+  it("a click with nothing selected inserts into the first root", () => {
+    openGroup();
+    openLibrary();
+    clickOn(editor.libraryTile("vbox"));
+    serveEdits();
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([
+      { kind: "insert", line: 0, widget: { type: "vbox" }, index: undefined },
+    ]);
+  });
+
+  it("a saved tile drops through insertComponent, by name", () => {
+    savedComponents = { chip: CHIP };
+    const layout = openGroup();
+    openLibrary();
+    const frame = rectOf(layout, "px_g5_frame");
+    editor.librarySection("Saved");
+    editor.rowPointer(editor.libraryTile("chip"), "pointerdown");
+    editor.move(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    editor.up(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    serveEdits();
+    expect(lastOfType(editor, "insertComponent")).toMatchObject({ name: "chip", line: 3 });
+    expect(doc).toContain('name = "px_chip"');
   });
 
   it("a drop commits ONE insert op and selects what it wrote", () => {
     const layout = openGroup();
-    editor.button("Palette").click();
-    serveEdits();
+    openLibrary();
     const frame = rectOf(layout, "px_g5_frame");
 
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     // Inside the frame but on none of its children: the drop appends.
     editor.move(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
     expect(editor.text("status")).toContain("into widget#px_g5_frame");
@@ -1432,12 +1556,11 @@ describe("the palette", () => {
     ].join("\n");
     openDoc(inType, "in-type.gui");
     serveEdits();
-    editor.button("Palette").click();
-    serveEdits();
+    openLibrary();
 
     // The instance's own children are spliced from the type, so a drop on them
     // finds no container with bytes here at all.
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     editor.move(110, 110);
     expect(editor.text("status")).toContain("into px_g5_card#px_g5_use");
     editor.up(110, 110);
@@ -1485,11 +1608,16 @@ describe("copy, paste, delete and duplicate", () => {
     );
   });
 
-  it("Del removes the whole selection in one batch, Ctrl+D duplicates", () => {
+  it("Del removes the whole selection in one batch, after a confirm, and Ctrl+D duplicates", async () => {
     const layout = openGroup();
     editor.click(centreOf(layout, "px_g5_a").x, centreOf(layout, "px_g5_a").y);
     editor.click(centreOf(layout, "px_g5_b").x, centreOf(layout, "px_g5_b").y, { shiftKey: true });
     editor.key("Delete");
+    // More than one widget: the page asks first, and nothing has gone out yet.
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(0);
+    expect(editor.document.querySelector(".px-dialog")?.textContent).toContain("Delete 2 widgets?");
+    editor.button("Delete").click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     serveEdits();
     // The quoted names, because `px_g5_box` has `px_g5_b` inside it.
     expect(doc).not.toContain('name = "px_g5_a"');
@@ -1776,11 +1904,52 @@ describe("the canvas devtools", () => {
 });
 
 describe("conditional visibility", () => {
+  it("interact mode: a click runs the variable half of an onclick and the checks follow", () => {
+    const text = [
+      "window = {",
+      "\tname = px_i",
+      "\tsize = { 400 300 }",
+      "\tbutton = {",
+      "\t\tname = px_i_btn",
+      "\t\tsize = { 40 40 }",
+      "\t\tonclick = \"[GetVariableSystem.Set('px_tab', 'b')]\"",
+      "\t\tonclick = \"[GetPlayer.MakeScope.ExecuteEffect('px_fx')]\"",
+      "\t}",
+      "\twidget = {",
+      "\t\tname = px_i_panel",
+      "\t\tposition = { 100 100 }",
+      "\t\tsize = { 40 40 }",
+      "\t\tvisible = \"[GetVariableSystem.HasValue('px_tab', 'b')]\"",
+      "\t}",
+      "}",
+    ].join("\n");
+    const layout = openDoc(text, "px_i.gui");
+    editor.document.getElementById("modeInteract")!.click();
+    const at = centreOf(layout, "px_i_btn");
+    editor.click(at.x, at.y);
+    // One message, the evaluate assignment the variable decides; nothing written.
+    expect(lastOfType(editor, "setVisibility")).toEqual({
+      type: "setVisibility",
+      mode: "evaluate",
+      checks: { "[GetVariableSystem.HasValue('px_tab', 'b')]": true },
+    });
+    expect(editor.sent.some((m) => m.type === "checkEdit" || m.type === "applyEdit")).toBe(false);
+    const tip = editor.document.getElementById("clickTip")!;
+    expect(tip.hasAttribute("hidden")).toBe(false);
+    expect(tip.textContent).toContain("set px_tab = b");
+    expect(tip.textContent).toContain("ExecuteEffect('px_fx')");
+    // Esc closes the tip first, then leaves interact mode.
+    editor.key("Escape");
+    expect(tip.hasAttribute("hidden")).toBe(true);
+    editor.key("Escape");
+    expect(editor.document.getElementById("modeEdit")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("a mode change is one message, the layout is the answer, and the badge says so", () => {
     openHalo();
     editor.button("Visible").click();
     // Reported in every mode, so the toggle UI exists before the mode changes.
-    expect(editor.text("haloBody")).toContain("[GetPlayer.IsAI]");
+    expect(editor.text("haloBody")).toContain("GetPlayer.IsAI");
     expect(editor.badge()).toBeNull();
 
     editor.button("Hide all").click();
@@ -1865,9 +2034,7 @@ describe("the dependency panel", () => {
     // The anchored widget calls nothing.
     expect(editor.text("haloBody")).toContain("This calls no scripted_gui");
 
-    const scope = editor.document.querySelector<HTMLInputElement>("#haloBody label.check input")!;
-    scope.checked = true;
-    scope.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("change"));
+    editor.button("Whole file").click();
     serveEdits();
 
     expect(lastOfType(editor, "requestDependencies")!.line).toBeUndefined();
@@ -2332,5 +2499,396 @@ describe("the inspector holds its place across the re-layout a commit causes", (
     serveWidgetInfo(editor, doc);
     expect(editor.scrollOf("inspector")).toBe(0);
     expect(editor.propRow("size")!.querySelector(".block")).toBeNull();
+  });
+});
+
+// ── Increment 1: canvas feel ────────────────────────────────────────────────
+
+/** A real wait, because the nudge burst is a trailing timer on the page's own clock. */
+const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** nudge.ts NUDGE_BURST_MS plus a margin. */
+const BURST = 320;
+
+describe("arrow-key nudges", () => {
+  it("a burst of keys is ONE op, previewed key by key, and never two in flight", async () => {
+    const layout = openGroup();
+    withoutGuides();
+    const a = centreOf(layout, "px_g5_a");
+    editor.click(a.x, a.y);
+
+    editor.key("ArrowRight");
+    editor.key("ArrowRight");
+    editor.key("ArrowRight");
+    editor.key("ArrowDown", { shiftKey: true });
+    // The preview and the readout move at once; the document has not.
+    expect(editor.text("status")).toContain("position = { 13 20 }");
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+
+    await tick(BURST);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(1);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 13 20 }" }]);
+
+    // The commit is still unanswered: the next burst waits for it.
+    editor.key("ArrowLeft", { altKey: true });
+    await tick(BURST);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(1);
+    serveEdits();
+    expect(doc).toContain('name = "px_g5_a" position = { 13 20 }');
+    await tick(BURST);
+    // Alt is one grid step, added to the FRESH source value the layout brought.
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(2);
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 5 20 }" }]);
+    serveEdits();
+    expect(doc).toContain('name = "px_g5_a" position = { 5 20 }');
+  });
+
+  it("a multi-selection nudges as ONE batch, and Escape drops an unwritten one", async () => {
+    const layout = openGroup();
+    const a = centreOf(layout, "px_g5_a");
+    const b = centreOf(layout, "px_g5_b");
+    editor.click(a.x, a.y);
+    editor.click(b.x, b.y, { shiftKey: true });
+
+    editor.key("ArrowDown");
+    editor.key("Escape");
+    await tick(BURST);
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(0);
+    // Escape took the nudge, not the selection.
+    expect(editor.selectedRows("tree")).toHaveLength(2);
+
+    editor.key("ArrowDown");
+    editor.key("ArrowDown");
+    await tick(BURST);
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toEqual([
+      { kind: "setProperties", line: 0, properties: [{ key: "position", value: "{ 10 12 }" }] },
+      { kind: "setProperties", line: 1, properties: [{ key: "position", value: "{ 100 32 }" }] },
+    ]);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+    serveEdits();
+    expect(doc).toContain('name = "px_g5_a" position = { 10 12 }');
+    expect(doc).toContain('name = "px_g5_b" position = { 100 32 }');
+  });
+});
+
+describe("resizing a multi-selection", () => {
+  it("the grips sit on the selection's bounds and write one size per member in ONE batch", () => {
+    const layout = openGroup();
+    withoutGuides();
+    const a = centreOf(layout, "px_g5_a");
+    const b = centreOf(layout, "px_g5_b");
+    editor.click(a.x, a.y);
+    editor.click(b.x, b.y, { shiftKey: true });
+
+    // a is 10,10 40x40 and b is 100,30 40x40: the bounds' south-east corner.
+    editor.press(140, 70);
+    const check = lastOfType(editor, "checkOps")!;
+    expect(
+      check.ops.map((op) => (op.kind === "setProperties" ? op.properties.map((p) => p.key) : []))
+    ).toEqual([["size"], ["size"]]);
+    serveEdits();
+    editor.move(160, 80);
+    editor.up(160, 80);
+    serveEdits();
+
+    const apply = lastOfType(editor, "applyOps")!;
+    expect(apply.ops).toEqual([
+      { kind: "setProperties", line: 1, properties: [{ key: "size", value: "{ 60 50 }" }] },
+      { kind: "setProperties", line: 0, properties: [{ key: "size", value: "{ 60 50 }" }] },
+    ]);
+    expect(editor.sent.filter((m) => m.type === "applyEdit")).toHaveLength(0);
+    expect(doc).toContain('name = "px_g5_a" position = { 10 10 } size = { 60 50 }');
+    expect(doc).toContain('name = "px_g5_b" position = { 100 30 } size = { 60 50 }');
+  });
+});
+
+describe("smart guides, increment 1", () => {
+  it("a drag snaps to the parent's own edge when there is no sibling to align to", () => {
+    const layout = openGroup();
+    const inner = centreOf(layout, "px_g5_inner");
+    editor.click(inner.x, inner.y);
+    editor.press(inner.x, inner.y);
+    serveEdits();
+    // 8 left puts the left edge 2 short of the frame's; 30 down is nowhere near it.
+    editor.move(inner.x - 8, inner.y + 30);
+    editor.up(inner.x - 8, inner.y + 30);
+    serveEdits();
+
+    expect(lastOfType(editor, "applyEdit")!.properties).toEqual([{ key: "position", value: "{ 0 40 }" }]);
+    expect(doc).toContain('name = "px_g5_inner" position = { 0 40 }');
+  });
+});
+
+describe("the library drag, increment 1", () => {
+  it("a release outside the canvas cancels, and the next drag starts clean", () => {
+    const layout = openGroup();
+    openLibrary();
+    const frame = rectOf(layout, "px_g5_frame");
+    const over = { x: frame.x + frame.w * 0.7, y: frame.y + frame.h * 0.7 };
+
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
+    // The chip follows the cursor from the press on.
+    expect(editor.document.querySelector(".paletteGhost")?.textContent).toBe("vbox");
+    editor.move(over.x, over.y);
+    expect(editor.text("status")).toContain("into widget#px_g5_frame");
+    expect(editor.document.getElementById("dropTarget")!.hidden).toBe(false);
+
+    // Released over the tree panel, say: nothing is written and nothing stays armed.
+    editor.windowPointer("pointerup", { x: -40, y: 300 });
+    expect(editor.sent.filter((m) => m.type === "applyOps")).toHaveLength(0);
+    expect(editor.document.querySelector(".paletteGhost")).toBeNull();
+    expect(editor.document.getElementById("dropTarget")!.hidden).toBe(true);
+    expect(editor.text("status")).not.toContain("vbox");
+    // A pointer move over the canvas with nothing armed is a hover, not a drop preview.
+    editor.move(over.x, over.y);
+    expect(editor.text("status")).not.toContain("into widget#px_g5_frame");
+
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
+    editor.move(over.x, over.y);
+    editor.up(over.x, over.y);
+    serveEdits();
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([
+      { kind: "insert", line: 3, widget: { type: "vbox" }, index: undefined },
+    ]);
+  });
+});
+
+describe("Alt+drag", () => {
+  it("duplicates the widget under the cursor and moves the COPY, leaving the original", () => {
+    const layout = openGroup();
+    withoutGuides();
+    const a = centreOf(layout, "px_g5_a");
+    editor.press(a.x, a.y, { altKey: true });
+    serveEdits();
+    editor.move(a.x + 50, a.y);
+    editor.up(a.x + 50, a.y);
+
+    // First the duplicate; the copy lands right after the original.
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([{ kind: "duplicate", line: 0 }]);
+    serveEdits();
+    // Then the move, on the copy's own line, as the copy is now the selection.
+    const move = lastOfType(editor, "applyEdit")!;
+    expect(move.line).toBe(1);
+    expect(move.properties).toEqual([{ key: "position", value: "{ 60 10 }" }]);
+    serveEdits();
+    expect(doc).toContain('name = "px_g5_a" position = { 10 10 }');
+    expect(doc).toContain('name = "px_g5_a" position = { 60 10 }');
+    expect(editor.selectedRow()).toContain("px_g5_a");
+  });
+});
+
+describe("keyboard navigation", () => {
+  it("Tab cycles siblings, Enter descends, Shift+Enter ascends, Shift+F zooms to the selection", () => {
+    const layout = openGroup();
+    const a = centreOf(layout, "px_g5_a");
+    editor.click(a.x, a.y);
+    editor.key("Tab");
+    expect(editor.selectedRow()).toContain("px_g5_b");
+    editor.key("Tab", { shiftKey: true });
+    expect(editor.selectedRow()).toContain("px_g5_a");
+
+    const frame = centreOf(layout, "px_g5_frame");
+    editor.click(frame.x + 100, frame.y + 80);
+    expect(editor.selectedRow()).toContain("px_g5_frame");
+    editor.key("Enter");
+    expect(editor.selectedRow()).toContain("px_g5_inner");
+    editor.key("Enter", { shiftKey: true });
+    expect(editor.selectedRow()).toContain("px_g5_frame");
+
+    const before = editor.document.getElementById("zoomLabel")!.textContent;
+    editor.key("F", { shiftKey: true });
+    expect(editor.document.getElementById("zoomLabel")!.textContent).not.toBe(before);
+    // Home fits the reference viewport again.
+    editor.key("Home");
+    expect(editor.document.getElementById("zoomLabel")!.textContent).toBe(before);
+  });
+});
+
+describe("the toolbar, increment 1", () => {
+  it("undo and redo are requests for the host's own history", () => {
+    openGroup();
+    editor.document.getElementById("undo")!.click();
+    editor.document.getElementById("redo")!.click();
+    expect(editor.sent.slice(-2)).toEqual([{ type: "undo" }, { type: "redo" }]);
+  });
+
+  it("the snap and grid toggles are remembered by the host and boot the next panel", () => {
+    openGroup();
+    editor.toggle("grid", true);
+    serveEdits();
+    expect(lastOfType(editor, "setUiState")).toEqual({
+      type: "setUiState",
+      valueMode: "full",
+      snap: true,
+      grid: true,
+    });
+    editor.toggle("snap", false);
+    serveEdits();
+    expect(storedUi).toEqual({ valueMode: "full", snap: false, grid: true });
+
+    editor.close();
+    editor = bootEditor();
+    editor.push({ type: "layout", file: "group.gui", result: layoutOf(GROUP), textures: {}, ui: storedUi });
+    expect((editor.document.getElementById("grid") as HTMLInputElement).checked).toBe(true);
+    expect((editor.document.getElementById("snap") as HTMLInputElement).checked).toBe(false);
+  });
+});
+
+// ---- textbox text: resolved by default, raw on request ----------------------
+
+const LOC_TEXT = [
+  "widget = {",
+  '\tname = "px_loc_frame"',
+  "\tsize = { 400 300 }",
+  '\ttextbox = { name = "px_loc_known" position = { 10 10 } size = { 200 30 } text = "px_known_key" }',
+  '\ttextbox = { name = "px_loc_missing" position = { 10 50 } size = { 200 30 } text = "px_missing_key" }',
+  '\ttextbox = { name = "px_loc_fn" position = { 10 90 } size = { 200 30 } text = "[GetPlayer.GetName]" }',
+  '\twidget = { name = "px_loc_plain" position = { 10 130 } size = { 200 30 } }',
+  "}",
+].join("\n");
+
+/** The stub host's loc index and preview table: what the REAL resolver reads. */
+let storedPreviewValues: Record<string, string> = {};
+const locIndex = (key: string): string | undefined => (key === "px_known_key" ? "Hello there" : undefined);
+
+/** A layout the way `panel.ts` requests one: the stored loc mode and preview table ride along. */
+function serveLocLayout(text = LOC_TEXT): GuiLayoutResult {
+  doc = text;
+  docFile = "loc.gui";
+  const resolve =
+    storedUi?.loc === "raw"
+      ? undefined
+      : (raw: string) => resolveGuiText(raw, { loc: locIndex, previewValues: storedPreviewValues });
+  const result = computeGuiLayoutResult(text, null, null, [], [], undefined, resolve);
+  editor.push({
+    type: "layout",
+    file: "loc.gui",
+    result,
+    textures: {},
+    ui: storedUi,
+    previewValues: storedPreviewValues,
+  });
+  return result;
+}
+
+function textOf(result: GuiLayoutResult, name: string): string | undefined {
+  return result.nodes[0].children.find((n) => n.name === name)?.text?.text;
+}
+
+function textTip(): string | null {
+  const node = editor.document.getElementById("textTip")!;
+  return node.hasAttribute("hidden") ? null : (node.textContent ?? "");
+}
+
+describe("textbox text", () => {
+  beforeEach(() => {
+    storedPreviewValues = {};
+  });
+
+  it("is resolved by default, and an unresolved key or datafunction paints muted and dotted", () => {
+    editor.paint.reset();
+    const layout = serveLocLayout();
+    expect(textOf(layout, "px_loc_known")).toBe("Hello there");
+    expect(editor.paint.strokes).toContain(UNRESOLVED_TEXT);
+
+    // Nothing to underline once the whole document resolves.
+    storedPreviewValues = { "[GetPlayer.GetName]": "Alice" };
+    editor.paint.reset();
+    const resolved = serveLocLayout(LOC_TEXT.replace("px_missing_key", "px_known_key"));
+    expect(textOf(resolved, "px_loc_fn")).toBe("Alice");
+    expect(editor.paint.strokes).not.toContain(UNRESOLVED_TEXT);
+  });
+
+  it("the Raw toggle is remembered by the host and asks for a layout in that mode", () => {
+    serveLocLayout();
+    editor.document.getElementById("locRaw")!.click();
+    serveEdits();
+    expect(editor.sent.slice(-2)).toEqual([
+      { type: "setUiState", valueMode: "full", loc: "raw" },
+      { type: "requestLayout" },
+    ]);
+    expect(storedUi?.loc).toBe("raw");
+    const layout = serveLocLayout();
+    expect(textOf(layout, "px_loc_known")).toBe("px_known_key");
+    expect(editor.document.getElementById("locRaw")!.getAttribute("aria-pressed")).toBe("true");
+
+    // The next panel boots in the stored mode without being told twice.
+    editor.close();
+    editor = bootEditor();
+    serveLocLayout();
+    expect(editor.document.getElementById("locRaw")!.getAttribute("aria-pressed")).toBe("true");
+    expect(editor.document.getElementById("locResolved")!.getAttribute("aria-pressed")).toBe("false");
+    expect(editor.sent.filter((m) => m.type === "requestLayout")).toEqual([]);
+  });
+
+  it("hovering a textbox explains each segment; a plain widget has no tooltip", () => {
+    const layout = serveLocLayout();
+    const known = rectOf(layout, "px_loc_known");
+    editor.move(known.x + 20, known.y + 10);
+    expect(textTip()).toContain("loc");
+    expect(textTip()).toContain("px_known_key");
+    expect(textTip()).toContain("Hello there");
+
+    const missing = rectOf(layout, "px_loc_missing");
+    editor.move(missing.x + 20, missing.y + 10);
+    expect(textTip()).toContain("px_missing_key");
+    expect(textTip()).toContain("no localization");
+
+    const fn = rectOf(layout, "px_loc_fn");
+    editor.move(fn.x + 20, fn.y + 10);
+    expect(textTip()).toContain("variable");
+    expect(textTip()).toContain("[GetPlayer.GetName]");
+    expect(textTip()).toContain("only the game knows");
+
+    const plain = rectOf(layout, "px_loc_plain");
+    editor.move(plain.x + 20, plain.y + 10);
+    expect(textTip()).toBeNull();
+  });
+
+  it("the inspector shows what a key resolved to, and offers to create a missing one", () => {
+    const layout = serveLocLayout();
+    const known = rectOf(layout, "px_loc_known");
+    editor.click(known.x + 20, known.y + 10);
+    serveWidgetInfo(editor, doc);
+    const row = editor.propRow("text")!;
+    expect(row.textContent).toContain("shows: Hello there");
+    expect(row.querySelector("button")).toBeNull();
+
+    const missing = rectOf(layout, "px_loc_missing");
+    editor.click(missing.x + 20, missing.y + 10);
+    serveWidgetInfo(editor, doc);
+    editor.button("Create localization").click();
+    expect(lastOfType(editor, "editLoc")).toEqual({ type: "editLoc", key: "px_missing_key" });
+  });
+
+  it("a datafunction takes a preview value from the inspector, and gives it back", () => {
+    const layout = serveLocLayout();
+    const fn = rectOf(layout, "px_loc_fn");
+    editor.click(fn.x + 20, fn.y + 10);
+    serveWidgetInfo(editor, doc);
+    editor.button("Set preview value…").click();
+    const input = editor.document.querySelector<HTMLInputElement>('.px-popover [data-row="+previewValue"]')!;
+    expect(input).not.toBeNull();
+    input.value = "Alice";
+    input.dispatchEvent(
+      new editor.document.defaultView!.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    );
+    expect(lastOfType(editor, "setPreviewValue")).toEqual({
+      type: "setPreviewValue",
+      expression: "GetPlayer.GetName",
+      value: "Alice",
+    });
+
+    // The host wrote the table and laid the document out with it.
+    storedPreviewValues = { "[GetPlayer.GetName]": "Alice" };
+    const next = serveLocLayout();
+    expect(textOf(next, "px_loc_fn")).toBe("Alice");
+    serveWidgetInfo(editor, doc);
+    expect(editor.propRow("text")!.textContent).toContain("shows: Alice");
+    editor.button("Preview value: Alice").click();
+    expect(lastOfType(editor, "clearPreviewValue")).toEqual({
+      type: "clearPreviewValue",
+      expression: "GetPlayer.GetName",
+    });
   });
 });

@@ -20,6 +20,8 @@ const section = (name: string, lines: string[], extra: Partial<EventSectionInfo>
 
 const option = (extra: Partial<EventOptionInfo> = {}): EventOptionInfo => ({
   line: 20,
+  bodyLine: 21,
+  fields: [],
   effectKeys: [],
   hasTrigger: false,
   hasAiChance: false,
@@ -35,6 +37,8 @@ const detail = (extra: Partial<EventDetail> = {}): EventDetail => ({
   file: "C:/mod/events/sim.txt",
   line: 2,
   endLine: 30,
+  bodyLine: 3,
+  fields: [],
   sections: [],
   options: [],
   refs: [],

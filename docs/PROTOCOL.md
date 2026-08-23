@@ -131,12 +131,16 @@ instead.
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
 | `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
 | `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph, plus the `suggestions` catalog a query box completes against |
+| `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
+| `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
-| `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
+| `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
 | `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
+| `paradox/guiPreview` | request | `{ uri, text, entries: [{ name, kind: builtin\|type\|template\|raw, fragment? }] }` → `GuiPreviewResult` — one laid-out instance per palette entry for a library tile (the document's own declarations kept, the store shared with guiLayout); `node: null` + `reason` when nothing stands up; at most `GUI_PREVIEW_MAX` (48) entries per request |
+| `paradox/guiSaveValues` | request | `{ path }` → `GuiSaveValuesResult` — preview values read out of a save game: `values` keyed by datafunction chain without brackets (the shape `guiLayout`'s `previewValues` takes), plus the `source` save's name, date and game. A chain the save has no field for is absent; an ironman or binary save comes back with `error` and no values. Victoria 3 (the played country, its ruler and heir) and Crusader Kings III (the played character's name, titles, currencies, age, house and character variables) both have an entity mapping; any other game answers the meta-only rows. A save whose script is zip-packed, which is what CK3 writes unless the game runs with `-debug_mode`, is unpacked while streaming |
 | `paradox/guiVocabulary` | request | `{ uri, text }` → `GuiVocabularyResult` — the widget names a designer palette may offer, plus the property names an inspector may offer per widget type: the bundled per-game harvest plus this document's own templates and types |
 | `paradox/guiSourceEdit` | request | `GuiSourceEditParams` → `GuiSourceEditResult \| null` — source edits for a designer gesture (one `op`, or a batch of `ops` answered as one edit set with a verdict each), or a refusal with a reason |
 | `paradox/guiWidgetEdit` | request | `GuiWidgetEditParams` → `GuiWidgetEditResult \| null` — DEPRECATED, the position/size half of `guiSourceEdit` |
@@ -159,6 +163,33 @@ completes a query box from the answer it already has instead of asking again.
 `modRoot` scopes it like the graph. The field is optional: a server that
 predates it simply omits it.
 
+`paradox/eventGraph` reports a namespace (or the whole mod) as its
+DEFINITIONS, not as the endpoints of the edges between them: an event nothing
+calls yet is still part of its namespace, and deriving the node set from edges
+hid exactly the event the author had just written. Edges that pass through a
+scripted effect are followed transitively (visited-guarded, three hops) and
+answered as a direct `from` -> `to` edge whose `label` reads
+`via effect_a -> effect_b`, so an event whose `trigger_event` sits inside a
+scripted effect is not reported as firing nothing.
+
+An `EventGraphNode` also carries what a card says about itself without a second
+request: `options` (its `option` blocks) and `triggerSummary` (the first keys of
+its `trigger` block) for this mod's own definitions, read from the file the
+answer already parses, and `fires` (how many nodes of this graph it fires),
+counted from the edges; all three are optional and absent where unknown.
+
+`paradox/eventVocabulary` is what an event editor is allowed to offer. Every
+list in it is derived, never hand-written: `eventKeys` / `optionKeys` from the
+active profile's structure table ordered by its usage counts, `values` from a
+key's declared `enum:` spec or from the schema's reference field resolved
+through the definition index (`theme` gives every indexed event_theme, this
+mod's entries first), `effects` / `triggers` from the parsed script_docs (or
+the bundled wiki fallback) with the log's own description, and `savedScopes`
+from the mod's own `save_scope_as` sites. Docs are capped to one line for a
+menu row. A key whose value is free text is simply absent from `values`; that
+is the signal to render an input instead of a dropdown. `modRoot` scopes the
+definition-backed sets like the graph.
+
 `paradox/eventDetail` carries an event's blocks twice over: `keys` /
 `effectKeys` summarize them for an inspector, and `lines` / `totalLines` /
 `targets` render them for a walkthrough. `lines` is the block flattened back
@@ -174,6 +205,13 @@ than a per-game payload, since the names do not collide: `sections` may hold a
 the game has one (absent otherwise). An option's `effectKeys` summary drops
 that game's option markers (`default_option`, `highlighted_option`) the same
 way it drops `custom_tooltip`; `lines` still renders them.
+
+`fields` (on the detail and on each option) is the scalar `key = value`
+statements written directly in that block, each with its line, so an editor can
+rewrite one in place instead of re-parsing the file; `bodyLine` is where a new
+statement may be inserted. Blocks are not fields: they are `sections` and
+`options`. A key written twice keeps the LAST site, because that is the one the
+game reads.
 
 `targets` are the references that hand control on: the step-into edges of an
 event chain. They come from the active profile's event/on_action reference
@@ -270,6 +308,42 @@ therefore share one toggle, which is what a toggle UI wants. `visibilityChecks`
 reports every check met — in ALL modes, `showAll` included, so the UI can be
 built before the user switches mode — each with the number of widgets carrying
 it and whether THIS run resolved it to hidden.
+
+Each `GuiLayoutNode` also carries its `onclick` and `tooltip` values verbatim
+(minus quotes) when the widget has them. Neither is evaluated: a client's
+interact mode reads the `GetVariableSystem.Set/Clear/Toggle` calls out of
+`onclick` and turns them into `evaluate` assignments of the checks above, and
+shows the rest as what the running game would do; `tooltip` is a loc key or a
+datafunction the client resolves the same way it resolves text.
+
+`paradox/guiLayout` resolves what a textbox SHOWS, as far as a static preview
+can know it, and `loc` chooses between the two honest answers. `resolve` (the
+default) looks a `text =` value up: a localization key becomes the configured
+language's text, a `[datafunction]` becomes its `Localize('key')` /
+`Concept('key', 'text')` value or the modder's own preview text, and a
+`#bold`/`§Y`/`@icon!` formatting is stripped for measurement. What cannot be
+known is shown as is and flagged, never invented: a key the index lacks shows
+the key, a chain like `[GetPlayer.GetName]` shows its last segment (`Name`).
+`raw` is the file's own value verbatim, which is what a layout measured before
+this field existed. Sizes follow the shown text either way, so an autoresizing
+label is as wide as what the player would read.
+
+`previewValues` is the modder's table of preview text per expression, keyed
+`[GetPlayer.GetName]` (the brackets are accepted either way) and kept by the
+client with the mod (the VS Code host reads and writes
+`<mod>/<configDirName>/gui-preview-values.json`). A value there wins over every
+other resolution of that expression, and a value is text, never a number the
+server would format.
+
+The answer is on `GuiLayoutText`: `text` is what was measured and drawn, `raw`
+is the `text =` value when it differs, and `segments` explains the pieces when
+there is something to explain (absent for a plain literal). Each
+`GuiTextSegment` has a `kind` (`literal`, `loc`, `datafn`), its `source` (the
+key, or the expression without brackets) and `resolved`, false for a key the
+index lacks or a datafunction only the running game evaluates. A key whose
+value itself holds datafunctions resolves one level deep and yields one `loc`
+segment per literal piece plus a `datafn` segment per expression, so a client
+can style the unresolved chips inside an otherwise localized line.
 
 `timings` is that request's own wall clock, split into `parseMs` (the document's
 CST plus its own declarations), `defsMs` (the cross-file template/type store, 0
@@ -378,6 +452,7 @@ interface there is part of this contract.
 |---|---|---|
 | `paradox/status` | notification | `{ tokens, tokensFromScriptDocs, definitions, indexing }` — data health for a status bar |
 | `paradox/indexChanged` | notification | none — definition index changed (debounced); overview views should re-query |
+| `paradox/progress` | notification | `{ phase, state: "start" \| "done", detail? }` — one coarse loading phase (`index`, `engine`, `guiStore`); `detail` carries the label, sent with `start` |
 
 ## Client command ids
 

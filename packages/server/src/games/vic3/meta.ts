@@ -51,4 +51,5 @@ export const vic3Meta: GameMeta = {
   scriptDocs: { format: "markdown", modifiers: "masked-block" },
   tiger: { binaryName: "vic3-tiger", repoSlug: "amtep/tiger", confName: "vic3-tiger.conf" },
   cacheSuffix: "-vic3",
+  flagBuilder: true,
 };

@@ -3,6 +3,7 @@ import { encodePng } from "./png";
 
 export { decodeDds, ddsFormatInfo } from "./decoder";
 export { encodePng } from "./png";
+export { decodeTga } from "./tga";
 export { encodeDds, hasTransparency, type DdsEncodeFormat } from "./encode";
 export type { DecodedImage } from "./decoder";
 

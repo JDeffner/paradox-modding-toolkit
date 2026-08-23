@@ -1,6 +1,6 @@
 {
   "name": "px-lsp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {
@@ -11,7 +11,8 @@
   },
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
-    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app",
+    "package:test": "node scripts/package-test.mjs",
+    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app && tsc -p packages/vscode/src/webviews/flagBuilder/app && tsc -p packages/vscode/src/webviews/eventGraph/app",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",

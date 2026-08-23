@@ -2,6 +2,17 @@
  * paradox/eventGraph: event ↔ trigger_event ↔ on_action chains as a graph, scoped
  * to a root definition or namespace to stay readable. Edges come from the
  * reference index (mod usage sites); node metadata from the definition index.
+ *
+ * Two things the naive reading gets wrong, both fixed here:
+ *
+ * - A namespace (or the whole mod) is its DEFINITIONS, not the endpoints of the
+ *   edges between them. Deriving the node set from edges hides every event that
+ *   nothing calls yet, which is exactly the event a modder just wrote.
+ * - Most real mods route their event chains through scripted effects, so the
+ *   `trigger_event` sits in a scripted_effect body and the event that calls that
+ *   effect looks like it fires nothing. Those calls are followed transitively
+ *   (bounded, visited-guarded) and reported as A → B labeled "via X", the same
+ *   walk shape `gui/guiDependencies.ts` uses over the same reference index.
  */
 import * as fs from "fs";
 import type {
@@ -13,12 +24,26 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { Reference } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
-import { decode, LineIndex, nodeAtOffset, parseScript, type ParseResult } from "../parser";
+import {
+  decode,
+  LineIndex,
+  nodeAtOffset,
+  parseScript,
+  type BlockNode,
+  type ParseResult,
+  type ValueNode,
+} from "../parser";
 
 const DEFAULT_MAX_NODES = 400;
 const GRAPH_KINDS = new Set(["event", "on_action", "decision"]);
 /** A query box lists a page at a time; a whole big mod is enough to type against. */
 const MAX_SUGGESTIONS = 2000;
+/**
+ * How many scripted-effect hops a chain follows. Three is what the readout
+ * ("via effect_a → effect_b") stays legible at, and it bounds the expansion a
+ * single request can do (guiDependencies.ts uses the same budget).
+ */
+const MAX_EFFECT_HOPS = 3;
 
 interface Edge {
   from: string;
@@ -115,17 +140,21 @@ export function computeEventGraph(
   // Definitions per file, sorted by line, to resolve a reference's containing
   // definition. The focus filter scopes the graph to one workspace mod: edges
   // originate only from focus files (targets may resolve anywhere).
+  // scripted_effect is in here so a reference written INSIDE an effect body is
+  // attributed to that effect instead of being dropped.
   const defsByFile = new Map<string, Array<{ name: string; kind: string; line: number }>>();
-  // Same pass feeds the query-box catalog: it must list the mod's whole
-  // vocabulary, so it cannot be derived from the selection below.
+  // Same pass feeds the query-box catalog and the namespace/all node sets: both
+  // must list the mod's whole vocabulary, edges or no edges.
   const vocabulary = new Set<string>();
   for (const def of data.index.allDefinitions()) {
-    if (def.source !== "mod" || !GRAPH_KINDS.has(def.kind) || !inFocus(def.file)) continue;
+    if (def.source !== "mod" || !inFocus(def.file)) continue;
+    const graphKind = GRAPH_KINDS.has(def.kind);
+    if (!graphKind && def.kind !== "scripted_effect") continue;
     const key = def.file.toLowerCase();
     let list = defsByFile.get(key);
     if (!list) defsByFile.set(key, (list = []));
     list.push({ name: def.name, kind: def.kind, line: def.line });
-    vocabulary.add(def.name);
+    if (graphKind) vocabulary.add(def.name);
   }
   for (const list of defsByFile.values()) list.sort((a, b) => a.line - b.line);
 
@@ -139,21 +168,85 @@ export function computeEventGraph(
     }
     return best;
   };
+  const isScriptedEffect = (name: string): boolean =>
+    data.index.lookup(name).some((d) => d.kind === "scripted_effect");
 
-  // All candidate edges from event/on_action references in mod files.
+  // One pass over the reference index feeds three tables: the direct edges, what
+  // each scripted effect fires, and who calls which scripted effect.
   const edges: Edge[] = [];
+  const direct = new Set<string>();
+  /** scripted effect -> the events / on_actions its own body fires. */
+  const effectFires = new Map<string, Edge[]>();
+  /** definition -> the scripted effects it calls (graph nodes and effects alike). */
+  const effectCalls = new Map<string, Set<string>>();
+  const addCall = (from: string, effect: string) => {
+    let set = effectCalls.get(from);
+    if (!set) effectCalls.set(from, (set = new Set()));
+    set.add(effect);
+  };
+
   for (const ref of data.refIndex.all()) {
-    if (!ref.kinds.some((k) => k === "event" || k === "on_action")) continue;
+    const fires = ref.kinds.some((k) => k === "event" || k === "on_action");
+    const call = ref.call === true && ref.kinds.includes("scripted_effect");
+    if (!fires && !call) continue;
     const from = containerOf(ref);
     if (!from) continue;
     if (from.name === ref.name) continue;
-    edges.push({
+    if (call) {
+      if (isScriptedEffect(ref.name)) addCall(from.name, ref.name);
+      continue;
+    }
+    const edge: Edge = {
       from: from.name,
       to: ref.name,
       via: ref.kinds.includes("on_action") ? "on_action" : "event",
       file: ref.file,
       line: ref.line,
-    });
+    };
+    if (from.kind === "scripted_effect") {
+      let list = effectFires.get(from.name);
+      if (!list) effectFires.set(from.name, (list = []));
+      list.push(edge);
+    } else {
+      edges.push(edge);
+      direct.add(`${edge.from}→${edge.to}`);
+    }
+  }
+
+  // Expand each graph node's scripted-effect calls into the events they reach.
+  // The chain is carried so the edge can say which effect it went through; the
+  // visited set is per START NODE, so two events sharing an effect both get it.
+  for (const [from, firstHop] of effectCalls) {
+    if (!vocabulary.has(from)) continue; // an effect calling an effect: expanded from its callers
+    const visited = new Set<string>();
+    let frontier: Array<{ effect: string; chain: string[] }> = [];
+    for (const effect of firstHop) {
+      visited.add(effect);
+      frontier.push({ effect, chain: [effect] });
+    }
+    for (let hop = 0; hop < MAX_EFFECT_HOPS && frontier.length > 0; hop++) {
+      const next: Array<{ effect: string; chain: string[] }> = [];
+      for (const step of frontier) {
+        for (const fired of effectFires.get(step.effect) ?? []) {
+          if (fired.to === from || direct.has(`${from}→${fired.to}`)) continue;
+          direct.add(`${from}→${fired.to}`);
+          edges.push({
+            from,
+            to: fired.to,
+            via: fired.via,
+            file: fired.file,
+            line: fired.line,
+            label: `via ${step.chain.join(" → ")}`,
+          });
+        }
+        for (const deeper of effectCalls.get(step.effect) ?? []) {
+          if (visited.has(deeper)) continue;
+          visited.add(deeper);
+          next.push({ effect: deeper, chain: [...step.chain, deeper] });
+        }
+      }
+      frontier = next;
+    }
   }
 
   // Adjacency for BFS in both directions.
@@ -191,12 +284,17 @@ export function computeEventGraph(
   } else {
     const ns = params.namespace;
     const inScope = (id: string): boolean => (ns ? id.startsWith(ns + ".") : true);
+    // The mod's own definitions come first and unconditionally: an event nothing
+    // references yet is still part of its namespace.
     const ids = new Set<string>();
+    for (const id of vocabulary) {
+      if (inScope(id)) ids.add(id);
+    }
+    // Then whatever those definitions are wired to, in or out.
     for (const e of edges) {
-      if (inScope(e.from) || inScope(e.to)) {
-        ids.add(e.from);
-        ids.add(e.to);
-      }
+      if (!inScope(e.from) && !inScope(e.to)) continue;
+      ids.add(e.from);
+      ids.add(e.to);
     }
     for (const id of [...ids].sort()) {
       if (selected.size >= maxNodes) {
@@ -217,25 +315,117 @@ export function computeEventGraph(
     edgeSeen.add(key);
     const out: EventGraphEdge = { from: e.from, to: e.to, via: e.via };
     graphEdges.push(out);
-    sites.set(out, e);
+    // A "via X" edge already knows its own origin; re-reading the effect's file
+    // would relabel it with the section INSIDE the effect, which is not where
+    // the reader's event calls it.
+    if (e.label) out.label = e.label;
+    else sites.set(out, e);
   }
   labelEdges(data, graphEdges, sites);
 
+  // What each node fires, for the card's third line. Free: the edges are here.
+  const firesCount = new Map<string, number>();
+  for (const e of graphEdges) firesCount.set(e.from, (firesCount.get(e.from) ?? 0) + 1);
+
   const nodes: EventGraphNode[] = [];
+  const factsOf = fileFacts();
   for (const id of selected) {
     const defs = data.index.lookup(id);
     const def = defs[0];
-    nodes.push({
+    const node: EventGraphNode = {
       id,
       kind: def?.kind ?? "unknown",
       source: def?.source ?? "vanilla",
       file: def?.file,
       line: def?.line,
       title: titleOf(data, id),
-    });
+    };
+    // Only this mod's own files are read: a card summarises what the author can
+    // edit, and parsing every vanilla event file a graph touches is not cheap.
+    const facts = def?.source === "mod" && def.file ? factsOf(def.file).get(id) : undefined;
+    if (facts) {
+      if (def?.kind === "event") node.options = facts.options;
+      if (facts.trigger) node.triggerSummary = facts.trigger;
+      if (params.themes && facts.theme) node.theme = facts.theme;
+    }
+    const fires = firesCount.get(id) ?? 0;
+    if (fires > 0) node.fires = fires;
+    nodes.push(node);
   }
   nodes.sort((a, b) => a.id.localeCompare(b.id));
   return { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
+}
+
+/** What a card says about one definition, all of it read from its own body. */
+interface DefFacts {
+  /** `option = { … }` blocks. */
+  options: number;
+  /** The first keys of the `trigger` block, or "" when there is no trigger. */
+  trigger: string;
+  /** `theme = X`, for the banner layer. */
+  theme?: string;
+}
+/** Trigger keys named on a card before it says "…". Two fit the card's width. */
+const TRIGGER_KEYS_SHOWN = 2;
+
+/**
+ * Every top-level definition of one file, summarised. Each file is parsed once
+ * per request; a file that cannot be read simply has no facts, which the caller
+ * renders as a card without a second and third line rather than a wrong one.
+ */
+function fileFacts(): (file: string) => Map<string, DefFacts> {
+  const byFile = new Map<string, Map<string, DefFacts>>();
+  return (file) => {
+    const key = file.toLowerCase();
+    let facts = byFile.get(key);
+    if (facts) return facts;
+    facts = new Map<string, DefFacts>();
+    byFile.set(key, facts);
+    try {
+      const root = parseScript(decode(fs.readFileSync(file)).text).root;
+      for (const stmt of root.statements) {
+        if (stmt.kind !== "assignment") continue;
+        const block = blockOf(stmt.value);
+        if (!block) continue;
+        const entry: DefFacts = { options: 0, trigger: "" };
+        for (const child of block.statements) {
+          if (child.kind !== "assignment") continue;
+          const childKey = child.key.text.toLowerCase();
+          if (childKey === "option") entry.options++;
+          else if (childKey === "theme" && child.value?.kind === "scalar") entry.theme = child.value.text;
+          else if (childKey === "trigger" && entry.trigger === "") entry.trigger = triggerKeys(child.value);
+        }
+        facts.set(stmt.key.text, entry);
+      }
+    } catch {
+      /* unreadable: memoized as empty so it is attempted once */
+    }
+    return facts;
+  };
+}
+
+function blockOf(value: ValueNode | null | undefined): BlockNode | null {
+  if (value?.kind === "block") return value;
+  if (value?.kind === "tagged-block") return value.block;
+  return null;
+}
+
+/** "is_adult, has_trait…": what a `trigger` block asks, short enough for a card. */
+function triggerKeys(value: ValueNode | null | undefined): string {
+  const block = blockOf(value);
+  if (!block) return "";
+  const keys: string[] = [];
+  let more = false;
+  for (const stmt of block.statements) {
+    if (stmt.kind !== "assignment") continue;
+    if (keys.length < TRIGGER_KEYS_SHOWN) keys.push(stmt.key.text);
+    else {
+      more = true;
+      break;
+    }
+  }
+  if (keys.length === 0) return "";
+  return keys.join(", ") + (more ? "…" : "");
 }
 
 /** The mod's own graph ids and the namespaces they imply, both sorted. */

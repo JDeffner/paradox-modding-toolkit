@@ -28,17 +28,28 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type {
+  GuiSaveValuesResult,
   GuiDependenciesResult,
   GuiLayoutResult,
+  GuiPreviewEntry,
+  GuiPreviewResult,
   GuiSourceEditResult,
   GuiSourceOp,
   GuiVisibilityOptions,
   GuiVocabularyResult,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
+import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp, type TextureEntry } from "./messages";
+import {
+  LAYOUT_DEBOUNCE_MS,
+  type AppToHost,
+  type GuiLocMode,
+  type HostToApp,
+  type TextureEntry,
+} from "./messages";
 import { guiEditorHtml } from "./html";
+import { gameDocsSubdir } from "../../config";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "./textureCache";
 import {
   COMPONENTS_KEY,
@@ -51,11 +62,14 @@ import {
   type StoredPresets,
 } from "./userData";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 export type FetchLayout = (
   uri: vscode.Uri,
   text: string,
-  visibility: GuiVisibilityOptions | undefined
+  visibility: GuiVisibilityOptions | undefined,
+  /** How textboxes are shown (`GuiLayoutParams.loc`) and the mod's preview table. */
+  textOptions: { loc: GuiLocMode | undefined; previewValues: Record<string, string> | undefined }
 ) => Promise<GuiLayoutResult>;
 export type FetchWidgetInfo = (
   uri: vscode.Uri,
@@ -75,6 +89,14 @@ export type FetchDependencies = (
   text: string,
   line: number | undefined
 ) => Promise<GuiDependenciesResult>;
+export type FetchSaveValues = (file: string) => Promise<GuiSaveValuesResult>;
+/** One loc key's value through the host's index; undefined when nothing defines it. */
+export type FetchLoc = (key: string) => Promise<string | undefined>;
+export type FetchPreviews = (
+  uri: vscode.Uri,
+  text: string,
+  entries: GuiPreviewEntry[]
+) => Promise<GuiPreviewResult>;
 
 /**
  * The per-user state lives in `workspaceState` under the keys `userData.ts`
@@ -103,6 +125,15 @@ const TEXTURE_WALK_MAX = 200_000;
 const TEXTURE_ANSWER_MAX = 200;
 /** One page of thumbnails is what the app asks for; a longer batch is truncated. */
 const THUMBNAIL_BATCH_MAX = 60;
+/**
+ * The modder's preview text per `[expression]`, kept with the mod under its
+ * game's config folder (`.vic3modding/gui-preview-values.json`): it describes
+ * what THAT mod's datafunctions should read as, so it travels with the mod and
+ * not with the user.
+ */
+/** workspaceState key: the save file whose values feed the preview. */
+const SAVE_KEY = "px.guiEditor.save";
+const PREVIEW_VALUES_FILE = "gui-preview-values.json";
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -114,6 +145,9 @@ export class GuiEditorPanel {
   private readonly fetchSourceEdit: FetchSourceEdit;
   private readonly fetchVocabulary: FetchVocabulary;
   private readonly fetchDependencies: FetchDependencies;
+  private readonly fetchPreviews: FetchPreviews;
+  private readonly fetchSaveValues: FetchSaveValues;
+  private readonly fetchLoc: FetchLoc;
   private readonly state: vscode.Memento;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
@@ -135,15 +169,21 @@ export class GuiEditorPanel {
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
+    fetchPreviews: FetchPreviews,
+    fetchSaveValues: FetchSaveValues,
+    fetchLoc: FetchLoc,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
   ) {
     this.fetchLayout = fetchLayout;
+    this.fetchLoc = fetchLoc;
     this.fetchWidgetInfo = fetchWidgetInfo;
     this.fetchSourceEdit = fetchSourceEdit;
     this.fetchVocabulary = fetchVocabulary;
     this.fetchDependencies = fetchDependencies;
+    this.fetchPreviews = fetchPreviews;
+    this.fetchSaveValues = fetchSaveValues;
     this.state = context.workspaceState;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
@@ -155,7 +195,7 @@ export class GuiEditorPanel {
     this.panel = vscode.window.createWebviewPanel(
       GuiEditorPanel.viewType,
       "GUI Editor",
-      vscode.ViewColumn.Beside,
+      vscode.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -166,13 +206,7 @@ export class GuiEditorPanel {
         ],
       }
     );
-    // The tab reads as a GUI editor rather than as a generic webview: the
-    // paradox-gui file icon's window frame with a pointer in it, so a tab and
-    // the .gui file it belongs to are recognisably the same thing.
-    this.panel.iconPath = {
-      light: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-light.svg"),
-      dark: vscode.Uri.joinPath(context.extensionUri, "media", "gui-editor-dark.svg"),
-    };
+    this.panel.iconPath = tabIcon("gui-editor");
     this.panel.webview.html = buildHtml(
       this.panel.webview,
       vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "guiEditor.js"),
@@ -224,6 +258,9 @@ export class GuiEditorPanel {
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
+    fetchPreviews: FetchPreviews,
+    fetchSaveValues: FetchSaveValues,
+    fetchLoc: FetchLoc,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -253,6 +290,9 @@ export class GuiEditorPanel {
       fetchSourceEdit,
       fetchVocabulary,
       fetchDependencies,
+      fetchPreviews,
+      fetchSaveValues,
+      fetchLoc,
       source,
       roots,
       meta
@@ -277,13 +317,23 @@ export class GuiEditorPanel {
   private async load(source: vscode.TextDocument): Promise<void> {
     const generation = ++this.generation;
     const file = source.uri.path.split("/").pop() ?? "gui";
-    this.panel.title = `GUI Editor — ${file}`;
+    this.panel.title = `GUI Editor - ${file}`;
     this.post({ type: "loading", file });
     try {
       // The stored mode is read per push rather than held in a field: the mode
       // belongs to the document, and `show` can point this panel at a new one.
       const visibility = this.visibility();
-      const result = await this.fetchLayout(source.uri, source.getText(), visibility);
+      const ui = readUiState(this.state.get(UI_KEY));
+      // The mod's own table wins over the save: typed values are deliberate.
+      const save = await this.saveValues();
+      const previewValues =
+        save || this.readPreviewValues()
+          ? { ...(save?.values ?? {}), ...(this.readPreviewValues() ?? {}) }
+          : undefined;
+      const result = await this.fetchLayout(source.uri, source.getText(), visibility, {
+        loc: ui?.loc,
+        previewValues,
+      });
       if (this.disposed || generation !== this.generation) return;
       const textures: Record<string, string | null> = {};
       for (const texture of result.textures) {
@@ -297,7 +347,13 @@ export class GuiEditorPanel {
         result,
         textures,
         visibility,
-        ui: readUiState(this.state.get(UI_KEY)),
+        ui,
+        previewValues,
+        save: save
+          ? { ...save.source, file: save.file }
+          : this.state.get<string>(SAVE_KEY)
+            ? null
+            : undefined,
         lineHeightRatio: this.meta.guiTextMetrics
           ? this.meta.guiTextMetrics.lineHeight / this.meta.guiTextMetrics.baseFontsize
           : undefined,
@@ -305,12 +361,92 @@ export class GuiEditorPanel {
         // sizes collapse and the canvas looks broken for no visible reason.
         storeWarning: this.roots.gamePath
           ? undefined
-          : "game install not found — layout is missing the game's templates. Run “Paradox: Run Setup & Health Check” or set px.gamePath",
+          : "game install not found: layout is missing the game's templates. Run “Paradox: Run Setup & Health Check” or set px.gamePath",
       });
     } catch (err) {
       if (this.disposed) return;
       this.post({ type: "error", message: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  /** The chosen save's values (server-cached by path + mtime), or null when none is chosen or it fails. */
+  private async saveValues(): Promise<{
+    values: Record<string, string>;
+    source: { name: string; date: string };
+    file: string;
+  } | null> {
+    const file = this.state.get<string>(SAVE_KEY);
+    if (!file) return null;
+    try {
+      const result = await this.fetchSaveValues(file);
+      if (result.error) {
+        void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${result.error}`);
+        return null;
+      }
+      return { values: result.values, source: { name: result.source.name, date: result.source.date }, file };
+    } catch {
+      return null;
+    }
+  }
+
+  /** File picker over the game's save folder; a plain-text (non-ironman) save is required. */
+  private async pickSave(): Promise<void> {
+    const folder = gameDocsSubdir(this.meta, "save games");
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      defaultUri: folder ? vscode.Uri.file(folder) : undefined,
+      openLabel: "Use for preview",
+      title: "Choose a save (plain text; ironman saves are for challenge runs, not dev previews)",
+      filters: { "Save games": ["v3", "ck3", "eu5", "sav"], "All files": ["*"] },
+    });
+    const file = picked?.[0]?.fsPath;
+    if (!file) return;
+    const result = await this.fetchSaveValues(file);
+    if (result.error) {
+      void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${result.error}`);
+      return;
+    }
+    await this.state.update(SAVE_KEY, file);
+    await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+  }
+
+  private previewValuesPath(): string | null {
+    return this.roots.modPath
+      ? path.join(this.roots.modPath, this.meta.configDirName, PREVIEW_VALUES_FILE)
+      : null;
+  }
+
+  /** The mod's preview table, or undefined when there is none (or it is not a flat string map). */
+  private readPreviewValues(): Record<string, string> | undefined {
+    const file = this.previewValuesPath();
+    if (!file) return undefined;
+    try {
+      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+      const out: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed)) if (typeof value === "string") out[key] = value;
+      return out;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Rewrite the table with one entry set or dropped, then lay the document out with it. */
+  private async updatePreviewValues(expression: string, value: string | undefined): Promise<void> {
+    const file = this.previewValuesPath();
+    if (!file) {
+      void vscode.window.showWarningMessage(
+        "Paradox Modding Toolkit: no mod folder for this .gui file, so there is nowhere to keep a preview value."
+      );
+      return;
+    }
+    const table = this.readPreviewValues() ?? {};
+    const key = `[${expression}]`;
+    if (value === undefined) delete table[key];
+    else table[key] = value;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(table, null, 2) + "\n", "utf8");
+    await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
   }
 
   /** The conditional-visibility options stored for THIS document, if any. */
@@ -338,6 +474,7 @@ export class GuiEditorPanel {
       components: Object.entries(components).map(([name, text]) => ({
         name,
         widgets: countTopLevelBlocks(text),
+        text,
       })),
       presets: Object.entries(presets).map(([name, properties]) => ({ name, properties })),
     });
@@ -623,6 +760,31 @@ export class GuiEditorPanel {
         });
         return;
       }
+      case "requestPreviews": {
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const entries = message.entries.slice(0, GUI_PREVIEW_MAX);
+        let previews: GuiPreviewResult["previews"];
+        try {
+          previews = (await this.fetchPreviews(doc.uri, doc.getText(), entries)).previews;
+        } catch (err) {
+          // A tile with no preview says so in its tooltip; a banner over the
+          // canvas would be about the wrong thing.
+          const reason = err instanceof Error ? err.message : String(err);
+          previews = entries.map((e) => ({ name: e.name, node: null, textures: [], reason }));
+        }
+        if (this.disposed) return;
+        const textures: Record<string, string | null> = {};
+        for (const preview of previews) {
+          for (const rel of preview.textures) {
+            if (rel in textures) continue;
+            // Thumbnail-capped, through the same cache the canvas fills use.
+            const png = this.textures.resolve(rel, THUMBNAIL_MAX_DIM);
+            textures[rel] = png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
+          }
+        }
+        this.post({ type: "previews", previews, textures });
+        return;
+      }
       case "requestThumbnails": {
         const urls: Record<string, string | null> = {};
         for (const rel of message.paths.slice(0, THUMBNAIL_BATCH_MAX)) {
@@ -683,10 +845,91 @@ export class GuiEditorPanel {
         });
         return;
       }
+      case "requestLoc": {
+        const value = await this.fetchLoc(message.key);
+        this.post({ type: "loc", key: message.key, value: value ?? null });
+        return;
+      }
+      case "pickReference": {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          openLabel: "Use as reference",
+          filters: { Images: ["png", "jpg", "jpeg", "webp"] },
+        });
+        const uri = picked?.[0];
+        if (!uri) {
+          this.post({ type: "reference", name: "", url: null });
+          return;
+        }
+        // Any folder on disk may hold the screenshot, and the webview may only
+        // load from its resource roots, so the bytes travel as a data URI.
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const ext = uri.fsPath.toLowerCase().split(".").pop() ?? "png";
+        const mime =
+          ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+        this.post({
+          type: "reference",
+          name: path.basename(uri.fsPath),
+          url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
+        });
+        return;
+      }
       case "setUiState": {
         // Stored, not echoed: the app has already applied it, and the next
         // panel picks it up from the `ui` field of its first layout.
-        await this.state.update(UI_KEY, { valueMode: message.valueMode });
+        const stored = readUiState(this.state.get(UI_KEY));
+        await this.state.update(UI_KEY, {
+          valueMode: message.valueMode,
+          panels: message.panels ?? stored?.panels,
+          snap: message.snap ?? stored?.snap,
+          grid: message.grid ?? stored?.grid,
+          loc: message.loc ?? stored?.loc,
+          sections: message.sections ?? stored?.sections,
+        });
+        return;
+      }
+      case "editLoc": {
+        // The toolkit's own loc flow: it asks for the value and writes it where
+        // the key's siblings live. The server re-indexes the changed file
+        // through the mod watcher, so the layout is re-requested after the
+        // debounce the rest of the extension gives a file change.
+        await vscode.commands.executeCommand("px.editLocalization", message.key);
+        if (this.debounce) clearTimeout(this.debounce);
+        this.debounce = setTimeout(() => {
+          void vscode.workspace.openTextDocument(this.sourceUri).then((doc) => this.load(doc));
+        }, LAYOUT_DEBOUNCE_MS);
+        return;
+      }
+      case "pickSave":
+        await this.pickSave();
+        return;
+      case "clearSave":
+        await this.state.update(SAVE_KEY, undefined);
+        await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+        return;
+      case "setPreviewValue": {
+        await this.updatePreviewValues(message.expression, message.value);
+        return;
+      }
+      case "clearPreviewValue": {
+        await this.updatePreviewValues(message.expression, undefined);
+        return;
+      }
+      case "undo":
+      case "redo": {
+        // The document's own history: the editor command acts on the ACTIVE
+        // editor, so the source is shown with focus first (the one reveal that
+        // may take it), and the change comes back down as a normal layout push.
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const visible = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === doc.uri.toString()
+        );
+        await vscode.window.showTextDocument(doc, {
+          viewColumn: visible?.viewColumn ?? vscode.ViewColumn.One,
+          preserveFocus: false,
+          preview: false,
+        });
+        await vscode.commands.executeCommand(message.type);
         return;
       }
       case "savePreset": {

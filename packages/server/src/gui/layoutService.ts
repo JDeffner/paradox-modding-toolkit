@@ -40,6 +40,25 @@ export const VIEWPORT = { w: 1920, h: 1080 };
 
 let cache: { key: string; defs: GuiDefs; files: number; links: GuiScriptLinks } | null = null;
 
+/**
+ * Per-file parse results, keyed by absolute path and kept across store
+ * rebuilds. A store rebuild used to re-read and re-parse every .gui of the
+ * game (about a thousand files) whenever ONE mod .gui was saved, which is
+ * exactly what autosave does after every editor gesture; now a rebuild
+ * re-parses only the files whose mtime moved and re-merges the rest.
+ */
+const fileCache = new Map<string, { mtimeMs: number; defs: GuiDefs; text: string }>();
+
+/**
+ * Observer of a cold store build, so the server can report the phase without
+ * this module knowing about the connection. Absent = nobody is watching.
+ */
+let onBuild: ((state: "start" | "done") => void) | null = null;
+
+export function observeGuiStoreBuild(fn: ((state: "start" | "done") => void) | null): void {
+  onBuild = fn;
+}
+
 function listGuiFiles(root: string): Map<string, string> {
   // relative path (lowercased, forward slashes) -> absolute path
   const out = new Map<string, string>();
@@ -92,25 +111,37 @@ function buildStore(
     if (!root) continue;
     for (const [rel, abs] of listGuiFiles(path.join(root, ...stagePrefix, "gui"))) effective.set(rel, abs);
   }
+  onBuild?.("start");
   const defs = emptyGuiDefs();
   const links = emptyGuiScriptLinks();
   let files = 0;
+  const seen = new Set<string>();
   for (const rel of [...effective.keys()].sort()) {
     const abs = effective.get(rel)!;
     try {
-      const text = fs.readFileSync(abs, "utf8");
-      mergeGuiDefs(defs, collectGuiDefs(text, undefined, abs));
+      const mtimeMs = fs.statSync(abs).mtimeMs;
+      let entry = fileCache.get(abs);
+      if (!entry || entry.mtimeMs !== mtimeMs) {
+        const text = fs.readFileSync(abs, "utf8");
+        entry = { mtimeMs, defs: collectGuiDefs(text, undefined, abs), text };
+        fileCache.set(abs, entry);
+      }
+      seen.add(abs);
+      mergeGuiDefs(defs, entry.defs);
       // Piggybacked on the one pass that already reads every .gui file: the
       // scripted_gui call scan is a substring test on all but the few files
       // that hold one, so the link index is effectively free here and a
       // second walk of the tree would not be.
-      collectScriptedGuiCalls(text, abs, links);
+      collectScriptedGuiCalls(entry.text, abs, links);
       files++;
     } catch {
       /* unreadable file: skip */
     }
   }
+  // A file that left the effective set (deleted, or shadowed by another root) drops out.
+  for (const abs of fileCache.keys()) if (!seen.has(abs)) fileCache.delete(abs);
   cache = { key, defs, files, links };
+  onBuild?.("done");
   return cache;
 }
 
@@ -145,7 +176,9 @@ export function computeGuiLayoutResult(
   modPath: string | null,
   parentPaths: string[] = [],
   engineRoots: string[] = [],
-  visibility?: GuiVisibilityOptions
+  visibility?: GuiVisibilityOptions,
+  /** Loc/datafunction resolution for textboxes; absent = raw `text =` values. */
+  resolveText?: LayoutEnv["resolveText"]
 ): GuiLayoutResult {
   const t0 = performance.now();
   const { defs, files } = buildStore(gamePath, modPath, parentPaths, engineRoots);
@@ -158,7 +191,7 @@ export function computeGuiLayoutResult(
     visibility,
     checks,
     timing,
-    measurer: profileMeasurer(),
+    measurer: resolveText ? { ...(profileMeasurer() ?? calibratedMeasurer), resolveText } : profileMeasurer(),
   });
   const textures = new Set<string>();
   let nodeCount = 0;
@@ -166,6 +199,8 @@ export function computeGuiLayoutResult(
     nodeCount++;
     if (n.bg?.texture) textures.add(n.bg.texture);
     if (n.fill?.texture) textures.add(n.fill.texture);
+    if (n.bg?.mask) textures.add(n.bg.mask);
+    if (n.fill?.mask) textures.add(n.fill.mask);
     for (const c of n.children) visit(c);
   };
   for (const n of nodes) visit(n);

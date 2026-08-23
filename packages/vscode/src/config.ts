@@ -44,6 +44,8 @@ export interface PxConfig {
   diagnosticsIgnorePatterns: string[];
   /** When false (default) tiger/our diagnostics skip files under the game path. */
   diagnosticsVanilla: boolean;
+  /** `px.diagnostics.requireDescriptor`: error when a mod folder has no descriptor. */
+  requireDescriptor: boolean;
   /** `px.trace.perf`: server-side wall clock into the output channel. */
   tracePerf: boolean;
   /** True when this workspace actually holds content of the ACTIVE game (a mod
@@ -281,6 +283,7 @@ export function readConfig(): PxConfig {
     diagnosticsIgnore: sanitizeStringList(cfg.get("diagnostics.ignore")),
     diagnosticsIgnorePatterns: sanitizeStringList(cfg.get("diagnostics.ignorePatterns")),
     diagnosticsVanilla: cfg.get<boolean>("diagnostics.vanilla") ?? false,
+    requireDescriptor: cfg.get<boolean>("diagnostics.requireDescriptor") ?? false,
     tracePerf: cfg.get<boolean>("trace.perf") ?? false,
     isCk3Workspace,
     warnings,

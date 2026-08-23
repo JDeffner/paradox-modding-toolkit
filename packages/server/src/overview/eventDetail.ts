@@ -9,6 +9,7 @@
 import * as fs from "fs";
 import type {
   EventDetail,
+  EventFieldInfo,
   EventLocField,
   EventOptionInfo,
   EventRefInfo,
@@ -82,6 +83,8 @@ export function computeEventDetail(data: ServerData, schema: SchemaData, id: str
     file: def.file,
     line: lineOf(stmt.key.range.start),
     endLine: block.closeBrace !== null ? lineOf(block.closeBrace) : lineOf(block.range.end),
+    bodyLine: lineOf(block.range.start) + 1,
+    fields: scalarFields(block, lineOf),
     sections: [],
     options: [],
     refs: [],
@@ -108,6 +111,27 @@ export function computeEventDetail(data: ServerData, schema: SchemaData, id: str
 
   detail.refs = collectRefs(data, id, block, lineOf);
   return detail;
+}
+
+/**
+ * The scalar `key = value` statements written directly in a block, with their
+ * lines, so an editor can rewrite one in place. Blocks are skipped: they are
+ * reported as sections / options. Duplicates keep the LAST site, which is the
+ * one the game reads and the one an edit must land on.
+ */
+function scalarFields(block: BlockNode, lineOf: (o: number) => number): EventFieldInfo[] {
+  const byKey = new Map<string, EventFieldInfo>();
+  for (const s of block.statements) {
+    if (s.kind !== "assignment" || s.key.quoted) continue;
+    if (s.value?.kind !== "scalar") continue;
+    byKey.set(s.key.text, {
+      key: s.key.text,
+      value: s.value.text,
+      line: lineOf(s.key.range.start),
+      ...(s.value.quoted ? { quoted: true } : {}),
+    });
+  }
+  return [...byKey.values()].sort((a, b) => a.line - b.line);
 }
 
 function childBlock(stmt: Statement): BlockNode | null {
@@ -172,6 +196,8 @@ function option(
   const targets = collectTargets(data, schema, block, lineOf);
   const info: EventOptionInfo = {
     line: lineOf(block.range.start),
+    bodyLine: lineOf(block.range.start) + 1,
+    fields: scalarFields(block, lineOf),
     effectKeys: [],
     hasTrigger: false,
     hasAiChance: false,

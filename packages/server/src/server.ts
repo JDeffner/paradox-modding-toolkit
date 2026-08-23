@@ -34,6 +34,7 @@ import {
   indexStatsRequest,
   lookupLocRequest,
   modFileChangedNotification,
+  progressNotification,
   reloadDocsRequest,
   statusNotification,
   type ParadoxInitOptions,
@@ -45,14 +46,18 @@ import {
   type ModScopedParams,
   type ReloadDocsParams,
   type ReloadDocsResult,
+  eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  eventVocabularyRequest,
   guiTreeRequest,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
+  type EventVocabularyParams,
   type GuiTreeParams,
   guiLayoutRequest,
   type GuiLayoutParams,
@@ -65,6 +70,13 @@ import {
   guiDependenciesRequest,
   type GuiDependenciesParams,
   guiVocabularyRequest,
+  guiPreviewRequest,
+  GUI_PREVIEW_MAX,
+  type GuiPreviewParams,
+  type GuiPreviewResult,
+  guiSaveValuesRequest,
+  type GuiSaveValuesParams,
+  type GuiSaveValuesResult,
   type GuiVocabularyParams,
   dependenciesRequest,
   type DependenciesParams,
@@ -73,11 +85,16 @@ import {
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
+import { resolveGuiText, type ResolvedText } from "./gui/textResolve";
+import { previewEntries } from "./gui/previewService";
+import { readSaveValues } from "./gui/saveValues";
 import {
   computeGuiLayoutResult,
   getGuiDefs,
+  profileMeasurer,
   getGuiScriptLinks,
   invalidateGuiDefsCache,
+  observeGuiStoreBuild,
   VIEWPORT,
 } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
@@ -149,6 +166,8 @@ import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
+import { computeEventVocabulary } from "./overview/eventVocabulary";
+import { computeEventBanner } from "./overview/eventBanner";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -439,6 +458,20 @@ function sendStatus(): void {
 }
 
 /**
+ * One coarse phase of the cold-start work, for the client's status bar. Phases
+ * are named on the wire, never numbered: the client owns the ordering it shows.
+ */
+function sendProgress(phase: string, state: "start" | "done", detail?: string): void {
+  void connection.sendNotification(progressNotification, { phase, state, detail });
+}
+
+// The template/type store is built lazily, on the first request that needs it,
+// so the phase is reported from where it happens rather than from a call site.
+observeGuiStoreBuild((state) =>
+  sendProgress("guiStore", state, state === "start" ? "building the GUI template store…" : undefined)
+);
+
+/**
  * Idle debounce for the global refresh (§B4). Raised from 300ms: one fire makes
  * EVERY visible editor re-request full-document semantic tokens and inlay
  * hints, and every server-backed sidebar view re-query the index.
@@ -606,6 +639,7 @@ function guiPaths(): GuiPaths {
  * layers. Engine (jomini) is the lowest layer, the mod the highest (last-wins).
  */
 function harvestEngineData(): void {
+  sendProgress("engine", "start", "harvesting engine tokens…");
   const t0 = Date.now();
   // Every workspace mod is a "mod" layer (multi-mod workspaces), added after
   // engine + game + dependency parents so mod definitions win.
@@ -630,6 +664,7 @@ function harvestEngineData(): void {
     `harvested defines: ${defines.count} constants (${tDef}ms), ` +
       `loc text formats: ${textFormatting.count} tags (${Date.now() - t1}ms)`
   );
+  sendProgress("engine", "done");
 }
 
 const yieldNow = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -798,6 +833,7 @@ async function buildIndex(): Promise<void> {
   harvestEngineData();
   rescanDigests.clear();
   indexing = true;
+  sendProgress("index", "start", "indexing mod definitions…");
   // A refresh queued before the rebuild would land mid-scan (§B4).
   cancelRefreshTimer();
   sendStatus();
@@ -887,6 +923,7 @@ async function buildIndex(): Promise<void> {
   } finally {
     if (generation === scanGeneration) {
       indexing = false;
+      sendProgress("index", "done");
       sendStatus();
       // §B4: the build's one and only refresh, fired from the finally so a scan
       // that returned null (superseded root) or threw cannot strand the open
@@ -1195,13 +1232,27 @@ function indexRead<T>(label: string, fn: () => T): T {
   return perfSpan(label, fn);
 }
 
+function mentionsTextFormatting(fsPath: string): boolean {
+  try {
+    return fs.readFileSync(fsPath, "utf8").includes("textformatting");
+  } catch {
+    return false;
+  }
+}
+
 function applyModFileChange(fsPath: string): void {
   rescanModFile(fsPath);
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
   if (lower.endsWith(".gui")) invalidateGuiDefsCache();
-  // Cheap full re-harvest when a mod defines file or a gui textformatting file changed.
-  if (lower.replace(/\\/g, "/").includes("common/defines/") || lower.endsWith(".gui")) harvestEngineData();
+  // Full re-harvest when a mod defines file or a gui file WITH textformatting
+  // changed. Not on every .gui: the harvest reads only those out of gui/, and
+  // autosave fires this after every GUI editor gesture.
+  if (
+    lower.replace(/\\/g, "/").includes("common/defines/") ||
+    (lower.endsWith(".gui") && mentionsTextFormatting(fsPath))
+  )
+    harvestEngineData();
 }
 
 connection.onNotification(modFileChangedNotification, (params: ModFileChangeParams) => {
@@ -1234,7 +1285,30 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
   computeEventGraph(data, params ?? {}, focusFilter(params?.modRoot))
 );
 
+// What an event editor may offer: the profile's structure table, the schema's
+// reference fields resolved through the index, and the script_docs tokens.
+// Never a hand-written name list.
+connection.onRequest(eventVocabularyRequest, (params: EventVocabularyParams | null) =>
+  computeEventVocabulary(data, schema, focusFilter(params?.modRoot))
+);
+
+// The theme's illustration, through the game's own event_themes ->
+// event_backgrounds hops. Answering "nothing resolved" is a real answer.
+connection.onRequest(eventBannerRequest, (params: EventBannerParams) =>
+  computeEventBanner(data, params?.theme ?? "")
+);
+
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));
+
+/** Loc keys resolve through the index (configured language, english files as fallback). */
+function locValue(key: string): string | undefined {
+  return data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
+}
+
+function guiTextResolver(params: GuiLayoutParams): ((raw: string) => ResolvedText) | undefined {
+  if (params.loc === "raw") return undefined;
+  return (raw) => resolveGuiText(raw, { loc: locValue, previewValues: params.previewValues });
+}
 
 connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
   computeGuiLayoutResult(
@@ -1243,7 +1317,8 @@ connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
     settings.modPath,
     settings.parentPaths,
     engineRoots(),
-    params.visibility
+    params.visibility,
+    guiTextResolver(params)
   )
 );
 
@@ -1290,6 +1365,42 @@ connection.onRequest(guiWidgetInfoRequest, (params: GuiWidgetInfoParams) =>
 // plus this document's own declarations. Never a hand-written name list.
 connection.onRequest(guiVocabularyRequest, (params: GuiVocabularyParams) =>
   computeGuiVocabulary(params.text ?? "", activeProfile().guiSchema)
+);
+
+// Library tiles: one instance per entry, same store and measurer as the canvas.
+connection.onRequest(guiPreviewRequest, (params: GuiPreviewParams): GuiPreviewResult => ({
+  previews: previewEntries(
+    params.text ?? "",
+    (params.entries ?? []).slice(0, GUI_PREVIEW_MAX),
+    guiDefsForEdits(),
+    profileMeasurer()
+  ),
+}));
+
+// Real values for the designer's `[...]` chips, read out of a save game.
+// Cached per file and mtime: a re-layout asks again and pays nothing, while a
+// save written since the last read is picked up on its own.
+let saveValues: { key: string; result: GuiSaveValuesResult } | null = null;
+connection.onRequest(
+  guiSaveValuesRequest,
+  async (params: GuiSaveValuesParams): Promise<GuiSaveValuesResult> => {
+    const file = params?.path ?? "";
+    let key = file;
+    try {
+      key = `${file}:${fs.statSync(file).mtimeMs}`;
+    } catch {
+      // Unreadable: the read below reports why, and every attempt asks again.
+    }
+    if (saveValues?.key === key) return saveValues.result;
+    const profile = activeProfile();
+    const result = await readSaveValues(file, {
+      gameId: profile.id,
+      schema: profile.saveSchema,
+      loc: locValue,
+    });
+    saveValues = { key, result };
+    return result;
+  }
 );
 
 // The GUI half of the dependency explorer. Same document text the canvas is

@@ -54,3 +54,23 @@ regeneration) still stands and is required reading.
 | `main` | Public face. One squash commit per landed change. Read-only to you. |
 | `dev-0.3.1` | The 0.3.1 working history, moved off `main` on 2026-08-20. Active work branch. |
 | `monorepo` | Older full working history, pushed to `origin/monorepo`. |
+
+## Test builds (automatic)
+
+Whenever Joel asks you to create, change or fix something in the extension,
+finish the work by building a test vsix and installing it, so he can try it
+without packaging himself. The name carries the version from
+`packages/vscode/package.json`:
+
+```bash
+pnpm run package:test     # scripts/package-test.mjs: compile, vsce package, code --install-extension
+```
+
+It writes `packages/vscode/px-toolkit-test-<version>.vsix` and installs it
+with `--force`.
+
+- Then tell him the install happened and that VS Code needs a reload
+  (`Developer: Reload Window`) to pick it up.
+- `px-toolkit-test-*.vsix` is gitignored; never commit a vsix.
+- Skip this only for changes with nothing to try in the editor (docs, CI,
+  tests alone), and say so.

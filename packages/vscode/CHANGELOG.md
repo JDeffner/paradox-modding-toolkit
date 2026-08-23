@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.2 (preview) - Flag Builder
+
+### Added
+
+- **Flag Builder for Victoria 3 and Europa Universalis V.** `Paradox: Open
+  Flag Builder` (also a row in the Project panel) composes a coat of arms
+  from the game's patterns, colored and textured emblems and sub flags,
+  previews it with the game's recolor rule (color slots, shading, pattern
+  masks, rotated instances), and writes the script: to the clipboard, into
+  the mod's `common/coat_of_arms/coat_of_arms/` folder, or as a PNG. Every
+  vanilla flag opens as a starting point. Approach ported from
+  kaiser-chris/pdx-flag-builder (MIT).
+- `.tga` textures decode (the vanilla flag patterns are TGA), in the Flag
+  Builder and the GUI editor alike.
+
 ## 0.3.1 (beta) - Victoria 3 feels right, and the panel learns some manners
 
 0.3.0 made Victoria 3 and EU5 first-class on paper; this release makes the

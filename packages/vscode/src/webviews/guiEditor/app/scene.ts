@@ -111,6 +111,12 @@ export interface SceneItem {
    * has no addressable slot, and nothing here counts one up for it.
    */
   srcIndex?: number;
+  /** The widget clips (and scrolls) its children: a scrollarea, or `scissor = yes`. */
+  scrolls?: boolean;
+  /** The `onclick` as authored, when the widget has one (interact mode reads it). */
+  onclick?: string;
+  /** The `tooltip` as authored (a loc key or a [datafunction]), when it has one. */
+  tooltip?: string;
 }
 
 export interface SceneTextLine {
@@ -213,6 +219,9 @@ export function buildScene(nodes: GuiLayoutNode[]): Scene {
       srcPosition: node.srcPosition,
       srcSize: node.srcSize,
       srcIndex: node.srcIndex,
+      scrolls: node.clip || undefined,
+      onclick: node.onclick,
+      tooltip: node.tooltip,
     });
     // A clipping widget clips its CHILDREN; its own fill is drawn against the
     // clip it inherited (the engine keeps true geometry and flags the clip,
@@ -308,4 +317,61 @@ export function dumpScene(scene: Scene): string[] {
     const suffix = flags.length > 0 ? ` [${flags.join(" ")}]` : "";
     return `${"  ".repeat(item.depth + 1)}${label} ${rect} ${fillKind(item)}${suffix}`;
   });
+}
+
+/** Positional path as a map key (the same string `selection.ts` keys on). */
+export function pathKey(path: readonly number[]): string {
+  return path.join(".");
+}
+
+/**
+ * Interact mode scrolling: shift every descendant of a scrolling widget by its
+ * offset, the clip rect staying put. Rects are copied, never mutated: the
+ * scene shares them with the layout nodes it was built from, and the next
+ * rebuild must start from the engine's own geometry. Offsets are keyed by
+ * positional path so they survive the re-layout a click causes.
+ */
+export function applyScrollOffsets(
+  scene: Scene,
+  offsets: ReadonlyMap<string, { x: number; y: number }>
+): void {
+  if (offsets.size === 0) return;
+  for (let i = 0; i < scene.items.length; i++) {
+    const item = scene.items[i];
+    if (!item.scrolls) continue;
+    const offset = offsets.get(pathKey(item.path));
+    if (!offset || (offset.x === 0 && offset.y === 0)) continue;
+    const end = subtreeEnd(scene, i);
+    for (let j = i + 1; j < end; j++) {
+      const child = scene.items[j];
+      child.rect = { ...child.rect, x: child.rect.x - offset.x, y: child.rect.y - offset.y };
+      child.textLines = child.textLines.map((l) => ({ ...l, x: l.x - offset.x, y: l.y - offset.y }));
+      if (child.ghostBox)
+        child.ghostBox = {
+          ...child.ghostBox,
+          x: child.ghostBox.x - offset.x,
+          y: child.ghostBox.y - offset.y,
+        };
+    }
+  }
+}
+
+/**
+ * How far a scrolling widget can scroll: its content's extent past its own
+ * rect, per axis, measured on the UNSCROLLED scene. 0 when the content fits.
+ */
+export function scrollExtent(scene: Scene, index: number): { x: number; y: number } {
+  const item = scene.items[index];
+  const end = subtreeEnd(scene, index);
+  let right = item.rect.x;
+  let bottom = item.rect.y;
+  for (let j = index + 1; j < end; j++) {
+    const r = scene.items[j].rect;
+    right = Math.max(right, r.x + r.w);
+    bottom = Math.max(bottom, r.y + r.h);
+  }
+  return {
+    x: Math.max(0, right - (item.rect.x + item.rect.w)),
+    y: Math.max(0, bottom - (item.rect.y + item.rect.h)),
+  };
 }

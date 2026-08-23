@@ -8,10 +8,10 @@
  * construction.
  */
 import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeometry";
-import type { GuiLayoutFill } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutFill, GuiTextSegment } from "@px-lsp/protocol/protocol";
 import { handlePoints, HANDLE_SIZE } from "./gesture";
 import type { ConstraintOverlay } from "./placement";
-import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
+import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect, type SceneTextLine } from "./scene";
 import type { Guide, SpacingBar } from "./snap";
 
 export interface Camera {
@@ -50,6 +50,16 @@ const EXPAND_STROKE = "#9cdcfe";
 const PULSE_STROKE = "#4fffb0";
 /** How opaque a heatmap tint gets at its strongest. */
 const HEAT_ALPHA = 0.4;
+/**
+ * Text the preview could not resolve (a loc key nobody localized, a datafunction
+ * only the running game evaluates): muted and dotted-underlined, so a chip
+ * never reads as the text the player would see. One colour for both, because
+ * the tooltip is where the two are told apart.
+ */
+export const UNRESOLVED_TEXT = "#8f8a80";
+const UNRESOLVED_DASH = [1, 2];
+/** A datafunction run: the text's own colour, dotted underline (the mark that says "variable"). */
+const VARIABLE_DASH = [1, 1];
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -103,6 +113,28 @@ function sourceFor(fill: GuiLayoutFill, img: HTMLImageElement): HTMLCanvasElemen
   return canvas;
 }
 
+/**
+ * Run widths per text line, measured once per scene item: every textbox with
+ * a variable in it would otherwise call measureText per run per frame, and a
+ * window has hundreds of them.
+ */
+const widthCache = new WeakMap<SceneItem, Map<SceneTextLine, number[]>>();
+function runWidths(
+  ctx: CanvasRenderingContext2D,
+  item: SceneItem,
+  line: SceneTextLine,
+  runs: readonly GuiTextSegment[]
+): number[] {
+  let perLine = widthCache.get(item);
+  if (!perLine) widthCache.set(item, (perLine = new Map()));
+  let widths = perLine.get(line);
+  if (!widths || widths.length !== runs.length) {
+    widths = runs.map((run) => ctx.measureText(run.text).width);
+    perLine.set(line, widths);
+  }
+  return widths;
+}
+
 function sizeOf(src: HTMLCanvasElement | HTMLImageElement): { w: number; h: number } {
   return src instanceof HTMLImageElement
     ? { w: src.naturalWidth || src.width, h: src.naturalHeight || src.height }
@@ -137,6 +169,7 @@ function paintFill(
   if (!img) {
     if (!fill.color) return;
     ctx.save();
+    ctx.globalAlpha *= fill.alpha ?? 1;
     ctx.fillStyle = rgba(fill.color);
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
     ctx.restore();
@@ -145,10 +178,38 @@ function paintFill(
   const src = sourceFor(fill, img);
   const { w: sw, h: sh } = sizeOf(src);
   if (sw <= 0 || sh <= 0) return;
+  const mask = fill.mask ? images[fill.mask] : undefined;
+  if (mask) {
+    // The mask's alpha multiplies the fill's over the whole rect: draw the
+    // fill into an offscreen of the rect's size, cut it with the mask, and
+    // composite the result. Integer-sized so the two drawImages line up, and
+    // cached per rect size: a header band is repainted on every frame.
+    const w = Math.max(1, Math.round(rect.w));
+    const h = Math.max(1, Math.round(rect.h));
+    const key = `mask|${fill.texture}|${fill.mask}|${w}x${h}|${fill.color?.join(",") ?? ""}|${fill.alpha ?? 1}|${fill.mode ?? ""}|${fill.fit ?? ""}|${fill.frame ?? ""}`;
+    let off = derived.get(key);
+    if (!off) {
+      const made = offscreen(w, h);
+      paintFill(made.ctx, { x: 0, y: 0, w, h }, { ...fill, mask: undefined }, images);
+      made.ctx.globalCompositeOperation = "destination-in";
+      made.ctx.drawImage(mask, 0, 0, w, h);
+      off = made.canvas;
+      derived.set(key, off);
+    }
+    ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h);
+    return;
+  }
   ctx.save();
-  ctx.globalAlpha *= fill.color?.[3] ?? 1;
+  ctx.globalAlpha *= (fill.color?.[3] ?? 1) * (fill.alpha ?? 1);
   const mode = fill.mode ?? "stretch";
-  if (fill.border && mode.startsWith("nineslice")) {
+  if (fill.fit === "centercrop") {
+    // Cover: scale the texture up to fill the rect on both axes, crop the
+    // overflow equally on both sides.
+    const scale = Math.max(rect.w / sw, rect.h / sh);
+    const cw = rect.w / scale;
+    const ch = rect.h / scale;
+    ctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, rect.x, rect.y, rect.w, rect.h);
+  } else if (fill.border && mode.startsWith("nineslice")) {
     // Corners 1:1, edges and centre stretched or tiled per the suffix
     // (the border applies only with a Cornered* sprite type, which the
     // engine already decided when it set `mode`).
@@ -210,10 +271,51 @@ function paintItem(
   if (item.textLines.length > 0) {
     ctx.save();
     ctx.textBaseline = "top";
-    ctx.fillStyle = item.text?.color ? rgba(item.text.color) : "#e3dac3";
+    const color = item.text?.color ? rgba(item.text.color) : "#e3dac3";
+    const segments = item.text?.segments;
+    // A run is marked when it is a datafunction (a variable, whatever value the
+    // preview found for it) or a loc key the index lacks.
+    const marked = segments?.some((s) => s.kind === "datafn" || !s.resolved) ? segments : null;
     for (const line of item.textLines) {
       ctx.font = `${line.fontsize}px ${fontFamily}`;
-      ctx.fillText(line.text, line.x, line.y);
+      if (!marked) {
+        ctx.fillStyle = color;
+        ctx.fillText(line.text, line.x, line.y);
+        continue;
+      }
+      // The segments are the WHOLE text, the line is a wrapped or elided piece
+      // of it, so a run is painted on its own only when the line IS the text
+      // (the common single-line case). A wrapped line paints as one marked
+      // run: the engine's wrap points are not known per segment, and a whole
+      // underlined line is honest where a misplaced underline would not be.
+      const runs =
+        item.textLines.length === 1 && segments!.map((s) => s.text).join("") === line.text
+          ? segments!
+          : [{ text: line.text, kind: "datafn", source: "", resolved: false } as GuiTextSegment];
+      let x = line.x;
+      const widths = runWidths(ctx, item, line, runs);
+      for (let r = 0; r < runs.length; r++) {
+        const run = runs[r];
+        const w = widths[r];
+        // Variables keep the text's own colour: on a busy background a muted
+        // run is unreadable, and the underline alone says what it is. Only a
+        // loc key nobody defined is muted, because the game prints the key.
+        const missing = run.kind === "loc" && !run.resolved;
+        ctx.fillStyle = missing ? UNRESOLVED_TEXT : color;
+        ctx.fillText(run.text, x, line.y);
+        if (run.kind === "datafn" || missing) {
+          const y = line.y + line.fontsize + 1;
+          ctx.strokeStyle = missing ? UNRESOLVED_TEXT : color;
+          ctx.lineWidth = 1;
+          ctx.setLineDash(missing ? UNRESOLVED_DASH : VARIABLE_DASH);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + w, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        x += w;
+      }
     }
     ctx.restore();
   }
@@ -261,6 +363,11 @@ export interface DrawPreview {
   slices: readonly { from: number; to: number }[];
   dx: number;
   dy: number;
+  /**
+   * An Alt+drag: the original stays where the file has it and a COPY moves,
+   * so the slices are painted twice, in place and shifted.
+   */
+  duplicate?: boolean;
 }
 
 /**
@@ -306,6 +413,17 @@ export interface DrawOptions {
   others?: readonly SceneRect[];
   /** Draw resize handles on `selected` (a widget with a declaration to write to). */
   handles?: boolean;
+  /**
+   * Where the handles go when it is not `selected`: the bounds of a
+   * multi-selection, whose grips resize every member at once.
+   */
+  handleRect?: SceneRect;
+  /**
+   * The page's accent colour, for the smart guides and the equal-size/spacing
+   * bars: they are chrome, and chrome follows the theme. Absent falls back to
+   * the canvas's own guide colour (a host page may have no theme to read).
+   */
+  accent?: string;
   /** The rubber band of a marquee drag, in world coordinates. */
   marquee?: SceneRect;
   preview?: DrawPreview;
@@ -330,6 +448,32 @@ export interface DrawOptions {
   constraints?: ConstraintOverlay;
   /** The widgets the last layout push moved. */
   pulse?: DrawPulse;
+  /** An in-game screenshot laid over (or under) the scene, to calibrate against. */
+  reference?: DrawReference;
+}
+
+/**
+ * A reference image for calibration: a screenshot of the same window in game,
+ * placed in WORLD coordinates (`x`, `y`, `scale`), at `opacity`. `blend`
+ * decides how it meets the scene: `over` and `under` for a look, `difference`
+ * for the measurement, where a perfectly aligned pixel goes black and every
+ * misplaced edge lights up.
+ */
+export interface DrawReference {
+  image: CanvasImageSource & { width: number; height: number };
+  x: number;
+  y: number;
+  scale: number;
+  opacity: number;
+  blend: "over" | "under" | "difference";
+}
+
+function paintReference(ctx: CanvasRenderingContext2D, ref: DrawReference): void {
+  ctx.save();
+  ctx.globalAlpha = ref.opacity;
+  if (ref.blend === "difference") ctx.globalCompositeOperation = "difference";
+  ctx.drawImage(ref.image, ref.x, ref.y, ref.image.width * ref.scale, ref.image.height * ref.scale);
+  ctx.restore();
 }
 
 /**
@@ -431,7 +575,12 @@ function paintGuides(
 }
 
 /** The two equal gaps, as segments with end ticks so a gap reads as a measure. */
-function paintBars(ctx: CanvasRenderingContext2D, bars: readonly SpacingBar[], zoom: number): void {
+function paintBars(
+  ctx: CanvasRenderingContext2D,
+  bars: readonly SpacingBar[],
+  zoom: number,
+  color: string
+): void {
   if (bars.length === 0) return;
   const tick = 4 / zoom;
   ctx.save();
@@ -454,7 +603,7 @@ function paintBars(ctx: CanvasRenderingContext2D, bars: readonly SpacingBar[], z
     }
   }
   ctx.lineWidth = 1 / zoom;
-  ctx.strokeStyle = GUIDE_STROKE;
+  ctx.strokeStyle = color;
   ctx.stroke();
   ctx.restore();
 }
@@ -645,6 +794,7 @@ export function drawScene(
   ctx.fillStyle = WORLD_BG;
   ctx.fillRect(0, 0, WORLD_W, WORLD_H);
   if (options.grid) paintGrid(ctx, options.grid, camera.zoom);
+  if (options.reference?.blend === "under") paintReference(ctx, options.reference);
   const preview = options.preview;
   const shifted = preview && (preview.dx !== 0 || preview.dy !== 0);
   const slices = preview?.slices ?? [];
@@ -658,6 +808,9 @@ export function drawScene(
     if (hidden?.[i]) continue;
     const alpha = dim?.[i] ? DIM_OPACITY : 1;
     if (shifted && inPreview) {
+      if (preview.duplicate) {
+        paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
+      }
       ctx.save();
       ctx.translate(preview.dx, preview.dy);
       paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
@@ -666,6 +819,7 @@ export function drawScene(
       paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
     }
   }
+  if (options.reference && options.reference.blend !== "under") paintReference(ctx, options.reference);
   // Over the scene and under every affordance: a tint is about the widgets, and
   // a guide line drawn under it would be the wrong colour.
   if (options.heatmap) paintHeatmap(ctx, scene, options.heatmap, hidden);
@@ -678,14 +832,15 @@ export function drawScene(
     ctx.strokeRect(options.flash.x, options.flash.y, options.flash.w, options.flash.h);
     ctx.restore();
   }
-  if (options.guides) paintGuides(ctx, options.guides, camera.zoom, GUIDE_STROKE, false);
-  if (options.bars) paintBars(ctx, options.bars, camera.zoom);
+  const guideColor = options.accent || GUIDE_STROKE;
+  if (options.guides) paintGuides(ctx, options.guides, camera.zoom, guideColor, false);
+  if (options.bars) paintBars(ctx, options.bars, camera.zoom, guideColor);
   if (options.dropLine) paintGuides(ctx, [options.dropLine], camera.zoom, DROP_STROKE, true);
   if (options.marquee) paintMarquee(ctx, options.marquee, camera.zoom);
   for (const rect of options.others ?? []) paintSelection(ctx, rect, camera.zoom);
   if (options.selected) {
     paintSelection(ctx, options.selected, camera.zoom);
-    if (options.handles) paintHandles(ctx, options.selected, camera.zoom);
+    if (options.handles) paintHandles(ctx, options.handleRect ?? options.selected, camera.zoom);
   }
   if (options.readout) paintReadout(ctx, options.readout, camera);
 }
@@ -693,4 +848,43 @@ export function drawScene(
 /** Drop the tint/cell caches: a fresh layout may re-color the same sprites. */
 export function resetImageCache(): void {
   derived.clear();
+}
+
+/**
+ * One scene painted to fit a box: a library tile. The scene's bounds (every
+ * item's rect, ghost boxes included) are scaled to fit inside `box` with a
+ * margin, aspect preserved and centred; the caller owns the backdrop. Same
+ * painter as the canvas, so a tile shows what inserting the entry would show.
+ */
+export function drawThumbnail(
+  ctx: CanvasRenderingContext2D,
+  scene: Scene,
+  images: Images,
+  box: { w: number; h: number },
+  fontFamily: string,
+  /** Device pixels per CSS pixel of `box`; the bitmap is `box` times this. */
+  ratio = 1
+): void {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const item of scene.items) {
+    for (const r of [item.rect, item.ghostBox]) {
+      if (!r || r.w <= 0 || r.h <= 0) continue;
+      x0 = Math.min(x0, r.x);
+      y0 = Math.min(y0, r.y);
+      x1 = Math.max(x1, r.x + r.w);
+      y1 = Math.max(y1, r.y + r.h);
+    }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, box.w * ratio, box.h * ratio);
+  if (!Number.isFinite(x0) || x1 <= x0 || y1 <= y0) return;
+  const margin = 4;
+  const zoom = Math.min((box.w - 2 * margin) / (x1 - x0), (box.h - 2 * margin) / (y1 - y0), 1);
+  const panX = (box.w - (x1 - x0) * zoom) / 2 - x0 * zoom;
+  const panY = (box.h - (y1 - y0) * zoom) / 2 - y0 * zoom;
+  ctx.setTransform(zoom * ratio, 0, 0, zoom * ratio, panX * ratio, panY * ratio);
+  for (const item of scene.items) paintItem(ctx, item, images, zoom * ratio, false, fontFamily, 1);
 }

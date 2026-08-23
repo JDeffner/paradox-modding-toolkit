@@ -20,7 +20,7 @@ import { modRootFor, readConfig, type PxConfig } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { guiEditorSupported, metaFor } from "./meta";
+import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -45,6 +45,10 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
+import { setTabIconRoot } from "./webviews/tabIcons";
+import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { readModName } from "@px-lsp/protocol/modName";
+import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
@@ -63,22 +67,30 @@ import {
   indexStatsRequest,
   lookupLocRequest,
   modFileChangedNotification,
+  progressNotification,
   reloadDocsRequest,
   statusNotification,
   type ParadoxInitOptions,
   type ParadoxSettings,
+  type ProgressPayload,
   type StatusPayload,
   type LocEntryInfo,
   type LookupLocParams,
   type ReloadDocsResult,
+  eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
   type EventDetail,
+  type EventBannerParams,
+  type EventBannerResult,
   type EventDetailParams,
   type EventGraph,
   type EventGraphParams,
+  type EventVocabularyParams,
+  type EventVocabularyResult,
   type GuiTree,
   type GuiTreeParams,
   type GuiLayoutParams,
@@ -95,6 +107,12 @@ import {
   guiDependenciesRequest,
   type GuiDependenciesParams,
   type GuiDependenciesResult,
+  guiPreviewRequest,
+  type GuiPreviewParams,
+  type GuiPreviewResult,
+  guiSaveValuesRequest,
+  type GuiSaveValuesParams,
+  type GuiSaveValuesResult,
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
@@ -129,6 +147,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  setTabIconRoot(context.extensionUri);
   output = vscode.window.createOutputChannel("Paradox Modding Toolkit", { log: true });
   context.subscriptions.push(output);
 
@@ -218,6 +237,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "setContext",
       "px.guiEditorSupported",
       guiEditorSupported(cfg.gameId)
+    );
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.flagBuilderSupported",
+      flagBuilderSupported(cfg.gameId)
     );
     statusBar.update({
       tokens: lastServerStatus.tokens,
@@ -364,6 +388,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
     lastServerStatus = payload;
     updateStatus();
+  });
+
+  lc.onNotification(progressNotification, (payload: ProgressPayload) => {
+    statusBar.setPhase(payload.phase, payload.state, payload.detail);
   });
 
   await lc.start();
@@ -578,7 +606,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // option scaffold inserts before the event's closing brace and creates loc.
   const graphActions = {
     fetchDetail: fetchEventDetail,
-    simulate: (id: string) => EventSimPanel.show(fetchEventDetail, id),
+    // The dropdowns in the graph inspector offer only what the server knows:
+    // the profile's structure table, the schema's reference fields resolved
+    // through the index, and the script_docs tokens.
+    fetchVocabulary: () =>
+      lc.sendRequest<EventVocabularyResult>(eventVocabularyRequest, {
+        modRoot: views.focusRoot(),
+      } satisfies EventVocabularyParams),
+    fetchBanner: (theme: string) =>
+      lc.sendRequest<EventBannerResult>(eventBannerRequest, { theme } satisfies EventBannerParams),
+    textureRoots: () => ({ gamePath: cfg.gamePath, modPath: cfg.modPath }),
+    notifyChanged: notifyModFileChanged,
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
         if (!replaceLocLineValue(file, line, value))
@@ -648,25 +686,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       EventSimPanel.show(fetchEventDetail, id);
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
-      // Seed the graph from where the user is: the event id under the cursor,
-      // an on_action/decision name in the matching folders, or the file's
-      // namespace — so opening from an applicable file shows related nodes.
-      const editor = vscode.window.activeTextEditor;
-      let params: EventGraphParams = {};
-      if (editor && isScriptLang(editor.document.languageId)) {
-        const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
-        const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
-        const word = range ? editor.document.getText(range) : "";
-        if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) {
-          params = { root: word };
-        } else if (/\/(on_action|decisions)\//.test(fsPath) && /^[A-Za-z0-9_-]{3,}$/.test(word)) {
-          params = { root: word };
-        } else {
-          const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
-          if (ns) params = { namespace: ns[1] };
-        }
-      }
-      EventGraphPanel.show(context, fetchGraph, params, graphActions);
+      EventGraphPanel.show(context, fetchGraph, seedGraphParams(), graphActions);
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
@@ -702,11 +722,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       GuiEditorPanel.show(
         context,
-        (uri, text, visibility) =>
+        (uri, text, visibility, textOptions) =>
           lc.sendRequest<GuiLayoutResult>(guiLayoutRequest, {
             uri: uri.toString(),
             text,
             visibility,
+            loc: textOptions.loc,
+            previewValues: textOptions.previewValues,
           } satisfies GuiLayoutParams),
         (uri, text, line, placement) =>
           lc.sendRequest<GuiWidgetInfo | null>(guiWidgetInfoRequest, {
@@ -732,10 +754,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             text,
             line,
           } satisfies GuiDependenciesParams),
+        (uri, text, entries) =>
+          lc.sendRequest<GuiPreviewResult>(guiPreviewRequest, {
+            uri: uri.toString(),
+            text,
+            entries,
+          } satisfies GuiPreviewParams),
+        (file) =>
+          lc.sendRequest<GuiSaveValuesResult>(guiSaveValuesRequest, {
+            path: file,
+          } satisfies GuiSaveValuesParams),
+        // A mod's own key wins over the game's, which is the order lookupLoc answers in.
+        async (key) => (await lookupLoc(key)).find((e) => e.value !== undefined)?.value,
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)
       );
+    }),
+    vscode.commands.registerCommand("px.openFlagBuilder", () => {
+      const meta = metaFor(cfg.gameId);
+      if (!flagBuilderSupported(cfg.gameId)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${meta.name}.`
+        );
+        return;
+      }
+      // Game first, then dependency mods, then the workspace's own mods: the
+      // load order, so a mod's flag of the same name wins like in the game.
+      const roots: FlagRoot[] = [];
+      if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
+      for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
+        if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+      }
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: readModName(p), path: p }));
+      FlagBuilderPanel.show(context, {
+        meta,
+        roots,
+        mods,
+        gameMissing: cfg.gamePath === null,
+      });
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
@@ -834,6 +893,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * When that is not an event the user is asked, pre-filled with the word under
  * the cursor when it is shaped like an id.
  */
+/**
+ * Where to open the event graph from. In order: the id the cursor sits ON, the
+ * definition the cursor sits INSIDE (the common case, since you are editing an
+ * event body and not its id line), then the file's namespace.
+ *
+ * The enclosing definition is read from the text rather than from the index: a
+ * top-level `name = {` at column zero is exactly what the indexer calls a
+ * definition in these folders, and this way the command answers without a round
+ * trip to a server that may still be indexing.
+ */
+function seedGraphParams(): EventGraphParams {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !isScriptLang(editor.document.languageId)) return {};
+  const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
+  const named = /\/(on_action|decisions)\//.test(fsPath);
+  const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
+  const word = range ? editor.document.getText(range) : "";
+  if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) return { root: word };
+  if (named && /^[A-Za-z0-9_-]{3,}$/.test(word)) return { root: word };
+
+  for (let line = editor.selection.active.line; line >= 0; line--) {
+    const match = /^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*\{/.exec(editor.document.lineAt(line).text);
+    if (!match) continue;
+    if (/^[A-Za-z0-9_-]+\.\d+$/.test(match[1]) || named) return { root: match[1] };
+    break;
+  }
+  const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
+  return ns ? { namespace: ns[1] } : {};
+}
+
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {
   const editor = vscode.window.activeTextEditor;
   let word = "";

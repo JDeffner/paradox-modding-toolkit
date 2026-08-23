@@ -1,0 +1,1227 @@
+/*
+ * px-ui: the one stylesheet every Paradox Modding Toolkit webview loads.
+ *
+ * The look is shadcn/ui's Nova style, neutral theme, default radius (preset
+ * `b0`), ported to plain CSS and driven by the user's VS Code theme: every
+ * surface is the editor background stepped toward the foreground by the same
+ * ratios the Nova neutral palette uses (3-4% for muted surfaces in light
+ * themes, 12-15% in dark ones), so a Solarized or high-contrast theme still
+ * yields a coherent page. Primary is the theme's accent (VS Code's button
+ * colors), so the one filled button on a page matches the editor's own.
+ *
+ * Classes mirror shadcn names (`px-btn` + data-variant/data-size, `px-input`,
+ * `px-select`, `px-toggle`, `px-badge`, `px-tabs`, `px-popover`, ...) so a
+ * reader who knows shadcn knows this file. No framework, no Tailwind.
+ */
+
+:root {
+  color-scheme: light dark;
+  --px-bg: var(--vscode-editor-background, #1e1e1e);
+  --px-fg: var(--vscode-editor-foreground, #e6e6e6);
+  --px-font: var(--vscode-font-family, system-ui, sans-serif);
+  --px-font-mono: var(--vscode-editor-font-family, ui-monospace, monospace);
+  --px-text: var(--vscode-font-size, 13px);
+  --px-text-xs: 11px;
+  --px-text-sm: 12px;
+
+  /* Nova neutral ratios, dark theme (overridden for light below). */
+  --px-mix-muted: 13%;
+  --px-mix-popover: 7%;
+  --px-mix-border: 10%;
+  --px-mix-input: 15%;
+  --px-mix-ring: 45%;
+  --px-mix-muted-fg: 62%;
+  --px-mix-fg-60: 60%;
+
+  --px-muted: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-muted));
+  --px-muted-strong: color-mix(in oklch, var(--px-bg), var(--px-fg) calc(var(--px-mix-muted) + 5%));
+  --px-popover: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-popover));
+  --px-border: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-border));
+  --px-input: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-input));
+  --px-ring: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-ring));
+  --px-ring-soft: color-mix(in oklch, var(--px-ring) 50%, transparent);
+  --px-muted-fg: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-muted-fg));
+  --px-fg-60: color-mix(in oklch, var(--px-fg) var(--px-mix-fg-60), transparent);
+  /* The user's accent: VS Code's own button colors, Nova's foreground-as-primary as the fallback. */
+  --px-primary: var(--vscode-button-background, var(--px-fg));
+  --px-primary-fg: var(--vscode-button-foreground, var(--px-bg));
+  --px-primary-hover: var(
+    --vscode-button-hoverBackground,
+    color-mix(in oklch, var(--px-primary) 80%, transparent)
+  );
+  --px-destructive: var(--vscode-errorForeground, #f14c4c);
+  --px-destructive-soft: color-mix(in oklch, var(--px-destructive) 18%, transparent);
+  --px-destructive-hover: color-mix(in oklch, var(--px-destructive) 28%, transparent);
+  --px-sidebar: var(--vscode-sideBar-background, var(--px-bg));
+  --px-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --px-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+
+  /* Script token colors, for a page that prints game script back to the user
+     (the event simulator). A webview cannot read a theme's TextMate colors, so
+     these follow the one family VS Code does publish per theme, the debug
+     token expressions, with the editor foreground as the fallback so an
+     unstyled theme still reads. Categories only: keys, values, strings,
+     numbers, booleans, comments, braces. */
+  --px-tok-key: var(--vscode-debugTokenExpression-name, var(--px-fg));
+  --px-tok-op: var(--px-muted-fg);
+  --px-tok-string: var(--vscode-debugTokenExpression-string, var(--px-fg));
+  --px-tok-number: var(--vscode-debugTokenExpression-number, var(--px-fg));
+  --px-tok-bool: var(--vscode-debugTokenExpression-boolean, var(--px-fg));
+  --px-tok-comment: var(--px-muted-fg);
+  --px-tok-brace: var(--px-fg-60);
+
+  --px-radius: 10px;
+  --px-radius-md: 8px;
+  --px-radius-sm: 6px;
+  --px-h: 32px;
+  --px-h-sm: 28px;
+  --px-h-xs: 24px;
+  --px-ease: 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+body.vscode-light {
+  --px-mix-muted: 4%;
+  --px-mix-popover: 0%;
+  --px-mix-border: 9%;
+  --px-mix-input: 9%;
+  --px-mix-ring: 34%;
+  --px-mix-muted-fg: 50%;
+  --px-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --px-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --px-mix-border: 60%;
+  --px-mix-input: 60%;
+}
+
+/* ---------------------------------------------------------------- base --- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--px-font);
+  font-size: var(--px-text);
+  line-height: 1.4;
+  color: var(--px-fg);
+  background: var(--px-bg);
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible {
+  outline: none;
+}
+::selection {
+  background: var(--vscode-editor-selectionBackground, color-mix(in oklch, var(--px-fg) 25%, transparent));
+}
+.px-muted {
+  color: var(--px-muted-fg);
+}
+.px-xs {
+  font-size: var(--px-text-xs);
+}
+.px-sm {
+  font-size: var(--px-text-sm);
+}
+.px-mono {
+  font-family: var(--px-font-mono);
+}
+.px-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.px-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.px-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.px-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+svg.px-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- button --- */
+
+.px-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--px-h);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--px-radius);
+  font: inherit;
+  font-size: var(--px-text);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--px-fg);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--px-ease),
+    color var(--px-ease),
+    border-color var(--px-ease),
+    box-shadow var(--px-ease),
+    transform var(--px-ease);
+}
+.px-btn:focus-visible {
+  border-color: var(--px-ring);
+  box-shadow: 0 0 0 3px var(--px-ring-soft);
+}
+.px-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.px-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.px-btn[data-variant="default"] {
+  background: var(--px-primary);
+  color: var(--px-primary-fg);
+}
+.px-btn[data-variant="default"]:hover {
+  background: var(--px-primary-hover);
+}
+.px-btn[data-variant="outline"] {
+  border-color: var(--px-input);
+  background: color-mix(in oklch, var(--px-input) 30%, transparent);
+}
+.px-btn[data-variant="outline"]:hover,
+.px-btn[data-variant="outline"][aria-expanded="true"] {
+  background: color-mix(in oklch, var(--px-input) 50%, transparent);
+}
+body.vscode-light .px-btn[data-variant="outline"] {
+  background: var(--px-bg);
+}
+body.vscode-light .px-btn[data-variant="outline"]:hover {
+  background: var(--px-muted);
+}
+.px-btn[data-variant="secondary"] {
+  background: var(--px-muted);
+}
+.px-btn[data-variant="secondary"]:hover {
+  background: var(--px-muted-strong);
+}
+.px-btn[data-variant="ghost"]:hover,
+.px-btn[data-variant="ghost"][aria-expanded="true"],
+.px-btn[data-variant="ghost"][aria-pressed="true"] {
+  background: var(--px-muted);
+}
+.px-btn[data-variant="destructive"] {
+  color: var(--px-destructive);
+  background: var(--px-destructive-soft);
+}
+.px-btn[data-variant="destructive"]:hover {
+  background: var(--px-destructive-hover);
+}
+.px-btn[data-variant="link"] {
+  padding: 0;
+  height: auto;
+  text-underline-offset: 4px;
+}
+.px-btn[data-variant="link"]:hover {
+  text-decoration: underline;
+}
+.px-btn[data-size="sm"] {
+  height: var(--px-h-sm);
+  padding: 0 10px;
+  font-size: var(--px-text-sm);
+  border-radius: var(--px-radius-md);
+}
+.px-btn[data-size="xs"] {
+  height: var(--px-h-xs);
+  padding: 0 8px;
+  font-size: var(--px-text-xs);
+  border-radius: var(--px-radius-md);
+}
+.px-btn[data-size="icon"] {
+  width: var(--px-h);
+  padding: 0;
+}
+.px-btn[data-size="icon-sm"] {
+  width: var(--px-h-sm);
+  height: var(--px-h-sm);
+  padding: 0;
+  border-radius: var(--px-radius-md);
+}
+.px-btn[data-size="icon-xs"] {
+  width: var(--px-h-xs);
+  height: var(--px-h-xs);
+  padding: 0;
+  border-radius: var(--px-radius-md);
+}
+.px-btn[data-size="icon-xs"] svg.px-icon,
+.px-btn[data-size="xs"] svg.px-icon {
+  width: 12px;
+  height: 12px;
+}
+.px-btn[data-size="sm"] svg.px-icon,
+.px-btn[data-size="icon-sm"] svg.px-icon {
+  width: 14px;
+  height: 14px;
+}
+/* A button that is mostly its icon gets the Nova icon inset. */
+.px-btn:has(> svg.px-icon:first-child):not([data-size^="icon"]) {
+  padding-left: 8px;
+}
+.px-btn:has(> svg.px-icon:last-child):not([data-size^="icon"]) {
+  padding-right: 8px;
+}
+
+/* --------------------------------------------------------------- inputs --- */
+
+.px-input,
+.px-select,
+.px-textarea {
+  height: var(--px-h);
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--px-input);
+  border-radius: var(--px-radius);
+  font: inherit;
+  color: var(--px-fg);
+  background: color-mix(in oklch, var(--px-input) 30%, transparent);
+  transition:
+    border-color var(--px-ease),
+    box-shadow var(--px-ease),
+    background-color var(--px-ease);
+}
+body.vscode-light .px-input,
+body.vscode-light .px-select,
+body.vscode-light .px-textarea {
+  background: transparent;
+}
+.px-input::placeholder {
+  color: var(--px-muted-fg);
+}
+.px-input:focus-visible,
+.px-select:focus-visible,
+.px-textarea:focus-visible {
+  border-color: var(--px-ring);
+  box-shadow: 0 0 0 3px var(--px-ring-soft);
+}
+.px-input:disabled,
+.px-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.px-input[aria-invalid="true"],
+.px-select[aria-invalid="true"] {
+  border-color: var(--px-destructive);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--px-destructive) 20%, transparent);
+}
+.px-input[data-size="sm"],
+.px-select[data-size="sm"] {
+  height: var(--px-h-sm);
+  padding: 0 8px;
+  font-size: var(--px-text-sm);
+  border-radius: var(--px-radius-md);
+}
+.px-input.px-scrub:not(:focus) {
+  cursor: ew-resize;
+}
+.px-input[data-scrubbing] {
+  border-color: var(--px-ring);
+}
+.px-input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.px-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.px-select {
+  appearance: none;
+  min-width: 64px;
+  padding-right: 26px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+.px-select:hover {
+  background-color: color-mix(in oklch, var(--px-input) 50%, transparent);
+}
+.px-textarea {
+  height: auto;
+  min-height: 64px;
+  padding: 6px 10px;
+  resize: vertical;
+}
+.px-label {
+  font-size: var(--px-text-sm);
+  font-weight: 500;
+  color: var(--px-muted-fg);
+}
+.px-field {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.px-field > .px-label {
+  white-space: nowrap;
+}
+
+/* A short prefix inside the field: <label class="px-labeled"><span>h</span><input class="px-input"></label> */
+.px-labeled {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.px-labeled > span {
+  position: absolute;
+  left: 7px;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.px-labeled > .px-input {
+  padding-left: 20px;
+}
+
+/* Input with an icon on the left (shadcn InputGroup, the one shape we need). */
+.px-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.px-input-group > svg.px-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--px-muted-fg);
+}
+.px-input-group > .px-input {
+  padding-left: 30px;
+}
+
+/* -------------------------------------------------------------- toggles --- */
+
+.px-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--px-radius);
+}
+.px-toggle-group[data-spacing="0"] > .px-toggle {
+  border-radius: 0;
+}
+.px-toggle-group[data-spacing="0"] > .px-toggle:first-child {
+  border-radius: var(--px-radius) 0 0 var(--px-radius);
+}
+.px-toggle-group[data-spacing="0"] > .px-toggle:last-child {
+  border-radius: 0 var(--px-radius) var(--px-radius) 0;
+}
+.px-toggle-group[data-spacing="0"] > .px-toggle[data-variant="outline"] + .px-toggle[data-variant="outline"] {
+  border-left-width: 0;
+}
+.px-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--px-h);
+  min-width: var(--px-h);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--px-radius);
+  font: inherit;
+  font-size: var(--px-text);
+  font-weight: 500;
+  color: var(--px-fg);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--px-ease),
+    color var(--px-ease),
+    box-shadow var(--px-ease);
+}
+.px-toggle:hover,
+.px-toggle[aria-pressed="true"] {
+  background: var(--px-muted);
+}
+.px-toggle[data-variant="outline"] {
+  border-color: var(--px-input);
+}
+.px-toggle:focus-visible {
+  border-color: var(--px-ring);
+  box-shadow: 0 0 0 3px var(--px-ring-soft);
+  z-index: 1;
+}
+.px-toggle[data-size="sm"] {
+  height: var(--px-h-sm);
+  min-width: var(--px-h-sm);
+  padding: 0 8px;
+  font-size: var(--px-text-sm);
+  border-radius: var(--px-radius-md);
+}
+
+/* A checkbox dressed as shadcn's Switch: <label class="px-switch"><input type=checkbox><span></span></label> */
+.px-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.px-switch > input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+/* The pill is the span right after the input; a label span after it is plain text. */
+.px-switch > input + span {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--px-input);
+  transition:
+    background-color var(--px-ease),
+    box-shadow var(--px-ease);
+}
+.px-switch > input + span::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--px-fg);
+  transition: transform var(--px-ease);
+}
+.px-switch > input:checked + span {
+  background: var(--px-primary);
+}
+.px-switch > input:checked + span::after {
+  background: var(--px-primary-fg);
+  transform: translateX(14px);
+}
+.px-switch > input:focus-visible + span {
+  box-shadow: 0 0 0 3px var(--px-ring-soft);
+}
+
+/* Native range dressed as shadcn's Slider. */
+.px-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.px-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background:
+    linear-gradient(var(--px-primary), var(--px-primary)) 0 / var(--px-slider-fill, 0%) 100% no-repeat,
+    var(--px-muted);
+}
+.px-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 999px;
+  border: 1px solid var(--px-ring);
+  background: #fff;
+  transition: box-shadow var(--px-ease);
+}
+.px-slider:hover::-webkit-slider-thumb,
+.px-slider:focus-visible::-webkit-slider-thumb,
+.px-slider:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--px-ring-soft);
+}
+
+/* ---------------------------------------------------------------- badge --- */
+
+.px-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: var(--px-text-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--px-primary);
+  color: var(--px-primary-fg);
+}
+.px-badge[data-variant="secondary"] {
+  background: var(--px-muted);
+  color: var(--px-fg);
+}
+.px-badge[data-variant="outline"] {
+  background: transparent;
+  border-color: var(--px-border);
+  color: var(--px-fg);
+}
+.px-badge[data-variant="destructive"] {
+  background: var(--px-destructive-soft);
+  color: var(--px-destructive);
+}
+.px-badge > svg.px-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ----------------------------------------------------------------- tabs --- */
+
+.px-tabs {
+  display: inline-flex;
+  align-items: center;
+  height: var(--px-h);
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--px-radius);
+  background: var(--px-muted);
+}
+.px-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--px-radius-md);
+  font: inherit;
+  font-size: var(--px-text);
+  font-weight: 500;
+  color: var(--px-muted-fg);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--px-ease),
+    color var(--px-ease),
+    box-shadow var(--px-ease);
+}
+.px-tab:hover {
+  color: var(--px-fg);
+}
+.px-tab[aria-selected="true"] {
+  color: var(--px-fg);
+  background: var(--px-bg);
+  box-shadow: var(--px-shadow-sm);
+}
+body:not(.vscode-light) .px-tab[aria-selected="true"] {
+  border-color: var(--px-input);
+  background: color-mix(in oklch, var(--px-input) 30%, transparent);
+}
+.px-tabs[data-variant="line"] {
+  height: auto;
+  padding: 0;
+  gap: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--px-border);
+}
+.px-tabs[data-variant="line"] .px-tab {
+  position: relative;
+  height: var(--px-h);
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.px-tabs[data-variant="line"] .px-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--px-fg);
+  opacity: 0;
+  transition: opacity var(--px-ease);
+}
+.px-tabs[data-variant="line"] .px-tab[aria-selected="true"]::after {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------- separator --- */
+
+.px-separator {
+  flex: 0 0 auto;
+  background: var(--px-border);
+  height: 1px;
+  width: 100%;
+}
+.px-separator[data-orientation="vertical"] {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+}
+
+/* ------------------------------------------------------- panels & lists --- */
+
+.px-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--px-h);
+  padding: 0 10px;
+  font-size: var(--px-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-muted-fg);
+}
+.px-panel-title > .px-grow {
+  flex: 1 1 auto;
+}
+.px-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+}
+.px-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--px-h-sm);
+  padding: 0 6px 0 8px;
+  border-radius: var(--px-radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--px-ease),
+    color var(--px-ease);
+}
+.px-item:hover {
+  background: var(--px-muted);
+}
+.px-item[aria-selected="true"] {
+  background: var(--px-muted-strong);
+}
+.px-item[data-dragging] {
+  opacity: 0.35;
+}
+.px-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  pointer-events: none;
+  background: var(--px-popover);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 12%, transparent);
+  opacity: 0.95;
+}
+.px-item > .px-item-kind {
+  flex: 0 0 auto;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.px-item > .px-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.px-item > .px-item-tools {
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transition: opacity var(--px-ease);
+}
+.px-item:hover > .px-item-tools,
+.px-item[aria-selected="true"] > .px-item-tools,
+.px-item:focus-within > .px-item-tools {
+  opacity: 1;
+}
+.px-kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--px-radius-sm);
+  font-family: var(--px-font);
+  font-size: var(--px-text-xs);
+  background: var(--px-muted);
+  color: var(--px-muted-fg);
+}
+
+/* -------------------------------------------------------------- popover --- */
+
+.px-popover {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+  max-width: min(480px, calc(100vw - 16px));
+  padding: 10px;
+  border-radius: var(--px-radius);
+  background: var(--px-popover);
+  color: var(--px-fg);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
+  animation: px-pop var(--px-ease);
+  transform-origin: var(--px-origin, top left);
+}
+/* A menu fills its popover edge to edge; the list scrolls, not the popover. */
+.px-popover:has(> .px-menu) {
+  padding: 0;
+  min-width: 0;
+}
+.px-popover-title {
+  font-weight: 500;
+}
+.px-popover-description {
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-sm);
+}
+@keyframes px-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+}
+
+/* ----------------------------------------------------------------- menu --- */
+
+/*
+ * overlay.ts `menu()`: a popover holding an optional search box and a list.
+ * Used in place of <select>, whose option list the webview cannot style.
+ */
+.px-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  min-width: 160px;
+}
+.px-menu-list {
+  max-height: 280px;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.px-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--px-radius-md);
+  font-size: var(--px-text);
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+.px-menu-item > .px-grow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.px-menu-item[data-two-line] {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.px-menu-item > .px-grow > .px-menu-description {
+  display: block;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.px-menu-item > .px-menu-hint {
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+}
+.px-menu-item[data-active],
+.px-menu-item:hover {
+  background: var(--px-muted);
+}
+.px-menu-item > svg.px-icon.check {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+}
+.px-menu-item[aria-selected="true"] > svg.px-icon.check {
+  opacity: 1;
+}
+.px-menu-empty {
+  padding: 8px;
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-sm);
+}
+.px-menu-separator {
+  height: 1px;
+  margin: 3px -4px;
+  background: var(--px-border);
+}
+/* The trigger: an outline button that reads as a field. */
+.px-dropdown {
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  font-weight: 400;
+}
+.px-dropdown > .px-truncate {
+  flex: 1 1 auto;
+  text-align: left;
+}
+.px-dropdown > svg.px-icon {
+  color: var(--px-muted-fg);
+}
+.px-dropdown[data-placeholder] > .px-truncate {
+  color: var(--px-muted-fg);
+}
+
+/* --------------------------------------------------------------- picker --- */
+
+.px-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 220px;
+}
+.px-picker-square {
+  position: relative;
+  height: 140px;
+  border-radius: var(--px-radius-md);
+  cursor: crosshair;
+  touch-action: none;
+}
+.px-picker-hue {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.px-picker-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.px-picker-hue > .px-picker-thumb {
+  top: 50%;
+}
+
+/* --------------------------------------------------------------- dialog --- */
+
+.px-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  animation: px-fade 120ms ease-out;
+}
+.px-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: var(--px-radius);
+  background: var(--px-popover);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
+  animation: px-pop 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.px-dialog-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.px-dialog-description {
+  color: var(--px-muted-fg);
+}
+.px-dialog-wide {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+.px-dialog-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  min-height: 0;
+}
+.px-dialog-section-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.px-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+@keyframes px-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* -------------------------------------------------------------- tooltip --- */
+
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 5px 10px;
+  border-radius: var(--px-radius-md);
+  font-size: var(--px-text-xs);
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--px-bg);
+  background: var(--px-fg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--px-ease);
+  transition-delay: 0s;
+}
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transition-delay: 400ms;
+}
+[data-tip][data-tip-wrap]::after {
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  text-align: left;
+}
+[data-tip][data-tip-side="left"]::after {
+  left: auto;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ---------------------------------------------------------------- toast --- */
+
+.px-toaster {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+}
+.px-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--px-radius);
+  font-size: var(--px-text-sm);
+  background: var(--px-popover);
+  color: var(--px-fg);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
+  animation: px-toast-in 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.px-toast[data-leaving] {
+  animation: px-toast-out 160ms ease-in forwards;
+}
+.px-toast[data-variant="destructive"] {
+  color: var(--px-destructive);
+}
+@keyframes px-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes px-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ----------------------------------------------------------- side panel --- */
+
+/*
+ * <div class="px-sidepanel" data-side="right">
+ *   <div class="px-sidepanel-resizer"></div>
+ *   <div class="px-sidepanel-body">...</div>
+ * </div>
+ * sidePanel.ts makes the resizer drag, persists the width and toggles
+ * data-collapsed. Collapsed, the panel is a 0-width element; the owner shows
+ * a reopen button wherever fits (usually its toolbar).
+ */
+.px-sidepanel {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  width: var(--px-sidepanel-width, 340px);
+  min-width: 0;
+  background: var(--px-sidebar);
+  transition: width 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.px-sidepanel[data-dragging] {
+  transition: none;
+}
+.px-sidepanel[data-side="right"] {
+  border-left: 1px solid var(--px-border);
+}
+.px-sidepanel[data-side="left"] {
+  border-right: 1px solid var(--px-border);
+  flex-direction: row-reverse;
+}
+.px-sidepanel[data-collapsed] {
+  width: 0 !important;
+  border-width: 0;
+  overflow: hidden;
+}
+.px-sidepanel-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+}
+.px-sidepanel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 5;
+  cursor: col-resize;
+}
+.px-sidepanel[data-side="right"] > .px-sidepanel-resizer {
+  left: -5px;
+}
+.px-sidepanel[data-side="left"] > .px-sidepanel-resizer {
+  right: -5px;
+}
+.px-sidepanel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--px-ring);
+  opacity: 0;
+  transition: opacity var(--px-ease);
+}
+.px-sidepanel-resizer:hover::after,
+.px-sidepanel[data-dragging] > .px-sidepanel-resizer::after {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------- swatch --- */
+
+.px-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--px-radius-sm);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--px-fg) 20%, transparent);
+  background: var(--px-swatch, transparent);
+}
+.px-swatch[data-missing] {
+  background: repeating-linear-gradient(45deg, var(--px-destructive) 0 3px, transparent 3px 6px);
+}
+button.px-swatch {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow var(--px-ease);
+}
+button.px-swatch:hover,
+button.px-swatch:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--px-fg) 20%, transparent),
+    0 0 0 3px var(--px-ring-soft);
+}
+
+/* -------------------------------------------------------------- scroll --- */
+
+/* One thin scrollbar for every scrolling box of every page: a track that is
+   not drawn at all and a thumb the weight of a border, so a list that
+   overflows says so without a chrome-colored bar cutting into it. Both
+   spellings are declared: the standard one, and the WebKit pseudo-elements
+   for the engines that only read those. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--px-border);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--px-border), var(--px-fg) 22%);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import type { EventDetail } from "@px-lsp/protocol/protocol";
 import { simulationSteps } from "./steps";
+import uiCss from "../shared/ui.css";
+import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
 type InboundMessage =
@@ -44,6 +47,7 @@ export class EventSimPanel {
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
+    this.panel.iconPath = tabIcon("event-sim");
     this.panel.webview.html = buildHtml(this.panel.webview);
 
     this.panel.webview.onDidReceiveMessage(
@@ -165,86 +169,58 @@ function buildHtml(webview: vscode.Webview): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Paradox Event Simulator</title>
 <style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    font-family: var(--vscode-font-family, sans-serif);
-    font-size: var(--vscode-font-size, 13px);
-    color: var(--vscode-editor-foreground);
-    background: var(--vscode-editor-background);
-  }
+${uiCss}
+  body { overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100%; }
   #bar {
-    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
-    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
-  #bar button {
-    padding: 3px 10px; border: none; border-radius: 2px; cursor: pointer;
-    color: var(--vscode-button-foreground); background: var(--vscode-button-background);
+  #bar .px-separator { height: 20px; align-self: center; }
+  #chain { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+  #chain > span { white-space: nowrap; }
+  #chain > .crumb { color: var(--px-muted-fg); }
+  #chain > .here { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  #chain > svg.px-icon { width: 12px; height: 12px; color: var(--px-muted-fg); }
+  #body { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px 24px; }
+  h1 { margin: 0 0 2px; font-size: 15px; font-weight: 600; word-break: break-all; }
+  #subtitle { color: var(--px-muted-fg); margin-bottom: 6px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0 12px; }
+  .step { margin: 4px 0; }
+  .step > .px-panel-title { padding-left: 4px; cursor: pointer; border-radius: var(--px-radius-md); transition: background-color var(--px-ease); }
+  .step > .px-panel-title:hover { background: var(--px-muted); }
+  .step > .px-panel-title .caret { transition: transform var(--px-ease); color: var(--px-muted-fg); }
+  .step[data-collapsed] > .px-panel-title .caret { transform: rotate(-90deg); }
+  .step[data-collapsed] > .step-body { display: none; }
+  .step > .px-panel-title .t { color: var(--px-fg); }
+  .step > .px-panel-title .s { flex: 1 1 auto; min-width: 0; font-weight: 400; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step > .px-panel-title .at { font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .step-body { padding: 0 0 4px 10px; }
+  .script { padding: 2px 0; font-family: var(--px-font-mono); font-size: var(--px-text-sm); }
+  .script .ln {
+    padding: 1px 8px; white-space: pre; cursor: pointer; border-radius: var(--px-radius-sm);
+    transition: background-color var(--px-ease);
   }
-  #bar button.secondary {
-    color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
-    background: var(--vscode-button-secondaryBackground, transparent);
-    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.4));
-  }
-  #bar button[disabled] { opacity: 0.45; cursor: default; }
-  #chain {
-    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--vscode-descriptionForeground);
-  }
-  #body { flex: 1 1 auto; overflow-y: auto; padding: 10px 14px 24px; }
-  h1 { margin: 0 0 2px; font-size: 1.25em; word-break: break-all; }
-  #subtitle { color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
-  .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
-  .badge {
-    padding: 0 7px; border-radius: 8px; font-size: 0.85em;
-    color: var(--vscode-badge-foreground, #fff); background: var(--vscode-badge-background, #4d4d4d);
-  }
-  .ilink { color: var(--vscode-textLink-foreground, #3794ff); cursor: pointer; text-decoration: none; }
-  .ilink:hover { text-decoration: underline; }
-  .step {
-    margin: 10px 0; border-radius: 4px; overflow: hidden;
-    border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
-  }
-  .step > header {
-    display: flex; align-items: baseline; gap: 8px; cursor: pointer;
-    padding: 5px 9px;
-    background: var(--vscode-editorWidget-background, rgba(128,128,128,0.12));
-    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
-  }
-  .step > header:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.2)); }
-  .step > header .t { font-weight: 600; letter-spacing: 0.05em; }
-  .step > header .s { color: var(--vscode-descriptionForeground); flex: 1 1 auto; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .step > header .at { color: var(--vscode-descriptionForeground); font-size: 0.85em; }
-  .step.trigger > header .t { color: var(--vscode-charts-yellow, #cca700); }
-  .step.option > header .t { color: var(--vscode-charts-orange, #d18616); }
-  .step.immediate > header .t, .step.after > header .t { color: var(--vscode-charts-blue, #3794ff); }
-  .script { padding: 4px 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.95em; }
-  .script .ln { padding: 0 9px; white-space: pre; cursor: pointer; }
-  .script .ln:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.18)); }
-  .note, .more { padding: 4px 9px; color: var(--vscode-descriptionForeground); }
-  .leads {
-    padding: 5px 9px; border-top: 1px dashed var(--vscode-panel-border, rgba(128,128,128,0.3));
-  }
-  .leads .lbl { color: var(--vscode-descriptionForeground); font-size: 0.85em; }
-  .target { margin: 2px 0; }
-  .target .via { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-right: 5px; }
+  .script .ln:hover { background: var(--px-muted); }
+  .note, .more { padding: 4px 8px; color: var(--px-muted-fg); }
+  .leads { padding: 4px 0 2px; }
+  .target { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; }
+  .target .via { color: var(--px-muted-fg); font-size: var(--px-text-xs); flex: 0 0 auto; }
   .fires { margin-left: 18px; }
-  .dim { color: var(--vscode-descriptionForeground); }
-  #status { padding: 6px 14px; color: var(--vscode-descriptionForeground); }
-  #status.error { color: var(--vscode-editorError-foreground, #f14c4c); }
+  .dim { color: var(--px-muted-fg); }
+  .target .px-btn[data-variant="link"] { font-weight: 500; }
+  .target .px-btn[data-variant="link"] svg.px-icon { width: 12px; height: 12px; color: var(--px-muted-fg); }
+  #status { padding: 6px 4px; color: var(--px-muted-fg); }
+  #status.error { color: var(--px-destructive); }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="bar">
-    <button id="back" class="secondary" disabled>&lsaquo; Back</button>
-    <button id="reload" class="secondary">Reload</button>
-    <span id="chain"></span>
+    <button id="back" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Back" disabled>${icon("chevronLeft")}</button>
+    <button id="reload" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Reload this event from the index">${icon("rotate")}</button>
+    <div class="px-separator" data-orientation="vertical"></div>
+    <div id="chain"></div>
   </div>
   <div id="body"><div id="status">Loading…</div></div>
 </div>
@@ -253,6 +229,10 @@ const vscode = acquireVsCodeApi();
 
 // === Shipped arrangement: exact source of the unit-tested simulationSteps ===
 const simulationSteps = ${stepsSource};
+
+const ICON_CARET = ${JSON.stringify(icon("chevronDown", "px-icon caret"))};
+const ICON_STEP = ${JSON.stringify(icon("cornerDownRight"))};
+const ICON_CRUMB = ${JSON.stringify(icon("chevronRight"))};
 
 const bodyEl = document.getElementById("body");
 const chainEl = document.getElementById("chain");
@@ -265,13 +245,21 @@ function el(tag, cls, text) {
   return node;
 }
 
-function openLink(label, file, line, cls) {
-  const a = el("a", cls || "ilink", label);
-  a.addEventListener("click", function (ev) {
+function linkButton(label, iconSvg) {
+  const b = el("button", "px-btn");
+  b.dataset.variant = "link";
+  if (iconSvg) b.innerHTML = iconSvg;
+  b.appendChild(el("span", "", label));
+  return b;
+}
+
+function openLink(label, file, line) {
+  const b = linkButton(label);
+  b.addEventListener("click", function (ev) {
     ev.stopPropagation();
     vscode.postMessage({ type: "open", file: file, line: line || 0 });
   });
-  return a;
+  return b;
 }
 
 function status(text, cls) {
@@ -283,8 +271,8 @@ function renderTarget(container, target, indent) {
   const row = el("div", indent ? "target fires" : "target");
   row.appendChild(el("span", "via", target.via));
   if (target.kind === "event") {
-    const link = el("a", "ilink", "▶ " + target.name);
-    link.title = "Step into " + target.name + " (Ctrl/Cmd+click opens its source)";
+    const link = linkButton(target.name, ICON_STEP);
+    link.dataset.tip = "Step into " + target.name + " (Ctrl/Cmd+click opens its source)";
     link.addEventListener("click", function (ev) {
       if ((ev.ctrlKey || ev.metaKey) && target.file) {
         vscode.postMessage({ type: "open", file: target.file, line: target.defLine || 0 });
@@ -297,20 +285,20 @@ function renderTarget(container, target, indent) {
     row.appendChild(target.file ? openLink(target.name, target.file, target.defLine) : el("span", "", target.name));
     // Merged on_action (mod extending vanilla): fires reads one site only.
     if ((target.defCount || 1) > 1) {
-      row.appendChild(el("span", "dim", "  (1 of " + target.defCount + " definition sites)"));
+      row.appendChild(el("span", "dim", "(1 of " + target.defCount + " definition sites)"));
     }
     // The server resolves on_actions exactly one level deep, so a chained one
     // is unresolved by design, not because its definition was unreadable.
     if (indent) {
-      row.appendChild(el("span", "dim", "  (chained on_action, open it to see what it fires)"));
+      row.appendChild(el("span", "dim", "(chained on_action, open it to see what it fires)"));
     } else if (target.fires === undefined) {
-      row.appendChild(el("span", "dim", "  (on_action definition not readable, cannot resolve its events)"));
+      row.appendChild(el("span", "dim", "(on_action definition not readable, cannot resolve its events)"));
     } else if (target.fires.length === 0) {
-      row.appendChild(el("span", "dim", "  (its definition names no events)"));
+      row.appendChild(el("span", "dim", "(its definition names no events)"));
     }
   } else {
     row.appendChild(el("span", "", target.name));
-    row.appendChild(el("span", "dim", "  (not indexed, nothing to step into)"));
+    row.appendChild(el("span", "dim", "(not indexed, nothing to step into)"));
   }
   container.appendChild(row);
 
@@ -323,17 +311,26 @@ function renderTarget(container, target, indent) {
 
 function renderStep(detail, step) {
   const card = el("div", "step " + step.kind);
-  const head = el("header");
+  const head = el("div", "px-panel-title");
+  head.innerHTML = ICON_CARET;
   head.appendChild(el("span", "t", step.title));
   head.appendChild(el("span", "s", step.subtitle));
   head.appendChild(el("span", "at", "line " + (step.line + 1)));
-  head.title = "Open " + detail.file + " at line " + (step.line + 1);
-  head.addEventListener("click", function () {
+  head.dataset.tip = "Open " + detail.file + " at line " + (step.line + 1);
+  head.dataset.tipWrap = "";
+  // The caret folds the section; the rest of the header opens the source.
+  head.addEventListener("click", function (ev) {
+    if (ev.target.closest(".caret")) {
+      card.toggleAttribute("data-collapsed");
+      return;
+    }
     vscode.postMessage({ type: "open", file: detail.file, line: step.line });
   });
   card.appendChild(head);
+  const body = el("div", "step-body");
+  card.appendChild(body);
 
-  if (step.note) card.appendChild(el("div", "note", step.note));
+  if (step.note) body.appendChild(el("div", "note", step.note));
   if (step.lines.length > 0) {
     const script = el("div", "script");
     for (const line of step.lines) {
@@ -344,25 +341,36 @@ function renderStep(detail, step) {
       });
       script.appendChild(row);
     }
-    card.appendChild(script);
+    body.appendChild(script);
   }
-  if (step.hidden > 0) card.appendChild(el("div", "more", "… " + step.hidden + " more lines (open the source to read them)"));
+  if (step.hidden > 0) body.appendChild(el("div", "more", "… " + step.hidden + " more lines (open the source to read them)"));
 
   if (step.targets.length > 0) {
     const leads = el("div", "leads");
-    leads.appendChild(el("div", "lbl", "leads to"));
+    leads.appendChild(el("div", "px-label", "Leads to")).style.padding = "0 8px";
     for (const target of step.targets) renderTarget(leads, target, false);
     if (step.hiddenTargets > 0) leads.appendChild(el("div", "target dim", "… " + step.hiddenTargets + " more"));
-    card.appendChild(leads);
+    body.appendChild(leads);
   }
   return card;
 }
 
+function badge(text) {
+  const b = el("span", "px-badge", text);
+  b.dataset.variant = "secondary";
+  return b;
+}
+
 function render(msg) {
   const detail = msg.detail;
-  chainEl.textContent = msg.stack.concat([msg.id]).join("  ›  ");
+  chainEl.textContent = "";
+  msg.stack.forEach(function (id) {
+    chainEl.appendChild(el("span", "crumb", id));
+    chainEl.insertAdjacentHTML("beforeend", ICON_CRUMB);
+  });
+  chainEl.appendChild(el("span", "here", msg.id));
   backEl.disabled = msg.stack.length === 0;
-  backEl.textContent = msg.stack.length > 0 ? "‹ Back to " + msg.stack[msg.stack.length - 1] : "‹ Back";
+  backEl.dataset.tip = msg.stack.length > 0 ? "Back to " + msg.stack[msg.stack.length - 1] : "Back";
 
   bodyEl.textContent = "";
   if (!detail) {
@@ -387,9 +395,9 @@ function render(msg) {
   if (flavorText) bodyEl.appendChild(el("div", "note", flavorText));
 
   const badges = el("div", "badges");
-  if (detail.type) badges.appendChild(el("span", "badge", detail.type));
-  if (detail.theme) badges.appendChild(el("span", "badge", "theme: " + detail.theme));
-  if (detail.hidden) badges.appendChild(el("span", "badge", "hidden"));
+  if (detail.type) badges.appendChild(badge(detail.type));
+  if (detail.theme) badges.appendChild(badge("theme: " + detail.theme));
+  if (detail.hidden) badges.appendChild(badge("hidden"));
   badges.appendChild(openLink("Open source", detail.file, detail.line));
   bodyEl.appendChild(badges);
 

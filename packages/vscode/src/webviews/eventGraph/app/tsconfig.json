@@ -1,0 +1,14 @@
+{
+  // Browser code, like the flag builder's app: DOM only, no node, no vscode.
+  // The host can only reach app/ through messages.ts.
+  "extends": "../../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "paths": {
+      "@px-lsp/protocol/*": ["../../../../../protocol/src/*"]
+    }
+  },
+  "include": ["."]
+}

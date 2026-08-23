@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-<!-- The paradox-gui file icon's window frame (scripts/gen-icons.ts), with its
-     second layout block replaced by a pointer: the window you can work in.
-     Dark-theme ink, matching that icon's dark variant. -->
-  <rect x="1.75" y="2.55" width="12.5" height="10.9" rx="1.6" fill="none" stroke="#A78BFA" stroke-width="1.5"/>
-  <line x1="2" y1="6" x2="14" y2="6" stroke="#A78BFA" stroke-width="1.5"/>
-  <rect fill="#A78BFA" x="3.9" y="7.9" width="3.5" height="3.5" rx="0.6"/>
-  <path fill="#A78BFA" d="M8.6 7.6 L12.7 11.7 L10.4 11.9 L8.6 13.4 Z"/>
-</svg>

@@ -11,6 +11,7 @@
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
+import type { SaveSchema } from "../gui/saveSchema";
 
 /**
  * One "New Content" template: the content of a scaffold, as data, so the writer
@@ -120,6 +121,13 @@ export interface GameMeta {
    */
   stageRoots?: string[];
   /**
+   * The game composes flags from `common/coat_of_arms` definitions over
+   * `gfx/coat_of_arms/{patterns,colored_emblems,textured_emblems}` textures,
+   * in the layout the flag builder renders. Absent = the Flag Builder does
+   * not open for this game.
+   */
+  flagBuilder?: boolean;
+  /**
    * Database entry-mode prefixes legal on top-level definition keys
    * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before
    * treating the rest as the definition name. Absent = no such syntax.
@@ -184,6 +192,12 @@ export interface GameProfile extends GameMeta {
    * flag documents its probe in gui/layoutEngine.ts's GuiLayoutQuirks.
    */
   guiLayoutQuirks?: GuiLayoutQuirks;
+  /**
+   * How this game's save games are read for GUI preview values: the entity
+   * mapping, the meta keys and the shape the streaming reader must expect
+   * (gui/saveSchema.ts). Absent = a save answers the meta-only default rows.
+   */
+  saveSchema?: SaveSchema;
   /** Trailing provenance note on bundled-wiki token hovers. */
   wikiNote: string;
   /** LSP diagnostic `source` label ("ck3-script"). */

@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -340,6 +340,11 @@
         "icon": "$(preview)"
       },
       {
+        "command": "px.openFlagBuilder",
+        "category": "Paradox",
+        "title": "Open Flag Builder"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report"
@@ -640,6 +645,12 @@
             "default": false,
             "order": 4,
             "markdownDescription": "Diagnose files under `px.gamePath` (vanilla game content). Off by default: the extension only ever diagnoses your mod's files."
+          },
+          "px.diagnostics.requireDescriptor": {
+            "type": "boolean",
+            "default": false,
+            "order": 5,
+            "markdownDescription": "Report an error (and offer to create one) when a mod folder has no `descriptor.mod` / `.metadata/metadata.json`. Off by default."
           }
         }
       },
@@ -829,6 +840,10 @@
         {
           "command": "px.openGuiEditor",
           "when": "px.isCk3Workspace && px.guiEditorSupported"
+        },
+        {
+          "command": "px.openFlagBuilder",
+          "when": "px.isCk3Workspace && px.flagBuilderSupported"
         },
         {
           "command": "px.modReport",
@@ -1060,9 +1075,9 @@
   },
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs",
-    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020",
-    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --watch",
+    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",
     "testp": "node ../../scripts/package-preview.mjs"

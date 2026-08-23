@@ -22,6 +22,9 @@ export interface PxStatus {
 
 export class PxStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
+  /** Server phases (`paradox/progress`), in the order the server started them. */
+  private readonly phases = new Map<string, { label: string; done: boolean }>();
+  private last: PxStatus | null = null;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
@@ -37,13 +40,24 @@ export class PxStatusBar implements vscode.Disposable {
     else this.item.hide();
   }
 
+  /** One server phase started or finished; the item re-renders so the tooltip
+   * says what is still loading instead of only what finished. */
+  setPhase(phase: string, state: "start" | "done", detail?: string): void {
+    const label = detail ?? this.phases.get(phase)?.label ?? phase;
+    this.phases.set(phase, { label, done: state === "done" });
+    if (this.last) this.update(this.last);
+  }
+
   update(s: PxStatus): void {
+    this.last = s;
     const healthy = s.gameOk && s.modOk && (s.tigerName === null || s.tigerOk) && s.tokens > 0;
-    this.item.text = s.indexing
-      ? "$(loading~spin) PX Toolkit"
-      : healthy
-        ? "$(check) PX Toolkit"
-        : "$(warning) PX Toolkit";
+    const running = [...this.phases.values()].some((p) => !p.done);
+    this.item.text =
+      s.indexing || running
+        ? "$(sync~spin) PX Toolkit"
+        : healthy
+          ? "$(check) PX Toolkit"
+          : "$(warning) PX Toolkit";
     const lines = [
       `**Paradox Modding Toolkit** — click to run setup & health check`,
       "",
@@ -63,6 +77,9 @@ export class PxStatusBar implements vscode.Disposable {
     if (s.tigerName !== null) {
       lines.push(`${s.tigerOk ? "✓" : "✗"} ${s.tigerName} ${s.tigerOk ? "available" : "not set up"}`);
     }
+    // What the server is still doing. A phase stays listed once done, with a
+    // check, so the rows do not jump around while a cold workspace loads.
+    for (const p of this.phases.values()) lines.push(`${p.done ? "✓" : "○"} ${p.label}`);
     const md = new vscode.MarkdownString(lines.join("\n\n"));
     this.item.tooltip = md;
   }

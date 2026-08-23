@@ -180,6 +180,19 @@ export interface StatusPayload {
  * Overview views re-query on this signal. */
 export const indexChangedNotification = "paradox/indexChanged";
 
+/** Notification: a long-running server phase started or finished; payload
+ * {@link ProgressPayload}. The status bar lists what is still loading, so a
+ * cold workspace says which step it is on instead of looking idle. No
+ * percentages: the phases are coarse and the client only shows their state. */
+export const progressNotification = "paradox/progress";
+export interface ProgressPayload {
+  /** Stable phase id, so a "done" can find the "start" it belongs to. */
+  phase: string;
+  state: "start" | "done";
+  /** Human-readable label for the phase, sent with "start". */
+  detail?: string;
+}
+
 // ---- overview suite (Phase 4) ------------------------------------------------
 
 /** Shared param for the mod-scoped overview requests: restrict the result to
@@ -312,6 +325,19 @@ export interface EventStepTarget {
   firesTotal?: number;
 }
 
+/**
+ * A scalar `key = value` written directly in an event body or an option body,
+ * with the line it sits on, so an editor can rewrite it in place instead of
+ * re-parsing the file. Blocks are not fields: they are `sections` / `options`.
+ */
+export interface EventFieldInfo {
+  key: string;
+  value: string;
+  /** 0-based source line. */
+  line: number;
+  /** The value was written in quotes and must be rewritten that way. */
+  quoted?: boolean;
+}
 export interface EventSectionInfo {
   name: string;
   /** 0-based line of the section key. */
@@ -328,6 +354,10 @@ export interface EventSectionInfo {
 }
 export interface EventOptionInfo {
   line: number;
+  /** Line the option's first statement may be inserted before (0-based). */
+  bodyLine: number;
+  /** Scalar keys written in the option body, editable in place. */
+  fields: EventFieldInfo[];
   name?: EventLocField;
   effectKeys: string[];
   hasTrigger: boolean;
@@ -357,6 +387,10 @@ export interface EventDetail {
   line: number;
   /** Line of the event's closing brace (option-scaffold insertion point). */
   endLine: number;
+  /** Line a new top-level statement may be inserted before (0-based). */
+  bodyLine: number;
+  /** Scalar keys written at the event's top level, editable in place. */
+  fields: EventFieldInfo[];
   type?: string;
   hidden?: boolean;
   theme?: string;
@@ -411,6 +445,14 @@ export interface GuiLayoutParams {
   text: string;
   /** Conditional-visibility preview mode; absent = `showAll`. */
   visibility?: GuiVisibilityOptions;
+  /**
+   * `resolve` (default): textbox keys show their localized value and
+   * `[datafunctions]` their knowable text, and sizes follow. `raw`: the
+   * `text =` value verbatim, as the file has it.
+   */
+  loc?: "resolve" | "raw";
+  /** Modder-supplied preview text per `[...]` expression (the `.<game>modding/gui-preview-values.json` table). */
+  previewValues?: Record<string, string>;
 }
 
 /**
@@ -471,14 +513,41 @@ export interface GuiLayoutFill {
   mode?: "stretch" | "tile" | "nineslice-stretch" | "nineslice-tile";
   /** `framesize = { w h }` cell size when the texture is a frame sheet. */
   framesize?: [number, number];
+  /** `alpha = x`: the fill's opacity, 0..1 (absent = 1). */
+  alpha?: number;
+  /**
+   * `modify_texture` with `blend_mode = alphamultiply`: a texture whose alpha
+   * multiplies the fill's, stretched over the rect. Listed in `textures` like
+   * any other path. Other blend modes are not carried.
+   */
+  mask?: string;
+  /** `fittype = centercrop`: cover the rect and crop to the centre instead of stretching. */
+  fit?: "centercrop";
   /**
    * 1-based frame index into that sheet, row-major over the cols x rows grid
    * (cols = texW/w). Out-of-range values clamp to the first or last cell.
    */
   frame?: number;
 }
-export interface GuiLayoutText {
+/**
+ * One piece of what a textbox shows. `loc`: a localization key the index
+ * resolved (or not: `resolved` false shows the key itself). `datafn`: a
+ * `[...]` expression; resolved through `Localize`/`Concept` or the modder's
+ * preview values, else shown as its last chain segment with `resolved` false.
+ * `source` is the key or the expression without brackets.
+ */
+export interface GuiTextSegment {
   text: string;
+  kind: "literal" | "loc" | "datafn";
+  source: string;
+  resolved: boolean;
+}
+export interface GuiLayoutText {
+  /** What is measured and drawn (resolved when the request asked for it). */
+  text: string;
+  /** The raw `text =` value; differs from `text` when something resolved. */
+  raw?: string;
+  segments?: GuiTextSegment[];
   fontsize: number;
   offsetX: number;
   offsetY: number;
@@ -526,6 +595,15 @@ export interface GuiLayoutNode {
    * never editable. Presentation only, not a measured layout rule.
    */
   ghost?: boolean;
+  /**
+   * The widget's `onclick` value as authored, minus its quotes, when it has
+   * one. A static preview cannot run it; a client's interact mode reads the
+   * `GetVariableSystem.*` calls out of it to drive the visibility checks, and
+   * names the rest as what the game would run.
+   */
+  onclick?: string;
+  /** The widget's `tooltip` value as authored (a loc key or a [datafunction]), when it has one. */
+  tooltip?: string;
   /**
    * A root that is a `type name = base { }` DECLARATION laid out as one
    * instance of itself. Set only on roots, and only for a document that
@@ -851,6 +929,75 @@ export interface GuiVocabularyResult {
 }
 
 /**
+ * Render-ready previews of palette entries: one instance of each entry laid
+ * out in a synthetic document that keeps the requested document's own
+ * declarations (so a local template previews with its real base). The
+ * result is an ordinary node tree the client draws with the same painter as
+ * the canvas. Entries a synthetic document cannot stand up (nothing to show,
+ * zero size, a type the store lacks) come back with `node: null` and a
+ * `reason`. Capped per request (GUI_PREVIEW_MAX); ask for the visible page.
+ */
+export const guiPreviewRequest = "paradox/guiPreview";
+export const GUI_PREVIEW_MAX = 48;
+export interface GuiPreviewEntry {
+  name: string;
+  /** `raw`: `fragment` is `.gui` text (a saved component) laid out as is. */
+  kind: "builtin" | "type" | "template" | "raw";
+  fragment?: string;
+}
+export interface GuiPreviewParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  text: string;
+  entries: GuiPreviewEntry[];
+}
+export interface GuiPreview {
+  name: string;
+  node: GuiLayoutNode | null;
+  /** Texture paths the node tree references (mod-relative). */
+  textures: string[];
+  reason?: string;
+}
+export interface GuiPreviewResult {
+  previews: GuiPreview[];
+}
+
+/**
+ * Preview values read out of a save game, so a designer draws
+ * `[GetPlayer.GetName]` as "Great Britain" instead of a placeholder chip.
+ *
+ * `values` is keyed by datafunction chain WITHOUT brackets, exactly the shape
+ * {@link GuiLayoutParams.previewValues} takes, so a client hands the answer
+ * straight back to the next layout request. A chain the save has no field for
+ * is absent: a preview shows what is knowable and never invents a value.
+ *
+ * The server streams the file and parses only the few blocks it needs (a big
+ * campaign runs ~115 MB), and caches the answer per file and mtime.
+ * Ironman and binary saves are refused with `error` set; melting them is a
+ * different tool.
+ */
+export const guiSaveValuesRequest = "paradox/guiSaveValues";
+export interface GuiSaveValuesParams {
+  /** Absolute path to the save file. */
+  path: string;
+}
+export interface GuiSaveValuesResult {
+  /** Datafunction chain without brackets -> display text. */
+  values: Record<string, string>;
+  /** What the values came from, for a UI to name the save it is showing. */
+  source: {
+    /** The campaign's name as the save's meta data states it. */
+    name: string;
+    /** The in-game date, already formatted ("21 January 1836"). */
+    date: string;
+    /** The game the values were read for. */
+    game: string;
+  };
+  /** Set when the save cannot be read (ironman, binary, unreadable). */
+  error?: string;
+}
+
+/**
  * Request: source edits for a `.gui` designer gesture;
  * {@link GuiSourceEditParams} -> {@link GuiSourceEditResult}, null when the
  * request itself makes no sense (an unknown op). The server never writes: it
@@ -993,6 +1140,9 @@ export interface EventGraphParams {
   /** Restrict to one workspace mod (absolute root path). */
   modRoot?: string | null;
   maxNodes?: number;
+  /** Also read each mod event's `theme`. Off by default: it costs one parse per
+   *  event file, and only a client that draws the theme's art needs it. */
+  themes?: boolean;
 }
 export interface EventGraphNode {
   id: string;
@@ -1002,6 +1152,14 @@ export interface EventGraphNode {
   line?: number;
   /** Localized title (best-effort: <id>.t / <id>_t / <id>.title lookups). */
   title?: string;
+  /** The event's declared `theme`, when the request asked for themes. */
+  theme?: string;
+  /** How many `option` blocks this definition has (mod-side definitions only). */
+  options?: number;
+  /** The first keys of its `trigger` block, e.g. `is_adult, has_trait…`; absent = no trigger. */
+  triggerSummary?: string;
+  /** How many other nodes of this graph it fires; absent when it fires none. */
+  fires?: number;
 }
 export interface EventGraphEdge {
   from: string;
@@ -1028,6 +1186,77 @@ export interface EventGraph {
   truncated: boolean;
   /** Absent from servers that predate it; a client must tolerate that. */
   suggestions?: EventGraphSuggestions;
+}
+
+/**
+ * Request: the value sets an event editor may offer; {@link EventVocabularyParams}
+ * to {@link EventVocabularyResult}.
+ *
+ * Everything in the answer is DERIVED: the key lists come from the active
+ * profile's structure table, the field value sets from the schema's reference
+ * fields resolved through the definition index, and the effect/trigger lists
+ * from the user's script_docs (or the bundled wiki fallback). Nothing here is a
+ * hand-written name list, so a game patch that adds a theme or an effect shows
+ * up without a release.
+ */
+/**
+ * Request: the illustration an event theme puts behind its window;
+ * {@link EventBannerParams} to {@link EventBannerResult}.
+ *
+ * Resolved through the game's own two hops (event_themes -> event_backgrounds),
+ * taking the last `background` block that carries no `trigger`, which is the
+ * file's own unconditional fallback. `texture` is the engine's mod-relative
+ * path, exactly as a `.gui` file would spell it, so a client resolves it with
+ * the same mod-then-game lookup it uses for any other texture. A theme that
+ * resolves to nothing answers `reason` instead: the caller is expected to say
+ * so rather than draw a picture that is not the event's.
+ */
+export const eventBannerRequest = "paradox/eventBanner";
+export interface EventBannerParams {
+  /** Theme name as the event writes it (`theme = intrigue`). */
+  theme: string;
+}
+export interface EventBannerResult {
+  theme: string;
+  /** Mod-relative texture path, absent when nothing resolved. */
+  texture?: string;
+  /** Why nothing resolved. Present exactly when `texture` is absent. */
+  reason?: string;
+}
+
+export const eventVocabularyRequest = "paradox/eventVocabulary";
+export interface EventVocabularyParams {
+  /** Restrict definition-backed value sets to one workspace mod (plus vanilla). */
+  modRoot?: string | null;
+}
+/** One offerable value with the one-line docs an editor shows beside it. */
+export interface EventVocabularyItem {
+  value: string;
+  /** Documentation, capped. Empty when the source has none; never invented. */
+  doc?: string;
+  /** Dimmer right-hand label: where the value comes from (mod / vanilla / a kind). */
+  hint?: string;
+}
+/** Caps: an editor lists a page at a time, and these ride on every open. */
+export const EVENT_VOCABULARY_MAX_TOKENS = 600;
+export const EVENT_VOCABULARY_MAX_VALUES = 400;
+export interface EventVocabularyResult {
+  /** Keys valid at an event's top level, most used first. */
+  eventKeys: EventVocabularyItem[];
+  /** Keys valid inside an `option` block, most used first. */
+  optionKeys: EventVocabularyItem[];
+  /**
+   * Key to the values that key accepts, for the keys whose value set is known:
+   * a declared enumeration, or a reference field resolved through the index
+   * (`theme` gives every indexed event_theme). Keys with a free value are absent.
+   */
+  values: Record<string, EventVocabularyItem[]>;
+  /** Effect tokens, most used first, capped at EVENT_VOCABULARY_MAX_TOKENS. */
+  effects: EventVocabularyItem[];
+  /** Trigger tokens, same ordering and cap. */
+  triggers: EventVocabularyItem[];
+  /** Saved scopes the mod writes (`save_scope_as`), sorted. */
+  savedScopes: EventVocabularyItem[];
 }
 
 /**

@@ -25,7 +25,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
-import { decodeDds, downscale, encodePng } from "@px-lsp/server/dds";
+import { decodeDds, decodeTga, downscale, encodePng, type DecodedImage } from "@px-lsp/server/dds";
 
 /** Skip textures beyond this pixel count (loading screens, atlases). */
 const MAX_TEXTURE_PIXELS = 4096 * 4096;
@@ -95,6 +95,17 @@ export class GuiTextureCache {
   resolve(rel: string, maxDim = 0): string | null {
     const source = this.locate(rel, maxDim);
     if (!source) return null;
+    return this.resolveSource(source, maxDim);
+  }
+
+  /** Same as `resolve` for a file the caller already located (the flag builder's roots are its own). */
+  resolveFile(abs: string, maxDim = 0): string | null {
+    const source = this.keyFor(abs, maxDim);
+    if (!source) return null;
+    return this.resolveSource(source, maxDim);
+  }
+
+  private resolveSource(source: { abs: string; key: string }, maxDim: number): string | null {
     const cached = this.resolved.get(source.key);
     if (cached !== undefined) {
       this.touch(source.key);
@@ -128,28 +139,34 @@ export class GuiTextureCache {
   private locate(rel: string, maxDim: number): { abs: string; key: string } | null {
     for (const root of [this.roots.modPath, this.roots.gamePath]) {
       if (!root) continue;
-      const abs = path.join(root, rel);
-      let stat: fs.Stats;
-      try {
-        stat = fs.statSync(abs);
-      } catch {
-        continue;
-      }
-      const key = createHash("sha1")
-        .update(`${abs}|${stat.mtimeMs}|${stat.size}|${maxDim}`)
-        .digest("hex")
-        .slice(0, 20);
-      return { abs, key };
+      const source = this.keyFor(path.join(root, rel), maxDim);
+      if (source) return source;
     }
     return null;
+  }
+
+  private keyFor(abs: string, maxDim: number): { abs: string; key: string } | null {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(abs);
+    } catch {
+      return null;
+    }
+    const key = createHash("sha1")
+      .update(`${abs}|${stat.mtimeMs}|${stat.size}|${maxDim}`)
+      .digest("hex")
+      .slice(0, 20);
+    return { abs, key };
   }
 
   private convert(abs: string, maxDim: number): Uint8Array | null {
     try {
       const bytes = fs.readFileSync(abs);
       if (/\.png$/i.test(abs)) return new Uint8Array(bytes);
-      if (!/\.dds$/i.test(abs)) return null;
-      const decoded = decodeDds(new Uint8Array(bytes));
+      let decoded: DecodedImage;
+      if (/\.dds$/i.test(abs)) decoded = decodeDds(new Uint8Array(bytes));
+      else if (/\.tga$/i.test(abs)) decoded = decodeTga(new Uint8Array(bytes));
+      else return null;
       if (decoded.width * decoded.height > MAX_TEXTURE_PIXELS) return null;
       const img = maxDim > 0 ? downscale(decoded, maxDim) : decoded;
       return encodePng(img.width, img.height, img.pixels);

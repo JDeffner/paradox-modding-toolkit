@@ -40,13 +40,17 @@
  */
 import type {
   GuiDependenciesResult,
+  GuiLayoutNode,
   GuiLayoutResult,
+  GuiPreview,
   GuiSourceOp,
+  GuiTextSegment,
   GuiVisibilityCheck,
   GuiVisibilityMode,
   GuiVocabularyEntry,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
+import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import {
   ANCHOR_X,
   ANCHOR_Y,
@@ -59,16 +63,33 @@ import type {
   AppToHost,
   EditProperty,
   GuiEditorUiState,
+  GuiLocMode,
+  GuiPanelStates,
   GuiValueMode,
   SavedComponent,
   SavedPreset,
   TextureEntry,
 } from "../messages";
 import { connectHost } from "./host";
+import { iconEl, type IconName } from "../../shared/icons";
+import { sidePanel } from "../../shared/sidePanel";
 import {
+  closePopover,
+  confirmDialog,
+  menu,
+  popover,
+  toast as pxToast,
+  type MenuItem,
+} from "../../shared/overlay";
+import { scrubbable } from "../../shared/scrub";
+import { colorPicker, type Rgb } from "../../shared/colorPicker";
+import {
+  applyScrollOffsets,
   buildScene,
   childIndices,
   parentIndex,
+  pathKey,
+  scrollExtent,
   setLineHeightRatio,
   subtreeEnd,
   type Scene,
@@ -76,10 +97,20 @@ import {
   type SceneRect,
 } from "./scene";
 import {
+  applyActions,
+  assignments,
+  describeAction,
+  parseOnclick,
+  type VarAction,
+  type VarState,
+} from "./interact";
+import {
   drawScene,
+  drawThumbnail,
   resetImageCache,
   type DrawMasks,
   type DrawPulse,
+  type DrawReference,
   type Images,
   WORLD_H,
   WORLD_W,
@@ -100,12 +131,25 @@ import {
 } from "./inspector";
 import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
 import { alignDeltas, distributeDeltas, type AlignMode } from "./align";
-import { containerRows, paletteLabel, paletteRows } from "./palette";
+import { containerRows, paletteLabel } from "./palette";
+import {
+  chunk,
+  LIBRARY_PAGE,
+  LIBRARY_SECTIONS,
+  libraryEntries,
+  libraryTiles,
+  libraryTip,
+  previewEntryFor,
+  type LibraryEntry,
+  type LibrarySection,
+} from "./library";
 import { browserGroups, usingValue, vocabularyDetail } from "./browse";
 import { buildHeatmap, diffScenes, HEATMAP_MODES, pulseNote, statsLine, type HeatmapMode } from "./devtools";
 import { constraintOverlay, num, overrideRows, placementReport, type ConstraintOverlay } from "./placement";
 import { textureFolder, textureName, texturePage, textureSummary, textureValue, thumbGrid } from "./textures";
 import { GRID_STEP, MOVE_EDGES, snapRect, type Guide, type SnapConfig, type SnapResult } from "./snap";
+import { NudgeBurst, nudgeVector } from "./nudge";
+import { firstChildOf, firstRoot, isTypingTarget, siblingFrom } from "./keys";
 import {
   baseOf,
   DRAG_THRESHOLD,
@@ -132,8 +176,9 @@ const inspectorEl = document.getElementById("inspector") as HTMLDivElement;
 const statusEl = document.getElementById("status") as HTMLSpanElement;
 const statsEl = document.getElementById("stats") as HTMLSpanElement;
 const visibilityBadgeEl = document.getElementById("visibilityBadge") as HTMLSpanElement;
-const toastEl = document.getElementById("toast") as HTMLDivElement;
 const metaEl = document.getElementById("meta") as HTMLSpanElement;
+const infoEl = document.getElementById("info") as HTMLButtonElement;
+const fileNameEl = document.getElementById("fileName") as HTMLSpanElement;
 const zoomLabel = document.getElementById("zoomLabel") as HTMLSpanElement;
 const outlinesEl = document.getElementById("outlines") as HTMLInputElement;
 const snapToggle = document.getElementById("snap") as HTMLInputElement;
@@ -141,12 +186,27 @@ const gridToggle = document.getElementById("grid") as HTMLInputElement;
 const constraintsToggle = document.getElementById("constraints") as HTMLInputElement;
 const pulsesToggle = document.getElementById("pulses") as HTMLInputElement;
 const heatmapSelect = document.getElementById("heatmap") as HTMLSelectElement;
-const paletteEl = document.getElementById("palette") as HTMLDivElement;
-const paletteToggleEl = document.getElementById("paletteToggle") as HTMLButtonElement;
-const haloEl = document.getElementById("halo") as HTMLDivElement;
+const heatmapMenuEl = document.getElementById("heatmapMenu") as HTMLButtonElement;
+const libraryEl = document.getElementById("library") as HTMLDivElement;
+const libraryToggleEl = document.getElementById("libraryToggle") as HTMLButtonElement;
 const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
 const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
-const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
+const libraryOverlayEl = document.getElementById("libraryOverlay") as HTMLDivElement;
+const clickTipEl = document.getElementById("clickTip") as HTMLDivElement;
+const modeEditEl = document.getElementById("modeEdit") as HTMLButtonElement;
+const modeInteractEl = document.getElementById("modeInteract") as HTMLButtonElement;
+/** The four collapsible panel sections, by id suffix (html.ts `section()`). */
+const sections = {
+  tree: document.getElementById("sec-tree") as HTMLDivElement,
+  layers: document.getElementById("sec-layers") as HTMLDivElement,
+  inspector: document.getElementById("sec-inspector") as HTMLDivElement,
+  devtools: document.getElementById("sec-devtools") as HTMLDivElement,
+};
+type SectionId = keyof typeof sections;
+const dropTargetEl = document.getElementById("dropTarget") as HTMLDivElement;
+const locResolvedEl = document.getElementById("locResolved") as HTMLButtonElement;
+const locRawEl = document.getElementById("locRaw") as HTMLButtonElement;
+const textTipEl = document.getElementById("textTip") as HTMLDivElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
@@ -311,6 +371,14 @@ function draw(): void {
     paintMs: lastPaintMs,
     widgets: scene.count,
   });
+  syncInfo();
+}
+
+/** The store line and the stats live behind the info button at the stage's edge, not in a bar. */
+function syncInfo(): void {
+  infoEl.dataset.tip = [metaEl.textContent, statsEl.textContent].filter((t) => t).join("\n");
+  if (metaEl.hasAttribute("data-warning")) infoEl.setAttribute("data-warning", "");
+  else infoEl.removeAttribute("data-warning");
 }
 
 function paintScene(): void {
@@ -322,6 +390,10 @@ function paintScene(): void {
   const live = livePreview();
   const rect = live?.write.rect ?? (item ? hitRect(item) : undefined);
   const shift = live?.write.offset;
+  // A multi-selection's grips sit on the bounds of the whole set, and the
+  // bounds follow the preview: they are the rect the grips were dragged from.
+  const bounds =
+    others.length > 0 && rect ? unionRect([rect, ...others.map((i) => otherRect(i, shift))]) : undefined;
   drawScene(
     ctx,
     scene,
@@ -339,10 +411,19 @@ function paintScene(): void {
       // has them (a resize is single-member and never gets here with others).
       others: marquee
         ? marquee.hits.map((i) => hitRect(scene.items[i]))
-        : others.map((i) => shifted(hitRect(scene.items[i]), shift)),
-      handles: canEdit(item) && others.length === 0,
+        : others.map((i) => otherRect(i, shift)),
+      handles: canEdit(item) || (bounds !== undefined && allSelected().some((i) => canEdit(scene.items[i]))),
+      handleRect: bounds,
+      accent: accentColor(),
       marquee: marquee?.rect,
-      preview: live ? { slices: live.slices, dx: live.write.offset.dx, dy: live.write.offset.dy } : undefined,
+      preview: live
+        ? {
+            slices: live.slices,
+            dx: live.write.offset.dx,
+            dy: live.write.offset.dy,
+            duplicate: live.duplicate,
+          }
+        : undefined,
       masks,
       grid: gridToggle.checked ? GRID_STEP : 0,
       guides: gesture?.snap?.guides,
@@ -355,9 +436,11 @@ function paintScene(): void {
       heatmap: heat?.values ?? null,
       constraints: constraintsToggle.checked ? (constraints ?? undefined) : undefined,
       pulse: pulse ?? undefined,
+      reference: reference.image ? { ...reference, image: reference.image } : undefined,
     }
   );
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  syncDropTarget();
 }
 
 function geometry(rect: SceneRect): string {
@@ -366,6 +449,50 @@ function geometry(rect: SceneRect): string {
 
 function shifted(rect: SceneRect, by: { dx: number; dy: number } | undefined): SceneRect {
   return by ? { ...rect, x: rect.x + by.dx, y: rect.y + by.dy } : rect;
+}
+
+/**
+ * Where a non-primary member is marked: its own previewed write while a
+ * gesture carries it (a resize changes its size, not just its place), else
+ * its rect moved by the primary's offset, else where the file has it.
+ */
+function otherRect(index: number, shift: { dx: number; dy: number } | undefined): SceneRect {
+  const g = gesture;
+  if (g?.writes) {
+    const at = g.members.findIndex((m) => m.index === index);
+    if (at >= 0 && g.members[at].refused === null) return g.writes[at].rect;
+  }
+  return shifted(hitRect(scene.items[index]), shift);
+}
+
+function unionRect(rects: readonly SceneRect[]): SceneRect {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const r of rects) {
+    x0 = Math.min(x0, r.x);
+    y0 = Math.min(y0, r.y);
+    x1 = Math.max(x1, r.x + r.w);
+    y1 = Math.max(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/** The bounds of the whole selection, where a multi-selection's grips sit. */
+function selectionBounds(): SceneRect | null {
+  const members = allSelected();
+  if (members.length < 2) return null;
+  return unionRect(members.map((i) => hitRect(scene.items[i])));
+}
+
+/**
+ * The theme's accent, read off the page so the guides follow the user's theme
+ * rather than a colour the canvas chose. Empty when the page has no token
+ * (a host page without px-ui), and the painter then uses its own.
+ */
+function accentColor(): string {
+  return getComputedStyle(document.body).getPropertyValue("--px-primary").trim();
 }
 
 /**
@@ -426,14 +553,118 @@ function el(tag: string, className?: string, text?: string): HTMLElement {
   return node;
 }
 
+interface ButtonOptions {
+  icon?: IconName;
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive";
+  size?: "sm" | "xs" | "icon" | "icon-sm" | "icon-xs";
+  /** The tooltip. Every icon-only button has one; a labelled one may. */
+  tip?: string;
+  className?: string;
+}
+
+/** A px-btn. The label is the button's whole text, so a test can find it by label. */
+function button(label: string, onClick: () => void, o: ButtonOptions = {}): HTMLButtonElement {
+  const node = document.createElement("button");
+  node.className = o.className ? `px-btn ${o.className}` : "px-btn";
+  node.dataset.variant = o.variant ?? "ghost";
+  if (o.size) node.dataset.size = o.size;
+  if (o.icon) node.appendChild(iconEl(o.icon));
+  if (label) node.appendChild(document.createTextNode(label));
+  if (o.tip) {
+    node.dataset.tip = o.tip;
+    if (o.tip.length > 40) node.dataset.tipWrap = "";
+  }
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+/** A text field: px-input, small, with the keystrokes kept off the canvas. */
+function textInput(placeholder: string, value: string, className = ""): HTMLInputElement {
+  const input = document.createElement("input");
+  input.className = className ? `px-input ${className}` : "px-input";
+  input.dataset.size = "sm";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.spellcheck = false;
+  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  return input;
+}
+
+/**
+ * A choice that reads as a field: a `<select>` holds the value (so the page's
+ * host contract and the harness still see a select) and a px-dropdown button
+ * opens its options as a `menu()`, because a native option list cannot be
+ * styled and breaks in dark themes. Picking writes the select and fires its
+ * `change`, so the owner listens to the select alone.
+ */
+function dropdownSelect(
+  items: MenuItem[],
+  value: string,
+  o: { tip?: string; search?: boolean } = {}
+): { wrap: HTMLElement; select: HTMLSelectElement } {
+  const wrap = el("span", "dropdownWrap");
+  const select = document.createElement("select");
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    select.appendChild(option);
+  }
+  select.value = value;
+  const label = el("span", "px-truncate");
+  const trigger = button("", () => undefined, {
+    variant: "outline",
+    size: "sm",
+    tip: o.tip,
+    className: "px-dropdown",
+  });
+  trigger.appendChild(label);
+  trigger.appendChild(iconEl("chevronDown"));
+  const sync = (): void => {
+    label.textContent = items.find((i) => i.value === select.value)?.label ?? select.value;
+  };
+  trigger.addEventListener("click", () =>
+    menu(trigger, items, {
+      value: select.value,
+      search: o.search,
+      onPick: (picked) => {
+        if (picked === select.value) return;
+        select.value = picked;
+        sync();
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    })
+  );
+  select.addEventListener("change", sync);
+  sync();
+  wrap.appendChild(select);
+  wrap.appendChild(trigger);
+  return { wrap, select };
+}
+
+/** A px-badge in its quiet outline form, for the row tags (declaration, synthetic, a count). */
+function badge(text: string, title?: string): HTMLElement {
+  const node = el("span", "px-badge tag", text);
+  node.dataset.variant = "outline";
+  if (title) node.title = title;
+  return node;
+}
+
+/** A section header inside a panel. */
+function sectionTitle(text: string): HTMLElement {
+  return el("div", "section", text);
+}
+
 function renderTree(): void {
   const fragment = document.createDocumentFragment();
   rowEls.clear();
   for (const row of treeRows(scene, collapsed, focusIndex)) {
-    const node = el("div", "row");
+    const node = el("div", "px-item row");
     node.style.paddingLeft = `${4 + row.depth * 12}px`;
-    const twisty = el("span", "twisty", row.hasChildren ? (row.collapsed ? "▸" : "▾") : "");
+    const twisty = el("span", "twisty");
     if (row.hasChildren) {
+      twisty.appendChild(iconEl("chevronRight"));
+      if (!row.collapsed) twisty.dataset.open = "";
       twisty.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const key = rowKey(scene.items[row.index].path);
@@ -443,22 +674,24 @@ function renderTree(): void {
       });
     }
     node.appendChild(twisty);
-    node.appendChild(el("span", undefined, row.key));
+    node.appendChild(el("span", "rowKey", row.key));
     if (row.name) node.appendChild(el("span", "rowName", `#${row.name}`));
     if (row.declared) {
-      const tag = el("span", "tag", "declaration");
-      tag.title =
-        "This file declares this type and instantiates nothing, so the declaration is previewed as one instance of itself. Its children are this file's own statements and are editable.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge(
+          "declaration",
+          "This file declares this type and instantiates nothing, so the declaration is previewed as one instance of itself. Its children are this file's own statements and are editable."
+        )
+      );
     } else if (row.synthetic) {
-      const tag = el("span", "tag", "synthetic");
-      tag.title = "Spliced in from a template or a type: no source of its own in this file.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge("synthetic", "Spliced in from a template or a type: no source of its own in this file.")
+      );
     }
     if (row.ghost) {
-      const tag = el("span", "tag", "ghost");
-      tag.title = "A datamodel placeholder: the list has no runtime rows in a static preview.";
-      node.appendChild(tag);
+      node.appendChild(
+        badge("ghost", "A datamodel placeholder: the list has no runtime rows in a static preview.")
+      );
     }
     node.addEventListener("click", () => select(row.index, { reveal: false }));
     rowEls.set(row.index, node);
@@ -469,11 +702,17 @@ function renderTree(): void {
   highlightTree(false);
 }
 
+/** The px-item selected state, which is also what the harness reads. */
+function setSelected(node: HTMLElement, on: boolean): void {
+  if (on) node.setAttribute("aria-selected", "true");
+  else node.removeAttribute("aria-selected");
+}
+
 function highlightTree(scrollTo: boolean): void {
   const members = new Set(others);
   for (const [index, node] of rowEls) {
     const isPrimary = index === selected;
-    node.classList.toggle("selected", isPrimary || members.has(index));
+    setSelected(node, isPrimary || members.has(index));
     if (isPrimary && scrollTo) node.scrollIntoView({ block: "nearest" });
   }
 }
@@ -506,13 +745,15 @@ function setFocus(index: number | null): void {
 function renderFocusBar(): void {
   focusBarEl.textContent = "";
   if (focusIndex === null) {
-    const button = el("button", undefined, "Focus subtree") as HTMLButtonElement;
-    button.title = "Show only the selected widget and what is inside it (f)";
-    button.disabled = selected === null;
-    button.addEventListener("click", () => {
-      if (selected !== null) setFocus(selected);
-    });
-    focusBarEl.appendChild(button);
+    const focus = button(
+      "Focus subtree",
+      () => {
+        if (selected !== null) setFocus(selected);
+      },
+      { icon: "focus", size: "sm", tip: "Show only the selected widget and what is inside it (f)" }
+    );
+    focus.disabled = selected === null;
+    focusBarEl.appendChild(focus);
     return;
   }
   // The ancestors are no longer rows, so the crumbs are the only way up.
@@ -527,10 +768,10 @@ function renderFocusBar(): void {
     focusBarEl.appendChild(el("span", "sepArrow", "›"));
   }
   focusBarEl.appendChild(el("span", undefined, widgetTitle(scene.items[focusIndex])));
-  const button = el("button", undefined, "Unfocus");
-  button.style.marginLeft = "auto";
-  button.addEventListener("click", () => setFocus(null));
-  focusBarEl.appendChild(button);
+  focusBarEl.appendChild(el("span", "px-grow"));
+  focusBarEl.appendChild(
+    button("Unfocus", () => setFocus(null), { size: "xs", tip: "Show the whole document again (f)" })
+  );
 }
 
 // ---- the layers panel ------------------------------------------------------
@@ -567,11 +808,17 @@ function renderLayers(): void {
   const reorderable = layersContainer !== null && container !== null && canEdit(container);
 
   const head = el("div", "head");
-  head.appendChild(el("div", "title", container ? `In ${widgetTitle(container)}` : "Document root"));
+  const title = el("div", "px-panel-title");
+  title.appendChild(iconEl("layers"));
+  title.appendChild(el("span", undefined, "Layers"));
+  title.appendChild(
+    el("span", "where px-truncate", container ? `In ${widgetTitle(container)}` : "Document root")
+  );
+  head.appendChild(title);
   head.appendChild(
     el(
       "div",
-      "hint",
+      "hint px-muted px-xs",
       reorderable
         ? "Source order: later rows paint on top, and in a box that is the layout order. Drag to reorder."
         : "Source order. These are the file's root widgets: there is no parent widget to reorder them inside."
@@ -609,40 +856,48 @@ function visibleWindow(rows: readonly LayerRow[]): { start: number; end: number 
 
 function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   const key = rowKey(scene.items[row.index].path);
-  const node = el("div", "row");
+  const node = el("div", "px-item row");
   node.classList.toggle("hiddenWidget", hiddenPaths.has(key));
-  node.appendChild(el("span", "grip", reorderable && row.rank >= 0 ? "⠿" : ""));
-  node.appendChild(
-    toggle("◉", "◌", hiddenPaths.has(key), "Hide this widget in the preview", () => {
+  const grip = el("span", "grip");
+  if (reorderable && row.rank >= 0) grip.appendChild(iconEl("grip"));
+  node.appendChild(grip);
+  const label = el("span", "label", widgetTitle(row));
+  node.appendChild(label);
+  if (row.declared) {
+    node.appendChild(
+      badge(
+        "declaration",
+        "A type this file declares, previewed as one instance of itself: there is no slot to move."
+      )
+    );
+  } else if (row.synthetic) {
+    node.appendChild(
+      badge("synthetic", "Spliced in from a template or a type: no source of its own to move.")
+    );
+  }
+  node.appendChild(el("span", "px-grow"));
+  const tools = el("span", "layerTools");
+  tools.appendChild(
+    toggle("eye", "eyeOff", hiddenPaths.has(key), "Hide this widget in the preview", () => {
       if (hiddenPaths.has(key)) hiddenPaths.delete(key);
       else hiddenPaths.add(key);
       afterToggle();
     })
   );
-  node.appendChild(
-    toggle("▢", "▣", lockedPaths.has(key), "Lock: the canvas stops picking this widget", () => {
+  tools.appendChild(
+    toggle("unlock", "lock", lockedPaths.has(key), "Lock: the canvas stops picking this widget", () => {
       if (lockedPaths.has(key)) lockedPaths.delete(key);
       else lockedPaths.add(key);
       afterToggle();
     })
   );
-  node.appendChild(
-    toggle("○", "◍", soloPath === key, "Solo: dim everything that is not this widget", () => {
+  tools.appendChild(
+    toggle("circle", "circleDot", soloPath === key, "Solo: dim everything that is not this widget", () => {
       soloPath = soloPath === key ? null : key;
       afterToggle();
     })
   );
-  const label = el("span", "label", widgetTitle(row));
-  node.appendChild(label);
-  if (row.declared) {
-    const tag = el("span", "tag", "declaration");
-    tag.title = "A type this file declares, previewed as one instance of itself: there is no slot to move.";
-    node.appendChild(tag);
-  } else if (row.synthetic) {
-    const tag = el("span", "tag", "synthetic");
-    tag.title = "Spliced in from a template or a type: no source of its own to move.";
-    node.appendChild(tag);
-  }
+  node.appendChild(tools);
 
   node.addEventListener("pointerdown", (ev) => onLayerPointerDown(ev as PointerEvent, row, reorderable));
   node.addEventListener("pointermove", (ev) => onLayerPointerMove(ev as PointerEvent, row));
@@ -659,15 +914,13 @@ function layerRowEl(row: LayerRow, reorderable: boolean): HTMLElement {
   return node;
 }
 
-/** One glyph column: `on` when the state is set, `off` when it is not. */
-function toggle(off: string, on: string, active: boolean, title: string, run: () => void): HTMLElement {
-  const node = el("span", `toggle${active ? " on" : ""}`, active ? on : off);
-  node.title = title;
+/** One row tool: `on` when the state is set, `off` when it is not. */
+function toggle(off: IconName, on: IconName, active: boolean, tip: string, run: () => void): HTMLElement {
+  const node = button("", run, { icon: active ? on : off, size: "icon-xs", tip, className: "toggle" });
+  node.setAttribute("aria-pressed", active ? "true" : "false");
+  node.dataset.tipSide = "left";
   node.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-  node.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    run();
-  });
+  node.addEventListener("click", (ev) => ev.stopPropagation());
   return node;
 }
 
@@ -680,21 +933,20 @@ function afterToggle(): void {
 function highlightLayers(): void {
   const members = new Set(others);
   for (const [index, node] of layerEls) {
-    node.classList.toggle("selected", index === selected || members.has(index));
+    setSelected(node, index === selected || members.has(index));
   }
 }
 
-// ---- the palette -----------------------------------------------------------
+// ---- the element library ---------------------------------------------------
 
 /**
- * What the palette may offer, straight from the host (`requestVocabulary`): the
+ * What the library may offer, straight from the host (`requestVocabulary`): the
  * game's own harvested widget vocabulary plus this document's declarations.
  * Nothing here invents a name, so a dropped entry is always a widget the game
  * knows. Empty until the panel is first opened; asking costs a server request
- * and a closed palette has nothing to show.
+ * and a closed library has nothing to show.
  */
 let vocabulary: GuiVocabularyEntry[] = [];
-let vocabularyTotal = 0;
 let vocabularyAsked = false;
 /**
  * The other half of the same answer: which PROPERTIES the harvest saw on the
@@ -704,8 +956,35 @@ let vocabularyAsked = false;
  */
 let vocabularyProps: Record<string, string[]> = {};
 let vocabularyCommon: string[] = [];
-let paletteQuery = "";
-const paletteEls = new Map<string, HTMLElement>();
+let libraryQuery = "";
+let librarySection: LibrarySection = "all";
+
+/** One tile on screen: what a drag marks and a preview paints into. */
+interface Tile {
+  node: HTMLElement;
+  canvas: HTMLCanvasElement;
+  entry: LibraryEntry;
+  painted: boolean;
+}
+const tileEls = new Map<string, Tile>();
+let tileObserver: IntersectionObserver | null = null;
+/** The tile bitmap, in CSS pixels; the canvas is scaled by the device ratio. */
+const TILE_W = 112;
+const TILE_H = 72;
+
+/**
+ * Previews the host has answered for THIS document version, by tile key. A
+ * layout push clears it: the document's own types and templates may have
+ * changed, and a tile that showed the old one would be a lie.
+ */
+const previewCache = new Map<string, GuiPreview>();
+/** Keys asked for and not yet answered, so a tile scrolled past twice asks once. */
+const previewPending = new Set<string>();
+/** The batches in flight, in order: the answer carries names, the batch carries keys. */
+const previewRequests: { gen: number; entries: LibraryEntry[] }[] = [];
+let libraryGen = 0;
+/** Per texture path a preview paints: the image once loaded, null when it could not load. */
+const libraryImages = new Map<string, HTMLImageElement | null>();
 
 /**
  * The widget an insert should select once the document comes back: the
@@ -714,19 +993,25 @@ const paletteEls = new Map<string, HTMLElement>();
  */
 let pendingSelect: { parent: string; source: number } | null = null;
 
-function paletteOpen(): boolean {
-  return !paletteEl.hidden;
+function libraryOpen(): boolean {
+  return !libraryEl.hidden;
 }
 
-function togglePalette(): void {
-  paletteEl.hidden = !paletteEl.hidden;
-  paletteToggleEl.classList.toggle("on", paletteOpen());
-  if (paletteOpen()) {
+function toggleLibrary(open = !libraryOpen()): void {
+  if (open === libraryOpen()) return;
+  libraryEl.hidden = !open;
+  libraryOverlayEl.hidden = !open;
+  libraryToggleEl.setAttribute("aria-pressed", open ? "true" : "false");
+  if (open) {
     // The document's own templates and types change as it is edited, so the
     // list is re-asked for whenever the panel is showing (onLayout does the
     // same); a closed panel asks once and lives with what it got.
     askVocabulary();
-    renderPalette();
+    if (!userDataAsked) {
+      userDataAsked = true;
+      host.send({ type: "requestUserData" });
+    }
+    renderLibrary();
   }
 }
 
@@ -735,56 +1020,271 @@ function askVocabulary(): void {
   host.send({ type: "requestVocabulary" });
 }
 
-function renderPalette(): void {
-  if (!paletteOpen()) return;
-  paletteEl.textContent = "";
-  paletteEls.clear();
+function renderLibrary(): void {
+  if (!libraryOpen()) return;
+  libraryEl.textContent = "";
+  tileObserver?.disconnect();
+  tileObserver = null;
+  tileEls.clear();
 
   const head = el("div", "head");
-  const filter = document.createElement("input");
-  filter.placeholder = "Filter widgets";
-  filter.value = paletteQuery;
-  filter.spellcheck = false;
-  filter.addEventListener("keydown", (ev) => ev.stopPropagation());
-  filter.addEventListener("input", () => {
-    paletteQuery = filter.value;
-    renderPalette();
-    filter.focus();
+  const titleRow = el("div", "titleRow");
+  titleRow.appendChild(el("span", "title", "Element library"));
+  titleRow.appendChild(
+    el(
+      "span",
+      "px-muted px-sm",
+      "Click a tile to add it to the selected container, or drag it onto the canvas"
+    )
+  );
+  titleRow.appendChild(el("span", "px-grow"));
+  titleRow.appendChild(
+    button("", () => toggleLibrary(false), {
+      icon: "x",
+      variant: "ghost",
+      size: "icon-sm",
+      tip: "Close (Esc or L)",
+    })
+  );
+  head.appendChild(titleRow);
+  const group = el("div", "px-input-group");
+  group.appendChild(iconEl("search"));
+  const search = textInput("Search the library", libraryQuery);
+  search.addEventListener("input", () => {
+    libraryQuery = search.value;
+    renderLibrary();
+    const again = libraryEl.querySelector("input");
+    again?.focus();
+    again?.setSelectionRange(again.value.length, again.value.length);
   });
-  head.appendChild(filter);
-  paletteEl.appendChild(head);
-
-  if (vocabulary.length === 0) {
-    paletteEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
-    return;
-  }
-  const rows = paletteRows(vocabulary, paletteQuery);
-  if (rows.length === 0) {
-    paletteEl.appendChild(el("div", "note", `Nothing matches "${paletteQuery}".`));
-    return;
-  }
-  for (const entry of rows) {
-    const node = el("div", "row");
-    node.appendChild(el("span", undefined, paletteLabel(entry)));
-    if (entry.count !== undefined) {
-      const tag = el("span", "tag", String(entry.count));
-      tag.title = `${entry.count} uses in the game's own gui files`;
-      node.appendChild(tag);
-    }
-    node.title = "Drag onto the canvas to insert it";
-    node.addEventListener("pointerdown", (ev) => {
-      if ((ev as PointerEvent).button !== 0 || committing) return;
-      paletteDrag = { entry, target: null, rank: 0, line: null };
-      node.classList.add("dragging");
+  group.appendChild(search);
+  head.appendChild(group);
+  const tabs = el("div", "px-tabs");
+  tabs.dataset.variant = "line";
+  tabs.setAttribute("role", "tablist");
+  for (const section of LIBRARY_SECTIONS) {
+    const tab = el("button", "px-tab", section.label) as HTMLButtonElement;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", section.id === librarySection ? "true" : "false");
+    tab.title = section.title;
+    tab.addEventListener("click", () => {
+      librarySection = section.id;
+      renderLibrary();
     });
-    paletteEls.set(entry.name, node);
-    paletteEl.appendChild(node);
+    tabs.appendChild(tab);
   }
-  const shown = rows.length;
-  const hidden = vocabularyTotal - shown;
-  if (hidden > 0) {
-    paletteEl.appendChild(el("div", "note", `${hidden} more; type to filter.`));
+  head.appendChild(tabs);
+  libraryEl.appendChild(head);
+
+  if (vocabulary.length === 0 && components.length === 0) {
+    libraryEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
+    return;
   }
+  const tiles = libraryTiles(libraryEntries(vocabulary, components), librarySection, libraryQuery);
+  if (tiles.length === 0) {
+    libraryEl.appendChild(
+      el(
+        "div",
+        "note",
+        libraryQuery
+          ? `Nothing matches "${libraryQuery}".`
+          : "Nothing saved yet. Select widgets and save them under Devtools › Saved."
+      )
+    );
+    return;
+  }
+  const grid = el("div", "tileGrid");
+  const more = el("div", "tileMore");
+  const count = el("div", "note count", `${tiles.length} ${tiles.length === 1 ? "entry" : "entries"}`);
+  // Previews only for the tiles on screen: each costs the server a layout,
+  // and a whole listing would be a layout per widget the game knows.
+  const observer = new IntersectionObserver((hits) => {
+    const wanted: LibraryEntry[] = [];
+    for (const hit of hits) {
+      if (!hit.isIntersecting) continue;
+      if (hit.target === more) appendPage();
+      else {
+        const tile = tileEls.get((hit.target as HTMLElement).dataset.key ?? "");
+        if (tile && !tile.painted && !paintFromCache(tile)) wanted.push(tile.entry);
+      }
+    }
+    askPreviews(wanted);
+  });
+  tileObserver = observer;
+  let shown = 0;
+  const appendPage = (): void => {
+    const end = Math.min(tiles.length, shown + LIBRARY_PAGE);
+    for (; shown < end; shown++) {
+      const tile = libraryTile(tiles[shown]);
+      grid.appendChild(tile.node);
+      observer.observe(tile.node);
+    }
+    if (shown >= tiles.length) {
+      observer.unobserve(more);
+      more.remove();
+    }
+  };
+  libraryEl.append(grid, more, count);
+  appendPage();
+  if (shown < tiles.length) observer.observe(more);
+}
+
+function libraryTile(entry: LibraryEntry): Tile {
+  const node = el("div", "tile");
+  node.dataset.key = entry.key;
+  node.dataset.kind = entry.kind;
+  node.title = libraryTip(entry);
+  const canvas = document.createElement("canvas");
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = TILE_W * ratio;
+  canvas.height = TILE_H * ratio;
+  node.append(canvas, el("div", "name", entry.name), el("div", "src", entry.source));
+  node.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0 || committing) return;
+    const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
+    document.body.appendChild(ghost);
+    paletteDrag = { entry, ghost, target: null, rank: 0, line: null, from: { x: ev.clientX, y: ev.clientY } };
+    moveGhost(ev.clientX, ev.clientY);
+    node.setAttribute("data-dragging", "");
+  });
+  // A click is a press and a release on the SAME tile, which a drag that
+  // reached the canvas never is; so a click inserts where the selection is.
+  node.addEventListener("click", () => libraryInsert(entry));
+  const tile: Tile = { node, canvas, entry, painted: false };
+  tileEls.set(entry.key, tile);
+  return tile;
+}
+
+/** Send the previews a page needs, in the batches the wire takes. */
+function askPreviews(entries: LibraryEntry[]): void {
+  const fresh = entries.filter((e) => !previewPending.has(e.key));
+  for (const batch of chunk(fresh, GUI_PREVIEW_MAX)) {
+    for (const e of batch) previewPending.add(e.key);
+    previewRequests.push({ gen: libraryGen, entries: batch });
+    host.send({ type: "requestPreviews", entries: batch.map(previewEntryFor) });
+  }
+}
+
+function onPreviews(previews: GuiPreview[], textures: Record<string, string | null>): void {
+  const request = previewRequests.shift();
+  if (!request) return;
+  for (const entry of request.entries) previewPending.delete(entry.key);
+  // An answer for a document version that has since changed: the cache was
+  // cleared for a reason, and the tiles re-ask when they are next seen.
+  if (request.gen !== libraryGen) return;
+  previews.forEach((preview, i) => {
+    const entry = request.entries[i] ?? request.entries.find((e) => e.name === preview.name);
+    if (entry) previewCache.set(entry.key, preview);
+  });
+  for (const [texture, url] of Object.entries(textures)) {
+    if (libraryImages.has(texture)) continue;
+    if (!url) {
+      libraryImages.set(texture, null);
+      continue;
+    }
+    const img = new Image();
+    img.onload = () => {
+      libraryImages.set(texture, img);
+      paintTiles();
+    };
+    img.onerror = () => {
+      libraryImages.set(texture, null);
+      paintTiles();
+    };
+    img.src = url;
+  }
+  paintTiles();
+}
+
+function paintTiles(): void {
+  for (const tile of tileEls.values()) if (!tile.painted) paintFromCache(tile);
+}
+
+/** Paint a tile from the cache. False when it has no preview yet, or its textures are still loading. */
+function paintFromCache(tile: Tile): boolean {
+  const preview = previewCache.get(tile.entry.key);
+  if (!preview) return false;
+  if (!preview.node) {
+    tile.node.dataset.empty = "";
+    tile.node.title = `${libraryTip(tile.entry)}\nNo preview: ${preview.reason ?? "nothing to lay out"}`;
+    tile.painted = true;
+    return true;
+  }
+  const images: Images = {};
+  for (const texture of preview.textures) {
+    const img = libraryImages.get(texture);
+    if (img === undefined) return false;
+    if (img) images[texture] = img;
+  }
+  const ctx = tile.canvas.getContext("2d");
+  if (!ctx) return false;
+  const ratio = tile.canvas.width / TILE_W;
+  drawThumbnail(ctx, buildScene([preview.node]), images, { w: TILE_W, h: TILE_H }, fontFamily, ratio);
+  tile.painted = true;
+  return true;
+}
+
+/**
+ * A click on a tile: a template is applied to the selection, anything else is
+ * inserted next to the selection (or into the first root when nothing is
+ * selected), through the same ops a drop sends.
+ */
+function libraryInsert(entry: LibraryEntry): void {
+  if (entry.kind === "template") {
+    const target = selectedItem();
+    if (!canEdit(target)) {
+      toast("Select a widget with a declaration in this file first.", "info");
+      return;
+    }
+    guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
+    return;
+  }
+  const at = insertTarget();
+  if (!at) return;
+  insertEntry(entry, at);
+}
+
+/** Where a click inserts: after the selection in its container, or into the first writable root. */
+function insertTarget(): { line: number; index?: number } | null {
+  const item = selectedItem();
+  if (item && canEdit(item)) return pasteTarget();
+  const root = childIndices(scene, null)
+    .map((i) => scene.items[i])
+    .find((i) => canEdit(i));
+  if (!root) {
+    toast("Select a widget first: an insert needs a container to go into.", "info");
+    return null;
+  }
+  return { line: root.line };
+}
+
+/** ONE op for the entry, at the container on `line`: `insert` for a type, `insertRaw` for a saved component. */
+function insertEntry(entry: LibraryEntry, at: { line: number; index?: number }): void {
+  const container = scene.items.find((i) => i.line === at.line && canEdit(i));
+  if (container) {
+    pendingSelect = { parent: rowKey(container.path), source: at.index ?? Number.POSITIVE_INFINITY };
+  }
+  const report = (verdict: EditVerdict): void => {
+    if (verdict.refused) {
+      pendingSelect = null;
+      toast(verdict.refused, "refused");
+    } else if (verdict.warning) toast(verdict.warning, "warned");
+    else if (entry.kind !== "saved") {
+      toast(`${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`, "info");
+    }
+  };
+  if (entry.kind === "saved") {
+    awaitVerdict(
+      (id) => ({ type: "insertComponent", id, name: entry.name, line: at.line, index: at.index }),
+      report
+    );
+    return;
+  }
+  sendOps(
+    "applyOps",
+    [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
+    report
+  );
 }
 
 /**
@@ -804,6 +1304,8 @@ const inspectorTexts = new Map<string, HTMLElement>();
  */
 let valueMode: GuiValueMode = "full";
 let uiAdopted = false;
+/** The preview table the current layout was computed with, keyed `[expression]` as the file has it. */
+let previewValues: Record<string, string> = {};
 
 /**
  * The block-valued rows whose sub-editor is open, and the abbreviated rows the
@@ -949,7 +1451,11 @@ function renderInspector(): void {
   pendingFocus = focus;
   pendingTyped = typed;
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, widgetTitle(item)));
+  const titleRow = el("div", "px-row");
+  titleRow.appendChild(el("span", "title px-truncate", widgetTitle(item)));
+  titleRow.appendChild(el("span", "px-grow"));
+  titleRow.appendChild(valueModeButton());
+  head.appendChild(titleRow);
   const r = item.rect;
   head.appendChild(el("div", "chain", `${round(r.x)}, ${round(r.y)} · ${round(r.w)} x ${round(r.h)}`));
   if (info && infoLine === item.line && info.typeChain.length > 0) {
@@ -967,7 +1473,6 @@ function renderInspector(): void {
       )
     );
   }
-  head.appendChild(valueModeButton());
   inspectorEl.appendChild(head);
   renderTools(item);
 
@@ -988,6 +1493,8 @@ function renderInspector(): void {
   const rows = inspectorRows(info);
   if (rows.length === 0) {
     inspectorEl.appendChild(el("div", "note", "This widget sets no properties."));
+  } else {
+    inspectorEl.appendChild(sectionTitle("Properties"));
   }
   for (const row of rows) {
     inspectorEl.appendChild(propRow(row, item.line));
@@ -1009,7 +1516,9 @@ function propRow(row: InspectorRow, line: number): HTMLElement {
   const entries = blockEntries(row.value);
   const expanded = expandedBlocks.has(row.key);
   if (entries) {
-    const twisty = el("span", "twisty", expanded ? "▾" : "▸");
+    const twisty = el("span", "twisty");
+    twisty.appendChild(iconEl("chevronRight"));
+    if (expanded) twisty.dataset.open = "";
     twisty.title = "Edit this block one key at a time";
     twisty.addEventListener("click", () => {
       if (expanded) expandedBlocks.delete(row.key);
@@ -1024,6 +1533,7 @@ function propRow(row: InspectorRow, line: number): HTMLElement {
   prop.appendChild(head);
   if (!row.local) prop.appendChild(el("div", "from", `from ${row.origin}`));
   if (entries && expanded) prop.appendChild(blockEditor(row, entries, line));
+  if (row.key === "text") for (const extra of textRowExtras(row)) prop.appendChild(extra);
   return prop;
 }
 
@@ -1041,9 +1551,10 @@ function valueCell(row: InspectorRow, line: number): HTMLElement | null {
   if (valueMode === "full" || short === row.value.trim() || editingRows.has(row.key)) {
     const input = rowInput(row, line);
     inspectorInputs.set(row.key, input);
-    return input;
+    const color = parseColor(row.key, row.value);
+    return color ? colorCell(input, color.rgb, color.alpha) : input;
   }
-  const label = el("span", "val short", short);
+  const label = el("span", "val short px-sm", short);
   label.title = `${row.value} (click to edit)`;
   label.addEventListener("click", () => {
     editingRows.add(row.key);
@@ -1056,11 +1567,167 @@ function valueCell(row: InspectorRow, line: number): HTMLElement | null {
 
 /** The three-way cycle, in the header because it is a statement about all the rows. */
 function valueModeButton(): HTMLElement {
-  const button = el("button", "modeButton", `Values: ${valueMode}`) as HTMLButtonElement;
-  button.title =
-    "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.";
-  button.addEventListener("click", () => setValueMode(nextValueMode(valueMode)));
-  return button;
+  const node = button(`Values: ${valueMode}`, () => setValueMode(nextValueMode(valueMode)), {
+    size: "xs",
+    tip: "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.",
+  });
+  node.dataset.tipSide = "left";
+  return node;
+}
+
+/**
+ * The toolbar's Resolved / Raw pair. The host remembers the mode like the snap
+ * and grid toggles, and unlike them it changes what the server measures, so the
+ * layout is asked for again. `silent` is the first layout adopting the stored
+ * mode: the layout that carried it was computed with it already.
+ */
+function setLocMode(mode: GuiLocMode, o: { silent?: boolean } = {}): void {
+  locResolvedEl.setAttribute("aria-pressed", String(mode === "resolve"));
+  locRawEl.setAttribute("aria-pressed", String(mode === "raw"));
+  if (o.silent) return;
+  host.send({ type: "setUiState", valueMode, loc: mode });
+  host.send({ type: "requestLayout" });
+}
+
+// ---- what a textbox resolved to --------------------------------------------
+
+/** The segments worth explaining: a plain literal has none and gets no tooltip. */
+function explainedSegments(item: SceneItem | null): GuiTextSegment[] | null {
+  const segments = item?.text?.segments?.filter((s) => s.kind !== "literal");
+  return segments && segments.length > 0 ? segments : null;
+}
+
+/** The preview value in force for a datafunction, keyed as the host's file has it. */
+function previewValueOf(segment: GuiTextSegment): string | undefined {
+  return previewValues[`[${segment.source}]`] ?? previewValues[segment.source];
+}
+
+/**
+ * One tooltip row: the badge and the source on the first line, what it became
+ * on the second, so a long datafunction chain wraps under its own badge
+ * instead of pushing the answer off the edge.
+ */
+function segmentRow(segment: GuiTextSegment): HTMLElement {
+  const row = el("div", "seg");
+  const variable = segment.kind === "datafn";
+  const kind = el("span", "px-badge", variable ? "variable" : "loc");
+  kind.dataset.variant = "outline";
+  row.appendChild(kind);
+  row.appendChild(el("span", "src", variable ? `[${segment.source}]` : segment.source));
+  const result = el("span", "res");
+  if (segment.resolved) {
+    const preview = variable ? previewValueOf(segment) : undefined;
+    result.appendChild(el("span", "arrow", "\u2192 "));
+    result.appendChild(el("span", "val", segment.text));
+    if (preview !== undefined) result.appendChild(el("span", "note", "  preview value"));
+    else if (variable && saveSource) result.appendChild(el("span", "note", "  from the save"));
+  } else {
+    result.appendChild(
+      el(
+        "span",
+        "note",
+        variable
+          ? "only the game knows this value. Right-click the widget to set a preview value"
+          : "no localization for this key"
+      )
+    );
+  }
+  row.appendChild(result);
+  return row;
+}
+
+let textTipFor: number | null = null;
+
+/** The hover explanation for the textbox under the pointer, or nothing for anything else. */
+function showTextTip(index: number | null, clientX: number, clientY: number): void {
+  const item = index === null ? null : scene.items[index];
+  const segments = explainedSegments(item);
+  if (!segments) {
+    textTipEl.hidden = true;
+    textTipFor = null;
+    return;
+  }
+  if (textTipFor !== index) {
+    textTipEl.textContent = "";
+    textTipEl.appendChild(el("div", "tipTitle", `${widgetTitle(item!)} · text`));
+    for (const segment of segments) textTipEl.appendChild(segmentRow(segment));
+    textTipFor = index;
+  }
+  textTipEl.hidden = false;
+  // Below and right of the pointer, kept inside the window; the stage owns the
+  // pointer so the tooltip ignores it and never steals the hover.
+  const box = textTipEl.getBoundingClientRect();
+  const left = Math.max(0, Math.min(clientX + 12, window.innerWidth - box.width - 4));
+  const top = clientY + 16 + box.height > window.innerHeight ? clientY - box.height - 8 : clientY + 16;
+  textTipEl.style.left = `${left}px`;
+  textTipEl.style.top = `${top}px`;
+}
+
+/**
+ * Under the inspector's `text` row: what the canvas shows for it when that is
+ * not the raw value, and a button per thing the preview could not resolve: a
+ * loc key goes to the host's localization flow, a datafunction gets a preview
+ * value typed here and kept by the host per mod.
+ */
+function textRowExtras(row: InspectorRow): HTMLElement[] {
+  const text = selectedItem()?.text;
+  if (!text || (text.raw === undefined && !text.segments)) return [];
+  const out: HTMLElement[] = [];
+  const raw = row.value.trim().replace(/^"|"$/g, "");
+  if (text.text !== raw) out.push(el("div", "resolved", `shows: ${text.text}`));
+  const tools = el("div", "textTools");
+  for (const segment of text.segments ?? []) {
+    if (segment.kind === "loc" && !segment.resolved) {
+      tools.appendChild(
+        button("Create localization", () => host.send({ type: "editLoc", key: segment.source }), {
+          size: "xs",
+          icon: "plus",
+          tip: `${segment.source} is not in the mod's localization. Write its text now.`,
+        })
+      );
+    } else if (segment.kind === "datafn") {
+      const current = previewValueOf(segment);
+      if (current !== undefined) {
+        tools.appendChild(
+          button(
+            `Preview value: ${current}`,
+            () => host.send({ type: "clearPreviewValue", expression: segment.source }),
+            {
+              size: "xs",
+              icon: "x",
+              tip: `[${segment.source}] shows this text in the preview. Click to drop it.`,
+            }
+          )
+        );
+      } else if (!segment.resolved) {
+        const open = button("Set preview value\u2026", () => previewValuePopover(open, segment.source), {
+          size: "xs",
+          tip: `[${segment.source}] is evaluated by the running game. Type what the preview should show for it.`,
+        });
+        tools.appendChild(open);
+      }
+    }
+  }
+  if (tools.childElementCount > 0) out.push(tools);
+  return out;
+}
+
+/** A one-field popover: Enter sends the value, Escape (or a click outside) drops it. */
+function previewValuePopover(anchor: HTMLElement, expression: string): void {
+  const body = el("div", "px-stack");
+  body.appendChild(el("div", "px-label", `Preview text for [${expression}]`));
+  const input = textInput("What the game would show here", "");
+  input.dataset.row = "+previewValue";
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    const value = input.value.trim();
+    if (value.length === 0) return;
+    closePopover();
+    host.send({ type: "setPreviewValue", expression, value });
+  });
+  body.appendChild(input);
+  popover(anchor, body);
+  input.focus();
 }
 
 function setValueMode(mode: GuiValueMode): void {
@@ -1098,9 +1765,13 @@ function blockEditor(row: InspectorRow, entries: readonly BlockEntry[], line: nu
         commit(next);
       })
     );
-    const remove = el("span", "toggle", "✕");
-    remove.title = `Remove ${entry.key} from ${row.key}`;
-    remove.addEventListener("click", () => commit(entries.filter((_, i) => i !== index)));
+    const remove = button("", () => commit(entries.filter((_, i) => i !== index)), {
+      icon: "x",
+      size: "icon-xs",
+      tip: `Remove ${entry.key} from ${row.key}`,
+      className: "toggle",
+    });
+    remove.dataset.tipSide = "left";
     sub.appendChild(remove);
     wrap.appendChild(sub);
   });
@@ -1110,15 +1781,17 @@ function blockEditor(row: InspectorRow, entries: readonly BlockEntry[], line: nu
   const value = blockInput(`${row.key}.new.value`, "", "val", () => undefined);
   key.placeholder = "key";
   value.placeholder = "value";
-  const go = el("button", undefined, "Add key") as HTMLButtonElement;
-  go.title = `Add a key to ${row.key}`;
-  go.addEventListener("click", () => {
-    if (key.value.trim().length === 0 || value.value.trim().length === 0) {
-      toast(`A ${row.key} entry needs both a key and a value.`, "info");
-      return;
-    }
-    commit([...entries, { key: key.value.trim(), value: value.value.trim() }]);
-  });
+  const go = button(
+    "Add key",
+    () => {
+      if (key.value.trim().length === 0 || value.value.trim().length === 0) {
+        toast(`A ${row.key} entry needs both a key and a value.`, "info");
+        return;
+      }
+      commit([...entries, { key: key.value.trim(), value: value.value.trim() }]);
+    },
+    { variant: "outline", size: "xs", tip: `Add a key to ${row.key}` }
+  );
   add.appendChild(key);
   add.appendChild(value);
   add.appendChild(go);
@@ -1133,14 +1806,10 @@ function blockInput(
   className: string,
   onCommit: (text: string) => void
 ): HTMLInputElement {
-  const input = document.createElement("input");
-  input.className = className === "key" ? "val key" : "val";
-  input.value = value;
-  input.spellcheck = false;
+  const input = textInput("", value, className === "key" ? "val key" : "val");
   input.dataset.row = rowId;
   input.dataset.baseline = value;
   input.addEventListener("keydown", (ev) => {
-    ev.stopPropagation();
     if (ev.key !== "Enter") return;
     ev.preventDefault();
     input.blur();
@@ -1172,16 +1841,13 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
   const taken = new Set(rows.map((row) => row.key.toLowerCase()));
   const chain = [item.key, ...(info?.typeChain ?? [])];
 
-  inspectorEl.appendChild(el("div", "section", "Add a property"));
+  inspectorEl.appendChild(sectionTitle("Add a property"));
   const wrap = el("div", "addProp");
   const fields = el("div", "line");
-  const name = document.createElement("input");
-  name.className = "val key";
-  name.placeholder = "property";
-  name.spellcheck = false;
+  const name = textInput("property", "", "val key");
   name.dataset.row = "+name";
-  const suggestions = el("div", "suggest");
-  let value: HTMLInputElement | HTMLSelectElement = valueControl(name.value);
+  const suggestions = el("div", "suggest px-list");
+  let value: ValueControl = valueControl(name.value);
 
   const commit = (): void => {
     const key = name.value.trim().toLowerCase();
@@ -1203,15 +1869,15 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
 
   const syncValue = (): void => {
     const next = valueControl(name.value);
-    if (next.tagName === value.tagName) return;
-    fields.replaceChild(next, value);
+    if (next.kind === value.kind) return;
+    fields.replaceChild(next.element, value.element);
     value = next;
   };
   const syncSuggestions = (): void => {
     suggestions.textContent = "";
     if (document.activeElement !== name) return;
     for (const choice of propertyChoices(chain, vocabularyProps, vocabularyCommon, taken, name.value)) {
-      const node = el("div", "row", choice);
+      const node = el("div", "px-item row", choice);
       node.addEventListener("mousedown", (ev) => {
         // mousedown, not click: the input's blur would clear the list first.
         ev.preventDefault();
@@ -1225,7 +1891,6 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
   };
 
   name.addEventListener("keydown", (ev) => {
-    ev.stopPropagation();
     if (ev.key === "Enter") {
       ev.preventDefault();
       const first = suggestions.firstElementChild?.textContent;
@@ -1250,11 +1915,14 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
     suggestions.textContent = "";
   });
 
-  const go = el("button", undefined, "Add") as HTMLButtonElement;
-  go.title = "Write this property into the widget's own body, through the same guards every edit passes.";
-  go.addEventListener("click", commit);
+  const go = button("Add", commit, {
+    variant: "outline",
+    size: "sm",
+    tip: "Write this property into the widget's own body, through the same guards every edit passes.",
+  });
+  go.dataset.tipSide = "left";
   fields.appendChild(name);
-  fields.appendChild(value);
+  fields.appendChild(value.element);
   fields.appendChild(go);
   wrap.appendChild(fields);
   wrap.appendChild(suggestions);
@@ -1264,31 +1932,46 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
 /** The nine anchor words the engine parses, from the layout engine's own table. */
 const ANCHOR_SPECS = ANCHOR_Y.flatMap((y) => ANCHOR_X.map((x) => anchorSpec(x as AnchorX, y as AnchorY)));
 
+/** The add-property row's value half: what to put in the row, and what it holds. */
+interface ValueControl {
+  kind: "choice" | "text";
+  element: HTMLElement;
+  readonly value: string;
+  focus(): void;
+}
+
 /**
- * A `<select>` where the engine's vocabulary for the property is known, a plain
+ * A menu where the engine's vocabulary for the property is known, a plain
  * field where it is not. Anchors are the known case: their words are the layout
  * engine's, so a picked one always parses.
  */
-function valueControl(key: string): HTMLInputElement | HTMLSelectElement {
+function valueControl(key: string): ValueControl {
   const lower = key.trim().toLowerCase();
   if (lower === "parentanchor" || lower === "widgetanchor") {
-    const select = document.createElement("select");
+    const { wrap, select } = dropdownSelect(
+      ANCHOR_SPECS.map((spec) => ({ value: spec, label: spec })),
+      ANCHOR_SPECS[0]
+    );
     select.dataset.row = "+value";
-    for (const spec of ANCHOR_SPECS) {
-      const option = document.createElement("option");
-      option.value = spec;
-      option.textContent = spec;
-      select.appendChild(option);
-    }
-    return select;
+    return {
+      kind: "choice",
+      element: wrap,
+      get value() {
+        return select.value;
+      },
+      focus: () => (wrap.querySelector("button") as HTMLButtonElement | null)?.focus(),
+    };
   }
-  const input = document.createElement("input");
-  input.className = "val";
-  input.placeholder = "value";
-  input.spellcheck = false;
+  const input = textInput("value", "", "val");
   input.dataset.row = "+value";
-  input.addEventListener("keydown", (ev) => ev.stopPropagation());
-  return input;
+  return {
+    kind: "text",
+    element: input,
+    get value() {
+      return input.value;
+    },
+    focus: () => input.focus(),
+  };
 }
 
 /**
@@ -1319,16 +2002,14 @@ function writeProperty(line: number, key: string, value: string): void {
 function renderTools(item: SceneItem): void {
   const members = allSelected();
   const tools = el("div", "tools");
-  const button = (label: string, title: string, enabled: boolean, run: () => void): void => {
-    const node = el("button", undefined, label) as HTMLButtonElement;
-    node.title = title;
+  const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
+    const node = button(label, run, { variant: "outline", size: "icon-sm", tip });
     node.disabled = !enabled;
-    node.addEventListener("click", run);
     tools.appendChild(node);
   };
 
   if (members.length >= 2) {
-    inspectorEl.appendChild(el("div", "section", "Align the selection"));
+    inspectorEl.appendChild(sectionTitle("Align the selection"));
     const aligns: [string, AlignMode, string][] = [
       ["⇤", "left", "Align left edges"],
       ["⇔", "hcenter", "Align horizontal centres"],
@@ -1338,12 +2019,12 @@ function renderTools(item: SceneItem): void {
       ["⇣", "bottom", "Align bottom edges"],
     ];
     for (const [label, mode, title] of aligns) {
-      button(label, title, true, () => commitMoves(members, alignDeltas(members.map(rectOf), mode), title));
+      tool(label, title, true, () => commitMoves(members, alignDeltas(members.map(rectOf), mode), title));
     }
-    button("↔", "Distribute horizontally: equal gaps left to right", members.length >= 3, () =>
+    tool("↔", "Distribute horizontally: equal gaps left to right", members.length >= 3, () =>
       commitMoves(members, distributeDeltas(members.map(rectOf), "x"), "Distribute horizontally")
     );
-    button("↕", "Distribute vertically: equal gaps top to bottom", members.length >= 3, () =>
+    tool("↕", "Distribute vertically: equal gaps top to bottom", members.length >= 3, () =>
       commitMoves(members, distributeDeltas(members.map(rectOf), "y"), "Distribute vertically")
     );
     inspectorEl.appendChild(tools);
@@ -1352,54 +2033,53 @@ function renderTools(item: SceneItem): void {
   const wrapTools = el("div", "tools");
   const containers = containerRows(vocabulary);
   if (containers.length > 0 && canEdit(item)) {
-    const select = document.createElement("select");
-    select.title = "Wrap the selection in a fresh container";
-    for (const entry of containers) {
-      const option = document.createElement("option");
-      option.value = entry.name;
-      option.textContent = paletteLabel(entry);
-      select.appendChild(option);
-    }
-    wrapTools.appendChild(el("span", undefined, "Wrap in"));
-    wrapTools.appendChild(select);
-    const go = el("button", undefined, "Wrap") as HTMLButtonElement;
-    go.addEventListener("click", () => commitWrap(members, select.value));
-    wrapTools.appendChild(go);
+    const { wrap, select } = dropdownSelect(
+      containers.map((entry) => ({ value: entry.name, label: paletteLabel(entry) })),
+      containers[0].name,
+      { tip: "Wrap the selection in a fresh container", search: containers.length > 8 }
+    );
+    wrapTools.appendChild(el("span", "px-label", "Wrap in"));
+    wrapTools.appendChild(wrap);
+    wrapTools.appendChild(
+      button("Wrap", () => commitWrap(members, select.value), { variant: "outline", size: "sm" })
+    );
     inspectorEl.appendChild(wrapTools);
   } else if (canEdit(item)) {
     // The palette is where the vocabulary comes from, so say that rather than
     // showing a menu with nothing in it.
-    inspectorEl.appendChild(el("div", "section", "Open the palette to wrap this in a container."));
+    inspectorEl.appendChild(el("div", "note", "Open the library to wrap this in a container."));
   }
 
   // A preset is saved FROM the inspector because the rows it saves are the ones
   // shown here: the widget's own, the ones it authored rather than inherited.
   const local = localProperties();
   if (local.length > 0) {
+    inspectorEl.appendChild(sectionTitle("Preset"));
     const presetTools = el("div", "tools");
-    const nameInput = document.createElement("input");
-    nameInput.className = "val";
-    nameInput.style.textAlign = "left";
-    nameInput.placeholder = "Preset name";
-    nameInput.value = presetName;
-    nameInput.spellcheck = false;
+    const nameInput = textInput("Preset name", presetName);
     nameInput.dataset.row = "+preset";
-    nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
     nameInput.addEventListener("input", () => {
       presetName = nameInput.value;
     });
     presetTools.appendChild(nameInput);
-    const save = el("button", undefined, `Save ${local.length} as preset`) as HTMLButtonElement;
-    save.title = `Store this widget's OWN ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`;
-    save.addEventListener("click", () => {
-      const name = presetName.trim();
-      if (name.length === 0) {
-        toast("Give the preset a name first.", "info");
-        return;
+    const save = button(
+      `Save ${local.length} as preset`,
+      () => {
+        const name = presetName.trim();
+        if (name.length === 0) {
+          toast("Give the preset a name first.", "info");
+          return;
+        }
+        host.send({ type: "savePreset", name, properties: local });
+        toast(`Saved ${local.length} propert${local.length === 1 ? "y" : "ies"} as "${name}".`, "info");
+      },
+      {
+        variant: "outline",
+        size: "sm",
+        tip: `Store this widget's own ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`,
       }
-      host.send({ type: "savePreset", name, properties: local });
-      toast(`Saved ${local.length} propert${local.length === 1 ? "y" : "ies"} as "${name}".`, "info");
-    });
+    );
+    save.dataset.tipSide = "left";
     presetTools.appendChild(save);
     inspectorEl.appendChild(presetTools);
   }
@@ -1424,7 +2104,7 @@ function localProperties(): EditProperty[] {
  */
 function renderAnchors(line: number, rows: readonly InspectorRow[]): void {
   const valueOf = (key: string) => rows.find((r) => r.key === key)?.value;
-  inspectorEl.appendChild(el("div", "section", "Anchors"));
+  inspectorEl.appendChild(sectionTitle("Anchors"));
   const wrap = el("div", "anchors");
   for (const key of ["parentanchor", "widgetanchor"] as const) {
     const column = el("div");
@@ -1529,10 +2209,7 @@ function commitWrap(members: readonly number[], type: string): void {
  * which is what the "from …" label under the row is there to explain.
  */
 function rowInput(row: InspectorRow, line: number): HTMLInputElement {
-  const input = document.createElement("input");
-  input.className = "val";
-  input.value = row.value;
-  input.spellcheck = false;
+  const input = textInput("", row.value, "val");
   // Named so a rebuild can put the caret back where the user left it: a commit
   // re-lays the document out and every row here is a new element. The baseline
   // is what dirty-detection compares against when a sibling's commit rebuilds.
@@ -1573,9 +2250,8 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
   };
 
   input.addEventListener("keydown", (ev) => {
-    // Typing must not reach the canvas: Escape here reverts the row, it does
-    // not clear the selection the row belongs to.
-    ev.stopPropagation();
+    // Typing must not reach the canvas (textInput stops it): Escape here
+    // reverts the row, it does not clear the selection the row belongs to.
     if (ev.key === "Enter") {
       ev.preventDefault();
       commit();
@@ -1585,7 +2261,56 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
     }
   });
   input.addEventListener("change", commit);
+  // A plain number drags sideways like every other numeric field; the drag
+  // ends in the same commit a typed value gets, so one drag is one undo step.
+  if (/^-?\d+(\.\d+)?$/.test(row.value.trim())) {
+    scrubbable(input, {
+      step: row.value.includes(".") ? 0.01 : 1,
+      onChange: () => undefined,
+      onCommit: commit,
+    });
+  }
   return input;
+}
+
+/**
+ * The value half of a color row: the input plus a swatch that opens the shared
+ * color picker. A color is written the way the engine reads one, `{ r g b a }`
+ * in 0..1, and the picker's close is the commit, so a drag through the square
+ * is one write and one undo step.
+ */
+function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTMLElement {
+  const wrap = el("span", "valRow");
+  const swatch = document.createElement("button");
+  swatch.className = "px-swatch";
+  swatch.dataset.tip = "Pick a color";
+  swatch.dataset.tipSide = "left";
+  swatch.style.setProperty("--px-swatch", `rgb(${rgb.join(" ")})`);
+  swatch.addEventListener("click", () => {
+    const start = input.value;
+    colorPicker(swatch, rgb, {
+      onChange: (next) => {
+        rgb = next;
+        swatch.style.setProperty("--px-swatch", `rgb(${next.join(" ")})`);
+        input.value = `{ ${next.map((v) => round(v / 255)).join(" ")}${alpha === null ? "" : ` ${alpha}`} }`;
+      },
+      onClose: () => {
+        if (input.value !== start) input.dispatchEvent(new Event("change"));
+      },
+    });
+  });
+  wrap.appendChild(input);
+  wrap.appendChild(swatch);
+  return wrap;
+}
+
+/** `{ r g b [a] }` in 0..1 on a `*color*` property, as the picker's 0..255 triple plus the alpha text. */
+function parseColor(key: string, value: string): { rgb: Rgb; alpha: string | null } | null {
+  if (!/color/i.test(key)) return null;
+  const m = /^\{\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s+([\d.]+))?\s*\}$/.exec(value.trim());
+  if (!m) return null;
+  const channel = (v: string): number => Math.max(0, Math.min(255, Math.round(Number(v) * 255)));
+  return { rgb: [channel(m[1]), channel(m[2]), channel(m[3])], alpha: m[4] ?? null };
 }
 
 /** `"px_card"` -> `px_card`: the scene reports names unquoted, the source quotes them. */
@@ -1604,29 +2329,21 @@ function round(v: number): string {
 
 /** How long a message stays up. Refusals are sentences; they need reading time. */
 const TOAST_MS = 8000;
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * A refusal reason is the SERVER'S sentence and is shown verbatim: it says what
  * the engine would do with the write, which is knowledge this app does not have
- * and must not paraphrase into something friendlier and wrong.
+ * and must not paraphrase into something friendlier and wrong. The surface is
+ * the shared px-toast, so it reads like every other webview's.
  */
 function toast(message: string, kind: "refused" | "warned" | "info"): void {
-  toastEl.textContent = message;
-  toastEl.className = kind;
-  toastEl.hidden = false;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, TOAST_MS);
+  pxToast(message, kind === "refused" ? "destructive" : "default", TOAST_MS);
 }
 
+/** Take every message down at once (an abandoned gesture's warning is moot). */
 function hideToast(): void {
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = undefined;
-  toastEl.hidden = true;
-  toastEl.textContent = "";
+  for (const node of Array.from(document.querySelectorAll<HTMLElement>(".px-toast"))) node.remove();
 }
-
-toastEl.addEventListener("click", hideToast);
 
 // ---- edits -----------------------------------------------------------------
 
@@ -1736,6 +2453,7 @@ function select(
   if (expanded || options.rebuildTree) renderTree();
   highlightTree(true);
   syncLayers();
+  hideClickTip();
   if (focusIndex === null) renderFocusBar();
   renderInspector();
   // The overlay and the halo both read the selection; both are no-ops while
@@ -1757,6 +2475,7 @@ function askWidgetInfo(line: number): void {
 }
 
 function statusLine(): string {
+  if (mode === "interact") return "Interact mode: click a button, scroll a list. Esc returns to editing.";
   const ghosts = scene.items.filter((i) => i.ghostBox).length;
   const estimated = ghosts > 0 ? ` · ${ghosts} unmeasurable (dashed)` : "";
   const item = selectedItem();
@@ -1777,12 +2496,27 @@ function statusLine(): string {
   return `${scene.count} widgets · ${file}${declared}${estimated}${focused}${picked}${moved}`;
 }
 
+/** The URL each loaded texture came from: a push that names the same URL keeps the decoded image. */
+const imageUrls = new Map<string, string>();
+
+/**
+ * Load the textures a layout names, REUSING every image whose URL did not
+ * change. A push after each editor gesture used to drop and re-decode all of
+ * them (a window has a hundred and more), which stalled the canvas and drew a
+ * textureless frame before the images came back.
+ */
 function loadTextures(urls: Record<string, string | null>): void {
-  images = {};
-  resetImageCache();
+  const next: Images = {};
+  let changed = false;
   let pending = 0;
   for (const [texture, url] of Object.entries(urls)) {
     if (!url) continue;
+    if (imageUrls.get(texture) === url && images[texture]) {
+      next[texture] = images[texture];
+      continue;
+    }
+    changed = true;
+    imageUrls.set(texture, url);
     const img = new Image();
     pending++;
     const done = () => {
@@ -1795,6 +2529,11 @@ function loadTextures(urls: Record<string, string | null>): void {
     img.onerror = done;
     img.src = url;
   }
+  for (const texture of Object.keys(images)) if (!(texture in urls)) changed = true;
+  images = next;
+  // The tint and cell caches key on the texture path: only a re-decoded
+  // image can invalidate them.
+  if (changed) resetImageCache();
 }
 
 function onLayout(
@@ -1803,20 +2542,35 @@ function onLayout(
   name: string,
   visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined,
   ui: GuiEditorUiState | undefined,
-  storeWarning?: string
+  storeWarning: string | undefined,
+  preview: Record<string, string> | undefined
 ): void {
   // Adopted ONCE, from the first layout: after that the panel's own copy is the
   // truth, so a layout already in flight cannot undo a mode the user just set.
   if (!uiAdopted) {
     uiAdopted = true;
     if (ui) valueMode = ui.valueMode;
+    if (ui?.panels) adoptPanels(ui.panels);
+    if (ui?.sections) adoptSections(ui.sections);
+    if (ui?.snap !== undefined) snapToggle.checked = ui.snap;
+    if (ui?.grid !== undefined) gridToggle.checked = ui.grid;
+    if (ui?.loc) setLocMode(ui.loc, { silent: true });
   }
+  previewValues = preview ?? {};
   file = name;
+  fileNameEl.textContent = name;
+  fileNameEl.title = name;
   defsFiles = result.defsFiles;
   previousScene = scene.items.length > 0 ? scene : null;
   const t0 = performance.now();
+  lastNodes = result.nodes;
   scene = buildScene(result.nodes);
+  applyScrollOffsets(scene, scrollOffsets);
   lastSceneMs = performance.now() - t0;
+  if (clickPending && previousScene) {
+    clickPending = false;
+    noteClickDelta(scene.count - previousScene.count);
+  }
   lastTimings = result.timings ?? lastTimings;
   // The host is where a visibility mode lives, so what it echoes is the truth
   // and the app keeps no copy that could disagree with the canvas.
@@ -1840,9 +2594,9 @@ function onLayout(
   metaEl.textContent = storeWarning
     ? `${defsFiles} gui files in template store, ${storeWarning}`
     : `${defsFiles} gui files in template store`;
-  metaEl.style.color = storeWarning
-    ? "var(--vscode-editorWarning-foreground)"
-    : "var(--vscode-descriptionForeground)";
+  if (storeWarning) metaEl.setAttribute("data-warning", "");
+  else metaEl.removeAttribute("data-warning");
+  syncInfo();
   seedCollapse();
   // Every path-keyed view (eye, lock, solo, focus) re-resolves against the new
   // draw indices before anything reads a mask.
@@ -1870,11 +2624,22 @@ function onLayout(
   // paint of this scene, which is what "what did this push cost" means.
   measurePaint = true;
   select(inserted ?? restored, { reveal: false, rebuildTree: true, keepOthers: inserted === null });
-  // The palette lists this document's own templates and types, and an edit can
-  // add one, so an open palette re-asks. The first layout asks too even with
-  // the palette closed: the inspector's "wrap in" menu is built from the same
+  // An Alt+drag's second half: the copy just landed and is the selection.
+  if (pendingMove) {
+    if (inserted !== null) moveCopy();
+    else pendingMove = null;
+  }
+  // A new document version: every tile preview was laid out against the old
+  // one, so the cache goes and the tiles on screen re-ask.
+  libraryGen++;
+  previewCache.clear();
+  previewPending.clear();
+  previewRequests.length = 0;
+  // The library lists this document's own templates and types, and an edit can
+  // add one, so an open library re-asks. The first layout asks too even with
+  // the library closed: the inspector's "wrap in" menu is built from the same
   // vocabulary and must not be empty until someone opens a panel.
-  if (paletteOpen() || !vocabularyAsked) askVocabulary();
+  if (libraryOpen() || !vocabularyAsked) askVocabulary();
   // A document change can change what it depends on, so an open dependency
   // panel re-asks; every other halo surface is redrawn from what it has.
   if (haloOpen()) {
@@ -1934,8 +2699,11 @@ function takePendingSelect(): number | null {
   const pending = pendingSelect;
   pendingSelect = null;
   if (!pending) return null;
-  const container = scene.items.findIndex((item) => rowKey(item.path) === pending.parent);
-  if (container < 0) return null;
+  // "" names the document's root list (rowKey of an empty path), the container
+  // a duplicated root widget's copy lands in.
+  const container =
+    pending.parent === "" ? null : scene.items.findIndex((item) => rowKey(item.path) === pending.parent);
+  if (container !== null && container < 0) return null;
   const rows = layerRows(scene, container).filter((row) => row.source >= 0);
   const exact = rows.find((row) => row.source === pending.source);
   return exact?.index ?? rows[rows.length - 1]?.index ?? null;
@@ -1969,14 +2737,25 @@ const host = connectHost((message) => {
       // Before the scene is built: the canvas measures its text boxes with the
       // same law the server laid the widgets out with.
       setLineHeightRatio(message.lineHeightRatio);
+      showSaveSource(message.save);
       onLayout(
         message.result,
         message.textures,
         message.file,
         message.visibility,
         message.ui,
-        message.storeWarning
+        message.storeWarning,
+        message.previewValues
       );
+      return;
+    case "loc":
+      toast(
+        message.value === null ? `No localization for ${message.key}.` : `${message.key}: ${message.value}`,
+        "info"
+      );
+      return;
+    case "reference":
+      if (message.url) loadReference(message.name, message.url);
       return;
     case "widgetInfo": {
       const item = selectedItem();
@@ -2000,10 +2779,9 @@ const host = connectHost((message) => {
     }
     case "vocabulary":
       vocabulary = message.entries;
-      vocabularyTotal = message.total;
       vocabularyProps = message.properties ?? {};
       vocabularyCommon = message.commonProperties ?? [];
-      renderPalette();
+      renderLibrary();
       renderInspector();
       if (haloOpen() && haloTab === "types") renderHalo();
       return;
@@ -2031,7 +2809,11 @@ const host = connectHost((message) => {
       components = message.components;
       presets = message.presets;
       if (haloOpen() && haloTab === "saved") renderHalo();
+      renderLibrary();
       renderInspector();
+      return;
+    case "previews":
+      onPreviews(message.previews, message.textures);
       return;
     case "error":
       statusEl.textContent = `Error: ${message.message}`;
@@ -2080,6 +2862,13 @@ interface Gesture {
   writes: GestureWrite[] | null;
   /** The other children of the same container: what the smart guides align to. */
   siblings: SceneRect[];
+  /** The container's own box (the viewport for a root widget): its edges and centre snap too. */
+  parent: SceneRect | null;
+  /**
+   * Alt+drag: the commit duplicates the pressed widget and moves the COPY,
+   * leaving the original where the file has it. Single-widget only.
+   */
+  duplicate: boolean;
   /** What the last preview snapped to, for the guide lines. */
   snap: SnapResult | null;
   /** Set when the guards turned the move down but the container can be reordered. */
@@ -2185,6 +2974,12 @@ function snapConfig(): SnapConfig {
   };
 }
 
+/** The container's box: the parent's rect, or the reference viewport for a root widget. */
+function parentRect(index: number): SceneRect {
+  const parent = parentIndex(scene, index);
+  return parent === null ? { x: 0, y: 0, w: WORLD_W, h: WORLD_H } : rectOf(parent);
+}
+
 /** The other children of the widget's own container: everything a guide can align to. */
 function siblingRects(index: number): SceneRect[] {
   const rects: SceneRect[] = [];
@@ -2197,6 +2992,12 @@ function siblingRects(index: number): SceneRect[] {
 }
 
 let gesture: Gesture | null = null;
+/**
+ * An Alt press, which is not yet a click or a drag: the release decides. A
+ * click (no drag) steps the selection outward through the stack under the
+ * cursor; a drag duplicates.
+ */
+let altPress: { next: number | null } | null = null;
 
 /**
  * What the canvas paints instead of the file's own geometry: the subtrees that
@@ -2207,6 +3008,8 @@ let gesture: Gesture | null = null;
 interface LivePreview {
   slices: { from: number; to: number }[];
   write: GestureWrite;
+  /** An Alt+drag: the original stays put and the painter shows the copy moving. */
+  duplicate?: boolean;
 }
 
 /** A released gesture whose write is in flight: its preview holds until the layout lands. */
@@ -2214,15 +3017,104 @@ let committing: LivePreview | null = null;
 
 function livePreview(): LivePreview | null {
   if (committing) return committing;
+  if (nudge.pending) return nudgePreview(nudge.dx, nudge.dy);
   if (gesture?.status !== "allowed" || !gesture.writes) return null;
   const slices = movingMembers(gesture)
     .map((m) => ({ from: m.from, to: m.to }))
     .sort((a, b) => a.from - b.from);
-  return { slices, write: gesture.writes[0] };
+  return { slices, write: gesture.writes[0], duplicate: gesture.duplicate };
 }
 
 const NO_SOURCE_HERE =
   "comes from a template or a type, so it has no declaration in this file to move or resize.";
+
+// ---- arrow-key nudges ------------------------------------------------------
+
+/**
+ * A held arrow key is ONE op: the burst folds every repeat into one delta and
+ * commits it after a trailing quiet time (nudge.ts), never while a commit is
+ * still in flight. The preview moves at once, key by key, off the same delta
+ * the commit will write, so the canvas never shows a number the file will not
+ * get. The members are resolved at commit time from the selection, so a
+ * layout that lands mid-burst (the previous nudge's answer) re-bases the next
+ * one on the fresh source values rather than on the ones the file has left.
+ */
+const nudge = new NudgeBurst({
+  busy: () => committing !== null,
+  onChange: () => {
+    const item = selectedItem();
+    if (item) {
+      const write = moveWrite(baseOf(item), hitRect(item), nudge.dx, nudge.dy);
+      const writes = write.properties.map((p) => `${p.key} = ${p.value}`).join("  ");
+      statusEl.textContent = `${widgetTitle(item)} · ${geometry(write.rect)} · ${writes}`;
+      previewInspector(write);
+    }
+    requestDraw();
+  },
+  commit: (dx, dy) => commitNudge(dx, dy),
+});
+
+/** The nudge's own preview: every editable member's subtree, moved by the pending delta. */
+function nudgePreview(dx: number, dy: number): LivePreview | null {
+  const members = allSelected().filter((i) => canEdit(scene.items[i]));
+  const primary = selectedItem();
+  if (members.length === 0 || !primary) return null;
+  const slices = members.map((i) => ({ from: i, to: subtreeEnd(scene, i) })).sort((a, b) => a.from - b.from);
+  return { slices, write: moveWrite(baseOf(primary), hitRect(primary), dx, dy) };
+}
+
+/**
+ * The one op a burst becomes: `applyEdit` for a single widget (the same path
+ * a one-widget drag takes), one `applyOps` batch of `setProperties` for a
+ * multi-selection. The preview holds until the layout lands, as a drag's does.
+ */
+function commitNudge(dx: number, dy: number): void {
+  const members = allSelected();
+  const preview = nudgePreview(dx, dy);
+  const skipped = members.filter((i) => !canEdit(scene.items[i]));
+  if (skipped.length > 0) {
+    const reasons = skipped.map((i) => `${widgetTitle(scene.items[i])} ${NO_SOURCE_HERE}`);
+    toast([...new Set(reasons)].join(" "), "warned");
+  }
+  const moving = members.filter((i) => canEdit(scene.items[i]));
+  if (moving.length === 0 || !preview) {
+    statusEl.textContent = statusLine();
+    draw();
+    return;
+  }
+  committing = preview;
+  const onVerdict = (verdict: EditVerdict): void => {
+    if (verdict.refused) {
+      committing = null;
+      toast(verdict.refused, "refused");
+      statusEl.textContent = statusLine();
+      renderInspector();
+      draw();
+      return;
+    }
+    const refused = distinctRefusals(verdict);
+    if (refused.length > 0) toast(refused.join(" "), "warned");
+    else if (verdict.warning) toast(verdict.warning, "warned");
+  };
+  const positionOf = (index: number): EditProperty[] => {
+    const base = baseOf(scene.items[index]);
+    return [{ key: "position", value: pairValue(base.position[0] + dx, base.position[1] + dy) }];
+  };
+  if (moving.length === 1) {
+    sendEdit("applyEdit", scene.items[moving[0]].line!, positionOf(moving[0]), onVerdict);
+  } else {
+    sendOps(
+      "applyOps",
+      moving.map((i) => ({
+        kind: "setProperties" as const,
+        line: scene.items[i].line!,
+        properties: positionOf(i),
+      })),
+      onVerdict
+    );
+  }
+  draw();
+}
 
 /**
  * Arm a gesture on the widget at `index` and ask the guards what the commit
@@ -2237,16 +3129,16 @@ function beginGesture(
   index: number,
   handle: ResizeHandle | null,
   world: { x: number; y: number },
-  screen: { x: number; y: number }
+  screen: { x: number; y: number },
+  duplicate = false
 ): void {
   const item = scene.items[index];
   if (!item) return;
-  // A resize grip belongs to ONE widget's rect, so it never carries the others.
   // A press on any member drags the whole set, the pressed one included: the
   // pointerdown promoted it to primary, so membership is what to test, not
-  // whether it is one of the others.
-  const group =
-    handle === null && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
+  // whether it is one of the others. A grip on a multi-selection's bounds
+  // resizes every member by the same delta. An Alt+drag copies ONE widget.
+  const group = !duplicate && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
   const members = [memberOf(index), ...group.filter((i) => i !== index).map(memberOf)];
   const first = members[0];
   const next: Gesture = {
@@ -2266,6 +3158,8 @@ function beginGesture(
     members,
     writes: null,
     siblings: siblingRects(index),
+    parent: parentRect(index),
+    duplicate,
     snap: null,
     reorder: null,
     drop: null,
@@ -2318,7 +3212,8 @@ function armGesture(g: Gesture, verdict: EditVerdict): void {
     // one that places its children itself: what a drag means there is a change
     // of LAYOUT ORDER, which is a reorder, and the refusal above is the
     // server's own explanation of why it is not a move.
-    const reorder = g.handle === null && g.members.length === 1 ? reorderContextFor(g.index) : null;
+    const reorder =
+      g.handle === null && g.members.length === 1 && !g.duplicate ? reorderContextFor(g.index) : null;
     g.status = reorder ? "reorder" : "blocked";
     g.reorder = reorder;
     if (reorder) probeReorder(reorder, g);
@@ -2391,7 +3286,8 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
     writeFor(g, g.members[0], rawX, rawY).rect,
     g.siblings,
     g.handle ? edgesOf(g.handle) : MOVE_EDGES,
-    snapConfig()
+    snapConfig(),
+    { parent: g.parent }
   );
   if (snap.dx !== 0 || snap.dy !== 0) {
     // Rounded again, for the reason gesture.ts rounds at all: the preview, the
@@ -2401,7 +3297,9 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
   g.snap = snap;
   g.writes = g.members.map((m) => writeFor(g, m, delta[0], delta[1]));
   statusEl.textContent = gestureReadout(g);
-  previewInspector(g.writes[0]);
+  // An Alt+drag can carry a widget that is not the selection; the inspector
+  // shows the selection's rows and must not take the other widget's numbers.
+  if (g.index === selected) previewInspector(g.writes[0]);
   requestDraw();
 }
 
@@ -2490,6 +3388,10 @@ function endGesture(g: Gesture): void {
     draw();
     return;
   }
+  if (g.duplicate) {
+    commitDuplicateMove(g, preview);
+    return;
+  }
   committing = preview;
   const onVerdict = (verdict: EditVerdict): void => {
     if (verdict.refused) {
@@ -2529,7 +3431,64 @@ function livePreviewOf(g: Gesture): LivePreview | null {
   const slices = movingMembers(g)
     .map((m) => ({ from: m.from, to: m.to }))
     .sort((a, b) => a.from - b.from);
-  return { slices, write: g.writes[0] };
+  return { slices, write: g.writes[0], duplicate: g.duplicate };
+}
+
+/**
+ * An Alt+drag's release. The server's ops address lines the document HAS, so
+ * the copy cannot be moved in the same batch that creates it: the duplicate
+ * goes first, the copy (the original's next source slot) becomes the
+ * selection when its layout lands, and the move is then written to it. Two
+ * document changes, so two undo steps, which is what the duplicate-then-move
+ * the protocol allows costs. The preview holds across both.
+ */
+let pendingMove: { dx: number; dy: number } | null = null;
+
+function commitDuplicateMove(g: Gesture, preview: LivePreview | null): void {
+  const item = scene.items[g.index];
+  const parent = parentIndex(scene, g.index);
+  const write = g.writes![0];
+  if (!canEdit(item) || item.srcIndex === undefined) {
+    toast(`${widgetTitle(item)} ${NO_SOURCE_HERE}`, "refused");
+    draw();
+    return;
+  }
+  committing = preview;
+  pendingSelect = {
+    parent: parent === null ? "" : rowKey(scene.items[parent].path),
+    source: item.srcIndex + 1,
+  };
+  pendingMove = { dx: write.offset.dx, dy: write.offset.dy };
+  sendOps("applyOps", [{ kind: "duplicate", line: item.line }], (verdict) => {
+    const refused = verdict.refused ?? distinctRefusals(verdict)[0];
+    if (!refused) return;
+    committing = null;
+    pendingSelect = null;
+    pendingMove = null;
+    toast(refused, "refused");
+    draw();
+  });
+  draw();
+}
+
+/** The second half of an Alt+drag: the copy is selected, so move it. */
+function moveCopy(): void {
+  const move = pendingMove;
+  pendingMove = null;
+  const item = selectedItem();
+  if (!move || !canEdit(item)) {
+    committing = null;
+    return;
+  }
+  const base = baseOf(item);
+  const write = moveWrite(base, hitRect(item), move.dx, move.dy);
+  committing = { slices: [{ from: selected!, to: subtreeEnd(scene, selected!) }], write };
+  sendEdit("applyEdit", item.line, write.properties, (verdict) => {
+    if (!verdict.refused) return;
+    committing = null;
+    toast(verdict.refused, "refused");
+    draw();
+  });
 }
 
 /** Per-member refusals, deduplicated and never paraphrased. */
@@ -2597,7 +3556,7 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
     drag.engaged = true;
     // Same discipline as a canvas drag: the guards answer before the row moves.
     probeReorder(drag.ctx, drag);
-    layerEls.get(drag.index)?.classList.add("dragging");
+    layerEls.get(drag.index)?.setAttribute("data-dragging", "");
     announceGesture(drag);
   }
   if (drag.status === "blocked" || row.rank < 0) return;
@@ -2605,21 +3564,49 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
   markDropRow(drag);
 }
 
-/** The drop line, as a border on the row the widget would land at. */
+/**
+ * The drop preview: the dragged row moves to where it would land and the rows
+ * between slide out of its way (FLIP, the same look as sortable.ts), so the
+ * list reads as the order a release would write. The rows go back to the
+ * order the file has when the drag ends: the fresh layout is the answer.
+ */
 function markDropRow(drag: RowDrag): void {
-  for (const node of layerEls.values()) node.classList.remove("dropBefore", "dropAfter");
-  if (drag.to === null || drag.to === drag.ctx.from) return;
-  const target = layerEls.get(drag.ctx.children[drag.to]);
-  target?.classList.add(drag.to < drag.ctx.from ? "dropBefore" : "dropAfter");
+  const moving = layerEls.get(drag.index);
+  if (!moving || drag.to === null) return;
+  const rows = drag.ctx.children.map((i) => layerEls.get(i)).filter((n): n is HTMLElement => !!n);
+  const others = rows.filter((n) => n !== moving);
+  const anchor = others[drag.to] ?? null;
+  if ((anchor ? anchor.previousElementSibling : others[others.length - 1]) === moving) return;
+  const before = new Map(rows.map((n) => [n, n.getBoundingClientRect().top]));
+  if (anchor) layersEl.insertBefore(moving, anchor);
+  else others[others.length - 1]?.after(moving);
+  for (const [row, top] of before) {
+    if (row === moving) continue;
+    const delta = top - row.getBoundingClientRect().top;
+    if (!delta) continue;
+    row.style.transition = "none";
+    row.style.transform = `translateY(${delta}px)`;
+    requestAnimationFrame(() => {
+      row.style.transition = "transform 140ms cubic-bezier(0.2, 0, 0, 1)";
+      row.style.transform = "";
+    });
+  }
 }
 
 function endRowDrag(): void {
   const drag = rowDrag;
   rowDrag = null;
   if (!drag) return;
-  layerEls.get(drag.index)?.classList.remove("dragging");
-  for (const node of layerEls.values()) node.classList.remove("dropBefore", "dropAfter");
-  if (!drag.engaged || drag.status === "blocked" || drag.to === null || drag.to === drag.ctx.from) return;
+  layerEls.get(drag.index)?.removeAttribute("data-dragging");
+  for (const node of layerEls.values()) {
+    node.style.transition = "";
+    node.style.transform = "";
+  }
+  if (!drag.engaged || drag.status === "blocked" || drag.to === null || drag.to === drag.ctx.from) {
+    // Nothing was written, so the rows go back to the order the file still has.
+    if (drag.engaged) renderLayers();
+    return;
+  }
   commitReorder(drag.ctx, drag.to);
 }
 
@@ -2647,18 +3634,22 @@ let marquee: Marquee | null = null;
 // ---- dropping a palette entry ----------------------------------------------
 
 /**
- * A widget being dragged out of the palette. It carries no geometry of its own:
+ * A tile being dragged out of the library. It carries no geometry of its own:
  * what a drop means is decided by the container under the cursor, exactly as a
  * reorder drop is, and the widget itself is written by the server.
  */
 interface PaletteDrag {
-  entry: GuiVocabularyEntry;
+  entry: LibraryEntry;
+  /** The chip that follows the cursor, named after the entry. */
+  ghost: HTMLElement;
   /** The container the pointer is over, or null while it is over nothing writable. */
   target: DropTarget | null;
   /** The rank inside that container the drop would land at. */
   rank: number;
   /** The drop line, when the container has children to land between. */
   line: Guide | null;
+  /** Where the press was: past DRAG_THRESHOLD from it the library gets out of the way. */
+  from: { x: number; y: number };
 }
 
 /** A container a drop can write into, and the children a drop line reads. */
@@ -2709,13 +3700,55 @@ function insertIndex(target: DropTarget, rank: number): number | undefined {
   return rank >= target.sources.length ? undefined : target.sources[rank];
 }
 
+/** The chip sits just off the cursor, so the cursor still shows what is under it. */
+function moveGhost(clientX: number, clientY: number): void {
+  if (paletteDrag) paletteDrag.ghost.style.transform = `translate(${clientX + 12}px, ${clientY + 12}px)`;
+}
+
+/** Whether a window pointer event is over the canvas: the only place a drop can land. */
+function overStage(ev: { clientX: number; clientY: number }): boolean {
+  const rect = stage.getBoundingClientRect();
+  return (
+    ev.clientX >= rect.left && ev.clientX < rect.right && ev.clientY >= rect.top && ev.clientY < rect.bottom
+  );
+}
+
+/** The pointer left the canvas mid-drag: nothing to drop into, and the overlay says so. */
+function clearPaletteTarget(): void {
+  const drag = paletteDrag;
+  if (!drag) return;
+  drag.target = null;
+  drag.line = null;
+  statusEl.textContent = `${drag.entry.name} · release over the canvas to insert it`;
+  requestDraw();
+}
+
+/**
+ * The "Drop here" outline over the container a drop would go into: a DOM
+ * element over the canvas (the accent colour is the page's, which the canvas
+ * cannot read), placed in screen space from the container's world rect, and
+ * re-placed on every paint because the camera may have moved under it.
+ */
+function syncDropTarget(): void {
+  const target = paletteDrag?.target;
+  if (!target) {
+    dropTargetEl.hidden = true;
+    return;
+  }
+  const rect = rectOf(target.index);
+  dropTargetEl.hidden = false;
+  dropTargetEl.style.left = `${rect.x * zoom + panX}px`;
+  dropTargetEl.style.top = `${rect.y * zoom + panY}px`;
+  dropTargetEl.style.width = `${rect.w * zoom}px`;
+  dropTargetEl.style.height = `${rect.h * zoom}px`;
+}
+
 function updatePaletteDrag(world: { x: number; y: number }): void {
   const drag = paletteDrag!;
   const target = dropTargetAt(world);
   drag.target = target;
   if (!target) {
     drag.line = null;
-    flashIndex = null;
     statusEl.textContent = `${drag.entry.name} · no widget here can take a child`;
     requestDraw();
     return;
@@ -2728,9 +3761,15 @@ function updatePaletteDrag(world: { x: number; y: number }): void {
       ? dropRank(target.rects, -1, target.axis, target.axis === "x" ? world.x : world.y)
       : target.rects.length;
   drag.line = target.rects.length >= 2 ? dropLineIn(target, drag.rank) : null;
-  flashIndex = target.index;
   const container = scene.items[target.index];
-  statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
+  if (drag.entry.kind === "template") {
+    // A template is applied to the widget under the cursor, not inserted
+    // between its children: there is no slot to point at.
+    drag.line = null;
+    statusEl.textContent = `${drag.entry.name} · using = on ${widgetTitle(container)}`;
+  } else {
+    statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
+  }
   requestDraw();
 }
 
@@ -2756,45 +3795,30 @@ function dropLineIn(target: DropTarget, rank: number): Guide {
 }
 
 /**
- * Release: ONE `insert` op, and the new widget becomes the selection. The body
- * is empty on purpose, a size this editor invented would be a number the
- * author never chose and the engine never measured, so the status line says
- * the widget draws nothing until it is given one.
+ * Release: ONE op (`insert` for a type, `insertRaw` for a saved component, a
+ * `using` write for a template), and the new widget becomes the selection. The
+ * body is empty on purpose, a size this editor invented would be a number the
+ * author never chose and the engine never measured, so the toast says the
+ * widget draws nothing until it is given one.
  */
 function endPaletteDrag(commit: boolean): void {
   const drag = paletteDrag;
   paletteDrag = null;
-  flashIndex = null;
-  for (const node of paletteEls.values()) node.classList.remove("dragging");
+  for (const tile of tileEls.values()) tile.node.removeAttribute("data-dragging");
   if (!drag) return;
+  drag.ghost.remove();
+  dropTargetEl.hidden = true;
   const target = drag.target;
   if (!commit || !target) {
     statusEl.textContent = statusLine();
     draw();
     return;
   }
-  const index = insertIndex(target, drag.rank);
-  // Select what lands: the container's path plus the source index the op wrote
-  // at, resolved against the NEXT layout (a draw index would be meaningless).
-  pendingSelect = {
-    parent: rowKey(scene.items[target.index].path),
-    source: index ?? Number.POSITIVE_INFINITY,
-  };
-  sendOps(
-    "applyOps",
-    [{ kind: "insert", line: target.line, widget: { type: drag.entry.name }, index }],
-    (verdict) => {
-      if (verdict.refused) {
-        pendingSelect = null;
-        toast(verdict.refused, "refused");
-        return;
-      }
-      toast(
-        `${drag.entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
-        "info"
-      );
-    }
-  );
+  if (drag.entry.kind === "template") {
+    guardedWrite(target.line, [{ key: "using", value: usingValue(drag.entry.name) }]);
+  } else {
+    insertEntry(drag.entry, { line: target.line, index: insertIndex(target, drag.rank) });
+  }
   statusEl.textContent = statusLine();
   draw();
 }
@@ -2929,7 +3953,7 @@ function reportBatch(verdict: EditVerdict): void {
  * batched `setProperties`, and a component is an `insertRaw`. Nothing here has
  * a write path of its own.
  */
-type HaloTab = "why" | "texture" | "visible" | "uses" | "types" | "art" | "saved";
+type HaloTab = "why" | "texture" | "visible" | "uses" | "types" | "art" | "saved" | "reference";
 
 const HALO_TABS: { tab: HaloTab; label: string; title: string }[] = [
   { tab: "why", label: "Why", title: "Why the selected widget's rect is where it is" },
@@ -2939,6 +3963,11 @@ const HALO_TABS: { tab: HaloTab; label: string; title: string }[] = [
   { tab: "types", label: "Types", title: "The widget types and templates available here" },
   { tab: "art", label: "Art", title: "Browse the .dds files under the mod's and the game's gfx trees" },
   { tab: "saved", label: "Saved", title: "Your saved components and property presets" },
+  {
+    tab: "reference",
+    label: "Reference",
+    title: "Lay an in-game screenshot over the canvas to compare the two",
+  },
 ];
 
 let haloTab: HaloTab = "why";
@@ -2977,7 +4006,7 @@ let visibilityFound: GuiVisibilityCheck[] = [];
 let pulseNoteText: string | null = null;
 
 function haloOpen(): boolean {
-  return !haloEl.hidden;
+  return !sections.devtools.hasAttribute("data-collapsed");
 }
 
 /**
@@ -2990,13 +4019,35 @@ function wantsPlacement(): boolean {
   return constraintsToggle.checked || (haloOpen() && haloTab === "why");
 }
 
-function toggleHalo(): void {
-  haloEl.hidden = !haloEl.hidden;
-  haloToggleEl.classList.toggle("on", haloOpen());
-  if (!haloOpen()) return;
-  renderHaloTabs();
-  askForTab();
-  renderHalo();
+/** Open (or close) the devtools section; opening it in a hidden panel shows the panel too. */
+function toggleHalo(open = !haloOpen()): void {
+  setSectionCollapsed("devtools", !open);
+  if (open && sidePanels.right.collapsed) sidePanels.right.toggle(false);
+}
+
+function setSectionCollapsed(id: SectionId, collapsed: boolean): void {
+  const node = sections[id];
+  if (node.hasAttribute("data-collapsed") === collapsed) return;
+  node.toggleAttribute("data-collapsed", collapsed);
+  if (id === "devtools" && !collapsed) {
+    renderHaloTabs();
+    askForTab();
+    renderHalo();
+  }
+  if (id === "devtools" && collapsed && constraintsToggle.checked === false) {
+    // The "why" trace is only fetched while something reads it.
+    reReadWidgetInfo();
+  }
+  if (!adoptingPanels) host.send({ type: "setUiState", valueMode, sections: collapsedSections() });
+}
+
+function collapsedSections(): SectionId[] {
+  return (Object.keys(sections) as SectionId[]).filter((id) => sections[id].hasAttribute("data-collapsed"));
+}
+for (const id of Object.keys(sections) as SectionId[]) {
+  sections[id]
+    .querySelector(".px-section-head")!
+    .addEventListener("click", () => setSectionCollapsed(id, !sections[id].hasAttribute("data-collapsed")));
 }
 
 function setHaloTab(tab: HaloTab): void {
@@ -3069,7 +4120,10 @@ function askTextures(): void {
 function renderHaloTabs(): void {
   haloTabsEl.textContent = "";
   for (const entry of HALO_TABS) {
-    const node = el("button", entry.tab === haloTab ? "on" : undefined, entry.label) as HTMLButtonElement;
+    const node = el("button", "px-tab", entry.label) as HTMLButtonElement;
+    node.setAttribute("role", "tab");
+    node.setAttribute("aria-selected", entry.tab === haloTab ? "true" : "false");
+    // A native title: the line tab's underline is its ::after, which a data-tip would take over.
     node.title = entry.title;
     node.addEventListener("click", () => setHaloTab(entry.tab));
     haloTabsEl.appendChild(node);
@@ -3100,6 +4154,9 @@ function renderHalo(): void {
       return;
     case "saved":
       renderSaved();
+      return;
+    case "reference":
+      renderReference();
       return;
   }
 }
@@ -3144,7 +4201,7 @@ function renderWhy(): void {
   }
 
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, widgetTitle(item)));
+  head.appendChild(el("div", "title", widgetTitle(item)));
   head.appendChild(
     el(
       "div",
@@ -3155,7 +4212,7 @@ function renderWhy(): void {
   haloBodyEl.appendChild(head);
 
   if (report.rows.length > 0) {
-    haloBodyEl.appendChild(el("div", "section", "Where the origin comes from"));
+    haloBodyEl.appendChild(sectionTitle("Where the origin comes from"));
     const terms = el("div", "terms");
     report.rows.forEach((row, i) => {
       const line = el("div", i === report.rows.length - 1 ? "term sum" : "term");
@@ -3169,7 +4226,7 @@ function renderWhy(): void {
 
   const overrides = overrideRows(widgetInfo.properties);
   if (overrides.length === 0) return;
-  haloBodyEl.appendChild(el("div", "section", "What overrides what"));
+  haloBodyEl.appendChild(sectionTitle("What overrides what"));
   for (const row of overrides) {
     const prose = el("div", "prose");
     prose.appendChild(el("span", undefined, `${row.key} = ${row.value}`));
@@ -3207,7 +4264,7 @@ function renderTextureTab(): void {
   }
   for (const texture of textures) {
     const head = el("div", "head");
-    head.appendChild(el("div", undefined, `${texture.source}: ${textureName(texture.path)}`));
+    head.appendChild(el("div", "title", `${texture.source}: ${textureName(texture.path)}`));
     head.appendChild(el("div", "chain", texture.path));
     head.appendChild(el("div", "chain", textureSummary(texture)));
     haloBodyEl.appendChild(head);
@@ -3281,7 +4338,7 @@ const VISIBILITY_MODES: { mode: GuiVisibilityMode; label: string; title: string 
  */
 function renderVisible(): void {
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, "Conditional visibility"));
+  head.appendChild(el("div", "title", "Conditional visibility"));
   head.appendChild(
     el(
       "div",
@@ -3292,42 +4349,84 @@ function renderVisible(): void {
   haloBodyEl.appendChild(head);
 
   const tools = el("div", "tools");
+  const group = el("div", "px-toggle-group");
+  group.dataset.spacing = "0";
   for (const entry of VISIBILITY_MODES) {
-    const node = el(
-      "button",
-      entry.mode === visibilityMode ? "on" : undefined,
-      entry.label
-    ) as HTMLButtonElement;
-    node.title = entry.title;
-    if (entry.mode === visibilityMode) node.style.borderColor = "var(--vscode-focusBorder, #007fd4)";
+    const node = el("button", "px-toggle", entry.label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.setAttribute("aria-pressed", entry.mode === visibilityMode ? "true" : "false");
+    node.dataset.tip = entry.title;
+    node.dataset.tipWrap = "";
     node.addEventListener("click", () => sendVisibility(entry.mode, visibilityChecks));
-    tools.appendChild(node);
+    group.appendChild(node);
   }
+  tools.appendChild(group);
   haloBodyEl.appendChild(tools);
 
   if (visibilityFound.length === 0) {
     note("No widget in this file has a conditional `visible`, so the mode changes nothing here.");
     return;
   }
-  haloBodyEl.appendChild(el("div", "section", `${visibilityFound.length} condition(s) the layout met`));
-  for (const check of visibilityFound) {
-    const label = el("label", "check") as HTMLLabelElement;
-    const box = document.createElement("input");
-    box.type = "checkbox";
+  if (visibilityMode !== "evaluate") {
+    note(
+      visibilityMode === "showAll"
+        ? "Every conditional widget is shown. Switch to Evaluate to decide per condition, or use Interact mode: a click sets the variables its onclick sets."
+        : "Every conditional widget is hidden. Switch to Evaluate to decide per condition."
+    );
+  }
+  haloBodyEl.appendChild(
+    filterBox("Filter conditions", visibleQuery, (value) => {
+      visibleQuery = value;
+      renderHalo();
+      focusFilter();
+    })
+  );
+  const q = visibleQuery.trim().toLowerCase();
+  const shown = visibilityFound.filter((c) => !q || c.key.toLowerCase().includes(q));
+  const hiddenCount = visibilityFound.filter((c) => c.hidden).length;
+  haloBodyEl.appendChild(
+    sectionTitle(
+      `${shown.length === visibilityFound.length ? visibilityFound.length : `${shown.length} of ${visibilityFound.length}`} condition(s)` +
+        (hiddenCount ? ` · ${hiddenCount} hiding widgets` : "")
+    )
+  );
+  // Most-used first: the condition on twenty widgets is the one worth deciding.
+  shown.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  for (const check of shown) {
     // Unassigned behaves as shown (the wire's rule), so an unticked box means
     // "assume false" and a ticked one means "assume true".
-    box.checked = visibilityChecks[check.key] !== false;
+    const label = switchRow(stripBrackets(check.key), visibilityChecks[check.key] !== false, (on) =>
+      sendVisibility("evaluate", { ...visibilityChecks, [check.key]: on })
+    );
+    label.querySelector(".px-grow")!.classList.add("mono");
+    const box = label.querySelector("input") as HTMLInputElement;
     box.disabled = visibilityMode !== "evaluate";
-    box.addEventListener("change", () => {
-      sendVisibility("evaluate", { ...visibilityChecks, [check.key]: box.checked });
-    });
-    label.appendChild(box);
-    const text = el("span", undefined, check.key);
-    text.title = `${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
-    label.appendChild(text);
-    if (check.hidden) label.appendChild(el("span", "tag", "hidden"));
+    label.title = `${check.key}\n${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
+    const count = el("span", "px-muted px-xs", `×${check.count}`);
+    count.style.flex = "0 0 auto";
+    label.appendChild(count);
+    if (check.hidden) label.appendChild(badge("hidden"));
     haloBodyEl.appendChild(label);
   }
+}
+
+function stripBrackets(key: string): string {
+  return key.replace(/^\[/, "").replace(/\]$/, "");
+}
+let visibleQuery = "";
+
+/** A labelled px-switch: `<label class="px-switch check"><input><span></span><span>text</span></label>`. */
+function switchRow(text: string, on: boolean, onChange: (on: boolean) => void): HTMLLabelElement {
+  const label = el("label", "px-switch check") as HTMLLabelElement;
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = on;
+  box.addEventListener("change", () => onChange(box.checked));
+  label.appendChild(box);
+  label.appendChild(el("span"));
+  label.appendChild(el("span", "px-grow px-sm", text));
+  return label;
 }
 
 function sendVisibility(mode: GuiVisibilityMode, checks: Record<string, boolean>): void {
@@ -3367,74 +4466,83 @@ function renderUses(): void {
   head.appendChild(
     el(
       "div",
-      undefined,
+      "title",
       dependenciesLine === undefined ? `Whole file: ${file}` : `Inside ${widgetTitle(item!)}`
     )
   );
   haloBodyEl.appendChild(head);
 
-  const scope = el("label", "check") as HTMLLabelElement;
-  const box = document.createElement("input");
-  box.type = "checkbox";
-  box.checked = dependenciesWholeFile;
-  box.addEventListener("change", () => {
-    dependenciesWholeFile = box.checked;
-    askDependencies();
-    renderHalo();
-  });
-  scope.appendChild(box);
-  scope.appendChild(el("span", undefined, "The whole file, not just the selection"));
-  haloBodyEl.appendChild(scope);
+  const scopeTools = el("div", "tools");
+  const scopeGroup = el("div", "px-toggle-group");
+  scopeGroup.dataset.spacing = "0";
+  for (const [whole, label] of [
+    [false, "Selection"],
+    [true, "Whole file"],
+  ] as const) {
+    const node = el("button", "px-toggle", label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.setAttribute("aria-pressed", dependenciesWholeFile === whole ? "true" : "false");
+    node.addEventListener("click", () => {
+      if (dependenciesWholeFile === whole) return;
+      dependenciesWholeFile = whole;
+      askDependencies();
+      renderHalo();
+    });
+    scopeGroup.appendChild(node);
+  }
+  scopeTools.appendChild(scopeGroup);
+  haloBodyEl.appendChild(scopeTools);
 
   if (!dependencies) {
     note(dependenciesPending ? "Reading what this reaches…" : "The host could not answer that.");
     return;
   }
 
-  haloBodyEl.appendChild(el("div", "section", `scripted_gui (${dependencies.scriptedGuis.length})`));
+  const uses = el("div", "uses");
+  haloBodyEl.appendChild(uses);
+  uses.appendChild(sectionTitle(`scripted_gui (${dependencies.scriptedGuis.length})`));
   if (dependencies.scriptedGuis.length === 0) {
-    note("This calls no scripted_gui, so it hands control to no script.");
+    uses.appendChild(el("div", "note", "This calls no scripted_gui, so it hands control to no script."));
   }
   for (const row of dependencies.scriptedGuis) {
-    const line = el("div", "prose");
-    line.appendChild(revealLink(row.name, row.file, row.line));
-    line.appendChild(
-      el("span", "chain", ` · ${row.uses} call site(s) across the gui tree, ${row.callLines.length} here`)
-    );
-    haloBodyEl.appendChild(line);
-    if (!row.file) haloBodyEl.appendChild(el("div", "chain missing", "  no scripted_gui by that name"));
+    const line = el("div", "row");
+    const name = revealLink(row.name, row.file, row.line);
+    name.classList.add("name");
+    line.appendChild(name);
+    const meta = el("span", "meta", `${row.callLines.length} here · ${row.uses} in the gui tree`);
+    meta.title = "Call sites: in this selection, and across every .gui file";
+    line.appendChild(meta);
+    uses.appendChild(line);
+    if (!row.file) uses.appendChild(el("div", "note missing sub", "no scripted_gui by that name"));
     for (const chain of row.chains) {
-      const entry = el("div", "prose");
-      entry.appendChild(el("span", "chain", "  → "));
-      entry.appendChild(revealLink(chain.name, chain.file, chain.line));
-      entry.appendChild(
-        el(
-          "span",
-          "chain",
-          chain.via.length === 0
-            ? ` (${chain.kind}, directly)`
-            : ` (${chain.kind}, via ${chain.via.join(" → ")})`
-        )
-      );
-      haloBodyEl.appendChild(entry);
+      const entry = el("div", "row sub");
+      entry.appendChild(el("span", "chain", "→"));
+      const target = revealLink(chain.name, chain.file, chain.line);
+      target.classList.add("name");
+      entry.appendChild(target);
+      entry.appendChild(el("span", "meta", chain.kind));
+      uses.appendChild(entry);
+      if (chain.via.length > 0) uses.appendChild(el("div", "via sub", `via ${chain.via.join(" → ")}`));
     }
   }
 
-  haloBodyEl.appendChild(el("div", "section", `localization (${dependencies.locKeys.length})`));
-  if (dependencies.locKeys.length === 0) note("This names no localization key.");
+  uses.appendChild(sectionTitle(`localization (${dependencies.locKeys.length})`));
+  if (dependencies.locKeys.length === 0)
+    uses.appendChild(el("div", "note", "This names no localization key."));
   for (const row of dependencies.locKeys) {
-    const line = el("div", "prose");
-    const key = el("span", row.missing ? "link missing" : "link", row.key);
+    const line = el("div", "row");
+    const key = el("span", row.missing ? "link missing name" : "link name", row.key);
     key.title = row.missing
       ? "No loc_key definition anywhere in the index: the game will print the key itself."
       : (row.value ?? "");
     // The key is named in THIS document, so the ordinary reveal is the right one.
     key.addEventListener("click", () => host.send({ type: "reveal", line: row.line }));
     line.appendChild(key);
-    line.appendChild(el("span", "chain", ` · ${row.prop}`));
-    if (row.missing) line.appendChild(el("span", "tag", "missing"));
-    else if (row.value) line.appendChild(el("span", "chain", ` · ${row.value}`));
-    haloBodyEl.appendChild(line);
+    line.appendChild(el("span", "meta", row.prop));
+    if (row.missing) line.appendChild(badge("missing"));
+    uses.appendChild(line);
+    if (!row.missing && row.value) uses.appendChild(el("div", "via sub", row.value));
   }
 }
 
@@ -3474,11 +4582,12 @@ function renderTypes(): void {
     return;
   }
   for (const group of groups) {
-    haloBodyEl.appendChild(el("div", "section", group.title));
+    haloBodyEl.appendChild(sectionTitle(group.title));
     for (const entry of group.entries) {
-      const row = el("div", browserPick === entry.name ? "row picked" : "row");
-      row.appendChild(el("span", undefined, paletteLabel(entry)));
-      if (entry.count !== undefined) row.appendChild(el("span", "tag", String(entry.count)));
+      const row = el("div", "px-item row");
+      setSelected(row, browserPick === entry.name);
+      row.appendChild(el("span", "label", paletteLabel(entry)));
+      if (entry.count !== undefined) row.appendChild(badge(String(entry.count)));
       row.addEventListener("click", () => {
         browserPick = browserPick === entry.name ? null : entry.name;
         renderHalo();
@@ -3506,41 +4615,44 @@ function browserActions(entry: GuiVocabularyEntry): HTMLElement {
   const tools = el("div", "tools");
   const writable = canEdit(selectedItem());
   if (entry.kind === "template") {
-    const apply = el("button", undefined, `Apply as using = ${entry.name}`) as HTMLButtonElement;
-    apply.title = "Write `using` on the selected widget. Its own properties still win over the template's.";
-    apply.disabled = !writable;
-    apply.addEventListener("click", () => {
-      const target = selectedItem();
-      if (!canEdit(target)) {
-        toast("Select a widget with a declaration in this file first.", "info");
-        return;
+    const apply = button(
+      `Apply as using = ${entry.name}`,
+      () => {
+        const target = selectedItem();
+        if (!canEdit(target)) {
+          toast("Select a widget with a declaration in this file first.", "info");
+          return;
+        }
+        guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
+      },
+      {
+        variant: "outline",
+        size: "sm",
+        tip: "Write `using` on the selected widget. Its own properties still win over the template's.",
       }
-      guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
-    });
+    );
+    apply.disabled = !writable;
     tools.appendChild(apply);
     return tools;
   }
-  const insert = el("button", undefined, "Insert here") as HTMLButtonElement;
-  insert.title = "Insert an instance next to the selected widget, through the same op a palette drop uses.";
-  insert.disabled = !writable;
-  insert.addEventListener("click", () => {
-    const at = pasteTarget();
-    if (!at) return;
-    sendOps(
-      "applyOps",
-      [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
-      (verdict) => {
-        if (verdict.refused) toast(verdict.refused, "refused");
-        else
-          toast(
-            `${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
-            "info"
-          );
-      }
-    );
+  const insert = button("Insert here", () => insertType(entry), {
+    variant: "outline",
+    size: "sm",
+    tip: "Insert an instance next to the selected widget, through the same op a palette drop uses.",
   });
+  insert.disabled = !writable;
   tools.appendChild(insert);
   return tools;
+}
+
+/** The browser's insert: the same op a library drop sends, at the paste target. */
+function insertType(entry: GuiVocabularyEntry): void {
+  const at = pasteTarget();
+  if (!at) return;
+  insertEntry(
+    { key: `${entry.kind}:${entry.name}`, name: entry.name, kind: entry.kind, source: "", vocab: entry },
+    at
+  );
 }
 
 /**
@@ -3574,7 +4686,7 @@ function renderArt(): void {
   const item = selectedItem();
   const keys = syncTextureKeys();
   const head = el("div", "head");
-  head.appendChild(el("div", undefined, "Textures under gfx/"));
+  head.appendChild(el("div", "title", "Textures under gfx/"));
   head.appendChild(
     el(
       "div",
@@ -3588,19 +4700,16 @@ function renderArt(): void {
 
   if (canEdit(item) && keys.length > 1) {
     const tools = el("div", "tools");
-    tools.appendChild(el("span", undefined, "Write to"));
-    const select = document.createElement("select");
-    for (const key of keys) {
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = key;
-      if (key === texturePropertyKey) option.selected = true;
-      select.appendChild(option);
-    }
+    tools.appendChild(el("span", "px-label", "Write to"));
+    const { wrap, select } = dropdownSelect(
+      keys.map((key) => ({ value: key, label: key })),
+      texturePropertyKey,
+      { tip: "Which texture property a pick writes" }
+    );
     select.addEventListener("change", () => {
       texturePropertyKey = select.value;
     });
-    tools.appendChild(select);
+    tools.appendChild(wrap);
     haloBodyEl.appendChild(tools);
   }
 
@@ -3628,7 +4737,7 @@ function renderArt(): void {
   if (wanted.length > 0) host.send({ type: "requestThumbnails", paths: wanted });
 
   for (const entry of page.rows) {
-    const row = el("div", "texRow");
+    const row = el("div", "px-item texRow");
     const url = thumbUrls[entry.path];
     if (url) {
       const img = document.createElement("img");
@@ -3640,7 +4749,7 @@ function renderArt(): void {
     }
     const names = el("div", "names");
     names.appendChild(el("div", undefined, textureName(entry.path)));
-    names.appendChild(el("div", "chain", `${entry.source} · ${textureFolder(entry.path)}`));
+    names.appendChild(el("div", "chain px-xs", `${entry.source} · ${textureFolder(entry.path)}`));
     row.appendChild(names);
     row.title = entry.path;
     row.addEventListener("click", () => {
@@ -3693,22 +4802,20 @@ function syncTextureKeys(): string[] {
 function renderSaved(): void {
   const item = selectedItem();
 
-  haloBodyEl.appendChild(el("div", "section", `Components (${components.length})`));
+  haloBodyEl.appendChild(sectionTitle(`Components (${components.length})`));
   const saveTools = el("div", "tools");
-  const nameInput = document.createElement("input");
-  nameInput.className = "text";
-  nameInput.placeholder = "Name";
-  nameInput.value = componentName;
-  nameInput.spellcheck = false;
-  nameInput.addEventListener("keydown", (ev) => ev.stopPropagation());
+  const nameInput = textInput("Name", componentName, "text");
   nameInput.addEventListener("input", () => {
     componentName = nameInput.value;
   });
   saveTools.appendChild(nameInput);
-  const save = el("button", undefined, "Save selection") as HTMLButtonElement;
-  save.title = "Store the selected widgets' verbatim block text under that name.";
+  const save = button("Save selection", () => saveSelectionAsComponent(), {
+    variant: "outline",
+    size: "sm",
+    tip: "Store the selected widgets' verbatim block text under that name.",
+  });
+  save.dataset.tipSide = "left";
   save.disabled = selected === null;
-  save.addEventListener("click", () => saveSelectionAsComponent());
   saveTools.appendChild(save);
   haloBodyEl.appendChild(saveTools);
 
@@ -3716,32 +4823,41 @@ function renderSaved(): void {
     note("Nothing saved yet. Select one or more widgets, name them, and save.");
   }
   for (const component of components) {
-    const row = el("div", "row");
-    row.appendChild(el("span", undefined, component.name));
-    row.appendChild(el("span", "tag", `${component.widgets}w`));
-    const insert = el("button", undefined, "Insert") as HTMLButtonElement;
+    const row = el("div", "px-item row");
+    row.appendChild(el("span", "label", component.name));
+    row.appendChild(badge(`${component.widgets}w`, `${component.widgets} widget(s)`));
+    row.appendChild(el("span", "px-grow"));
+    const tools = el("span", "px-item-tools");
+    const insert = button("Insert", () => insertComponent(component.name), {
+      size: "xs",
+      tip: "Insert it next to the selected widget",
+    });
     insert.disabled = !canEdit(item);
-    insert.addEventListener("click", () => insertComponent(component.name));
-    row.appendChild(insert);
-    row.appendChild(forgetButton("component", component.name));
+    tools.appendChild(insert);
+    tools.appendChild(forgetButton("component", component.name));
+    row.appendChild(tools);
     haloBodyEl.appendChild(row);
   }
 
-  haloBodyEl.appendChild(el("div", "section", `Property presets (${presets.length})`));
+  haloBodyEl.appendChild(sectionTitle(`Property presets (${presets.length})`));
   if (presets.length === 0) {
     note('Nothing saved yet. Use "Save preset" in the inspector to store a widget\'s own properties.');
   }
   for (const preset of presets) {
-    const row = el("div", "row");
-    row.appendChild(el("span", undefined, preset.name));
-    row.appendChild(el("span", "tag", `${preset.properties.length}`));
+    const row = el("div", "px-item row");
+    row.appendChild(el("span", "label", preset.name));
+    row.appendChild(badge(`${preset.properties.length}`, `${preset.properties.length} propert(ies)`));
     row.title = preset.properties.map((p) => `${p.key} = ${p.value}`).join("\n");
-    const apply = el("button", undefined, "Apply") as HTMLButtonElement;
-    apply.title = "Write every property of this preset onto the selection, as one undo step.";
+    row.appendChild(el("span", "px-grow"));
+    const tools = el("span", "px-item-tools");
+    const apply = button("Apply", () => applyPreset(preset), {
+      size: "xs",
+      tip: "Write every property of this preset onto the selection, as one undo step.",
+    });
     apply.disabled = selected === null;
-    apply.addEventListener("click", () => applyPreset(preset));
-    row.appendChild(apply);
-    row.appendChild(forgetButton("preset", preset.name));
+    tools.appendChild(apply);
+    tools.appendChild(forgetButton("preset", preset.name));
+    row.appendChild(tools);
     haloBodyEl.appendChild(row);
   }
 }
@@ -3749,9 +4865,11 @@ function renderSaved(): void {
 let componentName = "";
 
 function forgetButton(kind: "component" | "preset", name: string): HTMLElement {
-  const node = el("button", undefined, "Forget") as HTMLButtonElement;
-  node.title = `Remove "${name}" from your saved ${kind}s. The document is not touched.`;
-  node.addEventListener("click", () => host.send({ type: "forgetSaved", kind, name }));
+  const node = button("Forget", () => host.send({ type: "forgetSaved", kind, name }), {
+    size: "xs",
+    tip: `Remove "${name}" from your saved ${kind}s. The document is not touched.`,
+  });
+  node.dataset.tipSide = "left";
   return node;
 }
 
@@ -3775,13 +4893,7 @@ function saveSelectionAsComponent(): void {
 function insertComponent(name: string): void {
   const at = pasteTarget();
   if (!at) return;
-  awaitVerdict(
-    (id) => ({ type: "insertComponent", id, name, line: at.line, index: at.index }),
-    (verdict) => {
-      if (verdict.refused) toast(verdict.refused, "refused");
-      else if (verdict.warning) toast(verdict.warning, "warned");
-    }
-  );
+  insertEntry({ key: `saved:${name}`, name, kind: "saved", source: "" }, at);
 }
 
 /**
@@ -3805,14 +4917,12 @@ function applyPreset(preset: SavedPreset): void {
 /** A filter box, the palette's, reused by the two browsers. */
 function filterBox(placeholder: string, value: string, onInput: (value: string) => void): HTMLElement {
   const wrap = el("div", "filter");
-  const input = document.createElement("input");
-  input.className = "text";
-  input.placeholder = placeholder;
-  input.value = value;
-  input.spellcheck = false;
-  input.addEventListener("keydown", (ev) => ev.stopPropagation());
+  const group = el("div", "px-input-group");
+  group.appendChild(iconEl("search"));
+  const input = textInput(placeholder, value, "text");
   input.addEventListener("input", () => onInput(input.value));
-  wrap.appendChild(input);
+  group.appendChild(input);
+  wrap.appendChild(group);
   return wrap;
 }
 
@@ -3843,14 +4953,22 @@ stage.addEventListener("pointerdown", (ev) => {
     return;
   }
   if (ev.button !== 0) return;
+  if (mode === "interact") {
+    interactClick(ev);
+    return;
+  }
+  hideClickTip();
   const world = toWorld(ev);
   const screen = { x: ev.clientX, y: ev.clientY };
   const current = selectedItem();
   // A handle belongs to the CURRENT selection, so it is tested before the click
   // is allowed to pick anything else: grabbing a corner must never re-select
-  // whatever happens to be painted under that corner.
-  const handle =
-    current && selected !== null && canEdit(current)
+  // whatever happens to be painted under that corner. A multi-selection's
+  // grips sit on its bounds and resize every member.
+  const bounds = selectionBounds();
+  const handle = bounds
+    ? handleAt(bounds, world.x, world.y, zoom)
+    : current && selected !== null && canEdit(current)
       ? handleAt(hitRect(current), world.x, world.y, zoom)
       : null;
   if (handle !== null && selected !== null) {
@@ -3862,11 +4980,21 @@ stage.addEventListener("pointerdown", (ev) => {
     return;
   }
   const stack = hitStack(scene, world.x, world.y, skipMask);
-  // Empty canvas starts a marquee; Alt steps through everything under the
-  // cursor; Shift (without the reveal chord) adds to or removes from the set.
-  const next = ev.altKey ? nextInStack(stack, selected) : (stack[0] ?? null);
   const reveal = (ev.ctrlKey || ev.metaKey) && ev.shiftKey;
   const additive = ev.shiftKey && !ev.ctrlKey && !ev.metaKey;
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && stack.length > 0 && !committing) {
+    // Alt is two gestures on one press: a CLICK steps outward through the
+    // stack (decided on release, when no drag happened) and a DRAG duplicates
+    // the widget under the cursor, the selected one when the press is on it.
+    const target = selected !== null && stack.includes(selected) ? selected : stack[0];
+    altPress = { next: nextInStack(stack, selected) };
+    capture(ev.pointerId);
+    beginGesture(target, null, world, screen, true);
+    return;
+  }
+  // Empty canvas starts a marquee; Shift (without the reveal chord) adds to
+  // or removes from the set.
+  const next = stack[0] ?? null;
   if (next === null) {
     if (!additive) select(null, { reveal: false });
     marquee = { origin: world, rect: { ...world, w: 0, h: 0 }, additive, base: allSelected(), hits: [] };
@@ -3897,10 +5025,7 @@ stage.addEventListener("pointermove", (ev) => {
     return;
   }
   const world = toWorld(ev);
-  if (paletteDrag) {
-    updatePaletteDrag(world);
-    return;
-  }
+  if (paletteDrag) return;
   if (marquee) {
     marquee.rect = {
       x: Math.min(marquee.origin.x, world.x),
@@ -3919,10 +5044,17 @@ stage.addEventListener("pointermove", (ev) => {
     updateGesture(gesture, world, { x: ev.clientX, y: ev.clientY });
     return;
   }
+  if (mode === "interact") {
+    stage.style.cursor = clickableAt(world) !== null ? "pointer" : "default";
+    showTextTip(hitStack(scene, world.x, world.y, skipMask)[0] ?? null, ev.clientX, ev.clientY);
+    return;
+  }
   const current = selectedItem();
   const handle = canEdit(current) ? handleAt(hitRect(current), world.x, world.y, zoom) : null;
   stage.style.cursor = handle ? handleCursor(handle) : "default";
+  showTextTip(hitStack(scene, world.x, world.y, skipMask)[0] ?? null, ev.clientX, ev.clientY);
 });
+stage.addEventListener("pointerleave", () => showTextTip(null, 0, 0));
 stage.addEventListener("pointerup", (ev) => {
   if (ev.button === 1 && panning) {
     panning = false;
@@ -3931,11 +5063,7 @@ stage.addEventListener("pointerup", (ev) => {
     return;
   }
   if (ev.button !== 0) return;
-  if (paletteDrag) {
-    release(ev.pointerId);
-    endPaletteDrag(true);
-    return;
-  }
+  if (paletteDrag) return;
   if (marquee) {
     release(ev.pointerId);
     const caught = marquee.additive ? [...marquee.base, ...marquee.hits] : marquee.hits;
@@ -3945,9 +5073,19 @@ stage.addEventListener("pointerup", (ev) => {
   }
   if (!gesture) return;
   release(ev.pointerId);
-  endGesture(gesture);
+  const g = gesture;
+  const alt = altPress;
+  altPress = null;
+  if (alt && !g.engaged) {
+    // The Alt+click half: nothing was dragged, so step through the stack.
+    gesture = null;
+    select(alt.next, { reveal: false });
+    return;
+  }
+  endGesture(g);
 });
 stage.addEventListener("pointercancel", () => {
+  altPress = null;
   // The pointer went away mid-gesture (a touch cancelled, the window lost it):
   // drop the gesture without committing anything.
   if (!gesture) return;
@@ -3990,15 +5128,26 @@ stage.addEventListener(
   "wheel",
   (ev) => {
     ev.preventDefault();
+    if (mode === "interact" && !ev.ctrlKey && interactScroll(ev)) return;
     const rect = canvas.getBoundingClientRect();
     zoomToPoint(ev.clientX - rect.left, ev.clientY - rect.top, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15));
   },
   { passive: false }
 );
 window.addEventListener("keydown", (ev) => {
+  // A key typed into a field is the field's (the page's inputs stop
+  // propagation themselves; this is for anything that does not).
+  if (isTypingTarget(ev.target)) return;
   const chord = ev.ctrlKey || ev.metaKey;
+  if (!chord && ev.key !== "Escape" && onNavigationKey(ev)) return;
   if (chord && !ev.altKey) {
     const key = ev.key.toLowerCase();
+    if (key === "0" || key === "=" || key === "+" || key === "-") {
+      ev.preventDefault();
+      if (key === "0") fitView();
+      else zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * (key === "-" ? 1 / 1.25 : 1.25));
+      return;
+    }
     if (key === "c" || key === "d" || key === "v") {
       ev.preventDefault();
       if (key === "c") copySelection();
@@ -4009,17 +5158,50 @@ window.addEventListener("keydown", (ev) => {
   }
   if ((ev.key === "Delete" || ev.key === "Backspace") && !chord) {
     ev.preventDefault();
-    deleteSelection();
+    void deleteSelectionConfirmed();
     return;
+  }
+  if (!chord && !ev.altKey && !ev.shiftKey) {
+    if (ev.key === "v" || ev.key === "i") {
+      setMode(ev.key === "v" ? "edit" : "interact");
+      return;
+    }
+    if (ev.key === "l") {
+      toggleLibrary();
+      return;
+    }
   }
   if (ev.key === "f" && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
     // Focus the selection, or leave the focus when there is nothing new to
-    // focus on: one key, both directions.
+    // focus on: one key, both directions. With nothing to focus and nothing
+    // to leave, F fits the view instead.
     if (selected !== null && selected !== focusIndex) setFocus(selected);
     else if (focusIndex !== null) setFocus(null);
+    else fitView();
     return;
   }
   if (ev.key !== "Escape") return;
+  if (!clickTipEl.hidden) {
+    hideClickTip();
+    return;
+  }
+  if (libraryOpen()) {
+    toggleLibrary(false);
+    return;
+  }
+  if (mode === "interact") {
+    setMode("edit");
+    return;
+  }
+  if (nudge.pending) {
+    // Escape drops the nudge that has not been written yet; the preview goes
+    // back to what the file says.
+    nudge.cancel();
+    statusEl.textContent = statusLine();
+    renderInspector();
+    draw();
+    return;
+  }
   if (paletteDrag) {
     endPaletteDrag(false);
     return;
@@ -4052,26 +5234,133 @@ window.addEventListener("keydown", (ev) => {
   else if (focusIndex !== null) setFocus(null);
 });
 
-// ---- toolbar ---------------------------------------------------------------
+/**
+ * The keys that move the SELECTION or the VIEW rather than the document:
+ * arrows nudge, Tab and Shift+Tab step through siblings, Enter descends into
+ * the first child, Shift+Enter climbs back to the parent, Shift+F zooms to
+ * the selection and Home fits the reference viewport. True when the key was
+ * taken.
+ */
+function onNavigationKey(ev: KeyboardEvent): boolean {
+  const vector = nudgeVector(ev.key, ev, GRID_STEP);
+  if (vector) {
+    if (selected === null || gesture || marquee) return false;
+    ev.preventDefault();
+    nudge.add(vector[0], vector[1]);
+    return true;
+  }
+  if (ev.key === "Tab") {
+    // Only from the canvas: with a toolbar button focused, Tab is the page's.
+    if (document.activeElement && document.activeElement !== document.body) return false;
+    const next =
+      selected === null
+        ? firstRoot(scene, skipMask)
+        : siblingFrom(scene, selected, ev.shiftKey ? -1 : 1, skipMask);
+    if (next === null) return false;
+    ev.preventDefault();
+    select(next, { reveal: false });
+    return true;
+  }
+  if (ev.key === "Enter" && selected !== null) {
+    const next = ev.shiftKey ? parentIndex(scene, selected) : firstChildOf(scene, selected, skipMask);
+    if (next === null || skipMask?.[next]) return false;
+    ev.preventDefault();
+    select(next, { reveal: false });
+    return true;
+  }
+  if (ev.key === "F" && ev.shiftKey && !ev.altKey) {
+    const bounds = selectionBounds() ?? (selected !== null ? hitRect(scene.items[selected]) : null);
+    if (!bounds) return false;
+    ev.preventDefault();
+    fitRect(bounds);
+    return true;
+  }
+  if (ev.key === "Home" && !ev.shiftKey && !ev.altKey) {
+    ev.preventDefault();
+    fitView();
+    return true;
+  }
+  return false;
+}
 
-document.getElementById("zoomIn")!.addEventListener("click", () => {
-  zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * 1.25);
-});
-document.getElementById("zoomOut")!.addEventListener("click", () => {
-  zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom / 1.25);
-});
-document.getElementById("zoomFit")!.addEventListener("click", () => {
-  // Fit means "fit what is on screen", and under a subtree focus that is the
-  // subtree, not the 1920x1080 reference viewport around it.
+/** Fit what is on screen: the focused subtree when there is one, else the reference viewport. */
+function fitView(): void {
   if (focusIndex === null) fitAndCenter();
   else fitRect(hitRect(scene.items[focusIndex]));
-});
+}
+
+/**
+ * Delete, confirmed when it would take more than one widget: a multi-delete
+ * is one undo step, but it is also the one key that can empty a window.
+ */
+async function deleteSelectionConfirmed(): Promise<void> {
+  const count = allSelected().length;
+  if (count === 0) return;
+  if (count > 1) {
+    const ok = await confirmDialog({
+      title: `Delete ${count} widgets?`,
+      description: "Their blocks are removed from the file as one change; undo brings them all back.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+  }
+  deleteSelection();
+}
+
+// ---- toolbar ---------------------------------------------------------------
+
+document.getElementById("undo")!.addEventListener("click", () => host.send({ type: "undo" }));
+document.getElementById("redo")!.addEventListener("click", () => host.send({ type: "redo" }));
+
+// Fit means "fit what is on screen", and under a subtree focus that is the
+// subtree, not the 1920x1080 reference viewport around it. The wheel zooms;
+// the percent label is a double-click away from a fit.
+zoomLabel.addEventListener("dblclick", fitView);
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
-paletteToggleEl.addEventListener("click", togglePalette);
-haloToggleEl.addEventListener("click", toggleHalo);
+libraryToggleEl.addEventListener("click", () => toggleLibrary());
+modeEditEl.addEventListener("click", () => setMode("edit"));
+modeInteractEl.addEventListener("click", () => setMode("interact"));
 outlinesEl.addEventListener("change", draw);
-snapToggle.addEventListener("change", draw);
-gridToggle.addEventListener("change", draw);
+// The two drag toggles are remembered by the host, like the value mode.
+snapToggle.addEventListener("change", () => {
+  host.send({ type: "setUiState", valueMode, snap: snapToggle.checked, grid: gridToggle.checked });
+  draw();
+});
+gridToggle.addEventListener("change", () => {
+  host.send({ type: "setUiState", valueMode, snap: snapToggle.checked, grid: gridToggle.checked });
+  draw();
+});
+locResolvedEl.addEventListener("click", () => setLocMode("resolve"));
+locRawEl.addEventListener("click", () => setLocMode("raw"));
+
+// Preview from a save: the button names the chosen save; its menu picks or clears one.
+const saveSourceEl = document.getElementById("saveSource") as HTMLButtonElement;
+let saveSource: { name: string; date: string; file: string } | null = null;
+function showSaveSource(save: { name: string; date: string; file: string } | null | undefined): void {
+  saveSource = save ?? null;
+  const label = saveSourceEl.querySelector(".px-truncate")!;
+  label.textContent = saveSource ? `${saveSource.name}, ${saveSource.date}` : "No save";
+  saveSourceEl.toggleAttribute("data-placeholder", !saveSource);
+}
+saveSourceEl.addEventListener("click", () =>
+  menu(
+    saveSourceEl,
+    [
+      {
+        value: "pick",
+        label: saveSource ? "Choose another save…" : "Choose a save…",
+        hint: "plain text only",
+      },
+      ...(saveSource ? [{ value: "clear", label: "Stop using the save", description: saveSource.file }] : []),
+    ],
+    {
+      search: false,
+      width: 280,
+      onPick: (v) => host.send(v === "pick" ? { type: "pickSave" } : { type: "clearSave" }),
+    }
+  )
+);
 constraintsToggle.addEventListener("change", () => {
   // Switching it on turns the placement flag on, so the trace has to be fetched
   // for the CURRENT selection or the overlay would stay blank until the user
@@ -4103,12 +5392,573 @@ for (const entry of HEATMAP_MODES) {
   option.title = entry.title;
   heatmapSelect.appendChild(option);
 }
+/** The select holds the mode; the toolbar shows it as a px-dropdown whose list is a menu. */
+function syncHeatmapMenu(): void {
+  const label = heatmapMenuEl.querySelector(".px-truncate") as HTMLElement;
+  label.textContent = HEATMAP_MODES.find((m) => m.mode === heatmapSelect.value)?.label ?? "Heatmap";
+  heatmapMenuEl.setAttribute("aria-pressed", heatmapSelect.value === "off" ? "false" : "true");
+}
+heatmapMenuEl.addEventListener("click", () =>
+  menu(
+    heatmapMenuEl,
+    HEATMAP_MODES.map((m) => ({ value: m.mode, label: m.label, description: m.title })),
+    {
+      value: heatmapSelect.value,
+      width: 260,
+      onPick: (mode) => {
+        if (mode === heatmapSelect.value) return;
+        heatmapSelect.value = mode;
+        heatmapSelect.dispatchEvent(new Event("change"));
+      },
+    }
+  )
+);
 heatmapSelect.addEventListener("change", () => {
+  syncHeatmapMenu();
   rebuildHeatmap();
   if (heat) toast(heat.legend, "info");
   draw();
 });
+syncHeatmapMenu();
+
+// ---- tool modes --------------------------------------------------------------
+
+/**
+ * Edit is the editor; Interact is the game's own pointer, as far as a static
+ * preview can play it: a click runs the variable-system half of an `onclick`
+ * and the layout answers through the visibility checks, a wheel over a
+ * scrollarea scrolls it. Nothing in interact mode writes to the file.
+ */
+type ToolMode = "edit" | "interact";
+let mode: ToolMode = "edit";
+/** The variables the clicks so far have set (interact.ts). */
+let varState: VarState = new Map();
+/** Scroll offsets per scrolling widget, keyed by positional path (scene.ts). */
+const scrollOffsets = new Map<string, { x: number; y: number }>();
+/** The nodes of the last layout push, to rebuild the scene when a scroll moves. */
+let lastNodes: GuiLayoutNode[] = [];
+/** A click asked for a layout; the next push reports how many widgets it showed or hid. */
+let clickPending = false;
+
+function setMode(next: ToolMode): void {
+  if (mode === next) return;
+  mode = next;
+  modeEditEl.setAttribute("aria-pressed", next === "edit" ? "true" : "false");
+  modeInteractEl.setAttribute("aria-pressed", next === "interact" ? "true" : "false");
+  stage.dataset.mode = next;
+  hideClickTip();
+  if (next === "interact") {
+    if (gesture || marquee) return;
+    select(null, { reveal: false });
+    toast("Interact: click buttons, scroll lists. Esc or V goes back to editing.", "info");
+  }
+  statusEl.textContent = statusLine();
+  draw();
+}
+
+/** The first widget under the pointer that a click means something to. */
+function clickableAt(world: { x: number; y: number }): number | null {
+  for (const index of hitStack(scene, world.x, world.y, skipMask)) {
+    if (scene.items[index].onclick) return index;
+  }
+  return null;
+}
+
+/** The nearest scrolling widget at or above the pointer's topmost hit, with room to scroll. */
+function scrollableAt(world: { x: number; y: number }): number | null {
+  const top = hitStack(scene, world.x, world.y, skipMask)[0];
+  if (top === undefined) return null;
+  for (let i: number | null = top; i !== null; i = parentIndex(scene, i)) {
+    const item = scene.items[i];
+    if (!item.scrolls) continue;
+    const extent = scrollExtent(unscrolledScene(), i);
+    if (extent.x > 0 || extent.y > 0) return i;
+  }
+  return null;
+}
+
+let unscrolled: Scene | null = null;
+/** The scene as the engine laid it out, before any interact scroll shifted it. */
+function unscrolledScene(): Scene {
+  if (!unscrolled || unscrolled.count !== scene.count) unscrolled = buildScene(lastNodes);
+  return unscrolled;
+}
+
+function interactClick(ev: PointerEvent): void {
+  const world = toWorld(ev);
+  const index = clickableAt(world);
+  if (index === null) {
+    hideClickTip();
+    return;
+  }
+  const item = scene.items[index];
+  const actions = parseOnclick(item.onclick);
+  const before = varState;
+  varState = applyActions(varState, actions);
+  const changed =
+    [...varState].some(([k, v]) => !before.has(k) || before.get(k) !== v) || before.size !== varState.size;
+  if (changed) {
+    // The variables decide the checks they can; every other check keeps what
+    // the user set in the Visible tab.
+    clickPending = true;
+    sendVisibility("evaluate", {
+      ...visibilityChecks,
+      ...assignments(
+        visibilityFound.map((c) => c.key),
+        varState
+      ),
+    });
+  }
+  showClickTip(item, actions, ev.clientX, ev.clientY);
+}
+
+function interactScroll(ev: WheelEvent): boolean {
+  const index = scrollableAt(toWorld(ev));
+  if (index === null) return false;
+  const item = scene.items[index];
+  const key = pathKey(item.path);
+  const extent = scrollExtent(unscrolledScene(), index);
+  const current = scrollOffsets.get(key) ?? { x: 0, y: 0 };
+  // The wheel scrolls the axis the content overflows on; a horizontal list
+  // takes a vertical wheel, as the game does.
+  const vertical = extent.y > 0;
+  const step = ((ev.deltaY || ev.deltaX) * (ev.deltaMode === 1 ? 16 : 1)) / zoom;
+  const next = vertical
+    ? { x: current.x, y: Math.max(0, Math.min(extent.y, current.y + step)) }
+    : { x: Math.max(0, Math.min(extent.x, current.x + step)), y: current.y };
+  if (next.x === current.x && next.y === current.y) return true;
+  scrollOffsets.set(key, next);
+  scene = buildScene(lastNodes);
+  applyScrollOffsets(scene, scrollOffsets);
+  rebuildMasks();
+  draw();
+  return true;
+}
+
+/** What the click did, at the pointer: variables set, and what only the game could run. */
+function showClickTip(
+  item: SceneItem,
+  actions: readonly VarAction[],
+  clientX: number,
+  clientY: number
+): void {
+  clickTipEl.textContent = "";
+  clickTipEl.appendChild(el("div", "title", `Clicked ${widgetTitle(item)}`));
+  if (actions.length === 0) clickTipEl.appendChild(el("div", "note", "Its onclick is empty."));
+  for (const action of actions) {
+    const row = el("div", "act");
+    const kind = el("span", "px-badge", action.kind === "other" ? "game" : "variable");
+    kind.dataset.variant = action.kind === "other" ? "outline" : "default";
+    kind.title =
+      action.kind === "other"
+        ? "Only the running game can do this; the preview names it"
+        : "Applied to the preview's variable table";
+    row.appendChild(kind);
+    row.appendChild(el("span", "src", describeAction(action)));
+    clickTipEl.appendChild(row);
+  }
+  if (item.tooltip) {
+    const row = el("div", "note", "");
+    const link = el("span", "link", "Read its tooltip");
+    link.addEventListener("click", () => readTooltip(item));
+    row.appendChild(link);
+    clickTipEl.appendChild(row);
+  }
+  clickTipEl.appendChild(el("div", "note delta", ""));
+  clickTipEl.hidden = false;
+  const stageBox = stage.getBoundingClientRect();
+  const box = clickTipEl.getBoundingClientRect();
+  const left = Math.max(4, Math.min(clientX - stageBox.left + 12, stageBox.width - box.width - 4));
+  const top = Math.max(4, Math.min(clientY - stageBox.top + 12, stageBox.height - box.height - 4));
+  clickTipEl.style.left = `${left}px`;
+  clickTipEl.style.top = `${top}px`;
+}
+
+function noteClickDelta(delta: number): void {
+  const node = clickTipEl.querySelector(".delta");
+  if (!node || clickTipEl.hidden) return;
+  node.textContent =
+    delta === 0
+      ? "The layout did not change: no widget's visible depends on those variables."
+      : delta > 0
+        ? `${delta} widget(s) appeared.`
+        : `${-delta} widget(s) disappeared.`;
+}
+
+function hideClickTip(): void {
+  clickTipEl.hidden = true;
+}
+
+/** The widget's tooltip, read through the host's loc index and shown as a toast. */
+function readTooltip(item: SceneItem): void {
+  if (!item.tooltip) return;
+  const key = item.tooltip;
+  if (/^\[/.test(key)) {
+    toast(`Tooltip is a datafunction only the game evaluates: ${key}`, "info");
+    return;
+  }
+  host.send({ type: "requestLoc", key });
+}
+
+modeEditEl.addEventListener("click", () => setMode("edit"));
+modeInteractEl.addEventListener("click", () => setMode("interact"));
+
+// ---- the context menu (edit mode) ----------------------------------------------
+
+stage.addEventListener("contextmenu", (ev) => {
+  ev.preventDefault();
+  if (mode !== "edit" || gesture || marquee || paletteDrag) return;
+  const world = toWorld(ev);
+  const hit = hitStack(scene, world.x, world.y, skipMask)[0] ?? null;
+  // A right-click on a member keeps the selection; on anything else it selects that first.
+  if (hit !== null && !allSelected().includes(hit)) select(hit, { reveal: false });
+  else if (hit === null) select(null, { reveal: false });
+  const item = selectedItem();
+  const items: MenuItem[] = [];
+  if (item) {
+    if (item.tooltip)
+      items.push({ value: "tooltip", label: "Read tooltip", hint: item.tooltip.slice(0, 24) });
+    const variables = (item.text?.segments ?? []).filter((s) => s.kind === "datafn");
+    for (const seg of variables.slice(0, 4)) {
+      items.push({
+        value: `preview:${seg.source}`,
+        label: "Set preview value",
+        description: `[${seg.source}]`,
+      });
+    }
+    if (item.onclick)
+      items.push({ value: "click", label: "Run onclick (interact)", description: item.onclick.slice(0, 60) });
+    items.push({
+      value: "focus",
+      label: selected === focusIndex ? "Leave focus" : "Focus subtree",
+      hint: "F",
+    });
+    if (item.line !== undefined)
+      items.push({ value: "reveal", label: "Reveal in source", hint: "Ctrl+Shift+click" });
+    items.push({ value: "copy", label: "Copy", hint: "Ctrl+C" });
+    items.push({ value: "paste", label: "Paste into", hint: "Ctrl+V" });
+    items.push({ value: "duplicate", label: "Duplicate", hint: "Ctrl+D" });
+    const path = rowKey(item.path);
+    items.push({ value: "hide", label: hiddenPaths.has(path) ? "Show" : "Hide", hint: "eye" });
+    items.push({ value: "lock", label: lockedPaths.has(path) ? "Unlock" : "Lock", hint: "lock" });
+    items.push({ value: "delete", label: "Delete", hint: "Del" });
+  } else {
+    items.push({ value: "paste", label: "Paste here" });
+    items.push({ value: "library", label: "Open the library", hint: "L" });
+    items.push({ value: "fit", label: "Fit the view", hint: "Ctrl+0" });
+  }
+  // The menu anchors to an element; a throwaway one at the pointer is that element.
+  const anchor = el("span");
+  anchor.style.cssText = `position:fixed;left:${ev.clientX}px;top:${ev.clientY}px;width:0;height:0`;
+  document.body.appendChild(anchor);
+  menu(anchor, items, {
+    search: false,
+    width: 220,
+    onPick: (value) => {
+      anchor.remove();
+      runContextAction(value, item);
+    },
+  });
+});
+
+function runContextAction(value: string, item: SceneItem | null): void {
+  if (value.startsWith("preview:")) {
+    previewValuePopover(modeEditEl, value.slice("preview:".length));
+    return;
+  }
+  switch (value) {
+    case "tooltip":
+      if (item) readTooltip(item);
+      return;
+    case "click":
+      if (item) {
+        const actions = parseOnclick(item.onclick);
+        varState = applyActions(varState, actions);
+        clickPending = true;
+        sendVisibility("evaluate", {
+          ...visibilityChecks,
+          ...assignments(
+            visibilityFound.map((c) => c.key),
+            varState
+          ),
+        });
+        toast(actions.map(describeAction).join("; ") || "Its onclick is empty.", "info");
+      }
+      return;
+    case "focus":
+      if (selected !== null) setFocus(selected === focusIndex ? null : selected);
+      return;
+    case "reveal":
+      if (item?.line !== undefined) host.send({ type: "reveal", line: item.line });
+      return;
+    case "copy":
+      copySelection();
+      return;
+    case "paste":
+      pasteIntoSelection();
+      return;
+    case "duplicate":
+      duplicateSelection();
+      return;
+    case "hide":
+    case "lock": {
+      if (!item) return;
+      const set = value === "hide" ? hiddenPaths : lockedPaths;
+      const path = rowKey(item.path);
+      if (set.has(path)) set.delete(path);
+      else set.add(path);
+      afterToggle();
+      return;
+    }
+    case "delete":
+      void deleteSelectionConfirmed();
+      return;
+    case "library":
+      toggleLibrary(true);
+      return;
+    case "fit":
+      fitView();
+      return;
+  }
+}
+
+// ---- the reference screenshot ----------------------------------------------------
+
+/**
+ * A screenshot of the same window in game, drawn over the canvas so the two
+ * can be compared pixel for pixel. The host picks the file and hands a URL; the
+ * placement is the user's, in world units, and `difference` is the blend that
+ * turns a misaligned edge into a bright line.
+ */
+const reference: Omit<DrawReference, "image"> & { image: HTMLImageElement | null; name: string } = {
+  image: null,
+  name: "",
+  x: 0,
+  y: 0,
+  scale: 1,
+  opacity: 0.5,
+  blend: "over",
+};
+
+function renderReference(): void {
+  const head = el("div", "head");
+  head.appendChild(el("div", "title", "Reference screenshot"));
+  head.appendChild(
+    el(
+      "div",
+      "chain",
+      "Take a screenshot in game at 100% UI scale, load it here, and compare. Difference blend shows every edge that is off: a black area is a perfect match."
+    )
+  );
+  haloBodyEl.appendChild(head);
+  const tools = el("div", "tools");
+  tools.appendChild(
+    button(
+      reference.image ? "Load another…" : "Load a screenshot…",
+      () => host.send({ type: "pickReference" }),
+      {
+        variant: "outline",
+        size: "sm",
+      }
+    )
+  );
+  if (reference.image) {
+    tools.appendChild(
+      button(
+        "Clear",
+        () => {
+          reference.image = null;
+          reference.name = "";
+          renderHalo();
+          draw();
+        },
+        { variant: "ghost", size: "sm" }
+      )
+    );
+  }
+  haloBodyEl.appendChild(tools);
+  if (!reference.image) {
+    note("No screenshot loaded. PNG is best: JPEG compression blurs the edges the comparison looks for.");
+    return;
+  }
+  const img = reference.image;
+  note(`${reference.name} · ${img.naturalWidth}×${img.naturalHeight}`);
+  const blendTools = el("div", "tools");
+  const group = el("div", "px-toggle-group");
+  group.dataset.spacing = "0";
+  for (const [blend, label, tip] of [
+    ["under", "Under", "The screenshot behind the widgets"],
+    ["over", "Over", "The screenshot on top, at the opacity below"],
+    ["difference", "Difference", "Black where the two agree, bright where they differ"],
+  ] as const) {
+    const node = el("button", "px-toggle", label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.dataset.tip = tip;
+    node.setAttribute("aria-pressed", reference.blend === blend ? "true" : "false");
+    node.addEventListener("click", () => {
+      reference.blend = blend;
+      renderHalo();
+      draw();
+    });
+    group.appendChild(node);
+  }
+  blendTools.appendChild(group);
+  haloBodyEl.appendChild(blendTools);
+
+  const slider = el("div", "refRow");
+  slider.appendChild(el("span", "px-label", "Opacity"));
+  const range = document.createElement("input");
+  range.type = "range";
+  range.className = "px-slider";
+  range.min = "0";
+  range.max = "1";
+  range.step = "0.05";
+  range.value = String(reference.opacity);
+  range.addEventListener("input", () => {
+    reference.opacity = Number(range.value);
+    draw();
+  });
+  slider.appendChild(range);
+  haloBodyEl.appendChild(slider);
+
+  const numberRow = (label: string, key: "x" | "y" | "scale", step: number): void => {
+    const row = el("div", "refRow");
+    row.appendChild(el("span", "px-label", label));
+    const input = textInput("", String(reference[key]), "px-input");
+    input.dataset.size = "sm";
+    input.addEventListener("change", () => {
+      const v = Number(input.value);
+      if (Number.isFinite(v)) reference[key] = v;
+      draw();
+    });
+    scrubbable(input, {
+      step,
+      onChange: (v) => {
+        reference[key] = v;
+        draw();
+      },
+    });
+    row.appendChild(input);
+    haloBodyEl.appendChild(row);
+  };
+  numberRow("X", "x", 1);
+  numberRow("Y", "y", 1);
+  numberRow("Scale", "scale", 0.01);
+  const fitTools = el("div", "tools");
+  fitTools.appendChild(
+    button(
+      "Fit to 1920×1080",
+      () => {
+        reference.x = 0;
+        reference.y = 0;
+        reference.scale = WORLD_W / img.naturalWidth;
+        renderHalo();
+        draw();
+      },
+      { variant: "outline", size: "sm", tip: "Scale the screenshot so its width is the reference viewport's" }
+    )
+  );
+  fitTools.appendChild(
+    button(
+      "Align to selection",
+      () => {
+        const item = selectedItem();
+        if (!item) {
+          toast("Select the widget the screenshot's top-left corner sits on.", "info");
+          return;
+        }
+        reference.x = item.rect.x;
+        reference.y = item.rect.y;
+        renderHalo();
+        draw();
+      },
+      { variant: "outline", size: "sm", tip: "Put the screenshot's top-left corner on the selected widget's" }
+    )
+  );
+  haloBodyEl.appendChild(fitTools);
+}
+
+function loadReference(name: string, url: string): void {
+  const img = new Image();
+  img.onload = () => {
+    reference.image = img;
+    reference.name = name;
+    if (reference.scale === 1 && img.naturalWidth > WORLD_W) reference.scale = WORLD_W / img.naturalWidth;
+    renderHalo();
+    draw();
+  };
+  img.onerror = () => toast("Could not load that image.", "refused");
+  img.src = url;
+}
+
+// ---- side panels ------------------------------------------------------------
+
+/**
+ * The two side columns: resizable, hideable from the toolbar, and remembered
+ * by the host under the same ui key as the value display mode. A change is
+ * sent with the CURRENT value mode, since the host stores the two together.
+ */
+const sidePanels = {
+  left: sidePanel(document.getElementById("side") as HTMLElement, {
+    width: 280,
+    min: 200,
+    max: 560,
+    onChange: sendPanels,
+  }),
+  right: sidePanel(document.getElementById("right") as HTMLElement, {
+    width: 320,
+    min: 240,
+    max: 640,
+    onChange: sendPanels,
+  }),
+};
+
+function panelStates(): GuiPanelStates {
+  const of = (p: (typeof sidePanels)["left"]) => ({
+    width: parseInt(p.element.style.getPropertyValue("--px-sidepanel-width"), 10) || 0,
+    collapsed: p.collapsed,
+  });
+  return { left: of(sidePanels.left), right: of(sidePanels.right) };
+}
+
+/** True while the host's remembered state is being applied: that is not a change to send back. */
+let adoptingPanels = false;
+
+function sendPanels(): void {
+  updatePanelToggles();
+  if (!adoptingPanels) host.send({ type: "setUiState", valueMode, panels: panelStates() });
+}
+
+function adoptSections(collapsed: readonly string[]): void {
+  adoptingPanels = true;
+  for (const id of Object.keys(sections) as SectionId[]) setSectionCollapsed(id, collapsed.includes(id));
+  adoptingPanels = false;
+}
+
+function adoptPanels(panels: GuiPanelStates): void {
+  adoptingPanels = true;
+  sidePanels.left.setWidth(panels.left.width);
+  sidePanels.left.toggle(panels.left.collapsed);
+  sidePanels.right.setWidth(panels.right.width);
+  sidePanels.right.toggle(panels.right.collapsed);
+  adoptingPanels = false;
+}
+
+function updatePanelToggles(): void {
+  const left = document.getElementById("toggleSide") as HTMLButtonElement;
+  left.replaceChildren(iconEl(sidePanels.left.collapsed ? "panelLeftOpen" : "panelLeftClose"));
+  left.dataset.tip = sidePanels.left.collapsed ? "Show the tree" : "Hide the tree";
+  const right = document.getElementById("toggleRight") as HTMLButtonElement;
+  right.replaceChildren(iconEl(sidePanels.right.collapsed ? "panelRightOpen" : "panelRightClose"));
+  right.dataset.tip = sidePanels.right.collapsed ? "Show the inspector" : "Hide the inspector";
+}
+
+document.getElementById("toggleSide")!.addEventListener("click", () => sidePanels.left.toggle());
+document.getElementById("toggleRight")!.addEventListener("click", () => sidePanels.right.toggle());
 window.addEventListener("resize", draw);
+// A panel drag or fold resizes the stage without a window resize; the canvas follows.
+if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => requestDraw()).observe(stage);
 
 /**
  * The heatmap is rebuilt on a mode change and on every layout push, and never
@@ -4119,11 +5969,25 @@ function rebuildHeatmap(): void {
   heat = buildHeatmap(scene, heatmapSelect.value as HeatmapMode);
 }
 // A palette drag has no pointer capture of its own: it starts on a panel row
-// and ends over the canvas, where the stage's own handler commits it. This is
-// the other half, a release anywhere else, which cancels rather than leaving
-// the drag armed for the next pointer move.
-window.addEventListener("pointerup", () => {
-  if (paletteDrag) endPaletteDrag(false);
+// and can end anywhere, so the WINDOW follows and ends it (pointer events
+// bubble there from every element). Over the stage the drop commits; anywhere
+// else it cancels rather than leaving the drag armed for the next pointer move.
+window.addEventListener("pointermove", (ev) => {
+  if (!paletteDrag) return;
+  moveGhost(ev.clientX, ev.clientY);
+  // The library covers the stage; a real drag closes it so the drop can land.
+  if (
+    libraryOpen() &&
+    Math.hypot(ev.clientX - paletteDrag.from.x, ev.clientY - paletteDrag.from.y) > DRAG_THRESHOLD
+  ) {
+    toggleLibrary(false);
+  }
+  if (overStage(ev)) updatePaletteDrag(toWorld(ev));
+  else clearPaletteTarget();
+});
+window.addEventListener("pointerup", (ev) => {
+  if (!paletteDrag || ev.button !== 0) return;
+  endPaletteDrag(overStage(ev));
 });
 window.addEventListener("pointercancel", () => {
   if (paletteDrag) endPaletteDrag(false);

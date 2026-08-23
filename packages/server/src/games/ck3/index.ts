@@ -7,6 +7,7 @@ import { ck3Meta } from "./meta";
 import { BLOCK_REF_FIELDS, CK3_SCHEMA, PREFIX_REFS, REF_FIELDS } from "./schema";
 import { STRUCTURE_SOURCES } from "./structures";
 import { CK3_MODIFIER_PLACEHOLDERS } from "./modifierPlaceholders";
+import { CK3_SAVE_SCHEMA } from "./saveSchema";
 // Bundled baseline data (packages/server/data/ck3/), imported at build time so
 // completion/hover work without gamePath set. See scripts/build-data-types-json.ts
 // and scripts/build-gui-schema.ts for regeneration.
@@ -31,6 +32,7 @@ export const ck3Profile: GameProfile = {
   modifierPlaceholders: CK3_MODIFIER_PLACEHOLDERS,
   bundledDataTypes: BUNDLED_DATA_TYPES,
   guiSchema: GUI_SCHEMA,
+  saveSchema: CK3_SAVE_SCHEMA,
   wikiNote: "Source: CK3 wiki (may lag behind the current game version)",
   diagnosticSource: "ck3-script",
 };

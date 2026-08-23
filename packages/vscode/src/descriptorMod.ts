@@ -304,8 +304,9 @@ export function registerDescriptorMod(
       return;
     }
 
-    if (!looksLikeModContent(modPath)) {
-      // Not a mod workspace: no descriptor is expected, stay silent.
+    if (!cfg.requireDescriptor || !looksLikeModContent(modPath)) {
+      // Opt-in check (px.diagnostics.requireDescriptor), and only for folders
+      // that clearly hold mod content: otherwise stay silent.
       diagnostics.delete(descriptorUri);
       return;
     }
