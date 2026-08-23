@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
+import { parseCoaFile, upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { buildFlagDatabase, locateTexture, type FlagRoot } from "./database";
 import { flagBuilderHtml } from "./html";
@@ -24,8 +24,8 @@ export interface FlagBuilderOptions {
   meta: GameMeta;
   /** Game first, then mods in load order. */
   roots: FlagRoot[];
-  /** The mod flags are saved into, or null when the workspace has none. */
-  modPath: string | null;
+  /** Mods the flag can be saved into (the workspace's own), first = default. */
+  mods: { label: string; path: string }[];
   gameMissing: boolean;
 }
 
@@ -108,9 +108,9 @@ export class FlagBuilderPanel {
   }
 
   private postInit(): void {
-    const { meta, roots, gameMissing, modPath } = this.options;
+    const { meta, roots, gameMissing, mods } = this.options;
     const db = buildFlagDatabase(meta.name, roots, meta.stageRoots, gameMissing);
-    this.post({ type: "init", db, canSave: modPath !== null, ui: this.state.get<UiState>(UI_KEY) });
+    this.post({ type: "init", db, mods, ui: this.state.get<UiState>(UI_KEY) });
   }
 
   private async onMessage(message: AppToHost): Promise<void> {
@@ -143,8 +143,21 @@ export class FlagBuilderPanel {
         this.post({ type: "toast", message: "Script copied to the clipboard." });
         return;
       case "save":
-        await this.save(message.name, message.script);
+        await this.save(message.name, message.script, message.modPath);
         return;
+      case "paste": {
+        const text = await vscode.env.clipboard.readText();
+        const flags = text.trim() ? parseCoaFile(text) : [];
+        if (!flags.length) {
+          this.post({
+            type: "toast",
+            message: "The clipboard holds no flag definition (NAME = { pattern = … }).",
+          });
+          return;
+        }
+        this.post({ type: "pasted", flag: flags[0] });
+        return;
+      }
       case "exportPng":
         await this.exportPng(message.name, message.dataUrl);
         return;
@@ -156,9 +169,10 @@ export class FlagBuilderPanel {
    * (replacing the flag of that name if present) or a new one. The file keeps
    * its BOM; a new one gets one, like every script file the games read.
    */
-  private async save(name: string, script: string): Promise<void> {
-    const { modPath, meta } = this.options;
-    if (!modPath) return;
+  private async save(name: string, script: string, modPath: string): Promise<void> {
+    const { meta } = this.options;
+    // The app only offers paths the host listed, but the message is still text from a webview.
+    if (!this.options.mods.some((m) => m.path === modPath)) return;
     const dir = path.join(modPath, meta.stageRoots?.[0] ?? "", "common", "coat_of_arms", "coat_of_arms");
     let files: string[] = [];
     try {
@@ -202,7 +216,7 @@ export class FlagBuilderPanel {
 
   private async exportPng(name: string, dataUrl: string): Promise<void> {
     const target = await vscode.window.showSaveDialog({
-      defaultUri: vscode.Uri.file(path.join(this.options.modPath ?? "", `${name || "flag"}.png`)),
+      defaultUri: vscode.Uri.file(path.join(this.options.mods[0]?.path ?? "", `${name || "flag"}.png`)),
       filters: { PNG: ["png"] },
     });
     if (!target) return;

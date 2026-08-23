@@ -28,7 +28,8 @@ ${uiCss}
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #toolbar .px-grow { flex: 1 1 auto; }
-  #name { width: 180px; font-weight: 600; }
+  #name { width: 170px; font-weight: 600; }
+  #toolbar .px-separator { height: 20px; align-self: center; }
   #main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
   #stage {
     flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center;
@@ -40,12 +41,12 @@ ${uiCss}
   }
   #canvas { max-width: 92%; max-height: 92%; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 12px 40px rgba(0,0,0,.35); }
   #hint { position: absolute; bottom: 8px; left: 10px; }
-  .adders { display: flex; gap: 4px; flex-wrap: wrap; padding: 2px 10px 8px; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 18px 92px minmax(0, 1fr) 24px; align-items: center; gap: 6px; }
-  .inst { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .inst .px-input { width: 50px; padding: 0 6px; }
+  .instance { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 2px; }
+  .instance + .instance { border-top: 1px solid var(--px-border); }
+  .instance .px-input { width: 100%; min-width: 0; }
   .subhead { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
   #browser {
     position: absolute; inset: 0; display: none; flex-direction: column; z-index: 10;
@@ -61,24 +62,36 @@ ${uiCss}
     border-radius: var(--px-radius-md); transition: background-color var(--px-ease);
   }
   .tile:hover { background: var(--px-muted); }
+  .tile[data-kind="flag"] canvas { width: 120px; height: 80px; }
+  .tile .src { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   .tile canvas { width: 108px; height: 72px; border-radius: var(--px-radius-sm); background: color-mix(in oklch, var(--px-bg), var(--px-fg) 8%); }
   .tile .name { font-size: var(--px-text-xs); color: var(--px-muted-fg); width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .flagrow .px-item-kind { width: auto; }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <input id="name" class="px-input" placeholder="flag_name" spellcheck="false" />
-    <button id="new" class="px-btn" data-variant="outline">${icon("filePlus")} New</button>
-    <button id="open" class="px-btn" data-variant="outline">${icon("folderOpen")} Open…</button>
+    <input id="name" class="px-input" placeholder="flag_name" spellcheck="false" data-tip="Flag name (the key in the coa file)" />
+    <div class="px-row" style="gap:2px">
+      <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="New flag">${icon("filePlus")}</button>
+      <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open a flag from the game or a mod">${icon("folderOpen")}</button>
+      <button id="paste" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Paste a flag definition from the clipboard">${icon("paste")}</button>
+    </div>
     <div class="px-separator" data-orientation="vertical"></div>
-    <button id="copy" class="px-btn" data-variant="ghost">${icon("copy")} Copy script</button>
-    <button id="save" class="px-btn" data-variant="default">${icon("save")} Save to mod</button>
-    <button id="png" class="px-btn" data-variant="ghost">${icon("imageDown")} Export PNG</button>
+    <div class="px-row" style="gap:2px">
+      <button id="undo" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Undo (Ctrl+Z)">${icon("undo")}</button>
+      <button id="redo" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Redo (Ctrl+Y)">${icon("redo")}</button>
+    </div>
     <span class="px-grow"></span>
-    <span id="status" class="px-muted px-sm px-truncate"></span>
-    <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Toggle inspector" data-tip-side="left">${icon("panelRightClose")}</button>
+    <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:220px" data-tip="Mod the flag is saved into">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+    <button id="save" class="px-btn" data-variant="default" data-tip="Write the flag into the mod's coat_of_arms folder">${icon("save")} Save</button>
+    <div class="px-separator" data-orientation="vertical"></div>
+    <div class="px-row" style="gap:2px">
+      <button id="copy" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Copy the script to the clipboard">${icon("copy")}</button>
+      <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
+      <button id="info" class="px-btn" data-variant="ghost" data-size="icon" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
+      <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
+    </div>
   </div>
   <div id="main">
     <div id="stage">
@@ -88,13 +101,10 @@ ${uiCss}
     <div id="side" class="px-sidepanel" data-side="right">
       <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
-        <div class="px-panel-title">${icon("layers")} Layers</div>
-        <div id="layers" class="px-list"></div>
-        <div class="adders">
-          <button class="px-btn" data-variant="outline" data-size="xs" data-add="colored_emblem">${icon("plus")} Colored emblem</button>
-          <button class="px-btn" data-variant="outline" data-size="xs" data-add="textured_emblem">${icon("plus")} Textured emblem</button>
-          <button class="px-btn" data-variant="outline" data-size="xs" data-add="sub">${icon("plus")} Sub flag</button>
+        <div class="px-panel-title">${icon("layers")} Layers <span class="px-grow"></span>
+          <button id="addLayer" class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="Add a layer" data-tip-side="left">${icon("plus")}</button>
         </div>
+        <div id="layers" class="px-list"></div>
         <div class="px-separator"></div>
         <div id="inspectorTitle" class="px-panel-title">Flag</div>
         <div id="inspector"></div>
@@ -104,6 +114,7 @@ ${uiCss}
       <div id="browserBar">
         <span id="browserTitle" class="px-label"></span>
         <div class="px-input-group">${icon("search")}<input id="browserSearch" class="px-input" placeholder="Search…" spellcheck="false" /></div>
+        <span id="browserCount" class="px-muted px-xs"></span>
         <button id="browserClose" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Close (Esc)" data-tip-side="left">${icon("x")}</button>
       </div>
       <div id="browserBody"></div>

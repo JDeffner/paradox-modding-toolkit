@@ -1,8 +1,10 @@
 /**
  * The Flag Builder app: one flag under edit, drawn by render.ts, edited
- * through the layer list and the inspector (a resizable, collapsible side
- * panel), with a browser overlay for the game's textures and flags. Built
- * from the shared px-ui classes; talks to the host only through messages.ts.
+ * through the layer list (drag to reorder) and the inspector in a resizable,
+ * collapsible side panel, with a browser overlay for the game's textures and
+ * flags (rendered previews). Undo/redo is snapshot-based: every structural
+ * edit and every committed field value is one step. Built from the shared
+ * px-ui classes; talks to the host only through messages.ts.
  */
 import {
   COLOR_SLOTS,
@@ -15,10 +17,10 @@ import {
   type CoaLayer,
   type Rgb,
 } from "@px-lsp/server/coa/coa";
-import type { AppToHost, FlagDatabase, HostToApp, TextureKind, UiState } from "../messages";
+import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiState } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { toast } from "../../shared/overlay";
+import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "./render";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -31,6 +33,7 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 // ---------------------------------------------------------------------------
 
 let db: FlagDatabase | null = null;
+let mods: ModTarget[] = [];
 let flag: CoaFlag = { name: "new_flag", pattern: "", colors: [], layers: [] };
 /** -1 = the flag itself, otherwise a layer index. */
 let selected = -1;
@@ -65,18 +68,73 @@ function receiveTextures(urls: Record<string, string | null>, thumb: boolean): v
   for (const [key, url] of Object.entries(urls)) {
     if (!url) {
       store.set(key, null);
+      if (thumb) paintTiles();
       continue;
     }
     const img = new Image();
     img.onload = () => {
       store.set(key, img);
-      if (thumb) paintThumbs();
+      if (thumb) paintTiles();
       else draw();
     };
     img.onerror = () => store.set(key, null);
     img.src = url;
   }
   if (!thumb) draw();
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+const past: string[] = [];
+const future: string[] = [];
+let snapshot = "";
+
+/** Record the current flag as one undo step (no-op when nothing changed). */
+function commit(): void {
+  const now = JSON.stringify(flag);
+  if (now === snapshot) return;
+  past.push(snapshot);
+  if (past.length > 200) past.shift();
+  future.length = 0;
+  snapshot = now;
+  updateHistoryButtons();
+}
+
+function restore(json: string): void {
+  snapshot = json;
+  flag = JSON.parse(json);
+  $<HTMLInputElement>("name").value = flag.name;
+  if (selected >= flag.layers.length) selected = -1;
+  refresh(false);
+  updateHistoryButtons();
+}
+
+function undo(): void {
+  const prev = past.pop();
+  if (prev === undefined) return;
+  future.push(snapshot);
+  restore(prev);
+}
+
+function redo(): void {
+  const next = future.pop();
+  if (next === undefined) return;
+  past.push(snapshot);
+  restore(next);
+}
+
+function resetHistory(): void {
+  past.length = 0;
+  future.length = 0;
+  snapshot = JSON.stringify(flag);
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons(): void {
+  $<HTMLButtonElement>("undo").disabled = past.length === 0;
+  $<HTMLButtonElement>("redo").disabled = future.length === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,24 +202,27 @@ function button(label: string, onClick: () => void, o: ButtonOptions = {}): HTML
   return b;
 }
 
-function select(
-  options: [string, string][],
+/** A field-like trigger that opens a `menu`; the shadcn Select shape. */
+function dropdown(
+  items: MenuItem[],
   value: string,
-  onChange: (v: string) => void,
-  small = true
-): HTMLSelectElement {
-  const s = document.createElement("select");
-  s.className = "px-select";
-  if (small) s.dataset.size = "sm";
-  for (const [v, label] of options) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = label;
-    o.selected = v === value;
-    s.append(o);
+  onPick: (v: string) => void,
+  o: { small?: boolean; placeholder?: string; search?: boolean } = {}
+): HTMLButtonElement {
+  const current = items.find((i) => i.value === value);
+  const b = button("", () => menu(b, items, { value, search: o.search, onPick }), {
+    variant: "outline",
+    size: o.small ? "sm" : undefined,
+  });
+  b.classList.add("px-dropdown");
+  if (!current) b.setAttribute("data-placeholder", "");
+  if (current?.swatch) {
+    const sw = el("span", "px-swatch");
+    sw.style.setProperty("--px-swatch", current.swatch);
+    b.append(sw);
   }
-  s.onchange = () => onChange(s.value);
-  return s;
+  b.append(el("span", "px-truncate", current?.label ?? o.placeholder ?? value), iconEl("chevronDown"));
+  return b;
 }
 
 function numberInput(value: number, step: number, onChange: (v: number) => void): HTMLInputElement {
@@ -178,6 +239,8 @@ function numberInput(value: number, step: number, onChange: (v: number) => void)
       draw();
     }
   };
+  // The undo step is the committed value, not every keystroke.
+  i.onchange = commit;
   return i;
 }
 
@@ -240,6 +303,8 @@ function layerLabel(layer: CoaLayer): [string, string] {
   }
 }
 
+let dragFrom = -1;
+
 function renderLayers(): void {
   const list = $("layers");
   list.replaceChildren();
@@ -258,51 +323,98 @@ function renderLayers(): void {
       el("span", "px-item-label", r.label)
     );
     if (r.index === selected) row.setAttribute("aria-selected", "true");
-    row.onclick = () => select_(r.index);
-    if (r.index >= 0) {
-      const i = r.index;
-      row.append(
-        el(
-          "span",
-          "px-item-tools",
-          button("", () => moveLayer(i, -1), { icon: "arrowUp", size: "icon-xs", tip: "Draw earlier" }),
-          button("", () => moveLayer(i, 1), { icon: "arrowDown", size: "icon-xs", tip: "Draw later" }),
-          button(
-            "",
-            () => {
-              flag.layers.splice(i, 1);
-              select_(Math.min(selected, flag.layers.length - 1));
-            },
-            { icon: "x", size: "icon-xs", tip: "Remove layer" }
-          )
-        )
-      );
+    row.onclick = () => select(r.index);
+    if (r.index < 0) {
+      list.append(row);
+      continue;
     }
+    const i = r.index;
+    row.append(
+      el(
+        "span",
+        "px-item-tools",
+        button(
+          "",
+          () => {
+            flag.layers.splice(i, 1);
+            select(Math.min(selected, flag.layers.length - 1));
+          },
+          { icon: "x", size: "icon-xs", tip: "Remove layer" }
+        )
+      )
+    );
+    // Drag to reorder: the drop half of the row decides before or after.
+    row.draggable = true;
+    row.ondragstart = (e) => {
+      dragFrom = i;
+      row.setAttribute("data-dragging", "");
+      e.dataTransfer!.effectAllowed = "move";
+      e.dataTransfer!.setData("text/plain", String(i));
+    };
+    row.ondragend = () => {
+      dragFrom = -1;
+      for (const r of Array.from(list.children)) {
+        r.removeAttribute("data-dragging");
+        r.removeAttribute("data-drop");
+      }
+    };
+    row.ondragover = (e) => {
+      if (dragFrom < 0 || dragFrom === i) return;
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "move";
+      const rect = row.getBoundingClientRect();
+      row.dataset.drop = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    };
+    row.ondragleave = () => row.removeAttribute("data-drop");
+    row.ondrop = (e) => {
+      e.preventDefault();
+      if (dragFrom < 0 || dragFrom === i) return;
+      const after = row.dataset.drop === "after";
+      const [moved] = flag.layers.splice(dragFrom, 1);
+      let to = i + (after ? 1 : 0);
+      if (dragFrom < to) to--;
+      flag.layers.splice(to, 0, moved);
+      select(to);
+    };
     list.append(row);
   }
 }
 
-function moveLayer(i: number, dir: -1 | 1): void {
-  const j = i + dir;
-  if (j < 0 || j >= flag.layers.length) return;
-  [flag.layers[i], flag.layers[j]] = [flag.layers[j], flag.layers[i]];
-  select_(j);
-}
-
-function select_(index: number): void {
+function select(index: number): void {
   selected = index;
   refresh();
 }
 
-function refresh(): void {
+/** Redraw everything after an edit; `record` = false when restoring history. */
+function refresh(record = true): void {
   renderLayers();
   renderInspector();
   draw();
+  if (record) commit();
+}
+
+function addLayer(kind: CoaLayer["kind"]): void {
+  const layer: CoaLayer =
+    kind === "sub"
+      ? { kind, parent: "", instances: [] }
+      : kind === "colored_emblem"
+        ? { kind, texture: "", mask: 0, colors: [], instances: [] }
+        : { kind, texture: "", instances: [] };
+  flag.layers.push(layer);
+  select(flag.layers.length - 1);
+  if (kind === "sub") openBrowser("parent");
+  else openBrowser(kind === "colored_emblem" ? "colored_emblems" : "textured_emblems");
 }
 
 // ---------------------------------------------------------------------------
 // Inspector
 // ---------------------------------------------------------------------------
+
+function namedColorItems(): MenuItem[] {
+  return Object.keys(db!.namedColors)
+    .sort()
+    .map((n) => ({ value: n, label: n, swatch: rgbHex(db!.namedColors[n]) }));
+}
 
 function colorEditor(colors: CoaColor[], title: string): HTMLElement {
   const free = COLOR_SLOTS.find((s) => !colors.some((c) => c.name === s));
@@ -326,12 +438,12 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
   for (const color of colors) {
     const rgb = colorToRgb(color, db!.namedColors, flag.colors);
     const sw = swatch(rgb);
-    const kind = select(
+    const kind = dropdown(
       [
-        ["named", "named"],
-        ["rgb", "rgb"],
-        ["hsv360", "hsv360"],
-        ["ref", "same as"],
+        { value: "named", label: "named" },
+        { value: "rgb", label: "rgb" },
+        { value: "hsv360", label: "hsv360" },
+        { value: "ref", label: "same as" },
       ],
       color.kind,
       (k) => {
@@ -346,24 +458,24 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
                 ? { name: color.name, kind: "hsv360", value: rgbToHsv360(current) }
                 : { name: color.name, kind: "ref", value: flag.colors[0]?.name ?? "color1" };
         refresh();
-      }
+      },
+      { small: true }
     );
 
     const value = el("div", "px-row");
     value.style.minWidth = "0";
     if (color.kind === "named") {
-      const names = Object.keys(db!.namedColors).sort();
-      if (!names.includes(color.value)) names.unshift(color.value);
-      const s = select(
-        names.map((n) => [n, n]),
-        color.value,
-        (v) => {
-          color.value = v;
-          refresh();
-        }
+      value.append(
+        dropdown(
+          namedColorItems(),
+          color.value,
+          (v) => {
+            color.value = v;
+            refresh();
+          },
+          { small: true, search: true }
+        )
       );
-      s.style.width = "100%";
-      value.append(s);
     } else if (color.kind === "rgb") {
       const c = document.createElement("input");
       c.type = "color";
@@ -376,6 +488,7 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
         text.textContent = `rgb { ${color.value.join(" ")} }`;
         draw();
       };
+      c.onchange = commit;
       value.append(c, text);
     } else if (color.kind === "hsv360") {
       const v = color.value;
@@ -387,13 +500,18 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
     } else {
       const bases = flag.colors.filter((b) => !(colors === flag.colors && b.name === color.name));
       value.append(
-        select(
-          bases.map((b) => [b.name, b.name]),
+        dropdown(
+          bases.map((b) => ({
+            value: b.name,
+            label: b.name,
+            swatch: rgbHex(colorToRgb(b, db!.namedColors, flag.colors) ?? [0, 0, 0]),
+          })),
           color.value,
           (v) => {
             color.value = v;
             refresh();
-          }
+          },
+          { small: true }
         )
       );
     }
@@ -442,31 +560,17 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
       )
     )
   );
-  const tag = (t: string): HTMLSpanElement => el("span", "px-muted px-xs", t);
-  const instances: { scale: [number, number] }[] = layer.instances;
-  instances.forEach((inst, i) => {
-    const row = el("div", "inst");
-    if (layer.kind === "sub") {
-      const o = layer.instances[i].offset;
-      row.append(
-        tag("offset"),
-        numberInput(o[0], 0.01, (v) => (o[0] = v)),
-        numberInput(o[1], 0.01, (v) => (o[1] = v))
-      );
-    } else {
-      const it = layer.instances[i];
-      row.append(
-        tag("rot"),
-        numberInput(it.rotation, 1, (v) => (it.rotation = v)),
-        tag("pos"),
-        numberInput(it.position[0], 0.01, (v) => (it.position[0] = v)),
-        numberInput(it.position[1], 0.01, (v) => (it.position[1] = v))
-      );
-    }
-    row.append(
-      tag("scale"),
-      numberInput(inst.scale[0], 0.01, (v) => (inst.scale[0] = v)),
-      numberInput(inst.scale[1], 0.01, (v) => (inst.scale[1] = v)),
+  const pair = (a: HTMLElement, b: HTMLElement): HTMLElement => {
+    const row = el("div", "px-row", a, b);
+    row.style.minWidth = "0";
+    return row;
+  };
+  layer.instances.forEach((inst, i) => {
+    const block = el("div", "instance");
+    const head = el(
+      "div",
+      "subhead",
+      el("span", "px-muted px-xs", `Instance ${i + 1}`),
       button(
         "",
         () => {
@@ -476,7 +580,46 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
         { icon: "x", size: "icon-xs", tip: "Remove instance" }
       )
     );
-    wrap.append(row);
+    block.append(head);
+    if (layer.kind === "sub") {
+      const sub = layer.instances[i];
+      block.append(
+        field(
+          "Offset",
+          pair(
+            numberInput(sub.offset[0], 0.01, (v) => (sub.offset[0] = v)),
+            numberInput(sub.offset[1], 0.01, (v) => (sub.offset[1] = v))
+          )
+        )
+      );
+    } else {
+      const it = layer.instances[i];
+      block.append(
+        field(
+          "Position",
+          pair(
+            numberInput(it.position[0], 0.01, (v) => (it.position[0] = v)),
+            numberInput(it.position[1], 0.01, (v) => (it.position[1] = v))
+          )
+        )
+      );
+    }
+    block.append(
+      field(
+        "Scale",
+        pair(
+          numberInput(inst.scale[0], 0.01, (v) => (inst.scale[0] = v)),
+          numberInput(inst.scale[1], 0.01, (v) => (inst.scale[1] = v))
+        )
+      )
+    );
+    if (layer.kind !== "sub") {
+      const it = layer.instances[i];
+      const rot = numberInput(it.rotation, 1, (v) => (it.rotation = v));
+      rot.style.width = "calc(50% - 3px)";
+      block.append(field("Rotation", rot));
+    }
+    wrap.append(block);
   });
   return wrap;
 }
@@ -484,10 +627,9 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
 /** An outline button that reads as a picker: current value left, chevron right. */
 function pickButton(current: string, placeholder: string, onClick: () => void): HTMLButtonElement {
   const b = button("", onClick, { variant: "outline" });
-  b.style.cssText = "width:100%;justify-content:space-between";
-  const label = el("span", "px-truncate", current || placeholder);
-  if (!current) label.classList.add("px-muted");
-  b.append(label, iconEl("chevronDown"));
+  b.classList.add("px-dropdown");
+  if (!current) b.setAttribute("data-placeholder", "");
+  b.append(el("span", "px-truncate", current || placeholder), iconEl("chevronDown"));
   return b;
 }
 
@@ -525,21 +667,19 @@ function renderInspector(): void {
     )
   );
   if (layer.kind === "colored_emblem") {
-    const mask = select(
+    const mask = dropdown(
       [
-        ["0", "none"],
-        ["1", "pattern color1"],
-        ["2", "pattern color2"],
-        ["3", "pattern color3"],
+        { value: "0", label: "none" },
+        { value: "1", label: "pattern color1" },
+        { value: "2", label: "pattern color2" },
+        { value: "3", label: "pattern color3" },
       ],
       String(layer.mask),
       (v) => {
         layer.mask = Number(v);
-        draw();
-      },
-      false
+        refresh();
+      }
     );
-    mask.style.width = "100%";
     box.append(field("Mask", mask), colorEditor(layer.colors, "Emblem colors"));
   }
   box.append(instanceEditor(layer));
@@ -551,7 +691,8 @@ function renderInspector(): void {
 
 type BrowserMode = TextureKind | "flags" | "parent";
 let browserMode: BrowserMode = "patterns";
-const tileCanvases = new Map<string, HTMLCanvasElement>();
+/** Tiles waiting for their pixels: each paints itself once its textures arrived. */
+const tiles = new Map<string, { canvas: HTMLCanvasElement; paint: () => boolean }>();
 let observer: IntersectionObserver | null = null;
 
 function openBrowser(mode: BrowserMode): void {
@@ -569,29 +710,49 @@ function closeBrowser(): void {
   $("browser").classList.remove("open");
   observer?.disconnect();
   observer = null;
-  tileCanvases.clear();
+  tiles.clear();
 }
+
+const THUMB_SOURCE = { image: (k: string): HTMLImageElement | null => thumbs.get(k) ?? null };
 
 function fillBrowser(): void {
   if (!db) return;
   const body = $("browserBody");
   body.replaceChildren();
   observer?.disconnect();
-  tileCanvases.clear();
+  tiles.clear();
   const q = $<HTMLInputElement>("browserSearch").value.trim().toLowerCase();
+  const grid = el("div");
+  grid.id = "grid";
+  observer = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) tiles.get((e.target as HTMLElement).dataset.key!)?.paint();
+    }
+  });
+  const LIMIT = 600;
+  let total: number;
+
   if (browserMode === "flags" || browserMode === "parent") {
     const matches = db.flags.filter(
       (f) => !q || f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q)
     );
-    const list = el("div", "px-list");
-    for (const entry of matches.slice(0, 500)) {
-      const row = el(
+    total = matches.length;
+    for (const entry of matches.slice(0, LIMIT)) {
+      const def = db.definitions[entry.name];
+      const c = document.createElement("canvas");
+      c.width = 120;
+      c.height = 80;
+      const tile = el(
         "div",
-        "px-item flagrow",
-        el("span", "px-item-label", entry.name),
-        el("span", "px-item-kind", `${entry.source} · ${entry.file}`)
+        "tile",
+        c,
+        el("div", "name", entry.name),
+        el("div", "src", `${entry.source} · ${entry.file}`)
       );
-      row.onclick = () => {
+      tile.dataset.kind = "flag";
+      tile.dataset.key = `flag:${entry.name}`;
+      tile.title = entry.name;
+      tile.onclick = () => {
         if (browserMode === "parent") {
           const layer = flag.layers[selected];
           if (layer?.kind === "sub") layer.parent = entry.name;
@@ -599,104 +760,140 @@ function fillBrowser(): void {
           loadFlag(entry.name);
         }
         closeBrowser();
+        refresh(browserMode === "parent");
+      };
+      tiles.set(tile.dataset.key, {
+        canvas: c,
+        paint: () => {
+          if (c.dataset.done) return true;
+          const keys = textureKeys(def, db!.definitions);
+          for (const k of keys) request(k, true);
+          if (!keys.every((k) => thumbs.has(k))) return false;
+          const ctx = c.getContext("2d")!;
+          ctx.clearRect(0, 0, c.width, c.height);
+          renderFlag(
+            ctx,
+            def,
+            { x: 0, y: 0, w: c.width, h: c.height },
+            {
+              textures: THUMB_SOURCE,
+              namedColors: db!.namedColors,
+              definitions: db!.definitions,
+              cacheTag: "thumb:",
+            }
+          );
+          c.dataset.done = "1";
+          return true;
+        },
+      });
+      grid.append(tile);
+      observer.observe(tile);
+    }
+  } else {
+    const kind = browserMode;
+    const matches = db.textures[kind].filter((t) => !q || t.toLowerCase().includes(q));
+    total = matches.length;
+    for (const file of matches.slice(0, LIMIT)) {
+      const key = `${kind}/${file}`;
+      const c = document.createElement("canvas");
+      c.width = 108;
+      c.height = 72;
+      const tile = el("div", "tile", c, el("div", "name", file));
+      tile.dataset.key = key;
+      tile.title = file;
+      tile.onclick = () => {
+        if (kind === "patterns") flag.pattern = file;
+        else {
+          const layer = flag.layers[selected];
+          if (layer && layer.kind !== "sub") layer.texture = file;
+        }
+        closeBrowser();
         refresh();
       };
-      list.append(row);
+      tiles.set(key, {
+        canvas: c,
+        paint: () => {
+          if (c.dataset.done) return true;
+          request(key, true);
+          const img = thumbs.get(key);
+          if (img === undefined) return false;
+          c.dataset.done = "1";
+          const ctx = c.getContext("2d")!;
+          if (!img) {
+            ctx.fillStyle = "#a33";
+            ctx.fillText("cannot decode", 20, 40);
+            return true;
+          }
+          const src = previewThumb(`thumb:${key}`, img, kind);
+          const scale = Math.min(c.width / img.naturalWidth, c.height / img.naturalHeight);
+          const w = img.naturalWidth * scale;
+          const h = img.naturalHeight * scale;
+          ctx.drawImage(src, (c.width - w) / 2, (c.height - h) / 2, w, h);
+          return true;
+        },
+      });
+      grid.append(tile);
+      observer.observe(tile);
     }
-    body.append(list);
-    if (matches.length > 500)
-      body.append(el("div", "px-muted px-sm", `… ${matches.length - 500} more, narrow the search`));
-    return;
-  }
-  const kind = browserMode;
-  const grid = el("div");
-  grid.id = "grid";
-  observer = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) request((e.target as HTMLElement).dataset.key!, true);
-    }
-    paintThumbs();
-  });
-  const matches = db.textures[kind].filter((t) => !q || t.toLowerCase().includes(q));
-  for (const file of matches.slice(0, 600)) {
-    const key = `${kind}/${file}`;
-    const c = document.createElement("canvas");
-    c.width = 108;
-    c.height = 72;
-    const name = el("div", "name", file);
-    name.title = file;
-    const tile = el("div", "tile", c, name);
-    tile.dataset.key = key;
-    tile.onclick = () => {
-      if (kind === "patterns") flag.pattern = file;
-      else {
-        const layer = flag.layers[selected];
-        if (layer && layer.kind !== "sub") layer.texture = file;
-      }
-      closeBrowser();
-      refresh();
-    };
-    tileCanvases.set(key, c);
-    grid.append(tile);
-    observer.observe(tile);
   }
   body.append(grid);
-  if (matches.length > 600)
-    body.append(el("div", "px-muted px-sm", `… ${matches.length - 600} more, narrow the search`));
-  paintThumbs();
+  $("browserCount").textContent =
+    total > LIMIT
+      ? `${LIMIT} of ${total} shown, narrow the search`
+      : `${total} ${total === 1 ? "match" : "matches"}`;
 }
 
-function paintThumbs(): void {
-  for (const [key, c] of tileCanvases) {
-    if (c.dataset.done) continue;
-    const img = thumbs.get(key);
-    if (img === undefined) continue;
-    c.dataset.done = "1";
-    const ctx = c.getContext("2d")!;
-    if (!img) {
-      ctx.fillStyle = "#a33";
-      ctx.fillText("cannot decode", 20, 40);
-      continue;
-    }
-    const src = previewThumb(`thumb:${key}`, img, key.slice(0, key.indexOf("/")));
-    const scale = Math.min(c.width / img.naturalWidth, c.height / img.naturalHeight);
-    const w = img.naturalWidth * scale;
-    const h = img.naturalHeight * scale;
-    ctx.drawImage(src, (c.width - w) / 2, (c.height - h) / 2, w, h);
-  }
+/** Paint every tile whose pixels have arrived (called as thumbnails load). */
+function paintTiles(): void {
+  for (const t of tiles.values()) if (!t.canvas.dataset.done) t.paint();
 }
 
 // ---------------------------------------------------------------------------
 // Flags in and out
 // ---------------------------------------------------------------------------
 
-function loadFlag(name: string): void {
-  const def = db?.definitions[name];
-  if (!def) return;
-  flag = JSON.parse(JSON.stringify(def));
+function setFlag(next: CoaFlag): void {
+  flag = next;
   $<HTMLInputElement>("name").value = flag.name;
   selected = -1;
+  resetHistory();
+}
+
+function loadFlag(name: string): void {
+  const def = db?.definitions[name];
+  if (def) setFlag(JSON.parse(JSON.stringify(def)));
 }
 
 function newFlag(): void {
   const patterns = db?.textures.patterns ?? [];
   const pattern = patterns.find((p) => p.startsWith("pattern_solid")) ?? patterns[0] ?? "";
   const named = Object.keys(db?.namedColors ?? {});
-  flag = {
+  setFlag({
     name: "new_flag",
     pattern,
     colors: named.length
       ? [{ name: "color1", kind: "named", value: named.includes("red") ? "red" : named[0] }]
       : [],
     layers: [],
-  };
-  $<HTMLInputElement>("name").value = flag.name;
-  selected = -1;
-  refresh();
+  });
+  refresh(false);
+}
+
+/** True when the flag differs from what was last loaded, created or restored. */
+const dirty = (): boolean => past.length > 0;
+
+async function confirmDiscard(what: string): Promise<boolean> {
+  if (!dirty()) return true;
+  return confirmDialog({
+    title: `Discard changes to ${flag.name}?`,
+    description: `${what} replaces the flag you are editing. Copy its script first if you want to keep it.`,
+    confirmLabel: "Discard and continue",
+    destructive: true,
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Side panel
+// Side panel and save target
 // ---------------------------------------------------------------------------
 
 let uiState: UiState = { panelWidth: 340, panelCollapsed: false };
@@ -704,7 +901,7 @@ const panel = sidePanel($("side"), {
   width: uiState.panelWidth,
   collapsed: uiState.panelCollapsed,
   onChange: (s) => {
-    uiState = { panelWidth: s.width, panelCollapsed: s.collapsed };
+    uiState = { ...uiState, panelWidth: s.width, panelCollapsed: s.collapsed };
     updateToggle();
     send({ type: "uiState", state: uiState });
   },
@@ -716,45 +913,91 @@ function updateToggle(): void {
   b.dataset.tip = panel.collapsed ? "Show inspector" : "Hide inspector";
 }
 
+function saveTarget(): ModTarget | undefined {
+  return mods.find((m) => m.path === uiState.savePath) ?? mods[0];
+}
+
+function updateModPicker(): void {
+  const b = $<HTMLButtonElement>("mod");
+  const target = saveTarget();
+  b.querySelector(".px-truncate")!.textContent = target ? target.label : "No mod in workspace";
+  b.disabled = mods.length < 2;
+  $<HTMLButtonElement>("save").disabled = !target;
+  $("save").dataset.tip = target
+    ? `Write the flag into ${target.label}/common/coat_of_arms/coat_of_arms/`
+    : "No mod in the workspace to save into";
+}
+
 // ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
 
-$("new").onclick = newFlag;
-$("open").onclick = () => openBrowser("flags");
+$("new").onclick = async () => {
+  if (await confirmDiscard("A new flag")) newFlag();
+};
+$("open").onclick = async () => {
+  if (await confirmDiscard("Opening a flag")) openBrowser("flags");
+};
+$("paste").onclick = () => send({ type: "paste" });
+$("undo").onclick = undo;
+$("redo").onclick = redo;
 $("copy").onclick = () => send({ type: "copy", text: writeFlag(flag) });
 $("save").onclick = () => {
+  const target = saveTarget();
+  if (!target) return;
   if (!flag.name.trim()) {
     toast("Give the flag a name first.", "destructive");
     return;
   }
-  send({ type: "save", name: flag.name.trim(), script: writeFlag(flag) });
+  send({ type: "save", name: flag.name.trim(), script: writeFlag(flag), modPath: target.path });
 };
+$("mod").onclick = () =>
+  menu(
+    $("mod"),
+    mods.map((m) => ({ value: m.path, label: m.label, hint: m.path })),
+    {
+      value: saveTarget()?.path,
+      search: false,
+      width: 260,
+      onPick: (v) => {
+        uiState = { ...uiState, savePath: v };
+        send({ type: "uiState", state: uiState });
+        updateModPicker();
+      },
+    }
+  );
 $("png").onclick = () => send({ type: "exportPng", name: flag.name, dataUrl: canvas.toDataURL("image/png") });
 $("togglePanel").onclick = () => panel.toggle();
-$<HTMLInputElement>("name").oninput = (e) => {
-  flag.name = (e.target as HTMLInputElement).value.replace(/[^\w.-]/g, "_");
+$("addLayer").onclick = () =>
+  menu(
+    $("addLayer"),
+    [
+      { value: "colored_emblem", label: "Colored emblem", hint: "recolorable" },
+      { value: "textured_emblem", label: "Textured emblem", hint: "as is" },
+      { value: "sub", label: "Sub flag", hint: "another flag" },
+    ],
+    { search: false, width: 220, onPick: (v) => addLayer(v as CoaLayer["kind"]) }
+  );
+const nameInput = $<HTMLInputElement>("name");
+nameInput.oninput = () => {
+  flag.name = nameInput.value.replace(/[^\w.-]/g, "_");
 };
+nameInput.onchange = commit;
 $("browserClose").onclick = closeBrowser;
 $<HTMLInputElement>("browserSearch").oninput = fillBrowser;
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && $("browser").classList.contains("open")) closeBrowser();
+  if (e.key === "Escape" && $("browser").classList.contains("open")) {
+    closeBrowser();
+    return;
+  }
+  const editing = (e.target as HTMLElement).tagName === "INPUT";
+  if ((e.ctrlKey || e.metaKey) && !editing) {
+    if (e.key === "z" && !e.shiftKey) undo();
+    else if (e.key === "y" || (e.key === "z" && e.shiftKey)) redo();
+    else return;
+    e.preventDefault();
+  }
 });
-for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-add]"))) {
-  b.onclick = () => {
-    const kind = b.dataset.add as CoaLayer["kind"];
-    const layer: CoaLayer =
-      kind === "sub"
-        ? { kind, parent: "", instances: [] }
-        : kind === "colored_emblem"
-          ? { kind, texture: "", mask: 0, colors: [], instances: [] }
-          : { kind, texture: "", instances: [] };
-    flag.layers.push(layer);
-    select_(flag.layers.length - 1);
-    if (kind === "sub") openBrowser("parent");
-    else openBrowser(kind === "colored_emblem" ? "colored_emblems" : "textured_emblems");
-  };
-}
 
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   const m = event.data;
@@ -762,16 +1005,12 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "init": {
       const first = db === null;
       db = m.db;
-      const save = $<HTMLButtonElement>("save");
-      save.disabled = !m.canSave;
-      save.dataset.tip = m.canSave
-        ? "Write the flag into the mod's coat_of_arms folder"
-        : "No mod in the workspace to save into";
+      mods = m.mods;
       const t = db.textures;
-      $("status").textContent =
-        `${db.gameName} · ${db.flags.length} flags · ${t.patterns.length} patterns · ` +
-        `${t.colored_emblems.length} colored · ${t.textured_emblems.length} textured emblems` +
-        (db.gameMissing ? " · game folder not found (set px.gamePath)" : "");
+      $("info").dataset.tip =
+        `${db.gameName}: ${db.flags.length} flags, ${t.patterns.length} patterns, ` +
+        `${t.colored_emblems.length} colored and ${t.textured_emblems.length} textured emblems` +
+        (db.gameMissing ? ". Game folder not found: set px.gamePath." : ".");
       images.clear();
       thumbs.clear();
       clearRenderCaches();
@@ -783,11 +1022,20 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
         }
         updateToggle();
         newFlag();
-      } else refresh();
+      } else refresh(false);
+      updateModPicker();
       return;
     }
     case "textures":
       receiveTextures(m.urls, m.thumbs);
+      return;
+    case "pasted":
+      void (async () => {
+        if (!(await confirmDiscard(`Pasting ${m.flag.name}`))) return;
+        setFlag(m.flag);
+        refresh(false);
+        toast(`Pasted ${m.flag.name}.`);
+      })();
       return;
     case "toast":
       toast(m.message);

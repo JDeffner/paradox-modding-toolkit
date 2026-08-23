@@ -759,10 +759,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
         if (!roots.some((r) => r.path === p)) roots.push({ label: path.basename(p), path: p });
       }
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: path.basename(p), path: p }));
       FlagBuilderPanel.show(context, {
         meta,
         roots,
-        modPath: cfg.modPath,
+        mods,
         gameMissing: cfg.gamePath === null,
       });
     }),

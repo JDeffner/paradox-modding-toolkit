@@ -48,6 +48,8 @@ export interface RenderContext {
   textures: TextureSource;
   namedColors: Record<string, Rgb>;
   definitions: Record<string, CoaFlag>;
+  /** Prefix for the pixel caches: a source serving thumbnails must not share them with full-size decodes. */
+  cacheTag?: string;
 }
 
 interface Mapping {
@@ -212,12 +214,13 @@ export function renderFlag(
   depth = 0
 ): boolean {
   let complete = true;
+  const tag = rc.cacheTag ?? "";
   const patternKey = flag.pattern ? `patterns/${flag.pattern}` : null;
   const pattern = patternKey ? rc.textures.image(patternKey) : null;
   if (patternKey && !pattern) complete = false;
   if (pattern && patternKey) {
     const painted = recolor(
-      patternKey,
+      tag + patternKey,
       pattern,
       mappings(flag.colors, flag, PATTERN_SOURCE_COLORS, rc.namedColors),
       false
@@ -256,7 +259,7 @@ export function renderFlag(
       continue;
     }
     const painted = recolor(
-      key,
+      tag + key,
       img,
       mappings(layer.colors, flag, EMBLEM_SOURCE_COLORS, rc.namedColors),
       true
@@ -274,7 +277,7 @@ export function renderFlag(
     const sctx = scratch.getContext("2d")!;
     drawInstances(sctx, painted, layer.instances, { x: 0, y: 0, w: scratch.width, h: scratch.height });
     sctx.globalCompositeOperation = "destination-in";
-    sctx.drawImage(maskCanvas(patternKey, pattern, layer.mask), 0, 0, scratch.width, scratch.height);
+    sctx.drawImage(maskCanvas(tag + patternKey, pattern, layer.mask), 0, 0, scratch.width, scratch.height);
     ctx.drawImage(scratch, rect.x, rect.y, rect.w, rect.h);
   }
   return complete;

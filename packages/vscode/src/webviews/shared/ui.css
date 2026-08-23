@@ -6,7 +6,8 @@
  * surface is the editor background stepped toward the foreground by the same
  * ratios the Nova neutral palette uses (3-4% for muted surfaces in light
  * themes, 12-15% in dark ones), so a Solarized or high-contrast theme still
- * yields a coherent page. Primary is the foreground itself, as in Nova.
+ * yields a coherent page. Primary is the theme's accent (VS Code's button
+ * colors), so the one filled button on a page matches the editor's own.
  *
  * Classes mirror shadcn names (`px-btn` + data-variant/data-size, `px-input`,
  * `px-select`, `px-toggle`, `px-badge`, `px-tabs`, `px-popover`, ...) so a
@@ -41,9 +42,13 @@
   --px-ring-soft: color-mix(in oklch, var(--px-ring) 50%, transparent);
   --px-muted-fg: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-muted-fg));
   --px-fg-60: color-mix(in oklch, var(--px-fg) var(--px-mix-fg-60), transparent);
-  --px-primary: var(--px-fg);
-  --px-primary-fg: var(--px-bg);
-  --px-primary-hover: color-mix(in oklch, var(--px-primary) 80%, transparent);
+  /* The user's accent: VS Code's own button colors, Nova's foreground-as-primary as the fallback. */
+  --px-primary: var(--vscode-button-background, var(--px-fg));
+  --px-primary-fg: var(--vscode-button-foreground, var(--px-bg));
+  --px-primary-hover: var(
+    --vscode-button-hoverBackground,
+    color-mix(in oklch, var(--px-primary) 80%, transparent)
+  );
   --px-destructive: var(--vscode-errorForeground, #f14c4c);
   --px-destructive-soft: color-mix(in oklch, var(--px-destructive) 18%, transparent);
   --px-destructive-hover: color-mix(in oklch, var(--px-destructive) 28%, transparent);
@@ -682,6 +687,18 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-item[aria-selected="true"] {
   background: var(--px-muted-strong);
 }
+.px-item[draggable="true"] {
+  cursor: grab;
+}
+.px-item[data-dragging] {
+  opacity: 0.4;
+}
+.px-item[data-drop="before"] {
+  box-shadow: inset 0 2px 0 var(--px-primary);
+}
+.px-item[data-drop="after"] {
+  box-shadow: inset 0 -2px 0 var(--px-primary);
+}
 .px-item > .px-item-kind {
   flex: 0 0 auto;
   font-size: var(--px-text-xs);
@@ -755,6 +772,129 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   }
 }
 
+/* ----------------------------------------------------------------- menu --- */
+
+/*
+ * overlay.ts `menu()`: a popover holding an optional search box and a list.
+ * Used in place of <select>, whose option list the webview cannot style.
+ */
+.px-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  min-width: 160px;
+}
+.px-menu-list {
+  max-height: 280px;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.px-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--px-radius-md);
+  font-size: var(--px-text);
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+.px-menu-item > .px-grow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.px-menu-item > .px-menu-hint {
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+}
+.px-menu-item[data-active],
+.px-menu-item:hover {
+  background: var(--px-muted);
+}
+.px-menu-item > svg.px-icon.check {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+}
+.px-menu-item[aria-selected="true"] > svg.px-icon.check {
+  opacity: 1;
+}
+.px-menu-empty {
+  padding: 8px;
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-sm);
+}
+.px-menu-separator {
+  height: 1px;
+  margin: 3px -4px;
+  background: var(--px-border);
+}
+/* The trigger: an outline button that reads as a field. */
+.px-dropdown {
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  font-weight: 400;
+}
+.px-dropdown > .px-truncate {
+  flex: 1 1 auto;
+  text-align: left;
+}
+.px-dropdown > svg.px-icon {
+  color: var(--px-muted-fg);
+}
+.px-dropdown[data-placeholder] > .px-truncate {
+  color: var(--px-muted-fg);
+}
+
+/* --------------------------------------------------------------- dialog --- */
+
+.px-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  animation: px-fade 120ms ease-out;
+}
+.px-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: var(--px-radius);
+  background: var(--px-popover);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
+  animation: px-pop 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.px-dialog-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.px-dialog-description {
+  color: var(--px-muted-fg);
+}
+.px-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+@keyframes px-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 /* -------------------------------------------------------------- tooltip --- */
 
 [data-tip] {
@@ -784,6 +924,12 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 [data-tip]:focus-visible::after {
   opacity: 1;
   transition-delay: 400ms;
+}
+[data-tip][data-tip-wrap]::after {
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  text-align: left;
 }
 [data-tip][data-tip-side="left"]::after {
   left: auto;
@@ -877,7 +1023,7 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-sidepanel-body {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: auto;
+  overflow: hidden auto;
   display: flex;
   flex-direction: column;
 }

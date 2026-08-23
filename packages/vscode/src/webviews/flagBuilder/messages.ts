@@ -31,10 +31,20 @@ export interface FlagDatabase {
 export interface UiState {
   panelWidth: number;
   panelCollapsed: boolean;
+  /** The mod flags are saved into (its path), when the workspace has several. */
+  savePath?: string;
+}
+
+/** A mod the flag can be saved into. */
+export interface ModTarget {
+  label: string;
+  path: string;
 }
 
 export type HostToApp =
-  | { type: "init"; db: FlagDatabase; canSave: boolean; ui?: UiState }
+  | { type: "init"; db: FlagDatabase; mods: ModTarget[]; ui?: UiState }
+  /** The clipboard held a flag definition; the app asks before replacing its own. */
+  | { type: "pasted"; flag: CoaFlag }
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
   | { type: "toast"; message: string };
 
@@ -44,7 +54,8 @@ export type AppToHost =
   | { type: "textures"; keys: string[]; thumbs: boolean }
   | { type: "copy"; text: string }
   | { type: "uiState"; state: UiState }
-  | { type: "save"; name: string; script: string }
+  | { type: "save"; name: string; script: string; modPath: string }
+  | { type: "paste" }
   | { type: "exportPng"; name: string; dataUrl: string };
 
 export const THUMB_DIM = 96;
