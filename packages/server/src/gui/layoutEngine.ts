@@ -38,6 +38,7 @@ import {
   type GuiDefs,
 } from "./guiDefs";
 import { DECL_MARKERS, SLOT_KEYS } from "./declMarkers";
+import type { GuiTextSegment } from "@px-lsp/protocol/protocol";
 // The anchor table is a leaf so the webview's anchor picker offers exactly the
 // words this engine parses (B1-B/C).
 import { anchorFractions } from "./anchorSpec";
@@ -90,6 +91,8 @@ export interface Fill {
 
 export interface TextInfo {
   text: string;
+  raw?: string;
+  segments?: GuiTextSegment[];
   fontsize: number;
   /** Ink offset of the text run inside the widget rect (align; B4-T6). */
   offsetX: number;
@@ -322,6 +325,11 @@ export interface GuiLayoutQuirks {
  */
 export interface LayoutEnv extends TextMeasurer, GuiLayoutQuirks {
   defaultFontsize?: number;
+  /**
+   * What a `text =` value shows (textResolve.ts): loc keys and datafunctions
+   * resolved as far as the preview can know. Absent = the value verbatim.
+   */
+  resolveText?: (raw: string) => { text: string; segments?: GuiTextSegment[] };
 }
 
 /** Advance-model measurer over a measured metrics table (B2-L, B3-S3). */
@@ -1784,15 +1792,21 @@ function resolvedChildSize(
 // Text
 // ---------------------------------------------------------------------------
 
-function textContent(node: WNode): string {
+function rawTextContent(node: WNode): string {
   return str(node, "raw_text") ?? str(node, "text") ?? "";
+}
+
+/** The shown text: resolved through the env when it can resolve, else the raw value. */
+function textContent(node: WNode, env?: LayoutEnv): string {
+  const raw = rawTextContent(node);
+  return env?.resolveText ? env.resolveText(raw).text : raw;
 }
 
 function textSize(node: WNode, measurer: LayoutEnv): { size: { w: number; h: number }; lines: string[] } {
   // The game's measured default size when the textbox sets none; 15 is the
   // default profile's Font_Size_Small (probe 2026-08-09 measured 17 there).
   const fontsize = num(node, "fontsize") ?? measurer.defaultFontsize ?? 15;
-  const content = textContent(node);
+  const content = textContent(node, measurer);
   const maxWidth = num(node, "max_width");
   const explicit = explicitSize(node);
   // Vanilla `textbox` does not autoresize; text_single opts in (labels.gui).
@@ -1829,8 +1843,12 @@ function textInfo(node: WNode, rect: LayoutRect, measurer: LayoutEnv): TextInfo 
   const [fx, fy] = anchorFractions(str(node, "align"));
   // Horizontal align is exact with zero padding: x = f * (W - textwidth);
   // vertical centers the line box (B4-T6).
+  const raw = rawTextContent(node);
+  const resolved = measurer.resolveText?.(raw);
   return {
-    text: textContent(node),
+    text: resolved?.text ?? raw,
+    raw: resolved && resolved.text !== raw ? raw : undefined,
+    segments: resolved?.segments,
     fontsize,
     offsetX: fx * (rect.w - textW),
     offsetY: fy * (rect.h - lines.length * lineH),

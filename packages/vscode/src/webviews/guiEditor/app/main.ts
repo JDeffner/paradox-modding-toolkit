@@ -68,7 +68,7 @@ import type {
 import { connectHost } from "./host";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { menu, toast as pxToast, type MenuItem } from "../../shared/overlay";
+import { confirmDialog, menu, toast as pxToast, type MenuItem } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, type Rgb } from "../../shared/colorPicker";
 import {
@@ -112,6 +112,8 @@ import { buildHeatmap, diffScenes, HEATMAP_MODES, pulseNote, statsLine, type Hea
 import { constraintOverlay, num, overrideRows, placementReport, type ConstraintOverlay } from "./placement";
 import { textureFolder, textureName, texturePage, textureSummary, textureValue, thumbGrid } from "./textures";
 import { GRID_STEP, MOVE_EDGES, snapRect, type Guide, type SnapConfig, type SnapResult } from "./snap";
+import { NudgeBurst, nudgeVector } from "./nudge";
+import { firstChildOf, firstRoot, isTypingTarget, siblingFrom } from "./keys";
 import {
   baseOf,
   DRAG_THRESHOLD,
@@ -155,6 +157,7 @@ const haloEl = document.getElementById("halo") as HTMLDivElement;
 const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
 const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
 const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
+const dropTargetEl = document.getElementById("dropTarget") as HTMLDivElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
@@ -338,6 +341,10 @@ function paintScene(): void {
   const live = livePreview();
   const rect = live?.write.rect ?? (item ? hitRect(item) : undefined);
   const shift = live?.write.offset;
+  // A multi-selection's grips sit on the bounds of the whole set, and the
+  // bounds follow the preview: they are the rect the grips were dragged from.
+  const bounds =
+    others.length > 0 && rect ? unionRect([rect, ...others.map((i) => otherRect(i, shift))]) : undefined;
   drawScene(
     ctx,
     scene,
@@ -355,10 +362,19 @@ function paintScene(): void {
       // has them (a resize is single-member and never gets here with others).
       others: marquee
         ? marquee.hits.map((i) => hitRect(scene.items[i]))
-        : others.map((i) => shifted(hitRect(scene.items[i]), shift)),
-      handles: canEdit(item) && others.length === 0,
+        : others.map((i) => otherRect(i, shift)),
+      handles: canEdit(item) || (bounds !== undefined && allSelected().some((i) => canEdit(scene.items[i]))),
+      handleRect: bounds,
+      accent: accentColor(),
       marquee: marquee?.rect,
-      preview: live ? { slices: live.slices, dx: live.write.offset.dx, dy: live.write.offset.dy } : undefined,
+      preview: live
+        ? {
+            slices: live.slices,
+            dx: live.write.offset.dx,
+            dy: live.write.offset.dy,
+            duplicate: live.duplicate,
+          }
+        : undefined,
       masks,
       grid: gridToggle.checked ? GRID_STEP : 0,
       guides: gesture?.snap?.guides,
@@ -374,6 +390,7 @@ function paintScene(): void {
     }
   );
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  syncDropTarget();
 }
 
 function geometry(rect: SceneRect): string {
@@ -382,6 +399,50 @@ function geometry(rect: SceneRect): string {
 
 function shifted(rect: SceneRect, by: { dx: number; dy: number } | undefined): SceneRect {
   return by ? { ...rect, x: rect.x + by.dx, y: rect.y + by.dy } : rect;
+}
+
+/**
+ * Where a non-primary member is marked: its own previewed write while a
+ * gesture carries it (a resize changes its size, not just its place), else
+ * its rect moved by the primary's offset, else where the file has it.
+ */
+function otherRect(index: number, shift: { dx: number; dy: number } | undefined): SceneRect {
+  const g = gesture;
+  if (g?.writes) {
+    const at = g.members.findIndex((m) => m.index === index);
+    if (at >= 0 && g.members[at].refused === null) return g.writes[at].rect;
+  }
+  return shifted(hitRect(scene.items[index]), shift);
+}
+
+function unionRect(rects: readonly SceneRect[]): SceneRect {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const r of rects) {
+    x0 = Math.min(x0, r.x);
+    y0 = Math.min(y0, r.y);
+    x1 = Math.max(x1, r.x + r.w);
+    y1 = Math.max(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/** The bounds of the whole selection, where a multi-selection's grips sit. */
+function selectionBounds(): SceneRect | null {
+  const members = allSelected();
+  if (members.length < 2) return null;
+  return unionRect(members.map((i) => hitRect(scene.items[i])));
+}
+
+/**
+ * The theme's accent, read off the page so the guides follow the user's theme
+ * rather than a colour the canvas chose. Empty when the page has no token
+ * (a host page without px-ui), and the painter then uses its own.
+ */
+function accentColor(): string {
+  return getComputedStyle(document.body).getPropertyValue("--px-primary").trim();
 }
 
 /**
@@ -915,7 +976,10 @@ function renderPalette(): void {
     node.title = "Drag onto the canvas to insert it";
     node.addEventListener("pointerdown", (ev) => {
       if ((ev as PointerEvent).button !== 0 || committing) return;
-      paletteDrag = { entry, target: null, rank: 0, line: null };
+      const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
+      document.body.appendChild(ghost);
+      paletteDrag = { entry, ghost, target: null, rank: 0, line: null };
+      moveGhost((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
       node.setAttribute("data-dragging", "");
     });
     paletteEls.set(entry.name, node);
@@ -2011,6 +2075,8 @@ function onLayout(
     uiAdopted = true;
     if (ui) valueMode = ui.valueMode;
     if (ui?.panels) adoptPanels(ui.panels);
+    if (ui?.snap !== undefined) snapToggle.checked = ui.snap;
+    if (ui?.grid !== undefined) gridToggle.checked = ui.grid;
   }
   file = name;
   fileNameEl.textContent = name;
@@ -2073,6 +2139,11 @@ function onLayout(
   // paint of this scene, which is what "what did this push cost" means.
   measurePaint = true;
   select(inserted ?? restored, { reveal: false, rebuildTree: true, keepOthers: inserted === null });
+  // An Alt+drag's second half: the copy just landed and is the selection.
+  if (pendingMove) {
+    if (inserted !== null) moveCopy();
+    else pendingMove = null;
+  }
   // The palette lists this document's own templates and types, and an edit can
   // add one, so an open palette re-asks. The first layout asks too even with
   // the palette closed: the inspector's "wrap in" menu is built from the same
@@ -2137,8 +2208,11 @@ function takePendingSelect(): number | null {
   const pending = pendingSelect;
   pendingSelect = null;
   if (!pending) return null;
-  const container = scene.items.findIndex((item) => rowKey(item.path) === pending.parent);
-  if (container < 0) return null;
+  // "" names the document's root list (rowKey of an empty path), the container
+  // a duplicated root widget's copy lands in.
+  const container =
+    pending.parent === "" ? null : scene.items.findIndex((item) => rowKey(item.path) === pending.parent);
+  if (container !== null && container < 0) return null;
   const rows = layerRows(scene, container).filter((row) => row.source >= 0);
   const exact = rows.find((row) => row.source === pending.source);
   return exact?.index ?? rows[rows.length - 1]?.index ?? null;
@@ -2283,6 +2357,13 @@ interface Gesture {
   writes: GestureWrite[] | null;
   /** The other children of the same container: what the smart guides align to. */
   siblings: SceneRect[];
+  /** The container's own box (the viewport for a root widget): its edges and centre snap too. */
+  parent: SceneRect | null;
+  /**
+   * Alt+drag: the commit duplicates the pressed widget and moves the COPY,
+   * leaving the original where the file has it. Single-widget only.
+   */
+  duplicate: boolean;
   /** What the last preview snapped to, for the guide lines. */
   snap: SnapResult | null;
   /** Set when the guards turned the move down but the container can be reordered. */
@@ -2388,6 +2469,12 @@ function snapConfig(): SnapConfig {
   };
 }
 
+/** The container's box: the parent's rect, or the reference viewport for a root widget. */
+function parentRect(index: number): SceneRect {
+  const parent = parentIndex(scene, index);
+  return parent === null ? { x: 0, y: 0, w: WORLD_W, h: WORLD_H } : rectOf(parent);
+}
+
 /** The other children of the widget's own container: everything a guide can align to. */
 function siblingRects(index: number): SceneRect[] {
   const rects: SceneRect[] = [];
@@ -2400,6 +2487,12 @@ function siblingRects(index: number): SceneRect[] {
 }
 
 let gesture: Gesture | null = null;
+/**
+ * An Alt press, which is not yet a click or a drag: the release decides. A
+ * click (no drag) steps the selection outward through the stack under the
+ * cursor; a drag duplicates.
+ */
+let altPress: { next: number | null } | null = null;
 
 /**
  * What the canvas paints instead of the file's own geometry: the subtrees that
@@ -2410,6 +2503,8 @@ let gesture: Gesture | null = null;
 interface LivePreview {
   slices: { from: number; to: number }[];
   write: GestureWrite;
+  /** An Alt+drag: the original stays put and the painter shows the copy moving. */
+  duplicate?: boolean;
 }
 
 /** A released gesture whose write is in flight: its preview holds until the layout lands. */
@@ -2417,15 +2512,104 @@ let committing: LivePreview | null = null;
 
 function livePreview(): LivePreview | null {
   if (committing) return committing;
+  if (nudge.pending) return nudgePreview(nudge.dx, nudge.dy);
   if (gesture?.status !== "allowed" || !gesture.writes) return null;
   const slices = movingMembers(gesture)
     .map((m) => ({ from: m.from, to: m.to }))
     .sort((a, b) => a.from - b.from);
-  return { slices, write: gesture.writes[0] };
+  return { slices, write: gesture.writes[0], duplicate: gesture.duplicate };
 }
 
 const NO_SOURCE_HERE =
   "comes from a template or a type, so it has no declaration in this file to move or resize.";
+
+// ---- arrow-key nudges ------------------------------------------------------
+
+/**
+ * A held arrow key is ONE op: the burst folds every repeat into one delta and
+ * commits it after a trailing quiet time (nudge.ts), never while a commit is
+ * still in flight. The preview moves at once, key by key, off the same delta
+ * the commit will write, so the canvas never shows a number the file will not
+ * get. The members are resolved at commit time from the selection, so a
+ * layout that lands mid-burst (the previous nudge's answer) re-bases the next
+ * one on the fresh source values rather than on the ones the file has left.
+ */
+const nudge = new NudgeBurst({
+  busy: () => committing !== null,
+  onChange: () => {
+    const item = selectedItem();
+    if (item) {
+      const write = moveWrite(baseOf(item), hitRect(item), nudge.dx, nudge.dy);
+      const writes = write.properties.map((p) => `${p.key} = ${p.value}`).join("  ");
+      statusEl.textContent = `${widgetTitle(item)} · ${geometry(write.rect)} · ${writes}`;
+      previewInspector(write);
+    }
+    requestDraw();
+  },
+  commit: (dx, dy) => commitNudge(dx, dy),
+});
+
+/** The nudge's own preview: every editable member's subtree, moved by the pending delta. */
+function nudgePreview(dx: number, dy: number): LivePreview | null {
+  const members = allSelected().filter((i) => canEdit(scene.items[i]));
+  const primary = selectedItem();
+  if (members.length === 0 || !primary) return null;
+  const slices = members.map((i) => ({ from: i, to: subtreeEnd(scene, i) })).sort((a, b) => a.from - b.from);
+  return { slices, write: moveWrite(baseOf(primary), hitRect(primary), dx, dy) };
+}
+
+/**
+ * The one op a burst becomes: `applyEdit` for a single widget (the same path
+ * a one-widget drag takes), one `applyOps` batch of `setProperties` for a
+ * multi-selection. The preview holds until the layout lands, as a drag's does.
+ */
+function commitNudge(dx: number, dy: number): void {
+  const members = allSelected();
+  const preview = nudgePreview(dx, dy);
+  const skipped = members.filter((i) => !canEdit(scene.items[i]));
+  if (skipped.length > 0) {
+    const reasons = skipped.map((i) => `${widgetTitle(scene.items[i])} ${NO_SOURCE_HERE}`);
+    toast([...new Set(reasons)].join(" "), "warned");
+  }
+  const moving = members.filter((i) => canEdit(scene.items[i]));
+  if (moving.length === 0 || !preview) {
+    statusEl.textContent = statusLine();
+    draw();
+    return;
+  }
+  committing = preview;
+  const onVerdict = (verdict: EditVerdict): void => {
+    if (verdict.refused) {
+      committing = null;
+      toast(verdict.refused, "refused");
+      statusEl.textContent = statusLine();
+      renderInspector();
+      draw();
+      return;
+    }
+    const refused = distinctRefusals(verdict);
+    if (refused.length > 0) toast(refused.join(" "), "warned");
+    else if (verdict.warning) toast(verdict.warning, "warned");
+  };
+  const positionOf = (index: number): EditProperty[] => {
+    const base = baseOf(scene.items[index]);
+    return [{ key: "position", value: pairValue(base.position[0] + dx, base.position[1] + dy) }];
+  };
+  if (moving.length === 1) {
+    sendEdit("applyEdit", scene.items[moving[0]].line!, positionOf(moving[0]), onVerdict);
+  } else {
+    sendOps(
+      "applyOps",
+      moving.map((i) => ({
+        kind: "setProperties" as const,
+        line: scene.items[i].line!,
+        properties: positionOf(i),
+      })),
+      onVerdict
+    );
+  }
+  draw();
+}
 
 /**
  * Arm a gesture on the widget at `index` and ask the guards what the commit
@@ -2440,16 +2624,16 @@ function beginGesture(
   index: number,
   handle: ResizeHandle | null,
   world: { x: number; y: number },
-  screen: { x: number; y: number }
+  screen: { x: number; y: number },
+  duplicate = false
 ): void {
   const item = scene.items[index];
   if (!item) return;
-  // A resize grip belongs to ONE widget's rect, so it never carries the others.
   // A press on any member drags the whole set, the pressed one included: the
   // pointerdown promoted it to primary, so membership is what to test, not
-  // whether it is one of the others.
-  const group =
-    handle === null && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
+  // whether it is one of the others. A grip on a multi-selection's bounds
+  // resizes every member by the same delta. An Alt+drag copies ONE widget.
+  const group = !duplicate && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
   const members = [memberOf(index), ...group.filter((i) => i !== index).map(memberOf)];
   const first = members[0];
   const next: Gesture = {
@@ -2469,6 +2653,8 @@ function beginGesture(
     members,
     writes: null,
     siblings: siblingRects(index),
+    parent: parentRect(index),
+    duplicate,
     snap: null,
     reorder: null,
     drop: null,
@@ -2521,7 +2707,8 @@ function armGesture(g: Gesture, verdict: EditVerdict): void {
     // one that places its children itself: what a drag means there is a change
     // of LAYOUT ORDER, which is a reorder, and the refusal above is the
     // server's own explanation of why it is not a move.
-    const reorder = g.handle === null && g.members.length === 1 ? reorderContextFor(g.index) : null;
+    const reorder =
+      g.handle === null && g.members.length === 1 && !g.duplicate ? reorderContextFor(g.index) : null;
     g.status = reorder ? "reorder" : "blocked";
     g.reorder = reorder;
     if (reorder) probeReorder(reorder, g);
@@ -2594,7 +2781,8 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
     writeFor(g, g.members[0], rawX, rawY).rect,
     g.siblings,
     g.handle ? edgesOf(g.handle) : MOVE_EDGES,
-    snapConfig()
+    snapConfig(),
+    { parent: g.parent }
   );
   if (snap.dx !== 0 || snap.dy !== 0) {
     // Rounded again, for the reason gesture.ts rounds at all: the preview, the
@@ -2604,7 +2792,9 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
   g.snap = snap;
   g.writes = g.members.map((m) => writeFor(g, m, delta[0], delta[1]));
   statusEl.textContent = gestureReadout(g);
-  previewInspector(g.writes[0]);
+  // An Alt+drag can carry a widget that is not the selection; the inspector
+  // shows the selection's rows and must not take the other widget's numbers.
+  if (g.index === selected) previewInspector(g.writes[0]);
   requestDraw();
 }
 
@@ -2693,6 +2883,10 @@ function endGesture(g: Gesture): void {
     draw();
     return;
   }
+  if (g.duplicate) {
+    commitDuplicateMove(g, preview);
+    return;
+  }
   committing = preview;
   const onVerdict = (verdict: EditVerdict): void => {
     if (verdict.refused) {
@@ -2732,7 +2926,64 @@ function livePreviewOf(g: Gesture): LivePreview | null {
   const slices = movingMembers(g)
     .map((m) => ({ from: m.from, to: m.to }))
     .sort((a, b) => a.from - b.from);
-  return { slices, write: g.writes[0] };
+  return { slices, write: g.writes[0], duplicate: g.duplicate };
+}
+
+/**
+ * An Alt+drag's release. The server's ops address lines the document HAS, so
+ * the copy cannot be moved in the same batch that creates it: the duplicate
+ * goes first, the copy (the original's next source slot) becomes the
+ * selection when its layout lands, and the move is then written to it. Two
+ * document changes, so two undo steps, which is what the duplicate-then-move
+ * the protocol allows costs. The preview holds across both.
+ */
+let pendingMove: { dx: number; dy: number } | null = null;
+
+function commitDuplicateMove(g: Gesture, preview: LivePreview | null): void {
+  const item = scene.items[g.index];
+  const parent = parentIndex(scene, g.index);
+  const write = g.writes![0];
+  if (!canEdit(item) || item.srcIndex === undefined) {
+    toast(`${widgetTitle(item)} ${NO_SOURCE_HERE}`, "refused");
+    draw();
+    return;
+  }
+  committing = preview;
+  pendingSelect = {
+    parent: parent === null ? "" : rowKey(scene.items[parent].path),
+    source: item.srcIndex + 1,
+  };
+  pendingMove = { dx: write.offset.dx, dy: write.offset.dy };
+  sendOps("applyOps", [{ kind: "duplicate", line: item.line }], (verdict) => {
+    const refused = verdict.refused ?? distinctRefusals(verdict)[0];
+    if (!refused) return;
+    committing = null;
+    pendingSelect = null;
+    pendingMove = null;
+    toast(refused, "refused");
+    draw();
+  });
+  draw();
+}
+
+/** The second half of an Alt+drag: the copy is selected, so move it. */
+function moveCopy(): void {
+  const move = pendingMove;
+  pendingMove = null;
+  const item = selectedItem();
+  if (!move || !canEdit(item)) {
+    committing = null;
+    return;
+  }
+  const base = baseOf(item);
+  const write = moveWrite(base, hitRect(item), move.dx, move.dy);
+  committing = { slices: [{ from: selected!, to: subtreeEnd(scene, selected!) }], write };
+  sendEdit("applyEdit", item.line, write.properties, (verdict) => {
+    if (!verdict.refused) return;
+    committing = null;
+    toast(verdict.refused, "refused");
+    draw();
+  });
 }
 
 /** Per-member refusals, deduplicated and never paraphrased. */
@@ -2884,6 +3135,8 @@ let marquee: Marquee | null = null;
  */
 interface PaletteDrag {
   entry: GuiVocabularyEntry;
+  /** The chip that follows the cursor, named after the entry. */
+  ghost: HTMLElement;
   /** The container the pointer is over, or null while it is over nothing writable. */
   target: DropTarget | null;
   /** The rank inside that container the drop would land at. */
@@ -2940,13 +3193,55 @@ function insertIndex(target: DropTarget, rank: number): number | undefined {
   return rank >= target.sources.length ? undefined : target.sources[rank];
 }
 
+/** The chip sits just off the cursor, so the cursor still shows what is under it. */
+function moveGhost(clientX: number, clientY: number): void {
+  if (paletteDrag) paletteDrag.ghost.style.transform = `translate(${clientX + 12}px, ${clientY + 12}px)`;
+}
+
+/** Whether a window pointer event is over the canvas: the only place a drop can land. */
+function overStage(ev: { clientX: number; clientY: number }): boolean {
+  const rect = stage.getBoundingClientRect();
+  return (
+    ev.clientX >= rect.left && ev.clientX < rect.right && ev.clientY >= rect.top && ev.clientY < rect.bottom
+  );
+}
+
+/** The pointer left the canvas mid-drag: nothing to drop into, and the overlay says so. */
+function clearPaletteTarget(): void {
+  const drag = paletteDrag;
+  if (!drag) return;
+  drag.target = null;
+  drag.line = null;
+  statusEl.textContent = `${drag.entry.name} · release over the canvas to insert it`;
+  requestDraw();
+}
+
+/**
+ * The "Drop here" outline over the container a drop would go into: a DOM
+ * element over the canvas (the accent colour is the page's, which the canvas
+ * cannot read), placed in screen space from the container's world rect, and
+ * re-placed on every paint because the camera may have moved under it.
+ */
+function syncDropTarget(): void {
+  const target = paletteDrag?.target;
+  if (!target) {
+    dropTargetEl.hidden = true;
+    return;
+  }
+  const rect = rectOf(target.index);
+  dropTargetEl.hidden = false;
+  dropTargetEl.style.left = `${rect.x * zoom + panX}px`;
+  dropTargetEl.style.top = `${rect.y * zoom + panY}px`;
+  dropTargetEl.style.width = `${rect.w * zoom}px`;
+  dropTargetEl.style.height = `${rect.h * zoom}px`;
+}
+
 function updatePaletteDrag(world: { x: number; y: number }): void {
   const drag = paletteDrag!;
   const target = dropTargetAt(world);
   drag.target = target;
   if (!target) {
     drag.line = null;
-    flashIndex = null;
     statusEl.textContent = `${drag.entry.name} · no widget here can take a child`;
     requestDraw();
     return;
@@ -2959,7 +3254,6 @@ function updatePaletteDrag(world: { x: number; y: number }): void {
       ? dropRank(target.rects, -1, target.axis, target.axis === "x" ? world.x : world.y)
       : target.rects.length;
   drag.line = target.rects.length >= 2 ? dropLineIn(target, drag.rank) : null;
-  flashIndex = target.index;
   const container = scene.items[target.index];
   statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
   requestDraw();
@@ -2995,9 +3289,10 @@ function dropLineIn(target: DropTarget, rank: number): Guide {
 function endPaletteDrag(commit: boolean): void {
   const drag = paletteDrag;
   paletteDrag = null;
-  flashIndex = null;
   for (const node of paletteEls.values()) node.removeAttribute("data-dragging");
   if (!drag) return;
+  drag.ghost.remove();
+  dropTargetEl.hidden = true;
   const target = drag.target;
   if (!commit || !target) {
     statusEl.textContent = statusLine();
@@ -4099,9 +4394,12 @@ stage.addEventListener("pointerdown", (ev) => {
   const current = selectedItem();
   // A handle belongs to the CURRENT selection, so it is tested before the click
   // is allowed to pick anything else: grabbing a corner must never re-select
-  // whatever happens to be painted under that corner.
-  const handle =
-    current && selected !== null && canEdit(current)
+  // whatever happens to be painted under that corner. A multi-selection's
+  // grips sit on its bounds and resize every member.
+  const bounds = selectionBounds();
+  const handle = bounds
+    ? handleAt(bounds, world.x, world.y, zoom)
+    : current && selected !== null && canEdit(current)
       ? handleAt(hitRect(current), world.x, world.y, zoom)
       : null;
   if (handle !== null && selected !== null) {
@@ -4113,11 +4411,21 @@ stage.addEventListener("pointerdown", (ev) => {
     return;
   }
   const stack = hitStack(scene, world.x, world.y, skipMask);
-  // Empty canvas starts a marquee; Alt steps through everything under the
-  // cursor; Shift (without the reveal chord) adds to or removes from the set.
-  const next = ev.altKey ? nextInStack(stack, selected) : (stack[0] ?? null);
   const reveal = (ev.ctrlKey || ev.metaKey) && ev.shiftKey;
   const additive = ev.shiftKey && !ev.ctrlKey && !ev.metaKey;
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && stack.length > 0 && !committing) {
+    // Alt is two gestures on one press: a CLICK steps outward through the
+    // stack (decided on release, when no drag happened) and a DRAG duplicates
+    // the widget under the cursor, the selected one when the press is on it.
+    const target = selected !== null && stack.includes(selected) ? selected : stack[0];
+    altPress = { next: nextInStack(stack, selected) };
+    capture(ev.pointerId);
+    beginGesture(target, null, world, screen, true);
+    return;
+  }
+  // Empty canvas starts a marquee; Shift (without the reveal chord) adds to
+  // or removes from the set.
+  const next = stack[0] ?? null;
   if (next === null) {
     if (!additive) select(null, { reveal: false });
     marquee = { origin: world, rect: { ...world, w: 0, h: 0 }, additive, base: allSelected(), hits: [] };
@@ -4148,10 +4456,7 @@ stage.addEventListener("pointermove", (ev) => {
     return;
   }
   const world = toWorld(ev);
-  if (paletteDrag) {
-    updatePaletteDrag(world);
-    return;
-  }
+  if (paletteDrag) return;
   if (marquee) {
     marquee.rect = {
       x: Math.min(marquee.origin.x, world.x),
@@ -4182,11 +4487,7 @@ stage.addEventListener("pointerup", (ev) => {
     return;
   }
   if (ev.button !== 0) return;
-  if (paletteDrag) {
-    release(ev.pointerId);
-    endPaletteDrag(true);
-    return;
-  }
+  if (paletteDrag) return;
   if (marquee) {
     release(ev.pointerId);
     const caught = marquee.additive ? [...marquee.base, ...marquee.hits] : marquee.hits;
@@ -4196,9 +4497,19 @@ stage.addEventListener("pointerup", (ev) => {
   }
   if (!gesture) return;
   release(ev.pointerId);
-  endGesture(gesture);
+  const g = gesture;
+  const alt = altPress;
+  altPress = null;
+  if (alt && !g.engaged) {
+    // The Alt+click half: nothing was dragged, so step through the stack.
+    gesture = null;
+    select(alt.next, { reveal: false });
+    return;
+  }
+  endGesture(g);
 });
 stage.addEventListener("pointercancel", () => {
+  altPress = null;
   // The pointer went away mid-gesture (a touch cancelled, the window lost it):
   // drop the gesture without committing anything.
   if (!gesture) return;
@@ -4247,7 +4558,11 @@ stage.addEventListener(
   { passive: false }
 );
 window.addEventListener("keydown", (ev) => {
+  // A key typed into a field is the field's (the page's inputs stop
+  // propagation themselves; this is for anything that does not).
+  if (isTypingTarget(ev.target)) return;
   const chord = ev.ctrlKey || ev.metaKey;
+  if (!chord && ev.key !== "Escape" && onNavigationKey(ev)) return;
   if (chord && !ev.altKey) {
     const key = ev.key.toLowerCase();
     if (key === "c" || key === "d" || key === "v") {
@@ -4260,17 +4575,28 @@ window.addEventListener("keydown", (ev) => {
   }
   if ((ev.key === "Delete" || ev.key === "Backspace") && !chord) {
     ev.preventDefault();
-    deleteSelection();
+    void deleteSelectionConfirmed();
     return;
   }
   if (ev.key === "f" && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
     // Focus the selection, or leave the focus when there is nothing new to
-    // focus on: one key, both directions.
+    // focus on: one key, both directions. With nothing to focus and nothing
+    // to leave, F fits the view instead.
     if (selected !== null && selected !== focusIndex) setFocus(selected);
     else if (focusIndex !== null) setFocus(null);
+    else fitView();
     return;
   }
   if (ev.key !== "Escape") return;
+  if (nudge.pending) {
+    // Escape drops the nudge that has not been written yet; the preview goes
+    // back to what the file says.
+    nudge.cancel();
+    statusEl.textContent = statusLine();
+    renderInspector();
+    draw();
+    return;
+  }
   if (paletteDrag) {
     endPaletteDrag(false);
     return;
@@ -4303,7 +4629,84 @@ window.addEventListener("keydown", (ev) => {
   else if (focusIndex !== null) setFocus(null);
 });
 
+/**
+ * The keys that move the SELECTION or the VIEW rather than the document:
+ * arrows nudge, Tab and Shift+Tab step through siblings, Enter descends into
+ * the first child, Shift+Enter climbs back to the parent, Shift+F zooms to
+ * the selection and Home fits the reference viewport. True when the key was
+ * taken.
+ */
+function onNavigationKey(ev: KeyboardEvent): boolean {
+  const vector = nudgeVector(ev.key, ev, GRID_STEP);
+  if (vector) {
+    if (selected === null || gesture || marquee) return false;
+    ev.preventDefault();
+    nudge.add(vector[0], vector[1]);
+    return true;
+  }
+  if (ev.key === "Tab") {
+    // Only from the canvas: with a toolbar button focused, Tab is the page's.
+    if (document.activeElement && document.activeElement !== document.body) return false;
+    const next =
+      selected === null
+        ? firstRoot(scene, skipMask)
+        : siblingFrom(scene, selected, ev.shiftKey ? -1 : 1, skipMask);
+    if (next === null) return false;
+    ev.preventDefault();
+    select(next, { reveal: false });
+    return true;
+  }
+  if (ev.key === "Enter" && selected !== null) {
+    const next = ev.shiftKey ? parentIndex(scene, selected) : firstChildOf(scene, selected, skipMask);
+    if (next === null || skipMask?.[next]) return false;
+    ev.preventDefault();
+    select(next, { reveal: false });
+    return true;
+  }
+  if (ev.key === "F" && ev.shiftKey && !ev.altKey) {
+    const bounds = selectionBounds() ?? (selected !== null ? hitRect(scene.items[selected]) : null);
+    if (!bounds) return false;
+    ev.preventDefault();
+    fitRect(bounds);
+    return true;
+  }
+  if (ev.key === "Home" && !ev.shiftKey && !ev.altKey) {
+    ev.preventDefault();
+    fitView();
+    return true;
+  }
+  return false;
+}
+
+/** Fit what is on screen: the focused subtree when there is one, else the reference viewport. */
+function fitView(): void {
+  if (focusIndex === null) fitAndCenter();
+  else fitRect(hitRect(scene.items[focusIndex]));
+}
+
+/**
+ * Delete, confirmed when it would take more than one widget: a multi-delete
+ * is one undo step, but it is also the one key that can empty a window.
+ */
+async function deleteSelectionConfirmed(): Promise<void> {
+  const count = allSelected().length;
+  if (count === 0) return;
+  if (count > 1) {
+    const ok = await confirmDialog({
+      title: `Delete ${count} widgets?`,
+      description: "Their blocks are removed from the file as one change; undo brings them all back.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+  }
+  deleteSelection();
+}
+
 // ---- toolbar ---------------------------------------------------------------
+
+document.getElementById("undo")!.addEventListener("click", () => host.send({ type: "undo" }));
+document.getElementById("redo")!.addEventListener("click", () => host.send({ type: "redo" }));
 
 document.getElementById("zoomIn")!.addEventListener("click", () => {
   zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * 1.25);
@@ -4311,18 +4714,22 @@ document.getElementById("zoomIn")!.addEventListener("click", () => {
 document.getElementById("zoomOut")!.addEventListener("click", () => {
   zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom / 1.25);
 });
-document.getElementById("zoomFit")!.addEventListener("click", () => {
-  // Fit means "fit what is on screen", and under a subtree focus that is the
-  // subtree, not the 1920x1080 reference viewport around it.
-  if (focusIndex === null) fitAndCenter();
-  else fitRect(hitRect(scene.items[focusIndex]));
-});
+// Fit means "fit what is on screen", and under a subtree focus that is the
+// subtree, not the 1920x1080 reference viewport around it.
+document.getElementById("zoomFit")!.addEventListener("click", fitView);
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
 paletteToggleEl.addEventListener("click", togglePalette);
 haloToggleEl.addEventListener("click", toggleHalo);
 outlinesEl.addEventListener("change", draw);
-snapToggle.addEventListener("change", draw);
-gridToggle.addEventListener("change", draw);
+// The two drag toggles are remembered by the host, like the value mode.
+snapToggle.addEventListener("change", () => {
+  host.send({ type: "setUiState", valueMode, snap: snapToggle.checked, grid: gridToggle.checked });
+  draw();
+});
+gridToggle.addEventListener("change", () => {
+  host.send({ type: "setUiState", valueMode, snap: snapToggle.checked, grid: gridToggle.checked });
+  draw();
+});
 constraintsToggle.addEventListener("change", () => {
   // Switching it on turns the placement flag on, so the trace has to be fetched
   // for the CURRENT selection or the overlay would stay blank until the user
@@ -4454,11 +4861,18 @@ function rebuildHeatmap(): void {
   heat = buildHeatmap(scene, heatmapSelect.value as HeatmapMode);
 }
 // A palette drag has no pointer capture of its own: it starts on a panel row
-// and ends over the canvas, where the stage's own handler commits it. This is
-// the other half, a release anywhere else, which cancels rather than leaving
-// the drag armed for the next pointer move.
-window.addEventListener("pointerup", () => {
-  if (paletteDrag) endPaletteDrag(false);
+// and can end anywhere, so the WINDOW follows and ends it (pointer events
+// bubble there from every element). Over the stage the drop commits; anywhere
+// else it cancels rather than leaving the drag armed for the next pointer move.
+window.addEventListener("pointermove", (ev) => {
+  if (!paletteDrag) return;
+  moveGhost(ev.clientX, ev.clientY);
+  if (overStage(ev)) updatePaletteDrag(toWorld(ev));
+  else clearPaletteTarget();
+});
+window.addEventListener("pointerup", (ev) => {
+  if (!paletteDrag || ev.button !== 0) return;
+  endPaletteDrag(overStage(ev));
 });
 window.addEventListener("pointercancel", () => {
   if (paletteDrag) endPaletteDrag(false);

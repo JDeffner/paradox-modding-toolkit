@@ -72,6 +72,7 @@ import {
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
+import { resolveGuiText, type ResolvedText } from "./gui/textResolve";
 import {
   computeGuiLayoutResult,
   getGuiDefs,
@@ -1215,6 +1216,14 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));
 
+/** Loc keys resolve through the index (configured language, english files as fallback). */
+function guiTextResolver(params: GuiLayoutParams): ((raw: string) => ResolvedText) | undefined {
+  if (params.loc === "raw") return undefined;
+  const loc = (key: string): string | undefined =>
+    data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
+  return (raw) => resolveGuiText(raw, { loc, previewValues: params.previewValues });
+}
+
 connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
   computeGuiLayoutResult(
     params.text ?? "",
@@ -1222,7 +1231,8 @@ connection.onRequest(guiLayoutRequest, (params: GuiLayoutParams) =>
     settings.modPath,
     settings.parentPaths,
     engineRoots(),
-    params.visibility
+    params.visibility,
+    guiTextResolver(params)
   )
 );
 

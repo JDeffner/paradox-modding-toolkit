@@ -11,16 +11,19 @@
  * another.
  *
  * Per axis, exactly one rule fires, in this order:
- * 1. an EDGE or CENTRE alignment with a sibling, when one is inside tolerance;
- * 2. EQUAL SPACING between the two siblings the rect sits between (moves only:
+ * 1. an EDGE or CENTRE alignment with a sibling, or with the PARENT's own
+ *    content box (its edges and its centre), when one is inside tolerance;
+ * 2. EQUAL SIZE with a sibling (resizes only: the dragged edge lands where the
+ *    rect's extent matches a neighbour's);
+ * 3. EQUAL SPACING between the two siblings the rect sits between (moves only:
  *    a resize has no second gap to equalise);
- * 3. the GRID, when it is on. It is last because a guide is a statement about
+ * 4. the GRID, when it is on. It is last because a guide is a statement about
  *    the file's own geometry and a grid is an arbitrary lattice over it.
  */
 import type { SceneRect } from "./scene";
 
 /** World-unit grid step. Not a measured number: a round lattice to nudge along. */
-export const GRID_STEP = 10;
+export const GRID_STEP = 8;
 
 /** One alignment line: `at` on `axis`, drawn across the perpendicular span. */
 export interface Guide {
@@ -65,6 +68,17 @@ export interface SnapEdges {
 
 export const MOVE_EDGES: SnapEdges = { west: true, east: true, north: true, south: true };
 
+/**
+ * What the rect can align to besides its siblings. `parent` is the container's
+ * content box (the engine's rect for it: a child's position is already
+ * relative to that box, so its edges and centre are the lines a designer means
+ * by "flush left" and "centred"). Optional, so a caller with siblings alone
+ * keeps its old call.
+ */
+export interface SnapContext {
+  parent?: SceneRect | null;
+}
+
 const NOTHING: SnapResult = { dx: 0, dy: 0, guides: [], bars: [] };
 
 interface Axis {
@@ -90,11 +104,13 @@ export function snapRect(
   rect: SceneRect,
   siblings: readonly SceneRect[],
   edges: SnapEdges,
-  config: SnapConfig
+  config: SnapConfig,
+  context: SnapContext = {}
 ): SnapResult {
   if (!config.guides && config.grid <= 0) return NOTHING;
-  const x = snapAxis(rect, siblings, AXIS_X, edges.west, edges.east, config, "x");
-  const y = snapAxis(rect, siblings, AXIS_Y, edges.north, edges.south, config, "y");
+  const parent = context.parent ?? null;
+  const x = snapAxis(rect, siblings, parent, AXIS_X, edges.west, edges.east, config, "x");
+  const y = snapAxis(rect, siblings, parent, AXIS_Y, edges.north, edges.south, config, "y");
   return {
     dx: x.offset,
     dy: y.offset,
@@ -112,6 +128,7 @@ interface AxisSnap {
 function snapAxis(
   rect: SceneRect,
   siblings: readonly SceneRect[],
+  parent: SceneRect | null,
   axis: Axis,
   low: boolean,
   high: boolean,
@@ -121,8 +138,18 @@ function snapAxis(
   if (!low && !high) return { offset: 0, guides: [], bars: [] };
 
   if (config.guides) {
-    const aligned = alignAxis(rect, siblings, axis, low, high, config.tolerance, name);
+    // The parent's box offers the same three lines a sibling does. It is not a
+    // sibling for size or spacing: a rect is never "between" or "as big as"
+    // the container it sits in.
+    const targets = parent ? [...siblings, parent] : siblings;
+    const aligned = alignAxis(rect, targets, axis, low, high, config.tolerance, name);
     if (aligned) return { offset: aligned.offset, guides: aligned.guides, bars: [] };
+    if (low !== high) {
+      // One edge moves: a resize. Matching a neighbour's extent is what the
+      // dragged edge most often wants, and the bars mark the two equal lengths.
+      const sized = sizeAxis(rect, siblings, axis, low, config.tolerance, name);
+      if (sized) return { offset: sized.offset, guides: [], bars: sized.bars };
+    }
     // Equal spacing is a statement about a rect that keeps its size, so it is
     // offered to a move and never to a resize.
     if (low && high) {
@@ -227,6 +254,48 @@ function spaceAxis(
     bars: [
       { axis: name, on, start: axis.lo(before) + axis.len(before), end: lo + offset },
       { axis: name, on, start: hi + offset, end: axis.lo(after) },
+    ],
+  };
+}
+
+/**
+ * Equal size: the closest sibling whose extent on this axis is within tolerance
+ * of the rect's. The offset moves the DRAGGED edge (the low one when `low`) so
+ * the two extents match exactly, and the bars run the length of both rects so
+ * the match reads as a measure rather than a line.
+ */
+function sizeAxis(
+  rect: SceneRect,
+  siblings: readonly SceneRect[],
+  axis: Axis,
+  low: boolean,
+  tolerance: number,
+  name: "x" | "y"
+): { offset: number; bars: SpacingBar[] } | null {
+  const len = axis.len(rect);
+  let best: SceneRect | null = null;
+  let bestDiff = 0;
+  for (const sibling of siblings) {
+    const diff = axis.len(sibling) - len;
+    if (Math.abs(diff) > tolerance) continue;
+    if (best !== null && Math.abs(diff) >= Math.abs(bestDiff)) continue;
+    best = sibling;
+    bestDiff = diff;
+  }
+  if (best === null) return null;
+  // Growing by `diff` means the high edge moves out by it, or the low edge in.
+  const offset = low ? -bestDiff : bestDiff;
+  const lo = axis.lo(rect) + (low ? offset : 0);
+  return {
+    offset,
+    bars: [
+      { axis: name, on: axis.crossLo(rect) + axis.crossLen(rect) / 2, start: lo, end: lo + len + bestDiff },
+      {
+        axis: name,
+        on: axis.crossLo(best) + axis.crossLen(best) / 2,
+        start: axis.lo(best),
+        end: axis.lo(best) + axis.len(best),
+      },
     ],
   };
 }

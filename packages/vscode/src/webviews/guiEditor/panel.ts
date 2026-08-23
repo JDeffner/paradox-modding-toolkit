@@ -669,7 +669,26 @@ export class GuiEditorPanel {
         await this.state.update(UI_KEY, {
           valueMode: message.valueMode,
           panels: message.panels ?? stored?.panels,
+          snap: message.snap ?? stored?.snap,
+          grid: message.grid ?? stored?.grid,
         });
+        return;
+      }
+      case "undo":
+      case "redo": {
+        // The document's own history: the editor command acts on the ACTIVE
+        // editor, so the source is shown with focus first (the one reveal that
+        // may take it), and the change comes back down as a normal layout push.
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const visible = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === doc.uri.toString()
+        );
+        await vscode.window.showTextDocument(doc, {
+          viewColumn: visible?.viewColumn ?? vscode.ViewColumn.One,
+          preserveFocus: false,
+          preview: false,
+        });
+        await vscode.commands.executeCommand(message.type);
         return;
       }
       case "savePreset": {

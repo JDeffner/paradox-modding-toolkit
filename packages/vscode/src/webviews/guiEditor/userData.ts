@@ -48,15 +48,19 @@ const VALUE_MODES: readonly GuiValueMode[] = ["full", "abbreviated", "hidden"];
  * and a mode this build does not know must not reach the inspector.
  */
 export function readUiState(stored: unknown): GuiEditorUiState | undefined {
-  const record = stored as { valueMode?: unknown; panels?: unknown } | undefined;
+  const record = stored as
+    { valueMode?: unknown; panels?: unknown; snap?: unknown; grid?: unknown } | undefined;
   const mode = record?.valueMode;
   if (!VALUE_MODES.includes(mode as GuiValueMode)) return undefined;
   const panels = record?.panels as { left?: unknown; right?: unknown } | undefined;
   const left = readPanelState(panels?.left);
   const right = readPanelState(panels?.right);
-  return left && right
-    ? { valueMode: mode as GuiValueMode, panels: { left, right } }
-    : { valueMode: mode as GuiValueMode };
+  const state: GuiEditorUiState = { valueMode: mode as GuiValueMode };
+  if (left && right) state.panels = { left, right };
+  // Only a boolean reaches the toggles: anything else is left to the page's default.
+  if (typeof record?.snap === "boolean") state.snap = record.snap;
+  if (typeof record?.grid === "boolean") state.grid = record.grid;
+  return state;
 }
 
 /** One side panel's remembered width and collapsed state, or undefined when the bytes are not that. */

@@ -145,7 +145,9 @@ export function computeGuiLayoutResult(
   modPath: string | null,
   parentPaths: string[] = [],
   engineRoots: string[] = [],
-  visibility?: GuiVisibilityOptions
+  visibility?: GuiVisibilityOptions,
+  /** Loc/datafunction resolution for textboxes; absent = raw `text =` values. */
+  resolveText?: LayoutEnv["resolveText"]
 ): GuiLayoutResult {
   const t0 = performance.now();
   const { defs, files } = buildStore(gamePath, modPath, parentPaths, engineRoots);
@@ -158,7 +160,7 @@ export function computeGuiLayoutResult(
     visibility,
     checks,
     timing,
-    measurer: profileMeasurer(),
+    measurer: resolveText ? { ...(profileMeasurer() ?? calibratedMeasurer), resolveText } : profileMeasurer(),
   });
   const textures = new Set<string>();
   let nodeCount = 0;

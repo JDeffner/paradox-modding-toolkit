@@ -161,7 +161,15 @@ each has to actually do.
   a refusal, not silence.
 - **`savePreset` / `forgetSaved`** Update the store and push `userData`. Neither
   touches the document, so neither answers a verdict.
-- **`setUiState`** Store the inspector's value display mode and answer NOTHING.
+- **`undo` / `redo`** Run the host document's OWN undo or redo and answer
+  nothing: the editor holds no history (rule one), so the toolbar's two buttons
+  are requests for the text editor's. `panel.ts` shows the source document
+  WITH focus first, because VS Code's `undo` command acts on the active
+  editor and a webview panel is not one, then runs the command; the changed
+  text comes back down through the normal document-change `layout` push.
+- **`setUiState`** Store the inspector's value display mode, the side panels
+  and the snap/grid toggles (each field optional: absent leaves the stored one
+  alone) and answer NOTHING.
   The app applied it the moment the user picked it, and what the host keeps is
   what the next panel boots with, which it reads off `layout.ui`. A host that
   echoed it back mid-session would fight a user who changed it twice while a
@@ -211,7 +219,7 @@ VS Code's `workspaceState`; another host may use anything with the same shape.
 | `px.guiEditor.components` | `{ [name]: string }` — the widgets' VERBATIM block text | A library: global, not per document |
 | `px.guiEditor.presets` | `{ [name]: { key, value }[] }` — property writes in saved order | A library: global, not per document |
 | `px.guiEditor.visibility` | `{ [documentUri]: { mode, checks? } }` | Per document |
-| `px.guiEditor.ui` | `{ valueMode: "full" \| "abbreviated" \| "hidden" }` | A preference: global |
+| `px.guiEditor.ui` | `{ valueMode: "full" \| "abbreviated" \| "hidden", panels?, snap?, grid? }` | A preference: global |
 
 Three rules about them. The visibility default is NEVER stored: writing
 `showAll` for every file ever opened would grow the map by one entry per file,
@@ -228,8 +236,10 @@ these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
 `inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `meta`,
 `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`,
 `heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`,
-`haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `side`, `right`,
-`toggleSide`, `toggleRight`. `snap`, `grid`, `constraints` and `pulses` are
+`haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
+`dropTarget`, `side`, `right`, `toggleSide`, `toggleRight`. `dropTarget` is the
+"Drop here" outline a palette drag places over its container, a hidden
+element inside the stage that the app positions in screen space. `snap`, `grid`, `constraints` and `pulses` are
 checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app fills
 its own options into and keeps hidden behind `heatmapMenu`, the px-dropdown
 that opens them as a menu. `palette` and `halo` start `hidden` and their

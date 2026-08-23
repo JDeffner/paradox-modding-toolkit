@@ -411,6 +411,14 @@ export interface GuiLayoutParams {
   text: string;
   /** Conditional-visibility preview mode; absent = `showAll`. */
   visibility?: GuiVisibilityOptions;
+  /**
+   * `resolve` (default): textbox keys show their localized value and
+   * `[datafunctions]` their knowable text, and sizes follow. `raw`: the
+   * `text =` value verbatim, as the file has it.
+   */
+  loc?: "resolve" | "raw";
+  /** Modder-supplied preview text per `[...]` expression (the `.<game>modding/gui-preview-values.json` table). */
+  previewValues?: Record<string, string>;
 }
 
 /**
@@ -477,8 +485,25 @@ export interface GuiLayoutFill {
    */
   frame?: number;
 }
-export interface GuiLayoutText {
+/**
+ * One piece of what a textbox shows. `loc`: a localization key the index
+ * resolved (or not: `resolved` false shows the key itself). `datafn`: a
+ * `[...]` expression; resolved through `Localize`/`Concept` or the modder's
+ * preview values, else shown as its last chain segment with `resolved` false.
+ * `source` is the key or the expression without brackets.
+ */
+export interface GuiTextSegment {
   text: string;
+  kind: "literal" | "loc" | "datafn";
+  source: string;
+  resolved: boolean;
+}
+export interface GuiLayoutText {
+  /** What is measured and drawn (resolved when the request asked for it). */
+  text: string;
+  /** The raw `text =` value; differs from `text` when something resolved. */
+  raw?: string;
+  segments?: GuiTextSegment[];
   fontsize: number;
   offsetX: number;
   offsetY: number;

@@ -261,6 +261,11 @@ export interface DrawPreview {
   slices: readonly { from: number; to: number }[];
   dx: number;
   dy: number;
+  /**
+   * An Alt+drag: the original stays where the file has it and a COPY moves,
+   * so the slices are painted twice, in place and shifted.
+   */
+  duplicate?: boolean;
 }
 
 /**
@@ -306,6 +311,17 @@ export interface DrawOptions {
   others?: readonly SceneRect[];
   /** Draw resize handles on `selected` (a widget with a declaration to write to). */
   handles?: boolean;
+  /**
+   * Where the handles go when it is not `selected`: the bounds of a
+   * multi-selection, whose grips resize every member at once.
+   */
+  handleRect?: SceneRect;
+  /**
+   * The page's accent colour, for the smart guides and the equal-size/spacing
+   * bars: they are chrome, and chrome follows the theme. Absent falls back to
+   * the canvas's own guide colour (a host page may have no theme to read).
+   */
+  accent?: string;
   /** The rubber band of a marquee drag, in world coordinates. */
   marquee?: SceneRect;
   preview?: DrawPreview;
@@ -431,7 +447,12 @@ function paintGuides(
 }
 
 /** The two equal gaps, as segments with end ticks so a gap reads as a measure. */
-function paintBars(ctx: CanvasRenderingContext2D, bars: readonly SpacingBar[], zoom: number): void {
+function paintBars(
+  ctx: CanvasRenderingContext2D,
+  bars: readonly SpacingBar[],
+  zoom: number,
+  color: string
+): void {
   if (bars.length === 0) return;
   const tick = 4 / zoom;
   ctx.save();
@@ -454,7 +475,7 @@ function paintBars(ctx: CanvasRenderingContext2D, bars: readonly SpacingBar[], z
     }
   }
   ctx.lineWidth = 1 / zoom;
-  ctx.strokeStyle = GUIDE_STROKE;
+  ctx.strokeStyle = color;
   ctx.stroke();
   ctx.restore();
 }
@@ -658,6 +679,9 @@ export function drawScene(
     if (hidden?.[i]) continue;
     const alpha = dim?.[i] ? DIM_OPACITY : 1;
     if (shifted && inPreview) {
+      if (preview.duplicate) {
+        paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
+      }
       ctx.save();
       ctx.translate(preview.dx, preview.dy);
       paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
@@ -678,14 +702,15 @@ export function drawScene(
     ctx.strokeRect(options.flash.x, options.flash.y, options.flash.w, options.flash.h);
     ctx.restore();
   }
-  if (options.guides) paintGuides(ctx, options.guides, camera.zoom, GUIDE_STROKE, false);
-  if (options.bars) paintBars(ctx, options.bars, camera.zoom);
+  const guideColor = options.accent || GUIDE_STROKE;
+  if (options.guides) paintGuides(ctx, options.guides, camera.zoom, guideColor, false);
+  if (options.bars) paintBars(ctx, options.bars, camera.zoom, guideColor);
   if (options.dropLine) paintGuides(ctx, [options.dropLine], camera.zoom, DROP_STROKE, true);
   if (options.marquee) paintMarquee(ctx, options.marquee, camera.zoom);
   for (const rect of options.others ?? []) paintSelection(ctx, rect, camera.zoom);
   if (options.selected) {
     paintSelection(ctx, options.selected, camera.zoom);
-    if (options.handles) paintHandles(ctx, options.selected, camera.zoom);
+    if (options.handles) paintHandles(ctx, options.handleRect ?? options.selected, camera.zoom);
   }
   if (options.readout) paintReadout(ctx, options.readout, camera);
 }

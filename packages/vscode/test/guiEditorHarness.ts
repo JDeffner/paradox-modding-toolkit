@@ -157,6 +157,8 @@ export interface EditorHarness {
   rowPointer(node: Element, type: "pointerdown" | "pointermove", at?: { x: number; y: number }): void;
   /** Release the button anywhere, which is what ends a row drag. */
   releasePointer(): void;
+  /** A pointer event on the WINDOW at a client point, outside the canvas when asked. */
+  windowPointer(type: "pointermove" | "pointerup", at: { x: number; y: number }): void;
   paint: PaintLog;
   document: Document;
   close(): void;
@@ -404,6 +406,18 @@ export function bootEditor(): EditorHarness {
     },
     releasePointer() {
       win.dispatchEvent(new win.PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 2 }));
+    },
+    windowPointer(type, at) {
+      win.dispatchEvent(
+        new win.PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          pointerId: 2,
+          clientX: at.x,
+          clientY: at.y,
+        })
+      );
     },
     paint,
     document: doc,

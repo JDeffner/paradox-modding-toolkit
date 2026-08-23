@@ -100,6 +100,13 @@ export interface GuiEditorUiState {
    * or hidden one, so a fresh install opens with the page's own defaults.
    */
   panels?: GuiPanelStates;
+  /**
+   * The two canvas toggles a drag reads: smart guides (on by default) and the
+   * 8 px grid (off by default). Absent means the page's own default, so a
+   * store written before they existed changes nothing.
+   */
+  snap?: boolean;
+  grid?: boolean;
 }
 
 export interface GuiPanelState {
@@ -279,11 +286,30 @@ export type AppToHost =
    * and echoed it back mid-session would fight a user who changed it twice
    * before the first write landed.
    */
-  | { type: "setUiState"; valueMode: GuiValueMode; panels?: GuiPanelStates }
+  | {
+      type: "setUiState";
+      valueMode: GuiValueMode;
+      panels?: GuiPanelStates;
+      /** The snap and grid toggles; absent leaves what the host has stored alone. */
+      snap?: boolean;
+      grid?: boolean;
+    }
   /** Remember these properties under a name. The host answers by pushing `userData`. */
   | { type: "savePreset"; name: string; properties: EditProperty[] }
   /** Forget a saved component or preset. The host answers by pushing `userData`. */
-  | { type: "forgetSaved"; kind: "component" | "preset"; name: string };
+  | { type: "forgetSaved"; kind: "component" | "preset"; name: string }
+  /**
+   * Undo (or redo) the last change to the SOURCE DOCUMENT. The editor holds no
+   * history of its own (README: one gesture is one document change is one undo
+   * step), so these are requests for the host's own undo, which it runs on the
+   * document's text editor: it shows that editor with focus (an editor command
+   * acts on the active editor, and a panel is not one), runs the command, and
+   * the changed document comes back down through the normal `layout` push. No
+   * answer message: the layout IS the answer, and a step with nothing to undo
+   * changes nothing and pushes nothing.
+   */
+  | { type: "undo" }
+  | { type: "redo" };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =

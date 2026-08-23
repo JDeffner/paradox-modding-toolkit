@@ -131,6 +131,11 @@ ${uiCss}
   #layers .row.hiddenWidget .label { text-decoration: line-through; opacity: 0.6; }
   #palette .row { cursor: grab; }
   #palette .row[data-dragging] { opacity: 0.5; }
+  /* The chip that follows a palette drag, and the container it would drop into. */
+  .paletteGhost { padding: 0 10px; height: var(--px-h-sm); line-height: var(--px-h-sm); border-radius: var(--px-radius-md); font-size: var(--px-text-sm); white-space: nowrap; }
+  #dropTarget { position: absolute; pointer-events: none; box-sizing: border-box; border: 2px solid var(--px-primary); border-radius: 2px; }
+  #dropTarget[hidden] { display: none; }
+  #dropTarget > .px-badge { position: absolute; left: -2px; top: -22px; background: var(--px-primary); color: var(--px-primary-fg); border-color: var(--px-primary); }
 
   /* ---- inspector ---- */
   #inspector { flex: 1 1 auto; min-height: 80px; padding-bottom: 8px; }
@@ -232,11 +237,14 @@ ${uiCss}
   <div id="toolbar">
     <span id="fileName" class="px-truncate"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Lay the document out again">${icon("rotate")}</button>
+    <div class="px-separator" data-orientation="vertical"></div>
+    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Undo the last change to the .gui file (the text editor's own undo)">${icon("undo")}</button>
+    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Redo the change you just undid">${icon("redo")}</button>
     <span class="px-grow"></span>
     <div class="px-toggle-group">
       ${viewToggle("outlines", "squareDashed", "Outline every widget")}
-      ${viewToggle("snap", "magnet", "Guides: snap a drag to sibling edges, centres and equal gaps", true)}
-      ${viewToggle("grid", "grid", "Draw a 10 px grid and snap a drag to it")}
+      ${viewToggle("snap", "magnet", "Snap a drag to sibling and parent edges, centres, equal gaps and equal sizes", true)}
+      ${viewToggle("grid", "grid", "Draw an 8 px grid and snap a drag to it (Alt+arrow nudges by one step)")}
       ${viewToggle("constraints", "ruler", "Show the selected widget's parent box, its anchors and the offset between them")}
       ${viewToggle("pulses", "activity", "Flash the widgets each re-layout moved")}
     </div>
@@ -263,6 +271,7 @@ ${uiCss}
     </div>
     <div id="stage">
       <canvas id="canvas"></canvas>
+      <div id="dropTarget" hidden><span class="px-badge">Drop here</span></div>
       <div id="stageTools">
         <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="right" data-tip-wrap>${icon("info")}</button>
         <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out" data-tip-side="right">${icon("zoomOut")}</button>
