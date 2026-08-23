@@ -48,6 +48,7 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
     if (openPopover !== close) return;
     openPopover = null;
     openAnchor = null;
+    window.removeEventListener("resize", close);
     document.removeEventListener("pointerdown", onPointer, true);
     document.removeEventListener("keydown", onKey, true);
     anchor.removeAttribute("aria-expanded");
@@ -64,10 +65,12 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
       close();
     }
   };
-  // Deferred so the click that opened it does not close it.
+  // Deferred so the click that opened it does not close it. A resize moves
+  // the anchor out from under the popover: close rather than float loose.
   setTimeout(() => {
     document.addEventListener("pointerdown", onPointer, true);
     document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", close, { once: true });
   }, 0);
   openPopover = close;
   openAnchor = anchor;
@@ -104,8 +107,8 @@ export interface MenuItem {
   hint?: string;
   /** CSS color for a swatch on the left. */
   swatch?: string;
-  /** Hover text for the row (the full path behind a shortened one). */
-  title?: string;
+  /** A second, dimmer line under the label (a full path, an explanation). */
+  description?: string;
 }
 
 export interface MenuOptions {
@@ -129,7 +132,7 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
   }
   const root = document.createElement("div");
   root.className = "px-menu";
-  root.style.minWidth = `${Math.max(options.width ?? 0, anchor.getBoundingClientRect().width)}px`;
+  root.style.width = `${Math.max(options.width ?? 0, anchor.getBoundingClientRect().width)}px`;
   const search = options.search ?? items.length > 8;
   let input: HTMLInputElement | null = null;
   if (search) {
@@ -171,7 +174,6 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
       row.setAttribute("role", "option");
       if (item.value === options.value) row.setAttribute("aria-selected", "true");
       row.innerHTML = CHECK;
-      if (item.title) row.title = item.title;
       if (item.swatch) {
         const sw = document.createElement("span");
         sw.className = "px-swatch";
@@ -181,6 +183,13 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
       const label = document.createElement("span");
       label.className = "px-grow";
       label.textContent = item.label;
+      if (item.description) {
+        const d = document.createElement("span");
+        d.className = "px-menu-description";
+        d.textContent = item.description;
+        label.append(d);
+        row.setAttribute("data-two-line", "");
+      }
       row.append(label);
       if (item.hint) {
         const hint = document.createElement("span");

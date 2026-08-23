@@ -22,6 +22,7 @@ import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
+import { colorPicker } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "./render";
 
@@ -83,6 +84,34 @@ function receiveTextures(urls: Record<string, string | null>, thumb: boolean): v
     img.src = url;
   }
   if (!thumb) draw();
+}
+
+/** Clipboard reads go through the host; the next `clipboard` reply answers the oldest ask. */
+const clipboardWaiters: ((text: string) => void)[] = [];
+function readClipboard(): Promise<string> {
+  return new Promise((resolve) => {
+    clipboardWaiters.push(resolve);
+    send({ type: "readClipboard" });
+  });
+}
+
+/** "rgb { 255 0 0 }", "hsv360 { 0 100 100 }", "255 0 0" or "#ff0000" from the clipboard. */
+function parseColorText(text: string): { kind: "rgb" | "hsv360"; value: [number, number, number] } | null {
+  const t = text.trim();
+  const hex = /^#?([0-9a-f]{6})$/i.exec(t);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return { kind: "rgb", value: [(n >> 16) & 255, (n >> 8) & 255, n & 255] };
+  }
+  const m = /^(?:(rgb|hsv360|hsv)\s*)?\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*\}?$/i.exec(t);
+  if (!m) return null;
+  const n = [Number(m[2]), Number(m[3]), Number(m[4])];
+  if (n.some((x) => !Number.isFinite(x))) return null;
+  const tag = (m[1] ?? "rgb").toLowerCase();
+  if (tag === "hsv") return { kind: "hsv360", value: [n[0] * 360, n[1] * 100, n[2] * 100] };
+  if (tag === "hsv360") return { kind: "hsv360", value: [n[0], n[1], n[2]] };
+  const rgb = n.every((x) => x <= 1) ? n.map((x) => Math.round(x * 255)) : n.map(Math.round);
+  return { kind: "rgb", value: [rgb[0], rgb[1], rgb[2]] };
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +282,11 @@ function numberInput(value: number, step: number, onChange: (v: number) => void)
   return i;
 }
 
+/** A number field with a short prefix inside it ("h", "s", "v"). */
+function labeled(prefix: string, input: HTMLInputElement): HTMLElement {
+  return el("label", "px-labeled", el("span", undefined, prefix), input);
+}
+
 function field(label: string, ...value: (HTMLElement | string)[]): HTMLElement {
   const v = el("div", "px-row", ...value);
   v.style.minWidth = "0";
@@ -278,10 +312,6 @@ function rgbHex(rgb: Rgb): string {
       )
       .join("")
   );
-}
-
-function hexRgb(hex: string): Rgb {
-  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
 
 function rgbToHsv360(rgb: Rgb): [number, number, number] {
@@ -448,6 +478,18 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
 
     const value = el("div", "px-row");
     value.style.minWidth = "0";
+    let values: HTMLElement | null = null;
+    const copyText = (text: string): void => send({ type: "copy", text });
+    const pasteColor = async (): Promise<void> => {
+      const parsed = parseColorText(await readClipboard());
+      if (!parsed) {
+        toast("The clipboard holds no color (rgb { 255 0 0 }, 255 0 0 or #ff0000).", "destructive");
+        return;
+      }
+      const i = colors.indexOf(color);
+      colors[i] = { name: color.name, ...parsed };
+      refresh();
+    };
     if (color.kind === "named") {
       value.append(
         dropdown(
@@ -461,25 +503,60 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
         )
       );
     } else if (color.kind === "rgb") {
-      const c = document.createElement("input");
-      c.type = "color";
-      c.value = rgbHex(color.value);
-      c.style.cssText = "width:28px;height:24px;padding:0;border:none;background:none;cursor:pointer";
-      const text = el("span", "px-muted px-xs px-mono", `rgb { ${color.value.join(" ")} }`);
-      c.oninput = () => {
-        color.value = hexRgb(c.value);
-        sw.style.setProperty("--px-swatch", c.value);
-        text.textContent = `rgb { ${color.value.join(" ")} }`;
-        draw();
+      const text = el("span", "px-mono px-truncate");
+      const show = (): void => {
+        text.textContent = `R ${color.value[0]}  G ${color.value[1]}  B ${color.value[2]}`;
       };
-      c.onchange = commit;
-      value.append(c, text);
+      show();
+      const edit = button(
+        "",
+        () =>
+          colorPicker(edit, color.value, {
+            onChange: (rgb) => {
+              color.value = rgb;
+              sw.style.setProperty("--px-swatch", rgbHex(rgb));
+              show();
+              draw();
+            },
+            onClose: commit,
+          }),
+        { icon: "pencil", size: "icon-xs", tip: "Pick a color" }
+      );
+      values = el(
+        "div",
+        "color-values",
+        text,
+        edit,
+        button("", () => copyText(`rgb { ${color.value.join(" ")} }`), {
+          icon: "copy",
+          size: "icon-xs",
+          tip: "Copy rgb { r g b }",
+        }),
+        button("", () => void pasteColor(), { icon: "paste", size: "icon-xs", tip: "Paste a color" })
+      );
     } else if (color.kind === "hsv360") {
       const v = color.value;
-      value.append(
-        numberInput(v[0], 1, (x) => (v[0] = x)),
-        numberInput(v[1], 1, (x) => (v[1] = x)),
-        numberInput(v[2], 1, (x) => (v[2] = x))
+      values = el(
+        "div",
+        "color-values",
+        labeled(
+          "h",
+          numberInput(v[0], 1, (x) => (v[0] = x))
+        ),
+        labeled(
+          "s",
+          numberInput(v[1], 1, (x) => (v[1] = x))
+        ),
+        labeled(
+          "v",
+          numberInput(v[2], 1, (x) => (v[2] = x))
+        ),
+        button("", () => copyText(`hsv360 { ${v.map(Math.round).join(" ")} }`), {
+          icon: "copy",
+          size: "icon-xs",
+          tip: "Copy hsv360 { h s v }",
+        }),
+        button("", () => void pasteColor(), { icon: "paste", size: "icon-xs", tip: "Paste a color" })
       );
     } else {
       const bases = flag.colors.filter((b) => !(colors === flag.colors && b.name === color.name));
@@ -517,6 +594,7 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
         )
       )
     );
+    if (values) wrap.append(values);
   }
   return wrap;
 }
@@ -923,20 +1001,92 @@ function updateModPicker(): void {
   const b = $<HTMLButtonElement>("mod");
   const target = saveTarget();
   const label = target
-    ? target.label.length > 12
-      ? target.label.slice(0, 11) + "…"
+    ? target.label.length > 40
+      ? target.label.slice(0, 39) + "…"
       : target.label
     : "No mod in workspace";
   b.querySelector(".px-truncate")!.textContent = label;
   b.dataset.tip = target
-    ? `Saving into ${target.label} (${target.path})`
+    ? `Save writes into this mod: ${target.label}. Click to choose another.`
     : "No mod in the workspace to save into";
-  b.disabled = mods.length < 2;
+  b.disabled = mods.length === 0;
   $<HTMLButtonElement>("save").disabled = !target;
   $("save").dataset.tip = target
     ? `Write the flag into ${target.label}/common/coat_of_arms/coat_of_arms/`
     : "No mod in the workspace to save into";
 }
+
+// ---------------------------------------------------------------------------
+// Stage view: locked (fit) by default; unlocked = middle-drag pans, wheel zooms
+// ---------------------------------------------------------------------------
+
+const stage = $("stage");
+const viewport = $("viewport");
+const view = { locked: true, x: 0, y: 0, scale: 1 };
+
+function applyView(): void {
+  viewport.style.transform = view.locked ? "" : `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  $("zoom").textContent = view.locked ? "" : `${Math.round(view.scale * 100)}%`;
+  stage.toggleAttribute("data-unlocked", !view.locked);
+  const b = $("lock");
+  b.replaceChildren(iconEl(view.locked ? "lock" : "unlock"));
+  b.dataset.tip = view.locked
+    ? "View locked. Unlock to pan with the middle mouse button and zoom with the wheel"
+    : "View unlocked: middle-drag pans, wheel zooms, double-click resets. Lock to fit again";
+}
+
+$("lock").onclick = () => {
+  view.locked = !view.locked;
+  view.x = view.y = 0;
+  view.scale = 1;
+  applyView();
+};
+stage.addEventListener(
+  "wheel",
+  (e) => {
+    if (view.locked) return;
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    const next = Math.max(0.1, Math.min(16, view.scale * Math.exp(-e.deltaY * 0.0015)));
+    // Zoom about the pointer: the stage point under it stays put.
+    view.x = px - ((px - view.x) * next) / view.scale;
+    view.y = py - ((py - view.y) * next) / view.scale;
+    view.scale = next;
+    applyView();
+  },
+  { passive: false }
+);
+stage.addEventListener("pointerdown", (down) => {
+  if (view.locked || down.button !== 1) return;
+  down.preventDefault();
+  stage.setPointerCapture(down.pointerId);
+  stage.setAttribute("data-panning", "");
+  let lastX = down.clientX;
+  let lastY = down.clientY;
+  const move = (ev: PointerEvent): void => {
+    view.x += ev.clientX - lastX;
+    view.y += ev.clientY - lastY;
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    applyView();
+  };
+  const up = (): void => {
+    stage.removeEventListener("pointermove", move);
+    stage.removeEventListener("pointerup", up);
+    stage.removeAttribute("data-panning");
+  };
+  stage.addEventListener("pointermove", move);
+  stage.addEventListener("pointerup", up);
+});
+stage.addEventListener("dblclick", () => {
+  if (view.locked) return;
+  view.x = view.y = 0;
+  view.scale = 1;
+  applyView();
+});
+applyView();
 
 // ---------------------------------------------------------------------------
 // Wiring
@@ -964,7 +1114,7 @@ $("save").onclick = () => {
 $("mod").onclick = () =>
   menu(
     $("mod"),
-    mods.map((m) => ({ value: m.path, label: m.label, hint: shortPath(m.path), title: m.path })),
+    mods.map((m) => ({ value: m.path, label: m.label, hint: shortPath(m.path), description: m.path })),
     {
       value: saveTarget()?.path,
       search: false,
@@ -1046,6 +1196,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
         refresh(false);
         toast(`Pasted ${m.flag.name}.`);
       })();
+      return;
+    case "clipboard":
+      clipboardWaiters.shift()?.(m.text);
       return;
     case "toast":
       toast(m.message);

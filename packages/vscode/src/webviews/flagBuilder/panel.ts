@@ -145,6 +145,9 @@ export class FlagBuilderPanel {
       case "save":
         await this.save(message.name, message.script, message.modPath);
         return;
+      case "readClipboard":
+        this.post({ type: "clipboard", text: await vscode.env.clipboard.readText() });
+        return;
       case "paste": {
         const text = await vscode.env.clipboard.readText();
         const flags = text.trim() ? parseCoaFile(text) : [];

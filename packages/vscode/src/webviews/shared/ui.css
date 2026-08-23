@@ -373,6 +373,26 @@ body.vscode-light .px-textarea {
   white-space: nowrap;
 }
 
+/* A short prefix inside the field: <label class="px-labeled"><span>h</span><input class="px-input"></label> */
+.px-labeled {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.px-labeled > span {
+  position: absolute;
+  left: 7px;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.px-labeled > .px-input {
+  padding-left: 20px;
+}
+
 /* Input with an icon on the left (shadcn InputGroup, the one shape we need). */
 .px-input-group {
   position: relative;
@@ -756,7 +776,7 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   flex-direction: column;
   gap: 10px;
   min-width: 200px;
-  max-width: 320px;
+  max-width: min(480px, calc(100vw - 16px));
   padding: 10px;
   border-radius: var(--px-radius);
   background: var(--px-popover);
@@ -766,6 +786,11 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
     0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
   animation: px-pop var(--px-ease);
   transform-origin: var(--px-origin, top left);
+}
+/* A menu fills its popover edge to edge; the list scrolls, not the popover. */
+.px-popover:has(> .px-menu) {
+  padding: 0;
+  min-width: 0;
 }
 .px-popover-title {
   font-weight: 500;
@@ -817,6 +842,17 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.px-menu-item[data-two-line] {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.px-menu-item > .px-grow > .px-menu-description {
+  display: block;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .px-menu-item > .px-menu-hint {
   font-size: var(--px-text-xs);
   color: var(--px-muted-fg);
@@ -859,6 +895,43 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 .px-dropdown[data-placeholder] > .px-truncate {
   color: var(--px-muted-fg);
+}
+
+/* --------------------------------------------------------------- picker --- */
+
+.px-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 220px;
+}
+.px-picker-square {
+  position: relative;
+  height: 140px;
+  border-radius: var(--px-radius-md);
+  cursor: crosshair;
+  touch-action: none;
+}
+.px-picker-hue {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.px-picker-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.px-picker-hue > .px-picker-thumb {
+  top: 50%;
 }
 
 /* --------------------------------------------------------------- dialog --- */

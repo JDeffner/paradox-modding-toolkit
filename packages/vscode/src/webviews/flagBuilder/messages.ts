@@ -45,6 +45,7 @@ export type HostToApp =
   | { type: "init"; db: FlagDatabase; mods: ModTarget[]; ui?: UiState }
   /** The clipboard held a flag definition; the app asks before replacing its own. */
   | { type: "pasted"; flag: CoaFlag }
+  | { type: "clipboard"; text: string }
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
   | { type: "toast"; message: string };
 
@@ -56,6 +57,7 @@ export type AppToHost =
   | { type: "uiState"; state: UiState }
   | { type: "save"; name: string; script: string; modPath: string }
   | { type: "paste" }
+  | { type: "readClipboard" }
   | { type: "exportPng"; name: string; dataUrl: string };
 
 export const THUMB_DIM = 96;

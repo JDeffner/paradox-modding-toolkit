@@ -39,11 +39,17 @@ ${uiCss}
       linear-gradient(45deg, var(--px-muted) 25%, transparent 25%, transparent 75%, var(--px-muted) 75%) 12px 12px / 24px 24px,
       color-mix(in oklch, var(--px-bg), var(--px-fg) 3%);
   }
+  #viewport { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform-origin: 0 0; }
   #canvas { max-width: 92%; max-height: 92%; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 12px 40px rgba(0,0,0,.35); }
-  #hint { position: absolute; bottom: 8px; left: 10px; }
+  #stage[data-unlocked] { cursor: grab; }
+  #stage[data-panning] { cursor: grabbing; }
+  #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 4px; }
+  [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 18px 92px minmax(0, 1fr) 24px; align-items: center; gap: 6px; }
+  .color-values { display: flex; align-items: center; gap: 4px; padding-left: 68px; min-width: 0; }
+  .color-values .px-mono { flex: 1 1 auto; font-size: var(--px-text-sm); }
   .instance { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
   .instance + .instance { border-top: 1px solid var(--px-border); }
   .instance > .subhead { cursor: pointer; user-select: none; }
@@ -90,17 +96,19 @@ ${uiCss}
     <span class="px-grow"></span>
     <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:220px" data-tip="Mod the flag is saved into">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <button id="save" class="px-btn" data-variant="default" data-tip="Write the flag into the mod's coat_of_arms folder">${icon("save")} Save</button>
+    <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <div class="px-row" style="gap:2px">
-      <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
-      <button id="info" class="px-btn" data-variant="ghost" data-size="icon" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
-      <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
-    </div>
+    <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
     <div id="stage">
-      <canvas id="canvas" width="768" height="512"></canvas>
-      <div id="hint" class="px-muted px-xs"></div>
+      <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
+      <div id="stageTools">
+        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="right" data-tip-wrap>${icon("info")}</button>
+        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="View locked. Unlock to pan with the middle mouse button and zoom with the wheel" data-tip-side="right" data-tip-wrap>${icon("lock")}</button>
+        <span id="zoom" class="px-muted px-xs"></span>
+        <span id="hint" class="px-muted px-xs"></span>
+      </div>
     </div>
     <div id="side" class="px-sidepanel" data-side="right">
       <div class="px-sidepanel-resizer"></div>
