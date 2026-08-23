@@ -25,6 +25,22 @@ import { scrubbable } from "../../shared/scrub";
 import { colorPicker } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "./render";
+import {
+  boxOf,
+  cornerAt,
+  cornerCursor,
+  corners,
+  hitElement,
+  instanceCount,
+  moveBox,
+  resizeBox,
+  writeBox,
+  DRAG_THRESHOLD,
+  HANDLE_SIZE,
+  type Corner,
+  type ElementRef,
+} from "./elements";
+import { middleEllipsis } from "./paths";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -40,6 +56,8 @@ let mods: ModTarget[] = [];
 let flag: CoaFlag = { name: "new_flag", pattern: "", colors: [], layers: [] };
 /** -1 = the flag itself, otherwise a layer index. */
 let selected = -1;
+/** The element the canvas outlines, or null; always inside the selected layer. */
+let picked: ElementRef | null = null;
 
 /** Decoded textures by key; undefined = not asked yet, null = host has none. */
 const images = new Map<string, HTMLImageElement | null>();
@@ -138,6 +156,7 @@ function restore(json: string): void {
   flag = JSON.parse(json);
   $<HTMLInputElement>("name").value = flag.name;
   if (selected >= flag.layers.length) selected = -1;
+  clampPicked();
   refresh(false);
   updateHistoryButtons();
 }
@@ -177,7 +196,12 @@ const canvas = $<HTMLCanvasElement>("canvas");
 canvas.width = 768;
 canvas.height = 512;
 
-function draw(): void {
+/** The GUI editor's selection colors, so the two editors read as one product. */
+const SELECT_STROKE = "#4fc1ff";
+const SELECT_SHADOW = "rgba(0,0,0,0.65)";
+
+/** `overlay` = false for the PNG export: the outline is a tool, not the flag. */
+function draw(overlay = true): void {
   if (!db) return;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -194,6 +218,41 @@ function draw(): void {
   if (!complete) for (const key of textureKeys(flag, db.definitions)) request(key, false);
   const missing = textureKeys(flag, db.definitions).filter((k) => images.get(k) === null);
   $("hint").textContent = missing.length ? `Missing textures: ${missing.join(", ")}` : "";
+  if (overlay) paintSelection(ctx);
+}
+
+/**
+ * The outline and the four corner grips of the picked element, in canvas
+ * pixels. Widths and grips divide by how many screen pixels a canvas pixel
+ * covers, so they stay one screen size at every zoom, like the GUI editor's.
+ */
+function paintSelection(ctx: CanvasRenderingContext2D): void {
+  const layer = picked ? flag.layers[picked.layer] : null;
+  if (!picked || !layer) return;
+  const box = boxOf(layer, picked.instance);
+  const screen = canvas.getBoundingClientRect();
+  const f = screen.width ? screen.width / canvas.width : 1;
+  const points = corners(box).map((p) => [p.x * canvas.width, p.y * canvas.height] as const);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (const [x, y] of points.slice(1)) ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.lineWidth = 3 / f;
+  ctx.strokeStyle = SELECT_SHADOW;
+  ctx.stroke();
+  ctx.lineWidth = 1.5 / f;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.stroke();
+  const side = HANDLE_SIZE / f;
+  ctx.lineWidth = 1 / f;
+  ctx.strokeStyle = SELECT_SHADOW;
+  ctx.fillStyle = SELECT_STROKE;
+  for (const [x, y] of points) {
+    ctx.fillRect(x - side / 2, y - side / 2, side, side);
+    ctx.strokeRect(x - side / 2, y - side / 2, side, side);
+  }
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -396,7 +455,24 @@ sortable($("layers"), {
 
 function select(index: number): void {
   selected = index;
+  picked = index >= 0 ? { layer: index, instance: 0 } : null;
   refresh();
+}
+
+/** Keep the canvas selection inside the flag after a structural change. */
+function clampPicked(): void {
+  const layer = picked ? flag.layers[picked.layer] : null;
+  if (!layer) picked = null;
+  else picked = { layer: picked!.layer, instance: Math.min(picked!.instance, instanceCount(layer) - 1) };
+}
+
+/** Select an element on the canvas (null = nothing), and follow with the panel. */
+function pickElement(ref: ElementRef | null): void {
+  picked = ref;
+  selected = ref ? ref.layer : -1;
+  renderLayers();
+  renderInspector();
+  draw();
 }
 
 /** Redraw everything after an edit; `record` = false when restoring history. */
@@ -600,6 +676,26 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
   return wrap;
 }
 
+/**
+ * Append a default instance. The arrays are copied, not shared: the editor
+ * mutates `position` and `scale` in place, so a spread of the constant would
+ * write through into every other instance and into the constant itself.
+ */
+function addInstance(layer: CoaLayer): void {
+  if (layer.kind === "sub") {
+    layer.instances.push({
+      offset: [...DEFAULT_SUB_INSTANCE.offset],
+      scale: [...DEFAULT_SUB_INSTANCE.scale],
+    });
+    return;
+  }
+  layer.instances.push({
+    rotation: DEFAULT_INSTANCE.rotation,
+    scale: [...DEFAULT_INSTANCE.scale],
+    position: [...DEFAULT_INSTANCE.position],
+  });
+}
+
 /** Instances folded by the user, by "layer:index"; forgotten with the panel. */
 const collapsedInstances = new Set<string>();
 
@@ -618,8 +714,7 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
       button(
         "Add",
         () => {
-          if (layer.kind === "sub") layer.instances.push({ ...DEFAULT_SUB_INSTANCE });
-          else layer.instances.push({ ...DEFAULT_INSTANCE });
+          addInstance(layer);
           refresh();
         },
         { icon: "plus", size: "xs" }
@@ -974,6 +1069,7 @@ function setFlag(next: CoaFlag): void {
   flag = next;
   $<HTMLInputElement>("name").value = flag.name;
   selected = -1;
+  picked = null;
   resetHistory();
 }
 
@@ -1038,22 +1134,45 @@ function saveTarget(): ModTarget | undefined {
   return mods.find((m) => m.path === uiState.savePath) ?? mods[0];
 }
 
-/** "…\content\3472248460": the mod folder and the one above it, the rest elided. */
-function shortPath(p: string): string {
-  const sep = p.includes("\\") ? "\\" : "/";
-  const parts = p.split(/[\\/]/).filter(Boolean);
-  return parts.length > 2 ? `…${sep}${parts.slice(-2).join(sep)}` : p;
+/** The save-target menu: wide rows (name over path), right-aligned to its button. */
+const MOD_MENU_WIDTH = 420;
+/** Characters of path a row fits at that width, in the 11px muted style. */
+const MOD_PATH_CHARS = 62;
+
+function openModMenu(): void {
+  const anchor = $("mod");
+  menu(
+    anchor,
+    mods.map((m) => ({
+      value: m.path,
+      label: m.label,
+      description: middleEllipsis(m.path, MOD_PATH_CHARS),
+    })),
+    {
+      value: saveTarget()?.path,
+      search: false,
+      width: MOD_MENU_WIDTH,
+      onPick: (v) => {
+        uiState = { ...uiState, savePath: v };
+        send({ type: "uiState", state: uiState });
+        updateModPicker();
+      },
+    }
+  );
+  // `menu` hangs the popover off the anchor's LEFT edge; a menu this much wider
+  // than its button belongs under it, so it grows to the left instead of across
+  // the toolbar. (A second click closed it: then there is nothing to move.)
+  const pop = document.querySelector<HTMLElement>(".px-popover");
+  if (!pop) return;
+  const a = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, a.right - pop.getBoundingClientRect().width)}px`;
+  pop.style.setProperty("--px-origin", "top right");
 }
 
 function updateModPicker(): void {
   const b = $<HTMLButtonElement>("mod");
   const target = saveTarget();
-  const label = target
-    ? target.label.length > 40
-      ? target.label.slice(0, 39) + "…"
-      : target.label
-    : "No mod in workspace";
-  b.querySelector(".px-truncate")!.textContent = label;
+  b.querySelector(".px-truncate")!.textContent = target ? target.label : "No mod in workspace";
   b.dataset.tip = target
     ? `Save writes into this mod: ${target.label}. Click to choose another.`
     : "No mod in the workspace to save into";
@@ -1065,34 +1184,40 @@ function updateModPicker(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Stage view: locked (fit) by default; unlocked = middle-drag pans, wheel zooms
+// Stage view: live by default (wheel zooms, middle-drag pans); the lock freezes
 // ---------------------------------------------------------------------------
 
 const stage = $("stage");
 const viewport = $("viewport");
-const view = { locked: true, x: 0, y: 0, scale: 1 };
+const view = { frozen: false, x: 0, y: 0, scale: 1 };
 
 function applyView(): void {
-  viewport.style.transform = view.locked ? "" : `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-  $("zoom").textContent = view.locked ? "" : `${Math.round(view.scale * 100)}%`;
-  stage.toggleAttribute("data-unlocked", !view.locked);
+  viewport.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  $("zoom").textContent = `${Math.round(view.scale * 100)}%`;
   const b = $("lock");
-  b.replaceChildren(iconEl(view.locked ? "lock" : "unlock"));
-  b.dataset.tip = view.locked
-    ? "View locked. Unlock to pan with the middle mouse button and zoom with the wheel"
-    : "View unlocked: middle-drag pans, wheel zooms, double-click resets. Lock to fit again";
+  b.replaceChildren(iconEl(view.frozen ? "lock" : "unlock"));
+  b.dataset.tip = view.frozen ? "Unfreeze the canvas zoom and pan" : "Freeze the canvas zoom and pan";
+  draw();
 }
 
-$("lock").onclick = () => {
-  view.locked = !view.locked;
+function recenter(): void {
   view.x = view.y = 0;
   view.scale = 1;
   applyView();
+}
+
+$("lock").onclick = () => {
+  view.frozen = !view.frozen;
+  uiState = { ...uiState, viewFrozen: view.frozen };
+  send({ type: "uiState", state: uiState });
+  applyView();
 };
+// Recentering is a way out of a lost view, so the freeze does not block it.
+$("recenter").onclick = recenter;
 stage.addEventListener(
   "wheel",
   (e) => {
-    if (view.locked) return;
+    if (view.frozen) return;
     e.preventDefault();
     const r = stage.getBoundingClientRect();
     const px = e.clientX - r.left;
@@ -1107,7 +1232,7 @@ stage.addEventListener(
   { passive: false }
 );
 stage.addEventListener("pointerdown", (down) => {
-  if (view.locked || down.button !== 1) return;
+  if (view.frozen || down.button !== 1) return;
   down.preventDefault();
   stage.setPointerCapture(down.pointerId);
   stage.setAttribute("data-panning", "");
@@ -1128,13 +1253,106 @@ stage.addEventListener("pointerdown", (down) => {
   stage.addEventListener("pointermove", move);
   stage.addEventListener("pointerup", up);
 });
-stage.addEventListener("dblclick", () => {
-  if (view.locked) return;
-  view.x = view.y = 0;
-  view.scale = 1;
-  applyView();
-});
 applyView();
+
+// ---------------------------------------------------------------------------
+// Elements on the canvas: click selects, drag moves, a corner resizes
+// ---------------------------------------------------------------------------
+
+/** The pointer in flag fractions: the canvas IS the flag, transform included. */
+function unitAt(e: PointerEvent): [number, number] {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+}
+
+/** Half a handle in flag fractions, per axis: the flag is wider than it is tall. */
+function handleTolerance(): [number, number] {
+  const r = canvas.getBoundingClientRect();
+  return [HANDLE_SIZE / 2 / r.width, HANDLE_SIZE / 2 / r.height];
+}
+
+function cornerUnder(u: number, v: number): Corner | null {
+  const layer = picked ? flag.layers[picked.layer] : null;
+  if (!layer) return null;
+  const [tu, tv] = handleTolerance();
+  return cornerAt(boxOf(layer, picked!.instance), u, v, tu, tv);
+}
+
+interface Gesture {
+  ref: ElementRef;
+  /** null = a move. */
+  corner: Corner | null;
+  /** Where inside the element the pointer grabbed it, so a move does not jump. */
+  grabU: number;
+  grabV: number;
+  startX: number;
+  startY: number;
+  /** False until the pointer passed the threshold: a click must not nudge. */
+  started: boolean;
+}
+
+let gesture: Gesture | null = null;
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  const [u, v] = unitAt(e);
+  const corner = cornerUnder(u, v);
+  const ref = corner ? picked! : hitElement(flag.layers, u, v);
+  if (!ref) {
+    pickElement(null);
+    return;
+  }
+  e.preventDefault();
+  if (!corner) pickElement(ref);
+  const box = boxOf(flag.layers[ref.layer], ref.instance);
+  gesture = {
+    ref,
+    corner,
+    grabU: u - box.cx,
+    grabV: v - box.cy,
+    startX: e.clientX,
+    startY: e.clientY,
+    started: false,
+  };
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  const [u, v] = unitAt(e);
+  if (!gesture) {
+    const corner = cornerUnder(u, v);
+    canvas.style.cursor = corner ? cornerCursor(corner) : hitElement(flag.layers, u, v) ? "move" : "";
+    return;
+  }
+  if (!gesture.started) {
+    if (Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) < DRAG_THRESHOLD) return;
+    gesture.started = true;
+    // An implicit default instance has to become a real one before it can move.
+    const layer = flag.layers[gesture.ref.layer];
+    if (!layer.instances.length) {
+      addInstance(layer);
+      renderInspector();
+    }
+  }
+  const layer = flag.layers[gesture.ref.layer];
+  const box = boxOf(layer, gesture.ref.instance);
+  const next = gesture.corner
+    ? resizeBox(box, gesture.corner, u, v)
+    : moveBox(box, u - gesture.grabU - box.cx, v - gesture.grabV - box.cy);
+  writeBox(layer, gesture.ref.instance, next);
+  renderInspector();
+  draw();
+});
+
+const endGesture = (e: PointerEvent): void => {
+  if (!gesture) return;
+  const moved = gesture.started;
+  gesture = null;
+  canvas.releasePointerCapture(e.pointerId);
+  if (moved) commit();
+};
+canvas.addEventListener("pointerup", endGesture);
+canvas.addEventListener("pointercancel", endGesture);
 
 // ---------------------------------------------------------------------------
 // Wiring
@@ -1165,22 +1383,14 @@ $("save").onclick = () => {
     sourceFile: opened?.file,
   });
 };
-$("mod").onclick = () =>
-  menu(
-    $("mod"),
-    mods.map((m) => ({ value: m.path, label: m.label, hint: shortPath(m.path), description: m.path })),
-    {
-      value: saveTarget()?.path,
-      search: false,
-      width: 260,
-      onPick: (v) => {
-        uiState = { ...uiState, savePath: v };
-        send({ type: "uiState", state: uiState });
-        updateModPicker();
-      },
-    }
-  );
-$("png").onclick = () => send({ type: "exportPng", name: flag.name, dataUrl: canvas.toDataURL("image/png") });
+$("mod").onclick = () => openModMenu();
+$("png").onclick = () => {
+  // The export is the flag alone: repaint without the selection, then restore it.
+  draw(false);
+  const dataUrl = canvas.toDataURL("image/png");
+  draw();
+  send({ type: "exportPng", name: flag.name, dataUrl });
+};
 $("togglePanel").onclick = () => panel.toggle();
 $("help").onclick = () =>
   infoDialog("How to build a flag", [
@@ -1198,7 +1408,7 @@ $("help").onclick = () =>
     ],
     [
       "Placing",
-      "Each layer has instances: position is a fraction of the flag (0.5 0.5 = center), scale a fraction of its size, rotation in degrees. Drag a number sideways to scrub it.",
+      "Each layer has instances: position is a fraction of the flag (0.5 0.5 = center), scale a fraction of its size, rotation in degrees. Drag a number sideways to scrub it. On the canvas, click an emblem to select it, drag it to move it and drag a corner to resize it (the aspect ratio stays); Esc deselects. The wheel zooms and the middle mouse button pans until you freeze the view.",
     ],
     [
       "Emblem colors",
@@ -1235,8 +1445,9 @@ nameInput.onchange = commit;
 $("browserClose").onclick = closeBrowser;
 $<HTMLInputElement>("browserSearch").oninput = fillBrowser;
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && $("browser").classList.contains("open")) {
-    closeBrowser();
+  if (e.key === "Escape") {
+    if ($("browser").classList.contains("open")) closeBrowser();
+    else if (picked) pickElement(null);
     return;
   }
   const editing = (e.target as HTMLElement).tagName === "INPUT";
@@ -1268,6 +1479,8 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
           uiState = m.ui;
           panel.setWidth(m.ui.panelWidth);
           panel.toggle(m.ui.panelCollapsed);
+          view.frozen = m.ui.viewFrozen ?? false;
+          applyView();
         }
         updateToggle();
         newFlag();
