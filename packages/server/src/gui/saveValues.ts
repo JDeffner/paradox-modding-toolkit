@@ -9,6 +9,13 @@
  * those with the ordinary tolerant parser. Reading stops as soon as the last
  * needed block has gone by.
  *
+ * A Crusader Kings III save packs that script into a zip (`saveZip.ts` finds
+ * the one `gamestate` entry), and writes the played character LAST, long after
+ * the `living` record the preview wants — so the CK3 path costs one cheap
+ * chunk scan for the player's id before the streaming pass. `-debug_mode`
+ * writes the gamestate as plain text instead, which is the same path minus the
+ * unpacking.
+ *
  * What comes back is the `previewValues` map a layout request already takes:
  * datafunction chains WITHOUT brackets -> display text. A field the save does
  * not carry is simply absent — a preview shows what is knowable and never
@@ -17,15 +24,18 @@
  * Ironman and binary saves are not supported and say so; melting them is a
  * different tool.
  *
- * fs only (the save path); the loc lookup is injected. No vscode.
+ * fs/zlib only (the save path); the loc lookup is injected. No vscode.
  */
 import * as fs from "fs";
 import * as readline from "readline";
+import * as zlib from "zlib";
+import type { Readable } from "stream";
 import type { GuiSaveValuesResult } from "@px-lsp/protocol/protocol";
 import { parseScript, type BlockNode, type Statement } from "../parser";
+import { findZipEntry, ZIP_HEAD_BYTES, type ZipEntry } from "./saveZip";
 
 export interface SaveValuesOptions {
-  /** The active profile's id; only `vic3` has an entity mapping today. */
+  /** The active profile's id; `vic3` and `ck3` have an entity mapping today. */
   gameId: string;
   /** The configured language's value for a loc key, or undefined. */
   loc: (key: string) => string | undefined;
@@ -42,16 +52,18 @@ export const IRONMAN_ERROR =
 interface SaveContext {
   /** `meta_data`, parsed. */
   meta?: BlockNode;
-  /** The played country's entry (`country_manager.database.<id>`). */
+  /** The played country's entry (`country_manager.database.<id>`). Vic3. */
   country?: BlockNode;
-  /** `character_manager.database.<ruler id>`. */
+  /** `character_manager.database.<ruler id>`. Vic3. */
   ruler?: BlockNode;
   heir?: BlockNode;
-  /** `states.database.<capital id>`. */
+  /** `states.database.<capital id>`. Vic3. */
   capital?: BlockNode;
+  /** The played character's `living.<id>` entry. CK3. */
+  character?: BlockNode;
   /** The country's tag (`definition`), e.g. `GBR`. */
   tag?: string;
-  /** `meta_data.game_date`, formatted. */
+  /** The save's date, formatted. */
   date?: string;
   loc: (key: string) => string | undefined;
 }
@@ -63,10 +75,11 @@ interface ValueMapping {
 }
 
 /**
- * Vic3-shaped today. Every reader tolerates absence, so a game whose save gives
- * no country or character context still answers the meta-only rows.
+ * Every reader tolerates absence, so a game whose save gives no country or
+ * character context still answers the meta-only rows. A game with no mapping
+ * of its own reads the Jomini-shaped meta these use.
  */
-const MAPPINGS: ValueMapping[] = [
+const VIC3_MAPPINGS: ValueMapping[] = [
   {
     chains: ["GetPlayer.GetName", "GetPlayer.GetCountry.GetName"],
     read: (ctx) => scalar(ctx.meta, "name"),
@@ -113,12 +126,122 @@ const MAPPINGS: ValueMapping[] = [
   },
 ];
 
+/**
+ * CK3's player is a character, so most rows read the `living.<id>` record; the
+ * three names the load-game screen shows (character, primary title, house) the
+ * save already carries ready-localized in `meta_data`, which is why no title
+ * or dynasty block has to be cut out of a 70 MB gamestate to render them.
+ */
+const CK3_MAPPINGS: ValueMapping[] = [
+  {
+    // `first_name` is a loc key (`Alp_Arslan`), which is what CK3's own
+    // `GetName` renders for a character.
+    chains: ["GetPlayer.GetName", "GetPlayer.GetFirstName"],
+    read: (ctx) => firstName(ctx),
+  },
+  {
+    chains: ["GetPlayer.GetFullName"],
+    read: (ctx) => {
+      const first = firstName(ctx);
+      const house = scalar(ctx.meta, "meta_house_name");
+      return first && house ? `${first} ${house}` : first;
+    },
+  },
+  {
+    chains: ["GetPlayer.GetAge"],
+    read: (ctx) => age(scalar(ctx.character, "birth"), scalar(ctx.meta, "meta_date")),
+  },
+  {
+    chains: ["GetPlayer.GetGold"],
+    read: (ctx) => thousands(scalar(block(aliveData(ctx), "gold"), "value")),
+  },
+  {
+    chains: ["GetPlayer.GetPrestige"],
+    read: (ctx) => thousands(scalar(block(aliveData(ctx), "prestige"), "currency")),
+  },
+  {
+    chains: ["GetPlayer.GetPiety"],
+    read: (ctx) => thousands(scalar(block(aliveData(ctx), "piety"), "currency")),
+  },
+  {
+    // `meta_title_name` IS the primary title's name, article and all.
+    chains: ["GetPlayer.GetPrimaryTitle.GetName"],
+    read: (ctx) => scalar(ctx.meta, "meta_title_name"),
+  },
+  {
+    // The meta carries the HOUSE name; for most characters the dynasty reads
+    // the same, and a preview shows what is knowable.
+    chains: ["GetPlayer.GetDynasty.GetName", "GetPlayer.GetHouse.GetName"],
+    read: (ctx) => scalar(ctx.meta, "meta_house_name"),
+  },
+  {
+    chains: ["GetCurrentDate", "GetGameDate"],
+    read: (ctx) => ctx.date,
+  },
+];
+
+function mappingsFor(gameId: string): ValueMapping[] {
+  return gameId === "ck3" ? CK3_MAPPINGS : VIC3_MAPPINGS;
+}
+
 /** `first_name` + `last_name`, each resolved through loc when it is a key. */
 function characterName(ctx: SaveContext, character: BlockNode | undefined): string | undefined {
   const parts = [scalar(character, "first_name"), scalar(character, "last_name")]
     .map((p) => named(ctx, p))
     .filter((p): p is string => !!p);
   return parts.length ? parts.join(" ") : undefined;
+}
+
+function firstName(ctx: SaveContext): string | undefined {
+  return named(ctx, scalar(ctx.character, "first_name"));
+}
+
+/** The living character's own state (currencies, variables) sits under here. */
+function aliveData(ctx: SaveContext): BlockNode | undefined {
+  return block(ctx.character, "alive_data");
+}
+
+/**
+ * The character variables the save holds, as the two chains a modder reads them
+ * back with. `alive_data.variables.data` is a list of
+ * `{ flag=<name> data={ type=… identity=… } }`; a script value is conventionally
+ * named exactly like the variable it mirrors, so both chains answer from it.
+ * A variable the save stores without a value (a bare flag) stays absent.
+ */
+function characterVariables(ctx: SaveContext): Record<string, string> {
+  const out: Record<string, string> = {};
+  const data = block(block(aliveData(ctx), "variables"), "data");
+  for (const s of statements(data)) {
+    if (s.kind !== "value" || s.value.kind !== "block") continue;
+    const name = scalar(s.value, "flag");
+    const text = variableValue(block(s.value, "data"));
+    if (!name || text === undefined) continue;
+    out[`GetPlayer.MakeScope.Var('${name}').GetValue`] = text;
+    out[`GetPlayer.MakeScope.ScriptValue('${name}')`] = text;
+  }
+  return out;
+}
+
+/** One variable's stored value; `type=value` is fixed point, x100000. */
+function variableValue(data: BlockNode | undefined): string | undefined {
+  const identity = scalar(data, "identity");
+  if (identity === undefined) return undefined;
+  switch (scalar(data, "type")) {
+    case "value":
+      return fixedPoint(identity);
+    case "boolean":
+      return identity === "0" ? "no" : "yes";
+    default:
+      // A character/title/… variable: the id is all the save holds about it.
+      return identity;
+  }
+}
+
+/** `2700000` -> `27`, `25000` -> `0.25`. */
+function fixedPoint(raw: string): string | undefined {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  return String(Number((n / 100000).toFixed(5)));
 }
 
 /** A name is either literal text or a loc key; a key that resolves wins. */
@@ -151,13 +274,28 @@ const MONTHS = [
   "December",
 ];
 
+/** `1836.1.21` -> `[1836, 1, 21]`; anything else is not a date. */
+function parseDate(raw: string | undefined): [number, number, number] | undefined {
+  const m = raw === undefined ? null : /^(\d+)\.(\d+)\.(\d+)/.exec(raw);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : undefined;
+}
+
 /** `1836.1.21` -> `21 January 1836`; anything else comes back verbatim. */
 function formatDate(raw: string | undefined): string {
   if (!raw) return "";
-  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(raw);
-  if (!m) return raw;
-  const month = MONTHS[Number(m[2]) - 1];
-  return month ? `${Number(m[3])} ${month} ${m[1]}` : raw;
+  const d = parseDate(raw);
+  const month = d ? MONTHS[d[1] - 1] : undefined;
+  return d && month ? `${d[2]} ${month} ${d[0]}` : raw;
+}
+
+/** Whole years between a birth date and the save's date. */
+function age(birth: string | undefined, today: string | undefined): string | undefined {
+  const b = parseDate(birth);
+  const t = parseDate(today);
+  if (!b || !t) return undefined;
+  const beforeBirthday = t[1] < b[1] || (t[1] === b[1] && t[2] < b[2]);
+  const years = t[0] - b[0] - (beforeBirthday ? 1 : 0);
+  return years >= 0 ? String(years) : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +346,7 @@ function parseBlock(text: string): BlockNode | undefined {
 /**
  * Lines kept per cut-out block. A country entry runs a few hundred lines and
  * everything read from one sits near its top; the cap only bounds what a
- * pathological save could cost.
+ * pathological save could cost. (A CK3 `living` record measures 360 lines.)
  */
 const MAX_CAPTURE_LINES = 4000;
 
@@ -225,11 +363,13 @@ interface SaveEntities {
   ruler?: BlockNode;
   heir?: BlockNode;
   capital?: BlockNode;
+  character?: BlockNode;
 }
 
 /** Read a save's preview values. Never throws: a failure comes back as `error`. */
 export async function readSaveValues(file: string, options: SaveValuesOptions): Promise<GuiSaveValuesResult> {
   const blank = { values: {}, source: { name: "", date: "", game: options.gameId } };
+  const ck3 = options.gameId === "ck3";
   let entities: SaveEntities;
   try {
     entities = await streamSave(file, options);
@@ -238,8 +378,9 @@ export async function readSaveValues(file: string, options: SaveValuesOptions): 
   }
   if (!entities.meta) return { ...blank, error: IRONMAN_ERROR };
 
-  const date = formatDate(scalar(entities.meta, "game_date"));
-  const source = { name: scalar(entities.meta, "name") ?? "", date, game: options.gameId };
+  const date = formatDate(scalar(entities.meta, ck3 ? "meta_date" : "game_date"));
+  const name = scalar(entities.meta, ck3 ? "meta_player_name" : "name") ?? "";
+  const source = { name, date, game: options.gameId };
   if (scalar(entities.meta, "ironman") === "yes") {
     return { values: {}, source, error: IRONMAN_ERROR };
   }
@@ -251,11 +392,12 @@ export async function readSaveValues(file: string, options: SaveValuesOptions): 
     loc: options.loc,
   };
   const values: Record<string, string> = {};
-  for (const mapping of MAPPINGS) {
+  for (const mapping of mappingsFor(options.gameId)) {
     const value = mapping.read(ctx);
     if (!value) continue;
     for (const chain of mapping.chains) values[chain] = value;
   }
+  Object.assign(values, characterVariables(ctx));
   return { values, source };
 }
 
@@ -272,15 +414,116 @@ function looksBinary(line: string): boolean {
   return false;
 }
 
+/** The first `ZIP_HEAD_BYTES` of the file, or fewer if it is shorter. */
+async function readHead(file: string): Promise<Buffer> {
+  const handle = await fs.promises.open(file, "r");
+  try {
+    const buf = Buffer.alloc(ZIP_HEAD_BYTES);
+    const { bytesRead } = await handle.read(buf, 0, ZIP_HEAD_BYTES, 0);
+    return buf.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
- * One pass over the file. The blocks come in the order a Vic3 save writes them
- * (`meta_data`, `country_manager`, `states`, `character_manager`), which is why
- * the country's capital and ruler ids are already known when their own blocks
- * go by.
+ * The save's script as a byte stream: the file itself, or the `gamestate`
+ * entry inflated out of it. `close()` tears the whole chain down, which
+ * `destroy()` on the tail alone would not do.
+ */
+interface Body {
+  input: Readable;
+  close: () => void;
+}
+
+function openBody(file: string, entry: ZipEntry | undefined): Body {
+  if (!entry) {
+    const plain = fs.createReadStream(file);
+    return { input: plain, close: () => plain.destroy() };
+  }
+  const end = entry.compressedSize === undefined ? undefined : entry.dataStart + entry.compressedSize - 1;
+  const raw = fs.createReadStream(file, { start: entry.dataStart, end });
+  if (entry.method === 0) return { input: raw, close: () => raw.destroy() };
+  // Raw deflate ends itself at the end of the stream, so an unknown compressed
+  // size (a data descriptor) costs nothing.
+  const inflate = zlib.createInflateRaw();
+  raw.on("error", (e) => inflate.destroy(e));
+  raw.pipe(inflate);
+  return {
+    input: inflate,
+    close: () => {
+      raw.destroy();
+      inflate.destroy();
+    },
+  };
+}
+
+/** The zip entry a CK3 (or any packed) save keeps its script in. */
+async function packedGamestate(file: string): Promise<ZipEntry | undefined> {
+  const entry = findZipEntry(await readHead(file));
+  if (!entry || entry.name !== "gamestate") return undefined;
+  return entry.method === 0 || entry.method === 8 ? entry : undefined;
+}
+
+/**
+ * CK3 writes `played_character` near the END of the gamestate, long after the
+ * `living` record the preview wants, so the id has to be found first. A chunk
+ * scan for the marker costs a quarter of what a line-by-line pass would (225 ms
+ * against 1.8 s on a 4.9-million-line save) and holds only a 2 KB window.
+ */
+const PLAYER_MARKER = "\nplayed_character={";
+
+async function findPlayerId(file: string, entry: ZipEntry | undefined): Promise<string | undefined> {
+  const { input, close } = openBody(file, entry);
+  let window = "";
+  let at = -1;
+  try {
+    for await (const chunk of input) {
+      window += (chunk as Buffer).toString("latin1");
+      if (at < 0) {
+        at = window.indexOf(PLAYER_MARKER);
+        if (at < 0) window = window.slice(-PLAYER_MARKER.length);
+      }
+      if (at >= 0 && window.length - at >= 2048) break;
+    }
+  } finally {
+    close();
+  }
+  if (at < 0) return undefined;
+  return /\bcharacter=(\d+)/.exec(window.slice(at, at + 2048))?.[1];
+}
+
+/**
+ * Read the blocks a preview needs. Vic3 gets them all in one pass; CK3 needs
+ * the meta first (which also settles ironman/binary, so a save with nothing to
+ * read costs one line), then the player's id, then the pass that cuts out the
+ * `living` record.
  */
 async function streamSave(file: string, options: SaveValuesOptions): Promise<SaveEntities> {
-  const stream = fs.createReadStream(file, { encoding: "utf8" });
-  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  const entry = await packedGamestate(file);
+  const out = await scanBody(file, entry, options, undefined);
+  if (options.gameId !== "ck3" || !out.meta || scalar(out.meta, "ironman") === "yes") return out;
+
+  const playerId = await findPlayerId(file, entry);
+  if (!playerId) return out;
+  out.character = (await scanBody(file, entry, options, playerId)).character;
+  return out;
+}
+
+/**
+ * One pass over the script. The blocks come in the order a save writes them
+ * (Vic3: `meta_data`, `country_manager`, `states`, `character_manager`), which
+ * is why the country's capital and ruler ids are already known when their own
+ * blocks go by.
+ */
+async function scanBody(
+  file: string,
+  entry: ZipEntry | undefined,
+  options: SaveValuesOptions,
+  playerId: string | undefined
+): Promise<SaveEntities> {
+  const { input, close } = openBody(file, entry);
+  const rl = readline.createInterface({ input, crlfDelay: Infinity });
   const out: SaveEntities = {};
   const vic3 = options.gameId === "vic3";
 
@@ -348,13 +591,16 @@ async function streamSave(file: string, options: SaveValuesOptions): Promise<Sav
     if (done) break;
   }
   rl.close();
-  stream.destroy();
+  close();
   finishCountries();
   return out;
 
   /** Is the block we just entered one of the few worth cutting out? */
   function wanted(): boolean {
     if (stack.length === 1) return stack[0] === "meta_data";
+    if (playerId !== undefined) {
+      return stack.length === 2 && stack[0] === "living" && stack[1] === playerId;
+    }
     if (!vic3 || stack.length !== 3 || stack[1] !== "database") return false;
     const id = stack[2];
     switch (stack[0]) {
@@ -381,8 +627,14 @@ async function streamSave(file: string, options: SaveValuesOptions): Promise<Sav
   function keep(path: string[], text: string): void {
     if (path[0] === "meta_data") {
       out.meta = parseBlock(text);
-      // Only vic3 has an entity mapping; for any other game the meta is all of it.
-      if (!vic3) done = true;
+      // Only vic3 reads on from the meta in this same pass; a CK3 pass that
+      // has no player id yet, or a game with no entity mapping, is finished.
+      if (!vic3 && playerId === undefined) done = true;
+      return;
+    }
+    if (path[0] === "living") {
+      out.character = parseBlock(text);
+      done = true;
       return;
     }
     if (path[0] === "country_manager") {
