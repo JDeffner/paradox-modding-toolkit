@@ -42,6 +42,7 @@ import type {
   GuiDependenciesResult,
   GuiLayoutResult,
   GuiSourceOp,
+  GuiTextSegment,
   GuiVisibilityCheck,
   GuiVisibilityMode,
   GuiVocabularyEntry,
@@ -59,6 +60,7 @@ import type {
   AppToHost,
   EditProperty,
   GuiEditorUiState,
+  GuiLocMode,
   GuiPanelStates,
   GuiValueMode,
   SavedComponent,
@@ -68,7 +70,14 @@ import type {
 import { connectHost } from "./host";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { confirmDialog, menu, toast as pxToast, type MenuItem } from "../../shared/overlay";
+import {
+  closePopover,
+  confirmDialog,
+  menu,
+  popover,
+  toast as pxToast,
+  type MenuItem,
+} from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, type Rgb } from "../../shared/colorPicker";
 import {
@@ -158,6 +167,9 @@ const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
 const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
 const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
 const dropTargetEl = document.getElementById("dropTarget") as HTMLDivElement;
+const locResolvedEl = document.getElementById("locResolved") as HTMLButtonElement;
+const locRawEl = document.getElementById("locRaw") as HTMLButtonElement;
+const textTipEl = document.getElementById("textTip") as HTMLDivElement;
 /** The game font is embedded by the host when it could read it. */
 const fontFamily = document.body.dataset.font === "game" ? "PxGuiGameFont, Georgia, serif" : "Georgia, serif";
 
@@ -1009,6 +1021,8 @@ const inspectorTexts = new Map<string, HTMLElement>();
  */
 let valueMode: GuiValueMode = "full";
 let uiAdopted = false;
+/** The preview table the current layout was computed with, keyed `[expression]` as the file has it. */
+let previewValues: Record<string, string> = {};
 
 /**
  * The block-valued rows whose sub-editor is open, and the abbreviated rows the
@@ -1236,6 +1250,7 @@ function propRow(row: InspectorRow, line: number): HTMLElement {
   prop.appendChild(head);
   if (!row.local) prop.appendChild(el("div", "from", `from ${row.origin}`));
   if (entries && expanded) prop.appendChild(blockEditor(row, entries, line));
+  if (row.key === "text") for (const extra of textRowExtras(row)) prop.appendChild(extra);
   return prop;
 }
 
@@ -1275,6 +1290,144 @@ function valueModeButton(): HTMLElement {
   });
   node.dataset.tipSide = "left";
   return node;
+}
+
+/**
+ * The toolbar's Resolved / Raw pair. The host remembers the mode like the snap
+ * and grid toggles, and unlike them it changes what the server measures, so the
+ * layout is asked for again. `silent` is the first layout adopting the stored
+ * mode: the layout that carried it was computed with it already.
+ */
+function setLocMode(mode: GuiLocMode, o: { silent?: boolean } = {}): void {
+  locResolvedEl.setAttribute("aria-pressed", String(mode === "resolve"));
+  locRawEl.setAttribute("aria-pressed", String(mode === "raw"));
+  if (o.silent) return;
+  host.send({ type: "setUiState", valueMode, loc: mode });
+  host.send({ type: "requestLayout" });
+}
+
+// ---- what a textbox resolved to --------------------------------------------
+
+/** The segments worth explaining: a plain literal has none and gets no tooltip. */
+function explainedSegments(item: SceneItem | null): GuiTextSegment[] | null {
+  const segments = item?.text?.segments?.filter((s) => s.kind !== "literal");
+  return segments && segments.length > 0 ? segments : null;
+}
+
+/** The preview value in force for a datafunction, keyed as the host's file has it. */
+function previewValueOf(segment: GuiTextSegment): string | undefined {
+  return previewValues[`[${segment.source}]`] ?? previewValues[segment.source];
+}
+
+/** One tooltip row: kind badge, the key or [expression], and what it became. */
+function segmentRow(segment: GuiTextSegment): HTMLElement {
+  const row = el("div", "seg");
+  const kind = el("span", "px-badge", segment.kind === "loc" ? "loc" : "datafn");
+  kind.dataset.variant = "outline";
+  row.appendChild(kind);
+  row.appendChild(el("span", "src", segment.kind === "loc" ? segment.source : `[${segment.source}]`));
+  if (segment.resolved) {
+    row.appendChild(el("span", "arrow", "\u2192"));
+    row.appendChild(el("span", "", segment.text));
+  } else {
+    row.appendChild(
+      el("span", "note", segment.kind === "loc" ? "not localized" : "resolved by the game at runtime")
+    );
+  }
+  return row;
+}
+
+let textTipFor: number | null = null;
+
+/** The hover explanation for the textbox under the pointer, or nothing for anything else. */
+function showTextTip(index: number | null, clientX: number, clientY: number): void {
+  const item = index === null ? null : scene.items[index];
+  const segments = explainedSegments(item);
+  if (!segments) {
+    textTipEl.hidden = true;
+    textTipFor = null;
+    return;
+  }
+  if (textTipFor !== index) {
+    textTipEl.textContent = "";
+    for (const segment of segments) textTipEl.appendChild(segmentRow(segment));
+    textTipFor = index;
+  }
+  textTipEl.hidden = false;
+  // Below and right of the pointer, kept inside the window; the stage owns the
+  // pointer so the tooltip ignores it and never steals the hover.
+  const box = textTipEl.getBoundingClientRect();
+  const left = Math.max(0, Math.min(clientX + 12, window.innerWidth - box.width - 4));
+  const top = clientY + 16 + box.height > window.innerHeight ? clientY - box.height - 8 : clientY + 16;
+  textTipEl.style.left = `${left}px`;
+  textTipEl.style.top = `${top}px`;
+}
+
+/**
+ * Under the inspector's `text` row: what the canvas shows for it when that is
+ * not the raw value, and a button per thing the preview could not resolve: a
+ * loc key goes to the host's localization flow, a datafunction gets a preview
+ * value typed here and kept by the host per mod.
+ */
+function textRowExtras(row: InspectorRow): HTMLElement[] {
+  const text = selectedItem()?.text;
+  if (!text || (text.raw === undefined && !text.segments)) return [];
+  const out: HTMLElement[] = [];
+  const raw = row.value.trim().replace(/^"|"$/g, "");
+  if (text.text !== raw) out.push(el("div", "resolved", `shows: ${text.text}`));
+  const tools = el("div", "textTools");
+  for (const segment of text.segments ?? []) {
+    if (segment.kind === "loc" && !segment.resolved) {
+      tools.appendChild(
+        button("Create localization", () => host.send({ type: "editLoc", key: segment.source }), {
+          size: "xs",
+          icon: "plus",
+          tip: `${segment.source} is not in the mod's localization. Write its text now.`,
+        })
+      );
+    } else if (segment.kind === "datafn") {
+      const current = previewValueOf(segment);
+      if (current !== undefined) {
+        tools.appendChild(
+          button(
+            `Preview value: ${current}`,
+            () => host.send({ type: "clearPreviewValue", expression: segment.source }),
+            {
+              size: "xs",
+              icon: "x",
+              tip: `[${segment.source}] shows this text in the preview. Click to drop it.`,
+            }
+          )
+        );
+      } else if (!segment.resolved) {
+        const open = button("Set preview value\u2026", () => previewValuePopover(open, segment.source), {
+          size: "xs",
+          tip: `[${segment.source}] is evaluated by the running game. Type what the preview should show for it.`,
+        });
+        tools.appendChild(open);
+      }
+    }
+  }
+  if (tools.childElementCount > 0) out.push(tools);
+  return out;
+}
+
+/** A one-field popover: Enter sends the value, Escape (or a click outside) drops it. */
+function previewValuePopover(anchor: HTMLElement, expression: string): void {
+  const body = el("div", "px-stack");
+  body.appendChild(el("div", "px-label", `Preview text for [${expression}]`));
+  const input = textInput("What the game would show here", "");
+  input.dataset.row = "+previewValue";
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    const value = input.value.trim();
+    if (value.length === 0) return;
+    closePopover();
+    host.send({ type: "setPreviewValue", expression, value });
+  });
+  body.appendChild(input);
+  popover(anchor, body);
+  input.focus();
 }
 
 function setValueMode(mode: GuiValueMode): void {
@@ -2067,7 +2220,8 @@ function onLayout(
   name: string,
   visibility: { mode: GuiVisibilityMode; checks?: Record<string, boolean> } | undefined,
   ui: GuiEditorUiState | undefined,
-  storeWarning?: string
+  storeWarning: string | undefined,
+  preview: Record<string, string> | undefined
 ): void {
   // Adopted ONCE, from the first layout: after that the panel's own copy is the
   // truth, so a layout already in flight cannot undo a mode the user just set.
@@ -2077,7 +2231,9 @@ function onLayout(
     if (ui?.panels) adoptPanels(ui.panels);
     if (ui?.snap !== undefined) snapToggle.checked = ui.snap;
     if (ui?.grid !== undefined) gridToggle.checked = ui.grid;
+    if (ui?.loc) setLocMode(ui.loc, { silent: true });
   }
+  previewValues = preview ?? {};
   file = name;
   fileNameEl.textContent = name;
   fileNameEl.title = name;
@@ -2252,7 +2408,8 @@ const host = connectHost((message) => {
         message.file,
         message.visibility,
         message.ui,
-        message.storeWarning
+        message.storeWarning,
+        message.previewValues
       );
       return;
     case "widgetInfo": {
@@ -4478,7 +4635,9 @@ stage.addEventListener("pointermove", (ev) => {
   const current = selectedItem();
   const handle = canEdit(current) ? handleAt(hitRect(current), world.x, world.y, zoom) : null;
   stage.style.cursor = handle ? handleCursor(handle) : "default";
+  showTextTip(hitStack(scene, world.x, world.y, skipMask)[0] ?? null, ev.clientX, ev.clientY);
 });
+stage.addEventListener("pointerleave", () => showTextTip(null, 0, 0));
 stage.addEventListener("pointerup", (ev) => {
   if (ev.button === 1 && panning) {
     panning = false;
@@ -4730,6 +4889,8 @@ gridToggle.addEventListener("change", () => {
   host.send({ type: "setUiState", valueMode, snap: snapToggle.checked, grid: gridToggle.checked });
   draw();
 });
+locResolvedEl.addEventListener("click", () => setLocMode("resolve"));
+locRawEl.addEventListener("click", () => setLocMode("raw"));
 constraintsToggle.addEventListener("change", () => {
   // Switching it on turns the placement flag on, so the trace has to be fetched
   // for the CURRENT selection or the overlay would stay blank until the user

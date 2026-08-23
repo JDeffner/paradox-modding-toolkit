@@ -107,7 +107,17 @@ export interface GuiEditorUiState {
    */
   snap?: boolean;
   grid?: boolean;
+  /**
+   * How a textbox's `text =` is shown: `resolve` (the default) localizes keys
+   * and fills in what `[datafunctions]` can be known; `raw` shows the file's
+   * own value verbatim. It is `GuiLayoutParams.loc`, remembered by the host
+   * like the snap and grid toggles, and every layout request carries it.
+   */
+  loc?: GuiLocMode;
 }
+
+/** The two ways a layout shows textbox text (`GuiLayoutParams.loc`). */
+export type GuiLocMode = "resolve" | "raw";
 
 export interface GuiPanelState {
   width: number;
@@ -293,7 +303,32 @@ export type AppToHost =
       /** The snap and grid toggles; absent leaves what the host has stored alone. */
       snap?: boolean;
       grid?: boolean;
+      /**
+       * The textbox display mode. Unlike the other fields the host does not
+       * only store it: it re-lays the document out with it, because the mode
+       * changes what the server measures and draws. The app asks for that
+       * layout itself (`requestLayout`) right after this message.
+       */
+      loc?: GuiLocMode;
     }
+  /**
+   * Open the host's localization flow for `key`, which a textbox names and the
+   * loc index does not have: the host asks for the value and writes it where
+   * the mod's sibling keys live, then pushes a fresh layout so the textbox
+   * shows the new text. Nothing is written to the .gui document.
+   */
+  | { type: "editLoc"; key: string }
+  /**
+   * Remember `value` as the preview text for the `[expression]` a textbox
+   * holds and the game would only evaluate at runtime. The host keeps the
+   * table per mod (`<mod>/<configDir>/gui-preview-values.json`), sends it with
+   * every layout request as `GuiLayoutParams.previewValues`, and answers this
+   * message with a fresh layout. `expression` is the segment's `source`: the
+   * chain without its brackets.
+   */
+  | { type: "setPreviewValue"; expression: string; value: string }
+  /** Drop the preview text for `expression` from that table, then push a fresh layout. */
+  | { type: "clearPreviewValue"; expression: string }
   /** Remember these properties under a name. The host answers by pushing `userData`. */
   | { type: "savePreset"; name: string; properties: EditProperty[] }
   /** Forget a saved component or preset. The host answers by pushing `userData`. */
@@ -355,6 +390,13 @@ export type HostToApp =
        * complete and the app shows the file count alone.
        */
       storeWarning?: string;
+      /**
+       * The preview table this layout was computed with, keyed exactly as
+       * the file has it (`[expression]`). The inspector reads it to tell a
+       * datafunction the modder gave a value from one the loc index
+       * resolved, which the segment alone does not say.
+       */
+      previewValues?: Record<string, string>;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an

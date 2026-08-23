@@ -134,7 +134,7 @@ instead.
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
-| `paradox/guiLayout` | request | `{ uri, text, visibility? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings and the conditional-visibility checks it met |
+| `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
 | `paradox/guiDependencies` | request | `GuiDependenciesParams` → `GuiDependenciesResult` — the scripted_guis and loc keys a .gui document (or one widget in it) reaches |
 | `paradox/guiPreview` | request | `{ uri, text, entries: [{ name, kind: builtin\|type\|template\|raw, fragment? }] }` → `GuiPreviewResult` — one laid-out instance per palette entry for a library tile (the document's own declarations kept, the store shared with guiLayout); `node: null` + `reason` when nothing stands up; at most `GUI_PREVIEW_MAX` (48) entries per request |
@@ -271,6 +271,35 @@ therefore share one toggle, which is what a toggle UI wants. `visibilityChecks`
 reports every check met — in ALL modes, `showAll` included, so the UI can be
 built before the user switches mode — each with the number of widgets carrying
 it and whether THIS run resolved it to hidden.
+
+`paradox/guiLayout` resolves what a textbox SHOWS, as far as a static preview
+can know it, and `loc` chooses between the two honest answers. `resolve` (the
+default) looks a `text =` value up: a localization key becomes the configured
+language's text, a `[datafunction]` becomes its `Localize('key')` /
+`Concept('key', 'text')` value or the modder's own preview text, and a
+`#bold`/`§Y`/`@icon!` formatting is stripped for measurement. What cannot be
+known is shown as is and flagged, never invented: a key the index lacks shows
+the key, a chain like `[GetPlayer.GetName]` shows its last segment (`Name`).
+`raw` is the file's own value verbatim, which is what a layout measured before
+this field existed. Sizes follow the shown text either way, so an autoresizing
+label is as wide as what the player would read.
+
+`previewValues` is the modder's table of preview text per expression, keyed
+`[GetPlayer.GetName]` (the brackets are accepted either way) and kept by the
+client with the mod (the VS Code host reads and writes
+`<mod>/<configDirName>/gui-preview-values.json`). A value there wins over every
+other resolution of that expression, and a value is text, never a number the
+server would format.
+
+The answer is on `GuiLayoutText`: `text` is what was measured and drawn, `raw`
+is the `text =` value when it differs, and `segments` explains the pieces when
+there is something to explain (absent for a plain literal). Each
+`GuiTextSegment` has a `kind` (`literal`, `loc`, `datafn`), its `source` (the
+key, or the expression without brackets) and `resolved`, false for a key the
+index lacks or a datafunction only the running game evaluates. A key whose
+value itself holds datafunctions resolves one level deep and yields one `loc`
+segment per literal piece plus a `datafn` segment per expression, so a client
+can style the unresolved chips inside an otherwise localized line.
 
 `timings` is that request's own wall clock, split into `parseMs` (the document's
 CST plus its own declarations), `defsMs` (the cross-file template/type store, 0

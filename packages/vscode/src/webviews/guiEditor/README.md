@@ -175,6 +175,23 @@ each has to actually do.
   echoed it back mid-session would fight a user who changed it twice while a
   layout was in flight, which is also why the app adopts `layout.ui` only from
   the FIRST layout it receives.
+  `loc` is the one field that also changes a layout: it is
+  `GuiLayoutParams.loc` (`resolve`, the default, or `raw`), so every layout
+  request the host makes carries the stored value. The app sends
+  `requestLayout` itself right after changing it; the host only stores.
+- **`editLoc`** A textbox names a loc key the index does not have. Run the
+  host's own localization flow for it (`panel.ts` runs `px.editLocalization`
+  with the key, which asks for the value and writes it where the mod's sibling
+  keys live), then push a fresh `layout` once the loc index has seen the file.
+  Nothing is written to the .gui document and there is no verdict.
+- **`setPreviewValue` / `clearPreviewValue`** Keep a per-mod table of preview
+  text per `[expression]`, at `<mod>/<configDirName>/gui-preview-values.json`
+  (a flat `{ "[GetPlayer.GetName]": "Alice" }` object, pretty JSON, UTF-8,
+  folder created on first write). Send it with EVERY layout request as
+  `GuiLayoutParams.previewValues` and echo it on `layout.previewValues`: the
+  inspector reads that echo to tell a datafunction the modder gave a value from
+  one the loc index resolved, which the segment alone does not say. Both
+  messages write the file and push a fresh layout; no verdict.
 
 Every `checkEdit`, `applyEdit`, `checkReorder`, `reorder`, `checkOps`,
 `applyOps`, `copyBlocks`, `pasteInto`, `saveComponent` and `insertComponent`
@@ -219,7 +236,7 @@ VS Code's `workspaceState`; another host may use anything with the same shape.
 | `px.guiEditor.components` | `{ [name]: string }` — the widgets' VERBATIM block text | A library: global, not per document |
 | `px.guiEditor.presets` | `{ [name]: { key, value }[] }` — property writes in saved order | A library: global, not per document |
 | `px.guiEditor.visibility` | `{ [documentUri]: { mode, checks? } }` | Per document |
-| `px.guiEditor.ui` | `{ valueMode: "full" \| "abbreviated" \| "hidden", panels?, snap?, grid? }` | A preference: global |
+| `px.guiEditor.ui` | `{ valueMode: "full" \| "abbreviated" \| "hidden", panels?, snap?, grid?, loc? }` | A preference: global |
 
 Three rules about them. The visibility default is NEVER stored: writing
 `showAll` for every file ever opened would grow the map by one entry per file,
@@ -237,7 +254,11 @@ these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
 `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`,
 `heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`,
 `haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
-`dropTarget`, `side`, `right`, `toggleSide`, `toggleRight`. `dropTarget` is the
+`dropTarget`, `textTip`, `locResolved`, `locRaw`, `side`, `right`,
+`toggleSide`, `toggleRight`. `locResolved` and `locRaw` are the two buttons of
+a px-toggle-group (the app sets their `aria-pressed`); `textTip` is a hidden
+`px-popover` inside the stage that the app fills with a hovered textbox's
+segments and positions in screen space. `dropTarget` is the
 "Drop here" outline a palette drag places over its container, a hidden
 element inside the stage that the app positions in screen space. `snap`, `grid`, `constraints` and `pulses` are
 checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app fills

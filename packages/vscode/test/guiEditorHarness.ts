@@ -442,7 +442,17 @@ function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>):
     },
   };
   const context = new Proxy(
-    { globalAlpha: 1, lineWidth: 1, fillStyle: "", strokeStyle: "", font: "", textBaseline: "" },
+    {
+      globalAlpha: 1,
+      lineWidth: 1,
+      fillStyle: "",
+      strokeStyle: "",
+      font: "",
+      textBaseline: "",
+      // A fixed advance: the painter needs a width to place a text run after
+      // the one before it, and jsdom has no glyphs to measure.
+      measureText: (text: string) => ({ width: text.length * 7 }),
+    },
     {
       get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined),
       set: (target, key, value) => {

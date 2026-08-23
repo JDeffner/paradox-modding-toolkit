@@ -65,6 +65,13 @@ ${uiCss}
   .px-toggle:has(> input:focus-visible) { border-color: var(--px-ring); box-shadow: 0 0 0 3px var(--px-ring-soft); }
   #heatmap { display: none; }
   #heatmapMenu { width: auto; min-width: 120px; }
+  /* What a hovered textbox's segments resolved to (main.ts builds the rows). */
+  #textTip { position: fixed; z-index: 60; pointer-events: none; gap: 4px; min-width: 0; padding: 6px 8px; font-size: var(--px-text-xs); }
+  #textTip[hidden] { display: none; }
+  #textTip .seg { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  #textTip .seg .px-badge { flex: 0 0 auto; height: 16px; padding: 0 5px; }
+  #textTip .seg .src { font-family: var(--px-font-mono); }
+  #textTip .seg .arrow, #textTip .seg .note { color: var(--px-muted-fg); }
 
   /* ---- stage ---- */
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
@@ -159,6 +166,9 @@ ${uiCss}
   }
   #inspector .val.short:hover { background: var(--px-muted); }
   #inspector .prop .from { padding-left: 20px; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  /* Under the inspector text row: what the canvas shows for it, and the buttons for what it could not resolve. */
+  #inspector .prop .resolved { padding-left: 20px; font-size: var(--px-text-xs); color: var(--px-muted-fg); white-space: normal; word-break: break-word; }
+  #inspector .prop .textTools { display: flex; flex-wrap: wrap; gap: 3px; padding: 2px 0 2px 20px; }
   #inspector .prop .block { display: flex; flex-direction: column; gap: 3px; padding: 3px 0 3px 20px; }
   #inspector .prop .block .line { display: flex; gap: 4px; align-items: center; }
   #inspector .prop .block .line > .val { flex: 1 1 auto; }
@@ -248,6 +258,10 @@ ${uiCss}
       ${viewToggle("constraints", "ruler", "Show the selected widget's parent box, its anchors and the offset between them")}
       ${viewToggle("pulses", "activity", "Flash the widgets each re-layout moved")}
     </div>
+    <div class="px-toggle-group">
+      <button id="locResolved" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Show textboxes as the game would: localization keys as their text, [datafunctions] as what the preview can know" data-tip-wrap>Resolved</button>
+      <button id="locRaw" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Show textboxes as the file has them: the text = value verbatim" data-tip-wrap>Raw</button>
+    </div>
     <select id="heatmap"></select>
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
@@ -272,6 +286,7 @@ ${uiCss}
     <div id="stage">
       <canvas id="canvas"></canvas>
       <div id="dropTarget" hidden><span class="px-badge">Drop here</span></div>
+      <div id="textTip" class="px-popover" hidden></div>
       <div id="stageTools">
         <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="right" data-tip-wrap>${icon("info")}</button>
         <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out" data-tip-side="right">${icon("zoomOut")}</button>

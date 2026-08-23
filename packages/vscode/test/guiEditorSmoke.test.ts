@@ -57,6 +57,8 @@ import { collectScriptedGuiCalls, emptyGuiScriptLinks } from "../../server/src/g
 import { loadSchema } from "../../server/src/schema/loader";
 import { ServerData } from "../../server/src/serverData";
 import { applyAll } from "../../server/src/gui/sourceEdit";
+import { resolveGuiText } from "../../server/src/gui/textResolve";
+import { UNRESOLVED_TEXT } from "../src/webviews/guiEditor/app/render";
 import { countTopLevelBlocks } from "../src/webviews/guiEditor/userData";
 import type {
   AppToHost,
@@ -363,6 +365,7 @@ function serveHalo(message: AppToHost): boolean {
         valueMode: message.valueMode,
         snap: message.snap ?? storedUi?.snap,
         grid: message.grid ?? storedUi?.grid,
+        loc: message.loc ?? storedUi?.loc,
       };
       return true;
     case "savePreset":
@@ -2577,5 +2580,164 @@ describe("the toolbar, increment 1", () => {
     editor.push({ type: "layout", file: "group.gui", result: layoutOf(GROUP), textures: {}, ui: storedUi });
     expect((editor.document.getElementById("grid") as HTMLInputElement).checked).toBe(true);
     expect((editor.document.getElementById("snap") as HTMLInputElement).checked).toBe(false);
+  });
+});
+
+// ---- textbox text: resolved by default, raw on request ----------------------
+
+const LOC_TEXT = [
+  "widget = {",
+  '\tname = "px_loc_frame"',
+  "\tsize = { 400 300 }",
+  '\ttextbox = { name = "px_loc_known" position = { 10 10 } size = { 200 30 } text = "px_known_key" }',
+  '\ttextbox = { name = "px_loc_missing" position = { 10 50 } size = { 200 30 } text = "px_missing_key" }',
+  '\ttextbox = { name = "px_loc_fn" position = { 10 90 } size = { 200 30 } text = "[GetPlayer.GetName]" }',
+  '\twidget = { name = "px_loc_plain" position = { 10 130 } size = { 200 30 } }',
+  "}",
+].join("\n");
+
+/** The stub host's loc index and preview table: what the REAL resolver reads. */
+let storedPreviewValues: Record<string, string> = {};
+const locIndex = (key: string): string | undefined => (key === "px_known_key" ? "Hello there" : undefined);
+
+/** A layout the way `panel.ts` requests one: the stored loc mode and preview table ride along. */
+function serveLocLayout(text = LOC_TEXT): GuiLayoutResult {
+  doc = text;
+  docFile = "loc.gui";
+  const resolve =
+    storedUi?.loc === "raw"
+      ? undefined
+      : (raw: string) => resolveGuiText(raw, { loc: locIndex, previewValues: storedPreviewValues });
+  const result = computeGuiLayoutResult(text, null, null, [], [], undefined, resolve);
+  editor.push({
+    type: "layout",
+    file: "loc.gui",
+    result,
+    textures: {},
+    ui: storedUi,
+    previewValues: storedPreviewValues,
+  });
+  return result;
+}
+
+function textOf(result: GuiLayoutResult, name: string): string | undefined {
+  return result.nodes[0].children.find((n) => n.name === name)?.text?.text;
+}
+
+function textTip(): string | null {
+  const node = editor.document.getElementById("textTip")!;
+  return node.hasAttribute("hidden") ? null : (node.textContent ?? "");
+}
+
+describe("textbox text", () => {
+  beforeEach(() => {
+    storedPreviewValues = {};
+  });
+
+  it("is resolved by default, and an unresolved key or datafunction paints muted and dotted", () => {
+    editor.paint.reset();
+    const layout = serveLocLayout();
+    expect(textOf(layout, "px_loc_known")).toBe("Hello there");
+    expect(editor.paint.strokes).toContain(UNRESOLVED_TEXT);
+
+    // Nothing to underline once the whole document resolves.
+    storedPreviewValues = { "[GetPlayer.GetName]": "Alice" };
+    editor.paint.reset();
+    const resolved = serveLocLayout(LOC_TEXT.replace("px_missing_key", "px_known_key"));
+    expect(textOf(resolved, "px_loc_fn")).toBe("Alice");
+    expect(editor.paint.strokes).not.toContain(UNRESOLVED_TEXT);
+  });
+
+  it("the Raw toggle is remembered by the host and asks for a layout in that mode", () => {
+    serveLocLayout();
+    editor.document.getElementById("locRaw")!.click();
+    serveEdits();
+    expect(editor.sent.slice(-2)).toEqual([
+      { type: "setUiState", valueMode: "full", loc: "raw" },
+      { type: "requestLayout" },
+    ]);
+    expect(storedUi?.loc).toBe("raw");
+    const layout = serveLocLayout();
+    expect(textOf(layout, "px_loc_known")).toBe("px_known_key");
+    expect(editor.document.getElementById("locRaw")!.getAttribute("aria-pressed")).toBe("true");
+
+    // The next panel boots in the stored mode without being told twice.
+    editor.close();
+    editor = bootEditor();
+    serveLocLayout();
+    expect(editor.document.getElementById("locRaw")!.getAttribute("aria-pressed")).toBe("true");
+    expect(editor.document.getElementById("locResolved")!.getAttribute("aria-pressed")).toBe("false");
+    expect(editor.sent.filter((m) => m.type === "requestLayout")).toEqual([]);
+  });
+
+  it("hovering a textbox explains each segment; a plain widget has no tooltip", () => {
+    const layout = serveLocLayout();
+    const known = rectOf(layout, "px_loc_known");
+    editor.move(known.x + 20, known.y + 10);
+    expect(textTip()).toContain("loc");
+    expect(textTip()).toContain("px_known_key");
+    expect(textTip()).toContain("Hello there");
+
+    const missing = rectOf(layout, "px_loc_missing");
+    editor.move(missing.x + 20, missing.y + 10);
+    expect(textTip()).toContain("px_missing_key");
+    expect(textTip()).toContain("not localized");
+
+    const fn = rectOf(layout, "px_loc_fn");
+    editor.move(fn.x + 20, fn.y + 10);
+    expect(textTip()).toContain("datafn");
+    expect(textTip()).toContain("[GetPlayer.GetName]");
+    expect(textTip()).toContain("resolved by the game at runtime");
+
+    const plain = rectOf(layout, "px_loc_plain");
+    editor.move(plain.x + 20, plain.y + 10);
+    expect(textTip()).toBeNull();
+  });
+
+  it("the inspector shows what a key resolved to, and offers to create a missing one", () => {
+    const layout = serveLocLayout();
+    const known = rectOf(layout, "px_loc_known");
+    editor.click(known.x + 20, known.y + 10);
+    serveWidgetInfo(editor, doc);
+    const row = editor.propRow("text")!;
+    expect(row.textContent).toContain("shows: Hello there");
+    expect(row.querySelector("button")).toBeNull();
+
+    const missing = rectOf(layout, "px_loc_missing");
+    editor.click(missing.x + 20, missing.y + 10);
+    serveWidgetInfo(editor, doc);
+    editor.button("Create localization").click();
+    expect(lastOfType(editor, "editLoc")).toEqual({ type: "editLoc", key: "px_missing_key" });
+  });
+
+  it("a datafunction takes a preview value from the inspector, and gives it back", () => {
+    const layout = serveLocLayout();
+    const fn = rectOf(layout, "px_loc_fn");
+    editor.click(fn.x + 20, fn.y + 10);
+    serveWidgetInfo(editor, doc);
+    editor.button("Set preview value…").click();
+    const input = editor.document.querySelector<HTMLInputElement>('.px-popover [data-row="+previewValue"]')!;
+    expect(input).not.toBeNull();
+    input.value = "Alice";
+    input.dispatchEvent(
+      new editor.document.defaultView!.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    );
+    expect(lastOfType(editor, "setPreviewValue")).toEqual({
+      type: "setPreviewValue",
+      expression: "GetPlayer.GetName",
+      value: "Alice",
+    });
+
+    // The host wrote the table and laid the document out with it.
+    storedPreviewValues = { "[GetPlayer.GetName]": "Alice" };
+    const next = serveLocLayout();
+    expect(textOf(next, "px_loc_fn")).toBe("Alice");
+    serveWidgetInfo(editor, doc);
+    expect(editor.propRow("text")!.textContent).toContain("shows: Alice");
+    editor.button("Preview value: Alice").click();
+    expect(lastOfType(editor, "clearPreviewValue")).toEqual({
+      type: "clearPreviewValue",
+      expression: "GetPlayer.GetName",
+    });
   });
 });

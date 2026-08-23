@@ -49,7 +49,7 @@ const VALUE_MODES: readonly GuiValueMode[] = ["full", "abbreviated", "hidden"];
  */
 export function readUiState(stored: unknown): GuiEditorUiState | undefined {
   const record = stored as
-    { valueMode?: unknown; panels?: unknown; snap?: unknown; grid?: unknown } | undefined;
+    { valueMode?: unknown; panels?: unknown; snap?: unknown; grid?: unknown; loc?: unknown } | undefined;
   const mode = record?.valueMode;
   if (!VALUE_MODES.includes(mode as GuiValueMode)) return undefined;
   const panels = record?.panels as { left?: unknown; right?: unknown } | undefined;
@@ -60,6 +60,7 @@ export function readUiState(stored: unknown): GuiEditorUiState | undefined {
   // Only a boolean reaches the toggles: anything else is left to the page's default.
   if (typeof record?.snap === "boolean") state.snap = record.snap;
   if (typeof record?.grid === "boolean") state.grid = record.grid;
+  if (record?.loc === "resolve" || record?.loc === "raw") state.loc = record.loc;
   return state;
 }
 

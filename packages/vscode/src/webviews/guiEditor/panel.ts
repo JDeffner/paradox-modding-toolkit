@@ -37,7 +37,13 @@ import type {
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { LAYOUT_DEBOUNCE_MS, type AppToHost, type HostToApp, type TextureEntry } from "./messages";
+import {
+  LAYOUT_DEBOUNCE_MS,
+  type AppToHost,
+  type GuiLocMode,
+  type HostToApp,
+  type TextureEntry,
+} from "./messages";
 import { guiEditorHtml } from "./html";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "./textureCache";
 import {
@@ -54,7 +60,9 @@ import {
 export type FetchLayout = (
   uri: vscode.Uri,
   text: string,
-  visibility: GuiVisibilityOptions | undefined
+  visibility: GuiVisibilityOptions | undefined,
+  /** How textboxes are shown (`GuiLayoutParams.loc`) and the mod's preview table. */
+  textOptions: { loc: GuiLocMode | undefined; previewValues: Record<string, string> | undefined }
 ) => Promise<GuiLayoutResult>;
 export type FetchWidgetInfo = (
   uri: vscode.Uri,
@@ -95,6 +103,13 @@ const TEXTURE_WALK_MAX = 20000;
 const TEXTURE_ANSWER_MAX = 200;
 /** One page of thumbnails is what the app asks for; a longer batch is truncated. */
 const THUMBNAIL_BATCH_MAX = 60;
+/**
+ * The modder's preview text per `[expression]`, kept with the mod under its
+ * game's config folder (`.vic3modding/gui-preview-values.json`): it describes
+ * what THAT mod's datafunctions should read as, so it travels with the mod and
+ * not with the user.
+ */
+const PREVIEW_VALUES_FILE = "gui-preview-values.json";
 
 export class GuiEditorPanel {
   private static instance: GuiEditorPanel | undefined;
@@ -262,7 +277,12 @@ export class GuiEditorPanel {
       // The stored mode is read per push rather than held in a field: the mode
       // belongs to the document, and `show` can point this panel at a new one.
       const visibility = this.visibility();
-      const result = await this.fetchLayout(source.uri, source.getText(), visibility);
+      const ui = readUiState(this.state.get(UI_KEY));
+      const previewValues = this.readPreviewValues();
+      const result = await this.fetchLayout(source.uri, source.getText(), visibility, {
+        loc: ui?.loc,
+        previewValues,
+      });
       if (this.disposed || generation !== this.generation) return;
       const textures: Record<string, string | null> = {};
       for (const texture of result.textures) {
@@ -276,7 +296,8 @@ export class GuiEditorPanel {
         result,
         textures,
         visibility,
-        ui: readUiState(this.state.get(UI_KEY)),
+        ui,
+        previewValues,
         lineHeightRatio: this.meta.guiTextMetrics
           ? this.meta.guiTextMetrics.lineHeight / this.meta.guiTextMetrics.baseFontsize
           : undefined,
@@ -290,6 +311,45 @@ export class GuiEditorPanel {
       if (this.disposed) return;
       this.post({ type: "error", message: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  private previewValuesPath(): string | null {
+    return this.roots.modPath
+      ? path.join(this.roots.modPath, this.meta.configDirName, PREVIEW_VALUES_FILE)
+      : null;
+  }
+
+  /** The mod's preview table, or undefined when there is none (or it is not a flat string map). */
+  private readPreviewValues(): Record<string, string> | undefined {
+    const file = this.previewValuesPath();
+    if (!file) return undefined;
+    try {
+      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+      const out: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed)) if (typeof value === "string") out[key] = value;
+      return out;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Rewrite the table with one entry set or dropped, then lay the document out with it. */
+  private async updatePreviewValues(expression: string, value: string | undefined): Promise<void> {
+    const file = this.previewValuesPath();
+    if (!file) {
+      void vscode.window.showWarningMessage(
+        "Paradox Modding Toolkit: no mod folder for this .gui file, so there is nowhere to keep a preview value."
+      );
+      return;
+    }
+    const table = this.readPreviewValues() ?? {};
+    const key = `[${expression}]`;
+    if (value === undefined) delete table[key];
+    else table[key] = value;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(table, null, 2) + "\n", "utf8");
+    await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
   }
 
   /** The conditional-visibility options stored for THIS document, if any. */
@@ -671,7 +731,28 @@ export class GuiEditorPanel {
           panels: message.panels ?? stored?.panels,
           snap: message.snap ?? stored?.snap,
           grid: message.grid ?? stored?.grid,
+          loc: message.loc ?? stored?.loc,
         });
+        return;
+      }
+      case "editLoc": {
+        // The toolkit's own loc flow: it asks for the value and writes it where
+        // the key's siblings live. The server re-indexes the changed file
+        // through the mod watcher, so the layout is re-requested after the
+        // debounce the rest of the extension gives a file change.
+        await vscode.commands.executeCommand("px.editLocalization", message.key);
+        if (this.debounce) clearTimeout(this.debounce);
+        this.debounce = setTimeout(() => {
+          void vscode.workspace.openTextDocument(this.sourceUri).then((doc) => this.load(doc));
+        }, LAYOUT_DEBOUNCE_MS);
+        return;
+      }
+      case "setPreviewValue": {
+        await this.updatePreviewValues(message.expression, message.value);
+        return;
+      }
+      case "clearPreviewValue": {
+        await this.updatePreviewValues(message.expression, undefined);
         return;
       }
       case "undo":

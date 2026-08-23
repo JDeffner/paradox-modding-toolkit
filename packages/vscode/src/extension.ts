@@ -710,11 +710,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       GuiEditorPanel.show(
         context,
-        (uri, text, visibility) =>
+        (uri, text, visibility, textOptions) =>
           lc.sendRequest<GuiLayoutResult>(guiLayoutRequest, {
             uri: uri.toString(),
             text,
             visibility,
+            loc: textOptions.loc,
+            previewValues: textOptions.previewValues,
           } satisfies GuiLayoutParams),
         (uri, text, line, placement) =>
           lc.sendRequest<GuiWidgetInfo | null>(guiWidgetInfoRequest, {

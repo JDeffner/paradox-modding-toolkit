@@ -8,7 +8,7 @@
  * construction.
  */
 import { computeFrameCell, computeNineSlice } from "@px-lsp/server/gui/fillGeometry";
-import type { GuiLayoutFill } from "@px-lsp/protocol/protocol";
+import type { GuiLayoutFill, GuiTextSegment } from "@px-lsp/protocol/protocol";
 import { handlePoints, HANDLE_SIZE } from "./gesture";
 import type { ConstraintOverlay } from "./placement";
 import { GHOST_OPACITY, type Scene, type SceneItem, type SceneRect } from "./scene";
@@ -50,6 +50,14 @@ const EXPAND_STROKE = "#9cdcfe";
 const PULSE_STROKE = "#4fffb0";
 /** How opaque a heatmap tint gets at its strongest. */
 const HEAT_ALPHA = 0.4;
+/**
+ * Text the preview could not resolve (a loc key nobody localized, a datafunction
+ * only the running game evaluates): muted and dotted-underlined, so a chip
+ * never reads as the text the player would see. One colour for both, because
+ * the tooltip is where the two are told apart.
+ */
+export const UNRESOLVED_TEXT = "#8f8a80";
+const UNRESOLVED_DASH = [1, 2];
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -210,10 +218,43 @@ function paintItem(
   if (item.textLines.length > 0) {
     ctx.save();
     ctx.textBaseline = "top";
-    ctx.fillStyle = item.text?.color ? rgba(item.text.color) : "#e3dac3";
+    const color = item.text?.color ? rgba(item.text.color) : "#e3dac3";
+    const segments = item.text?.segments;
+    const unresolved = segments?.some((s) => !s.resolved) ? segments : null;
     for (const line of item.textLines) {
       ctx.font = `${line.fontsize}px ${fontFamily}`;
-      ctx.fillText(line.text, line.x, line.y);
+      if (!unresolved) {
+        ctx.fillStyle = color;
+        ctx.fillText(line.text, line.x, line.y);
+        continue;
+      }
+      // The segments are the WHOLE text, the line is a wrapped or elided piece
+      // of it, so a run is painted on its own only when the line IS the text
+      // (the common single-line case). A wrapped line paints as one unresolved
+      // run: the engine's wrap points are not known per segment, and a whole
+      // muted line is honest where a misplaced underline would not be.
+      const runs =
+        item.textLines.length === 1 && segments!.map((s) => s.text).join("") === line.text
+          ? segments!
+          : [{ text: line.text, resolved: false } as GuiTextSegment];
+      let x = line.x;
+      for (const run of runs) {
+        const w = ctx.measureText(run.text).width;
+        ctx.fillStyle = run.resolved ? color : UNRESOLVED_TEXT;
+        ctx.fillText(run.text, x, line.y);
+        if (!run.resolved) {
+          const y = line.y + line.fontsize + 1;
+          ctx.strokeStyle = UNRESOLVED_TEXT;
+          ctx.lineWidth = 1;
+          ctx.setLineDash(UNRESOLVED_DASH);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + w, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        x += w;
+      }
     }
     ctx.restore();
   }
