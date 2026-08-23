@@ -30,22 +30,89 @@ const execFileAsync = promisify(execFile);
 const ALLOWED_DOWNLOAD_HOSTS = new Set(["github.com", "objects.githubusercontent.com"]);
 
 /**
- * The parsed asset URL, or null when it is not a GitHub release URL.
+ * The parsed download URL, or null when it is not a GitHub release URL.
+ * `base` resolves a relative `Location` header against the hop that sent it.
  *
  * `browser_download_url` is a field of the GitHub API answer, and what comes
  * back is written to disk, unpacked and then executed. There is no checksum to
  * verify against (tiger publishes none), so the host is the one thing that can
- * be asserted, and it is asserted before the bytes are fetched.
+ * be asserted, and it is asserted for every URL the download touches, not just
+ * the first one.
  */
-export function checkedDownloadUrl(raw: string): URL | null {
+export function checkedDownloadUrl(raw: string, base?: URL): URL | null {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = new URL(raw, base);
   } catch {
     return null;
   }
   if (url.protocol !== "https:" || !ALLOWED_DOWNLOAD_HOSTS.has(url.hostname)) return null;
   return url;
+}
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * GitHub hands a release asset over as a redirect chain (github.com answers a
+ * 302 to a signed objects.githubusercontent.com URL), so redirects have to be
+ * followed. Five hops is far more than that chain has ever taken and keeps a
+ * redirect loop from spending the whole download timeout.
+ */
+const MAX_DOWNLOAD_REDIRECTS = 5;
+
+/** Where a download response points next. */
+export type RedirectStep =
+  /** Not a redirect: this response carries the bytes. */
+  | { kind: "done" }
+  /** A redirect to an allowed host. */
+  | { kind: "follow"; url: URL }
+  /** A redirect off the allowlist. */
+  | { kind: "refused"; target: string };
+
+/**
+ * The next step of a download's redirect chain.
+ *
+ * `fetch` follows redirects itself, which would leave the allowlist covering
+ * only the first URL: a hop off it would then deliver the bytes that get
+ * unpacked and executed, which is the whole thing the check exists to stop.
+ * Split out of the fetch loop so each branch is testable without a network.
+ */
+export function redirectStep(status: number, location: string | null, from: URL): RedirectStep {
+  if (!REDIRECT_STATUSES.has(status) || location === null) return { kind: "done" };
+  const url = checkedDownloadUrl(location, from);
+  return url ? { kind: "follow", url } : { kind: "refused", target: location };
+}
+
+/**
+ * GET `url`, checking every redirect target against the host allowlist.
+ *
+ * The abort signal is created once and shared across the chain, so the timeout
+ * bounds the whole download instead of restarting at each hop.
+ */
+async function fetchCheckedDownload(url: URL, timeoutMs: number): Promise<Response> {
+  const signal = AbortSignal.timeout(timeoutMs);
+  let current = url;
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(current, {
+      headers: { "User-Agent": "ck3-modding-vscode" },
+      redirect: "manual",
+      signal,
+    });
+    const step = redirectStep(res.status, res.headers.get("location"), current);
+    if (step.kind === "done") return res;
+    if (step.kind === "refused") {
+      throw new Error(`refusing to follow the redirect to ${step.target}: not an https GitHub release URL.`);
+    }
+    if (hop >= MAX_DOWNLOAD_REDIRECTS) {
+      throw new Error(`download of ${url.href} still redirecting after ${MAX_DOWNLOAD_REDIRECTS} hops.`);
+    }
+    try {
+      await res.body?.cancel();
+    } catch {
+      // a 3xx body is empty in practice; failing to drain it is not fatal
+    }
+    current = step.url;
+  }
 }
 
 /** Hang guards: without them a stalled connection leaves the progress notification up forever. */
@@ -204,10 +271,7 @@ export async function downloadLatestTiger(
   }
 
   report(`downloading ${assetUrl.href}...`);
-  const dlRes = await fetch(assetUrl, {
-    headers: { "User-Agent": "ck3-modding-vscode" },
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-  });
+  const dlRes = await fetchCheckedDownload(assetUrl, DOWNLOAD_TIMEOUT_MS);
   if (!dlRes.ok) throw new Error(`download failed with HTTP ${dlRes.status}.`);
   const buffer = Buffer.from(await dlRes.arrayBuffer());
   // tiger publishes no checksums, so there is nothing to verify against. The
