@@ -268,7 +268,7 @@ export class GraphView {
     const tip = svgEl("title");
     tip.textContent =
       node.id +
-      (node.title ? " — " + node.title : "") +
+      (node.title ? ": " + node.title : "") +
       `  [${node.kind} · ${node.source}]` +
       (node.file ? `\n${node.file}${node.line ? ":" + node.line : ""}` : "") +
       "\nclick: focus and inspect · drag: move · double-click: open source · right-click: re-centre";
