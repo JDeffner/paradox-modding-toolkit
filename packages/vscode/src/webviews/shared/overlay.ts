@@ -4,6 +4,17 @@
  */
 
 let openPopover: (() => void) | null = null;
+let openAnchor: HTMLElement | null = null;
+
+/** Close the open popover, if any. */
+export function closePopover(): void {
+  openPopover?.();
+}
+
+/** True when `anchor` currently owns the open popover (so a click on it should close, not reopen). */
+export function isPopoverAnchor(anchor: HTMLElement): boolean {
+  return openPopover !== null && openAnchor === anchor;
+}
 
 /**
  * Show `content` anchored below `anchor` (above when there is no room).
@@ -36,6 +47,7 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
   const close = (): void => {
     if (openPopover !== close) return;
     openPopover = null;
+    openAnchor = null;
     document.removeEventListener("pointerdown", onPointer, true);
     document.removeEventListener("keydown", onKey, true);
     anchor.removeAttribute("aria-expanded");
@@ -58,6 +70,7 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
     document.addEventListener("keydown", onKey, true);
   }, 0);
   openPopover = close;
+  openAnchor = anchor;
   return close;
 }
 
@@ -91,6 +104,8 @@ export interface MenuItem {
   hint?: string;
   /** CSS color for a swatch on the left. */
   swatch?: string;
+  /** Hover text for the row (the full path behind a shortened one). */
+  title?: string;
 }
 
 export interface MenuOptions {
@@ -107,6 +122,11 @@ const CHECK =
 
 /** Open a list of items under `anchor`; arrows, Enter, Escape and typing work. */
 export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOptions): void {
+  // The trigger toggles: a second click closes what the first opened.
+  if (isPopoverAnchor(anchor)) {
+    closePopover();
+    return;
+  }
   const root = document.createElement("div");
   root.className = "px-menu";
   root.style.minWidth = `${Math.max(options.width ?? 0, anchor.getBoundingClientRect().width)}px`;
@@ -151,6 +171,7 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
       row.setAttribute("role", "option");
       if (item.value === options.value) row.setAttribute("aria-selected", "true");
       row.innerHTML = CHECK;
+      if (item.title) row.title = item.title;
       if (item.swatch) {
         const sw = document.createElement("span");
         sw.className = "px-swatch";

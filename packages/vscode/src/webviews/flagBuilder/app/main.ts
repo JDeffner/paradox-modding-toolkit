@@ -21,6 +21,8 @@ import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiStat
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { scrubbable } from "../../shared/scrub";
+import { sortable } from "../../shared/sortable";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "./render";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -241,6 +243,13 @@ function numberInput(value: number, step: number, onChange: (v: number) => void)
   };
   // The undo step is the committed value, not every keystroke.
   i.onchange = commit;
+  scrubbable(i, {
+    onChange: (v) => {
+      onChange(v);
+      draw();
+    },
+    onCommit: commit,
+  });
   return i;
 }
 
@@ -303,8 +312,6 @@ function layerLabel(layer: CoaLayer): [string, string] {
   }
 }
 
-let dragFrom = -1;
-
 function renderLayers(): void {
   const list = $("layers");
   list.replaceChildren();
@@ -343,42 +350,19 @@ function renderLayers(): void {
         )
       )
     );
-    // Drag to reorder: the drop half of the row decides before or after.
-    row.draggable = true;
-    row.ondragstart = (e) => {
-      dragFrom = i;
-      row.setAttribute("data-dragging", "");
-      e.dataTransfer!.effectAllowed = "move";
-      e.dataTransfer!.setData("text/plain", String(i));
-    };
-    row.ondragend = () => {
-      dragFrom = -1;
-      for (const r of Array.from(list.children)) {
-        r.removeAttribute("data-dragging");
-        r.removeAttribute("data-drop");
-      }
-    };
-    row.ondragover = (e) => {
-      if (dragFrom < 0 || dragFrom === i) return;
-      e.preventDefault();
-      e.dataTransfer!.dropEffect = "move";
-      const rect = row.getBoundingClientRect();
-      row.dataset.drop = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
-    };
-    row.ondragleave = () => row.removeAttribute("data-drop");
-    row.ondrop = (e) => {
-      e.preventDefault();
-      if (dragFrom < 0 || dragFrom === i) return;
-      const after = row.dataset.drop === "after";
-      const [moved] = flag.layers.splice(dragFrom, 1);
-      let to = i + (after ? 1 : 0);
-      if (dragFrom < to) to--;
-      flag.layers.splice(to, 0, moved);
-      select(to);
-    };
     list.append(row);
   }
 }
+
+// The pattern row is fixed; every layer row below it drags.
+sortable($("layers"), {
+  rows: () => Array.from($("layers").children).slice(1) as HTMLElement[],
+  onReorder: (from, to) => {
+    const [moved] = flag.layers.splice(from, 1);
+    flag.layers.splice(to, 0, moved);
+    select(to);
+  },
+});
 
 function select(index: number): void {
   selected = index;
@@ -537,6 +521,9 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
   return wrap;
 }
 
+/** Instances folded by the user, by "layer:index"; forgotten with the panel. */
+const collapsedInstances = new Set<string>();
+
 function instanceEditor(layer: CoaLayer): HTMLElement {
   const wrap = el(
     "div",
@@ -567,10 +554,13 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
   };
   layer.instances.forEach((inst, i) => {
     const block = el("div", "instance");
+    const key = `${selected}:${i}`;
+    if (collapsedInstances.has(key)) block.setAttribute("data-collapsed", "");
+    const caret = iconEl("chevronDown", "px-icon caret");
     const head = el(
       "div",
       "subhead",
-      el("span", "px-muted px-xs", `Instance ${i + 1}`),
+      el("span", "px-row", caret, el("span", "px-muted px-xs", `Instance ${i + 1}`)),
       button(
         "",
         () => {
@@ -580,6 +570,11 @@ function instanceEditor(layer: CoaLayer): HTMLElement {
         { icon: "x", size: "icon-xs", tip: "Remove instance" }
       )
     );
+    head.onclick = () => {
+      if (collapsedInstances.has(key)) collapsedInstances.delete(key);
+      else collapsedInstances.add(key);
+      block.toggleAttribute("data-collapsed");
+    };
     block.append(head);
     if (layer.kind === "sub") {
       const sub = layer.instances[i];
@@ -917,10 +912,25 @@ function saveTarget(): ModTarget | undefined {
   return mods.find((m) => m.path === uiState.savePath) ?? mods[0];
 }
 
+/** "…\content\3472248460": the mod folder and the one above it, the rest elided. */
+function shortPath(p: string): string {
+  const sep = p.includes("\\") ? "\\" : "/";
+  const parts = p.split(/[\\/]/).filter(Boolean);
+  return parts.length > 2 ? `…${sep}${parts.slice(-2).join(sep)}` : p;
+}
+
 function updateModPicker(): void {
   const b = $<HTMLButtonElement>("mod");
   const target = saveTarget();
-  b.querySelector(".px-truncate")!.textContent = target ? target.label : "No mod in workspace";
+  const label = target
+    ? target.label.length > 12
+      ? target.label.slice(0, 11) + "…"
+      : target.label
+    : "No mod in workspace";
+  b.querySelector(".px-truncate")!.textContent = label;
+  b.dataset.tip = target
+    ? `Saving into ${target.label} (${target.path})`
+    : "No mod in the workspace to save into";
   b.disabled = mods.length < 2;
   $<HTMLButtonElement>("save").disabled = !target;
   $("save").dataset.tip = target
@@ -954,7 +964,7 @@ $("save").onclick = () => {
 $("mod").onclick = () =>
   menu(
     $("mod"),
-    mods.map((m) => ({ value: m.path, label: m.label, hint: m.path })),
+    mods.map((m) => ({ value: m.path, label: m.label, hint: shortPath(m.path), title: m.path })),
     {
       value: saveTarget()?.path,
       search: false,

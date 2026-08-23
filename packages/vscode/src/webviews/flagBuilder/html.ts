@@ -44,8 +44,12 @@ ${uiCss}
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 18px 92px minmax(0, 1fr) 24px; align-items: center; gap: 6px; }
-  .instance { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 2px; }
+  .instance { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
   .instance + .instance { border-top: 1px solid var(--px-border); }
+  .instance > .subhead { cursor: pointer; user-select: none; }
+  .instance > .subhead .px-icon.caret { transition: transform var(--px-ease); }
+  .instance[data-collapsed] > .subhead .px-icon.caret { transform: rotate(-90deg); }
+  .instance[data-collapsed] > .px-field { display: none; }
   .instance .px-input { width: 100%; min-width: 0; }
   .subhead { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
   #browser {
@@ -76,6 +80,7 @@ ${uiCss}
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="New flag">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open a flag from the game or a mod">${icon("folderOpen")}</button>
       <button id="paste" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Paste a flag definition from the clipboard">${icon("paste")}</button>
+      <button id="copy" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Copy the script to the clipboard">${icon("copy")}</button>
     </div>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-row" style="gap:2px">
@@ -87,7 +92,6 @@ ${uiCss}
     <button id="save" class="px-btn" data-variant="default" data-tip="Write the flag into the mod's coat_of_arms folder">${icon("save")} Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-row" style="gap:2px">
-      <button id="copy" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Copy the script to the clipboard">${icon("copy")}</button>
       <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
       <button id="info" class="px-btn" data-variant="ghost" data-size="icon" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
       <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>

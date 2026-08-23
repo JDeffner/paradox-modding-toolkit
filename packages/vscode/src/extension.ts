@@ -46,6 +46,7 @@ import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { readModName } from "@px-lsp/protocol/modName";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
@@ -761,7 +762,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)
-        .map((p) => ({ label: path.basename(p), path: p }));
+        .map((p) => ({ label: readModName(p), path: p }));
       FlagBuilderPanel.show(context, {
         meta,
         roots,

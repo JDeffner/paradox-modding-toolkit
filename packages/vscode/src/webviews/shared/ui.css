@@ -326,6 +326,12 @@ body.vscode-light .px-textarea {
   font-size: var(--px-text-sm);
   border-radius: var(--px-radius-md);
 }
+.px-input.px-scrub:not(:focus) {
+  cursor: ew-resize;
+}
+.px-input[data-scrubbing] {
+  border-color: var(--px-ring);
+}
 .px-input[type="number"] {
   font-variant-numeric: tabular-nums;
   -moz-appearance: textfield;
@@ -687,17 +693,20 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-item[aria-selected="true"] {
   background: var(--px-muted-strong);
 }
-.px-item[draggable="true"] {
-  cursor: grab;
-}
 .px-item[data-dragging] {
-  opacity: 0.4;
+  opacity: 0.35;
 }
-.px-item[data-drop="before"] {
-  box-shadow: inset 0 2px 0 var(--px-primary);
-}
-.px-item[data-drop="after"] {
-  box-shadow: inset 0 -2px 0 var(--px-primary);
+.px-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  pointer-events: none;
+  background: var(--px-popover);
+  box-shadow:
+    var(--px-shadow-md),
+    0 0 0 1px color-mix(in oklch, var(--px-fg) 12%, transparent);
+  opacity: 0.95;
 }
 .px-item > .px-item-kind {
   flex: 0 0 auto;
