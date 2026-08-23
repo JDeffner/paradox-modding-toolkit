@@ -452,6 +452,7 @@ interface there is part of this contract.
 |---|---|---|
 | `paradox/status` | notification | `{ tokens, tokensFromScriptDocs, definitions, indexing }` — data health for a status bar |
 | `paradox/indexChanged` | notification | none — definition index changed (debounced); overview views should re-query |
+| `paradox/progress` | notification | `{ phase, state: "start" \| "done", detail? }` — one coarse loading phase (`index`, `engine`, `guiStore`); `detail` carries the label, sent with `start` |
 
 ## Client command ids
 

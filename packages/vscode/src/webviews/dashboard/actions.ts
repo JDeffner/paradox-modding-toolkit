@@ -1,5 +1,6 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { IconName } from "../shared/icons";
+import { hasFormatDocs } from "../../meta";
 
 export interface ActionItem {
   label: string;
@@ -61,12 +62,21 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ]
           : []),
-        {
-          label: "Format Docs",
-          command: "px.openInfoDocs",
-          icon: "bookOpen",
-          tip: "The game's own _*.info format documentation for the file you are editing.",
-        },
+        // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
+        // files of the folder plus a search on the game's modding wiki.
+        hasFormatDocs(meta.id)
+          ? {
+              label: "Format Docs",
+              command: "px.openInfoDocs",
+              icon: "bookOpen" as const,
+              tip: "The game's own _*.info format documentation for the file you are editing.",
+            }
+          : {
+              label: "Vanilla Examples & Wiki",
+              command: "px.openInfoDocs",
+              icon: "bookOpen" as const,
+              tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
+            },
         {
           label: "Simulate Event",
           command: "px.simulateEvent",

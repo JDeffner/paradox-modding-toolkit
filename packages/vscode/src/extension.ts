@@ -67,10 +67,12 @@ import {
   indexStatsRequest,
   lookupLocRequest,
   modFileChangedNotification,
+  progressNotification,
   reloadDocsRequest,
   statusNotification,
   type ParadoxInitOptions,
   type ParadoxSettings,
+  type ProgressPayload,
   type StatusPayload,
   type LocEntryInfo,
   type LookupLocParams,
@@ -386,6 +388,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
     lastServerStatus = payload;
     updateStatus();
+  });
+
+  lc.onNotification(progressNotification, (payload: ProgressPayload) => {
+    statusBar.setPhase(payload.phase, payload.state, payload.detail);
   });
 
   await lc.start();

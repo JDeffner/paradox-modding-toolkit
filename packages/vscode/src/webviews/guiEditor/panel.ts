@@ -195,7 +195,7 @@ export class GuiEditorPanel {
     this.panel = vscode.window.createWebviewPanel(
       GuiEditorPanel.viewType,
       "GUI Editor",
-      vscode.ViewColumn.Beside,
+      vscode.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -317,7 +317,7 @@ export class GuiEditorPanel {
   private async load(source: vscode.TextDocument): Promise<void> {
     const generation = ++this.generation;
     const file = source.uri.path.split("/").pop() ?? "gui";
-    this.panel.title = `GUI Editor — ${file}`;
+    this.panel.title = `GUI Editor - ${file}`;
     this.post({ type: "loading", file });
     try {
       // The stored mode is read per push rather than held in a field: the mode
@@ -361,7 +361,7 @@ export class GuiEditorPanel {
         // sizes collapse and the canvas looks broken for no visible reason.
         storeWarning: this.roots.gamePath
           ? undefined
-          : "game install not found — layout is missing the game's templates. Run “Paradox: Run Setup & Health Check” or set px.gamePath",
+          : "game install not found: layout is missing the game's templates. Run “Paradox: Run Setup & Health Check” or set px.gamePath",
       });
     } catch (err) {
       if (this.disposed) return;
