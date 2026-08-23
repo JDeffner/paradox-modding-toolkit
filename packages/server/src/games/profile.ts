@@ -11,6 +11,7 @@
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
+import type { SaveSchema } from "../gui/saveSchema";
 
 /**
  * One "New Content" template: the content of a scaffold, as data, so the writer
@@ -191,6 +192,12 @@ export interface GameProfile extends GameMeta {
    * flag documents its probe in gui/layoutEngine.ts's GuiLayoutQuirks.
    */
   guiLayoutQuirks?: GuiLayoutQuirks;
+  /**
+   * How this game's save games are read for GUI preview values: the entity
+   * mapping, the meta keys and the shape the streaming reader must expect
+   * (gui/saveSchema.ts). Absent = a save answers the meta-only default rows.
+   */
+  saveSchema?: SaveSchema;
   /** Trailing provenance note on bundled-wiki token hovers. */
   wikiNote: string;
   /** LSP diagnostic `source` label ("ck3-script"). */

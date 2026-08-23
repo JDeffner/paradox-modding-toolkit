@@ -1,6 +1,6 @@
 /**
- * Coat-of-arms model for the flag builder (Victoria 3, EU5; CK3 shares the
- * format): the types, color resolution and the writer. Parsing lives in
+ * Coat-of-arms model for the flag builder (every game whose profile opts in
+ * shares the format): the types, color resolution and the writer. Parsing lives in
  * coaParse.ts so this module (which the webview app bundles) pulls in no
  * parser and no game profile.
  *

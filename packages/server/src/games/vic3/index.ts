@@ -8,6 +8,7 @@ import type { GameProfile } from "../profile";
 import { vic3Meta } from "./meta";
 import { VIC3_BLOCK_REF_FIELDS, VIC3_PREFIX_REFS, VIC3_REF_FIELDS, VIC3_SCHEMA } from "./schema";
 import { VIC3_STRUCTURES, VIC3_STRUCTURE_SOURCES } from "./structures";
+import { VIC3_SAVE_SCHEMA } from "./saveSchema";
 import GUI_SCHEMA from "../../../data/vic3/guiSchema.json";
 
 export const vic3Profile: GameProfile = {
@@ -44,6 +45,7 @@ export const vic3Profile: GameProfile = {
     scripted_gui: { key: "scope" },
   },
   modifierPlaceholders: {},
+  saveSchema: VIC3_SAVE_SCHEMA,
   // No bundled wiki tokens in the preview cut, so nothing ever renders this.
   wikiNote: "",
   diagnosticSource: "vic3-script",

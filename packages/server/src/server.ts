@@ -1372,7 +1372,12 @@ connection.onRequest(
       // Unreadable: the read below reports why, and every attempt asks again.
     }
     if (saveValues?.key === key) return saveValues.result;
-    const result = await readSaveValues(file, { gameId: activeProfile().id, loc: locValue });
+    const profile = activeProfile();
+    const result = await readSaveValues(file, {
+      gameId: profile.id,
+      schema: profile.saveSchema,
+      loc: locValue,
+    });
     saveValues = { key, result };
     return result;
   }

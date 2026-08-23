@@ -1,9 +1,8 @@
 /**
  * Where a zip-packed save keeps its script.
  *
- * A Crusader Kings III save is a short text header plus a plain-text
- * `meta_data` block, and then a zip archive holding ONE entry, `gamestate`,
- * deflated. Reading it needs nothing more than that entry's byte offset and
+ * A packed save is a short text header plus a plain-text `meta_data` block,
+ * and then a zip archive holding ONE entry, `gamestate`, deflated. Reading it needs nothing more than that entry's byte offset and
  * compression method: `zlib.createInflateRaw()` over the rest of the file
  * stops itself at the end of the deflate stream, so the compressed size only
  * matters for a stored (uncompressed) entry.
@@ -12,7 +11,7 @@
  * no central directory, no npm dependency. Pure: bytes in, offsets out.
  */
 
-/** How much of a save's head is searched for the archive. CK3 packs it within ~32 KB. */
+/** How much of a save's head is searched for the archive; a real one packs it within ~32 KB. */
 export const ZIP_HEAD_BYTES = 1 << 20;
 
 /** Local file header signature, `PK\x03\x04`. */

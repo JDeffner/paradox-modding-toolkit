@@ -15,6 +15,8 @@ import * as path from "path";
 import * as zlib from "zlib";
 import { IRONMAN_ERROR, readSaveValues } from "../src/gui/saveValues";
 import { findZipEntry } from "../src/gui/saveZip";
+import { CK3_SAVE_SCHEMA } from "../src/games/ck3/saveSchema";
+import { VIC3_SAVE_SCHEMA } from "../src/games/vic3/saveSchema";
 
 /** The loc index a Vic3 workspace would answer with. */
 const LOC: Record<string, string> = {
@@ -255,7 +257,11 @@ function saveFile(name: string, text: string): string {
 describe("readSaveValues", () => {
   it("maps the curated chains to values read off the save", async () => {
     const file = saveFile("vic3.v3", SAVE);
-    const { values, source, error } = await readSaveValues(file, { gameId: "vic3", loc });
+    const { values, source, error } = await readSaveValues(file, {
+      gameId: "vic3",
+      schema: VIC3_SAVE_SCHEMA,
+      loc,
+    });
 
     expect(error).toBeUndefined();
     expect(source).toEqual({ name: "Great Britain", date: "21 January 1836", game: "vic3" });
@@ -279,7 +285,7 @@ describe("readSaveValues", () => {
 
   it("falls back to the first main tag when no country's name matches", async () => {
     const file = saveFile("unmatched.v3", SAVE.replace('name="Great Britain"', 'name="Atlantis"'));
-    const { values, source } = await readSaveValues(file, { gameId: "vic3", loc });
+    const { values, source } = await readSaveValues(file, { gameId: "vic3", schema: VIC3_SAVE_SCHEMA, loc });
 
     expect(source.name).toBe("Atlantis");
     // GER is the first `is_main_tag=yes` entry: its money is 0 and it has no
@@ -292,7 +298,7 @@ describe("readSaveValues", () => {
 
   it("omits a key the save has no field for", async () => {
     const file = saveFile("noheir.v3", SAVE.replace("\their=3855\n", ""));
-    const { values } = await readSaveValues(file, { gameId: "vic3", loc });
+    const { values } = await readSaveValues(file, { gameId: "vic3", schema: VIC3_SAVE_SCHEMA, loc });
 
     expect(values["GetPlayer.GetHeir.GetName"]).toBeUndefined();
     expect(values["GetPlayer.GetRuler.GetName"]).toBe("William Hannover");
@@ -316,7 +322,11 @@ describe("readSaveValues", () => {
 
   it("refuses an ironman save", async () => {
     const file = saveFile("ironman.v3", SAVE.replace("ironman=no", "ironman=yes"));
-    const { values, source, error } = await readSaveValues(file, { gameId: "vic3", loc });
+    const { values, source, error } = await readSaveValues(file, {
+      gameId: "vic3",
+      schema: VIC3_SAVE_SCHEMA,
+      loc,
+    });
 
     expect(error).toBe(IRONMAN_ERROR);
     expect(values).toEqual({});
@@ -325,14 +335,18 @@ describe("readSaveValues", () => {
 
   it("refuses a binary body", async () => {
     const file = saveFile("binary.v3", "SAV0100" + String.fromCharCode(1, 2) + " binary body");
-    const { error } = await readSaveValues(file, { gameId: "vic3", loc });
+    const { error } = await readSaveValues(file, { gameId: "vic3", schema: VIC3_SAVE_SCHEMA, loc });
 
     expect(error).toBe(IRONMAN_ERROR);
   });
 
   it("reads a zip-packed Crusader Kings III save", async () => {
     const file = saveBytes("ck3.ck3", ck3Save(CK3_GAMESTATE));
-    const { values, source, error } = await readSaveValues(file, { gameId: "ck3", loc });
+    const { values, source, error } = await readSaveValues(file, {
+      gameId: "ck3",
+      schema: CK3_SAVE_SCHEMA,
+      loc,
+    });
 
     expect(error).toBeUndefined();
     expect(source).toEqual({
@@ -368,7 +382,7 @@ describe("readSaveValues", () => {
 
   it("reads a -debug_mode save, whose gamestate is plain text", async () => {
     const file = saveFile("debug.ck3", `SAV01022428995100007dea\n${CK3_GAMESTATE}`);
-    const { values, error } = await readSaveValues(file, { gameId: "ck3", loc });
+    const { values, error } = await readSaveValues(file, { gameId: "ck3", schema: CK3_SAVE_SCHEMA, loc });
 
     expect(error).toBeUndefined();
     expect(values["GetPlayer.GetName"]).toBe("Alp Arslan");
@@ -377,7 +391,11 @@ describe("readSaveValues", () => {
 
   it("refuses an ironman Crusader Kings III save", async () => {
     const file = saveBytes("ironman.ck3", ck3Save(CK3_GAMESTATE.replace("ironman=no", "ironman=yes")));
-    const { values, source, error } = await readSaveValues(file, { gameId: "ck3", loc });
+    const { values, source, error } = await readSaveValues(file, {
+      gameId: "ck3",
+      schema: CK3_SAVE_SCHEMA,
+      loc,
+    });
 
     expect(error).toBe(IRONMAN_ERROR);
     expect(values).toEqual({});
@@ -387,6 +405,7 @@ describe("readSaveValues", () => {
   it("reports a missing file instead of throwing", async () => {
     const { error } = await readSaveValues(path.join(os.tmpdir(), "px-no-such.v3"), {
       gameId: "vic3",
+      schema: VIC3_SAVE_SCHEMA,
       loc,
     });
 
@@ -433,7 +452,11 @@ describe("readSaveValues (real save)", () => {
   real(
     "reads the played country out of a real Victoria 3 save",
     async () => {
-      const { values, source, error } = await readSaveValues(REAL!, { gameId: "vic3", loc });
+      const { values, source, error } = await readSaveValues(REAL!, {
+        gameId: "vic3",
+        schema: VIC3_SAVE_SCHEMA,
+        loc,
+      });
 
       expect(error).toBeUndefined();
       expect(values["GetPlayer.GetName"]).toBe("Great Britain");
@@ -454,7 +477,11 @@ describe("readSaveValues (real CK3 save)", () => {
   realCk3(
     "reads the played character out of a real Crusader Kings III save",
     async () => {
-      const { values, source, error } = await readSaveValues(REAL_CK3!, { gameId: "ck3", loc });
+      const { values, source, error } = await readSaveValues(REAL_CK3!, {
+        gameId: "ck3",
+        schema: CK3_SAVE_SCHEMA,
+        loc,
+      });
 
       expect(error).toBeUndefined();
       expect(values["GetPlayer.GetName"]).toBe("Alp Arslan");

@@ -958,8 +958,8 @@ export interface GuiPreviewResult {
  * straight back to the next layout request. A chain the save has no field for
  * is absent: a preview shows what is knowable and never invents a value.
  *
- * The server streams the file and parses only the few blocks it needs (a
- * Victoria 3 campaign is ~115 MB), and caches the answer per file and mtime.
+ * The server streams the file and parses only the few blocks it needs (a big
+ * campaign runs ~115 MB), and caches the answer per file and mtime.
  * Ironman and binary saves are refused with `error` set; melting them is a
  * different tool.
  */
