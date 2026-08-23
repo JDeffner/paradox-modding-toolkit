@@ -497,8 +497,10 @@ body.vscode-light .px-textarea {
   width: 0;
   height: 0;
 }
-.px-switch > span {
+/* The pill is the span right after the input; a label span after it is plain text. */
+.px-switch > input + span {
   position: relative;
+  flex: 0 0 auto;
   width: 32px;
   height: 18px;
   border-radius: 999px;
@@ -507,7 +509,7 @@ body.vscode-light .px-textarea {
     background-color var(--px-ease),
     box-shadow var(--px-ease);
 }
-.px-switch > span::after {
+.px-switch > input + span::after {
   content: "";
   position: absolute;
   top: 1px;
