@@ -50,7 +50,7 @@ const CROWDED = 8;
 const MIN_SIDE_X = NODE_W / 2 + GAP;
 /** Overlap-removal sweeps. Enough to settle the ring boundaries; bounded so a
  *  400-node namespace stays inside the frame budget. */
-const SETTLE_PASSES = 24;
+const SETTLE_PASSES = 120;
 
 const TAU = Math.PI * 2;
 
@@ -159,10 +159,113 @@ export function radialLayout(
   // Nodes no walk reached (a namespace view lists definitions nothing wires up
   // yet): a grid under everything else, so they read as "not connected".
   const loose = ids.filter((id) => !placed.has(id));
-  if (loose.length > 0) gridBelow(loose, pos);
 
+  relax([...placed.keys()], pos, placed, out, inc, centre);
+  if (loose.length > 0) gridBelow(loose, pos);
   settle(ids, pos, centre);
   return pos;
+}
+
+/** Relaxation passes. Bounded: a 400-node namespace is ~160k pair tests per pass. */
+const RELAX_PASSES = 160;
+/** How far a card's rest distance to its neighbour grows per extra link it has. */
+const HUB_STRETCH = 0.12;
+/** Two cards closer than this, along the diagonal, push each other apart. */
+const REPEL_RANGE = PITCH_X * 1.6;
+
+/**
+ * The organic pass. The fans give every card a side and a rough place; this
+ * lets the graph find its own distances the way a force layout does, so a
+ * busy hub spreads its neighbours out, a lone chain pulls tight, and a
+ * column of twenty callers stops looking like a ruler. Three forces, all
+ * deterministic: a spring along every edge (rest length grows with how many
+ * links the two ends carry), a short-range repulsion between every pair, and
+ * a weak pull toward the centre so nothing drifts off. Each card keeps its
+ * SIDE: a caller never crosses to the fired side, which is what makes the
+ * left-to-right reading survive the relaxation. The centre does not move.
+ */
+function relax(
+  ids: string[],
+  pos: Map<string, LayoutPos>,
+  placed: Map<string, Placed>,
+  out: Map<string, string[]>,
+  inc: Map<string, string[]>,
+  centre: string
+): void {
+  if (ids.length < 3) return;
+  const degree = (id: string): number => (out.get(id)?.length ?? 0) + (inc.get(id)?.length ?? 0);
+  const links: Array<[string, string, number]> = [];
+  for (const id of ids) {
+    for (const other of out.get(id) ?? []) {
+      if (!pos.has(other) || !placed.has(other)) continue;
+      const rest = PITCH_X * (1 + HUB_STRETCH * Math.min(10, Math.max(degree(id), degree(other)) - 1));
+      links.push([id, other, rest]);
+    }
+  }
+  const vel = new Map<string, { x: number; y: number }>();
+  for (const id of ids) vel.set(id, { x: 0, y: 0 });
+  for (let pass = 0; pass < RELAX_PASSES; pass++) {
+    const heat = 1 - pass / RELAX_PASSES;
+    const force = new Map<string, { x: number; y: number }>();
+    for (const id of ids) force.set(id, { x: 0, y: 0 });
+    // Springs.
+    for (const [a, b, rest] of links) {
+      const pa = pos.get(a)!;
+      const pb = pos.get(b)!;
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const k = ((d - rest) / d) * 0.08;
+      force.get(a)!.x += dx * k;
+      force.get(a)!.y += dy * k;
+      force.get(b)!.x -= dx * k;
+      force.get(b)!.y -= dy * k;
+    }
+    // Repulsion, in card units: the horizontal axis is squashed by the card's
+    // aspect so a wide card pushes sideways as hard as a tall one would.
+    const aspect = PITCH_X / PITCH_Y;
+    for (let i = 0; i < ids.length; i++) {
+      const pa = pos.get(ids[i])!;
+      for (let j = i + 1; j < ids.length; j++) {
+        const pb = pos.get(ids[j])!;
+        const dx = (pb.x - pa.x) / aspect;
+        const dy = pb.y - pa.y;
+        const d2 = dx * dx + dy * dy;
+        const range = REPEL_RANGE / aspect;
+        if (d2 >= range * range) continue;
+        const d = Math.max(8, Math.sqrt(d2));
+        const push = ((range - d) / range) * 14;
+        const ux = d2 === 0 ? (i < j ? 1 : -1) : dx / d;
+        const uy = d2 === 0 ? 0 : dy / d;
+        force.get(ids[i])!.x -= ux * push * aspect;
+        force.get(ids[i])!.y -= uy * push;
+        force.get(ids[j])!.x += ux * push * aspect;
+        force.get(ids[j])!.y += uy * push;
+      }
+    }
+    // Gravity, and the side each card keeps.
+    for (const id of ids) {
+      if (id === centre) continue;
+      const p = pos.get(id)!;
+      const f = force.get(id)!;
+      f.x -= p.x * 0.004;
+      f.y -= p.y * 0.004;
+      const v = vel.get(id)!;
+      v.x = (v.x + f.x) * 0.6;
+      v.y = (v.y + f.y) * 0.6;
+      p.x += v.x * heat;
+      p.y += v.y * heat;
+      // The side boundary is a wedge, not a wall: a card beside the root
+      // stays clear of its column, a card far above or below it may drift
+      // over the column, so a crowded side wraps around instead of stacking
+      // into a ruler against the line.
+      const side = placed.get(id)!.side;
+      const slack = Math.min(MIN_SIDE_X - 8, Math.max(0, Math.abs(p.y) - PITCH_Y) * 0.7);
+      if (side === 1 && p.x < MIN_SIDE_X - slack) p.x = MIN_SIDE_X - slack;
+      if (side === -1 && p.x > -MIN_SIDE_X + slack) p.x = -MIN_SIDE_X + slack;
+    }
+  }
+  pos.set(centre, { x: 0, y: 0 });
 }
 
 /** The focus, or the busiest node when the view has no focus. */
