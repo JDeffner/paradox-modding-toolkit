@@ -92,13 +92,15 @@ ${uiCss}
   #side { --px-sidepanel-width: 280px; }
   #right { --px-sidepanel-width: 320px; }
   #side > .px-sidepanel-body, #right > .px-sidepanel-body { overflow: hidden; }
-  #tree, #layers, #inspector, #palette, #haloBody { overflow: auto; min-height: 0; }
+  #tree, #layers, #inspector, #library, #haloBody { overflow: auto; min-height: 0; }
   #tree { flex: 1 1 auto; min-height: 60px; }
   #layers { flex: 0 0 40%; min-height: 70px; border-top: 1px solid var(--px-border); }
-  #palette { flex: 0 0 35%; min-height: 90px; border-top: 1px solid var(--px-border); }
-  #palette[hidden] { display: none; }
-  #palette .head, #layers .head { position: sticky; top: 0; z-index: 1; background: var(--px-sidebar); }
-  #palette .head { padding: 6px 8px 4px; }
+  #library { flex: 0 0 45%; min-height: 160px; border-top: 1px solid var(--px-border); }
+  #library[hidden] { display: none; }
+  #library .head, #layers .head { position: sticky; top: 0; z-index: 1; background: var(--px-sidebar); }
+  #library .head { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 0; }
+  #library .head .px-tabs { display: flex; flex-wrap: wrap; }
+  #library .head .px-tab { height: var(--px-h-sm); padding: 0 7px; font-size: var(--px-text-sm); }
   #layers .head { padding: 0 0 2px; }
   #layers .head .where { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--px-fg); }
   #layers .head .hint { padding: 0 10px 4px; white-space: normal; }
@@ -114,7 +116,7 @@ ${uiCss}
   #focusBar .sepArrow { color: var(--px-muted-fg); }
   #focusBar .px-grow { flex: 1 1 auto; }
 
-  /* ---- rows (tree, layers, palette): px-item plus this page's columns ---- */
+  /* ---- rows (tree, layers): px-item plus this page's columns ---- */
   .px-list { padding: 2px 4px; }
   .row { gap: 4px; min-height: 24px; padding-right: 4px; white-space: nowrap; }
   .row > span { flex: 0 0 auto; }
@@ -136,9 +138,25 @@ ${uiCss}
   #layers .row .layerTools .toggle:not([aria-pressed="true"]) { color: var(--px-muted-fg); }
   #layers .row[data-dragging] { opacity: 0.35; }
   #layers .row.hiddenWidget .label { text-decoration: line-through; opacity: 0.6; }
-  #palette .row { cursor: grab; }
-  #palette .row[data-dragging] { opacity: 0.5; }
-  /* The chip that follows a palette drag, and the container it would drop into. */
+  /* ---- the library's tiles ---- */
+  #library .tileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px; padding: 6px; }
+  #library .tile {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; min-width: 0;
+    border-radius: var(--px-radius-md); cursor: grab; transition: background-color var(--px-ease);
+  }
+  #library .tile:hover { background: var(--px-muted); }
+  #library .tile[data-dragging] { opacity: 0.5; }
+  #library .tile canvas {
+    width: 112px; height: 72px; max-width: 100%; border-radius: var(--px-radius-sm);
+    background: color-mix(in oklch, var(--px-bg), var(--px-fg) 8%); box-shadow: inset 0 0 0 1px var(--px-border);
+  }
+  #library .tile[data-empty] canvas { background: transparent; box-shadow: none; border: 1px dashed var(--px-border); box-sizing: border-box; }
+  #library .tile .name, #library .tile .src { width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #library .tile .name { font-size: var(--px-text-sm); }
+  #library .tile .src { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  #library .tileMore { height: 1px; }
+  #library .note.count { text-align: center; font-size: var(--px-text-xs); }
+  /* The chip that follows a library drag, and the container it would drop into. */
   .paletteGhost { padding: 0 10px; height: var(--px-h-sm); line-height: var(--px-h-sm); border-radius: var(--px-radius-md); font-size: var(--px-text-sm); white-space: nowrap; }
   #dropTarget { position: absolute; pointer-events: none; box-sizing: border-box; border: 2px solid var(--px-primary); border-radius: 2px; }
   #dropTarget[hidden] { display: none; }
@@ -266,7 +284,7 @@ ${uiCss}
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-toggle-group">
-      <button id="paletteToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Show the widgets you can drag onto the canvas" data-tip-wrap>${icon("shapes")}Palette</button>
+      <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can drag onto the canvas, with previews" data-tip-wrap>${icon("shapes")}Library</button>
       <button id="haloToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Explain, browse and reuse: why a widget is placed where it is, what it depends on, and the textures, types and saved pieces available to it" data-tip-wrap>${icon("wrench")}Devtools</button>
     </div>
     <div class="px-separator" data-orientation="vertical"></div>
@@ -280,7 +298,7 @@ ${uiCss}
         <div id="focusBar"></div>
         <div id="tree" class="px-list"></div>
         <div id="layers" class="px-list"></div>
-        <div id="palette" class="px-list" hidden></div>
+        <div id="library" hidden></div>
       </div>
     </div>
     <div id="stage">

@@ -93,7 +93,7 @@ export interface EditorHarness {
   /** Visible text of one of the app's panels. */
   text(
     id:
-      "tree" | "layers" | "inspector" | "status" | "stats" | "focusBar" | "palette" | "haloTabs" | "haloBody"
+      "tree" | "layers" | "inspector" | "status" | "stats" | "focusBar" | "library" | "haloTabs" | "haloBody"
   ): string;
   /** Flip one of the toolbar checkboxes, the way a click on it would. */
   toggle(id: "outlines" | "snap" | "grid" | "constraints" | "pulses", on: boolean): void;
@@ -139,12 +139,20 @@ export interface EditorHarness {
   layer(name: string): HTMLElement;
   /** Every selected row's text in a panel, tree or layers. */
   selectedRows(id: "tree" | "layers"): string[];
-  /** Every palette row's text, in order. */
-  paletteRows(): string[];
-  /** The palette row whose text starts with `name`. */
-  paletteRow(name: string): HTMLElement;
-  /** Type into the palette's filter box, the way a keystroke would. */
-  filterPalette(text: string): void;
+  /** Every library tile's name, in order. */
+  libraryTiles(): string[];
+  /** The library tile named exactly `name` (the first one, when a saved piece shares a name). */
+  libraryTile(name: string): HTMLElement;
+  /** Type into the library's search box, the way a keystroke would. */
+  searchLibrary(text: string): void;
+  /** Pick a library section tab by its label. */
+  librarySection(label: string): void;
+  /**
+   * Tell the library's IntersectionObserver that everything it watches is on
+   * screen, the way a scroll would. jsdom lays nothing out, so this is the only
+   * way a tile ever "appears".
+   */
+  scrollLibrary(): void;
   /** Click a toolbar or inspector button by its visible label. */
   button(label: string): HTMLButtonElement;
   /** Click something inside a panel: a focus crumb, a button, the first toggle. */
@@ -183,7 +191,7 @@ export function bootEditor(): EditorHarness {
       sent.push(message);
     },
   });
-  const paint = stubBrowser(win);
+  const { paint, observers } = stubBrowser(win);
 
   win.eval(appBundle());
 
@@ -358,19 +366,31 @@ export function bootEditor(): EditorHarness {
     selectedRows(id) {
       return [...el(id).querySelectorAll('.row[aria-selected="true"]')].map((r) => r.textContent ?? "");
     },
-    paletteRows() {
-      return [...el("palette").querySelectorAll(".row")].map((r) => r.textContent ?? "");
+    libraryTiles() {
+      return [...el("library").querySelectorAll(".tile .name")].map((r) => r.textContent ?? "");
     },
-    paletteRow(name) {
-      for (const row of el("palette").querySelectorAll<HTMLElement>(".row")) {
-        if ((row.textContent ?? "").startsWith(name)) return row;
+    libraryTile(name) {
+      for (const tile of el("library").querySelectorAll<HTMLElement>(".tile")) {
+        if (tile.querySelector(".name")?.textContent === name) return tile;
       }
-      throw new Error(`no palette row for ${name}`);
+      throw new Error(`no library tile for ${name}`);
     },
-    filterPalette(text) {
-      const input = el("palette").querySelector("input")!;
+    searchLibrary(text) {
+      const input = el("library").querySelector("input")!;
       input.value = text;
       input.dispatchEvent(new win.Event("input", { bubbles: true }));
+    },
+    librarySection(label) {
+      for (const tab of el("library").querySelectorAll<HTMLElement>(".px-tab")) {
+        if (tab.textContent === label) {
+          tab.dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+          return;
+        }
+      }
+      throw new Error(`no library section ${label}`);
+    },
+    scrollLibrary() {
+      for (const observer of observers) observer.intersectAll();
     },
     button(label) {
       for (const node of doc.querySelectorAll<HTMLButtonElement>("button")) {
@@ -432,7 +452,39 @@ export function guiFixture(name: string, dir = "layout"): string {
   return fs.readFileSync(path.join(PKG_ROOT, "..", "server", "test", "fixtures", "gui", dir, name), "utf8");
 }
 
-function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>): PaintLog {
+/** jsdom has no IntersectionObserver; this one reports what it is told to. */
+interface StubObserver {
+  intersectAll(): void;
+}
+
+function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>): {
+  paint: PaintLog;
+  observers: Set<StubObserver>;
+} {
+  const observers = new Set<StubObserver>();
+  win.IntersectionObserver = class {
+    private readonly targets = new Set<Element>();
+    private readonly self: StubObserver;
+    constructor(
+      private readonly callback: (entries: { target: Element; isIntersecting: boolean }[]) => void
+    ) {
+      this.self = {
+        intersectAll: () =>
+          this.callback([...this.targets].map((target) => ({ target, isIntersecting: true }))),
+      };
+      observers.add(this.self);
+    }
+    observe(target: Element) {
+      this.targets.add(target);
+    }
+    unobserve(target: Element) {
+      this.targets.delete(target);
+    }
+    disconnect() {
+      this.targets.clear();
+      observers.delete(this.self);
+    }
+  } as unknown as typeof IntersectionObserver;
   const paint: PaintLog = {
     strokes: [],
     alphas: [],
@@ -513,5 +565,5 @@ function stubBrowser(win: Window & typeof globalThis & Record<string, unknown>):
     return 0;
   }) as typeof win.requestAnimationFrame;
   win.cancelAnimationFrame = noop;
-  return paint;
+  return { paint, observers };
 }

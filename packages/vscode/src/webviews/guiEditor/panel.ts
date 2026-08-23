@@ -30,12 +30,15 @@ import * as path from "path";
 import type {
   GuiDependenciesResult,
   GuiLayoutResult,
+  GuiPreviewEntry,
+  GuiPreviewResult,
   GuiSourceEditResult,
   GuiSourceOp,
   GuiVisibilityOptions,
   GuiVocabularyResult,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
+import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import {
   LAYOUT_DEBOUNCE_MS,
@@ -82,6 +85,11 @@ export type FetchDependencies = (
   text: string,
   line: number | undefined
 ) => Promise<GuiDependenciesResult>;
+export type FetchPreviews = (
+  uri: vscode.Uri,
+  text: string,
+  entries: GuiPreviewEntry[]
+) => Promise<GuiPreviewResult>;
 
 /**
  * The per-user state lives in `workspaceState` under the keys `userData.ts`
@@ -121,6 +129,7 @@ export class GuiEditorPanel {
   private readonly fetchSourceEdit: FetchSourceEdit;
   private readonly fetchVocabulary: FetchVocabulary;
   private readonly fetchDependencies: FetchDependencies;
+  private readonly fetchPreviews: FetchPreviews;
   private readonly state: vscode.Memento;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
@@ -142,6 +151,7 @@ export class GuiEditorPanel {
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
+    fetchPreviews: FetchPreviews,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -151,6 +161,7 @@ export class GuiEditorPanel {
     this.fetchSourceEdit = fetchSourceEdit;
     this.fetchVocabulary = fetchVocabulary;
     this.fetchDependencies = fetchDependencies;
+    this.fetchPreviews = fetchPreviews;
     this.state = context.workspaceState;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
@@ -218,6 +229,7 @@ export class GuiEditorPanel {
     fetchSourceEdit: FetchSourceEdit,
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
+    fetchPreviews: FetchPreviews,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -247,6 +259,7 @@ export class GuiEditorPanel {
       fetchSourceEdit,
       fetchVocabulary,
       fetchDependencies,
+      fetchPreviews,
       source,
       roots,
       meta
@@ -377,6 +390,7 @@ export class GuiEditorPanel {
       components: Object.entries(components).map(([name, text]) => ({
         name,
         widgets: countTopLevelBlocks(text),
+        text,
       })),
       presets: Object.entries(presets).map(([name, properties]) => ({ name, properties })),
     });
@@ -660,6 +674,31 @@ export class GuiEditorPanel {
           total: matches.length,
           roots: this.roots.modPath !== null || this.roots.gamePath !== null,
         });
+        return;
+      }
+      case "requestPreviews": {
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const entries = message.entries.slice(0, GUI_PREVIEW_MAX);
+        let previews: GuiPreviewResult["previews"];
+        try {
+          previews = (await this.fetchPreviews(doc.uri, doc.getText(), entries)).previews;
+        } catch (err) {
+          // A tile with no preview says so in its tooltip; a banner over the
+          // canvas would be about the wrong thing.
+          const reason = err instanceof Error ? err.message : String(err);
+          previews = entries.map((e) => ({ name: e.name, node: null, textures: [], reason }));
+        }
+        if (this.disposed) return;
+        const textures: Record<string, string | null> = {};
+        for (const preview of previews) {
+          for (const rel of preview.textures) {
+            if (rel in textures) continue;
+            // Thumbnail-capped, through the same cache the canvas fills use.
+            const png = this.textures.resolve(rel, THUMBNAIL_MAX_DIM);
+            textures[rel] = png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
+          }
+        }
+        this.post({ type: "previews", previews, textures });
         return;
       }
       case "requestThumbnails": {

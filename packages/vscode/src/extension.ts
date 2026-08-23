@@ -98,6 +98,9 @@ import {
   guiDependenciesRequest,
   type GuiDependenciesParams,
   type GuiDependenciesResult,
+  guiPreviewRequest,
+  type GuiPreviewParams,
+  type GuiPreviewResult,
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
@@ -742,6 +745,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             text,
             line,
           } satisfies GuiDependenciesParams),
+        (uri, text, entries) =>
+          lc.sendRequest<GuiPreviewResult>(guiPreviewRequest, {
+            uri: uri.toString(),
+            text,
+            entries,
+          } satisfies GuiPreviewParams),
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)

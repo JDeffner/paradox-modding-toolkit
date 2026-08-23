@@ -391,6 +391,7 @@ function pushUserData(): void {
     components: Object.entries(savedComponents).map(([name, text]) => ({
       name,
       widgets: countTopLevelBlocks(text),
+      text,
     })),
     presets: Object.entries(savedPresets).map(([name, properties]) => ({ name, properties })),
   });
@@ -1389,24 +1390,137 @@ describe("align and distribute", () => {
   });
 });
 
-describe("the palette", () => {
-  it("offers the game's own widgets and filters them", () => {
-    openGroup();
-    editor.button("Palette").click();
-    serveEdits();
+/** Open the library the way the toolbar does, with the vocabulary and the saved data served. */
+function openLibrary(): void {
+  editor.button("Library").click();
+  serveEdits();
+}
 
-    expect(editor.paletteRows().length).toBeGreaterThan(5);
-    editor.filterPalette("vbo");
-    expect(editor.paletteRows()[0]).toContain("vbox");
+/** A mouse click on a panel element. */
+function clickOn(node: Element): void {
+  node.dispatchEvent(new editor.document.defaultView!.MouseEvent("click", { bubbles: true }));
+}
+
+const CHIP = 'widget = { name = "px_chip" size = { 10 10 } }';
+
+describe("the library", () => {
+  it("lists the vocabulary by section and searches across it", () => {
+    openGroup();
+    openLibrary();
+
+    expect(editor.libraryTiles().length).toBeGreaterThan(5);
+    editor.librarySection("This file");
+    expect(editor.libraryTiles()).toEqual([]);
+    editor.librarySection("Widgets");
+    const widgets = editor.libraryTiles();
+    expect(widgets).toContain("vbox");
+    expect(widgets).toContain("hbox");
+    editor.librarySection("All");
+    editor.searchLibrary("vbo");
+    expect(editor.libraryTiles()[0]).toBe("vbox");
+    expect(editor.libraryTiles().every((name) => name.includes("vbo"))).toBe(true);
+    editor.searchLibrary("nothing-like-this");
+    expect(editor.text("library")).toContain("Nothing matches");
+  });
+
+  it("this file's declarations and the saved pieces each have a section", () => {
+    savedComponents = { chip: CHIP };
+    openDoc(TEXT, "templates-types.gui");
+    openLibrary();
+    editor.librarySection("This file");
+    expect(editor.libraryTiles().length).toBeGreaterThan(0);
+    expect(editor.text("library")).toContain("this file");
+    editor.librarySection("Saved");
+    expect(editor.libraryTiles()).toEqual(["chip"]);
+    expect(editor.text("library")).toContain("saved · 1 widget");
+  });
+
+  it("asks for previews only for the tiles on screen, in batches of at most 48, each once", () => {
+    openGroup();
+    openLibrary();
+    expect(editor.sent.filter((m) => m.type === "requestPreviews")).toHaveLength(0);
+
+    editor.scrollLibrary();
+    const requests = editor.sent.filter((m) => m.type === "requestPreviews");
+    expect(requests.length).toBeGreaterThan(0);
+    let asked = 0;
+    for (const request of requests) {
+      if (request.type !== "requestPreviews") continue;
+      expect(request.entries.length).toBeLessThanOrEqual(48);
+      asked += request.entries.length;
+    }
+    // The first page of 60, every tile of it. The second scroll pages on and
+    // asks nothing twice.
+    expect(asked).toBe(60);
+    editor.scrollLibrary();
+    const names = editor.sent.flatMap((m) =>
+      m.type === "requestPreviews" ? m.entries.map((e) => e.name) : []
+    );
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.length).toBeGreaterThan(60);
+  });
+
+  it("a saved component previews as raw text, and a preview the server cannot stand up says why", () => {
+    savedComponents = { chip: CHIP };
+    openGroup();
+    openLibrary();
+    editor.librarySection("Saved");
+    editor.scrollLibrary();
+    const request = lastOfType(editor, "requestPreviews")!;
+    expect(request.entries).toEqual([{ name: "chip", kind: "raw", fragment: CHIP }]);
+    editor.push({
+      type: "previews",
+      previews: [{ name: "chip", node: null, textures: [], reason: "nothing to lay out" }],
+      textures: {},
+    });
+    const tile = editor.libraryTile("chip");
+    expect(tile.hasAttribute("data-empty")).toBe(true);
+    expect(tile.title).toContain("nothing to lay out");
+  });
+
+  it("a click on a tile inserts next to the selection through the same insert op", () => {
+    const layout = openGroup();
+    openLibrary();
+    const inner = centreOf(layout, "px_g5_inner");
+    editor.click(inner.x, inner.y);
+    clickOn(editor.libraryTile("vbox"));
+    serveEdits();
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([
+      { kind: "insert", line: 3, widget: { type: "vbox" }, index: 1 },
+    ]);
+    expect(editor.selectedRow()).toContain("vbox");
+  });
+
+  it("a click with nothing selected inserts into the first root", () => {
+    openGroup();
+    openLibrary();
+    clickOn(editor.libraryTile("vbox"));
+    serveEdits();
+    expect(lastOfType(editor, "applyOps")!.ops).toEqual([
+      { kind: "insert", line: 0, widget: { type: "vbox" }, index: undefined },
+    ]);
+  });
+
+  it("a saved tile drops through insertComponent, by name", () => {
+    savedComponents = { chip: CHIP };
+    const layout = openGroup();
+    openLibrary();
+    const frame = rectOf(layout, "px_g5_frame");
+    editor.librarySection("Saved");
+    editor.rowPointer(editor.libraryTile("chip"), "pointerdown");
+    editor.move(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    editor.up(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
+    serveEdits();
+    expect(lastOfType(editor, "insertComponent")).toMatchObject({ name: "chip", line: 3 });
+    expect(doc).toContain('name = "px_chip"');
   });
 
   it("a drop commits ONE insert op and selects what it wrote", () => {
     const layout = openGroup();
-    editor.button("Palette").click();
-    serveEdits();
+    openLibrary();
     const frame = rectOf(layout, "px_g5_frame");
 
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     // Inside the frame but on none of its children: the drop appends.
     editor.move(frame.x + frame.w * 0.7, frame.y + frame.h * 0.7);
     expect(editor.text("status")).toContain("into widget#px_g5_frame");
@@ -1442,12 +1556,11 @@ describe("the palette", () => {
     ].join("\n");
     openDoc(inType, "in-type.gui");
     serveEdits();
-    editor.button("Palette").click();
-    serveEdits();
+    openLibrary();
 
     // The instance's own children are spliced from the type, so a drop on them
     // finds no container with bytes here at all.
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     editor.move(110, 110);
     expect(editor.text("status")).toContain("into px_g5_card#px_g5_use");
     editor.up(110, 110);
@@ -2467,15 +2580,14 @@ describe("smart guides, increment 1", () => {
   });
 });
 
-describe("the palette drag, increment 1", () => {
+describe("the library drag, increment 1", () => {
   it("a release outside the canvas cancels, and the next drag starts clean", () => {
     const layout = openGroup();
-    editor.button("Palette").click();
-    serveEdits();
+    openLibrary();
     const frame = rectOf(layout, "px_g5_frame");
     const over = { x: frame.x + frame.w * 0.7, y: frame.y + frame.h * 0.7 };
 
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     // The chip follows the cursor from the press on.
     expect(editor.document.querySelector(".paletteGhost")?.textContent).toBe("vbox");
     editor.move(over.x, over.y);
@@ -2492,7 +2604,7 @@ describe("the palette drag, increment 1", () => {
     editor.move(over.x, over.y);
     expect(editor.text("status")).not.toContain("into widget#px_g5_frame");
 
-    editor.rowPointer(editor.paletteRow("vbox"), "pointerdown");
+    editor.rowPointer(editor.libraryTile("vbox"), "pointerdown");
     editor.move(over.x, over.y);
     editor.up(over.x, over.y);
     serveEdits();

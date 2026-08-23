@@ -38,6 +38,8 @@
 import type {
   GuiDependenciesResult,
   GuiLayoutResult,
+  GuiPreview,
+  GuiPreviewEntry,
   GuiSourceOp,
   GuiVisibilityMode,
   GuiVisibilityOptions,
@@ -64,13 +66,16 @@ export interface TextureEntry {
 }
 
 /**
- * A selection saved for reuse, host-side. The app never sees the block text: it
- * is the document's bytes, which are the host's, exactly like the clipboard.
+ * A selection saved for reuse, host-side. The host stores and inserts the
+ * text; the app only reads it to ask for a preview (`requestPreviews`, kind
+ * `raw`), never to write it.
  */
 export interface SavedComponent {
   name: string;
   /** How many top-level widgets the saved text holds, for the row's label. */
   widgets: number;
+  /** The verbatim block text, for the library tile's preview. */
+  text: string;
 }
 
 /** A named bundle of property writes, applied as ONE batched `setProperties`. */
@@ -232,6 +237,14 @@ export type AppToHost =
    * is edited. The host answers `vocabulary`.
    */
   | { type: "requestVocabulary" }
+  /**
+   * Render-ready previews for the library tiles on screen
+   * (`paradox/guiPreview`): at most `GUI_PREVIEW_MAX` entries per message,
+   * sent for the visible page only, never for a whole listing. A saved
+   * component goes as kind `raw` with its stored text. The host answers
+   * `previews`.
+   */
+  | { type: "requestPreviews"; entries: GuiPreviewEntry[] }
   /**
    * Lay the document out in this conditional-visibility mode from now on
    * (`GuiLayoutParams.visibility`), and REMEMBER it for this document: a widget
@@ -446,6 +459,13 @@ export type HostToApp =
       properties: Record<string, string[]>;
       commonProperties: string[];
     }
+  /**
+   * Answer to `requestPreviews`, one preview per asked entry in the same
+   * order. `textures` maps every path the previews reference to a URL or
+   * null, resolved through the same cache the canvas fills use, at thumbnail
+   * size.
+   */
+  | { type: "previews"; previews: GuiPreview[]; textures: Record<string, string | null> }
   /**
    * Answer to `requestDependencies`. `line` is echoed (absent for a
    * whole-document answer) so the app can drop an answer the selection has

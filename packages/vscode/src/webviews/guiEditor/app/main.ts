@@ -41,6 +41,7 @@
 import type {
   GuiDependenciesResult,
   GuiLayoutResult,
+  GuiPreview,
   GuiSourceOp,
   GuiTextSegment,
   GuiVisibilityCheck,
@@ -48,6 +49,7 @@ import type {
   GuiVocabularyEntry,
   GuiWidgetInfo,
 } from "@px-lsp/protocol/protocol";
+import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import {
   ANCHOR_X,
   ANCHOR_Y,
@@ -92,6 +94,7 @@ import {
 } from "./scene";
 import {
   drawScene,
+  drawThumbnail,
   resetImageCache,
   type DrawMasks,
   type DrawPulse,
@@ -115,7 +118,18 @@ import {
 } from "./inspector";
 import { boxAxis, dropRank, layerRows, reorderTo, type LayerRow } from "./layers";
 import { alignDeltas, distributeDeltas, type AlignMode } from "./align";
-import { containerRows, paletteLabel, paletteRows } from "./palette";
+import { containerRows, paletteLabel } from "./palette";
+import {
+  chunk,
+  LIBRARY_PAGE,
+  LIBRARY_SECTIONS,
+  libraryEntries,
+  libraryTiles,
+  libraryTip,
+  previewEntryFor,
+  type LibraryEntry,
+  type LibrarySection,
+} from "./library";
 import { browserGroups, usingValue, vocabularyDetail } from "./browse";
 import { buildHeatmap, diffScenes, HEATMAP_MODES, pulseNote, statsLine, type HeatmapMode } from "./devtools";
 import { constraintOverlay, num, overrideRows, placementReport, type ConstraintOverlay } from "./placement";
@@ -160,8 +174,8 @@ const constraintsToggle = document.getElementById("constraints") as HTMLInputEle
 const pulsesToggle = document.getElementById("pulses") as HTMLInputElement;
 const heatmapSelect = document.getElementById("heatmap") as HTMLSelectElement;
 const heatmapMenuEl = document.getElementById("heatmapMenu") as HTMLButtonElement;
-const paletteEl = document.getElementById("palette") as HTMLDivElement;
-const paletteToggleEl = document.getElementById("paletteToggle") as HTMLButtonElement;
+const libraryEl = document.getElementById("library") as HTMLDivElement;
+const libraryToggleEl = document.getElementById("libraryToggle") as HTMLButtonElement;
 const haloEl = document.getElementById("halo") as HTMLDivElement;
 const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
 const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
@@ -899,17 +913,16 @@ function highlightLayers(): void {
   }
 }
 
-// ---- the palette -----------------------------------------------------------
+// ---- the element library ---------------------------------------------------
 
 /**
- * What the palette may offer, straight from the host (`requestVocabulary`): the
+ * What the library may offer, straight from the host (`requestVocabulary`): the
  * game's own harvested widget vocabulary plus this document's declarations.
  * Nothing here invents a name, so a dropped entry is always a widget the game
  * knows. Empty until the panel is first opened; asking costs a server request
- * and a closed palette has nothing to show.
+ * and a closed library has nothing to show.
  */
 let vocabulary: GuiVocabularyEntry[] = [];
-let vocabularyTotal = 0;
 let vocabularyAsked = false;
 /**
  * The other half of the same answer: which PROPERTIES the harvest saw on the
@@ -919,8 +932,35 @@ let vocabularyAsked = false;
  */
 let vocabularyProps: Record<string, string[]> = {};
 let vocabularyCommon: string[] = [];
-let paletteQuery = "";
-const paletteEls = new Map<string, HTMLElement>();
+let libraryQuery = "";
+let librarySection: LibrarySection = "all";
+
+/** One tile on screen: what a drag marks and a preview paints into. */
+interface Tile {
+  node: HTMLElement;
+  canvas: HTMLCanvasElement;
+  entry: LibraryEntry;
+  painted: boolean;
+}
+const tileEls = new Map<string, Tile>();
+let tileObserver: IntersectionObserver | null = null;
+/** The tile bitmap, in CSS pixels; the canvas is scaled by the device ratio. */
+const TILE_W = 112;
+const TILE_H = 72;
+
+/**
+ * Previews the host has answered for THIS document version, by tile key. A
+ * layout push clears it: the document's own types and templates may have
+ * changed, and a tile that showed the old one would be a lie.
+ */
+const previewCache = new Map<string, GuiPreview>();
+/** Keys asked for and not yet answered, so a tile scrolled past twice asks once. */
+const previewPending = new Set<string>();
+/** The batches in flight, in order: the answer carries names, the batch carries keys. */
+const previewRequests: { gen: number; entries: LibraryEntry[] }[] = [];
+let libraryGen = 0;
+/** Per texture path a preview paints: the image once loaded, null when it could not load. */
+const libraryImages = new Map<string, HTMLImageElement | null>();
 
 /**
  * The widget an insert should select once the document comes back: the
@@ -929,21 +969,25 @@ const paletteEls = new Map<string, HTMLElement>();
  */
 let pendingSelect: { parent: string; source: number } | null = null;
 
-function paletteOpen(): boolean {
-  return !paletteEl.hidden;
+function libraryOpen(): boolean {
+  return !libraryEl.hidden;
 }
 
-function togglePalette(): void {
-  paletteEl.hidden = !paletteEl.hidden;
-  paletteToggleEl.setAttribute("aria-pressed", paletteOpen() ? "true" : "false");
-  if (paletteOpen()) {
-    // The palette lives in the left panel: showing it in a hidden panel would show nothing.
+function toggleLibrary(): void {
+  libraryEl.hidden = !libraryEl.hidden;
+  libraryToggleEl.setAttribute("aria-pressed", libraryOpen() ? "true" : "false");
+  if (libraryOpen()) {
+    // The library lives in the left panel: showing it in a hidden panel would show nothing.
     if (sidePanels.left.collapsed) sidePanels.left.toggle(false);
     // The document's own templates and types change as it is edited, so the
     // list is re-asked for whenever the panel is showing (onLayout does the
     // same); a closed panel asks once and lives with what it got.
     askVocabulary();
-    renderPalette();
+    if (!userDataAsked) {
+      userDataAsked = true;
+      host.send({ type: "requestUserData" });
+    }
+    renderLibrary();
   }
 }
 
@@ -952,56 +996,252 @@ function askVocabulary(): void {
   host.send({ type: "requestVocabulary" });
 }
 
-function renderPalette(): void {
-  if (!paletteOpen()) return;
-  paletteEl.textContent = "";
-  paletteEls.clear();
+function renderLibrary(): void {
+  if (!libraryOpen()) return;
+  libraryEl.textContent = "";
+  tileObserver?.disconnect();
+  tileObserver = null;
+  tileEls.clear();
 
   const head = el("div", "head");
   const group = el("div", "px-input-group");
   group.appendChild(iconEl("search"));
-  const filter = textInput("Filter widgets", paletteQuery);
-  filter.addEventListener("input", () => {
-    paletteQuery = filter.value;
-    renderPalette();
-    filter.focus();
+  const search = textInput("Search the library", libraryQuery);
+  search.addEventListener("input", () => {
+    libraryQuery = search.value;
+    renderLibrary();
+    const again = libraryEl.querySelector("input");
+    again?.focus();
+    again?.setSelectionRange(again.value.length, again.value.length);
   });
-  group.appendChild(filter);
+  group.appendChild(search);
   head.appendChild(group);
-  paletteEl.appendChild(head);
-
-  if (vocabulary.length === 0) {
-    paletteEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
-    return;
-  }
-  const rows = paletteRows(vocabulary, paletteQuery);
-  if (rows.length === 0) {
-    paletteEl.appendChild(el("div", "note", `Nothing matches "${paletteQuery}".`));
-    return;
-  }
-  for (const entry of rows) {
-    const node = el("div", "px-item row");
-    node.appendChild(el("span", "label", paletteLabel(entry)));
-    if (entry.count !== undefined) {
-      node.appendChild(badge(String(entry.count), `${entry.count} uses in the game's own gui files`));
-    }
-    node.title = "Drag onto the canvas to insert it";
-    node.addEventListener("pointerdown", (ev) => {
-      if ((ev as PointerEvent).button !== 0 || committing) return;
-      const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
-      document.body.appendChild(ghost);
-      paletteDrag = { entry, ghost, target: null, rank: 0, line: null };
-      moveGhost((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
-      node.setAttribute("data-dragging", "");
+  const tabs = el("div", "px-tabs");
+  tabs.dataset.variant = "line";
+  tabs.setAttribute("role", "tablist");
+  for (const section of LIBRARY_SECTIONS) {
+    const tab = el("button", "px-tab", section.label) as HTMLButtonElement;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", section.id === librarySection ? "true" : "false");
+    tab.title = section.title;
+    tab.addEventListener("click", () => {
+      librarySection = section.id;
+      renderLibrary();
     });
-    paletteEls.set(entry.name, node);
-    paletteEl.appendChild(node);
+    tabs.appendChild(tab);
   }
-  const shown = rows.length;
-  const hidden = vocabularyTotal - shown;
-  if (hidden > 0) {
-    paletteEl.appendChild(el("div", "note", `${hidden} more; type to filter.`));
+  head.appendChild(tabs);
+  libraryEl.appendChild(head);
+
+  if (vocabulary.length === 0 && components.length === 0) {
+    libraryEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
+    return;
   }
+  const tiles = libraryTiles(libraryEntries(vocabulary, components), librarySection, libraryQuery);
+  if (tiles.length === 0) {
+    libraryEl.appendChild(
+      el(
+        "div",
+        "note",
+        libraryQuery
+          ? `Nothing matches "${libraryQuery}".`
+          : "Nothing saved yet. Select widgets and save them under Devtools › Saved."
+      )
+    );
+    return;
+  }
+  const grid = el("div", "tileGrid");
+  const more = el("div", "tileMore");
+  const count = el("div", "note count", `${tiles.length} ${tiles.length === 1 ? "entry" : "entries"}`);
+  // Previews only for the tiles on screen: each costs the server a layout,
+  // and a whole listing would be a layout per widget the game knows.
+  const observer = new IntersectionObserver((hits) => {
+    const wanted: LibraryEntry[] = [];
+    for (const hit of hits) {
+      if (!hit.isIntersecting) continue;
+      if (hit.target === more) appendPage();
+      else {
+        const tile = tileEls.get((hit.target as HTMLElement).dataset.key ?? "");
+        if (tile && !tile.painted && !paintFromCache(tile)) wanted.push(tile.entry);
+      }
+    }
+    askPreviews(wanted);
+  });
+  tileObserver = observer;
+  let shown = 0;
+  const appendPage = (): void => {
+    const end = Math.min(tiles.length, shown + LIBRARY_PAGE);
+    for (; shown < end; shown++) {
+      const tile = libraryTile(tiles[shown]);
+      grid.appendChild(tile.node);
+      observer.observe(tile.node);
+    }
+    if (shown >= tiles.length) {
+      observer.unobserve(more);
+      more.remove();
+    }
+  };
+  libraryEl.append(grid, more, count);
+  appendPage();
+  if (shown < tiles.length) observer.observe(more);
+}
+
+function libraryTile(entry: LibraryEntry): Tile {
+  const node = el("div", "tile");
+  node.dataset.key = entry.key;
+  node.dataset.kind = entry.kind;
+  node.title = libraryTip(entry);
+  const canvas = document.createElement("canvas");
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = TILE_W * ratio;
+  canvas.height = TILE_H * ratio;
+  node.append(canvas, el("div", "name", entry.name), el("div", "src", entry.source));
+  node.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0 || committing) return;
+    const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
+    document.body.appendChild(ghost);
+    paletteDrag = { entry, ghost, target: null, rank: 0, line: null };
+    moveGhost(ev.clientX, ev.clientY);
+    node.setAttribute("data-dragging", "");
+  });
+  // A click is a press and a release on the SAME tile, which a drag that
+  // reached the canvas never is; so a click inserts where the selection is.
+  node.addEventListener("click", () => libraryInsert(entry));
+  const tile: Tile = { node, canvas, entry, painted: false };
+  tileEls.set(entry.key, tile);
+  return tile;
+}
+
+/** Send the previews a page needs, in the batches the wire takes. */
+function askPreviews(entries: LibraryEntry[]): void {
+  const fresh = entries.filter((e) => !previewPending.has(e.key));
+  for (const batch of chunk(fresh, GUI_PREVIEW_MAX)) {
+    for (const e of batch) previewPending.add(e.key);
+    previewRequests.push({ gen: libraryGen, entries: batch });
+    host.send({ type: "requestPreviews", entries: batch.map(previewEntryFor) });
+  }
+}
+
+function onPreviews(previews: GuiPreview[], textures: Record<string, string | null>): void {
+  const request = previewRequests.shift();
+  if (!request) return;
+  for (const entry of request.entries) previewPending.delete(entry.key);
+  // An answer for a document version that has since changed: the cache was
+  // cleared for a reason, and the tiles re-ask when they are next seen.
+  if (request.gen !== libraryGen) return;
+  previews.forEach((preview, i) => {
+    const entry = request.entries[i] ?? request.entries.find((e) => e.name === preview.name);
+    if (entry) previewCache.set(entry.key, preview);
+  });
+  for (const [texture, url] of Object.entries(textures)) {
+    if (libraryImages.has(texture)) continue;
+    if (!url) {
+      libraryImages.set(texture, null);
+      continue;
+    }
+    const img = new Image();
+    img.onload = () => {
+      libraryImages.set(texture, img);
+      paintTiles();
+    };
+    img.onerror = () => {
+      libraryImages.set(texture, null);
+      paintTiles();
+    };
+    img.src = url;
+  }
+  paintTiles();
+}
+
+function paintTiles(): void {
+  for (const tile of tileEls.values()) if (!tile.painted) paintFromCache(tile);
+}
+
+/** Paint a tile from the cache. False when it has no preview yet, or its textures are still loading. */
+function paintFromCache(tile: Tile): boolean {
+  const preview = previewCache.get(tile.entry.key);
+  if (!preview) return false;
+  if (!preview.node) {
+    tile.node.dataset.empty = "";
+    tile.node.title = `${libraryTip(tile.entry)}\nNo preview: ${preview.reason ?? "nothing to lay out"}`;
+    tile.painted = true;
+    return true;
+  }
+  const images: Images = {};
+  for (const texture of preview.textures) {
+    const img = libraryImages.get(texture);
+    if (img === undefined) return false;
+    if (img) images[texture] = img;
+  }
+  const ctx = tile.canvas.getContext("2d");
+  if (!ctx) return false;
+  const ratio = tile.canvas.width / TILE_W;
+  drawThumbnail(ctx, buildScene([preview.node]), images, { w: TILE_W, h: TILE_H }, fontFamily, ratio);
+  tile.painted = true;
+  return true;
+}
+
+/**
+ * A click on a tile: a template is applied to the selection, anything else is
+ * inserted next to the selection (or into the first root when nothing is
+ * selected), through the same ops a drop sends.
+ */
+function libraryInsert(entry: LibraryEntry): void {
+  if (entry.kind === "template") {
+    const target = selectedItem();
+    if (!canEdit(target)) {
+      toast("Select a widget with a declaration in this file first.", "info");
+      return;
+    }
+    guardedWrite(target.line, [{ key: "using", value: usingValue(entry.name) }]);
+    return;
+  }
+  const at = insertTarget();
+  if (!at) return;
+  insertEntry(entry, at);
+}
+
+/** Where a click inserts: after the selection in its container, or into the first writable root. */
+function insertTarget(): { line: number; index?: number } | null {
+  const item = selectedItem();
+  if (item && canEdit(item)) return pasteTarget();
+  const root = childIndices(scene, null)
+    .map((i) => scene.items[i])
+    .find((i) => canEdit(i));
+  if (!root) {
+    toast("Select a widget first: an insert needs a container to go into.", "info");
+    return null;
+  }
+  return { line: root.line };
+}
+
+/** ONE op for the entry, at the container on `line`: `insert` for a type, `insertRaw` for a saved component. */
+function insertEntry(entry: LibraryEntry, at: { line: number; index?: number }): void {
+  const container = scene.items.find((i) => i.line === at.line && canEdit(i));
+  if (container) {
+    pendingSelect = { parent: rowKey(container.path), source: at.index ?? Number.POSITIVE_INFINITY };
+  }
+  const report = (verdict: EditVerdict): void => {
+    if (verdict.refused) {
+      pendingSelect = null;
+      toast(verdict.refused, "refused");
+    } else if (verdict.warning) toast(verdict.warning, "warned");
+    else if (entry.kind !== "saved") {
+      toast(`${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`, "info");
+    }
+  };
+  if (entry.kind === "saved") {
+    awaitVerdict(
+      (id) => ({ type: "insertComponent", id, name: entry.name, line: at.line, index: at.index }),
+      report
+    );
+    return;
+  }
+  sendOps(
+    "applyOps",
+    [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
+    report
+  );
 }
 
 /**
@@ -1747,7 +1987,7 @@ function renderTools(item: SceneItem): void {
   } else if (canEdit(item)) {
     // The palette is where the vocabulary comes from, so say that rather than
     // showing a menu with nothing in it.
-    inspectorEl.appendChild(el("div", "note", "Open the palette to wrap this in a container."));
+    inspectorEl.appendChild(el("div", "note", "Open the library to wrap this in a container."));
   }
 
   // A preset is saved FROM the inspector because the rows it saves are the ones
@@ -2300,11 +2540,17 @@ function onLayout(
     if (inserted !== null) moveCopy();
     else pendingMove = null;
   }
-  // The palette lists this document's own templates and types, and an edit can
-  // add one, so an open palette re-asks. The first layout asks too even with
-  // the palette closed: the inspector's "wrap in" menu is built from the same
+  // A new document version: every tile preview was laid out against the old
+  // one, so the cache goes and the tiles on screen re-ask.
+  libraryGen++;
+  previewCache.clear();
+  previewPending.clear();
+  previewRequests.length = 0;
+  // The library lists this document's own templates and types, and an edit can
+  // add one, so an open library re-asks. The first layout asks too even with
+  // the library closed: the inspector's "wrap in" menu is built from the same
   // vocabulary and must not be empty until someone opens a panel.
-  if (paletteOpen() || !vocabularyAsked) askVocabulary();
+  if (libraryOpen() || !vocabularyAsked) askVocabulary();
   // A document change can change what it depends on, so an open dependency
   // panel re-asks; every other halo surface is redrawn from what it has.
   if (haloOpen()) {
@@ -2434,10 +2680,9 @@ const host = connectHost((message) => {
     }
     case "vocabulary":
       vocabulary = message.entries;
-      vocabularyTotal = message.total;
       vocabularyProps = message.properties ?? {};
       vocabularyCommon = message.commonProperties ?? [];
-      renderPalette();
+      renderLibrary();
       renderInspector();
       if (haloOpen() && haloTab === "types") renderHalo();
       return;
@@ -2465,7 +2710,11 @@ const host = connectHost((message) => {
       components = message.components;
       presets = message.presets;
       if (haloOpen() && haloTab === "saved") renderHalo();
+      renderLibrary();
       renderInspector();
+      return;
+    case "previews":
+      onPreviews(message.previews, message.textures);
       return;
     case "error":
       statusEl.textContent = `Error: ${message.message}`;
@@ -3286,12 +3535,12 @@ let marquee: Marquee | null = null;
 // ---- dropping a palette entry ----------------------------------------------
 
 /**
- * A widget being dragged out of the palette. It carries no geometry of its own:
+ * A tile being dragged out of the library. It carries no geometry of its own:
  * what a drop means is decided by the container under the cursor, exactly as a
  * reorder drop is, and the widget itself is written by the server.
  */
 interface PaletteDrag {
-  entry: GuiVocabularyEntry;
+  entry: LibraryEntry;
   /** The chip that follows the cursor, named after the entry. */
   ghost: HTMLElement;
   /** The container the pointer is over, or null while it is over nothing writable. */
@@ -3412,7 +3661,14 @@ function updatePaletteDrag(world: { x: number; y: number }): void {
       : target.rects.length;
   drag.line = target.rects.length >= 2 ? dropLineIn(target, drag.rank) : null;
   const container = scene.items[target.index];
-  statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
+  if (drag.entry.kind === "template") {
+    // A template is applied to the widget under the cursor, not inserted
+    // between its children: there is no slot to point at.
+    drag.line = null;
+    statusEl.textContent = `${drag.entry.name} · using = on ${widgetTitle(container)}`;
+  } else {
+    statusEl.textContent = `${drag.entry.name} · into ${widgetTitle(container)} at ${drag.rank + 1} of ${target.rects.length + 1}`;
+  }
   requestDraw();
 }
 
@@ -3438,15 +3694,16 @@ function dropLineIn(target: DropTarget, rank: number): Guide {
 }
 
 /**
- * Release: ONE `insert` op, and the new widget becomes the selection. The body
- * is empty on purpose, a size this editor invented would be a number the
- * author never chose and the engine never measured, so the status line says
- * the widget draws nothing until it is given one.
+ * Release: ONE op (`insert` for a type, `insertRaw` for a saved component, a
+ * `using` write for a template), and the new widget becomes the selection. The
+ * body is empty on purpose, a size this editor invented would be a number the
+ * author never chose and the engine never measured, so the toast says the
+ * widget draws nothing until it is given one.
  */
 function endPaletteDrag(commit: boolean): void {
   const drag = paletteDrag;
   paletteDrag = null;
-  for (const node of paletteEls.values()) node.removeAttribute("data-dragging");
+  for (const tile of tileEls.values()) tile.node.removeAttribute("data-dragging");
   if (!drag) return;
   drag.ghost.remove();
   dropTargetEl.hidden = true;
@@ -3456,28 +3713,11 @@ function endPaletteDrag(commit: boolean): void {
     draw();
     return;
   }
-  const index = insertIndex(target, drag.rank);
-  // Select what lands: the container's path plus the source index the op wrote
-  // at, resolved against the NEXT layout (a draw index would be meaningless).
-  pendingSelect = {
-    parent: rowKey(scene.items[target.index].path),
-    source: index ?? Number.POSITIVE_INFINITY,
-  };
-  sendOps(
-    "applyOps",
-    [{ kind: "insert", line: target.line, widget: { type: drag.entry.name }, index }],
-    (verdict) => {
-      if (verdict.refused) {
-        pendingSelect = null;
-        toast(verdict.refused, "refused");
-        return;
-      }
-      toast(
-        `${drag.entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
-        "info"
-      );
-    }
-  );
+  if (drag.entry.kind === "template") {
+    guardedWrite(target.line, [{ key: "using", value: usingValue(drag.entry.name) }]);
+  } else {
+    insertEntry(drag.entry, { line: target.line, index: insertIndex(target, drag.rank) });
+  }
   statusEl.textContent = statusLine();
   draw();
 }
@@ -4228,21 +4468,13 @@ function browserActions(entry: GuiVocabularyEntry): HTMLElement {
   return tools;
 }
 
-/** The browser's insert: the same op a palette drop sends, at the paste target. */
+/** The browser's insert: the same op a library drop sends, at the paste target. */
 function insertType(entry: GuiVocabularyEntry): void {
   const at = pasteTarget();
   if (!at) return;
-  sendOps(
-    "applyOps",
-    [{ kind: "insert", line: at.line, widget: { type: entry.name }, index: at.index }],
-    (verdict) => {
-      if (verdict.refused) toast(verdict.refused, "refused");
-      else
-        toast(
-          `${entry.name} inserted. It has no size yet, so it draws nothing until you give it one.`,
-          "info"
-        );
-    }
+  insertEntry(
+    { key: `${entry.kind}:${entry.name}`, name: entry.name, kind: entry.kind, source: "", vocab: entry },
+    at
   );
 }
 
@@ -4480,13 +4712,7 @@ function saveSelectionAsComponent(): void {
 function insertComponent(name: string): void {
   const at = pasteTarget();
   if (!at) return;
-  awaitVerdict(
-    (id) => ({ type: "insertComponent", id, name, line: at.line, index: at.index }),
-    (verdict) => {
-      if (verdict.refused) toast(verdict.refused, "refused");
-      else if (verdict.warning) toast(verdict.warning, "warned");
-    }
-  );
+  insertEntry({ key: `saved:${name}`, name, kind: "saved", source: "" }, at);
 }
 
 /**
@@ -4877,7 +5103,7 @@ document.getElementById("zoomOut")!.addEventListener("click", () => {
 // subtree, not the 1920x1080 reference viewport around it.
 document.getElementById("zoomFit")!.addEventListener("click", fitView);
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
-paletteToggleEl.addEventListener("click", togglePalette);
+libraryToggleEl.addEventListener("click", toggleLibrary);
 haloToggleEl.addEventListener("click", toggleHalo);
 outlinesEl.addEventListener("change", draw);
 // The two drag toggles are remembered by the host, like the value mode.

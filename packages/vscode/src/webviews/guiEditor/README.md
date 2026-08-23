@@ -1,6 +1,6 @@
 # The GUI editor, and the contract a host implements
 
-`app/` is the whole editor: canvas, tree, layers, palette, inspector,
+`app/` is the whole editor: canvas, tree, layers, element library, inspector,
 hit-testing, gestures, smart guides, subtree focus, multi-selection, the
 clipboard gestures, and the devtools halo (placement, overlays, heatmaps,
 visibility, dependencies) with its browsers and its saved library. It
@@ -18,7 +18,7 @@ it, and which of the promises are load-bearing rather than conveniences.
 
 | File | What it is | Who ports it |
 |---|---|---|
-| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`, `placement`, `devtools`, `textures`, `browse`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
+| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`, `library`, `placement`, `devtools`, `textures`, `browse`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
 | `app/host.ts` | The transport shim, and the ONLY file under `app/` that knows which host it is in | A new host adds a branch here. Nothing else under `app/` changes. |
 | `messages.ts` | The typed contract, both directions | Nobody. It is the contract. |
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |
@@ -114,12 +114,21 @@ each has to actually do.
 - **`pasteInto`** Read the clipboard and commit it as one `insertRaw` op at the
   named container and index. An empty clipboard is a refusal, not silence.
 - **`requestVocabulary` / `vocabulary`** Answer `paradox/guiVocabulary` for the
-  current text, WHOLE: the widget names a palette may offer, and the
+  current text, WHOLE: the widget names the library may offer, and the
   `properties` / `commonProperties` an inspector's add-property row completes
   from. A host that forwarded only the entries would leave that row offering
   nothing, which looks exactly like a document whose types the harvest does not
   know. A host with no such request answers `{ entries: [], total: 0 }`, and
   both panels say they have nothing rather than breaking.
+- **`requestPreviews` / `previews`** Answer `paradox/guiPreview` for the
+  current text and the entries given (at most `GUI_PREVIEW_MAX`, 48, per
+  message), one preview per entry IN ORDER, and resolve every texture path the
+  previews name through the same cache and eviction the canvas fills use,
+  CAPPED to the thumbnail size. The app asks only for the library tiles on
+  screen and caches the answers per layout push, so a host that answered out
+  of order or for a whole listing would either mislabel tiles or lay out every
+  widget the game knows to draw a scrollbar. A failed request answers
+  `node: null` with the reason per entry, not an error.
 - **`reveal`** Show that line in the text editor without stealing focus and
   without hijacking the column the editor panel is in.
 - **`revealAt`** The same, for an ARBITRARY file: a dependency row points at a
@@ -147,8 +156,9 @@ each has to actually do.
   cache and eviction the canvas fills use, CAPPED to a thumbnail size. The app
   asks only for the page it is drawing; a host that decoded a whole listing
   would decode a game's entire sprite set to draw a scrollbar.
-- **`requestUserData` / `userData`** Answer with the saved components and
-  presets. **Ship none.** A component or a preset this editor invented would be
+- **`requestUserData` / `userData`** Answer with the saved components (name,
+  widget count AND the stored text, which the library previews as a `raw`
+  entry) and presets. **Ship none.** A component or a preset this editor invented would be
   a guess at what a mod's widgets look like; two empty lists is the correct
   answer for a new user and the panels say so.
 - **`saveComponent`** Read those widgets' verbatim blocks (a `blockText` op
@@ -249,22 +259,23 @@ must not reach the inspector.
 ## What the page must provide
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
-these ids: `canvas`, `stage`, `tree`, `layers`, `palette`, `focusBar`,
+these ids: `canvas`, `stage`, `tree`, `layers`, `library`, `focusBar`,
 `inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `meta`,
 `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`,
-`heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `paletteToggle`,
+`heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `libraryToggle`,
 `haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
 `dropTarget`, `textTip`, `locResolved`, `locRaw`, `side`, `right`,
 `toggleSide`, `toggleRight`. `locResolved` and `locRaw` are the two buttons of
 a px-toggle-group (the app sets their `aria-pressed`); `textTip` is a hidden
 `px-popover` inside the stage that the app fills with a hovered textbox's
 segments and positions in screen space. `dropTarget` is the
-"Drop here" outline a palette drag places over its container, a hidden
+"Drop here" outline a library drag places over its container, a hidden
 element inside the stage that the app positions in screen space. `snap`, `grid`, `constraints` and `pulses` are
 checkboxes, `snap` checked by default; `heatmap` is a `<select>` the app fills
 its own options into and keeps hidden behind `heatmapMenu`, the px-dropdown
-that opens them as a menu. `palette` and `halo` start `hidden` and their
-toggles are what show them. `side` and `right` are the two `px-sidepanel`s
+that opens them as a menu. `library` and `halo` start `hidden` and their
+toggles are what show them. The library's tile grid needs `IntersectionObserver`
+(tiles ask for their preview when they scroll into view); the harness stubs it. `side` and `right` are the two `px-sidepanel`s
 (../shared/sidePanel.ts); their width and collapsed state ride on
 `setUiState.panels` and come back on `layout.ui.panels`. Toasts are the shared
 px-ui `toast()`, so the page needs no element for them. The stage needs pointer events and, ideally, pointer

@@ -760,3 +760,42 @@ export function drawScene(
 export function resetImageCache(): void {
   derived.clear();
 }
+
+/**
+ * One scene painted to fit a box: a library tile. The scene's bounds (every
+ * item's rect, ghost boxes included) are scaled to fit inside `box` with a
+ * margin, aspect preserved and centred; the caller owns the backdrop. Same
+ * painter as the canvas, so a tile shows what inserting the entry would show.
+ */
+export function drawThumbnail(
+  ctx: CanvasRenderingContext2D,
+  scene: Scene,
+  images: Images,
+  box: { w: number; h: number },
+  fontFamily: string,
+  /** Device pixels per CSS pixel of `box`; the bitmap is `box` times this. */
+  ratio = 1
+): void {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const item of scene.items) {
+    for (const r of [item.rect, item.ghostBox]) {
+      if (!r || r.w <= 0 || r.h <= 0) continue;
+      x0 = Math.min(x0, r.x);
+      y0 = Math.min(y0, r.y);
+      x1 = Math.max(x1, r.x + r.w);
+      y1 = Math.max(y1, r.y + r.h);
+    }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, box.w * ratio, box.h * ratio);
+  if (!Number.isFinite(x0) || x1 <= x0 || y1 <= y0) return;
+  const margin = 4;
+  const zoom = Math.min((box.w - 2 * margin) / (x1 - x0), (box.h - 2 * margin) / (y1 - y0), 1);
+  const panX = (box.w - (x1 - x0) * zoom) / 2 - x0 * zoom;
+  const panY = (box.h - (y1 - y0) * zoom) / 2 - y0 * zoom;
+  ctx.setTransform(zoom * ratio, 0, 0, zoom * ratio, panX * ratio, panY * ratio);
+  for (const item of scene.items) paintItem(ctx, item, images, zoom * ratio, false, fontFamily, 1);
+}
