@@ -24,7 +24,15 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { Reference } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
-import { decode, LineIndex, nodeAtOffset, parseScript, type ParseResult } from "../parser";
+import {
+  decode,
+  LineIndex,
+  nodeAtOffset,
+  parseScript,
+  type BlockNode,
+  type ParseResult,
+  type ValueNode,
+} from "../parser";
 
 const DEFAULT_MAX_NODES = 400;
 const GRAPH_KINDS = new Set(["event", "on_action", "decision"]);
@@ -315,8 +323,12 @@ export function computeEventGraph(
   }
   labelEdges(data, graphEdges, sites);
 
+  // What each node fires, for the card's third line. Free: the edges are here.
+  const firesCount = new Map<string, number>();
+  for (const e of graphEdges) firesCount.set(e.from, (firesCount.get(e.from) ?? 0) + 1);
+
   const nodes: EventGraphNode[] = [];
-  const themeReader = params.themes ? themeLookup() : null;
+  const factsOf = fileFacts();
   for (const id of selected) {
     const defs = data.index.lookup(id);
     const def = defs[0];
@@ -328,52 +340,92 @@ export function computeEventGraph(
       line: def?.line,
       title: titleOf(data, id),
     };
-    if (themeReader && def?.kind === "event" && def.file) {
-      const theme = themeReader(def.file, id);
-      if (theme) node.theme = theme;
+    // Only this mod's own files are read: a card summarises what the author can
+    // edit, and parsing every vanilla event file a graph touches is not cheap.
+    const facts = def?.source === "mod" && def.file ? factsOf(def.file).get(id) : undefined;
+    if (facts) {
+      if (def?.kind === "event") node.options = facts.options;
+      if (facts.trigger) node.triggerSummary = facts.trigger;
+      if (params.themes && facts.theme) node.theme = facts.theme;
     }
+    const fires = firesCount.get(id) ?? 0;
+    if (fires > 0) node.fires = fires;
     nodes.push(node);
   }
   nodes.sort((a, b) => a.id.localeCompare(b.id));
   return { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
 }
 
+/** What a card says about one definition, all of it read from its own body. */
+interface DefFacts {
+  /** `option = { … }` blocks. */
+  options: number;
+  /** The first keys of the `trigger` block, or "" when there is no trigger. */
+  trigger: string;
+  /** `theme = X`, for the banner layer. */
+  theme?: string;
+}
+/** Trigger keys named on a card before it says "…". Two fit the card's width. */
+const TRIGGER_KEYS_SHOWN = 2;
+
 /**
- * `theme = X` of one event, read from its own file. Each file is parsed once
- * per request; a file that cannot be read simply has no themes, which the
- * caller renders as "unresolved" rather than as a wrong picture.
+ * Every top-level definition of one file, summarised. Each file is parsed once
+ * per request; a file that cannot be read simply has no facts, which the caller
+ * renders as a card without a second and third line rather than a wrong one.
  */
-function themeLookup(): (file: string, id: string) => string | undefined {
-  const byFile = new Map<string, Map<string, string>>();
-  return (file, id) => {
+function fileFacts(): (file: string) => Map<string, DefFacts> {
+  const byFile = new Map<string, Map<string, DefFacts>>();
+  return (file) => {
     const key = file.toLowerCase();
-    let themes = byFile.get(key);
-    if (!themes) {
-      themes = new Map<string, string>();
-      byFile.set(key, themes);
-      try {
-        const root = parseScript(decode(fs.readFileSync(file)).text).root;
-        for (const stmt of root.statements) {
-          if (stmt.kind !== "assignment") continue;
-          const block =
-            stmt.value?.kind === "block"
-              ? stmt.value
-              : stmt.value?.kind === "tagged-block"
-                ? stmt.value.block
-                : null;
-          if (!block) continue;
-          for (const child of block.statements) {
-            if (child.kind !== "assignment") continue;
-            if (child.key.text.toLowerCase() !== "theme") continue;
-            if (child.value?.kind === "scalar") themes.set(stmt.key.text, child.value.text);
-          }
+    let facts = byFile.get(key);
+    if (facts) return facts;
+    facts = new Map<string, DefFacts>();
+    byFile.set(key, facts);
+    try {
+      const root = parseScript(decode(fs.readFileSync(file)).text).root;
+      for (const stmt of root.statements) {
+        if (stmt.kind !== "assignment") continue;
+        const block = blockOf(stmt.value);
+        if (!block) continue;
+        const entry: DefFacts = { options: 0, trigger: "" };
+        for (const child of block.statements) {
+          if (child.kind !== "assignment") continue;
+          const childKey = child.key.text.toLowerCase();
+          if (childKey === "option") entry.options++;
+          else if (childKey === "theme" && child.value?.kind === "scalar") entry.theme = child.value.text;
+          else if (childKey === "trigger" && entry.trigger === "") entry.trigger = triggerKeys(child.value);
         }
-      } catch {
-        /* unreadable: memoized as empty so it is attempted once */
+        facts.set(stmt.key.text, entry);
       }
+    } catch {
+      /* unreadable: memoized as empty so it is attempted once */
     }
-    return themes.get(id);
+    return facts;
   };
+}
+
+function blockOf(value: ValueNode | null | undefined): BlockNode | null {
+  if (value?.kind === "block") return value;
+  if (value?.kind === "tagged-block") return value.block;
+  return null;
+}
+
+/** "is_adult, has_trait…": what a `trigger` block asks, short enough for a card. */
+function triggerKeys(value: ValueNode | null | undefined): string {
+  const block = blockOf(value);
+  if (!block) return "";
+  const keys: string[] = [];
+  let more = false;
+  for (const stmt of block.statements) {
+    if (stmt.kind !== "assignment") continue;
+    if (keys.length < TRIGGER_KEYS_SHOWN) keys.push(stmt.key.text);
+    else {
+      more = true;
+      break;
+    }
+  }
+  if (keys.length === 0) return "";
+  return keys.join(", ") + (more ? "…" : "");
 }
 
 /** The mod's own graph ids and the namespaces they imply, both sorted. */

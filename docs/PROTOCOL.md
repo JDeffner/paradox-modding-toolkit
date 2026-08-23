@@ -172,6 +172,12 @@ answered as a direct `from` -> `to` edge whose `label` reads
 `via effect_a -> effect_b`, so an event whose `trigger_event` sits inside a
 scripted effect is not reported as firing nothing.
 
+An `EventGraphNode` also carries what a card says about itself without a second
+request: `options` (its `option` blocks) and `triggerSummary` (the first keys of
+its `trigger` block) for this mod's own definitions, read from the file the
+answer already parses, and `fires` (how many nodes of this graph it fires),
+counted from the edges; all three are optional and absent where unknown.
+
 `paradox/eventVocabulary` is what an event editor is allowed to offer. Every
 list in it is derived, never hand-written: `eventKeys` / `optionKeys` from the
 active profile's structure table ordered by its usage counts, `values` from a
