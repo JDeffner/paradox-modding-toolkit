@@ -323,3 +323,14 @@ expectations:
   commit on the biggest window the game ships.
 - `docs/gui-designer/g3-checklist.md` is the human-mouse pass, because feel is
   not something a headless harness can sign off.
+
+## Preview from a save
+
+`pickSave` / `clearSave` (app → host) choose or forget a plain-text save
+whose real values (`paradox/guiSaveValues`: played country, ruler, capital,
+date, ...) stand in for datafunctions; the host remembers the file per
+workspace (`px.guiEditor.save`), merges its values UNDER the mod's
+`gui-preview-values.json` (typed values win), and names the save on every
+`layout` push as `save` (`null` when a chosen save failed, absent when none is
+chosen). Ironman or binary saves are refused with a message: they are for
+challenge runs, not dev previews.

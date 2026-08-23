@@ -101,6 +101,9 @@ import {
   guiPreviewRequest,
   type GuiPreviewParams,
   type GuiPreviewResult,
+  guiSaveValuesRequest,
+  type GuiSaveValuesParams,
+  type GuiSaveValuesResult,
   dependenciesRequest,
   type DependenciesParams,
   type DependenciesResult,
@@ -751,6 +754,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             text,
             entries,
           } satisfies GuiPreviewParams),
+        (file) =>
+          lc.sendRequest<GuiSaveValuesResult>(guiSaveValuesRequest, {
+            path: file,
+          } satisfies GuiSaveValuesParams),
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)

@@ -2648,6 +2648,7 @@ const host = connectHost((message) => {
       // Before the scene is built: the canvas measures its text boxes with the
       // same law the server laid the widgets out with.
       setLineHeightRatio(message.lineHeightRatio);
+      showSaveSource(message.save);
       onLayout(
         message.result,
         message.textures,
@@ -5117,6 +5118,34 @@ gridToggle.addEventListener("change", () => {
 });
 locResolvedEl.addEventListener("click", () => setLocMode("resolve"));
 locRawEl.addEventListener("click", () => setLocMode("raw"));
+
+// Preview from a save: the button names the chosen save; its menu picks or clears one.
+const saveSourceEl = document.getElementById("saveSource") as HTMLButtonElement;
+let saveSource: { name: string; date: string; file: string } | null = null;
+function showSaveSource(save: { name: string; date: string; file: string } | null | undefined): void {
+  saveSource = save ?? null;
+  const label = saveSourceEl.querySelector(".px-truncate")!;
+  label.textContent = saveSource ? `${saveSource.name}, ${saveSource.date}` : "No save";
+  saveSourceEl.toggleAttribute("data-placeholder", !saveSource);
+}
+saveSourceEl.addEventListener("click", () =>
+  menu(
+    saveSourceEl,
+    [
+      {
+        value: "pick",
+        label: saveSource ? "Choose another save…" : "Choose a save…",
+        hint: "plain text only",
+      },
+      ...(saveSource ? [{ value: "clear", label: "Stop using the save", description: saveSource.file }] : []),
+    ],
+    {
+      search: false,
+      width: 280,
+      onPick: (v) => host.send(v === "pick" ? { type: "pickSave" } : { type: "clearSave" }),
+    }
+  )
+);
 constraintsToggle.addEventListener("change", () => {
   // Switching it on turns the placement flag on, so the trace has to be fetched
   // for the CURRENT selection or the overlay would stay blank until the user

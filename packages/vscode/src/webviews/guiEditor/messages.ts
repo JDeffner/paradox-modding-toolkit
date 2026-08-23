@@ -339,6 +339,13 @@ export type AppToHost =
    * message with a fresh layout. `expression` is the segment's `source`: the
    * chain without its brackets.
    */
+  /**
+   * Choose a plain-text save whose real values (played country name, ruler,
+   * date, ...) stand in for datafunctions; the host shows a file picker and
+   * remembers the choice per workspace. `clearSave` forgets it.
+   */
+  | { type: "pickSave" }
+  | { type: "clearSave" }
   | { type: "setPreviewValue"; expression: string; value: string }
   /** Drop the preview text for `expression` from that table, then push a fresh layout. */
   | { type: "clearPreviewValue"; expression: string }
@@ -410,6 +417,8 @@ export type HostToApp =
        * resolved, which the segment alone does not say.
        */
       previewValues?: Record<string, string>;
+      /** The save the preview values partly come from, when one is chosen. */
+      save?: { name: string; date: string; file: string } | null;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an

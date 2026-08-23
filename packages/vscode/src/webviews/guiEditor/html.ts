@@ -279,6 +279,7 @@ ${uiCss}
     <div class="px-toggle-group">
       <button id="locResolved" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Show textboxes as the game would: localization keys as their text, [datafunctions] as what the preview can know" data-tip-wrap>Resolved</button>
       <button id="locRaw" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Show textboxes as the file has them: the text = value verbatim" data-tip-wrap>Raw</button>
+      <button id="saveSource" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;max-width:260px" data-tip="Real values for [datafunctions] from a save game (plain text, not ironman)" data-tip-wrap>${icon("fileText")}<span class="px-truncate">No save</span>${icon("chevronDown")}</button>
     </div>
     <select id="heatmap"></select>
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>

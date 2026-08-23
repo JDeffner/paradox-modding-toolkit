@@ -28,6 +28,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import type {
+  GuiSaveValuesResult,
   GuiDependenciesResult,
   GuiLayoutResult,
   GuiPreviewEntry,
@@ -48,6 +49,7 @@ import {
   type TextureEntry,
 } from "./messages";
 import { guiEditorHtml } from "./html";
+import { gameDocsSubdir } from "../../config";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "./textureCache";
 import {
   COMPONENTS_KEY,
@@ -85,6 +87,7 @@ export type FetchDependencies = (
   text: string,
   line: number | undefined
 ) => Promise<GuiDependenciesResult>;
+export type FetchSaveValues = (file: string) => Promise<GuiSaveValuesResult>;
 export type FetchPreviews = (
   uri: vscode.Uri,
   text: string,
@@ -117,6 +120,8 @@ const THUMBNAIL_BATCH_MAX = 60;
  * what THAT mod's datafunctions should read as, so it travels with the mod and
  * not with the user.
  */
+/** workspaceState key: the save file whose values feed the preview. */
+const SAVE_KEY = "px.guiEditor.save";
 const PREVIEW_VALUES_FILE = "gui-preview-values.json";
 
 export class GuiEditorPanel {
@@ -130,6 +135,7 @@ export class GuiEditorPanel {
   private readonly fetchVocabulary: FetchVocabulary;
   private readonly fetchDependencies: FetchDependencies;
   private readonly fetchPreviews: FetchPreviews;
+  private readonly fetchSaveValues: FetchSaveValues;
   private readonly state: vscode.Memento;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
@@ -152,6 +158,7 @@ export class GuiEditorPanel {
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
     fetchPreviews: FetchPreviews,
+    fetchSaveValues: FetchSaveValues,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -162,6 +169,7 @@ export class GuiEditorPanel {
     this.fetchVocabulary = fetchVocabulary;
     this.fetchDependencies = fetchDependencies;
     this.fetchPreviews = fetchPreviews;
+    this.fetchSaveValues = fetchSaveValues;
     this.state = context.workspaceState;
     this.sourceUri = source.uri;
     this.storageDir = context.globalStorageUri.fsPath;
@@ -230,6 +238,7 @@ export class GuiEditorPanel {
     fetchVocabulary: FetchVocabulary,
     fetchDependencies: FetchDependencies,
     fetchPreviews: FetchPreviews,
+    fetchSaveValues: FetchSaveValues,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -260,6 +269,7 @@ export class GuiEditorPanel {
       fetchVocabulary,
       fetchDependencies,
       fetchPreviews,
+      fetchSaveValues,
       source,
       roots,
       meta
@@ -291,7 +301,12 @@ export class GuiEditorPanel {
       // belongs to the document, and `show` can point this panel at a new one.
       const visibility = this.visibility();
       const ui = readUiState(this.state.get(UI_KEY));
-      const previewValues = this.readPreviewValues();
+      // The mod's own table wins over the save: typed values are deliberate.
+      const save = await this.saveValues();
+      const previewValues =
+        save || this.readPreviewValues()
+          ? { ...(save?.values ?? {}), ...(this.readPreviewValues() ?? {}) }
+          : undefined;
       const result = await this.fetchLayout(source.uri, source.getText(), visibility, {
         loc: ui?.loc,
         previewValues,
@@ -311,6 +326,11 @@ export class GuiEditorPanel {
         visibility,
         ui,
         previewValues,
+        save: save
+          ? { ...save.source, file: save.file }
+          : this.state.get<string>(SAVE_KEY)
+            ? null
+            : undefined,
         lineHeightRatio: this.meta.guiTextMetrics
           ? this.meta.guiTextMetrics.lineHeight / this.meta.guiTextMetrics.baseFontsize
           : undefined,
@@ -324,6 +344,47 @@ export class GuiEditorPanel {
       if (this.disposed) return;
       this.post({ type: "error", message: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  /** The chosen save's values (server-cached by path + mtime), or null when none is chosen or it fails. */
+  private async saveValues(): Promise<{
+    values: Record<string, string>;
+    source: { name: string; date: string };
+    file: string;
+  } | null> {
+    const file = this.state.get<string>(SAVE_KEY);
+    if (!file) return null;
+    try {
+      const result = await this.fetchSaveValues(file);
+      if (result.error) {
+        void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${result.error}`);
+        return null;
+      }
+      return { values: result.values, source: { name: result.source.name, date: result.source.date }, file };
+    } catch {
+      return null;
+    }
+  }
+
+  /** File picker over the game's save folder; a plain-text (non-ironman) save is required. */
+  private async pickSave(): Promise<void> {
+    const folder = gameDocsSubdir(this.meta, "save games");
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      defaultUri: folder ? vscode.Uri.file(folder) : undefined,
+      openLabel: "Use for preview",
+      title: "Choose a save (plain text; ironman saves are for challenge runs, not dev previews)",
+      filters: { "Save games": ["v3", "ck3", "eu5", "sav"], "All files": ["*"] },
+    });
+    const file = picked?.[0]?.fsPath;
+    if (!file) return;
+    const result = await this.fetchSaveValues(file);
+    if (result.error) {
+      void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${result.error}`);
+      return;
+    }
+    await this.state.update(SAVE_KEY, file);
+    await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
   }
 
   private previewValuesPath(): string | null {
@@ -786,6 +847,13 @@ export class GuiEditorPanel {
         }, LAYOUT_DEBOUNCE_MS);
         return;
       }
+      case "pickSave":
+        await this.pickSave();
+        return;
+      case "clearSave":
+        await this.state.update(SAVE_KEY, undefined);
+        await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
+        return;
       case "setPreviewValue": {
         await this.updatePreviewValues(message.expression, message.value);
         return;
