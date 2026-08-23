@@ -41,8 +41,7 @@ ${uiCss}
   }
   #viewport { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform-origin: 0 0; }
   #canvas { max-width: 92%; max-height: 92%; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 12px 40px rgba(0,0,0,.35); }
-  #stage[data-unlocked] { cursor: grab; }
-  #stage[data-panning] { cursor: grabbing; }
+  #stage[data-panning], #stage[data-panning] #canvas { cursor: grabbing; }
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 4px; }
   #stageInfo { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #resetName[hidden] { display: none; }
@@ -97,7 +96,7 @@ ${uiCss}
       <button id="redo" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Redo (Ctrl+Y)">${icon("redo")}</button>
     </div>
     <span class="px-grow"></span>
-    <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:220px" data-tip="Mod the flag is saved into">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+    <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:320px;min-width:180px" data-tip="Mod the flag is saved into">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <button id="save" class="px-btn" data-variant="default" data-tip="Write the flag into the mod's coat_of_arms folder">${icon("save")} Save</button>
     <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
@@ -108,7 +107,8 @@ ${uiCss}
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="View locked. Unlock to pan with the middle mouse button and zoom with the wheel" data-tip-side="right" data-tip-wrap>${icon("lock")}</button>
+        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="right" data-tip-wrap>${icon("unlock")}</button>
+        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="right" data-tip-wrap>${icon("maximize")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
         <span id="hint" class="px-muted px-xs"></span>
       </div>

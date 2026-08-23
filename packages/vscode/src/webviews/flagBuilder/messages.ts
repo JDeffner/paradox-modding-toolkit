@@ -33,6 +33,8 @@ export interface UiState {
   panelCollapsed: boolean;
   /** The mod flags are saved into (its path), when the workspace has several. */
   savePath?: string;
+  /** The canvas zoom and pan are frozen; unset (the default) means they are live. */
+  viewFrozen?: boolean;
 }
 
 /** A mod the flag can be saved into. */
