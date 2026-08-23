@@ -1075,9 +1075,9 @@
   },
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs",
-    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
+    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text",
     "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020",
-    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --watch",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",
     "testp": "node ../../scripts/package-preview.mjs"

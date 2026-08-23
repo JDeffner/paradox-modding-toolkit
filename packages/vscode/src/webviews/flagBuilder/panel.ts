@@ -15,9 +15,10 @@ import { upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { buildFlagDatabase, locateTexture, type FlagRoot } from "./database";
 import { flagBuilderHtml } from "./html";
-import { THUMB_DIM, type AppToHost, type HostToApp, type TextureKind } from "./messages";
+import { THUMB_DIM, type AppToHost, type HostToApp, type TextureKind, type UiState } from "./messages";
 
 const BOM = "﻿";
+const UI_KEY = "px.flagBuilder.ui";
 
 export interface FlagBuilderOptions {
   meta: GameMeta;
@@ -34,12 +35,14 @@ export class FlagBuilderPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly textures: GuiTextureCache;
+  private readonly state: vscode.Memento;
   private options: FlagBuilderOptions;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
   private constructor(context: vscode.ExtensionContext, options: FlagBuilderOptions) {
     this.options = options;
+    this.state = context.workspaceState;
     this.textures = new GuiTextureCache(context.globalStorageUri.fsPath, { gamePath: null, modPath: null });
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
@@ -107,7 +110,7 @@ export class FlagBuilderPanel {
   private postInit(): void {
     const { meta, roots, gameMissing, modPath } = this.options;
     const db = buildFlagDatabase(meta.name, roots, meta.stageRoots, gameMissing);
-    this.post({ type: "init", db, canSave: modPath !== null });
+    this.post({ type: "init", db, canSave: modPath !== null, ui: this.state.get<UiState>(UI_KEY) });
   }
 
   private async onMessage(message: AppToHost): Promise<void> {
@@ -132,6 +135,9 @@ export class FlagBuilderPanel {
         this.post({ type: "textures", urls, thumbs: message.thumbs });
         return;
       }
+      case "uiState":
+        await this.state.update(UI_KEY, message.state);
+        return;
       case "copy":
         await vscode.env.clipboard.writeText(message.text);
         this.post({ type: "toast", message: "Script copied to the clipboard." });
