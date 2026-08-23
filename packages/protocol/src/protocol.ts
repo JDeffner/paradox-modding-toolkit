@@ -1141,6 +1141,12 @@ export interface EventGraphNode {
   title?: string;
   /** The event's declared `theme`, when the request asked for themes. */
   theme?: string;
+  /** How many `option` blocks this definition has (mod-side definitions only). */
+  options?: number;
+  /** The first keys of its `trigger` block, e.g. `is_adult, has_trait…`; absent = no trigger. */
+  triggerSummary?: string;
+  /** How many other nodes of this graph it fires; absent when it fires none. */
+  fires?: number;
 }
 export interface EventGraphEdge {
   from: string;

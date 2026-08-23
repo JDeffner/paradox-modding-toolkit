@@ -13,10 +13,11 @@ import { GraphHistory, type GraphState } from "../history";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
-import { el } from "./dom";
+import { el, iconButton } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";
+import { describeEdit, editKind } from "./pendingView";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -31,7 +32,7 @@ const queryEl = $<HTMLInputElement>("query");
 const saveEl = $<HTMLButtonElement>("save");
 const undoEl = $<HTMLButtonElement>("undo");
 const redoEl = $<HTMLButtonElement>("redo");
-const zoomLabelEl = $("zoomLabel");
+const changesEl = $<HTMLButtonElement>("changes");
 
 let ui: UiState = {
   panelWidth: 340,
@@ -57,10 +58,12 @@ const side = sidePanel($("side"), {
     updatePanelToggle();
   },
 });
+// A strip of icons has no width to choose, so the rail only ever opens and
+// closes, and its handle rides on the canvas edge where it stays reachable.
 const rail = sidePanel($("rail"), {
-  min: 150,
-  max: 260,
-  width: 172,
+  min: 40,
+  max: 40,
+  width: 40,
   onChange: (s) => {
     ui = { ...ui, railCollapsed: s.collapsed };
     saveUi();
@@ -74,11 +77,12 @@ function updatePanelToggle(): void {
   btn.dataset.tip = side.collapsed ? "Show inspector" : "Hide inspector";
 }
 function updateRailToggle(): void {
-  $("railShow").hidden = !rail.collapsed;
+  const btn = $("railToggle");
+  btn.replaceChildren(iconEl(rail.collapsed ? "panelLeftOpen" : "panelLeftClose"));
+  btn.dataset.tip = rail.collapsed ? "Show the tools" : "Hide the tools";
 }
 $("togglePanel").onclick = () => side.toggle();
-$("railHide").onclick = () => rail.toggle(true);
-$("railShow").onclick = () => rail.toggle(false);
+$("railToggle").onclick = () => rail.toggle();
 
 function saveUi(): void {
   send({ type: "uiState", state: ui });
@@ -98,16 +102,11 @@ const view = new GraphView(svg, {
     afterHistoryChange();
     view.setOptions({ positions });
   },
-  onZoom: (percent) => {
-    zoomLabelEl.textContent = `${percent}%`;
-  },
   onNeedBanner: (theme) => send({ type: "banner", theme }),
 });
 
 const inspector = new Inspector($("inspector"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
-  onRefocus: (id) => refocus(id),
-  onSimulate: (id) => sim.open(id),
   onEdit: (label, edit) => {
     history.pushEdit(label, edit);
     afterHistoryChange();
@@ -158,11 +157,17 @@ function refocus(id: string): void {
 function afterHistoryChange(): void {
   const count = history.pendingCount;
   saveEl.disabled = count === 0;
-  saveEl.querySelector(".count")!.textContent = String(count);
   saveEl.dataset.tip =
     count === 0
       ? "No changes to save yet. Edits stay in this view until you save them"
       : `Write ${count} change${count === 1 ? "" : "s"} to your mod files`;
+  changesEl.disabled = count === 0;
+  changesEl.querySelector(".count")!.textContent = String(count);
+  changesEl.dataset.tip =
+    count === 0
+      ? "No changes yet. Edits stay in this view until you save them"
+      : `List the ${count} unsaved change${count === 1 ? "" : "s"}, newest last`;
+  if (count === 0 && isPopoverAnchor(changesEl)) closePopover();
   undoEl.disabled = !history.canUndo;
   redoEl.disabled = !history.canRedo;
   undoEl.dataset.tip = history.canUndo ? `Undo ${history.undoLabel}` : "Nothing to undo";
@@ -194,6 +199,50 @@ saveEl.onclick = () => {
   if (history.pendingCount === 0) return;
   saveEl.disabled = true;
   send({ type: "save", edits: history.pending });
+};
+
+/** Walk undo back until edit `index` and everything after it is gone. */
+function undoTo(index: number): void {
+  let state: GraphState | null = null;
+  while (history.pendingCount > index && history.canUndo) state = history.undo();
+  if (state) applyState(state);
+}
+
+/**
+ * Every edit waiting for Save, oldest first. It is the answer to "what did I
+ * change?", which a count on a button cannot give, and each row offers the way
+ * back to before it.
+ */
+changesEl.onclick = () => {
+  if (isPopoverAnchor(changesEl)) {
+    closePopover();
+    return;
+  }
+  const list = el("div", "px-list");
+  list.id = "changeList";
+  history.pending.forEach((edit, index) => {
+    const row = el("div", "px-item");
+    const what = describeEdit(edit);
+    row.title = what;
+    row.append(
+      el("span", "px-item-kind", editKind(edit)),
+      el("span", "who", edit.id),
+      el("span", "what", what),
+      iconButton(
+        "undo",
+        index === history.pendingCount - 1
+          ? "Undo this change"
+          : `Undo this change and the ${history.pendingCount - 1 - index} after it`,
+        () => {
+          closePopover();
+          undoTo(index);
+        },
+        "icon-xs"
+      )
+    );
+    list.appendChild(row);
+  });
+  popover(changesEl, list);
 };
 
 window.addEventListener("keydown", (ev) => {
@@ -248,6 +297,7 @@ function setTitleMode(mode: "raw" | "loc"): void {
   $("titleRaw").setAttribute("aria-pressed", String(mode === "raw"));
   $("titleLoc").setAttribute("aria-pressed", String(mode === "loc"));
   view.setOptions({ titleMode: mode });
+  updateRailTools();
 }
 
 $("refresh").onclick = () => fetchGraph(currentParams);
@@ -268,6 +318,9 @@ $("kinds").addEventListener("click", (ev) => {
 
 // --- rail tools ---
 
+// The three tools that act on a card stay clickable-looking but inert without
+// one: `disabled` would take their tooltip away, which is where the page now
+// says a card is needed.
 $("toolSimulate").onclick = () => {
   if (selectedId) sim.open(selectedId);
 };
@@ -296,15 +349,19 @@ $("toolBanner").onclick = () => {
   if (ui.banner) fetchGraph(currentParams);
 };
 
-/** Simulate, Center and Source act on a selection; say so instead of failing. */
+/** The caption a card carries: its localized title, or its id. */
+function labelFor(id: string): string {
+  const node = currentGraph?.nodes.find((n) => n.id === id);
+  return ui.titleMode === "loc" && node?.title ? node.title : id;
+}
+
+/** Simulate, Center and Source act on a selection; the rail's edge says which. */
 function updateRailTools(): void {
   const has = selectedId !== null;
   for (const id of ["toolSimulate", "toolCenter", "toolSource"]) {
-    $<HTMLButtonElement>(id).disabled = !has;
+    $(id).setAttribute("aria-disabled", String(!has));
   }
-  $("railHint").textContent = has
-    ? `Acting on ${selectedId}.`
-    : "Select a card first: Simulate, Center and Source act on it.";
+  $("actingOn").textContent = has ? `Acting on: ${labelFor(selectedId!)}` : "";
 }
 
 $("helpBtn").onclick = () => {
@@ -317,11 +374,12 @@ $("helpBtn").onclick = () => {
   help.appendChild(el("div", "px-popover-title", "How to read the graph"));
   const list = el("ul");
   for (const text of [
-    "The card in the middle is what you are looking at. What it fires spreads to one side, what fires it to the other, further hops one ring further out.",
+    "The card in the middle is what you are looking at. What fires it is on the left, what it fires is on the right, further hops one ring further out.",
+    "A card says its name, then its kind and how many options it has, then what its trigger asks for and how much it fires.",
     "The colored bar is the kind. Dashed borders are vanilla content, solid is your mod, dotted is a parent mod.",
     "Click a card to focus and inspect it, drag it to move it, double-click to open its source, right-click to re-centre the graph on it.",
     'An arrow labeled "via" goes through a scripted effect: the event does not name the target itself, the effect it calls does.',
-    "Edits in the inspector are held here until you press Save changes. Undo and redo cover edits, moves and refocusing alike.",
+    "Edits in the inspector are held here until you press Save. The Changes button lists them, and each row goes back to before it.",
     "Drag the canvas to pan, scroll to zoom. + / − / 0 or the buttons at the bottom left do the same.",
   ]) {
     list.appendChild(el("li", "", text));

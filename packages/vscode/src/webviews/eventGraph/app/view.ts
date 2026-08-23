@@ -16,6 +16,12 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const LABELS_ALWAYS_MAX = 25;
 /** Pointer travel that turns a press into a drag rather than a click. */
 const DRAG_SLOP = 4;
+/**
+ * How far out and in the canvas goes: out far enough for a whole namespace of
+ * 240 px cards, in far enough to read a card's third line unaided.
+ */
+const ZOOM_MIN = 0.08;
+const ZOOM_MAX = 5;
 
 type Kind = "event" | "on_action" | "decision" | "other";
 
@@ -25,7 +31,6 @@ export interface ViewCallbacks {
   onRefocus(id: string): void;
   /** A node was dragged to a new place in graph coordinates. */
   onMove(id: string, x: number, y: number): void;
-  onZoom(percent: number): void;
   /** A theme whose illustration has not been asked for yet. */
   onNeedBanner(theme: string): void;
 }
@@ -85,10 +90,6 @@ export class GraphView {
     private readonly cb: ViewCallbacks
   ) {
     this.installGestures();
-  }
-
-  get zoomPercent(): number {
-    return Math.round(this.view.scale * 100);
   }
 
   /** A theme's illustration arrived (or is known to be missing): redraw. */
@@ -201,8 +202,18 @@ export class GraphView {
     defs.appendChild(hatch);
     // Clip so an illustration stays inside its card's rounded corners.
     const clip = svgEl("clipPath", { id: "cardClip" });
-    clip.appendChild(svgEl("rect", { width: String(NODE_W), height: String(NODE_H), rx: "5", ry: "5" }));
+    clip.appendChild(svgEl("rect", { width: String(NODE_W), height: String(NODE_H), rx: "6", ry: "6" }));
     defs.appendChild(clip);
+    // The scrim over an illustration. Text never sits on the picture itself:
+    // the side the words start on is the dark end, and it lightens away.
+    const scrim = svgEl("linearGradient", { id: "scrim", x1: "0", y1: "0", x2: "1", y2: "0" });
+    for (const [offset, opacity] of [
+      ["0", "0.85"],
+      ["1", "0.55"],
+    ]) {
+      scrim.appendChild(svgEl("stop", { offset, "stop-color": "rgb(16,16,16)", "stop-opacity": opacity }));
+    }
+    defs.appendChild(scrim);
     return defs;
   }
 
@@ -248,23 +259,31 @@ export class GraphView {
     return { from, to, path, label: text, labelsAlways };
   }
 
+  /**
+   * One card: the name in a size you can read across the canvas, then what kind
+   * of thing it is, then what it asks for and what it leads to. The kind is
+   * said twice, as a bar and as the border's hue, so it survives an
+   * illustration behind the card.
+   */
   private drawNode(node: EventGraphNode, at: LayoutPos): SVGGElement {
     const isRoot = this.rootId !== null && node.id === this.rootId;
+    const kind = kindKey(node.kind);
     const group = svgEl("g", {
       class: "node" + (isRoot ? " root" : ""),
       transform: `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`,
     });
     group.dataset.id = node.id;
-    group.dataset.kind = kindKey(node.kind);
+    group.dataset.kind = kind;
 
     const rect = svgEl("rect", {
       class: "node-rect",
       width: String(NODE_W),
       height: String(NODE_H),
-      rx: "5",
-      ry: "5",
+      rx: "6",
+      ry: "6",
       "stroke-dasharray": sourceDash(node.source),
     });
+    rect.style.stroke = `color-mix(in oklch, var(--eg-${kind}) 35%, transparent)`;
     const tip = svgEl("title");
     tip.textContent =
       node.id +
@@ -277,34 +296,41 @@ export class GraphView {
     this.nodeRects.set(node.id, { rect, node });
     this.nodeGroups.set(node.id, group);
 
-    if (this.options.banner) this.drawBanner(group, node);
+    if (this.options.banner && this.drawBanner(group, node)) group.classList.add("on-banner");
 
     group.appendChild(
       svgEl("rect", {
-        x: "4",
-        y: "5",
-        width: "3.5",
-        height: String(NODE_H - 10),
-        rx: "1.75",
-        fill: `var(--eg-${kindKey(node.kind)})`,
+        x: "6",
+        y: "8",
+        width: "3",
+        height: String(NODE_H - 16),
+        rx: "1.5",
+        fill: `var(--eg-${kind})`,
         "pointer-events": "none",
       })
     );
+    if (isRoot) {
+      group.appendChild(
+        svgEl("rect", {
+          class: "node-outline",
+          x: "-3",
+          y: "-3",
+          width: String(NODE_W + 6),
+          height: String(NODE_H + 6),
+          rx: "8",
+          ry: "8",
+        })
+      );
+    }
 
     const primary = this.options.titleMode === "loc" && node.title ? node.title : node.id;
-    const secondary = this.options.titleMode === "loc" && node.title ? node.id : node.title;
-    const label = svgEl("text", {
-      class: "node-label",
-      x: "13",
-      y: String(secondary ? NODE_H / 2 - 3 : NODE_H / 2 + 4),
-    });
-    label.textContent = clip(primary, 21);
-    group.appendChild(label);
-    if (secondary) {
-      const sub = svgEl("text", { class: "node-label node-sub", x: "13", y: String(NODE_H / 2 + 12) });
-      sub.textContent = clip(secondary, 27);
-      group.appendChild(sub);
-    }
+    const title = svgEl("text", { class: "node-title", x: "16", y: "22" });
+    title.textContent = clip(primary, 30);
+    const meta = svgEl("text", { class: "node-sub", x: "16", y: "39" });
+    meta.textContent = clip(metaLine(node), 40);
+    const sub = svgEl("text", { class: "node-sub", x: "16", y: "54" });
+    sub.textContent = clip(subLine(node), 40);
+    group.append(title, meta, sub);
 
     group.addEventListener("dblclick", (ev) => {
       ev.stopPropagation();
@@ -320,19 +346,21 @@ export class GraphView {
   }
 
   /**
-   * The theme's illustration behind the card, or a hatched box that says the
-   * picture could not be resolved. A missing texture is never silently left
-   * blank: a blank card would read as "this theme has no art".
+   * The theme's illustration behind the card, under a scrim dark enough that
+   * the text never sits on the picture itself. A missing texture is never
+   * silently left blank: a blank card would read as "this theme has no art", so
+   * it gets a hatched box that says otherwise. Answers whether a real picture
+   * went down, which is what decides the text color.
    */
-  private drawBanner(group: SVGGElement, node: EventGraphNode): void {
+  private drawBanner(group: SVGGElement, node: EventGraphNode): boolean {
     const theme = node.theme;
-    if (!theme) return;
+    if (!theme) return false;
     if (!this.banners.has(theme)) {
       if (!this.askedBanners.has(theme)) {
         this.askedBanners.add(theme);
         this.cb.onNeedBanner(theme);
       }
-      return;
+      return false;
     }
     const url = this.banners.get(theme) ?? null;
     const holder = svgEl("g", { "clip-path": "url(#cardClip)", "pointer-events": "none" });
@@ -347,6 +375,9 @@ export class GraphView {
           height: String(NODE_H),
           preserveAspectRatio: "xMidYMid slice",
         })
+      );
+      holder.appendChild(
+        svgEl("rect", { width: String(NODE_W), height: String(NODE_H), fill: "url(#scrim)" })
       );
     } else {
       holder.appendChild(
@@ -366,6 +397,7 @@ export class GraphView {
       holder.appendChild(note);
     }
     group.appendChild(holder);
+    return url !== null;
   }
 
   // --- selection and filtering ---------------------------------------------
@@ -437,7 +469,6 @@ export class GraphView {
       "transform",
       `translate(${this.view.x},${this.view.y}) scale(${this.view.scale})`
     );
-    this.cb.onZoom(this.zoomPercent);
   }
 
   zoomBy(factor: number): void {
@@ -446,7 +477,7 @@ export class GraphView {
   }
 
   private zoomAt(cx: number, cy: number, factor: number): void {
-    const next = Math.min(4, Math.max(0.1, this.view.scale * factor));
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.view.scale * factor));
     this.view.x = cx - (cx - this.view.x) * (next / this.view.scale);
     this.view.y = cy - (cy - this.view.y) * (next / this.view.scale);
     this.view.scale = next;
@@ -474,7 +505,7 @@ export class GraphView {
     }
     const w = maxX - minX + NODE_W + 80;
     const h = maxY - minY + NODE_H + 80;
-    this.view.scale = Math.min(1.2, Math.max(0.15, Math.min(vw / w, vh / h)));
+    this.view.scale = Math.min(1.2, Math.max(ZOOM_MIN, Math.min(vw / w, vh / h)));
     this.view.x = vw / 2 - ((minX + maxX) / 2) * this.view.scale;
     this.view.y = vh / 2 - ((minY + maxY) / 2) * this.view.scale;
     this.applyTransform();
@@ -644,4 +675,24 @@ function borderPoint(a: LayoutPos, b: LayoutPos): LayoutPos {
 
 function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
+}
+
+/** The card's second line: what kind of thing it is, and how much of it. */
+function metaLine(node: EventGraphNode): string {
+  const kind = node.kind === "unknown" ? "not indexed" : node.kind;
+  if (node.options === undefined) return kind;
+  return `${kind} · ${node.options} option${node.options === 1 ? "" : "s"}`;
+}
+
+/**
+ * The card's third line: what it asks for before it runs, and what it leads to.
+ * "no trigger" is only claimed for a definition the server actually read; for
+ * anything else silence is the honest answer.
+ */
+function subLine(node: EventGraphNode): string {
+  const parts: string[] = [];
+  if (node.triggerSummary) parts.push(`trigger: ${node.triggerSummary}`);
+  else if (node.options !== undefined) parts.push("no trigger");
+  if (node.fires) parts.push(`fires ${node.fires}`);
+  return parts.join(" · ");
 }

@@ -10,7 +10,14 @@
  * input and says so by being one.
  *
  * No edit reaches disk from here. Every change is handed to `onEdit` as a
- * PendingEdit, which the history records and the toolbar's Save applies.
+ * PendingEdit, which the history records and the toolbar's Save applies. Until
+ * then the panel draws the detail with those edits folded over it
+ * (pendingView.ts), each changed or added row marked "unsaved", so an edit is
+ * visible the moment it is made rather than after a write.
+ *
+ * What acts on the whole event (open the source, simulate it, re-centre the
+ * graph on it) is NOT here: those are the tools rail's, and one button per job
+ * beats the same button in two places.
  */
 import type {
   EventDetail,
@@ -24,11 +31,10 @@ import type { PendingEdit } from "../history";
 import type { MenuItem } from "../../shared/overlay";
 import { iconEl } from "../../shared/icons";
 import { badge, button, dropdown, el, iconButton, input } from "./dom";
+import { fieldRowKey, locRowKey, pendingOverlay, type PendingOverlay } from "./pendingView";
 
 export interface InspectorCallbacks {
   onOpen(file: string, line?: number): void;
-  onRefocus(id: string): void;
-  onSimulate(id: string): void;
   onEdit(label: string, edit: PendingEdit): void;
 }
 
@@ -46,9 +52,11 @@ const EMPTY_VOCABULARY: EventVocabularyResult = {
   savedScopes: [],
 };
 
+const EMPTY_OVERLAY: PendingOverlay = { values: new Map(), inserted: new Map(), options: 0 };
+
 export class Inspector {
   private vocabulary: EventVocabularyResult = EMPTY_VOCABULARY;
-  private pending: PendingEdit[] = [];
+  private view: PendingOverlay = EMPTY_OVERLAY;
 
   constructor(
     private readonly root: HTMLElement,
@@ -70,7 +78,7 @@ export class Inspector {
   }
 
   render(detail: EventDetail | null, id: string, pending: PendingEdit[]): void {
-    this.pending = pending;
+    this.view = pendingOverlay(id, pending);
     this.root.replaceChildren();
     if (!detail) {
       this.root.appendChild(
@@ -84,18 +92,6 @@ export class Inspector {
     if (detail.type) chips.appendChild(badge(detail.type));
     if (detail.hidden) chips.appendChild(badge("hidden"));
     if (chips.childElementCount > 0) this.root.appendChild(chips);
-
-    const actions = el("div", "actions");
-    actions.append(
-      button("Source", "fileText", `Open the source at line ${detail.line + 1}`, () =>
-        this.cb.onOpen(detail.file, detail.line + 1)
-      ),
-      button("Simulate", "play", `Walk through ${detail.id} step by step`, () =>
-        this.cb.onSimulate(detail.id)
-      ),
-      button("Center", "locate", `Rebuild the graph around ${detail.id}`, () => this.cb.onRefocus(detail.id))
-    );
-    this.root.appendChild(actions);
 
     this.renderFields(detail);
     this.renderText(detail);
@@ -120,6 +116,7 @@ export class Inspector {
     const offerable = this.vocabulary.eventKeys.filter(
       (k) => k.hint !== BLOCK_HINT && !written.has(k.value.toLowerCase())
     );
+    this.insertedRows(detail.bodyLine, this.root);
     if (offerable.length > 0) {
       this.root.appendChild(
         this.addRow("Add field", offerable, "A key this event does not set yet", (key, value) => {
@@ -164,6 +161,18 @@ export class Inspector {
       "What the player can choose. Each option's effects run when it is picked."
     );
     detail.options.forEach((option, index) => this.root.appendChild(this.optionBlock(detail, option, index)));
+    // The options this session added are not in `detail` (nothing is written
+    // before Save), so they are drawn from the pending list instead.
+    for (let i = 0; i < this.view.options; i++) {
+      const block = el("div", "block");
+      const head = el("div", "head");
+      head.append(
+        el("span", "", `option ${detail.options.length + i + 1}`),
+        el("span", "pendingMark px-xs", "unsaved")
+      );
+      block.append(head, el("div", "hint", "Saving writes this option and its localization key."));
+      this.root.appendChild(block);
+    }
 
     const add = button(
       "Add option",
@@ -175,7 +184,9 @@ export class Inspector {
           id: detail.id,
           file: detail.file,
           endLine: detail.endLine,
-          count: detail.options.length,
+          // Count the unsaved ones too, or two adds in a row would ask for the
+          // same localization key.
+          count: detail.options.length + this.view.options,
         }),
       "outline"
     );
@@ -227,6 +238,7 @@ export class Inspector {
         })
       );
     };
+    this.insertedRows(option.bodyLine, block);
     insert("Add effect", this.vocabulary.effects, "An effect that runs when this option is picked");
     insert("Add trigger", this.vocabulary.triggers, "A check; it belongs inside the option's trigger block");
     return block;
@@ -279,8 +291,7 @@ export class Inspector {
     const row = el("div", "field");
     row.appendChild(el("span", "k", field.key));
     const holder = el("div", "v");
-    const key = `${file}:${field.key}:${field.line}`;
-    const current = this.pendingField(key) ?? field.value;
+    const current = this.view.values.get(fieldRowKey(file, field.key, field.line)) ?? field.value;
     const commit = (value: string): void => {
       if (value === field.value) return;
       this.cb.onEdit(`set ${field.key}`, {
@@ -311,6 +322,21 @@ export class Inspector {
     if (current !== field.value) holder.appendChild(el("span", "pendingMark px-xs", "unsaved"));
     row.appendChild(holder);
     return row;
+  }
+
+  /** The rows this session added to one body, none of them written yet. */
+  private insertedRows(bodyLine: number, into: HTMLElement): void {
+    for (const added of this.view.inserted.get(bodyLine) ?? []) {
+      const row = el("div", "field");
+      row.appendChild(el("span", "k", added.key));
+      const holder = el("div", "v");
+      holder.append(
+        el("span", "px-grow px-truncate", added.value),
+        el("span", "pendingMark px-xs", "unsaved")
+      );
+      row.appendChild(holder);
+      into.appendChild(row);
+    }
   }
 
   /** The "pick a key, type its value, insert it" row shared by fields and effects. */
@@ -359,8 +385,7 @@ export class Inspector {
         el("div", "hint", "Built by a block (first_valid / triggered_desc). Edit it in the source.")
       );
     } else {
-      const pendingKey = `loc:${loc.key}`;
-      const current = this.pendingField(pendingKey) ?? loc.text ?? "";
+      const current = this.view.values.get(locRowKey(loc.key)) ?? loc.text ?? "";
       const edit = el("div", "edit");
       edit.appendChild(
         input(current, loc.text === undefined ? "No localization yet. Type one" : "", (next) => {
@@ -386,17 +411,6 @@ export class Inspector {
     b.dataset.variant = "link";
     b.addEventListener("click", onClick);
     return b;
-  }
-
-  /** The newest pending value for a field, so an unsaved edit stays visible. */
-  private pendingField(key: string): string | undefined {
-    let found: string | undefined;
-    for (const edit of this.pending) {
-      if (edit.kind === "editLoc" && `loc:${edit.key}` === key) found = edit.value;
-      else if (edit.kind === "setField" && `${edit.file}:${edit.key}:${edit.line}` === key)
-        found = edit.value;
-    }
-    return found;
   }
 }
 
