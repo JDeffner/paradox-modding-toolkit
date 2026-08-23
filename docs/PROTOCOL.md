@@ -273,6 +273,13 @@ reports every check met — in ALL modes, `showAll` included, so the UI can be
 built before the user switches mode — each with the number of widgets carrying
 it and whether THIS run resolved it to hidden.
 
+Each `GuiLayoutNode` also carries its `onclick` and `tooltip` values verbatim
+(minus quotes) when the widget has them. Neither is evaluated: a client's
+interact mode reads the `GetVariableSystem.Set/Clear/Toggle` calls out of
+`onclick` and turns them into `evaluate` assignments of the checks above, and
+shows the rest as what the running game would do; `tooltip` is a loc key or a
+datafunction the client resolves the same way it resolves text.
+
 `paradox/guiLayout` resolves what a textbox SHOWS, as far as a static preview
 can know it, and `loc` chooses between the two honest answers. `resolve` (the
 default) looks a `text =` value up: a localization key becomes the configured

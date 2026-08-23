@@ -1904,11 +1904,52 @@ describe("the canvas devtools", () => {
 });
 
 describe("conditional visibility", () => {
+  it("interact mode: a click runs the variable half of an onclick and the checks follow", () => {
+    const text = [
+      "window = {",
+      "\tname = px_i",
+      "\tsize = { 400 300 }",
+      "\tbutton = {",
+      "\t\tname = px_i_btn",
+      "\t\tsize = { 40 40 }",
+      "\t\tonclick = \"[GetVariableSystem.Set('px_tab', 'b')]\"",
+      "\t\tonclick = \"[GetPlayer.MakeScope.ExecuteEffect('px_fx')]\"",
+      "\t}",
+      "\twidget = {",
+      "\t\tname = px_i_panel",
+      "\t\tposition = { 100 100 }",
+      "\t\tsize = { 40 40 }",
+      "\t\tvisible = \"[GetVariableSystem.HasValue('px_tab', 'b')]\"",
+      "\t}",
+      "}",
+    ].join("\n");
+    const layout = openDoc(text, "px_i.gui");
+    editor.document.getElementById("modeInteract")!.click();
+    const at = centreOf(layout, "px_i_btn");
+    editor.click(at.x, at.y);
+    // One message, the evaluate assignment the variable decides; nothing written.
+    expect(lastOfType(editor, "setVisibility")).toEqual({
+      type: "setVisibility",
+      mode: "evaluate",
+      checks: { "[GetVariableSystem.HasValue('px_tab', 'b')]": true },
+    });
+    expect(editor.sent.some((m) => m.type === "checkEdit" || m.type === "applyEdit")).toBe(false);
+    const tip = editor.document.getElementById("clickTip")!;
+    expect(tip.hasAttribute("hidden")).toBe(false);
+    expect(tip.textContent).toContain("set px_tab = b");
+    expect(tip.textContent).toContain("ExecuteEffect('px_fx')");
+    // Esc closes the tip first, then leaves interact mode.
+    editor.key("Escape");
+    expect(tip.hasAttribute("hidden")).toBe(true);
+    editor.key("Escape");
+    expect(editor.document.getElementById("modeEdit")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("a mode change is one message, the layout is the answer, and the badge says so", () => {
     openHalo();
     editor.button("Visible").click();
     // Reported in every mode, so the toggle UI exists before the mode changes.
-    expect(editor.text("haloBody")).toContain("[GetPlayer.IsAI]");
+    expect(editor.text("haloBody")).toContain("GetPlayer.IsAI");
     expect(editor.badge()).toBeNull();
 
     editor.button("Hide all").click();
@@ -1993,9 +2034,7 @@ describe("the dependency panel", () => {
     // The anchored widget calls nothing.
     expect(editor.text("haloBody")).toContain("This calls no scripted_gui");
 
-    const scope = editor.document.querySelector<HTMLInputElement>("#haloBody label.check input")!;
-    scope.checked = true;
-    scope.dispatchEvent(new (editor.document.defaultView as Window & typeof globalThis).Event("change"));
+    editor.button("Whole file").click();
     serveEdits();
 
     expect(lastOfType(editor, "requestDependencies")!.line).toBeUndefined();
@@ -2793,13 +2832,13 @@ describe("textbox text", () => {
     const missing = rectOf(layout, "px_loc_missing");
     editor.move(missing.x + 20, missing.y + 10);
     expect(textTip()).toContain("px_missing_key");
-    expect(textTip()).toContain("not localized");
+    expect(textTip()).toContain("no localization");
 
     const fn = rectOf(layout, "px_loc_fn");
     editor.move(fn.x + 20, fn.y + 10);
-    expect(textTip()).toContain("datafn");
+    expect(textTip()).toContain("variable");
     expect(textTip()).toContain("[GetPlayer.GetName]");
-    expect(textTip()).toContain("resolved by the game at runtime");
+    expect(textTip()).toContain("only the game knows");
 
     const plain = rectOf(layout, "px_loc_plain");
     editor.move(plain.x + 20, plain.y + 10);

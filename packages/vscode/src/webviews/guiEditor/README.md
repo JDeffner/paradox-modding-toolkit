@@ -259,13 +259,18 @@ must not reach the inspector.
 ## What the page must provide
 
 If a host writes its own page instead of reusing `html.ts`, `app/` queries
-these ids: `canvas`, `stage`, `tree`, `layers`, `library`, `focusBar`,
-`inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`, `meta`,
-`fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`, `pulses`,
-`heatmap`, `heatmapMenu`, `zoomIn`, `zoomOut`, `zoomFit`, `libraryToggle`,
-`haloToggle`, `halo`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
-`dropTarget`, `textTip`, `locResolved`, `locRaw`, `side`, `right`,
-`toggleSide`, `toggleRight`. `locResolved` and `locRaw` are the two buttons of
+these ids: `canvas`, `stage`, `tree`, `layers`, `library`, `libraryOverlay`,
+`focusBar`, `inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`,
+`meta`, `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`,
+`pulses`, `heatmap`, `heatmapMenu`, `libraryToggle`, `modeEdit`,
+`modeInteract`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
+`dropTarget`, `textTip`, `clickTip`, `locResolved`, `locRaw`, `side`, `right`,
+`toggleSide`, `toggleRight`, and the four collapsible sections `sec-tree`,
+`sec-layers`, `sec-inspector`, `sec-devtools` (each a `.px-section` whose
+`.px-section-head` button toggles `data-collapsed`; the devtools halo is "open"
+when its section is). `libraryOverlay` covers the stage and holds `library`;
+`clickTip` is the popover interact mode fills with what a click did.
+`modeEdit` / `modeInteract` are the tool mode toggle group. `locResolved` and `locRaw` are the two buttons of
 a px-toggle-group (the app sets their `aria-pressed`); `textTip` is a hidden
 `px-popover` inside the stage that the app fills with a hovered textbox's
 segments and positions in screen space. `dropTarget` is the
@@ -323,6 +328,22 @@ expectations:
   commit on the biggest window the game ships.
 - `docs/gui-designer/g3-checklist.md` is the human-mouse pass, because feel is
   not something a headless harness can sign off.
+
+## Interact mode, the context menu and the reference screenshot
+
+Interact mode needs nothing new from a host: `GuiLayoutNode.onclick` and
+`tooltip` come with every layout, the app decodes the variable-system calls
+itself (`app/interact.ts`) and sends the result as an ordinary `setVisibility`
+in `evaluate` mode. A wheel over a scrollarea shifts the scene client side
+(`scene.ts` `applyScrollOffsets`), so no request is made for a scroll.
+
+Two messages are new. `requestLoc` / `loc` reads one loc key through the
+host's index (a widget's `tooltip`, which the layout never resolves).
+`pickReference` / `reference` lets the user pick an in-game screenshot; the
+host answers with a URL the page can load (`panel.ts` sends a data URI, since
+the file may live anywhere on disk) or `url: null` when they cancelled. The
+devtools "Reference" tab draws it under, over or as a difference against the
+scene, which is how a layout is calibrated against the game.
 
 ## Preview from a save
 

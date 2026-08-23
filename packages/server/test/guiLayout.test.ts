@@ -847,3 +847,67 @@ types PxDeclTypes {
     expect(nodes[0].declared).toBeUndefined();
   });
 });
+
+describe("fills: block overrides, alpha, masks, centercrop (the header pattern)", () => {
+  // vanilla windows.gui `widget_header_with_picture`, reduced: the picture is a
+  // `block` inside a background that the instance overrides, the text band is
+  // black.dds at alpha 0.7 under an alphamultiply mask.
+  const HEADER = `
+types px_hdr_types {
+	type px_hdr = widget {
+		size = { 400 120 }
+		widget = {
+			name = "illustration"
+			size = { 100% 133 }
+			background = {
+				fittype = centercrop
+				block "illustration_texture" {
+					texture = "gfx/default.dds"
+				}
+				modify_texture = {
+					texture = "gfx/mask_illustration.dds"
+					blend_mode = alphamultiply
+				}
+			}
+		}
+		icon = {
+			name = "text_bg"
+			size = { 100% 54 }
+			alpha = 0.7
+			texture = "gfx/interface/colors/black.dds"
+			modify_texture = {
+				blend_mode = alphaMultiply
+				texture = "gfx/mask_text_bg.dds"
+			}
+		}
+	}
+}
+px_hdr = {
+	blockoverride "illustration_texture" {
+		texture = "gfx/forge.dds"
+	}
+}`;
+
+  it("a block inside a background takes the instance's blockoverride", () => {
+    const [root] = computeGuiLayout(HEADER, { viewport: { w: 1000, h: 1000 } });
+    const picture = root.children.find((c) => c.name === "illustration")!;
+    expect(picture.bg?.texture).toBe("gfx/forge.dds");
+    expect(picture.bg?.fit).toBe("centercrop");
+    expect(picture.bg?.mask).toBe("gfx/mask_illustration.dds");
+  });
+
+  it("a widget's own fill carries alpha and its alphamultiply mask", () => {
+    const [root] = computeGuiLayout(HEADER, { viewport: { w: 1000, h: 1000 } });
+    const band = root.children.find((c) => c.name === "text_bg")!;
+    expect(band.fill?.texture).toBe("gfx/interface/colors/black.dds");
+    expect(band.fill?.alpha).toBeCloseTo(0.7);
+    expect(band.fill?.mask).toBe("gfx/mask_text_bg.dds");
+  });
+
+  it("the default block content stands when nothing overrides it", () => {
+    const [root] = computeGuiLayout(HEADER.replace(/blockoverride[^}]*}\s*/, ""), {
+      viewport: { w: 1000, h: 1000 },
+    });
+    expect(root.children.find((c) => c.name === "illustration")!.bg?.texture).toBe("gfx/default.dds");
+  });
+});

@@ -39,6 +39,10 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
   const viewToggle = (id: string, name: IconName, tip: string, checked = false): string =>
     `<label class="px-toggle" data-size="sm" data-tip="${tip}" data-tip-wrap><input id="${id}" type="checkbox"${checked ? " checked" : ""} />${icon(name)}</label>`;
 
+  /** A collapsible panel section: the header toggles `data-collapsed` on the section (main.ts wires it). */
+  const section = (id: string, title: string, inner: string, collapsed = false): string =>
+    `<div class="px-section" id="sec-${id}"${collapsed ? " data-collapsed" : ""}><button class="px-section-head" type="button">${icon("chevronDown")}<span>${title}</span></button><div class="px-section-body">${inner}</div></div>`;
+
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,11 +70,14 @@ ${uiCss}
   #heatmap { display: none; }
   #heatmapMenu { width: auto; min-width: 120px; }
   /* What a hovered textbox's segments resolved to (main.ts builds the rows). */
-  #textTip { position: fixed; z-index: 60; pointer-events: none; gap: 4px; min-width: 0; padding: 6px 8px; font-size: var(--px-text-xs); }
+  #textTip { position: fixed; z-index: 60; pointer-events: none; gap: 6px; min-width: 0; max-width: 420px; padding: 8px 10px; font-size: var(--px-text-xs); }
   #textTip[hidden] { display: none; }
-  #textTip .seg { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-  #textTip .seg .px-badge { flex: 0 0 auto; height: 16px; padding: 0 5px; }
-  #textTip .seg .src { font-family: var(--px-font-mono); }
+  #textTip .tipTitle { font-weight: 600; color: var(--px-muted-fg); }
+  #textTip .seg { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; }
+  #textTip .seg .px-badge { height: 16px; padding: 0 5px; }
+  #textTip .seg .src { font-family: var(--px-font-mono); word-break: break-all; white-space: normal; }
+  #textTip .seg .res { grid-column: 2; white-space: normal; }
+  #textTip .seg .val { color: var(--px-fg); }
   #textTip .seg .arrow, #textTip .seg .note { color: var(--px-muted-fg); }
 
   /* ---- stage ---- */
@@ -78,12 +85,45 @@ ${uiCss}
   /* The canvas paints this same color under the world (render.ts CANVAS_BG), so a resize shows no flash. */
   #stage { flex: 1 1 auto; overflow: hidden; background: #101010; position: relative; min-width: 0; }
   #canvas { display: block; }
-  #stageTools {
-    position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 2px;
+  #stageTools, #stageInfo {
+    position: absolute; bottom: 8px; display: flex; align-items: center; gap: 2px;
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #zoomLabel { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+  #stageTools { left: 8px; }
+  #stageInfo { right: 8px; }
+  #zoomLabel { min-width: 44px; height: var(--px-h-sm); line-height: var(--px-h-sm); padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
+  /* What a click did in interact mode (main.ts fills it). */
+  #clickTip { position: absolute; z-index: 61; gap: 4px; min-width: 0; max-width: 360px; padding: 8px 10px; font-size: var(--px-text-xs); }
+  #clickTip[hidden] { display: none; }
+  #clickTip .title { font-weight: 600; font-size: var(--px-text-sm); }
+  #clickTip .act { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #clickTip .act .px-badge { flex: 0 0 auto; height: 16px; padding: 0 5px; }
+  #clickTip .act .src { font-family: var(--px-font-mono); overflow: hidden; text-overflow: ellipsis; }
+  #clickTip .note { padding: 0; }
+  /* ---- collapsible sections in the side panels ---- */
+  .px-section { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; }
+  .px-section[data-collapsed] { flex: 0 0 auto; }
+  .px-section + .px-section { border-top: 1px solid var(--px-border); }
+  .px-section-head {
+    display: flex; align-items: center; gap: 4px; flex: 0 0 auto; width: 100%;
+    padding: 5px 8px; border: 0; background: var(--px-sidebar); color: var(--px-muted-fg);
+    font: inherit; font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    cursor: pointer; text-align: left;
+  }
+  .px-section-head:hover { color: var(--px-fg); }
+  .px-section-head > svg.px-icon { width: 14px; height: 14px; transition: transform var(--px-ease); }
+  .px-section[data-collapsed] > .px-section-head > svg.px-icon { transform: rotate(-90deg); }
+  .px-section-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .px-section[data-collapsed] > .px-section-body { display: none; }
+  #sec-layers:not([data-collapsed]) { flex: 0 0 40%; }
+  #sec-tree[data-collapsed] ~ #sec-layers:not([data-collapsed]) { flex: 1 1 0; }
+  #sec-devtools:not([data-collapsed]) { flex: 0 0 55%; }
+  #sec-inspector[data-collapsed] ~ #sec-devtools:not([data-collapsed]) { flex: 1 1 0; }
+  /* ---- the library, over the stage ---- */
+  #libraryOverlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: color-mix(in oklch, var(--px-bg) 96%, transparent); }
+  #libraryOverlay[hidden] { display: none; }
+  #libraryOverlay > #library { flex: 1 1 auto; min-height: 0; border-top: 0; }
   #info[data-warning] { color: var(--px-destructive); }
   #info::after { white-space: pre-line; }
   [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
@@ -94,11 +134,12 @@ ${uiCss}
   #side > .px-sidepanel-body, #right > .px-sidepanel-body { overflow: hidden; }
   #tree, #layers, #inspector, #library, #haloBody { overflow: auto; min-height: 0; }
   #tree { flex: 1 1 auto; min-height: 60px; }
-  #layers { flex: 0 0 40%; min-height: 70px; border-top: 1px solid var(--px-border); }
-  #library { flex: 0 0 45%; min-height: 160px; border-top: 1px solid var(--px-border); }
+  #layers { flex: 1 1 auto; min-height: 70px; }
   #library[hidden] { display: none; }
   #library .head, #layers .head { position: sticky; top: 0; z-index: 1; background: var(--px-sidebar); }
-  #library .head { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 0; }
+  #library .head { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 4px; }
+  #library .head .titleRow { display: flex; align-items: center; gap: 8px; }
+  #library .head .titleRow .title { font-weight: 600; }
   #library .head .px-tabs { display: flex; flex-wrap: wrap; }
   #library .head .px-tab { height: var(--px-h-sm); padding: 0 7px; font-size: var(--px-text-sm); }
   #layers .head { padding: 0 0 2px; }
@@ -139,7 +180,7 @@ ${uiCss}
   #layers .row[data-dragging] { opacity: 0.35; }
   #layers .row.hiddenWidget .label { text-decoration: line-through; opacity: 0.6; }
   /* ---- the library's tiles ---- */
-  #library .tileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px; padding: 6px; }
+  #library .tileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; padding: 8px 12px; }
   #library .tile {
     display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; min-width: 0;
     border-radius: var(--px-radius-md); cursor: grab; transition: background-color var(--px-ease);
@@ -216,8 +257,7 @@ ${uiCss}
   #inspector .anchorGrid .cell.on { background: var(--px-primary); border-color: var(--px-primary); }
 
   /* ---- devtools halo ---- */
-  #halo { flex: 0 0 55%; min-height: 120px; display: flex; flex-direction: column; border-top: 1px solid var(--px-border); }
-  #halo[hidden] { display: none; }
+  #halo { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; }
   #haloTabs { flex: 0 0 auto; display: flex; flex-wrap: wrap; padding: 0 4px; }
   #haloTabs .px-tab { height: var(--px-h-sm); padding: 0 7px; font-size: var(--px-text-sm); }
   #haloBody { flex: 1 1 auto; padding: 4px 0; }
@@ -242,8 +282,19 @@ ${uiCss}
   #haloBody .texRow { gap: 8px; min-height: 36px; }
   #haloBody .texRow .names { min-width: 0; }
   #haloBody .texRow .names div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #haloBody label.check { padding: 3px 10px; gap: 8px; }
-  #haloBody label.check .px-grow { white-space: normal; }
+  #haloBody label.check { display: flex; width: 100%; box-sizing: border-box; padding: 3px 10px; gap: 8px; min-width: 0; }
+  #haloBody label.check > span:first-of-type { flex: 0 0 auto; }
+  #haloBody label.check .px-grow { flex: 1 1 auto; min-width: 0; white-space: normal; }
+  #haloBody label.check .px-grow.mono { font-family: var(--px-font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #haloBody .uses .row { display: flex; align-items: baseline; gap: 6px; padding: 2px 10px; min-height: 22px; }
+  #haloBody .uses .row .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #haloBody .uses .row .meta { flex: 0 0 auto; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  #haloBody .uses .sub { padding-left: 22px; }
+  #haloBody .uses .via { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; }
+  #haloBody .refRow { display: flex; align-items: center; gap: 6px; padding: 3px 10px; }
+  #haloBody .refRow .px-slider { flex: 1 1 auto; }
+  #haloBody .refRow .px-label { flex: 0 0 64px; }
+  #haloBody .refRow input.px-input { width: 72px; text-align: right; font-family: var(--px-font-mono); }
 
   /* ---- status strip ---- */
   #statusBar {
@@ -263,11 +314,17 @@ ${uiCss}
 <body data-font="${fontDataUri ? "game" : "fallback"}">
 <div id="app">
   <div id="toolbar">
+    <button id="toggleSide" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the tree" data-tip-side="right">${icon("panelLeftClose")}</button>
     <span id="fileName" class="px-truncate"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Lay the document out again">${icon("rotate")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Undo the last change to the .gui file (the text editor's own undo)">${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Redo the change you just undid">${icon("redo")}</button>
+    <div class="px-separator" data-orientation="vertical"></div>
+    <div class="px-toggle-group" id="modeGroup">
+      <button id="modeEdit" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Edit: select, drag, resize and write to the file (V)" data-tip-wrap>${icon("mousePointer")}Edit</button>
+      <button id="modeInteract" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Interact: click buttons and scroll lists as in game. Variable-driven tabs and windows react; nothing is written (I)" data-tip-wrap>${icon("hand")}Interact</button>
+    </div>
     <span class="px-grow"></span>
     <div class="px-toggle-group">
       ${viewToggle("outlines", "squareDashed", "Outline every widget")}
@@ -284,41 +341,38 @@ ${uiCss}
     <select id="heatmap"></select>
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <div class="px-toggle-group">
-      <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can drag onto the canvas, with previews" data-tip-wrap>${icon("shapes")}Library</button>
-      <button id="haloToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Explain, browse and reuse: why a widget is placed where it is, what it depends on, and the textures, types and saved pieces available to it" data-tip-wrap>${icon("wrench")}Devtools</button>
-    </div>
+    <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can add to the canvas, with previews (L)" data-tip-wrap>${icon("shapes")}Library</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <button id="toggleSide" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the tree">${icon("panelLeftClose")}</button>
     <button id="toggleRight" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
     <div id="side" class="px-sidepanel" data-side="left">
       <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
-        <div id="focusBar"></div>
-        <div id="tree" class="px-list"></div>
-        <div id="layers" class="px-list"></div>
-        <div id="library" hidden></div>
+        ${section("tree", "Tree", `<div id="focusBar"></div><div id="tree" class="px-list"></div>`)}
+        ${section("layers", "Layers", `<div id="layers" class="px-list"></div>`)}
       </div>
     </div>
     <div id="stage">
       <canvas id="canvas"></canvas>
       <div id="dropTarget" hidden><span class="px-badge">Drop here</span></div>
       <div id="textTip" class="px-popover" hidden></div>
+      <div id="clickTip" class="px-popover" hidden></div>
       <div id="stageTools">
-        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="right" data-tip-wrap>${icon("info")}</button>
-        <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out" data-tip-side="right">${icon("zoomOut")}</button>
-        <span id="zoomLabel" class="px-muted px-xs">100%</span>
-        <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in" data-tip-side="right">${icon("zoomIn")}</button>
-        <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the 1920x1080 reference viewport" data-tip-side="right">${icon("maximize")}</button>
+        <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Ctrl+0 fits the 1920x1080 viewport, Shift+F the selection" data-tip-side="right" data-tip-wrap>100%</span>
+      </div>
+      <div id="stageInfo">
+        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
+      </div>
+      <div id="libraryOverlay" hidden>
+        <div id="library" hidden></div>
       </div>
     </div>
     <div id="right" class="px-sidepanel" data-side="right">
       <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
-        <div id="inspector"></div>
-        <div id="halo" hidden><div id="haloTabs" class="px-tabs" data-variant="line"></div><div id="haloBody"></div></div>
+        ${section("inspector", "Inspector", `<div id="inspector"></div>`)}
+        ${section("devtools", "Devtools", `<div id="halo"><div id="haloTabs" class="px-tabs" data-variant="line"></div><div id="haloBody"></div></div>`, true)}
       </div>
     </div>
   </div>

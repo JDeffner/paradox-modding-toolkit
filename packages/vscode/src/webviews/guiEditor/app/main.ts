@@ -40,6 +40,7 @@
  */
 import type {
   GuiDependenciesResult,
+  GuiLayoutNode,
   GuiLayoutResult,
   GuiPreview,
   GuiSourceOp,
@@ -83,9 +84,12 @@ import {
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, type Rgb } from "../../shared/colorPicker";
 import {
+  applyScrollOffsets,
   buildScene,
   childIndices,
   parentIndex,
+  pathKey,
+  scrollExtent,
   setLineHeightRatio,
   subtreeEnd,
   type Scene,
@@ -93,11 +97,20 @@ import {
   type SceneRect,
 } from "./scene";
 import {
+  applyActions,
+  assignments,
+  describeAction,
+  parseOnclick,
+  type VarAction,
+  type VarState,
+} from "./interact";
+import {
   drawScene,
   drawThumbnail,
   resetImageCache,
   type DrawMasks,
   type DrawPulse,
+  type DrawReference,
   type Images,
   WORLD_H,
   WORLD_W,
@@ -176,10 +189,20 @@ const heatmapSelect = document.getElementById("heatmap") as HTMLSelectElement;
 const heatmapMenuEl = document.getElementById("heatmapMenu") as HTMLButtonElement;
 const libraryEl = document.getElementById("library") as HTMLDivElement;
 const libraryToggleEl = document.getElementById("libraryToggle") as HTMLButtonElement;
-const haloEl = document.getElementById("halo") as HTMLDivElement;
 const haloTabsEl = document.getElementById("haloTabs") as HTMLDivElement;
 const haloBodyEl = document.getElementById("haloBody") as HTMLDivElement;
-const haloToggleEl = document.getElementById("haloToggle") as HTMLButtonElement;
+const libraryOverlayEl = document.getElementById("libraryOverlay") as HTMLDivElement;
+const clickTipEl = document.getElementById("clickTip") as HTMLDivElement;
+const modeEditEl = document.getElementById("modeEdit") as HTMLButtonElement;
+const modeInteractEl = document.getElementById("modeInteract") as HTMLButtonElement;
+/** The four collapsible panel sections, by id suffix (html.ts `section()`). */
+const sections = {
+  tree: document.getElementById("sec-tree") as HTMLDivElement,
+  layers: document.getElementById("sec-layers") as HTMLDivElement,
+  inspector: document.getElementById("sec-inspector") as HTMLDivElement,
+  devtools: document.getElementById("sec-devtools") as HTMLDivElement,
+};
+type SectionId = keyof typeof sections;
 const dropTargetEl = document.getElementById("dropTarget") as HTMLDivElement;
 const locResolvedEl = document.getElementById("locResolved") as HTMLButtonElement;
 const locRawEl = document.getElementById("locRaw") as HTMLButtonElement;
@@ -413,6 +436,7 @@ function paintScene(): void {
       heatmap: heat?.values ?? null,
       constraints: constraintsToggle.checked ? (constraints ?? undefined) : undefined,
       pulse: pulse ?? undefined,
+      reference: reference.image ? { ...reference, image: reference.image } : undefined,
     }
   );
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -973,12 +997,12 @@ function libraryOpen(): boolean {
   return !libraryEl.hidden;
 }
 
-function toggleLibrary(): void {
-  libraryEl.hidden = !libraryEl.hidden;
-  libraryToggleEl.setAttribute("aria-pressed", libraryOpen() ? "true" : "false");
-  if (libraryOpen()) {
-    // The library lives in the left panel: showing it in a hidden panel would show nothing.
-    if (sidePanels.left.collapsed) sidePanels.left.toggle(false);
+function toggleLibrary(open = !libraryOpen()): void {
+  if (open === libraryOpen()) return;
+  libraryEl.hidden = !open;
+  libraryOverlayEl.hidden = !open;
+  libraryToggleEl.setAttribute("aria-pressed", open ? "true" : "false");
+  if (open) {
     // The document's own templates and types change as it is edited, so the
     // list is re-asked for whenever the panel is showing (onLayout does the
     // same); a closed panel asks once and lives with what it got.
@@ -1004,6 +1028,25 @@ function renderLibrary(): void {
   tileEls.clear();
 
   const head = el("div", "head");
+  const titleRow = el("div", "titleRow");
+  titleRow.appendChild(el("span", "title", "Element library"));
+  titleRow.appendChild(
+    el(
+      "span",
+      "px-muted px-sm",
+      "Click a tile to add it to the selected container, or drag it onto the canvas"
+    )
+  );
+  titleRow.appendChild(el("span", "px-grow"));
+  titleRow.appendChild(
+    button("", () => toggleLibrary(false), {
+      icon: "x",
+      variant: "ghost",
+      size: "icon-sm",
+      tip: "Close (Esc or L)",
+    })
+  );
+  head.appendChild(titleRow);
   const group = el("div", "px-input-group");
   group.appendChild(iconEl("search"));
   const search = textInput("Search the library", libraryQuery);
@@ -1100,7 +1143,7 @@ function libraryTile(entry: LibraryEntry): Tile {
     if (ev.button !== 0 || committing) return;
     const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
     document.body.appendChild(ghost);
-    paletteDrag = { entry, ghost, target: null, rank: 0, line: null };
+    paletteDrag = { entry, ghost, target: null, rank: 0, line: null, from: { x: ev.clientX, y: ev.clientY } };
     moveGhost(ev.clientX, ev.clientY);
     node.setAttribute("data-dragging", "");
   });
@@ -1559,21 +1602,37 @@ function previewValueOf(segment: GuiTextSegment): string | undefined {
   return previewValues[`[${segment.source}]`] ?? previewValues[segment.source];
 }
 
-/** One tooltip row: kind badge, the key or [expression], and what it became. */
+/**
+ * One tooltip row: the badge and the source on the first line, what it became
+ * on the second, so a long datafunction chain wraps under its own badge
+ * instead of pushing the answer off the edge.
+ */
 function segmentRow(segment: GuiTextSegment): HTMLElement {
   const row = el("div", "seg");
-  const kind = el("span", "px-badge", segment.kind === "loc" ? "loc" : "datafn");
+  const variable = segment.kind === "datafn";
+  const kind = el("span", "px-badge", variable ? "variable" : "loc");
   kind.dataset.variant = "outline";
   row.appendChild(kind);
-  row.appendChild(el("span", "src", segment.kind === "loc" ? segment.source : `[${segment.source}]`));
+  row.appendChild(el("span", "src", variable ? `[${segment.source}]` : segment.source));
+  const result = el("span", "res");
   if (segment.resolved) {
-    row.appendChild(el("span", "arrow", "\u2192"));
-    row.appendChild(el("span", "", segment.text));
+    const preview = variable ? previewValueOf(segment) : undefined;
+    result.appendChild(el("span", "arrow", "\u2192 "));
+    result.appendChild(el("span", "val", segment.text));
+    if (preview !== undefined) result.appendChild(el("span", "note", "  preview value"));
+    else if (variable && saveSource) result.appendChild(el("span", "note", "  from the save"));
   } else {
-    row.appendChild(
-      el("span", "note", segment.kind === "loc" ? "not localized" : "resolved by the game at runtime")
+    result.appendChild(
+      el(
+        "span",
+        "note",
+        variable
+          ? "only the game knows this value. Right-click the widget to set a preview value"
+          : "no localization for this key"
+      )
     );
   }
+  row.appendChild(result);
   return row;
 }
 
@@ -1590,6 +1649,7 @@ function showTextTip(index: number | null, clientX: number, clientY: number): vo
   }
   if (textTipFor !== index) {
     textTipEl.textContent = "";
+    textTipEl.appendChild(el("div", "tipTitle", `${widgetTitle(item!)} · text`));
     for (const segment of segments) textTipEl.appendChild(segmentRow(segment));
     textTipFor = index;
   }
@@ -2393,6 +2453,7 @@ function select(
   if (expanded || options.rebuildTree) renderTree();
   highlightTree(true);
   syncLayers();
+  hideClickTip();
   if (focusIndex === null) renderFocusBar();
   renderInspector();
   // The overlay and the halo both read the selection; both are no-ops while
@@ -2414,6 +2475,7 @@ function askWidgetInfo(line: number): void {
 }
 
 function statusLine(): string {
+  if (mode === "interact") return "Interact mode: click a button, scroll a list. Esc returns to editing.";
   const ghosts = scene.items.filter((i) => i.ghostBox).length;
   const estimated = ghosts > 0 ? ` · ${ghosts} unmeasurable (dashed)` : "";
   const item = selectedItem();
@@ -2469,6 +2531,7 @@ function onLayout(
     uiAdopted = true;
     if (ui) valueMode = ui.valueMode;
     if (ui?.panels) adoptPanels(ui.panels);
+    if (ui?.sections) adoptSections(ui.sections);
     if (ui?.snap !== undefined) snapToggle.checked = ui.snap;
     if (ui?.grid !== undefined) gridToggle.checked = ui.grid;
     if (ui?.loc) setLocMode(ui.loc, { silent: true });
@@ -2480,8 +2543,14 @@ function onLayout(
   defsFiles = result.defsFiles;
   previousScene = scene.items.length > 0 ? scene : null;
   const t0 = performance.now();
+  lastNodes = result.nodes;
   scene = buildScene(result.nodes);
+  applyScrollOffsets(scene, scrollOffsets);
   lastSceneMs = performance.now() - t0;
+  if (clickPending && previousScene) {
+    clickPending = false;
+    noteClickDelta(scene.count - previousScene.count);
+  }
   lastTimings = result.timings ?? lastTimings;
   // The host is where a visibility mode lives, so what it echoes is the truth
   // and the app keeps no copy that could disagree with the canvas.
@@ -2658,6 +2727,15 @@ const host = connectHost((message) => {
         message.storeWarning,
         message.previewValues
       );
+      return;
+    case "loc":
+      toast(
+        message.value === null ? `No localization for ${message.key}.` : `${message.key}: ${message.value}`,
+        "info"
+      );
+      return;
+    case "reference":
+      if (message.url) loadReference(message.name, message.url);
       return;
     case "widgetInfo": {
       const item = selectedItem();
@@ -3550,6 +3628,8 @@ interface PaletteDrag {
   rank: number;
   /** The drop line, when the container has children to land between. */
   line: Guide | null;
+  /** Where the press was: past DRAG_THRESHOLD from it the library gets out of the way. */
+  from: { x: number; y: number };
 }
 
 /** A container a drop can write into, and the children a drop line reads. */
@@ -3853,7 +3933,7 @@ function reportBatch(verdict: EditVerdict): void {
  * batched `setProperties`, and a component is an `insertRaw`. Nothing here has
  * a write path of its own.
  */
-type HaloTab = "why" | "texture" | "visible" | "uses" | "types" | "art" | "saved";
+type HaloTab = "why" | "texture" | "visible" | "uses" | "types" | "art" | "saved" | "reference";
 
 const HALO_TABS: { tab: HaloTab; label: string; title: string }[] = [
   { tab: "why", label: "Why", title: "Why the selected widget's rect is where it is" },
@@ -3863,6 +3943,11 @@ const HALO_TABS: { tab: HaloTab; label: string; title: string }[] = [
   { tab: "types", label: "Types", title: "The widget types and templates available here" },
   { tab: "art", label: "Art", title: "Browse the .dds files under the mod's and the game's gfx trees" },
   { tab: "saved", label: "Saved", title: "Your saved components and property presets" },
+  {
+    tab: "reference",
+    label: "Reference",
+    title: "Lay an in-game screenshot over the canvas to compare the two",
+  },
 ];
 
 let haloTab: HaloTab = "why";
@@ -3901,7 +3986,7 @@ let visibilityFound: GuiVisibilityCheck[] = [];
 let pulseNoteText: string | null = null;
 
 function haloOpen(): boolean {
-  return !haloEl.hidden;
+  return !sections.devtools.hasAttribute("data-collapsed");
 }
 
 /**
@@ -3914,14 +3999,35 @@ function wantsPlacement(): boolean {
   return constraintsToggle.checked || (haloOpen() && haloTab === "why");
 }
 
-function toggleHalo(): void {
-  haloEl.hidden = !haloEl.hidden;
-  haloToggleEl.setAttribute("aria-pressed", haloOpen() ? "true" : "false");
-  if (!haloOpen()) return;
-  if (sidePanels.right.collapsed) sidePanels.right.toggle(false);
-  renderHaloTabs();
-  askForTab();
-  renderHalo();
+/** Open (or close) the devtools section; opening it in a hidden panel shows the panel too. */
+function toggleHalo(open = !haloOpen()): void {
+  setSectionCollapsed("devtools", !open);
+  if (open && sidePanels.right.collapsed) sidePanels.right.toggle(false);
+}
+
+function setSectionCollapsed(id: SectionId, collapsed: boolean): void {
+  const node = sections[id];
+  if (node.hasAttribute("data-collapsed") === collapsed) return;
+  node.toggleAttribute("data-collapsed", collapsed);
+  if (id === "devtools" && !collapsed) {
+    renderHaloTabs();
+    askForTab();
+    renderHalo();
+  }
+  if (id === "devtools" && collapsed && constraintsToggle.checked === false) {
+    // The "why" trace is only fetched while something reads it.
+    reReadWidgetInfo();
+  }
+  if (!adoptingPanels) host.send({ type: "setUiState", valueMode, sections: collapsedSections() });
+}
+
+function collapsedSections(): SectionId[] {
+  return (Object.keys(sections) as SectionId[]).filter((id) => sections[id].hasAttribute("data-collapsed"));
+}
+for (const id of Object.keys(sections) as SectionId[]) {
+  sections[id]
+    .querySelector(".px-section-head")!
+    .addEventListener("click", () => setSectionCollapsed(id, !sections[id].hasAttribute("data-collapsed")));
 }
 
 function setHaloTab(tab: HaloTab): void {
@@ -4028,6 +4134,9 @@ function renderHalo(): void {
       return;
     case "saved":
       renderSaved();
+      return;
+    case "reference":
+      renderReference();
       return;
   }
 }
@@ -4239,20 +4348,53 @@ function renderVisible(): void {
     note("No widget in this file has a conditional `visible`, so the mode changes nothing here.");
     return;
   }
-  haloBodyEl.appendChild(sectionTitle(`${visibilityFound.length} condition(s) the layout met`));
-  for (const check of visibilityFound) {
+  if (visibilityMode !== "evaluate") {
+    note(
+      visibilityMode === "showAll"
+        ? "Every conditional widget is shown. Switch to Evaluate to decide per condition, or use Interact mode: a click sets the variables its onclick sets."
+        : "Every conditional widget is hidden. Switch to Evaluate to decide per condition."
+    );
+  }
+  haloBodyEl.appendChild(
+    filterBox("Filter conditions", visibleQuery, (value) => {
+      visibleQuery = value;
+      renderHalo();
+      focusFilter();
+    })
+  );
+  const q = visibleQuery.trim().toLowerCase();
+  const shown = visibilityFound.filter((c) => !q || c.key.toLowerCase().includes(q));
+  const hiddenCount = visibilityFound.filter((c) => c.hidden).length;
+  haloBodyEl.appendChild(
+    sectionTitle(
+      `${shown.length === visibilityFound.length ? visibilityFound.length : `${shown.length} of ${visibilityFound.length}`} condition(s)` +
+        (hiddenCount ? ` · ${hiddenCount} hiding widgets` : "")
+    )
+  );
+  // Most-used first: the condition on twenty widgets is the one worth deciding.
+  shown.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  for (const check of shown) {
     // Unassigned behaves as shown (the wire's rule), so an unticked box means
     // "assume false" and a ticked one means "assume true".
-    const label = switchRow(check.key, visibilityChecks[check.key] !== false, (on) =>
+    const label = switchRow(stripBrackets(check.key), visibilityChecks[check.key] !== false, (on) =>
       sendVisibility("evaluate", { ...visibilityChecks, [check.key]: on })
     );
+    label.querySelector(".px-grow")!.classList.add("mono");
     const box = label.querySelector("input") as HTMLInputElement;
     box.disabled = visibilityMode !== "evaluate";
-    label.title = `${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
+    label.title = `${check.key}\n${check.count} widget(s) carry this condition${check.hidden ? "; this run hid them" : ""}`;
+    const count = el("span", "px-muted px-xs", `×${check.count}`);
+    count.style.flex = "0 0 auto";
+    label.appendChild(count);
     if (check.hidden) label.appendChild(badge("hidden"));
     haloBodyEl.appendChild(label);
   }
 }
+
+function stripBrackets(key: string): string {
+  return key.replace(/^\[/, "").replace(/\]$/, "");
+}
+let visibleQuery = "";
 
 /** A labelled px-switch: `<label class="px-switch check"><input><span></span><span>text</span></label>`. */
 function switchRow(text: string, on: boolean, onChange: (on: boolean) => void): HTMLLabelElement {
@@ -4310,63 +4452,77 @@ function renderUses(): void {
   );
   haloBodyEl.appendChild(head);
 
-  haloBodyEl.appendChild(
-    switchRow("The whole file, not just the selection", dependenciesWholeFile, (on) => {
-      dependenciesWholeFile = on;
+  const scopeTools = el("div", "tools");
+  const scopeGroup = el("div", "px-toggle-group");
+  scopeGroup.dataset.spacing = "0";
+  for (const [whole, label] of [
+    [false, "Selection"],
+    [true, "Whole file"],
+  ] as const) {
+    const node = el("button", "px-toggle", label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.setAttribute("aria-pressed", dependenciesWholeFile === whole ? "true" : "false");
+    node.addEventListener("click", () => {
+      if (dependenciesWholeFile === whole) return;
+      dependenciesWholeFile = whole;
       askDependencies();
       renderHalo();
-    })
-  );
+    });
+    scopeGroup.appendChild(node);
+  }
+  scopeTools.appendChild(scopeGroup);
+  haloBodyEl.appendChild(scopeTools);
 
   if (!dependencies) {
     note(dependenciesPending ? "Reading what this reaches…" : "The host could not answer that.");
     return;
   }
 
-  haloBodyEl.appendChild(sectionTitle(`scripted_gui (${dependencies.scriptedGuis.length})`));
+  const uses = el("div", "uses");
+  haloBodyEl.appendChild(uses);
+  uses.appendChild(sectionTitle(`scripted_gui (${dependencies.scriptedGuis.length})`));
   if (dependencies.scriptedGuis.length === 0) {
-    note("This calls no scripted_gui, so it hands control to no script.");
+    uses.appendChild(el("div", "note", "This calls no scripted_gui, so it hands control to no script."));
   }
   for (const row of dependencies.scriptedGuis) {
-    const line = el("div", "prose");
-    line.appendChild(revealLink(row.name, row.file, row.line));
-    line.appendChild(
-      el("span", "chain", ` · ${row.uses} call site(s) across the gui tree, ${row.callLines.length} here`)
-    );
-    haloBodyEl.appendChild(line);
-    if (!row.file) haloBodyEl.appendChild(el("div", "chain missing", "  no scripted_gui by that name"));
+    const line = el("div", "row");
+    const name = revealLink(row.name, row.file, row.line);
+    name.classList.add("name");
+    line.appendChild(name);
+    const meta = el("span", "meta", `${row.callLines.length} here · ${row.uses} in the gui tree`);
+    meta.title = "Call sites: in this selection, and across every .gui file";
+    line.appendChild(meta);
+    uses.appendChild(line);
+    if (!row.file) uses.appendChild(el("div", "note missing sub", "no scripted_gui by that name"));
     for (const chain of row.chains) {
-      const entry = el("div", "prose");
-      entry.appendChild(el("span", "chain", "  → "));
-      entry.appendChild(revealLink(chain.name, chain.file, chain.line));
-      entry.appendChild(
-        el(
-          "span",
-          "chain",
-          chain.via.length === 0
-            ? ` (${chain.kind}, directly)`
-            : ` (${chain.kind}, via ${chain.via.join(" → ")})`
-        )
-      );
-      haloBodyEl.appendChild(entry);
+      const entry = el("div", "row sub");
+      entry.appendChild(el("span", "chain", "→"));
+      const target = revealLink(chain.name, chain.file, chain.line);
+      target.classList.add("name");
+      entry.appendChild(target);
+      entry.appendChild(el("span", "meta", chain.kind));
+      uses.appendChild(entry);
+      if (chain.via.length > 0) uses.appendChild(el("div", "via sub", `via ${chain.via.join(" → ")}`));
     }
   }
 
-  haloBodyEl.appendChild(sectionTitle(`localization (${dependencies.locKeys.length})`));
-  if (dependencies.locKeys.length === 0) note("This names no localization key.");
+  uses.appendChild(sectionTitle(`localization (${dependencies.locKeys.length})`));
+  if (dependencies.locKeys.length === 0)
+    uses.appendChild(el("div", "note", "This names no localization key."));
   for (const row of dependencies.locKeys) {
-    const line = el("div", "prose");
-    const key = el("span", row.missing ? "link missing" : "link", row.key);
+    const line = el("div", "row");
+    const key = el("span", row.missing ? "link missing name" : "link name", row.key);
     key.title = row.missing
       ? "No loc_key definition anywhere in the index: the game will print the key itself."
       : (row.value ?? "");
     // The key is named in THIS document, so the ordinary reveal is the right one.
     key.addEventListener("click", () => host.send({ type: "reveal", line: row.line }));
     line.appendChild(key);
-    line.appendChild(el("span", "chain", ` · ${row.prop}`));
+    line.appendChild(el("span", "meta", row.prop));
     if (row.missing) line.appendChild(badge("missing"));
-    else if (row.value) line.appendChild(el("span", "chain", ` · ${row.value}`));
-    haloBodyEl.appendChild(line);
+    uses.appendChild(line);
+    if (!row.missing && row.value) uses.appendChild(el("div", "via sub", row.value));
   }
 }
 
@@ -4773,6 +4929,11 @@ stage.addEventListener("pointerdown", (ev) => {
     return;
   }
   if (ev.button !== 0) return;
+  if (mode === "interact") {
+    interactClick(ev);
+    return;
+  }
+  hideClickTip();
   const world = toWorld(ev);
   const screen = { x: ev.clientX, y: ev.clientY };
   const current = selectedItem();
@@ -4859,6 +5020,11 @@ stage.addEventListener("pointermove", (ev) => {
     updateGesture(gesture, world, { x: ev.clientX, y: ev.clientY });
     return;
   }
+  if (mode === "interact") {
+    stage.style.cursor = clickableAt(world) !== null ? "pointer" : "default";
+    showTextTip(hitStack(scene, world.x, world.y, skipMask)[0] ?? null, ev.clientX, ev.clientY);
+    return;
+  }
   const current = selectedItem();
   const handle = canEdit(current) ? handleAt(hitRect(current), world.x, world.y, zoom) : null;
   stage.style.cursor = handle ? handleCursor(handle) : "default";
@@ -4938,6 +5104,7 @@ stage.addEventListener(
   "wheel",
   (ev) => {
     ev.preventDefault();
+    if (mode === "interact" && !ev.ctrlKey && interactScroll(ev)) return;
     const rect = canvas.getBoundingClientRect();
     zoomToPoint(ev.clientX - rect.left, ev.clientY - rect.top, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15));
   },
@@ -4951,6 +5118,12 @@ window.addEventListener("keydown", (ev) => {
   if (!chord && ev.key !== "Escape" && onNavigationKey(ev)) return;
   if (chord && !ev.altKey) {
     const key = ev.key.toLowerCase();
+    if (key === "0" || key === "=" || key === "+" || key === "-") {
+      ev.preventDefault();
+      if (key === "0") fitView();
+      else zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * (key === "-" ? 1 / 1.25 : 1.25));
+      return;
+    }
     if (key === "c" || key === "d" || key === "v") {
       ev.preventDefault();
       if (key === "c") copySelection();
@@ -4964,6 +5137,16 @@ window.addEventListener("keydown", (ev) => {
     void deleteSelectionConfirmed();
     return;
   }
+  if (!chord && !ev.altKey && !ev.shiftKey) {
+    if (ev.key === "v" || ev.key === "i") {
+      setMode(ev.key === "v" ? "edit" : "interact");
+      return;
+    }
+    if (ev.key === "l") {
+      toggleLibrary();
+      return;
+    }
+  }
   if (ev.key === "f" && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
     // Focus the selection, or leave the focus when there is nothing new to
     // focus on: one key, both directions. With nothing to focus and nothing
@@ -4974,6 +5157,18 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
   if (ev.key !== "Escape") return;
+  if (!clickTipEl.hidden) {
+    hideClickTip();
+    return;
+  }
+  if (libraryOpen()) {
+    toggleLibrary(false);
+    return;
+  }
+  if (mode === "interact") {
+    setMode("edit");
+    return;
+  }
   if (nudge.pending) {
     // Escape drops the nudge that has not been written yet; the preview goes
     // back to what the file says.
@@ -5094,18 +5289,14 @@ async function deleteSelectionConfirmed(): Promise<void> {
 document.getElementById("undo")!.addEventListener("click", () => host.send({ type: "undo" }));
 document.getElementById("redo")!.addEventListener("click", () => host.send({ type: "redo" }));
 
-document.getElementById("zoomIn")!.addEventListener("click", () => {
-  zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * 1.25);
-});
-document.getElementById("zoomOut")!.addEventListener("click", () => {
-  zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom / 1.25);
-});
 // Fit means "fit what is on screen", and under a subtree focus that is the
-// subtree, not the 1920x1080 reference viewport around it.
-document.getElementById("zoomFit")!.addEventListener("click", fitView);
+// subtree, not the 1920x1080 reference viewport around it. The wheel zooms;
+// the percent label is a double-click away from a fit.
+zoomLabel.addEventListener("dblclick", fitView);
 document.getElementById("refresh")!.addEventListener("click", () => host.send({ type: "requestLayout" }));
-libraryToggleEl.addEventListener("click", toggleLibrary);
-haloToggleEl.addEventListener("click", toggleHalo);
+libraryToggleEl.addEventListener("click", () => toggleLibrary());
+modeEditEl.addEventListener("click", () => setMode("edit"));
+modeInteractEl.addEventListener("click", () => setMode("interact"));
 outlinesEl.addEventListener("change", draw);
 // The two drag toggles are remembered by the host, like the value mode.
 snapToggle.addEventListener("change", () => {
@@ -5206,6 +5397,477 @@ heatmapSelect.addEventListener("change", () => {
 });
 syncHeatmapMenu();
 
+// ---- tool modes --------------------------------------------------------------
+
+/**
+ * Edit is the editor; Interact is the game's own pointer, as far as a static
+ * preview can play it: a click runs the variable-system half of an `onclick`
+ * and the layout answers through the visibility checks, a wheel over a
+ * scrollarea scrolls it. Nothing in interact mode writes to the file.
+ */
+type ToolMode = "edit" | "interact";
+let mode: ToolMode = "edit";
+/** The variables the clicks so far have set (interact.ts). */
+let varState: VarState = new Map();
+/** Scroll offsets per scrolling widget, keyed by positional path (scene.ts). */
+const scrollOffsets = new Map<string, { x: number; y: number }>();
+/** The nodes of the last layout push, to rebuild the scene when a scroll moves. */
+let lastNodes: GuiLayoutNode[] = [];
+/** A click asked for a layout; the next push reports how many widgets it showed or hid. */
+let clickPending = false;
+
+function setMode(next: ToolMode): void {
+  if (mode === next) return;
+  mode = next;
+  modeEditEl.setAttribute("aria-pressed", next === "edit" ? "true" : "false");
+  modeInteractEl.setAttribute("aria-pressed", next === "interact" ? "true" : "false");
+  stage.dataset.mode = next;
+  hideClickTip();
+  if (next === "interact") {
+    if (gesture || marquee) return;
+    select(null, { reveal: false });
+    toast("Interact: click buttons, scroll lists. Esc or V goes back to editing.", "info");
+  }
+  statusEl.textContent = statusLine();
+  draw();
+}
+
+/** The first widget under the pointer that a click means something to. */
+function clickableAt(world: { x: number; y: number }): number | null {
+  for (const index of hitStack(scene, world.x, world.y, skipMask)) {
+    if (scene.items[index].onclick) return index;
+  }
+  return null;
+}
+
+/** The nearest scrolling widget at or above the pointer's topmost hit, with room to scroll. */
+function scrollableAt(world: { x: number; y: number }): number | null {
+  const top = hitStack(scene, world.x, world.y, skipMask)[0];
+  if (top === undefined) return null;
+  for (let i: number | null = top; i !== null; i = parentIndex(scene, i)) {
+    const item = scene.items[i];
+    if (!item.scrolls) continue;
+    const extent = scrollExtent(unscrolledScene(), i);
+    if (extent.x > 0 || extent.y > 0) return i;
+  }
+  return null;
+}
+
+let unscrolled: Scene | null = null;
+/** The scene as the engine laid it out, before any interact scroll shifted it. */
+function unscrolledScene(): Scene {
+  if (!unscrolled || unscrolled.count !== scene.count) unscrolled = buildScene(lastNodes);
+  return unscrolled;
+}
+
+function interactClick(ev: PointerEvent): void {
+  const world = toWorld(ev);
+  const index = clickableAt(world);
+  if (index === null) {
+    hideClickTip();
+    return;
+  }
+  const item = scene.items[index];
+  const actions = parseOnclick(item.onclick);
+  const before = varState;
+  varState = applyActions(varState, actions);
+  const changed =
+    [...varState].some(([k, v]) => !before.has(k) || before.get(k) !== v) || before.size !== varState.size;
+  if (changed) {
+    // The variables decide the checks they can; every other check keeps what
+    // the user set in the Visible tab.
+    clickPending = true;
+    sendVisibility("evaluate", {
+      ...visibilityChecks,
+      ...assignments(
+        visibilityFound.map((c) => c.key),
+        varState
+      ),
+    });
+  }
+  showClickTip(item, actions, ev.clientX, ev.clientY);
+}
+
+function interactScroll(ev: WheelEvent): boolean {
+  const index = scrollableAt(toWorld(ev));
+  if (index === null) return false;
+  const item = scene.items[index];
+  const key = pathKey(item.path);
+  const extent = scrollExtent(unscrolledScene(), index);
+  const current = scrollOffsets.get(key) ?? { x: 0, y: 0 };
+  // The wheel scrolls the axis the content overflows on; a horizontal list
+  // takes a vertical wheel, as the game does.
+  const vertical = extent.y > 0;
+  const step = ((ev.deltaY || ev.deltaX) * (ev.deltaMode === 1 ? 16 : 1)) / zoom;
+  const next = vertical
+    ? { x: current.x, y: Math.max(0, Math.min(extent.y, current.y + step)) }
+    : { x: Math.max(0, Math.min(extent.x, current.x + step)), y: current.y };
+  if (next.x === current.x && next.y === current.y) return true;
+  scrollOffsets.set(key, next);
+  scene = buildScene(lastNodes);
+  applyScrollOffsets(scene, scrollOffsets);
+  rebuildMasks();
+  draw();
+  return true;
+}
+
+/** What the click did, at the pointer: variables set, and what only the game could run. */
+function showClickTip(
+  item: SceneItem,
+  actions: readonly VarAction[],
+  clientX: number,
+  clientY: number
+): void {
+  clickTipEl.textContent = "";
+  clickTipEl.appendChild(el("div", "title", `Clicked ${widgetTitle(item)}`));
+  if (actions.length === 0) clickTipEl.appendChild(el("div", "note", "Its onclick is empty."));
+  for (const action of actions) {
+    const row = el("div", "act");
+    const kind = el("span", "px-badge", action.kind === "other" ? "game" : "variable");
+    kind.dataset.variant = action.kind === "other" ? "outline" : "default";
+    kind.title =
+      action.kind === "other"
+        ? "Only the running game can do this; the preview names it"
+        : "Applied to the preview's variable table";
+    row.appendChild(kind);
+    row.appendChild(el("span", "src", describeAction(action)));
+    clickTipEl.appendChild(row);
+  }
+  if (item.tooltip) {
+    const row = el("div", "note", "");
+    const link = el("span", "link", "Read its tooltip");
+    link.addEventListener("click", () => readTooltip(item));
+    row.appendChild(link);
+    clickTipEl.appendChild(row);
+  }
+  clickTipEl.appendChild(el("div", "note delta", ""));
+  clickTipEl.hidden = false;
+  const stageBox = stage.getBoundingClientRect();
+  const box = clickTipEl.getBoundingClientRect();
+  const left = Math.max(4, Math.min(clientX - stageBox.left + 12, stageBox.width - box.width - 4));
+  const top = Math.max(4, Math.min(clientY - stageBox.top + 12, stageBox.height - box.height - 4));
+  clickTipEl.style.left = `${left}px`;
+  clickTipEl.style.top = `${top}px`;
+}
+
+function noteClickDelta(delta: number): void {
+  const node = clickTipEl.querySelector(".delta");
+  if (!node || clickTipEl.hidden) return;
+  node.textContent =
+    delta === 0
+      ? "The layout did not change: no widget's visible depends on those variables."
+      : delta > 0
+        ? `${delta} widget(s) appeared.`
+        : `${-delta} widget(s) disappeared.`;
+}
+
+function hideClickTip(): void {
+  clickTipEl.hidden = true;
+}
+
+/** The widget's tooltip, read through the host's loc index and shown as a toast. */
+function readTooltip(item: SceneItem): void {
+  if (!item.tooltip) return;
+  const key = item.tooltip;
+  if (/^\[/.test(key)) {
+    toast(`Tooltip is a datafunction only the game evaluates: ${key}`, "info");
+    return;
+  }
+  host.send({ type: "requestLoc", key });
+}
+
+modeEditEl.addEventListener("click", () => setMode("edit"));
+modeInteractEl.addEventListener("click", () => setMode("interact"));
+
+// ---- the context menu (edit mode) ----------------------------------------------
+
+stage.addEventListener("contextmenu", (ev) => {
+  ev.preventDefault();
+  if (mode !== "edit" || gesture || marquee || paletteDrag) return;
+  const world = toWorld(ev);
+  const hit = hitStack(scene, world.x, world.y, skipMask)[0] ?? null;
+  // A right-click on a member keeps the selection; on anything else it selects that first.
+  if (hit !== null && !allSelected().includes(hit)) select(hit, { reveal: false });
+  else if (hit === null) select(null, { reveal: false });
+  const item = selectedItem();
+  const items: MenuItem[] = [];
+  if (item) {
+    if (item.tooltip)
+      items.push({ value: "tooltip", label: "Read tooltip", hint: item.tooltip.slice(0, 24) });
+    const variables = (item.text?.segments ?? []).filter((s) => s.kind === "datafn");
+    for (const seg of variables.slice(0, 4)) {
+      items.push({
+        value: `preview:${seg.source}`,
+        label: "Set preview value",
+        description: `[${seg.source}]`,
+      });
+    }
+    if (item.onclick)
+      items.push({ value: "click", label: "Run onclick (interact)", description: item.onclick.slice(0, 60) });
+    items.push({
+      value: "focus",
+      label: selected === focusIndex ? "Leave focus" : "Focus subtree",
+      hint: "F",
+    });
+    if (item.line !== undefined)
+      items.push({ value: "reveal", label: "Reveal in source", hint: "Ctrl+Shift+click" });
+    items.push({ value: "copy", label: "Copy", hint: "Ctrl+C" });
+    items.push({ value: "paste", label: "Paste into", hint: "Ctrl+V" });
+    items.push({ value: "duplicate", label: "Duplicate", hint: "Ctrl+D" });
+    const path = rowKey(item.path);
+    items.push({ value: "hide", label: hiddenPaths.has(path) ? "Show" : "Hide", hint: "eye" });
+    items.push({ value: "lock", label: lockedPaths.has(path) ? "Unlock" : "Lock", hint: "lock" });
+    items.push({ value: "delete", label: "Delete", hint: "Del" });
+  } else {
+    items.push({ value: "paste", label: "Paste here" });
+    items.push({ value: "library", label: "Open the library", hint: "L" });
+    items.push({ value: "fit", label: "Fit the view", hint: "Ctrl+0" });
+  }
+  // The menu anchors to an element; a throwaway one at the pointer is that element.
+  const anchor = el("span");
+  anchor.style.cssText = `position:fixed;left:${ev.clientX}px;top:${ev.clientY}px;width:0;height:0`;
+  document.body.appendChild(anchor);
+  menu(anchor, items, {
+    search: false,
+    width: 220,
+    onPick: (value) => {
+      anchor.remove();
+      runContextAction(value, item);
+    },
+  });
+});
+
+function runContextAction(value: string, item: SceneItem | null): void {
+  if (value.startsWith("preview:")) {
+    previewValuePopover(modeEditEl, value.slice("preview:".length));
+    return;
+  }
+  switch (value) {
+    case "tooltip":
+      if (item) readTooltip(item);
+      return;
+    case "click":
+      if (item) {
+        const actions = parseOnclick(item.onclick);
+        varState = applyActions(varState, actions);
+        clickPending = true;
+        sendVisibility("evaluate", {
+          ...visibilityChecks,
+          ...assignments(
+            visibilityFound.map((c) => c.key),
+            varState
+          ),
+        });
+        toast(actions.map(describeAction).join("; ") || "Its onclick is empty.", "info");
+      }
+      return;
+    case "focus":
+      if (selected !== null) setFocus(selected === focusIndex ? null : selected);
+      return;
+    case "reveal":
+      if (item?.line !== undefined) host.send({ type: "reveal", line: item.line });
+      return;
+    case "copy":
+      copySelection();
+      return;
+    case "paste":
+      pasteIntoSelection();
+      return;
+    case "duplicate":
+      duplicateSelection();
+      return;
+    case "hide":
+    case "lock": {
+      if (!item) return;
+      const set = value === "hide" ? hiddenPaths : lockedPaths;
+      const path = rowKey(item.path);
+      if (set.has(path)) set.delete(path);
+      else set.add(path);
+      afterToggle();
+      return;
+    }
+    case "delete":
+      void deleteSelectionConfirmed();
+      return;
+    case "library":
+      toggleLibrary(true);
+      return;
+    case "fit":
+      fitView();
+      return;
+  }
+}
+
+// ---- the reference screenshot ----------------------------------------------------
+
+/**
+ * A screenshot of the same window in game, drawn over the canvas so the two
+ * can be compared pixel for pixel. The host picks the file and hands a URL; the
+ * placement is the user's, in world units, and `difference` is the blend that
+ * turns a misaligned edge into a bright line.
+ */
+const reference: Omit<DrawReference, "image"> & { image: HTMLImageElement | null; name: string } = {
+  image: null,
+  name: "",
+  x: 0,
+  y: 0,
+  scale: 1,
+  opacity: 0.5,
+  blend: "over",
+};
+
+function renderReference(): void {
+  const head = el("div", "head");
+  head.appendChild(el("div", "title", "Reference screenshot"));
+  head.appendChild(
+    el(
+      "div",
+      "chain",
+      "Take a screenshot in game at 100% UI scale, load it here, and compare. Difference blend shows every edge that is off: a black area is a perfect match."
+    )
+  );
+  haloBodyEl.appendChild(head);
+  const tools = el("div", "tools");
+  tools.appendChild(
+    button(
+      reference.image ? "Load another…" : "Load a screenshot…",
+      () => host.send({ type: "pickReference" }),
+      {
+        variant: "outline",
+        size: "sm",
+      }
+    )
+  );
+  if (reference.image) {
+    tools.appendChild(
+      button(
+        "Clear",
+        () => {
+          reference.image = null;
+          reference.name = "";
+          renderHalo();
+          draw();
+        },
+        { variant: "ghost", size: "sm" }
+      )
+    );
+  }
+  haloBodyEl.appendChild(tools);
+  if (!reference.image) {
+    note("No screenshot loaded. PNG is best: JPEG compression blurs the edges the comparison looks for.");
+    return;
+  }
+  const img = reference.image;
+  note(`${reference.name} · ${img.naturalWidth}×${img.naturalHeight}`);
+  const blendTools = el("div", "tools");
+  const group = el("div", "px-toggle-group");
+  group.dataset.spacing = "0";
+  for (const [blend, label, tip] of [
+    ["under", "Under", "The screenshot behind the widgets"],
+    ["over", "Over", "The screenshot on top, at the opacity below"],
+    ["difference", "Difference", "Black where the two agree, bright where they differ"],
+  ] as const) {
+    const node = el("button", "px-toggle", label) as HTMLButtonElement;
+    node.dataset.variant = "outline";
+    node.dataset.size = "sm";
+    node.dataset.tip = tip;
+    node.setAttribute("aria-pressed", reference.blend === blend ? "true" : "false");
+    node.addEventListener("click", () => {
+      reference.blend = blend;
+      renderHalo();
+      draw();
+    });
+    group.appendChild(node);
+  }
+  blendTools.appendChild(group);
+  haloBodyEl.appendChild(blendTools);
+
+  const slider = el("div", "refRow");
+  slider.appendChild(el("span", "px-label", "Opacity"));
+  const range = document.createElement("input");
+  range.type = "range";
+  range.className = "px-slider";
+  range.min = "0";
+  range.max = "1";
+  range.step = "0.05";
+  range.value = String(reference.opacity);
+  range.addEventListener("input", () => {
+    reference.opacity = Number(range.value);
+    draw();
+  });
+  slider.appendChild(range);
+  haloBodyEl.appendChild(slider);
+
+  const numberRow = (label: string, key: "x" | "y" | "scale", step: number): void => {
+    const row = el("div", "refRow");
+    row.appendChild(el("span", "px-label", label));
+    const input = textInput("", String(reference[key]), "px-input");
+    input.dataset.size = "sm";
+    input.addEventListener("change", () => {
+      const v = Number(input.value);
+      if (Number.isFinite(v)) reference[key] = v;
+      draw();
+    });
+    scrubbable(input, {
+      step,
+      onChange: (v) => {
+        reference[key] = v;
+        draw();
+      },
+    });
+    row.appendChild(input);
+    haloBodyEl.appendChild(row);
+  };
+  numberRow("X", "x", 1);
+  numberRow("Y", "y", 1);
+  numberRow("Scale", "scale", 0.01);
+  const fitTools = el("div", "tools");
+  fitTools.appendChild(
+    button(
+      "Fit to 1920×1080",
+      () => {
+        reference.x = 0;
+        reference.y = 0;
+        reference.scale = WORLD_W / img.naturalWidth;
+        renderHalo();
+        draw();
+      },
+      { variant: "outline", size: "sm", tip: "Scale the screenshot so its width is the reference viewport's" }
+    )
+  );
+  fitTools.appendChild(
+    button(
+      "Align to selection",
+      () => {
+        const item = selectedItem();
+        if (!item) {
+          toast("Select the widget the screenshot's top-left corner sits on.", "info");
+          return;
+        }
+        reference.x = item.rect.x;
+        reference.y = item.rect.y;
+        renderHalo();
+        draw();
+      },
+      { variant: "outline", size: "sm", tip: "Put the screenshot's top-left corner on the selected widget's" }
+    )
+  );
+  haloBodyEl.appendChild(fitTools);
+}
+
+function loadReference(name: string, url: string): void {
+  const img = new Image();
+  img.onload = () => {
+    reference.image = img;
+    reference.name = name;
+    if (reference.scale === 1 && img.naturalWidth > WORLD_W) reference.scale = WORLD_W / img.naturalWidth;
+    renderHalo();
+    draw();
+  };
+  img.onerror = () => toast("Could not load that image.", "refused");
+  img.src = url;
+}
+
 // ---- side panels ------------------------------------------------------------
 
 /**
@@ -5242,6 +5904,12 @@ let adoptingPanels = false;
 function sendPanels(): void {
   updatePanelToggles();
   if (!adoptingPanels) host.send({ type: "setUiState", valueMode, panels: panelStates() });
+}
+
+function adoptSections(collapsed: readonly string[]): void {
+  adoptingPanels = true;
+  for (const id of Object.keys(sections) as SectionId[]) setSectionCollapsed(id, collapsed.includes(id));
+  adoptingPanels = false;
 }
 
 function adoptPanels(panels: GuiPanelStates): void {
@@ -5283,6 +5951,13 @@ function rebuildHeatmap(): void {
 window.addEventListener("pointermove", (ev) => {
   if (!paletteDrag) return;
   moveGhost(ev.clientX, ev.clientY);
+  // The library covers the stage; a real drag closes it so the drop can land.
+  if (
+    libraryOpen() &&
+    Math.hypot(ev.clientX - paletteDrag.from.x, ev.clientY - paletteDrag.from.y) > DRAG_THRESHOLD
+  ) {
+    toggleLibrary(false);
+  }
   if (overStage(ev)) updatePaletteDrag(toWorld(ev));
   else clearPaletteTarget();
 });

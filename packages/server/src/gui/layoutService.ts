@@ -168,6 +168,8 @@ export function computeGuiLayoutResult(
     nodeCount++;
     if (n.bg?.texture) textures.add(n.bg.texture);
     if (n.fill?.texture) textures.add(n.fill.texture);
+    if (n.bg?.mask) textures.add(n.bg.mask);
+    if (n.fill?.mask) textures.add(n.fill.mask);
     for (const c of n.children) visit(c);
   };
   for (const n of nodes) visit(n);

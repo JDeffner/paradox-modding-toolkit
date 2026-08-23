@@ -87,6 +87,16 @@ export interface Fill {
   framesize?: [number, number];
   /** 1-based `frame` index into that grid, clamped by computeFrameCell (Studio §L, L22). */
   frame?: number;
+  /** `alpha = x` on the widget or the background block: the fill's opacity, 0..1. */
+  alpha?: number;
+  /**
+   * `modify_texture = { texture blend_mode = alphamultiply }`: a mask whose
+   * alpha multiplies the fill's, stretched over the rect. Only the
+   * alphamultiply blend is carried; the engine's other blends are not drawn.
+   */
+  mask?: string;
+  /** `fittype = centercrop`: the texture covers the rect, cropped to centre, never stretched. */
+  fit?: "centercrop";
 }
 
 export interface TextInfo {
@@ -154,6 +164,10 @@ export interface LayoutNode {
    * stand in. Presentation only, propagated to the whole ghost subtree.
    */
   ghost?: boolean;
+  /** The widget's `onclick` source string, verbatim, when it has one (see GuiLayoutNode.onclick). */
+  onclick?: string;
+  /** The widget's `tooltip` source string, verbatim, when it has one. */
+  tooltip?: string;
   /**
    * True for a root that is a `type name = base { }` DECLARATION laid out as
    * one instance of itself, which is what a document that instantiates nothing
@@ -701,7 +715,10 @@ function buildWNode(
         if (SKIP_SUBTREES.has(k)) {
           continue;
         } else if (k === "background") {
-          node.bg = resolveFill(child, ctx.consts, ctx.defs);
+          node.bg = resolveFill(child, ctx.consts, ctx.defs, ov);
+        } else if (k === "modify_texture") {
+          const mask = maskOf(child);
+          if (mask) node.props.set("#mask", fakeScalar(mask));
         } else if (k === "scrollwidget") {
           // Pass-through: scrollarea content renders at the viewport origin
           // with no rect of its own observed (B3-R1).
@@ -748,7 +765,19 @@ function buildWNode(
           );
         }
       } else if (stmt.value?.kind === "scalar") {
-        node.props.set(k, stmt.value);
+        // A widget may carry several `onclick` lines; the game runs them all,
+        // so keep every one (newline-joined) rather than the last.
+        const prior = k === "onclick" ? node.props.get(k) : undefined;
+        node.props.set(
+          k,
+          prior
+            ? {
+                ...stmt.value,
+                text: `${prior.text}
+${stmt.value.text}`,
+              }
+            : stmt.value
+        );
       }
     }
   };
@@ -833,11 +862,19 @@ function fakeScalar(text: string): ScalarNode {
  * spliced. Exported so the inspector reads a background exactly the way the
  * canvas drew it instead of re-deriving the same attributes.
  */
-export function resolveFill(block: BlockNode, consts: Map<string, number>, defs: GuiDefs): Fill {
+export function resolveFill(
+  block: BlockNode,
+  consts: Map<string, number>,
+  defs: GuiDefs,
+  overrides: ReadonlyMap<string, BlockNode> = new Map()
+): Fill {
   const fill: Fill = {};
   // `background = { using = Background_Area_Dark }` carries its texture via
   // the template; expandWidget with an unknown key just splices templates.
-  const { statements } = expandWidget("#background", block, defs);
+  // A `block "illustration_texture" { texture = ... }` inside it takes the
+  // instance's blockoverride, the way a widget's own slots do: vanilla's
+  // widget_header_with_picture names its picture exactly so.
+  const statements = spliceBlocks(expandWidget("#background", block, defs).statements, overrides);
   let sprite: number[] | undefined;
   let spriteType: string | undefined;
   let framesize: number[] | undefined;
@@ -848,6 +885,14 @@ export function resolveFill(block: BlockNode, consts: Map<string, number>, defs:
     const k = stmt.key.text.toLowerCase();
     if (k === "texture" && stmt.value?.kind === "scalar") fill.texture = stmt.value.text;
     if (k === "spritetype" && stmt.value?.kind === "scalar") spriteType = stmt.value.text;
+    if (k === "alpha" && stmt.value?.kind === "scalar") fill.alpha = toNumber(stmt.value.text, consts);
+    if (k === "fittype" && stmt.value?.kind === "scalar" && stmt.value.text.toLowerCase() === "centercrop")
+      fill.fit = "centercrop";
+    if (k === "modify_texture") {
+      const b = blockOf(stmt);
+      const mask = b ? maskOf(b) : undefined;
+      if (mask) fill.mask = mask;
+    }
     if (k === "frame" && stmt.value?.kind === "scalar") frame = toNumber(stmt.value.text, consts);
     if (k === "framesize") {
       const b = blockOf(stmt);
@@ -885,6 +930,54 @@ export function resolveFill(block: BlockNode, consts: Map<string, number>, defs:
     }
   }
   return fill;
+}
+
+/**
+ * The statements with every `block "name" { ... }` slot replaced by its
+ * override (or its own default content), recursively, an override consumed
+ * once it is applied (the same rule buildWNode's process() follows).
+ */
+function spliceBlocks(statements: Statement[], overrides: ReadonlyMap<string, BlockNode>): Statement[] {
+  const out: Statement[] = [];
+  let marker: "block" | "blockoverride" | null = null;
+  for (const stmt of statements) {
+    if (stmt.kind === "value") {
+      const t = stmt.value.kind === "scalar" ? stmt.value.text.toLowerCase() : "";
+      marker = t === "block" ? "block" : t === "blockoverride" ? "blockoverride" : null;
+      continue;
+    }
+    const m = marker;
+    marker = null;
+    if (m === "blockoverride") continue;
+    if (m === "block") {
+      const override = overrides.get(stmt.key.text);
+      const content = override ?? blockOf(stmt);
+      if (!content) continue;
+      let sub = overrides;
+      if (override) {
+        const next = new Map(overrides);
+        next.delete(stmt.key.text);
+        sub = next;
+      }
+      out.push(...spliceBlocks(content.statements, sub));
+      continue;
+    }
+    out.push(stmt);
+  }
+  return out;
+}
+
+/** The mask texture of a `modify_texture` block when its blend is alphamultiply (the only blend drawn). */
+function maskOf(block: BlockNode): string | undefined {
+  let texture: string | undefined;
+  let blend = "";
+  for (const stmt of block.statements) {
+    if (stmt.kind !== "assignment" || stmt.value?.kind !== "scalar") continue;
+    const k = stmt.key.text.toLowerCase();
+    if (k === "texture") texture = stmt.value.text;
+    if (k === "blend_mode") blend = stmt.value.text.toLowerCase();
+  }
+  return texture && blend === "alphamultiply" ? texture : undefined;
 }
 
 /**
@@ -1303,6 +1396,8 @@ function arrange(
     // theirs names a slot a client could move.
     srcIndex: node.ghost ? undefined : node.srcIndex,
     ghost: node.ghost ? true : undefined,
+    onclick: str(node, "onclick"),
+    tooltip: str(node, "tooltip"),
     children: [],
   };
   const colorPair = node.pairs.get("color");
@@ -1324,6 +1419,11 @@ function arrange(
     });
     const texture = str(node, "texture");
     out.fill = { texture, color, border };
+    const alpha = num(node, "alpha");
+    if (alpha !== undefined) out.fill.alpha = alpha;
+    const mask = str(node, "#mask");
+    if (mask) out.fill.mask = mask;
+    if (str(node, "fittype")?.toLowerCase() === "centercrop") out.fill.fit = "centercrop";
     if (texture !== undefined) {
       out.fill.mode = fillMode(str(node, "spritetype"), border); // Studio §J, L21a-d
       const framesize = node.pairs.get("framesize");

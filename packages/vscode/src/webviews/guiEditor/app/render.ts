@@ -58,6 +58,8 @@ const HEAT_ALPHA = 0.4;
  */
 export const UNRESOLVED_TEXT = "#8f8a80";
 const UNRESOLVED_DASH = [1, 2];
+/** A datafunction run: the text's own colour, dotted underline (the mark that says "variable"). */
+const VARIABLE_DASH = [1, 1];
 
 /** Tinted and cell-cropped source images, keyed by texture + parameters. */
 const derived = new Map<string, HTMLCanvasElement>();
@@ -145,6 +147,7 @@ function paintFill(
   if (!img) {
     if (!fill.color) return;
     ctx.save();
+    ctx.globalAlpha *= fill.alpha ?? 1;
     ctx.fillStyle = rgba(fill.color);
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
     ctx.restore();
@@ -153,10 +156,33 @@ function paintFill(
   const src = sourceFor(fill, img);
   const { w: sw, h: sh } = sizeOf(src);
   if (sw <= 0 || sh <= 0) return;
+  const mask = fill.mask ? images[fill.mask] : undefined;
+  if (mask) {
+    // The mask's alpha multiplies the fill's over the whole rect: draw the
+    // fill into an offscreen of the rect's size, cut it with the mask, and
+    // composite the result. Integer-sized so the two drawImages line up.
+    const w = Math.max(1, Math.round(rect.w));
+    const h = Math.max(1, Math.round(rect.h));
+    const { canvas: off, ctx: octx } = offscreen(w, h);
+    paintFill(octx, { x: 0, y: 0, w, h }, { ...fill, mask: undefined }, images);
+    octx.globalCompositeOperation = "destination-in";
+    octx.drawImage(mask, 0, 0, w, h);
+    ctx.save();
+    ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h);
+    ctx.restore();
+    return;
+  }
   ctx.save();
-  ctx.globalAlpha *= fill.color?.[3] ?? 1;
+  ctx.globalAlpha *= (fill.color?.[3] ?? 1) * (fill.alpha ?? 1);
   const mode = fill.mode ?? "stretch";
-  if (fill.border && mode.startsWith("nineslice")) {
+  if (fill.fit === "centercrop") {
+    // Cover: scale the texture up to fill the rect on both axes, crop the
+    // overflow equally on both sides.
+    const scale = Math.max(rect.w / sw, rect.h / sh);
+    const cw = rect.w / scale;
+    const ch = rect.h / scale;
+    ctx.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, rect.x, rect.y, rect.w, rect.h);
+  } else if (fill.border && mode.startsWith("nineslice")) {
     // Corners 1:1, edges and centre stretched or tiled per the suffix
     // (the border applies only with a Cornered* sprite type, which the
     // engine already decided when it set `mode`).
@@ -220,33 +246,39 @@ function paintItem(
     ctx.textBaseline = "top";
     const color = item.text?.color ? rgba(item.text.color) : "#e3dac3";
     const segments = item.text?.segments;
-    const unresolved = segments?.some((s) => !s.resolved) ? segments : null;
+    // A run is marked when it is a datafunction (a variable, whatever value the
+    // preview found for it) or a loc key the index lacks.
+    const marked = segments?.some((s) => s.kind === "datafn" || !s.resolved) ? segments : null;
     for (const line of item.textLines) {
       ctx.font = `${line.fontsize}px ${fontFamily}`;
-      if (!unresolved) {
+      if (!marked) {
         ctx.fillStyle = color;
         ctx.fillText(line.text, line.x, line.y);
         continue;
       }
       // The segments are the WHOLE text, the line is a wrapped or elided piece
       // of it, so a run is painted on its own only when the line IS the text
-      // (the common single-line case). A wrapped line paints as one unresolved
+      // (the common single-line case). A wrapped line paints as one marked
       // run: the engine's wrap points are not known per segment, and a whole
-      // muted line is honest where a misplaced underline would not be.
+      // underlined line is honest where a misplaced underline would not be.
       const runs =
         item.textLines.length === 1 && segments!.map((s) => s.text).join("") === line.text
           ? segments!
-          : [{ text: line.text, resolved: false } as GuiTextSegment];
+          : [{ text: line.text, kind: "datafn", source: "", resolved: false } as GuiTextSegment];
       let x = line.x;
       for (const run of runs) {
         const w = ctx.measureText(run.text).width;
-        ctx.fillStyle = run.resolved ? color : UNRESOLVED_TEXT;
+        // Variables keep the text's own colour: on a busy background a muted
+        // run is unreadable, and the underline alone says what it is. Only a
+        // loc key nobody defined is muted, because the game prints the key.
+        const missing = run.kind === "loc" && !run.resolved;
+        ctx.fillStyle = missing ? UNRESOLVED_TEXT : color;
         ctx.fillText(run.text, x, line.y);
-        if (!run.resolved) {
+        if (run.kind === "datafn" || missing) {
           const y = line.y + line.fontsize + 1;
-          ctx.strokeStyle = UNRESOLVED_TEXT;
+          ctx.strokeStyle = missing ? UNRESOLVED_TEXT : color;
           ctx.lineWidth = 1;
-          ctx.setLineDash(UNRESOLVED_DASH);
+          ctx.setLineDash(missing ? UNRESOLVED_DASH : VARIABLE_DASH);
           ctx.beginPath();
           ctx.moveTo(x, y);
           ctx.lineTo(x + w, y);
@@ -387,6 +419,32 @@ export interface DrawOptions {
   constraints?: ConstraintOverlay;
   /** The widgets the last layout push moved. */
   pulse?: DrawPulse;
+  /** An in-game screenshot laid over (or under) the scene, to calibrate against. */
+  reference?: DrawReference;
+}
+
+/**
+ * A reference image for calibration: a screenshot of the same window in game,
+ * placed in WORLD coordinates (`x`, `y`, `scale`), at `opacity`. `blend`
+ * decides how it meets the scene: `over` and `under` for a look, `difference`
+ * for the measurement, where a perfectly aligned pixel goes black and every
+ * misplaced edge lights up.
+ */
+export interface DrawReference {
+  image: CanvasImageSource & { width: number; height: number };
+  x: number;
+  y: number;
+  scale: number;
+  opacity: number;
+  blend: "over" | "under" | "difference";
+}
+
+function paintReference(ctx: CanvasRenderingContext2D, ref: DrawReference): void {
+  ctx.save();
+  ctx.globalAlpha = ref.opacity;
+  if (ref.blend === "difference") ctx.globalCompositeOperation = "difference";
+  ctx.drawImage(ref.image, ref.x, ref.y, ref.image.width * ref.scale, ref.image.height * ref.scale);
+  ctx.restore();
 }
 
 /**
@@ -707,6 +765,7 @@ export function drawScene(
   ctx.fillStyle = WORLD_BG;
   ctx.fillRect(0, 0, WORLD_W, WORLD_H);
   if (options.grid) paintGrid(ctx, options.grid, camera.zoom);
+  if (options.reference?.blend === "under") paintReference(ctx, options.reference);
   const preview = options.preview;
   const shifted = preview && (preview.dx !== 0 || preview.dy !== 0);
   const slices = preview?.slices ?? [];
@@ -731,6 +790,7 @@ export function drawScene(
       paintItem(ctx, scene.items[i], images, camera.zoom, options.outlines, options.fontFamily, alpha);
     }
   }
+  if (options.reference && options.reference.blend !== "under") paintReference(ctx, options.reference);
   // Over the scene and under every affordance: a tint is about the widgets, and
   // a guide line drawn under it would be the wrong colour.
   if (options.heatmap) paintHeatmap(ctx, scene, options.heatmap, hidden);

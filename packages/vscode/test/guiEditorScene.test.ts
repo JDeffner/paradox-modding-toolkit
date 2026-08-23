@@ -15,12 +15,21 @@ import * as path from "path";
 import { devPath } from "../../../scripts/devPaths";
 import { computeGuiLayoutResult } from "../../server/src/gui/layoutService";
 import {
+  computeGuiLayout,
   computeNineSlice as engineNineSlice,
   GHOST_OPACITY as ENGINE_GHOST_OPACITY,
 } from "../../server/src/gui/layoutEngine";
 import { computeNineSlice } from "../../server/src/gui/fillGeometry";
 import type { GuiLayoutNode } from "@px-lsp/protocol/protocol";
-import { buildScene, dumpScene, GHOST_BOX, GHOST_OPACITY } from "../src/webviews/guiEditor/app/scene";
+import {
+  applyScrollOffsets,
+  buildScene,
+  dumpScene,
+  GHOST_BOX,
+  GHOST_OPACITY,
+  pathKey,
+  scrollExtent,
+} from "../src/webviews/guiEditor/app/scene";
 
 const FIXTURES = path.join(__dirname, "..", "..", "server", "test", "fixtures", "gui", "layout");
 const BASELINE = path.join(__dirname, "fixtures", "gui-scene.baseline.txt");
@@ -192,5 +201,34 @@ describe("vanilla corpus", () => {
     expect(scene.items.some((i) => i.fill?.texture || i.bg?.texture)).toBe(true);
     expect(scene.items.some((i) => i.ghost)).toBe(true);
     expect(scene.items.some((i) => i.textLines.length > 0)).toBe(true);
+  });
+});
+
+describe("interact scrolling over a scrollarea", () => {
+  const SCROLL = `
+scrollarea = {
+	size = { 100 50 }
+	scrollwidget = {
+		vbox = {
+			icon = { size = { 100 40 } texture = "a.dds" }
+			icon = { size = { 100 40 } texture = "a.dds" }
+			icon = { size = { 100 40 } texture = "a.dds" }
+		}
+	}
+}`;
+  it("the extent is the content past the viewport, and an offset shifts the children only", () => {
+    const nodes = computeGuiLayout(SCROLL, { viewport: { w: 1000, h: 1000 } }) as unknown as GuiLayoutNode[];
+    const scene = buildScene(nodes);
+    expect(scene.items[0].scrolls).toBe(true);
+    expect(scrollExtent(scene, 0)).toEqual({ x: 0, y: 70 });
+    const before = scene.items.map((i) => ({ ...i.rect }));
+    applyScrollOffsets(scene, new Map([[pathKey(scene.items[0].path), { x: 0, y: 30 }]]));
+    expect(scene.items[0].rect).toEqual(before[0]);
+    for (let i = 1; i < scene.items.length; i++) {
+      expect(scene.items[i].rect.y).toBe(before[i].y - 30);
+      expect(scene.items[i].clip).toEqual(before[0]);
+    }
+    // The layout nodes are untouched: the next rebuild starts from the engine's geometry.
+    expect(buildScene(nodes).items[1].rect).toEqual(before[1]);
   });
 });

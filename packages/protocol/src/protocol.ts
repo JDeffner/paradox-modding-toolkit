@@ -479,6 +479,16 @@ export interface GuiLayoutFill {
   mode?: "stretch" | "tile" | "nineslice-stretch" | "nineslice-tile";
   /** `framesize = { w h }` cell size when the texture is a frame sheet. */
   framesize?: [number, number];
+  /** `alpha = x`: the fill's opacity, 0..1 (absent = 1). */
+  alpha?: number;
+  /**
+   * `modify_texture` with `blend_mode = alphamultiply`: a texture whose alpha
+   * multiplies the fill's, stretched over the rect. Listed in `textures` like
+   * any other path. Other blend modes are not carried.
+   */
+  mask?: string;
+  /** `fittype = centercrop`: cover the rect and crop to the centre instead of stretching. */
+  fit?: "centercrop";
   /**
    * 1-based frame index into that sheet, row-major over the cols x rows grid
    * (cols = texW/w). Out-of-range values clamp to the first or last cell.
@@ -551,6 +561,15 @@ export interface GuiLayoutNode {
    * never editable. Presentation only, not a measured layout rule.
    */
   ghost?: boolean;
+  /**
+   * The widget's `onclick` value as authored, minus its quotes, when it has
+   * one. A static preview cannot run it; a client's interact mode reads the
+   * `GetVariableSystem.*` calls out of it to drive the visibility checks, and
+   * names the rest as what the game would run.
+   */
+  onclick?: string;
+  /** The widget's `tooltip` value as authored (a loc key or a [datafunction]), when it has one. */
+  tooltip?: string;
   /**
    * A root that is a `type name = base { }` DECLARATION laid out as one
    * instance of itself. Set only on roots, and only for a document that

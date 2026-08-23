@@ -88,6 +88,8 @@ export type FetchDependencies = (
   line: number | undefined
 ) => Promise<GuiDependenciesResult>;
 export type FetchSaveValues = (file: string) => Promise<GuiSaveValuesResult>;
+/** One loc key's value through the host's index; undefined when nothing defines it. */
+export type FetchLoc = (key: string) => Promise<string | undefined>;
 export type FetchPreviews = (
   uri: vscode.Uri,
   text: string,
@@ -136,6 +138,7 @@ export class GuiEditorPanel {
   private readonly fetchDependencies: FetchDependencies;
   private readonly fetchPreviews: FetchPreviews;
   private readonly fetchSaveValues: FetchSaveValues;
+  private readonly fetchLoc: FetchLoc;
   private readonly state: vscode.Memento;
   private readonly storageDir: string;
   private textures: GuiTextureCache;
@@ -159,11 +162,13 @@ export class GuiEditorPanel {
     fetchDependencies: FetchDependencies,
     fetchPreviews: FetchPreviews,
     fetchSaveValues: FetchSaveValues,
+    fetchLoc: FetchLoc,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
   ) {
     this.fetchLayout = fetchLayout;
+    this.fetchLoc = fetchLoc;
     this.fetchWidgetInfo = fetchWidgetInfo;
     this.fetchSourceEdit = fetchSourceEdit;
     this.fetchVocabulary = fetchVocabulary;
@@ -239,6 +244,7 @@ export class GuiEditorPanel {
     fetchDependencies: FetchDependencies,
     fetchPreviews: FetchPreviews,
     fetchSaveValues: FetchSaveValues,
+    fetchLoc: FetchLoc,
     source: vscode.TextDocument,
     roots: TextureRoots,
     meta: GameMeta
@@ -270,6 +276,7 @@ export class GuiEditorPanel {
       fetchDependencies,
       fetchPreviews,
       fetchSaveValues,
+      fetchLoc,
       source,
       roots,
       meta
@@ -822,6 +829,35 @@ export class GuiEditorPanel {
         });
         return;
       }
+      case "requestLoc": {
+        const value = await this.fetchLoc(message.key);
+        this.post({ type: "loc", key: message.key, value: value ?? null });
+        return;
+      }
+      case "pickReference": {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          openLabel: "Use as reference",
+          filters: { Images: ["png", "jpg", "jpeg", "webp"] },
+        });
+        const uri = picked?.[0];
+        if (!uri) {
+          this.post({ type: "reference", name: "", url: null });
+          return;
+        }
+        // Any folder on disk may hold the screenshot, and the webview may only
+        // load from its resource roots, so the bytes travel as a data URI.
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const ext = uri.fsPath.toLowerCase().split(".").pop() ?? "png";
+        const mime =
+          ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+        this.post({
+          type: "reference",
+          name: path.basename(uri.fsPath),
+          url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
+        });
+        return;
+      }
       case "setUiState": {
         // Stored, not echoed: the app has already applied it, and the next
         // panel picks it up from the `ui` field of its first layout.
@@ -832,6 +868,7 @@ export class GuiEditorPanel {
           snap: message.snap ?? stored?.snap,
           grid: message.grid ?? stored?.grid,
           loc: message.loc ?? stored?.loc,
+          sections: message.sections ?? stored?.sections,
         });
         return;
       }

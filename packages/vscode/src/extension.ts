@@ -758,6 +758,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           lc.sendRequest<GuiSaveValuesResult>(guiSaveValuesRequest, {
             path: file,
           } satisfies GuiSaveValuesParams),
+        // A mod's own key wins over the game's, which is the order lookupLoc answers in.
+        async (key) => (await lookupLoc(key)).find((e) => e.value !== undefined)?.value,
         editor.document,
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)

@@ -119,6 +119,11 @@ export interface GuiEditorUiState {
    * like the snap and grid toggles, and every layout request carries it.
    */
   loc?: GuiLocMode;
+  /**
+   * The collapsed panel sections (`tree`, `layers`, `inspector`, `devtools`).
+   * Absent means the page's own defaults (devtools folded, the rest open).
+   */
+  sections?: string[];
 }
 
 /** The two ways a layout shows textbox text (`GuiLayoutParams.loc`). */
@@ -316,6 +321,8 @@ export type AppToHost =
       /** The snap and grid toggles; absent leaves what the host has stored alone. */
       snap?: boolean;
       grid?: boolean;
+      /** The collapsed panel sections; absent leaves the stored list alone. */
+      sections?: string[];
       /**
        * The textbox display mode. Unlike the other fields the host does not
        * only store it: it re-lays the document out with it, because the mode
@@ -364,7 +371,18 @@ export type AppToHost =
    * changes nothing and pushes nothing.
    */
   | { type: "undo" }
-  | { type: "redo" };
+  | { type: "redo" }
+  /**
+   * Read one loc key through the host's index (a widget's `tooltip`, which
+   * the layout never resolves). The host answers `loc` with the value, null
+   * when no definition exists.
+   */
+  | { type: "requestLoc"; key: string }
+  /**
+   * Let the user pick an image file (an in-game screenshot) and answer
+   * `reference` with a URL the page can load, or `url: null` when they cancelled.
+   */
+  | { type: "pickReference" };
 
 /** Messages the host pushes DOWN to the editor app. */
 export type HostToApp =
@@ -496,6 +514,8 @@ export type HostToApp =
    * with nothing stored answers with two empty lists, and the panel says so.
    */
   | { type: "userData"; components: SavedComponent[]; presets: SavedPreset[] }
+  | { type: "loc"; key: string; value: string | null }
+  | { type: "reference"; name: string; url: string | null }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 
