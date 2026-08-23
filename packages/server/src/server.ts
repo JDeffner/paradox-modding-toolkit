@@ -27,6 +27,7 @@ import { createHash } from "crypto";
 import { version as SERVER_VERSION } from "../package.json";
 import type { Definition } from "@px-lsp/protocol/types";
 import { pushAll } from "@px-lsp/protocol/arrays";
+import { iterFiles } from "@px-lsp/protocol/fsWalk";
 import {
   configChangedNotification,
   indexChangedNotification,
@@ -118,7 +119,6 @@ import {
   classifyFile,
   detectGameVersion,
   isWantedLocFile,
-  listFiles,
   loadIndexCache,
   saveIndexCache,
 } from "./index/indexer";
@@ -677,7 +677,18 @@ async function scanRootChunked(
   let totalFiles = 0;
   for (const entry of schema.entries) {
     const dir = path.join(root, ...entry.path.split("/"));
-    let files = listFiles(dir, entry.ext ?? ".txt");
+    // The listing shares the read loop's yield budget below. It used to run to
+    // completion first, and for its whole duration the server answered no
+    // request: completion and hover stalled behind it.
+    let files: string[] = [];
+    for (const file of iterFiles(dir, entry.ext ?? ".txt")) {
+      if (file === null) {
+        if (generation !== scanGeneration) return null; // superseded
+        await yieldNow();
+      } else {
+        files.push(file);
+      }
+    }
     if (entry.kind === "loc_key") {
       files = files.filter((f) => isWantedLocFile(path.relative(root, f), settings.locLanguage));
     }
@@ -717,7 +728,17 @@ async function scanModReferences(
   generation: number
 ): Promise<boolean> {
   const t0 = Date.now();
-  const files = listFiles(root, ".txt");
+  // A mod root is walked whole here, gfx/ and all, so the listing yields on the
+  // same rhythm as the read loop below rather than blocking through it.
+  const files: string[] = [];
+  for (const file of iterFiles(root, ".txt")) {
+    if (file === null) {
+      if (generation !== scanGeneration) return false;
+      await yieldNow();
+    } else {
+      files.push(file);
+    }
+  }
   const BATCH = 150;
   let refCount = 0;
   for (let i = 0; i < files.length; i += BATCH) {

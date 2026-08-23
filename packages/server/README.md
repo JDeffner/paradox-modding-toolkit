@@ -30,6 +30,10 @@ mirror in the log. Nothing has to be configured for that.
 
 ## Install
 
+The release tarball is the distribution. This package is not on npm: inside the
+repository its `exports` point at TypeScript sources, which the bundler consumes
+directly and a published package could not.
+
 Download `px-lsp-server-<version>.tar.gz` from the
 [GitHub releases](https://github.com/JDeffner/paradox-modding-toolkit/releases)
 and extract it anywhere, e.g. `~/.local/share/px-lsp/`. Layout:

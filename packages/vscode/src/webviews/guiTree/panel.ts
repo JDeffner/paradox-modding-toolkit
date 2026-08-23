@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { GuiTree } from "@px-lsp/protocol/protocol";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
+import { makeNonce } from "../nonce";
 
 /** Messages the webview sends to the host. */
 type InboundMessage = { type: "open"; line: number; focus?: boolean } | { type: "refresh" };
@@ -470,11 +471,4 @@ window.addEventListener("message", (ev) => {
 </script>
 </body>
 </html>`;
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

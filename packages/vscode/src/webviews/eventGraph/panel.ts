@@ -11,6 +11,7 @@ import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "../guiEdi
 import { eventGraphHtml } from "./html";
 import type { GraphState, PendingEdit } from "./history";
 import type { AppToHost, HostToApp, UiState } from "./messages";
+import { makeNonce } from "../nonce";
 
 const UI_KEY = "px.eventGraph.ui";
 
@@ -385,11 +386,4 @@ function describe(edit: PendingEdit): string {
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

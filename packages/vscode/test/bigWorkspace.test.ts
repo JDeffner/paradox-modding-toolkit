@@ -80,6 +80,15 @@ describe("countScriptFiles", () => {
     expect(countScriptFiles([root], 5)).toEqual({ files: 5, partial: true });
   });
 
+  it("stops on entries visited too, not only on files matched", () => {
+    // A tree with no script files at all: the file cap can never fire, so
+    // without an entry bound this walks the whole thing on the activation path.
+    const files: string[] = [];
+    for (let i = 0; i < 40; i++) files.push(`gfx/portraits/p${i}.dds`);
+    const root = modTree(files);
+    expect(countScriptFiles([root], 2)).toEqual({ files: 0, partial: true });
+  });
+
   it("contributes nothing for a root that does not exist", () => {
     expect(countScriptFiles([path.join("D:", "nope", "gone")], 10)).toEqual({ files: 0, partial: false });
   });

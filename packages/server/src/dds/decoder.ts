@@ -68,6 +68,16 @@ interface ParsedHeader {
   formatName: string;
 }
 
+/**
+ * Decode budget, in pixels. Every decoder allocates width*height*4 bytes of
+ * RGBA out of dimensions the file declares, so the budget has to be per pixel:
+ * a per-axis cap of 0x10000 still admits 65535x65535, which reserved 16.1 GB
+ * (measured) before the data-length check could refuse it. 4096*4096 is the cap
+ * the GUI editor's texture cache already applies (MAX_TEXTURE_PIXELS in
+ * webviews/guiEditor/textureCache.ts), only after the decode instead of before.
+ */
+export const MAX_DECODE_PIXELS = 4096 * 4096;
+
 function readU32(buf: Uint8Array, off: number): number {
   return (buf[off] | (buf[off + 1] << 8) | (buf[off + 2] << 16) | (buf[off + 3] << 24)) >>> 0;
 }
@@ -82,7 +92,12 @@ function parseHeader(buf: Uint8Array): ParsedHeader | null {
 
   const height = readU32(buf, 12);
   const width = readU32(buf, 16);
-  if (width === 0 || height === 0 || width > 0x10000 || height > 0x10000) return null;
+  if (width === 0 || height === 0) return null;
+  // Throw rather than return null so ddsFormatInfo still reports the declared
+  // size (its catch branch) and the caller can say why the preview is missing.
+  if (width * height > MAX_DECODE_PIXELS) {
+    throw new Error(`image too large: ${width}x${height} exceeds ${MAX_DECODE_PIXELS} pixels`);
+  }
 
   // DDS_PIXELFORMAT starts at offset 76, size 32 bytes
   const pfOffset = 76;
@@ -245,11 +260,13 @@ function putPixel(
 }
 
 function decodeDxt1(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const blocksX = Math.ceil(width / 4);
   const blocksY = Math.ceil(height / 4);
   const needed = off + blocksX * blocksY * 8;
+  // Refuse before allocating: a truncated file must not reserve the full RGBA
+  // buffer its header claims.
   if (needed > buf.length) throw new Error("truncated DXT1 data");
+  const out = new Uint8Array(width * height * 4);
 
   let p = off;
   for (let by = 0; by < blocksY; by++) {
@@ -298,10 +315,10 @@ function decodeColorBlock565(buf: Uint8Array, p: number, outColors: [number, num
 }
 
 function decodeDxt3(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const blocksX = Math.ceil(width / 4);
   const blocksY = Math.ceil(height / 4);
   if (off + blocksX * blocksY * 16 > buf.length) throw new Error("truncated DXT3 data");
+  const out = new Uint8Array(width * height * 4);
 
   const colors: [number, number, number][] = [
     [0, 0, 0],
@@ -335,10 +352,10 @@ function decodeDxt3(buf: Uint8Array, off: number, width: number, height: number)
 }
 
 function decodeDxt5(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const blocksX = Math.ceil(width / 4);
   const blocksY = Math.ceil(height / 4);
   if (off + blocksX * blocksY * 16 > buf.length) throw new Error("truncated DXT5 data");
+  const out = new Uint8Array(width * height * 4);
 
   const colors: [number, number, number][] = [
     [0, 0, 0],
@@ -880,10 +897,10 @@ function isAnchorForSubset(i: number, partTable: number[], anchors: number[]): b
 }
 
 function decodeBc7(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const blocksX = Math.ceil(width / 4);
   const blocksY = Math.ceil(height / 4);
   if (off + blocksX * blocksY * 16 > buf.length) throw new Error("truncated BC7 data");
+  const out = new Uint8Array(width * height * 4);
   let p = off;
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
@@ -905,9 +922,9 @@ function decodeBgra8(
   height: number,
   hasAlpha: boolean
 ): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const need = off + width * height * 4;
   if (need > buf.length) throw new Error("truncated BGRA8 data");
+  const out = new Uint8Array(width * height * 4);
   let s = off;
   for (let i = 0; i < width * height; i++) {
     const bch = buf[s];
@@ -925,17 +942,17 @@ function decodeBgra8(
 }
 
 function decodeRgba8(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const need = off + width * height * 4;
   if (need > buf.length) throw new Error("truncated RGBA8 data");
+  const out = new Uint8Array(width * height * 4);
   out.set(buf.subarray(off, need));
   return out;
 }
 
 function decodeRgb8(buf: Uint8Array, off: number, width: number, height: number): Uint8Array {
-  const out = new Uint8Array(width * height * 4);
   const need = off + width * height * 3;
   if (need > buf.length) throw new Error("truncated RGB8 data");
+  const out = new Uint8Array(width * height * 4);
   let s = off;
   for (let i = 0; i < width * height; i++) {
     // D3DFMT_R8G8B8 is stored B,G,R in memory

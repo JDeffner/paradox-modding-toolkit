@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { listFiles } from "../src/fsWalk";
+import { iterFiles, listFiles, WALK_TICK } from "../src/fsWalk";
 
 const dirs: string[] = [];
 
@@ -93,5 +93,22 @@ describe("listFiles", () => {
     const root = tmp();
     fs.writeFileSync(path.join(root, "A.TXT"), "");
     expect(listFiles(root, ".txt")).toEqual([path.join(root, "A.TXT")]);
+  });
+});
+
+describe("iterFiles", () => {
+  it("ticks on entries visited, so a subtree with no match still paces a caller", () => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, "gfx"));
+    for (let i = 0; i < WALK_TICK * 2; i++) fs.writeFileSync(path.join(root, "gfx", `p${i}.dds`), "");
+
+    let ticks = 0;
+    let files = 0;
+    for (const file of iterFiles(root, ".txt")) {
+      if (file === null) ticks++;
+      else files++;
+    }
+    expect(files).toBe(0);
+    expect(ticks).toBe(2);
   });
 });

@@ -4664,7 +4664,7 @@ function guardedWrite(line: number, properties: EditProperty[]): void {
  */
 function renderArt(): void {
   const item = selectedItem();
-  const keys = textureKeys();
+  const keys = syncTextureKeys();
   const head = el("div", "head");
   head.appendChild(el("div", "title", "Textures under gfx/"));
   head.appendChild(
@@ -4755,8 +4755,12 @@ let texturePropertyKey = "texture";
  * The widget's own texture-valued keys, found by their VALUES rather than by a
  * list of key names: a `.dds` in the value is what makes a property a texture,
  * and the vanilla trees spell that key several ways.
+ *
+ * Named `sync` because it also WRITES: a selection that does not carry the
+ * currently chosen key resets the choice to `texture`, which is what keeps the
+ * "Write to" dropdown and the key a pick writes from disagreeing.
  */
-function textureKeys(): string[] {
+function syncTextureKeys(): string[] {
   const widgetInfo = selectedInfo();
   const keys = new Set<string>(["texture"]);
   for (const property of widgetInfo?.properties ?? []) {

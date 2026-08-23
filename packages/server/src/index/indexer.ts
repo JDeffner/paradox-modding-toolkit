@@ -273,6 +273,20 @@ interface IndexCacheFile {
   >;
 }
 
+/**
+ * Both halves of the cache round trip build ONE contiguous JSON string and block
+ * the event loop for its whole duration. Measured with 460k definitions (the
+ * vanilla tree per vitest.config.ts): a 26.3 MB file, 528 ms to save, 271 ms to
+ * load. That is the deliberate trade the compact row format above exists to
+ * make: the alternative it replaces is a multi-second rescan on every start.
+ *
+ * The ceiling is V8's ~512 MB single-string cap, roughly 20x the measured size.
+ * A tree that reached it throws RangeError, which both sides already degrade
+ * from: the caller of saveIndexCache logs and continues, loadIndexCache returns
+ * null and the caller rescans. So the failure mode is "no cache", not a crash.
+ * If the save or the load ever shows up in the perf trace, the answer is
+ * newline-delimited rows parsed in batches inside the scan's yieldNow rhythm.
+ */
 export function saveIndexCache(cacheFile: string, gameVersion: string, defs: Definition[]): void {
   const kindIdx = new Map<string, number>();
   const kinds: string[] = [];
