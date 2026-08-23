@@ -19,26 +19,34 @@ const KINDS: { kind: string; label: string; tip: string }[] = [
   { kind: "other", label: "other", tip: "Show or dim other definitions" },
 ];
 
-/** One tool in the left rail: an icon, a label, and a sentence. */
-const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; label: string; tip: string }[] = [
+/**
+ * One tool in the left rail: an icon and a sentence. The rail is icons only, so
+ * the tooltip is the whole label, and a tool that acts on a card says so in it
+ * rather than in a line of prose under the buttons.
+ */
+const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsCard?: boolean }[] = [
   {
     id: "toolSimulate",
     icon: "flaskConical",
-    label: "Simulate",
-    tip: "Walk through the selected event block by block, in the order the game runs them",
+    tip: "Simulate: walk through the selected event block by block, in the order the game runs them. Needs a card selected",
+    needsCard: true,
   },
-  { id: "toolCenter", icon: "locate", label: "Center", tip: "Rebuild the graph around the selected event" },
+  {
+    id: "toolCenter",
+    icon: "locate",
+    tip: "Center: rebuild the graph around the selected event. Needs a card selected",
+    needsCard: true,
+  },
   {
     id: "toolAll",
     icon: "waypoints",
-    label: "All nodes",
-    tip: "Every event, on_action and decision of this mod, connected or not",
+    tip: "All nodes: every event, on_action and decision of this mod, connected or not",
   },
   {
     id: "toolSource",
     icon: "fileText",
-    label: "Source",
-    tip: "Open the selected event's file beside the graph",
+    tip: "Source: open the selected event's file beside the graph. Needs a card selected",
+    needsCard: true,
   },
 ];
 
@@ -49,7 +57,7 @@ export function eventGraphHtml({ scriptSrc, nonce, csp }: EventGraphHtmlOptions)
   ).join("");
   const tools = TOOLS.map(
     (t) =>
-      `<button id="${t.id}" class="tool px-btn" data-variant="ghost" data-size="sm" data-tip="${t.tip}" data-tip-side="right" data-tip-wrap>${icon(t.icon)}<span>${t.label}</span></button>`
+      `<button id="${t.id}" class="tool px-btn" data-variant="ghost" data-size="icon-sm" data-tip="${t.tip}" data-tip-side="right" data-tip-wrap${t.needsCard ? ' aria-disabled="true"' : ""}>${icon(t.icon)}</button>`
   ).join("");
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -94,39 +102,52 @@ ${uiCss}
     box-shadow: var(--px-shadow-md), 0 0 0 1px color-mix(in oklch, var(--px-fg) 10%, transparent);
   }
   #suggest.show { display: block; }
-  #save .count {
-    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; margin-left: 2px;
+  /* The pending count rides the Changes button: one place says how much is
+     unsaved, and it is the button that lists it. */
+  #changes .count {
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 10px; font-variant-numeric: tabular-nums;
-    background: color-mix(in oklch, var(--px-primary-fg) 24%, transparent);
+    background: var(--px-primary); color: var(--px-primary-fg);
   }
-  #save[disabled] .count { display: none; }
-  #kinds .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  #changes[disabled] .count { display: none; }
+  /* Compact kind chips: a swatch, a word, one row. */
+  #kinds .px-toggle { height: 26px; padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
+  #kinds .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
   #kinds .px-toggle[aria-pressed="false"] { color: var(--px-muted-fg); }
   #kinds .px-toggle[aria-pressed="false"] .swatch { opacity: 0.35; }
+  /* Every pending edit, newest last, with a way back to before any of them. */
+  #changeList { display: flex; flex-direction: column; gap: 2px; width: 340px; max-height: 320px; overflow: auto; }
+  #changeList .px-item-kind { width: 62px; }
+  #changeList .what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #changeList .who { color: var(--px-muted-fg); font-size: var(--px-text-xs); flex: 0 0 auto; }
 
   /* ---- main split ---- */
   #main { display: flex; flex: 1 1 auto; min-height: 0; }
-  #rail { --px-sidepanel-width: 172px; }
-  #rail > .px-sidepanel-body { padding: 6px; gap: 2px; }
-  #rail .railHead { display: flex; align-items: center; gap: 4px; padding: 0 2px 4px; }
-  #rail .railHead .px-panel-title { padding: 0; flex: 1 1 auto; }
-  .tool { width: 100%; justify-content: flex-start; }
+  /* The rail is a fixed strip of icons, so it has no resizer: there is nothing
+     to make wider. It still collapses, and its handle lives on the canvas. */
+  #rail { --px-sidepanel-width: 40px; }
+  #rail > .px-sidepanel-body { padding: 6px 4px; gap: 2px; align-items: center; overflow: hidden; }
   .tool[aria-pressed="true"] { background: var(--px-muted); }
-  #railShow { position: absolute; left: 8px; top: 8px; z-index: 6; }
-  #railShow[hidden] { display: none; }
-  #railHint { padding: 8px 2px 0; white-space: normal; line-height: 1.45; }
+  .tool[aria-disabled="true"] { opacity: 0.45; }
 
   #graphWrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
   #graph { width: 100%; height: 100%; display: block; cursor: grab; }
   #graph.dragging { cursor: grabbing; }
+  /* The rail's handle and what the tools would act on, on the rail's edge. */
+  #railBar {
+    position: absolute; left: 6px; top: 6px; z-index: 6;
+    display: flex; align-items: center; gap: 8px; max-width: calc(100% - 12px);
+  }
+  #railBar .px-btn { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
+  #actingOn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #actingOn:empty { display: none; }
   /* Bottom-left view controls, the same group the GUI editor uses. */
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #zoomGroup {
     display: flex; align-items: center; gap: 2px; padding: 2px;
     border-radius: var(--px-radius); background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #zoomLabel { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
   #focusLine { white-space: nowrap; }
   #focusLine[data-state="warn"] { color: var(--eg-hit); }
   #focusLine[data-state="error"] { color: var(--px-destructive); }
@@ -142,25 +163,34 @@ ${uiCss}
   .help li { margin: 4px 0; }
 
   /* ---- nodes and edges ---- */
+  /* A card is a small document: a title you can read at a glance, what kind of
+     thing it is, and what it asks for before it runs. The kind is said twice,
+     as a bar on the left and as the border's hue, so it survives a banner
+     behind the card and a colorblind reader alike. */
   .node { cursor: pointer; }
-  .node-rect { fill: var(--px-popover); stroke: var(--px-ring); stroke-opacity: 0.6; stroke-width: 1.2; }
-  .node:hover .node-rect { stroke: var(--px-fg); stroke-opacity: 0.8; }
-  .node.selected .node-rect, .node.root .node-rect { stroke: var(--px-fg); stroke-opacity: 1; stroke-width: 2.2; }
-  .node-label { pointer-events: none; fill: var(--px-fg); font-size: 12px; font-family: var(--px-font); }
-  .node-sub { font-size: 9.5px; fill: var(--px-muted-fg); }
+  .node-rect { fill: var(--px-popover); stroke-width: 1; }
+  .node:hover .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 0.55; }
+  .node.selected .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 1; stroke-width: 2; }
+  .node-outline { fill: none; stroke: var(--px-primary); stroke-width: 2; pointer-events: none; }
+  .node-title { pointer-events: none; fill: var(--px-fg); font-size: 13px; font-weight: 600; font-family: var(--px-font); }
+  .node-sub { pointer-events: none; fill: var(--px-muted-fg); font-size: 11px; font-family: var(--px-font); }
+  /* Over an illustration the theme's colors no longer apply: the scrim below
+     is dark in every theme, so the text is light in every theme. */
+  .node.on-banner .node-title { fill: #f4f4f4; }
+  .node.on-banner .node-sub { fill: #c9c9c9; }
   .node-rect.search-hit { stroke: var(--eg-hit) !important; stroke-opacity: 1 !important; stroke-width: 2.6 !important; }
-  .node-banner { opacity: 0.5; }
+  .node-banner { opacity: 0.85; }
   /* Placeholder for a theme whose illustration does not resolve. Hatched and
      labeled, so it can never be mistaken for the real picture. */
   .banner-missing { fill: url(#hatch); stroke: var(--px-border); }
-  .banner-missing-label { fill: var(--px-muted-fg); font-size: 8px; font-family: var(--px-font); pointer-events: none; }
+  .banner-missing-label { fill: var(--px-muted-fg); font-size: 9px; font-family: var(--px-font); pointer-events: none; }
   /* Focus + context: the selection's 1-hop neighborhood stays, the rest dims
      (never hides, so the mental map survives). In and out edges differ. */
   .node.dim, .edge-path.dim, .edge-label.dim { opacity: 0.25; }
   .edge-path { fill: none; stroke: var(--px-fg); stroke-opacity: 0.35; transition: opacity var(--px-ease); }
   .edge-path.out-of-sel { stroke: var(--eg-event); stroke-opacity: 0.95; }
   .edge-path.into-sel { stroke: var(--eg-other); stroke-opacity: 0.95; }
-  .edge-label { pointer-events: none; fill: var(--px-muted-fg); font-size: 9px; font-family: var(--px-font); }
+  .edge-label { pointer-events: none; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .edge-label.hidden { display: none; }
   .arrow-plain { fill: var(--px-fg); opacity: 0.5; }
   .arrow-out { fill: var(--eg-event); }
@@ -227,7 +257,6 @@ ${uiCss}
   }
   #inspector .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .badges { display: flex; gap: 4px; flex-wrap: wrap; }
-  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
   .field { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; }
   .field > .k { color: var(--px-muted-fg); font-size: var(--px-text-xs); overflow: hidden; text-overflow: ellipsis; }
   .field > .v { min-width: 0; display: flex; gap: 4px; align-items: center; }
@@ -236,7 +265,7 @@ ${uiCss}
   .locrow .k { word-break: break-all; }
   .locrow .edit { display: flex; gap: 4px; align-items: center; }
   .locrow .edit .px-input { flex: 1 1 auto; min-width: 0; }
-  .pendingMark { color: var(--px-primary); }
+  .pendingMark { color: var(--px-primary); flex: 0 0 auto; }
   .block { display: flex; flex-direction: column; gap: 4px; }
   .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; }
   .block > .head .caret { transition: transform var(--px-ease); cursor: pointer; }
@@ -264,36 +293,33 @@ ${uiCss}
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to undo" disabled>${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
-    <span class="px-grow"></span>
-    <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="No changes to save yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("save")}Save changes<span class="count">0</span></button>
-    <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reload the current graph from the index">${icon("rotate")}</button>
-    <button id="export" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Export the graph as SVG">${icon("download")}</button>
+    <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-wrap>${kindToggles}</div>
+    <span class="px-grow"></span>
+    <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reload the current graph from the index">${icon("rotate")}</button>
+    <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="No changes to save yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
+    <button id="export" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Export the graph as SVG" data-tip-side="left">${icon("download")}</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How to read this view" data-tip-side="left">${icon("circleHelp")}</button>
     <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
     <div id="rail" class="px-sidepanel" data-side="left">
-      <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
-        <div class="railHead">
-          <span class="px-panel-title">Tools</span>
-          <button id="railHide" class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="Hide the tools">${icon("panelLeftClose")}</button>
-        </div>
         ${tools}
-        <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="sm" aria-pressed="false" data-tip="Draw each event's theme illustration behind its card. A theme whose picture cannot be resolved gets a hatched placeholder that says so" data-tip-side="right" data-tip-wrap>${icon("image")}<span>Event banner</span></button>
-        <div id="railHint" class="px-muted px-xs">Select a card first: Simulate, Center and Source act on it.</div>
+        <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Event banner: draw each event's theme illustration behind its card. A theme whose picture cannot be resolved gets a hatched placeholder that says so" data-tip-side="right" data-tip-wrap>${icon("image")}</button>
       </div>
     </div>
     <div id="graphWrap">
-      <button id="railShow" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Show the tools" data-tip-side="right" hidden>${icon("panelLeftOpen")}</button>
+      <div id="railBar">
+        <button id="railToggle" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
+        <span id="actingOn" class="px-muted px-xs"></span>
+      </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">
         <div id="zoomGroup">
           <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (−)" data-tip-side="right">${icon("zoomOut")}</button>
-          <span id="zoomLabel" class="px-muted px-xs">100%</span>
           <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="right">${icon("zoomIn")}</button>
           <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="right">${icon("maximize")}</button>
         </div>

@@ -1,12 +1,14 @@
 /**
- * The event graph's radial layout. What matters to a reader is checked here,
- * because it is what a screenshot cannot prove: the focused event really is in
- * the middle, no two cards overlap (the failure the old layered layout hid
- * behind a wide canvas), what the focus fires and what fires it land on
- * opposite sides, and two runs of the same graph agree.
+ * The event graph's layout. What matters to a reader is checked here, because
+ * it is what a screenshot cannot prove: the focused event really is in the
+ * middle, no two cards come within the 24 px gap of each other (the failure the
+ * old layered layout hid behind a wide canvas), what the focus fires and what
+ * fires it land on opposite SIDES rather than merely opposite directions, and
+ * two runs of the same graph agree.
  */
 import { describe, expect, it } from "vitest";
 import {
+  GAP,
   NODE_H,
   NODE_W,
   radialLayout,
@@ -18,14 +20,16 @@ import {
 const n = (...ids: string[]): LayoutNodeInput[] => ids.map((id) => ({ id }));
 const e = (from: string, to: string): LayoutEdgeInput => ({ from, to });
 
-/** The first overlapping pair, or null. Boxes touching exactly is not overlap. */
-function overlap(pos: Map<string, LayoutPos>): [string, string] | null {
+/** The first pair closer than a card plus the demanded gap, or null. */
+function tooClose(pos: Map<string, LayoutPos>): [string, string] | null {
   const entries = [...pos.entries()];
   for (let a = 0; a < entries.length; a++) {
     for (let b = a + 1; b < entries.length; b++) {
       const [idA, pa] = entries[a];
       const [idB, pb] = entries[b];
-      if (Math.abs(pa.x - pb.x) < NODE_W && Math.abs(pa.y - pb.y) < NODE_H) return [idA, idB];
+      const clearX = Math.abs(pa.x - pb.x) >= NODE_W + GAP - 0.5;
+      const clearY = Math.abs(pa.y - pb.y) >= NODE_H + GAP - 0.5;
+      if (!clearX && !clearY) return [idA, idB];
     }
   }
   return null;
@@ -42,10 +46,40 @@ describe("radialLayout", () => {
     expect(pos.get("a")).toEqual({ x: 0, y: 0 });
   });
 
-  it("puts what the focus fires opposite what fires the focus", () => {
-    const pos = radialLayout(n("root", "child", "parent"), [e("root", "child"), e("parent", "root")], "root");
-    expect(pos.get("child")!.x).toBeGreaterThan(0);
-    expect(pos.get("parent")!.x).toBeLessThan(0);
+  it("puts what fires the focus left of it and what it fires right of it", () => {
+    const pos = radialLayout(
+      n("root", "c1", "c2", "c3", "p1", "p2"),
+      [e("root", "c1"), e("root", "c2"), e("root", "c3"), e("p1", "root"), e("p2", "root")],
+      "root"
+    );
+    for (const id of ["c1", "c2", "c3"]) expect(pos.get(id)!.x).toBeGreaterThan(NODE_W / 2);
+    for (const id of ["p1", "p2"]) expect(pos.get(id)!.x).toBeLessThan(-NODE_W / 2);
+  });
+
+  it("keeps the sides apart even when one of them is crowded", () => {
+    const children = Array.from({ length: 22 }, (_, i) => `c.${i}`);
+    const pos = radialLayout(
+      n("root", ...children, "p1"),
+      [...children.map((id) => e("root", id)), e("p1", "root")],
+      "root"
+    );
+    for (const id of children) expect(pos.get(id)!.x).toBeGreaterThan(0);
+    expect(pos.get("p1")!.x).toBeLessThan(0);
+    expect(tooClose(pos)).toBeNull();
+  });
+
+  it("puts a child's own children near that child", () => {
+    // Two branches off the root; each grandchild should sit on its parent's side
+    // of the fan rather than being sprayed over the whole ring.
+    const pos = radialLayout(
+      n("root", "a", "b", "a1", "a2", "b1", "b2"),
+      [e("root", "a"), e("root", "b"), e("a", "a1"), e("a", "a2"), e("b", "b1"), e("b", "b2")],
+      "root"
+    );
+    const nearer = (child: string, mine: string, other: string): boolean =>
+      Math.abs(pos.get(child)!.y - pos.get(mine)!.y) < Math.abs(pos.get(child)!.y - pos.get(other)!.y);
+    for (const child of ["a1", "a2"]) expect(nearer(child, "a", "b")).toBe(true);
+    for (const child of ["b1", "b2"]) expect(nearer(child, "b", "a")).toBe(true);
   });
 
   it("keeps every card clear of every other card", () => {
@@ -57,13 +91,15 @@ describe("radialLayout", () => {
     ];
     const pos = radialLayout(nodes, edges, "root");
     expect(pos.size).toBe(41);
-    expect(overlap(pos)).toBeNull();
+    expect(tooClose(pos)).toBeNull();
   });
 
   it("gives disconnected nodes a place of their own without overlapping", () => {
     const pos = radialLayout(n("a", "b", "lonely1", "lonely2", "lonely3"), [e("a", "b")], "a");
     expect(pos.size).toBe(5);
-    expect(overlap(pos)).toBeNull();
+    expect(tooClose(pos)).toBeNull();
+    // Below the graph, not woven into it.
+    for (const id of ["lonely1", "lonely2", "lonely3"]) expect(pos.get(id)!.y).toBeGreaterThan(0);
   });
 
   it("survives cycles, self-loops, unknown edge ends and duplicate ids", () => {
