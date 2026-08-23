@@ -180,6 +180,19 @@ export interface StatusPayload {
  * Overview views re-query on this signal. */
 export const indexChangedNotification = "paradox/indexChanged";
 
+/** Notification: a long-running server phase started or finished; payload
+ * {@link ProgressPayload}. The status bar lists what is still loading, so a
+ * cold workspace says which step it is on instead of looking idle. No
+ * percentages: the phases are coarse and the client only shows their state. */
+export const progressNotification = "paradox/progress";
+export interface ProgressPayload {
+  /** Stable phase id, so a "done" can find the "start" it belongs to. */
+  phase: string;
+  state: "start" | "done";
+  /** Human-readable label for the phase, sent with "start". */
+  detail?: string;
+}
+
 // ---- overview suite (Phase 4) ------------------------------------------------
 
 /** Shared param for the mod-scoped overview requests: restrict the result to

@@ -49,6 +49,16 @@ let cache: { key: string; defs: GuiDefs; files: number; links: GuiScriptLinks } 
  */
 const fileCache = new Map<string, { mtimeMs: number; defs: GuiDefs; text: string }>();
 
+/**
+ * Observer of a cold store build, so the server can report the phase without
+ * this module knowing about the connection. Absent = nobody is watching.
+ */
+let onBuild: ((state: "start" | "done") => void) | null = null;
+
+export function observeGuiStoreBuild(fn: ((state: "start" | "done") => void) | null): void {
+  onBuild = fn;
+}
+
 function listGuiFiles(root: string): Map<string, string> {
   // relative path (lowercased, forward slashes) -> absolute path
   const out = new Map<string, string>();
@@ -101,6 +111,7 @@ function buildStore(
     if (!root) continue;
     for (const [rel, abs] of listGuiFiles(path.join(root, ...stagePrefix, "gui"))) effective.set(rel, abs);
   }
+  onBuild?.("start");
   const defs = emptyGuiDefs();
   const links = emptyGuiScriptLinks();
   let files = 0;
@@ -130,6 +141,7 @@ function buildStore(
   // A file that left the effective set (deleted, or shadowed by another root) drops out.
   for (const abs of fileCache.keys()) if (!seen.has(abs)) fileCache.delete(abs);
   cache = { key, defs, files, links };
+  onBuild?.("done");
   return cache;
 }
 

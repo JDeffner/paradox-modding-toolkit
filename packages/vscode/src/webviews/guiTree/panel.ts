@@ -47,7 +47,7 @@ export class GuiTreePanel {
 
     this.panel = vscode.window.createWebviewPanel(
       GuiTreePanel.viewType,
-      "Paradox GUI Tree",
+      "GUI Tree",
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
@@ -111,7 +111,7 @@ export class GuiTreePanel {
 
   private async load(source: vscode.TextDocument): Promise<void> {
     this.post({ type: "loading" });
-    this.panel.title = `Paradox GUI Tree — ${source.uri.path.split("/").pop() ?? "gui"}`;
+    this.panel.title = `GUI Tree - ${source.uri.path.split("/").pop() ?? "gui"}`;
     try {
       const tree = await this.fetchTree(source.uri, source.getText());
       if (this.disposed) return;
@@ -180,7 +180,7 @@ function buildHtml(webview: vscode.Webview): string {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Paradox GUI Tree</title>
+<title>GUI Tree</title>
 <style>
 ${uiCss}
   body { overflow: hidden; }

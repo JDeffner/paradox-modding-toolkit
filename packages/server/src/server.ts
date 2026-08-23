@@ -34,6 +34,7 @@ import {
   indexStatsRequest,
   lookupLocRequest,
   modFileChangedNotification,
+  progressNotification,
   reloadDocsRequest,
   statusNotification,
   type ParadoxInitOptions,
@@ -93,6 +94,7 @@ import {
   profileMeasurer,
   getGuiScriptLinks,
   invalidateGuiDefsCache,
+  observeGuiStoreBuild,
   VIEWPORT,
 } from "./gui/layoutService";
 import { computeGuiWidgetEdit } from "./gui/widgetEdit";
@@ -456,6 +458,20 @@ function sendStatus(): void {
 }
 
 /**
+ * One coarse phase of the cold-start work, for the client's status bar. Phases
+ * are named on the wire, never numbered: the client owns the ordering it shows.
+ */
+function sendProgress(phase: string, state: "start" | "done", detail?: string): void {
+  void connection.sendNotification(progressNotification, { phase, state, detail });
+}
+
+// The template/type store is built lazily, on the first request that needs it,
+// so the phase is reported from where it happens rather than from a call site.
+observeGuiStoreBuild((state) =>
+  sendProgress("guiStore", state, state === "start" ? "building the GUI template store…" : undefined)
+);
+
+/**
  * Idle debounce for the global refresh (§B4). Raised from 300ms: one fire makes
  * EVERY visible editor re-request full-document semantic tokens and inlay
  * hints, and every server-backed sidebar view re-query the index.
@@ -623,6 +639,7 @@ function guiPaths(): GuiPaths {
  * layers. Engine (jomini) is the lowest layer, the mod the highest (last-wins).
  */
 function harvestEngineData(): void {
+  sendProgress("engine", "start", "harvesting engine tokens…");
   const t0 = Date.now();
   // Every workspace mod is a "mod" layer (multi-mod workspaces), added after
   // engine + game + dependency parents so mod definitions win.
@@ -647,6 +664,7 @@ function harvestEngineData(): void {
     `harvested defines: ${defines.count} constants (${tDef}ms), ` +
       `loc text formats: ${textFormatting.count} tags (${Date.now() - t1}ms)`
   );
+  sendProgress("engine", "done");
 }
 
 const yieldNow = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -815,6 +833,7 @@ async function buildIndex(): Promise<void> {
   harvestEngineData();
   rescanDigests.clear();
   indexing = true;
+  sendProgress("index", "start", "indexing mod definitions…");
   // A refresh queued before the rebuild would land mid-scan (§B4).
   cancelRefreshTimer();
   sendStatus();
@@ -904,6 +923,7 @@ async function buildIndex(): Promise<void> {
   } finally {
     if (generation === scanGeneration) {
       indexing = false;
+      sendProgress("index", "done");
       sendStatus();
       // §B4: the build's one and only refresh, fired from the finally so a scan
       // that returned null (superseded root) or threw cannot strand the open
