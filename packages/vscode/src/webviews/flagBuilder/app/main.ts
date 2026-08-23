@@ -20,7 +20,7 @@ import {
 import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiState } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmDialog, infoDialog, menu, toast, type MenuItem } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
@@ -404,6 +404,7 @@ function refresh(record = true): void {
   renderLayers();
   renderInspector();
   draw();
+  updateOrigin();
   if (record) commit();
 }
 
@@ -788,6 +789,12 @@ function closeBrowser(): void {
 
 const THUMB_SOURCE = { image: (k: string): HTMLImageElement | null => thumbs.get(k) ?? null };
 
+/** Words that mean "the base game" in the Open search, beside the game's own name. */
+const GAME_WORDS = ["game", "vanilla", "basegame", "base game", "base"];
+
+/** Grid pages: the next batch is appended when the sentinel scrolls into view. */
+const PAGE = 120;
+
 function fillBrowser(): void {
   if (!db) return;
   const body = $("browserBody");
@@ -799,19 +806,29 @@ function fillBrowser(): void {
   grid.id = "grid";
   observer = new IntersectionObserver((entries) => {
     for (const e of entries) {
-      if (e.isIntersecting) tiles.get((e.target as HTMLElement).dataset.key!)?.paint();
+      const t = e.target as HTMLElement;
+      if (!e.isIntersecting) continue;
+      if (t.id === "more") appendPage();
+      else tiles.get(t.dataset.key!)?.paint();
     }
   });
-  const LIMIT = 600;
-  let total: number;
 
+  let makeTile: (i: number) => HTMLElement;
+  let total: number;
   if (browserMode === "flags" || browserMode === "parent") {
-    const matches = db.flags.filter(
-      (f) => !q || f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q)
-    );
+    const gameName = db.gameName.toLowerCase();
+    const matches = db.flags.filter((f) => {
+      if (!q) return true;
+      if (f.name.toLowerCase().includes(q) || f.file.toLowerCase().includes(q)) return true;
+      const source = f.source.toLowerCase();
+      if (source === "game")
+        return gameName.includes(q) || GAME_WORDS.some((w) => w.startsWith(q) || q.startsWith(w));
+      return source.includes(q);
+    });
     total = matches.length;
-    for (const entry of matches.slice(0, LIMIT)) {
-      const def = db.definitions[entry.name];
+    makeTile = (i) => {
+      const entry = matches[i];
+      const def = db!.definitions[entry.name];
       const c = document.createElement("canvas");
       c.width = 120;
       c.height = 80;
@@ -820,7 +837,7 @@ function fillBrowser(): void {
         "tile",
         c,
         el("div", "name", entry.name),
-        el("div", "src", `${entry.source} · ${entry.file}`)
+        el("div", "src", `${sourceLabel(entry.source)} · ${entry.file}`)
       );
       tile.dataset.kind = "flag";
       tile.dataset.key = `flag:${entry.name}`;
@@ -830,7 +847,7 @@ function fillBrowser(): void {
           const layer = flag.layers[selected];
           if (layer?.kind === "sub") layer.parent = entry.name;
         } else {
-          loadFlag(entry.name);
+          loadFlag(entry);
         }
         closeBrowser();
         refresh(browserMode === "parent");
@@ -859,14 +876,14 @@ function fillBrowser(): void {
           return true;
         },
       });
-      grid.append(tile);
-      observer.observe(tile);
-    }
+      return tile;
+    };
   } else {
     const kind = browserMode;
     const matches = db.textures[kind].filter((t) => !q || t.toLowerCase().includes(q));
     total = matches.length;
-    for (const file of matches.slice(0, LIMIT)) {
+    makeTile = (i) => {
+      const file = matches[i];
       const key = `${kind}/${file}`;
       const c = document.createElement("canvas");
       c.width = 108;
@@ -905,15 +922,29 @@ function fillBrowser(): void {
           return true;
         },
       });
-      grid.append(tile);
-      observer.observe(tile);
-    }
+      return tile;
+    };
   }
-  body.append(grid);
-  $("browserCount").textContent =
-    total > LIMIT
-      ? `${LIMIT} of ${total} shown, narrow the search`
-      : `${total} ${total === 1 ? "match" : "matches"}`;
+
+  const more = el("div");
+  more.id = "more";
+  let shown = 0;
+  const appendPage = (): void => {
+    const end = Math.min(total, shown + PAGE);
+    for (; shown < end; shown++) {
+      const tile = makeTile(shown);
+      grid.append(tile);
+      observer!.observe(tile);
+    }
+    if (shown >= total) {
+      observer!.unobserve(more);
+      more.remove();
+    }
+    $("browserCount").textContent = `${total} ${total === 1 ? "match" : "matches"}`;
+  };
+  body.append(grid, more);
+  appendPage();
+  if (shown < total) observer.observe(more);
 }
 
 /** Paint every tile whose pixels have arrived (called as thumbnails load). */
@@ -925,6 +956,20 @@ function paintTiles(): void {
 // Flags in and out
 // ---------------------------------------------------------------------------
 
+/** The flag as opened from the database: its origin, for the footer, the name reset and the save target. */
+let opened: { name: string; source: string; file: string } | null = null;
+
+function sourceLabel(source: string): string {
+  return source === "game" ? (db?.gameName ?? "game") : source;
+}
+
+function updateOrigin(): void {
+  $("origin").textContent = opened ? `Opened from ${sourceLabel(opened.source)} · ${opened.file}` : "";
+  const reset = $<HTMLButtonElement>("resetName");
+  reset.hidden = !opened || opened.name === flag.name;
+  if (opened) reset.dataset.tip = `Reset the name to ${opened.name} (to override the opened flag)`;
+}
+
 function setFlag(next: CoaFlag): void {
   flag = next;
   $<HTMLInputElement>("name").value = flag.name;
@@ -932,15 +977,18 @@ function setFlag(next: CoaFlag): void {
   resetHistory();
 }
 
-function loadFlag(name: string): void {
-  const def = db?.definitions[name];
-  if (def) setFlag(JSON.parse(JSON.stringify(def)));
+function loadFlag(entry: { name: string; source: string; file: string }): void {
+  const def = db?.definitions[entry.name];
+  if (!def) return;
+  opened = { ...entry };
+  setFlag(JSON.parse(JSON.stringify(def)));
 }
 
 function newFlag(): void {
   const patterns = db?.textures.patterns ?? [];
   const pattern = patterns.find((p) => p.startsWith("pattern_solid")) ?? patterns[0] ?? "";
   const named = Object.keys(db?.namedColors ?? {});
+  opened = null;
   setFlag({
     name: "new_flag",
     pattern,
@@ -1109,7 +1157,13 @@ $("save").onclick = () => {
     toast("Give the flag a name first.", "destructive");
     return;
   }
-  send({ type: "save", name: flag.name.trim(), script: writeFlag(flag), modPath: target.path });
+  send({
+    type: "save",
+    name: flag.name.trim(),
+    script: writeFlag(flag),
+    modPath: target.path,
+    sourceFile: opened?.file,
+  });
 };
 $("mod").onclick = () =>
   menu(
@@ -1128,6 +1182,33 @@ $("mod").onclick = () =>
   );
 $("png").onclick = () => send({ type: "exportPng", name: flag.name, dataUrl: canvas.toDataURL("image/png") });
 $("togglePanel").onclick = () => panel.toggle();
+$("help").onclick = () =>
+  infoDialog("How to build a flag", [
+    [
+      "Start",
+      "New gives you a solid flag with one color. Open shows every flag of the game and your mods as a preview; pick one to start from it. Paste reads a definition from the clipboard.",
+    ],
+    [
+      "Pattern and colors",
+      "The pattern is the base texture; its red, yellow and white areas become color1, color2 and color3 of the flag. Select the Pattern row to change it and the flag colors.",
+    ],
+    [
+      "Layers",
+      "Add a colored emblem (recolorable shape), a textured emblem (drawn as is) or a sub flag (another flag inside this one). Drag rows to change the draw order; later rows draw on top.",
+    ],
+    [
+      "Placing",
+      "Each layer has instances: position is a fraction of the flag (0.5 0.5 = center), scale a fraction of its size, rotation in degrees. Drag a number sideways to scrub it.",
+    ],
+    [
+      "Emblem colors",
+      "An emblem's color1..3 can be a named game color, an rgb or hsv value, or \"same as\" one of the flag's colors. Mask limits an emblem to one pattern color's area.",
+    ],
+    [
+      "Saving",
+      "Choose the mod in the toolbar, then Save writes the script into its coat_of_arms folder. Saving to the same file name as the opened flag overrides the game's flag. Copy puts the script on the clipboard; Export PNG renders the preview.",
+    ],
+  ]);
 $("addLayer").onclick = () =>
   menu(
     $("addLayer"),
@@ -1141,6 +1222,14 @@ $("addLayer").onclick = () =>
 const nameInput = $<HTMLInputElement>("name");
 nameInput.oninput = () => {
   flag.name = nameInput.value.replace(/[^\w.-]/g, "_");
+  updateOrigin();
+};
+$("resetName").onclick = () => {
+  if (!opened) return;
+  flag.name = opened.name;
+  nameInput.value = opened.name;
+  commit();
+  updateOrigin();
 };
 nameInput.onchange = commit;
 $("browserClose").onclick = closeBrowser;
@@ -1192,6 +1281,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "pasted":
       void (async () => {
         if (!(await confirmDiscard(`Pasting ${m.flag.name}`))) return;
+        opened = null;
         setFlag(m.flag);
         refresh(false);
         toast(`Pasted ${m.flag.name}.`);

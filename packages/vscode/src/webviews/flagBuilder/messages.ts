@@ -55,7 +55,8 @@ export type AppToHost =
   | { type: "textures"; keys: string[]; thumbs: boolean }
   | { type: "copy"; text: string }
   | { type: "uiState"; state: UiState }
-  | { type: "save"; name: string; script: string; modPath: string }
+  /** `sourceFile`: the coa file the flag was opened from, offered as the save target for overrides. */
+  | { type: "save"; name: string; script: string; modPath: string; sourceFile?: string }
   | { type: "paste" }
   | { type: "readClipboard" }
   | { type: "exportPng"; name: string; dataUrl: string };

@@ -143,7 +143,7 @@ export class FlagBuilderPanel {
         this.post({ type: "toast", message: "Script copied to the clipboard." });
         return;
       case "save":
-        await this.save(message.name, message.script, message.modPath);
+        await this.save(message.name, message.script, message.modPath, message.sourceFile);
         return;
       case "readClipboard":
         this.post({ type: "clipboard", text: await vscode.env.clipboard.readText() });
@@ -172,7 +172,7 @@ export class FlagBuilderPanel {
    * (replacing the flag of that name if present) or a new one. The file keeps
    * its BOM; a new one gets one, like every script file the games read.
    */
-  private async save(name: string, script: string, modPath: string): Promise<void> {
+  private async save(name: string, script: string, modPath: string, sourceFile?: string): Promise<void> {
     const { meta } = this.options;
     // The app only offers paths the host listed, but the message is still text from a webview.
     if (!this.options.mods.some((m) => m.path === modPath)) return;
@@ -187,11 +187,19 @@ export class FlagBuilderPanel {
       /* folder does not exist yet */
     }
     const NEW = "$(new-file) New file…";
-    const pick = await vscode.window.showQuickPick([...files, NEW], {
+    // The file the flag came from first: same name in the mod overrides it in the game.
+    const SAME = sourceFile ? `$(replace) ${sourceFile}` : null;
+    const items = [
+      ...(SAME ? [{ label: SAME, description: "same file name as the opened flag (overrides it)" }] : []),
+      ...files.filter((f) => f !== sourceFile).map((f) => ({ label: f })),
+      { label: NEW },
+    ];
+    const picked = await vscode.window.showQuickPick(items, {
       placeHolder: `Save ${name} into ${path.relative(modPath, dir)}/…`,
     });
-    if (!pick) return;
-    let file = pick;
+    if (!picked) return;
+    const pick = picked.label;
+    let file = pick === SAME ? sourceFile! : pick;
     if (pick === NEW) {
       const typed = await vscode.window.showInputBox({
         prompt: "File name",

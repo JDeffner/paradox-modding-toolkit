@@ -758,7 +758,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const roots: FlagRoot[] = [];
       if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
       for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
-        if (!roots.some((r) => r.path === p)) roots.push({ label: path.basename(p), path: p });
+        if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
       }
       const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)

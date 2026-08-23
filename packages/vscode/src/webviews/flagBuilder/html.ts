@@ -44,6 +44,8 @@ ${uiCss}
   #stage[data-unlocked] { cursor: grab; }
   #stage[data-panning] { cursor: grabbing; }
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 4px; }
+  #stageInfo { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  #resetName[hidden] { display: none; }
   [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
@@ -82,6 +84,7 @@ ${uiCss}
 <div id="app">
   <div id="toolbar">
     <input id="name" class="px-input" placeholder="flag_name" spellcheck="false" data-tip="Flag name (the key in the coa file)" />
+    <button id="resetName" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reset the name to the opened flag's name" hidden>${icon("rotate")}</button>
     <div class="px-row" style="gap:2px">
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="New flag">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open a flag from the game or a mod">${icon("folderOpen")}</button>
@@ -98,16 +101,20 @@ ${uiCss}
     <button id="save" class="px-btn" data-variant="default" data-tip="Write the flag into the mod's coat_of_arms folder">${icon("save")} Save</button>
     <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
+    <button id="help" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How to build a flag" data-tip-side="left">${icon("circleHelp")}</button>
     <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="right" data-tip-wrap>${icon("info")}</button>
         <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="View locked. Unlock to pan with the middle mouse button and zoom with the wheel" data-tip-side="right" data-tip-wrap>${icon("lock")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
         <span id="hint" class="px-muted px-xs"></span>
+      </div>
+      <div id="stageInfo">
+        <span id="origin" class="px-muted px-xs"></span>
+        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
       </div>
     </div>
     <div id="side" class="px-sidepanel" data-side="right">
