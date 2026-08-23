@@ -6,6 +6,7 @@
  */
 import * as vscode from "vscode";
 import { decodeDds, ddsFormatInfo, encodePng } from "@px-lsp/server/dds";
+import { makeNonce } from "./webviews/nonce";
 
 class DdsDocument implements vscode.CustomDocument {
   constructor(
@@ -66,6 +67,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     void this.maybePromptForDefault();
     panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     const name = document.uri.path.split("/").pop() ?? "texture.dds";
+    const nonce = makeNonce();
     const info = ddsFormatInfo(document.bytes);
     let body: string;
     if (!info) {
@@ -76,7 +78,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
         const png = encodePng(img.width, img.height, img.pixels);
         const dataUri = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
         const kb = (document.bytes.length / 1024).toFixed(1);
-        body = imageHtml(dataUri, `${name} · ${info.format} · ${img.width}×${img.height} · ${kb} KB`);
+        body = imageHtml(dataUri, `${name} · ${info.format} · ${img.width}×${img.height} · ${kb} KB`, nonce);
       } catch (err) {
         body = errorHtml(
           `${name}: ${info.format} ${info.width}×${info.height} — preview failed: ` +
@@ -84,16 +86,16 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
         );
       }
     }
-    panel.webview.html = wrapHtml(body);
+    panel.webview.html = wrapHtml(body, nonce);
   }
 }
 
-function wrapHtml(body: string): string {
+function wrapHtml(body: string, nonce: string): string {
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'" />
 <style>
   :root { color-scheme: light dark; }
   html, body { margin: 0; height: 100%; font-family: var(--vscode-font-family, sans-serif); color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
@@ -127,7 +129,7 @@ function wrapHtml(body: string): string {
 </html>`;
 }
 
-function imageHtml(dataUri: string, caption: string): string {
+function imageHtml(dataUri: string, caption: string, nonce: string): string {
   return /* html */ `
 <div id="bar">
   <span>${escapeHtml(caption)}</span>
@@ -135,7 +137,7 @@ function imageHtml(dataUri: string, caption: string): string {
   <label><input type="checkbox" id="pix" checked /> pixelated</label>
 </div>
 <div id="stage"><img id="img" class="pixelated" src="${dataUri}" /></div>
-<script>
+<script nonce="${nonce}">
   const stage = document.getElementById("stage");
   const img = document.getElementById("img");
   // Zoom clamps: 5% to 3200%.

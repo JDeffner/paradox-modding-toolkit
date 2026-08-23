@@ -12,9 +12,112 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { createHash } from "crypto";
+import { promisify } from "util";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { isCk3, metaFor } from "./meta";
+
+/**
+ * Both child processes run on the extension host thread. execFileSync blocked
+ * every other extension in the window for as long as tar took, and again for as
+ * long as the freshly written binary took to answer `--version` (up to its 15 s
+ * timeout; a first run on Windows with Defender scanning 20 MB is the slow
+ * case). The function is already async and already reports progress.
+ */
+const execFileAsync = promisify(execFile);
+
+const ALLOWED_DOWNLOAD_HOSTS = new Set(["github.com", "objects.githubusercontent.com"]);
+
+/**
+ * The parsed download URL, or null when it is not a GitHub release URL.
+ * `base` resolves a relative `Location` header against the hop that sent it.
+ *
+ * `browser_download_url` is a field of the GitHub API answer, and what comes
+ * back is written to disk, unpacked and then executed. There is no checksum to
+ * verify against (tiger publishes none), so the host is the one thing that can
+ * be asserted, and it is asserted for every URL the download touches, not just
+ * the first one.
+ */
+export function checkedDownloadUrl(raw: string, base?: URL): URL | null {
+  let url: URL;
+  try {
+    url = new URL(raw, base);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !ALLOWED_DOWNLOAD_HOSTS.has(url.hostname)) return null;
+  return url;
+}
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * GitHub hands a release asset over as a redirect chain (github.com answers a
+ * 302 to a signed objects.githubusercontent.com URL), so redirects have to be
+ * followed. Five hops is far more than that chain has ever taken and keeps a
+ * redirect loop from spending the whole download timeout.
+ */
+const MAX_DOWNLOAD_REDIRECTS = 5;
+
+/** Where a download response points next. */
+export type RedirectStep =
+  /** Not a redirect: this response carries the bytes. */
+  | { kind: "done" }
+  /** A redirect to an allowed host. */
+  | { kind: "follow"; url: URL }
+  /** A redirect off the allowlist. */
+  | { kind: "refused"; target: string };
+
+/**
+ * The next step of a download's redirect chain.
+ *
+ * `fetch` follows redirects itself, which would leave the allowlist covering
+ * only the first URL: a hop off it would then deliver the bytes that get
+ * unpacked and executed, which is the whole thing the check exists to stop.
+ * Split out of the fetch loop so each branch is testable without a network.
+ */
+export function redirectStep(status: number, location: string | null, from: URL): RedirectStep {
+  if (!REDIRECT_STATUSES.has(status) || location === null) return { kind: "done" };
+  const url = checkedDownloadUrl(location, from);
+  return url ? { kind: "follow", url } : { kind: "refused", target: location };
+}
+
+/**
+ * GET `url`, checking every redirect target against the host allowlist.
+ *
+ * The abort signal is created once and shared across the chain, so the timeout
+ * bounds the whole download instead of restarting at each hop.
+ */
+async function fetchCheckedDownload(url: URL, timeoutMs: number): Promise<Response> {
+  const signal = AbortSignal.timeout(timeoutMs);
+  let current = url;
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(current, {
+      headers: { "User-Agent": "ck3-modding-vscode" },
+      redirect: "manual",
+      signal,
+    });
+    const step = redirectStep(res.status, res.headers.get("location"), current);
+    if (step.kind === "done") return res;
+    if (step.kind === "refused") {
+      throw new Error(`refusing to follow the redirect to ${step.target}: not an https GitHub release URL.`);
+    }
+    if (hop >= MAX_DOWNLOAD_REDIRECTS) {
+      throw new Error(`download of ${url.href} still redirecting after ${MAX_DOWNLOAD_REDIRECTS} hops.`);
+    }
+    try {
+      await res.body?.cancel();
+    } catch {
+      // a 3xx body is empty in practice; failing to drain it is not fatal
+    }
+    current = step.url;
+  }
+}
+
+/** Hang guards: without them a stalled connection leaves the progress notification up forever. */
+const API_TIMEOUT_MS = 20_000;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 
 /** Which tiger to fetch/run. The tiger releases ship one archive per game
  * (ck3-tiger-*, vic3-tiger-*); flavors keep the downloads apart. */
@@ -146,6 +249,7 @@ export async function downloadLatestTiger(
   report("querying latest release...");
   const apiRes = await fetch(`https://api.github.com/repos/${flavor.repoSlug}/releases/latest`, {
     headers: { "User-Agent": "ck3-modding-vscode", Accept: "application/vnd.github+json" },
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
   if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status} for the tiger releases feed.`);
   const release = (await apiRes.json()) as { tag_name?: string; assets?: ReleaseAsset[] };
@@ -159,12 +263,23 @@ export async function downloadLatestTiger(
     );
   }
 
-  report(`downloading ${asset.name}...`);
-  const dlRes = await fetch(asset.browser_download_url, {
-    headers: { "User-Agent": "ck3-modding-vscode" },
-  });
+  const assetUrl = checkedDownloadUrl(asset.browser_download_url);
+  if (!assetUrl) {
+    throw new Error(
+      `refusing to download ${asset.name}: ${asset.browser_download_url} is not an https GitHub release URL.`
+    );
+  }
+
+  report(`downloading ${assetUrl.href}...`);
+  const dlRes = await fetchCheckedDownload(assetUrl, DOWNLOAD_TIMEOUT_MS);
   if (!dlRes.ok) throw new Error(`download failed with HTTP ${dlRes.status}.`);
   const buffer = Buffer.from(await dlRes.arrayBuffer());
+  // tiger publishes no checksums, so there is nothing to verify against. The
+  // hash goes to the output channel instead, where it can be compared with the
+  // release page by hand.
+  report(
+    `${asset.name}: ${buffer.length} bytes, sha256 ${createHash("sha256").update(buffer).digest("hex")}`
+  );
 
   const destDir = path.join(tigerStorageDir(storageDir, flavor), tag);
   fs.rmSync(destDir, { recursive: true, force: true });
@@ -175,7 +290,7 @@ export async function downloadLatestTiger(
   report("unpacking...");
   // bsdtar ships with Windows 10+ and handles zip; GNU/bsd tar handles tar.gz.
   try {
-    execFileSync("tar", ["-xf", archivePath, "-C", destDir], { windowsHide: true });
+    await execFileAsync("tar", ["-xf", archivePath, "-C", destDir], { windowsHide: true });
   } catch (err) {
     throw new Error(`could not unpack ${asset.name}: ${String(err)}`);
   } finally {
@@ -203,7 +318,7 @@ export async function downloadLatestTiger(
 
   // Sanity check the binary runs.
   try {
-    execFileSync(binaryPath, ["--version"], { windowsHide: true, timeout: 15000 });
+    await execFileAsync(binaryPath, ["--version"], { windowsHide: true, timeout: 15000 });
   } catch (err) {
     throw new Error(`downloaded tiger does not run: ${String(err)}`);
   }

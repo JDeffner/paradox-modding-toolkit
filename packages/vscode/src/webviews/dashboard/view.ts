@@ -6,6 +6,7 @@ import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import { ICONS, visibleActionGroups, type ActionGroup } from "./actions";
+import { makeNonce } from "../nonce";
 
 /** The three collapsible sections, in render order. */
 type SectionId = "mods" | "toggles" | "tools";
@@ -752,11 +753,4 @@ vscode.postMessage({ type: "ready" });
 </script>
 </body>
 </html>`;
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

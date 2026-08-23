@@ -9,6 +9,7 @@
  */
 import * as vscode from "vscode";
 import { encodeDds, hasTransparency, type DdsEncodeFormat } from "@px-lsp/server/dds";
+import { makeNonce } from "./webviews/nonce";
 
 const EXT_MIME: Record<string, string> = {
   ".png": "image/png",
@@ -199,13 +200,14 @@ class WebviewDecoder {
 }
 
 function decoderHtml(): string {
+  const nonce = makeNonce();
   return /* html */ `<!DOCTYPE html>
 <html><head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'" />
 <style>body { font-family: sans-serif; color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); padding: 16px; }</style>
 </head><body>
 <p>Decoding images…</p>
-<script>
+<script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 window.addEventListener("message", (ev) => {
   const msg = ev.data;

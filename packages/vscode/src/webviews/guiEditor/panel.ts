@@ -50,6 +50,7 @@ import {
   type StoredComponents,
   type StoredPresets,
 } from "./userData";
+import { makeNonce } from "../nonce";
 
 export type FetchLayout = (
   uri: vscode.Uri,
@@ -86,12 +87,19 @@ type StoredVisibility = Record<string, GuiVisibilityOptions>;
 /**
  * Bounds on the texture walk. A game's `gfx/` tree is tens of thousands of
  * files deep in places, and the browser is a picker, not an asset database: the
- * walk stops at a depth no vanilla sprite path exceeds and at a file count that
- * still holds every texture either root realistically ships, and the answer
+ * walk stops at a depth no vanilla sprite path exceeds and at an entry count
+ * that still holds every texture either root realistically ships, and the answer
  * itself is capped far lower because the panel thumbnails what it lists.
+ *
+ * TEXTURE_WALK_MAX counts every entry the walk MEETS, not the `.dds` it keeps:
+ * models, meshes, `.asset` and portrait data are the bulk of a `gfx/` tree and
+ * they cost the same readdirSync work. Counting hits instead left the walk
+ * unbounded on exactly the trees it was meant to bound (a 22,314-entry tree with
+ * zero `.dds` measured 5,290 ms cold, 776 ms warm, all of it on the extension
+ * host). The value is raised to match the new unit.
  */
 const TEXTURE_WALK_DEPTH = 10;
-const TEXTURE_WALK_MAX = 20000;
+const TEXTURE_WALK_MAX = 200_000;
 const TEXTURE_ANSWER_MAX = 200;
 /** One page of thumbnails is what the app asks for; a longer batch is truncated. */
 const THUMBNAIL_BATCH_MAX = 60;
@@ -171,8 +179,21 @@ export class GuiEditorPanel {
       loadGameFont(roots.gamePath, meta.uiFont)
     );
 
+    // onMessage awaits openTextDocument outside its own try, and the .gui can
+    // stop being openable while the panel is up (a branch switch, a rename, a
+    // mod rebuild that moves the folder). A rejection dropped here answers
+    // nothing, so the app's `committing` stays set forever: the canvas keeps
+    // drawing the stale live preview and every later gesture is swallowed by an
+    // `if (committing) return;` guard. Answer the message instead, verbatim.
     this.panel.webview.onDidReceiveMessage(
-      (message: AppToHost) => void this.onMessage(message),
+      (message: AppToHost) => {
+        void this.onMessage(message).catch((err: unknown) => {
+          const id = (message as { id?: number }).id;
+          const refused = err instanceof Error ? err.message : String(err);
+          if (id !== undefined) this.post({ type: "editVerdict", id, refused });
+          else this.post({ type: "error", message: refused });
+        });
+      },
       undefined,
       this.disposables
     );
@@ -353,11 +374,11 @@ export class GuiEditorPanel {
         }
         for (const entry of entries) {
           if (budget <= 0) return;
+          budget--;
           const next = rel === "" ? entry.name : `${rel}/${entry.name}`;
           if (entry.isDirectory()) {
             walk(path.join(dir, entry.name), next, depth + 1);
           } else if (entry.name.toLowerCase().endsWith(".dds")) {
-            budget--;
             const key = `gfx/${next}`;
             if (!seen.has(key)) seen.set(key, { path: key, source });
           }
@@ -795,11 +816,4 @@ function buildHtml(webview: vscode.Webview, script: vscode.Uri, fontDataUri: str
     ].join("; "),
     fontDataUri,
   });
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }
