@@ -5,7 +5,8 @@
  * it.
  */
 import type { EventGraph, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
-import { NODE_H, NODE_W, radialLayout, type LayoutPos } from "../layout";
+import { NODE_H, NODE_W, type LayoutPos } from "../layout";
+import { ForceSim } from "../force";
 import { iconEl } from "../../shared/icons";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -85,6 +86,15 @@ export class GraphView {
   private banners = new Map<string, string | null>();
   private askedBanners = new Set<string>();
   private lastGraph: EventGraph | null = null;
+  /**
+   * The live simulation. It outlives a redraw: a title-mode switch or a banner
+   * arriving rebuilds the DOM over the SAME positions, and only a different
+   * graph (or focus) warms it up again, so the map never twitches for nothing.
+   */
+  private sim: ForceSim | null = null;
+  private simKey = "";
+  private frame: number | null = null;
+  private refitWhenCool = false;
 
   constructor(
     private readonly svg: SVGSVGElement,
@@ -128,13 +138,20 @@ export class GraphView {
     const edges = graph.edges ?? [];
     if (nodes.length === 0) return;
 
-    const laid = radialLayout(nodes, edges, this.rootId ?? undefined);
-    // A dragged node keeps where the user put it; everything else follows the
-    // layout, so a re-layout never silently undoes a drag.
-    this.positions = new Map(laid);
-    for (const [id, at] of Object.entries(this.options.positions)) {
-      if (this.positions.has(id)) this.positions.set(id, { x: at.x, y: at.y });
+    // The simulation is fed only when the graph itself changed; cards that
+    // survive a refocus keep their place and glide to the new one.
+    const key = `${this.rootId ?? ""}|${nodes.map((n) => n.id).join(",")}|${edges.map((e) => `${e.from}>${e.to}`).join(",")}`;
+    if (!this.sim) this.sim = new ForceSim(nodes, edges, this.rootId ?? undefined);
+    else if (key !== this.simKey) this.sim.update(nodes, edges, this.rootId ?? undefined);
+    this.simKey = key;
+    // A dragged card stays where the user put it; everything else is the
+    // simulation's, so a re-layout never silently undoes a drag.
+    for (const n of this.sim.nodes) {
+      const at = this.options.positions[n.id];
+      if (at) this.sim.pin(n.id, at.x, at.y);
+      else this.sim.unpin(n.id);
     }
+    this.positions = this.sim.positions();
 
     this.svg.appendChild(this.defs());
     const g = svgEl("g");
@@ -158,8 +175,58 @@ export class GraphView {
     }
 
     this.applyFocus();
-    if (refit) this.fit();
+    if (refit) {
+      this.fit();
+      this.refitWhenCool = true;
+    }
     this.applyTransform();
+    this.animate();
+  }
+
+  /**
+   * Run the simulation at the frame rate until it cools, moving the cards and
+   * their edges each frame. Idle is silent: no frame is scheduled while the
+   * temperature is out, and a drag or a new graph is what lights it again.
+   */
+  private animate(): void {
+    if (this.frame !== null || !this.sim) return;
+    const step = (): void => {
+      this.frame = null;
+      const sim = this.sim;
+      if (!sim) return;
+      const warm = sim.tick();
+      this.positions = sim.positions();
+      this.placeAll();
+      if (warm) this.frame = requestAnimationFrame(step);
+      else if (this.refitWhenCool) {
+        this.refitWhenCool = false;
+        this.fit();
+        this.applyTransform();
+      }
+    };
+    this.frame = requestAnimationFrame(step);
+  }
+
+  /** Put every card and edge where the positions say, without rebuilding the DOM. */
+  private placeAll(): void {
+    for (const [id, group] of this.nodeGroups) {
+      const at = this.positions.get(id);
+      if (at) group.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`);
+    }
+    for (const item of this.edgeItems) {
+      const a = this.positions.get(item.from);
+      const b = this.positions.get(item.to);
+      if (!a || !b) continue;
+      const start = borderPoint(a, b);
+      const end = borderPoint(b, a);
+      const mx = (start.x + end.x) / 2;
+      const my = (start.y + end.y) / 2;
+      item.path.setAttribute("d", `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`);
+      if (item.label) {
+        item.label.setAttribute("x", String(mx));
+        item.label.setAttribute("y", String(my - 4));
+      }
+    }
   }
 
   private defs(): SVGDefsElement {
@@ -607,9 +674,15 @@ export class GraphView {
           y: drag.origin.y + dy / this.view.scale,
         };
         this.positions.set(drag.id, at);
-        this.nodeGroups
-          .get(drag.id)
-          ?.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`);
+        // The card follows the hand and the rest of the map makes room for
+        // it: the simulation is pinned there and warmed a little.
+        if (this.sim) {
+          this.sim.pin(drag.id, at.x, at.y);
+          this.sim.reheat(0.25);
+          this.animate();
+        } else {
+          this.placeAll();
+        }
         return;
       }
       if (!this.dragging) return;

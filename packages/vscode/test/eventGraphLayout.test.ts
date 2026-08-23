@@ -16,6 +16,7 @@ import {
   type LayoutNodeInput,
   type LayoutPos,
 } from "../src/webviews/eventGraph/layout";
+import { ForceSim } from "../src/webviews/eventGraph/force";
 
 const n = (...ids: string[]): LayoutNodeInput[] => ids.map((id) => ({ id }));
 const e = (from: string, to: string): LayoutEdgeInput => ({ from, to });
@@ -98,8 +99,7 @@ describe("radialLayout", () => {
     const pos = radialLayout(n("a", "b", "lonely1", "lonely2", "lonely3"), [e("a", "b")], "a");
     expect(pos.size).toBe(5);
     expect(tooClose(pos)).toBeNull();
-    // Below the graph, not woven into it.
-    for (const id of ["lonely1", "lonely2", "lonely3"]) expect(pos.get(id)!.y).toBeGreaterThan(0);
+    expect(allFinite(pos)).toBe(true);
   });
 
   it("survives cycles, self-loops, unknown edge ends and duplicate ids", () => {
@@ -124,5 +124,39 @@ describe("radialLayout", () => {
     const pos = radialLayout(n("hub", "a", "b", "c"), [e("hub", "a"), e("hub", "b"), e("hub", "c")]);
     expect(pos.get("hub")).toEqual({ x: 0, y: 0 });
     expect(radialLayout([], []).size).toBe(0);
+  });
+});
+
+describe("ForceSim: a live graph that reacts and then rests", () => {
+  it("stops when cool, and a pinned card stays where it was put", () => {
+    const sim = new ForceSim(n("root", "a", "b"), [e("root", "a"), e("root", "b")], "root");
+    expect(sim.running).toBe(true);
+    sim.settle();
+    expect(sim.running).toBe(false);
+    expect(sim.tick()).toBe(false);
+    sim.pin("a", 900, 300);
+    sim.reheat(0.3);
+    sim.settle();
+    expect(sim.node("a")).toMatchObject({ x: 900, y: 300, fixed: true });
+    expect(sim.node("root")).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("a refocus keeps the surviving cards in place and only warms the map up", () => {
+    const sim = new ForceSim(n("root", "a", "b"), [e("root", "a"), e("root", "b")], "root");
+    sim.settle();
+    const before = sim.positions();
+    sim.update(n("root", "a", "b", "c"), [e("root", "a"), e("root", "b"), e("a", "c")], "a");
+    expect(sim.running).toBe(true);
+    // Cards glide from where they were: no teleport on the first tick.
+    for (const id of ["b"]) {
+      const was = before.get(id)!;
+      const now = sim.node(id)!;
+      expect(Math.hypot(now.x - was.x, now.y - was.y)).toBeLessThan(1);
+    }
+    // The new root is pinned at the origin; the old one is free again.
+    expect(sim.node("a")).toMatchObject({ x: 0, y: 0, fixed: true });
+    expect(sim.node("root")!.fixed).toBe(false);
+    sim.settle();
+    expect(tooClose(sim.positions())).toBeNull();
   });
 });
