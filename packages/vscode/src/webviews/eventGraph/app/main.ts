@@ -718,10 +718,15 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
     banner: ui.banner,
   });
   // The focus itself is already in the query box; this line only flags a view
-  // that hides something (truncation, cluster).
+  // that hides something (truncation, cluster). A cluster cut from a truncated
+  // graph says both: its component may be missing members the server never sent.
   setFocusLine(
-    clustered ? `Cluster: ${shown.nodes.length} connected cards` : graph.truncated ? "Truncated view" : "",
-    graph.truncated && !clustered ? "warn" : ""
+    clustered
+      ? `Cluster: ${shown.nodes.length} connected cards${graph.truncated ? " · truncated view" : ""}`
+      : graph.truncated
+        ? "Truncated view"
+        : "",
+    graph.truncated ? "warn" : ""
   );
   updateInfo(shown, params, renderedCluster);
 }

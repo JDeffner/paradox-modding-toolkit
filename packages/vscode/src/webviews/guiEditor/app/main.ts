@@ -4614,13 +4614,7 @@ function renderUses(): void {
       const target = revealLink(chain.name, chain.file, chain.line);
       target.classList.add("name");
       entry.appendChild(target);
-      // A script value is denoted <SV> everywhere, and its tooltip leads with
-      // what that means, so the shorthand teaches itself.
-      const kindEl = el("span", "meta", chain.kind === "script_value" ? "<SV>" : chain.kind);
-      if (chain.kind === "script_value") {
-        kindEl.title = "Script Value: a number computed by script, defined under common/script_values.";
-      }
-      entry.appendChild(kindEl);
+      entry.appendChild(el("span", "meta", chain.kind));
       uses.appendChild(entry);
       if (chain.via.length > 0) uses.appendChild(el("div", "via sub", `via ${chain.via.join(" → ")}`));
     }
