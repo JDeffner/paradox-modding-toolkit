@@ -94,25 +94,31 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     panel.webview.html = pageHtml({ name, meta, dataUri, error, nonce });
 
     const messages = panel.webview.onDidReceiveMessage(async (msg: { type?: string }) => {
-      switch (msg?.type) {
-        case "copyPath":
-          await vscode.env.clipboard.writeText(scriptPath(document.uri.fsPath));
-          break;
-        case "copyName":
-          await vscode.env.clipboard.writeText(name);
-          break;
-        case "reveal":
-          await vscode.commands.executeCommand("revealFileInOS", document.uri);
-          break;
-        case "savePng": {
-          if (!png) return;
-          const target = await vscode.window.showSaveDialog({
-            defaultUri: document.uri.with({ path: document.uri.path.replace(/\.dds$/i, ".png") }),
-            filters: { "PNG image": ["png"] },
-          });
-          if (target) await vscode.workspace.fs.writeFile(target, png);
-          break;
+      try {
+        switch (msg?.type) {
+          case "copyPath":
+            await vscode.env.clipboard.writeText(scriptPath(document.uri.fsPath));
+            break;
+          case "copyName":
+            await vscode.env.clipboard.writeText(name);
+            break;
+          case "reveal":
+            await vscode.commands.executeCommand("revealFileInOS", document.uri);
+            break;
+          case "savePng": {
+            if (!png) return;
+            const target = await vscode.window.showSaveDialog({
+              defaultUri: document.uri.with({ path: document.uri.path.replace(/\.dds$/i, ".png") }),
+              filters: { "PNG image": ["png"] },
+            });
+            if (target) await vscode.workspace.fs.writeFile(target, png);
+            break;
+          }
         }
+      } catch (err) {
+        void vscode.window.showErrorMessage(
+          `DDS preview: ${msg?.type ?? "action"} failed: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     });
     panel.onDidDispose(() => messages.dispose());
@@ -144,7 +150,7 @@ function pageHtml(opts: {
   const barButton = (id: string, name_: Parameters<typeof icon>[0], label: string, tip: string): string =>
     `<button id="${id}" class="px-btn" data-variant="ghost" data-size="sm" data-tip="${tip}" data-tip-wrap>${icon(name_)}${label}</button>`;
   const toolButton = (id: string, name_: Parameters<typeof icon>[0], tip: string): string =>
-    `<button id="${id}" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="${tip}" data-tip-wrap>${icon(name_)}</button>`;
+    `<button id="${id}" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="${tip}" data-tip-side="top" data-tip-wrap>${icon(name_)}</button>`;
 
   const stageInfo = meta ? `<div id="stageInfo">${escapeHtml(meta)}</div>` : "";
   const stage = error
@@ -153,13 +159,13 @@ function pageHtml(opts: {
   <img id="img" src="${dataUri}" />
   <div id="stageTools">
     ${toolButton("zout", "zoomOut", "Zoom out")}
-    <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, drag pans" data-tip-wrap>100%</span>
+    <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, drag pans" data-tip-side="top" data-tip-wrap>100%</span>
     ${toolButton("zin", "zoomIn", "Zoom in")}
     <div class="px-separator" data-orientation="vertical"></div>
     ${toolButton("zfit", "maximize", "Fit the image to the window")}
     ${toolButton("recenter", "locate", "Recenter at the current zoom")}
     <div class="px-separator" data-orientation="vertical"></div>
-    <label class="px-toggle" data-size="sm" data-tip="Pixelated: nearest-neighbour scaling to inspect single pixels. Off matches how the game samples the texture (smooth)" data-tip-wrap><input id="pix" type="checkbox" />${icon("grid")}</label>
+    <label class="px-toggle" data-size="sm" data-tip="Pixelated: nearest-neighbour scaling to inspect single pixels. Off matches how the game samples the texture (smooth)" data-tip-side="top" data-tip-wrap><input id="pix" type="checkbox" />${icon("grid")}</label>
   </div>
   ${stageInfo}`;
 
@@ -209,8 +215,6 @@ ${uiCss}
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
   #zoomLabel { min-width: 44px; height: var(--px-h-sm); line-height: var(--px-h-sm); padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
-  /* The tools sit on the bottom edge, so their tooltips open upward. */
-  #stageTools [data-tip]::after { top: auto; bottom: calc(100% + 6px); }
   #stageInfo {
     position: absolute; right: 8px; bottom: 8px;
     padding: 4px 10px; border-radius: var(--px-radius);
@@ -290,6 +294,8 @@ ${uiCss}
     // Left- or middle-button drag pans; preventDefault suppresses image drag / autoscroll.
     let panX = 0, panY = 0, panning = false;
     stage.addEventListener("mousedown", (e) => {
+      // Clicks on the floating tools interact with them, never pan.
+      if (e.target instanceof Element && e.target.closest("#stageTools")) return;
       if (e.button !== 0 && e.button !== 1) return;
       e.preventDefault();
       panning = true; panX = e.clientX; panY = e.clientY;

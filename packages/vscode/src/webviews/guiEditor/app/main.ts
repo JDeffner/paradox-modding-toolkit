@@ -4943,6 +4943,9 @@ function toWorld(ev: { clientX: number; clientY: number }): { x: number; y: numb
 }
 
 stage.addEventListener("pointerdown", (ev) => {
+  // Drags starting on the floating stage chrome (tools, info, popovers, the
+  // library overlay) interact with it, never pan or select on the canvas.
+  if (ev.target instanceof Element && ev.target.closest("#stageTools, #stageInfo, #clickTip, #textTip, #libraryOverlay")) return;
   if (ev.button === 1) {
     // Middle mouse drags the camera.
     ev.preventDefault();

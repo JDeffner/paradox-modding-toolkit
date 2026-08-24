@@ -335,13 +335,13 @@ ${uiCss}
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">
         <div id="zoomGroup">
-          <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (−)" data-tip-side="right">${icon("zoomOut")}</button>
-          <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="right">${icon("zoomIn")}</button>
-          <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="right">${icon("maximize")}</button>
+          <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (−)" data-tip-side="top">${icon("zoomOut")}</button>
+          <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="top">${icon("zoomIn")}</button>
+          <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="top">${icon("maximize")}</button>
         </div>
         <span id="focusLine" class="px-muted px-xs"></span>
       </div>
-      <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
+      <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
       <div id="sim" hidden>
         <div id="simBar">
           <span id="simTitle" class="px-truncate">Simulation</span>

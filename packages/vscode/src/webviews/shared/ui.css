@@ -1050,6 +1050,17 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   top: 50%;
   transform: translateY(-50%);
 }
+/* Above the element, for controls on a view's bottom edge. */
+[data-tip][data-tip-side="top"]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+/* Right-aligned above, for the bottom-RIGHT corner (a centered tip would leave the window). */
+[data-tip][data-tip-side="top"][data-tip-align="right"]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
 
 /* ---------------------------------------------------------------- toast --- */
 
