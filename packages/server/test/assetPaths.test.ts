@@ -195,8 +195,8 @@ gated("asset paths against vanilla", () => {
     const hover = provideTextureHover(settings, doc, { line: 1, character: 12 }, "trait");
     expect(hover).not.toBeNull();
     const value = (hover!.contents as { value: string }).value;
-    expect(value).toContain("reveler.dds");
-    expect(value).toContain("vanilla");
+    // The caption carries dimensions + encoding + size, not the (redundant) path.
+    expect(value).toMatch(/\d+×\d+ · \S+ · [\d.]+ [KM]B · vanilla/);
   });
 
   it("does not resolve a bare icon when the field is not a mapped bare-name field", () => {
