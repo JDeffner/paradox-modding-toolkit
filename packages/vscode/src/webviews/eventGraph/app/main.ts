@@ -64,32 +64,16 @@ const side = sidePanel($("side"), {
     updatePanelToggle();
   },
 });
-// A strip of icons has no width to choose, so the rail only ever opens and
-// closes, and its handle rides on the canvas edge where it stays reachable.
-const rail = sidePanel($("rail"), {
-  min: 40,
-  max: 40,
-  width: 40,
-  onChange: (s) => {
-    ui = { ...ui, railCollapsed: s.collapsed };
-    saveUi();
-    updateRailToggle();
-  },
-});
+// The tools rail is a fixed 40px strip and simply always there: a collapse
+// that saves 40px was not worth its buttons.
+sidePanel($("rail"), { min: 40, max: 40, width: 40, onChange: () => undefined });
 
 function updatePanelToggle(): void {
   const btn = $("togglePanel");
   btn.replaceChildren(iconEl(side.collapsed ? "panelRightOpen" : "panelRightClose"));
   btn.dataset.tip = side.collapsed ? "Show inspector" : "Hide inspector";
 }
-function updateRailToggle(): void {
-  // The toggle lives at the BOTTOM of the rail; when the rail is away, a
-  // floating twin at the canvas' bottom-left corner brings it back.
-  $("railExpand").hidden = !rail.collapsed;
-}
 $("togglePanel").onclick = () => side.toggle();
-$("railToggle").onclick = () => rail.toggle();
-$("railExpand").onclick = () => rail.toggle();
 
 function saveUi(): void {
   send({ type: "uiState", state: ui });
@@ -939,13 +923,11 @@ function applyUi(next: UiState | undefined): void {
   ui = { ...ui, ...next };
   side.setWidth(ui.panelWidth);
   if (ui.panelCollapsed !== side.collapsed) side.toggle(ui.panelCollapsed);
-  if (ui.railCollapsed !== rail.collapsed) rail.toggle(ui.railCollapsed);
   setTitleMode(ui.titleMode);
   $("toolBanner").setAttribute("aria-pressed", String(ui.banner));
   view.setOptions({ banner: ui.banner });
   if (ui.simX !== undefined && ui.simY !== undefined) sim.setPosition(ui.simX, ui.simY);
   updatePanelToggle();
-  updateRailToggle();
 }
 
 window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
@@ -1080,7 +1062,6 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
 }
 
 updatePanelToggle();
-updateRailToggle();
 updateRailTools();
 inspector.showPlaceholder();
 afterHistoryChange();

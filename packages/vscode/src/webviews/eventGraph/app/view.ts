@@ -405,16 +405,19 @@ export class GraphView {
       })
     );
     defs.appendChild(hatch);
-    // Clip so an illustration stays inside its card's rounded TOP corners;
-    // the bottom edge is square, because on a card with rows the banner ends
-    // mid-card and rounded bottom corners there read as a seam.
+    // Two banner clips: a compact card's illustration fills the WHOLE card,
+    // so every corner rounds with it; on a card with rows the banner ends
+    // mid-card, where square bottom corners avoid a seam.
     const clip = svgEl("clipPath", { id: "cardClip" });
-    clip.appendChild(
+    clip.appendChild(svgEl("rect", { width: String(NODE_W), height: String(NODE_H), rx: "6", ry: "6" }));
+    defs.appendChild(clip);
+    const clipRows = svgEl("clipPath", { id: "cardClipRows" });
+    clipRows.appendChild(
       svgEl("path", {
         d: `M 0 ${NODE_H} V 6 Q 0 0 6 0 H ${NODE_W - 6} Q ${NODE_W} 0 ${NODE_W} 6 V ${NODE_H} Z`,
       })
     );
-    defs.appendChild(clip);
+    defs.appendChild(clipRows);
     // The banner's bottom fades into the card's own background, so the
     // illustration transitions flat into the rows below it.
     const fade = svgEl("linearGradient", { id: "bannerFade", x1: "0", y1: "0", x2: "0", y2: "1" });
@@ -638,9 +641,9 @@ export class GraphView {
         // hover; the texts above it stay pointer-inert.
         const bg = svgEl("rect", {
           class: "step-row-bg",
-          x: "8",
+          x: "4",
           y: String(y + 1),
-          width: String(NODE_W - 16),
+          width: String(NODE_W - 8),
           height: String(ROW_H - 2),
           rx: "4",
           "data-step-line": String(step.line),
@@ -749,7 +752,11 @@ export class GraphView {
       return false;
     }
     const url = this.banners.get(theme) ?? null;
-    const holder = svgEl("g", { "clip-path": "url(#cardClip)", "pointer-events": "none" });
+    const hasRows = this.stepsOn && (node.steps?.length ?? 0) > 0;
+    const holder = svgEl("g", {
+      "clip-path": hasRows ? "url(#cardClipRows)" : "url(#cardClip)",
+      "pointer-events": "none",
+    });
     if (url) {
       holder.appendChild(
         svgEl("image", {
@@ -767,7 +774,7 @@ export class GraphView {
       );
       // A card with rows continues below the banner: fade the picture into
       // the card's background, so header and rows read as ONE surface.
-      if (this.stepsOn && (node.steps?.length ?? 0) > 0) {
+      if (hasRows) {
         holder.appendChild(
           svgEl("rect", {
             y: String(NODE_H - 30),

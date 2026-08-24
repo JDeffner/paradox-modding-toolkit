@@ -65,10 +65,10 @@ export class SimWindow {
   }
 
   setPosition(x: number, y: number): void {
-    const parent = this.root.parentElement;
-    const bounds = parent?.getBoundingClientRect();
-    const maxX = Math.max(8, (bounds?.width ?? 0) - this.root.offsetWidth - 8);
-    const maxY = Math.max(8, (bounds?.height ?? 0) - 40);
+    // The window is fixed-positioned: it may ride anywhere on the page, as
+    // long as its title bar stays reachable.
+    const maxX = Math.max(8, window.innerWidth - this.root.offsetWidth - 8);
+    const maxY = Math.max(8, window.innerHeight - 40);
     this.root.style.left = `${Math.min(Math.max(8, x), maxX)}px`;
     this.root.style.top = `${Math.min(Math.max(8, y), maxY)}px`;
   }

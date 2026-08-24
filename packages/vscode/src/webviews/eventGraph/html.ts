@@ -266,10 +266,12 @@ ${uiCss}
      positioned box takes its static position, which here is under a
      full-height <svg>, so the window would open outside the clipped wrapper.
      A drag sets left, which wins over right from then on. */
+  /* Fixed, not absolute: the window drags over the WHOLE page (topbar,
+     inspector, rail), not just the canvas it was born in. */
   #sim {
-    position: absolute; z-index: 40; right: 16px; top: 16px;
-    width: 440px; max-width: calc(100% - 24px);
-    display: flex; flex-direction: column; max-height: calc(100% - 24px);
+    position: fixed; z-index: 40; right: 16px; top: 44px;
+    width: 440px; max-width: calc(100vw - 24px);
+    display: flex; flex-direction: column; max-height: calc(100vh - 60px);
     border-radius: var(--px-radius); background: var(--px-popover);
     box-shadow: var(--px-shadow-md), 0 0 0 1px var(--px-border);
   }
@@ -338,11 +340,40 @@ ${uiCss}
   .locrow .edit .px-input { flex: 1 1 auto; min-width: 0; }
   .pendingMark { color: var(--px-primary); flex: 0 0 auto; }
   .block { display: flex; flex-direction: column; gap: 4px; }
-  .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; }
+  .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; cursor: pointer; user-select: none; }
   .block > .head .caret { transition: transform var(--px-ease); cursor: pointer; }
-  .block[data-collapsed] > .head .caret { transform: rotate(-90deg); }
-  .block[data-collapsed] > :not(.head) { display: none; }
+  .block > .head .btitle { flex: 1 1 auto; font-weight: 600; font-size: var(--px-text-sm); }
   .block + .block { border-top: 1px solid var(--px-border); padding-top: 4px; }
+  .bbody { display: flex; flex-direction: column; gap: 4px; }
+  #inspector .caret.closed { transform: rotate(-90deg); }
+  /* ---- the structured script editor ---- */
+  #inspector .insHead { display: flex; align-items: center; gap: 4px; }
+  #inspector .insHead h2 { flex: 1 1 auto; }
+  .subhead2 {
+    margin-top: 2px; font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--px-muted-fg); width: fit-content;
+  }
+  .tree { display: flex; flex-direction: column; gap: 1px; }
+  .tchildren { display: flex; flex-direction: column; gap: 1px; }
+  .trow {
+    display: flex; align-items: center; gap: 6px; min-height: 24px;
+    padding-right: 2px; border-radius: var(--px-radius-sm);
+  }
+  .trow:hover { background: color-mix(in oklch, var(--px-fg) 5%, transparent); }
+  .trow .tk { font-family: var(--px-font-mono); font-size: var(--px-text-sm); color: var(--px-tok-key, var(--px-fg)); }
+  .trow .top { font-family: var(--px-font-mono); font-size: var(--px-text-sm); color: var(--px-muted-fg); }
+  .trow .tv { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
+  .trow .tv .px-input, .trow .tv .px-dropdown { flex: 1 1 auto; min-width: 0; height: 24px; font-size: var(--px-text-sm); }
+  .trow .ttools { display: flex; align-items: center; opacity: 0; transition: opacity var(--px-ease); }
+  .trow:hover .ttools, .trow.thead .ttools { opacity: 1; }
+  .trow.thead .ttools { opacity: 0; }
+  .trow.thead:hover .ttools { opacity: 1; }
+  .trow.thead .tk { font-weight: 600; color: var(--px-fg); flex: 1 1 auto; }
+  .trow.thead .caret { cursor: pointer; flex: 0 0 auto; }
+  .trow.tbare .tk { color: var(--px-muted-fg); }
+  .trow.tadd:hover { background: none; }
+  .trow-more { align-self: flex-start; padding: 0 4px; font-size: var(--px-text-xs); }
+  .gateAdd { margin-top: 2px; }
   #inspector .revealed { box-shadow: 0 0 0 1.5px var(--eg-hit); border-radius: var(--px-radius-md); transition: box-shadow 0.2s; }
   #inspector .px-list { padding: 0; }
   #inspector .px-item > .px-item-kind { width: 64px; }
@@ -380,8 +411,6 @@ ${uiCss}
     <div id="rail" class="px-sidepanel" data-side="left">
       <div class="px-sidepanel-body">
         ${tools}
-        <span class="px-grow"></span>
-        <button id="railToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
       </div>
     </div>
     <div id="graphWrap">
@@ -397,7 +426,6 @@ ${uiCss}
       </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">
-        <button id="railExpand" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Show the tools" data-tip-side="top" hidden>${icon("panelLeftOpen")}</button>
         <div id="zoomGroup">
           <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (−)" data-tip-side="top">${icon("zoomOut")}</button>
           <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="top">${icon("zoomIn")}</button>

@@ -352,6 +352,13 @@ export interface EventSectionInfo {
   /** Real target count before `targets` was capped. */
   targetsTotal: number;
 }
+/** A gate block (trigger / ai_chance) rendered for in-place editing. */
+export interface EventGateInfo {
+  /** 0-based line of the block's key. */
+  line: number;
+  lines: EventScriptLine[];
+  totalLines: number;
+}
 export interface EventOptionInfo {
   line: number;
   /** Line the option's first statement may be inserted before (0-based). */
@@ -362,6 +369,10 @@ export interface EventOptionInfo {
   effectKeys: string[];
   hasTrigger: boolean;
   hasAiChance: boolean;
+  /** The option's own trigger block, rendered, when it has one. */
+  trigger?: EventGateInfo;
+  /** The option's ai_chance block, rendered, when it has one. */
+  aiChance?: EventGateInfo;
   /** The option's effects rendered as pseudo-script (name/trigger/ai_chance/
    * ai_value dropped: they gate the option, they are not its effect), capped. */
   lines: EventScriptLine[];

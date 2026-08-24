@@ -835,6 +835,18 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   padding: 4px;
   min-width: 160px;
 }
+/* Inline completions under a focused input: a floating px-menu of its own. */
+.px-suggest {
+  position: fixed;
+  z-index: 70;
+  width: 300px;
+  max-height: 240px;
+  overflow: hidden auto;
+  border-radius: var(--px-radius);
+  border: 1px solid var(--px-border);
+  background: var(--px-popover);
+  box-shadow: var(--px-shadow-md);
+}
 .px-menu-list {
   max-height: 280px;
   overflow: hidden auto;
@@ -1133,6 +1145,13 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 [data-tip]:focus-visible::after {
   opacity: 1;
   transition-delay: 400ms;
+}
+/* No tooltip while the element is being pressed or holds an open popover:
+   a tip floating over the menu you just opened reads as a glitch. */
+[data-tip]:active::after,
+[data-tip][aria-expanded="true"]::after {
+  opacity: 0;
+  transition: none;
 }
 [data-tip][data-tip-wrap]::after {
   white-space: normal;
