@@ -51,6 +51,8 @@ export interface SimNode extends SimPos {
   h: number;
   w: number;
   degree: number;
+  /** No edges at all: laid out once in a static grid, never simulated. */
+  parked: boolean;
 }
 
 /** The card the renderer draws; the collision force keeps these boxes apart. */
@@ -162,6 +164,14 @@ export class ForceSim {
   private byId = new Map<string, SimNode>();
   private links: Array<{ a: SimNode; b: SimNode; rest: number; strength: number }> = [];
   private clusters = new Map<string, { homeY: number; members: SimNode[] }>();
+  /**
+   * The simulated (non-parked) nodes, grouped by rank. With x locked to the
+   * columns, only SAME-COLUMN cards can ever collide, so every O(n²) pass
+   * (repulsion, collision) runs per column instead of over all pairs — the
+   * difference between a freeze and a blink on a 1000-card mod.
+   */
+  private columns: SimNode[][] = [];
+  private live: SimNode[] = [];
   private root: string | null = null;
   alpha = 0;
 
@@ -252,12 +262,22 @@ export class ForceSim {
     /** New cards stack out from their column's middle, below then above,
      *  by their own heights, so even the very first paint has no pile. */
     const ladder = new Map<number, { down: number; up: number; k: number }>();
+    /** Parked (edge-less) cards: a static grid LEFT of the flow, stacked by
+     *  their own heights — they carry no sequence, so they get no columns
+     *  and no simulation. */
+    const parkedCount = inputs.filter(
+      (i) => i.id !== this.root && (out.get(i.id)?.length ?? 0) === 0 && (inc.get(i.id)?.length ?? 0) === 0
+    ).length;
+    const gridCols = Math.max(1, Math.ceil(Math.sqrt(parkedCount) / 1.4));
+    const gridNextY: number[] = new Array<number>(gridCols).fill(0);
+    let gridAt = 0;
     for (const input of inputs) {
       const id = input.id;
       const cluster = input.cluster ?? clusterOf(id);
       const rank = ranks.get(id) ?? 0;
       const h = input.height ?? NODE_H;
       const w = input.width ?? NODE_W;
+      const parked = id !== this.root && (out.get(id)?.length ?? 0) === 0 && (inc.get(id)?.length ?? 0) === 0;
       const old = previous.get(id);
       let node: SimNode;
       if (old) {
@@ -266,7 +286,27 @@ export class ForceSim {
         node.rank = rank;
         node.h = h;
         node.w = w;
+        node.parked = parked;
         if (node.id === oldRoot) node.fixed = false;
+      } else if (parked) {
+        const col = gridAt % gridCols;
+        gridAt++;
+        const y = gridNextY[col] + h / 2;
+        gridNextY[col] = y + h / 2 + GAP;
+        node = {
+          id,
+          x: -((col + 1) * PITCH_X) - 40,
+          y,
+          vx: 0,
+          vy: 0,
+          fixed: false,
+          cluster,
+          rank,
+          h,
+          w,
+          degree: 0,
+          parked,
+        };
       } else {
         const homeY = this.clusters.get(cluster)?.homeY ?? 0;
         let col = ladder.get(rank);
@@ -296,15 +336,24 @@ export class ForceSim {
           h,
           w,
           degree: 0,
+          parked,
         };
       }
       this.nodes.push(node);
       this.byId.set(id, node);
     }
+    const byRank = new Map<number, SimNode[]>();
+    this.live = [];
     for (const n of this.nodes) {
       n.degree = (out.get(n.id)?.length ?? 0) + (inc.get(n.id)?.length ?? 0);
       this.clusters.get(n.cluster)?.members.push(n);
+      if (n.parked) continue;
+      this.live.push(n);
+      const col = byRank.get(n.rank);
+      if (col) col.push(n);
+      else byRank.set(n.rank, [n]);
     }
+    this.columns = [...byRank.values()];
     if (this.root) {
       const r = this.byId.get(this.root)!;
       r.x = r.rank * COL_W;
@@ -342,22 +391,16 @@ export class ForceSim {
     if (this.alpha < ALPHA_MIN) {
       // The last step: whatever the forces left inside the gap is parted
       // now, so a cooled map keeps the hard guarantee a settled one has.
-      separate(this.nodes);
+      for (const column of this.columns) separate(column);
       return false;
     }
-    const nodes = this.nodes;
 
     // Springs: with x owned by the columns, these order each column's
     // vertical neighborhood so wired cards sit level with each other.
     for (const l of this.links) {
-      let dx = l.b.x - l.a.x;
-      let dy = l.b.y - l.a.y;
-      let d = Math.hypot(dx, dy);
-      if (d === 0) {
-        dx = 1;
-        dy = 0;
-        d = 1;
-      }
+      const dx = l.b.x - l.a.x;
+      const dy = l.b.y - l.a.y;
+      const d = Math.hypot(dx, dy) || 1;
       // Only y: x belongs to the columns, and a spring that pulled on x would
       // drag a whole chain off its ranks.
       const f = ((d - l.rest) / d) * alpha * l.strength;
@@ -365,51 +408,47 @@ export class ForceSim {
       l.b.vy -= dy * f * share;
       l.a.vy += dy * f * (1 - share);
     }
-    // Repulsion, in card units so a wide card pushes sideways as a tall one
-    // pushes up: the x axis is squashed by the card's aspect.
-    const aspect = PITCH_X / PITCH_Y;
-    const range2 = (CHARGE_RANGE / aspect) * (CHARGE_RANGE / aspect);
-    for (let i = 0; i < nodes.length; i++) {
-      const a = nodes[i];
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = nodes[j];
-        const dx = (b.x - a.x) / aspect;
-        const dy = b.y - a.y;
-        let l2 = dx * dx + dy * dy;
-        if (l2 >= range2) continue;
-        // Coincident or nearly so: the kick is capped at a card's height, and
-        // two cards on one spot part along y (the collision pass does the rest).
-        const near = l2 < PITCH_Y * PITCH_Y;
-        if (near) l2 = PITCH_Y * PITCH_Y;
-        const w = (CHARGE * alpha) / l2;
-        // y only: x belongs to the columns.
-        const py = (near && dy === 0 ? PITCH_Y : dy) * w;
-        a.vy -= py;
-        b.vy += py;
+    // Repulsion, along y and per COLUMN: cards on different columns cannot
+    // overlap (x is locked and the pitch exceeds the widest card), so pairs
+    // across columns would only burn time.
+    for (const column of this.columns) {
+      for (let i = 0; i < column.length; i++) {
+        const a = column[i];
+        for (let j = i + 1; j < column.length; j++) {
+          const b = column[j];
+          const dy = b.y - a.y;
+          let l2 = dy * dy;
+          if (l2 >= CHARGE_RANGE * CHARGE_RANGE) continue;
+          // Coincident or nearly so: the kick is capped at a card's height.
+          const near = l2 < PITCH_Y * PITCH_Y;
+          if (near) l2 = PITCH_Y * PITCH_Y;
+          const w = (CHARGE * alpha) / l2;
+          const py = (near && dy === 0 ? PITCH_Y : dy) * w;
+          a.vy -= py;
+          b.vy += py;
+        }
       }
     }
-    // y-gravity toward the middle and the cluster's band.
-    for (const n of nodes) {
-      n.vy -= n.y * 0.0015 * alpha;
-      const cluster = this.clusters.get(n.cluster);
-      if (cluster && this.clusters.size > 1) n.vy += (cluster.homeY - n.y) * 0.04 * alpha;
-    }
-    // Integrate. x is not a force at all: a free card rides onto its rank's
-    // column and stays there, so the sequence axis is exact, not approximate.
-    for (const n of nodes) {
+    // y-gravity toward the middle and the cluster's band; integrate. x is not
+    // a force at all: a free card rides onto its rank's column and stays
+    // there, so the sequence axis is exact, not approximate. Parked cards
+    // never move: they have nothing to react to.
+    for (const n of this.live) {
       if (n.fixed) {
         n.vx = 0;
         n.vy = 0;
         continue;
       }
+      n.vy -= n.y * 0.0015 * alpha;
+      const cluster = this.clusters.get(n.cluster);
+      if (cluster && this.clusters.size > 1) n.vy += (cluster.homeY - n.y) * 0.04 * alpha;
       n.vy *= VELOCITY_DECAY;
       n.y += n.vy;
       n.x += (n.rank * COL_W - n.x) * 0.3;
     }
-    // Collision, on the positions themselves: cards are boxes, and a box that
-    // overlaps another is moved apart along the shallower axis, most of the
-    // way while the graph is hot and all the way as it cools.
-    separate(nodes, 1, 0.6 + 0.4 * (1 - alpha));
+    // Collision, on the positions themselves, per column again.
+    const strength = 0.6 + 0.4 * (1 - alpha);
+    for (const column of this.columns) separate(column, 1, strength);
     return this.alpha >= ALPHA_MIN;
   }
 
