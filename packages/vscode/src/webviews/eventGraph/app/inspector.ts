@@ -466,7 +466,8 @@ function menuItems(items: EventVocabularyItem[]): MenuItem[] {
     value: item.value,
     label: item.value,
     description: item.doc,
-    hint: item.hint,
+    // "none" is the engine's way of saying "no scopes": pure noise in a list.
+    hint: item.hint && item.hint.toLowerCase() !== "none" ? item.hint : undefined,
   }));
 }
 

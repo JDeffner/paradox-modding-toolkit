@@ -54,6 +54,8 @@ interface EdgeItem {
   from: string;
   to: string;
   path: SVGPathElement;
+  /** The invisible wide twin that makes the thin line hoverable. */
+  hit: SVGPathElement;
   label: SVGTextElement | null;
   labelsAlways: boolean;
   /** Row index the edge leaves from on the source card, or null = the border. */
@@ -322,7 +324,9 @@ export class GraphView {
     }
     const end = { x: b.x - wb / 2 - 2, y: b.y };
     const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
-    item.path.setAttribute("d", `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`);
+    const d = `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`;
+    item.path.setAttribute("d", d);
+    item.hit.setAttribute("d", d);
     // Horizontal tangents make the cubic's midpoint the plain average.
     const mx = (sx + end.x) / 2;
     const my = (sy + end.y) / 2;
@@ -401,14 +405,19 @@ export class GraphView {
       "stroke-width": "1.3",
       "marker-end": "url(#arrow)",
     });
+    layer.appendChild(path);
+    // A 1.3px stroke is no hover target: an invisible wide twin under the
+    // pointer carries the connector's story.
+    const hit = svgEl("path", { class: "edge-hit" });
     const title = svgEl("title");
     title.textContent =
-      `${edge.from} → ${edge.to}  (${edge.label || edge.via || ""})` +
-      (edge.delay ? `\nafter ${edge.delay}` : "") +
-      (edge.weight !== undefined ? `\nrandom, weight ${edge.weight}` : "") +
-      (back ? "\nloops back to an earlier step" : "");
-    path.appendChild(title);
-    layer.appendChild(path);
+      `${edge.from} → ${edge.to}` +
+      (edge.label || edge.phase ? `\nfrom: ${edge.label ?? edge.phase}` : "") +
+      (edge.delay ? `\nwhen: ${delayTitle(edge.delay)}` : "") +
+      (edge.weight !== undefined ? `\nwhen: picked at random from this pool, weight ${edge.weight}` : "") +
+      (back ? "\nloops back to an earlier step in the sequence" : "");
+    hit.appendChild(title);
+    layer.appendChild(hit);
 
     // The WHEN chip: a delay ("30d") or a random weight ("w 100"), always on,
     // and it explains itself on hover.
@@ -442,7 +451,7 @@ export class GraphView {
       text.textContent = edge.label;
       layer.appendChild(text);
     }
-    return { from: edge.from, to: edge.to, path, label: text, labelsAlways, fromRow, back, chip };
+    return { from: edge.from, to: edge.to, path, hit, label: text, labelsAlways, fromRow, back, chip };
   }
 
   /**
@@ -935,13 +944,13 @@ export class GraphView {
   serializeSvg(): string {
     const clone = this.svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute("xmlns", SVG_NS);
-    // The hover button belongs to the canvas, not to a file: a picture cannot
-    // open anything.
-    for (const button of Array.from(clone.querySelectorAll(".card-open"))) button.remove();
+    // The hover button and the hover-only hit paths belong to the canvas,
+    // not to a file: a picture cannot open anything or show a tooltip.
+    for (const node of Array.from(clone.querySelectorAll(".card-open, .edge-hit"))) node.remove();
     // Bake the computed colors in: the exported file has no stylesheet, and the
     // live one paints through CSS variables. Circles are the step ports.
     const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text, circle, line")).filter(
-      (node) => node.closest(".card-open") === null
+      (node) => node.closest(".card-open") === null && !node.classList.contains("edge-hit")
     );
     const copies = clone.querySelectorAll<SVGElement>("rect, path, text, circle, line");
     live.forEach((node, i) => {

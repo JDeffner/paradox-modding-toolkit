@@ -212,6 +212,8 @@ ${uiCss}
   .edge-label.hidden { display: none; }
   /* A cycle's return arc: unmistakably not a forward step. */
   .edge-path.edge-back { stroke-dasharray: 6 4; stroke-opacity: 0.3; }
+  /* The connector's hover target: wide, invisible, carries the <title>. */
+  .edge-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
   /* The WHEN chip: an edge's delay ("30d") or random weight ("w 100").
      Hoverable: its <title> says what the number means. */
   .edge-chip { pointer-events: all; }
@@ -347,21 +349,26 @@ ${uiCss}
     <div id="rail" class="px-sidepanel" data-side="left">
       <div class="px-sidepanel-body">
         ${tools}
+        <span class="px-grow"></span>
+        <button id="railToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
       </div>
     </div>
     <div id="graphWrap">
       <div id="railBar">
-        <button id="railToggle" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
         <span id="actingOn" class="px-muted px-xs"></span>
       </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">
+        <button id="railExpand" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Show the tools" data-tip-side="top" hidden>${icon("panelLeftOpen")}</button>
         <div id="zoomGroup">
           <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (−)" data-tip-side="top">${icon("zoomOut")}</button>
           <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="top">${icon("zoomIn")}</button>
           <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="top">${icon("maximize")}</button>
         </div>
         <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-side="top" data-tip-wrap>${kindToggles}</div>
+        <div id="chainDepth" class="px-toggle-group" data-tip="How many steps of preceding events the chain keeps (what leads to the card); ∞ keeps them all" data-tip-side="top" data-tip-wrap hidden>
+          ${["1", "2", "3", "4", "∞"].map((label) => `<button class="px-toggle" data-size="sm" data-depth="${label === "∞" ? "inf" : label}" aria-pressed="${label === "∞"}">${label}</button>`).join("")}
+        </div>
         <span id="focusLine" class="px-muted px-xs"></span>
       </div>
       <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>

@@ -59,8 +59,10 @@ export type PendingEdit =
 export interface GraphState {
   /** What the graph is showing (root / namespace / everything). */
   focus: EventGraphParams;
-  /** Show only the nodes connected to this one (the Cluster tool). */
+  /** Show only the selected node's chain (the Chain tool). */
   cluster?: string;
+  /** How many hops of PRECEDING nodes the chain keeps; absent = all of them. */
+  clusterDepth?: number;
   /** Node id -> position a drag put it at. Absent = wherever the layout says. */
   positions: Record<string, { x: number; y: number }>;
   /** File edits waiting for Save, oldest first. */
@@ -72,6 +74,7 @@ function clone(state: GraphState): GraphState {
   return {
     focus: { ...state.focus },
     cluster: state.cluster,
+    clusterDepth: state.clusterDepth,
     positions: { ...state.positions },
     pending: state.pending.map((edit) => ({ ...edit })),
   };

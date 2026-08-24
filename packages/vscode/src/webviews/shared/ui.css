@@ -847,6 +847,9 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   align-items: center;
   gap: 8px;
   min-height: 28px;
+  /* The list is a max-height flex column: without this, a long list SHRINKS
+     its rows to min-height and two-line rows overflow into their neighbours. */
+  flex-shrink: 0;
   padding: 0 8px;
   border-radius: var(--px-radius-md);
   font-size: var(--px-text);
@@ -860,23 +863,43 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 /* Two-line rows breathe: without the padding and the description's own
    margin, one row's description sat flush against the next row's label and
-   the list read as alternating unrelated lines rather than as pairs. */
+   the list read as alternating unrelated lines rather than as pairs. The
+   name leads (medium weight, first line), the doc sits under it in muted
+   small text, and the hint rides the FIRST line — centered against two
+   lines it looked like it belonged to neither row. A hairline between
+   two-line rows keeps the pairs apart even while scrolling fast. */
 .px-menu-item[data-two-line] {
+  align-items: flex-start;
   padding-top: 6px;
   padding-bottom: 6px;
+  white-space: normal;
+}
+.px-menu-item[data-two-line] > .px-grow {
+  font-weight: 500;
+}
+.px-menu-item[data-two-line] + .px-menu-item[data-two-line] {
+  border-top: 1px solid color-mix(in oklch, var(--px-fg) 8%, transparent);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 .px-menu-item > .px-grow > .px-menu-description {
   display: block;
   margin-top: 2px;
   line-height: 1.35;
   font-size: var(--px-text-xs);
+  font-weight: 400;
   color: var(--px-muted-fg);
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 .px-menu-item > .px-menu-hint {
   font-size: var(--px-text-xs);
   color: var(--px-muted-fg);
+}
+.px-menu-item[data-two-line] > .px-menu-hint,
+.px-menu-item[data-two-line] > svg.px-icon.check {
+  margin-top: 3px;
 }
 .px-menu-item[data-active],
 .px-menu-item:hover {

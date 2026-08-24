@@ -83,12 +83,13 @@ function updatePanelToggle(): void {
   btn.dataset.tip = side.collapsed ? "Show inspector" : "Hide inspector";
 }
 function updateRailToggle(): void {
-  const btn = $("railToggle");
-  btn.replaceChildren(iconEl(rail.collapsed ? "panelLeftOpen" : "panelLeftClose"));
-  btn.dataset.tip = rail.collapsed ? "Show the tools" : "Hide the tools";
+  // The toggle lives at the BOTTOM of the rail; when the rail is away, a
+  // floating twin at the canvas' bottom-left corner brings it back.
+  $("railExpand").hidden = !rail.collapsed;
 }
 $("togglePanel").onclick = () => side.toggle();
 $("railToggle").onclick = () => rail.toggle();
+$("railExpand").onclick = () => rail.toggle();
 
 function saveUi(): void {
   send({ type: "uiState", state: ui });
@@ -159,10 +160,13 @@ function refocus(id: string): void {
 /**
  * The node's CHAIN: everything that leads to `id` and everything it leads to,
  * following edge DIRECTION — not the whole connected component, which in a
- * wired-up mod is most of the graph. Client-side, so the Chain tool costs no
- * round trip and undo brings the full graph straight back.
+ * wired-up mod is most of the graph. `precedingDepth` caps how many hops
+ * UPSTREAM the chain reaches (undefined = all of them); downstream is always
+ * followed to the end, because "what does this lead to" is the question.
+ * Client-side, so the Chain tool costs no round trip and undo brings the
+ * full graph straight back.
  */
-function clusterGraph(graph: EventGraph, id: string): EventGraph {
+function clusterGraph(graph: EventGraph, id: string, precedingDepth?: number): EventGraph {
   const out = new Map<string, string[]>();
   const inc = new Map<string, string[]>();
   const link = (map: Map<string, string[]>, a: string, b: string): void => {
@@ -175,13 +179,20 @@ function clusterGraph(graph: EventGraph, id: string): EventGraph {
     link(inc, edge.to, edge.from);
   }
   const keep = new Set<string>([id]);
-  for (const links of [out, inc]) {
-    const queue = [id];
+  for (const [links, limit] of [
+    [out, undefined],
+    [inc, precedingDepth],
+  ] as const) {
+    // Breadth-first, so the first visit is the SHORTEST hop count and the
+    // depth cap never drops a node that a nearer path would have kept.
+    const queue: Array<{ id: string; hops: number }> = [{ id, hops: 0 }];
     while (queue.length > 0) {
-      for (const next of links.get(queue.pop()!) ?? []) {
+      const at = queue.shift()!;
+      if (limit !== undefined && at.hops >= limit) continue;
+      for (const next of links.get(at.id) ?? []) {
         if (keep.has(next)) continue;
         keep.add(next);
-        queue.push(next);
+        queue.push({ id: next, hops: at.hops + 1 });
       }
     }
   }
@@ -516,6 +527,30 @@ $("toolCenter").onclick = () => {
   renderGraph(currentGraph, currentParams);
   selectNode(id);
 };
+
+// The chain's upstream depth: 1..4 hops of preceding nodes, or all of them.
+for (const btn of Array.from($("chainDepth").children) as HTMLElement[]) {
+  btn.onclick = () => {
+    if (!renderedCluster || !currentGraph) return;
+    const id = renderedCluster;
+    const depth = btn.dataset.depth === "inf" ? undefined : Number(btn.dataset.depth);
+    history.push(`chain depth ${btn.textContent}`, { ...history.state, clusterDepth: depth });
+    afterHistoryChange();
+    renderGraph(currentGraph, currentParams);
+    selectNode(id);
+  };
+}
+
+/** Show the depth picker only while a chain is on, with its current step lit. */
+function updateChainDepth(): void {
+  const group = $("chainDepth");
+  group.hidden = renderedCluster === null;
+  const depth = history.state.clusterDepth;
+  for (const btn of Array.from(group.children) as HTMLElement[]) {
+    const mine = btn.dataset.depth === "inf" ? undefined : Number(btn.dataset.depth);
+    btn.setAttribute("aria-pressed", String(mine === depth));
+  }
+}
 $("toolAll").onclick = () => {
   queryEl.value = "";
   hideSuggest();
@@ -628,7 +663,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "Chain",
-            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. Undo brings the whole graph back.",
+            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. The 1 2 3 4 ∞ picker at the bottom caps how many steps of PRECEDING events stay visible. Undo brings the whole graph back.",
           },
           { lead: "All nodes", text: "loads everything the mod has, connected or not." },
           {
@@ -948,12 +983,13 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
   updateRailTools();
   inspector.showPlaceholder();
 
-  // The Cluster tool's filter: applied at render time so the full graph stays
-  // in `currentGraph` and undoing the cluster is a redraw, not a fetch.
+  // The Chain tool's filter: applied at render time so the full graph stays
+  // in `currentGraph` and undoing the chain is a redraw, not a fetch.
   const cluster = history.state.cluster ?? null;
   const clustered = cluster !== null && (graph.nodes ?? []).some((n) => n.id === cluster);
-  const shown = clustered ? clusterGraph(graph, cluster) : graph;
+  const shown = clustered ? clusterGraph(graph, cluster, history.state.clusterDepth) : graph;
   renderedCluster = clustered ? cluster : null;
+  updateChainDepth();
 
   if ((shown.nodes ?? []).length === 0) {
     emptyEl.classList.add("show");
