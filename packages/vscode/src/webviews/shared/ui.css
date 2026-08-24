@@ -877,10 +877,10 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-menu-item[data-two-line] > .px-grow {
   font-weight: 500;
 }
-.px-menu-item[data-two-line] + .px-menu-item[data-two-line] {
-  border-top: 1px solid color-mix(in oklch, var(--px-fg) 8%, transparent);
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+/* Air between pairs, NOT borders: a separator line rides the row and breaks
+   the hover highlight's top edge. */
+.px-menu-list:has(> .px-menu-item[data-two-line]) {
+  gap: 3px;
 }
 .px-menu-item > .px-grow > .px-menu-description {
   display: block;

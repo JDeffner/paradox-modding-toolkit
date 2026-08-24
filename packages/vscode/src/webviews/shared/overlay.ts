@@ -38,8 +38,12 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
     top = a.top - gap - r.height;
     origin = "bottom";
   }
+  // A popover that would overflow the right edge RIGHT-ALIGNS to its anchor
+  // instead of being clamped to the viewport: it stays visually attached to
+  // the control that opened it rather than hugging the screen edge.
   let left = a.left;
-  if (left + r.width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - r.width);
+  if (left + r.width > window.innerWidth - 8) left = a.right - r.width;
+  left = Math.max(8, Math.min(left, window.innerWidth - 8 - r.width));
   el.style.top = `${Math.max(8, top)}px`;
   el.style.left = `${left}px`;
   el.style.setProperty("--px-origin", `${origin} left`);
