@@ -346,7 +346,9 @@ export function computeEventGraph(
     if (facts) {
       if (def?.kind === "event") node.options = facts.options;
       if (facts.trigger) node.triggerSummary = facts.trigger;
-      if (params.themes && facts.theme) node.theme = facts.theme;
+      // override_background wins over the theme: it is the picture the game
+      // actually shows for this event, and the banner resolver takes either.
+      if (params.themes && (facts.background ?? facts.theme)) node.theme = facts.background ?? facts.theme;
     }
     const fires = firesCount.get(id) ?? 0;
     if (fires > 0) node.fires = fires;
@@ -364,6 +366,8 @@ interface DefFacts {
   trigger: string;
   /** `theme = X`, for the banner layer. */
   theme?: string;
+  /** `override_background = { reference = X }`: wins over the theme's picture. */
+  background?: string;
 }
 /** Trigger keys named on a card before it says "…". Two fit the card's width. */
 const TRIGGER_KEYS_SHOWN = 2;
@@ -393,7 +397,10 @@ function fileFacts(): (file: string) => Map<string, DefFacts> {
           const childKey = child.key.text.toLowerCase();
           if (childKey === "option") entry.options++;
           else if (childKey === "theme" && child.value?.kind === "scalar") entry.theme = child.value.text;
-          else if (childKey === "trigger" && entry.trigger === "") entry.trigger = triggerKeys(child.value);
+          else if (childKey === "override_background") {
+            const ref = backgroundReference(child.value);
+            if (ref) entry.background = ref;
+          } else if (childKey === "trigger" && entry.trigger === "") entry.trigger = triggerKeys(child.value);
         }
         facts.set(stmt.key.text, entry);
       }
@@ -408,6 +415,23 @@ function blockOf(value: ValueNode | null | undefined): BlockNode | null {
   if (value?.kind === "block") return value;
   if (value?.kind === "tagged-block") return value.block;
   return null;
+}
+
+/**
+ * The reference of an `override_background` value: `{ reference = X }` in the
+ * current syntax, a bare scalar in the pre-1.5 one. Several blocks would be
+ * trigger-gated variants; the last reference is the file's own fallback.
+ */
+function backgroundReference(value: ValueNode | null | undefined): string | null {
+  if (value?.kind === "scalar") return value.text;
+  const block = blockOf(value);
+  if (!block) return null;
+  let ref: string | null = null;
+  for (const stmt of block.statements) {
+    if (stmt.kind !== "assignment") continue;
+    if (stmt.key.text.toLowerCase() === "reference" && stmt.value?.kind === "scalar") ref = stmt.value.text;
+  }
+  return ref;
 }
 
 /** "is_adult, has_trait…": what a `trigger` block asks, short enough for a card. */

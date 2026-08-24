@@ -34,7 +34,7 @@ const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsC
   {
     id: "toolCenter",
     icon: "locate",
-    tip: "Center: rebuild the graph around the selected event. Needs a card selected",
+    tip: "Cluster: keep only the cards connected to the selected one, so you see the sequence it belongs to. Undo brings the rest back. Needs a card selected",
     needsCard: true,
   },
   {
@@ -53,7 +53,7 @@ const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsC
 export function eventGraphHtml({ scriptSrc, nonce, csp }: EventGraphHtmlOptions): string {
   const kindToggles = KINDS.map(
     (k) =>
-      `<button class="px-toggle" data-size="sm" data-kind="${k.kind}" aria-pressed="true" data-tip="${k.tip}"><i class="swatch" style="background:var(--eg-${k.kind})"></i>${k.label}</button>`
+      `<button class="px-toggle" data-size="sm" data-kind="${k.kind}" aria-pressed="true" data-tip="${k.tip}" data-tip-side="top"><i class="swatch" style="background:var(--eg-${k.kind})"></i>${k.label}</button>`
   ).join("");
   const tools = TOOLS.map(
     (t) =>
@@ -111,8 +111,12 @@ ${uiCss}
     background: var(--px-primary); color: var(--px-primary-fg);
   }
   #changes[disabled] .count { display: none; }
-  /* Compact kind chips: a swatch, a word, one row. */
-  #kinds { gap: 6px; }
+  /* Compact kind chips: a swatch, a word, one row. They sit on the canvas
+     next to the zoom group, so they get the same translucent backing. */
+  #kinds {
+    gap: 4px; padding: 2px; border-radius: var(--px-radius);
+    background: color-mix(in oklch, var(--px-bg) 75%, transparent);
+  }
   #kinds .px-toggle { height: var(--px-h-sm); padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
   #kinds .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
   #kinds .px-toggle[aria-pressed="false"] { color: var(--px-muted-fg); }
@@ -306,11 +310,10 @@ ${uiCss}
       <button id="titleRaw" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Caption every card with its raw id (cultivation_scheme.101)" data-tip-wrap>Raw</button>
       <button id="titleLoc" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Caption every card with its localized title, falling back to the id where there is none" data-tip-wrap>Loc</button>
     </div>
+    <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Event background: draw each event's background illustration behind its card. A background that cannot be resolved gets a hatched placeholder that says so" data-tip-wrap>${icon("image")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to undo" disabled>${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
-    <div class="px-separator" data-orientation="vertical"></div>
-    <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-wrap>${kindToggles}</div>
     <span class="px-grow"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reload the current graph from the index">${icon("rotate")}</button>
     <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
@@ -324,7 +327,6 @@ ${uiCss}
     <div id="rail" class="px-sidepanel" data-side="left">
       <div class="px-sidepanel-body">
         ${tools}
-        <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Event banner: draw each event's theme illustration behind its card. A theme whose picture cannot be resolved gets a hatched placeholder that says so" data-tip-side="right" data-tip-wrap>${icon("image")}</button>
       </div>
     </div>
     <div id="graphWrap">
@@ -339,6 +341,7 @@ ${uiCss}
           <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="top">${icon("zoomIn")}</button>
           <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="top">${icon("maximize")}</button>
         </div>
+        <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-side="top" data-tip-wrap>${kindToggles}</div>
         <span id="focusLine" class="px-muted px-xs"></span>
       </div>
       <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>

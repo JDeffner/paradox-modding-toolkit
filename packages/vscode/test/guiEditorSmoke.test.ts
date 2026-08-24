@@ -1904,45 +1904,17 @@ describe("the canvas devtools", () => {
 });
 
 describe("conditional visibility", () => {
-  it("interact mode: a click runs the variable half of an onclick and the checks follow", () => {
-    const text = [
-      "window = {",
-      "\tname = px_i",
-      "\tsize = { 400 300 }",
-      "\tbutton = {",
-      "\t\tname = px_i_btn",
-      "\t\tsize = { 40 40 }",
-      "\t\tonclick = \"[GetVariableSystem.Set('px_tab', 'b')]\"",
-      "\t\tonclick = \"[GetPlayer.MakeScope.ExecuteEffect('px_fx')]\"",
-      "\t}",
-      "\twidget = {",
-      "\t\tname = px_i_panel",
-      "\t\tposition = { 100 100 }",
-      "\t\tsize = { 40 40 }",
-      "\t\tvisible = \"[GetVariableSystem.HasValue('px_tab', 'b')]\"",
-      "\t}",
-      "}",
-    ].join("\n");
-    const layout = openDoc(text, "px_i.gui");
+  it("interact mode is deferred: the toggle is hidden and the mode cannot be entered", () => {
+    // docs/deferred-features.md: interact mode is hidden until it is fleshed
+    // out. The elements stay in the DOM (the id contract), but neither the
+    // button nor the I shortcut may reach the mode.
+    openDoc(["window = {", "\tname = px_i", "\tsize = { 400 300 }", "}"].join("\n"), "px_i.gui");
+    expect(editor.document.getElementById("modeGroup")!.hasAttribute("hidden")).toBe(true);
     editor.document.getElementById("modeInteract")!.click();
-    const at = centreOf(layout, "px_i_btn");
-    editor.click(at.x, at.y);
-    // One message, the evaluate assignment the variable decides; nothing written.
-    expect(lastOfType(editor, "setVisibility")).toEqual({
-      type: "setVisibility",
-      mode: "evaluate",
-      checks: { "[GetVariableSystem.HasValue('px_tab', 'b')]": true },
-    });
-    expect(editor.sent.some((m) => m.type === "checkEdit" || m.type === "applyEdit")).toBe(false);
-    const tip = editor.document.getElementById("clickTip")!;
-    expect(tip.hasAttribute("hidden")).toBe(false);
-    expect(tip.textContent).toContain("set px_tab = b");
-    expect(tip.textContent).toContain("ExecuteEffect('px_fx')");
-    // Esc closes the tip first, then leaves interact mode.
-    editor.key("Escape");
-    expect(tip.hasAttribute("hidden")).toBe(true);
-    editor.key("Escape");
     expect(editor.document.getElementById("modeEdit")!.getAttribute("aria-pressed")).toBe("true");
+    editor.key("i");
+    expect(editor.document.getElementById("modeEdit")!.getAttribute("aria-pressed")).toBe("true");
+    expect(editor.document.getElementById("modeInteract")!.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("a mode change is one message, the layout is the answer, and the badge says so", () => {

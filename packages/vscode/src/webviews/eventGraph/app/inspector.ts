@@ -257,13 +257,16 @@ export class Inspector {
       variable: "variable",
       scripted_effect: "effect",
       scripted_trigger: "trigger",
-      script_value: "value",
+      script_value: "<SV>",
       event: "event",
     };
     for (const kind of order) {
       for (const ref of detail.refs.filter((r) => r.kind === kind)) {
         const row = el("div", "px-item");
-        row.title = ref.name;
+        row.title =
+          kind === "script_value"
+            ? `Script Value\n${ref.name}: a number computed by script, defined under common/script_values.`
+            : ref.name;
         row.appendChild(el("span", "px-item-kind", labels[kind] ?? kind));
         row.appendChild(el("span", "px-item-label", ref.name));
         if (ref.defFile && (ref.defCount ?? 0) > 1) {

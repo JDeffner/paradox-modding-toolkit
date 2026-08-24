@@ -43,6 +43,8 @@ let ui: UiState = {
 };
 let currentGraph: EventGraph | null = null;
 let currentParams: EventGraphParams = {};
+/** The cluster filter the LAST render actually drew (null = the whole graph). */
+let renderedCluster: string | null = null;
 const hiddenKinds = new Set<string>();
 
 const history = new GraphHistory({ focus: {}, positions: {}, pending: [] });
@@ -145,9 +147,41 @@ function selectNode(id: string | null): void {
 function refocus(id: string): void {
   const focus: EventGraphParams = { ...baseParams(), root: id };
   // A refocus is a history step: undo takes the reader back where they were.
-  history.push(`focus ${id}`, { ...history.state, focus, positions: {} });
+  history.push(`focus ${id}`, { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
+}
+
+/**
+ * The subgraph connected to `id`, following edges both ways: the sequence the
+ * node belongs to, with every unrelated card gone. Client-side, so the Cluster
+ * tool costs no round trip and undo brings the full graph straight back.
+ */
+function clusterGraph(graph: EventGraph, id: string): EventGraph {
+  const adjacent = new Map<string, string[]>();
+  const link = (a: string, b: string): void => {
+    const list = adjacent.get(a);
+    if (list) list.push(b);
+    else adjacent.set(a, [b]);
+  };
+  for (const edge of graph.edges) {
+    link(edge.from, edge.to);
+    link(edge.to, edge.from);
+  }
+  const keep = new Set<string>([id]);
+  const queue = [id];
+  while (queue.length > 0) {
+    for (const next of adjacent.get(queue.pop()!) ?? []) {
+      if (keep.has(next)) continue;
+      keep.add(next);
+      queue.push(next);
+    }
+  }
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((n) => keep.has(n.id)),
+    edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +214,14 @@ function applyState(state: GraphState): void {
   view.setOptions({ positions: state.positions });
   if (lastDetail && selectedId) inspector.render(lastDetail, selectedId, state.pending);
   afterHistoryChange();
-  if (!sameFocus(state.focus, currentParams)) fetchGraph(state.focus);
+  if (!sameFocus(state.focus, currentParams)) {
+    fetchGraph(state.focus);
+    return;
+  }
+  // Same focus but a different cluster: redraw from the graph we already hold.
+  if ((state.cluster ?? null) !== renderedCluster && currentGraph) {
+    renderGraph(currentGraph, currentParams);
+  }
 }
 
 function sameFocus(a: EventGraphParams, b: EventGraphParams): boolean {
@@ -325,13 +366,20 @@ $("toolSimulate").onclick = () => {
   if (selectedId) sim.open(selectedId);
 };
 $("toolCenter").onclick = () => {
-  if (selectedId) refocus(selectedId);
+  if (!selectedId || !currentGraph) return;
+  const id = selectedId;
+  // A view-only step: the graph we hold is filtered down to the nodes connected
+  // to the selection. Undo restores the full view; nothing is fetched.
+  history.push(`cluster around ${id}`, { ...history.state, cluster: id, positions: {} });
+  afterHistoryChange();
+  renderGraph(currentGraph, currentParams);
+  selectNode(id);
 };
 $("toolAll").onclick = () => {
   queryEl.value = "";
   hideSuggest();
   const focus: EventGraphParams = { maxNodes: 5000 };
-  history.push("show all nodes", { ...history.state, focus, positions: {} });
+  history.push("show all nodes", { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 };
@@ -378,6 +426,7 @@ $("helpBtn").onclick = () => {
     "A card says its name, then its kind and how many options it has, then what its trigger asks for and how much it fires.",
     "The colored bar is the kind. Dashed borders are vanilla content, solid is your mod, dotted is a parent mod.",
     "Click a card to focus and inspect it, drag it to move it, double-click to open its source, right-click to re-centre the graph on it.",
+    "The Cluster tool keeps only the cards connected to the selected one, so you can follow one sequence. Undo brings the rest back.",
     'An arrow labeled "via" goes through a scripted effect: the event does not name the target itself, the effect it calls does.',
     "Edits in the inspector are held here until you press Save. The Changes button lists them, and each row goes back to before it.",
     "Drag the canvas to pan, scroll to zoom. + / − / 0 or the buttons at the bottom left do the same.",
@@ -409,7 +458,7 @@ function parseQuery(): EventGraphParams {
 function submitQuery(): void {
   hideSuggest();
   const focus = parseQuery();
-  history.push("change focus", { ...history.state, focus, positions: {} });
+  history.push("change focus", { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 }
@@ -491,7 +540,7 @@ function pick(index: number): void {
   hideSuggest();
   view.highlight(entry.text);
   const focus = paramsFor(entry.text, entry.kind);
-  history.push(`focus ${entry.text}`, { ...history.state, focus, positions: {} });
+  history.push(`focus ${entry.text}`, { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 }
@@ -531,9 +580,11 @@ function setFocusLine(text: string, state: "" | "warn" | "error"): void {
   else delete focusLineEl.dataset.state;
 }
 
-function updateInfo(graph: EventGraph, params: EventGraphParams): void {
+function updateInfo(graph: EventGraph, params: EventGraphParams, cluster: string | null): void {
   const lines = [`${graph.nodes.length} nodes · ${graph.edges.length} edges`];
   if (graph.truncated) lines.push("Truncated: this view hides part of the graph.");
+  if (cluster)
+    lines.push(`Clustered around ${cluster}: only the cards connected to it. Undo brings the rest back.`);
   lines.push(
     params.root
       ? `Focused on ${params.root}: what it fires, what fires it, and one hop further.`
@@ -619,7 +670,9 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       }
       if (currentParams.root) queryEl.value = currentParams.root;
       else if (currentParams.namespace) queryEl.value = currentParams.namespace;
-      // The focus the host loaded is the focus the history should hold.
+      // The focus the host loaded is the focus the history should hold. A
+      // cluster from another focus would filter the wrong graph: drop it.
+      if (!sameFocus(history.state.focus, currentParams)) history.state.cluster = undefined;
       history.state.focus = currentParams;
       try {
         renderGraph(msg.graph, currentParams);
@@ -636,7 +689,14 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
   updateRailTools();
   inspector.showPlaceholder();
 
-  if ((graph.nodes ?? []).length === 0) {
+  // The Cluster tool's filter: applied at render time so the full graph stays
+  // in `currentGraph` and undoing the cluster is a redraw, not a fetch.
+  const cluster = history.state.cluster ?? null;
+  const clustered = cluster !== null && (graph.nodes ?? []).some((n) => n.id === cluster);
+  const shown = clustered ? clusterGraph(graph, cluster) : graph;
+  renderedCluster = clustered ? cluster : null;
+
+  if ((shown.nodes ?? []).length === 0) {
     emptyEl.classList.add("show");
     emptyEl.replaceChildren(
       el(
@@ -648,20 +708,22 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
       )
     );
     setFocusLine("Nothing to show", "warn");
-    updateInfo(graph, params);
+    updateInfo(shown, params, renderedCluster);
     return;
   }
   emptyEl.classList.remove("show");
-  view.render(graph, params, {
+  view.render(shown, clustered ? { ...params, root: cluster } : params, {
     positions: history.state.positions,
     titleMode: ui.titleMode,
     banner: ui.banner,
   });
+  // The focus itself is already in the query box; this line only flags a view
+  // that hides something (truncation, cluster).
   setFocusLine(
-    params.root ? `Around ${params.root}` : params.namespace ? `Namespace ${params.namespace}` : "All nodes",
-    graph.truncated ? "warn" : ""
+    clustered ? `Cluster: ${shown.nodes.length} connected cards` : graph.truncated ? "Truncated view" : "",
+    graph.truncated && !clustered ? "warn" : ""
   );
-  updateInfo(graph, params);
+  updateInfo(shown, params, renderedCluster);
 }
 
 updatePanelToggle();

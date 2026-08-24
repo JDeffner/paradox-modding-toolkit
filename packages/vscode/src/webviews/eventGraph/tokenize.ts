@@ -8,6 +8,12 @@
  * are its own flattened output (`key = value`, `key = {`, `}`, or a bare list
  * entry), so a scanner that never looks past the end of the line is enough,
  * and it cannot disagree with the parse the lines came from.
+ *
+ * SELF-CONTAINED ON PURPOSE: the event-sim panel ships this function by
+ * serializing it into its inline webview script (`tokenizeScriptLine.toString()`,
+ * the same trick it plays with `simulationSteps`), so every constant and helper
+ * lives INSIDE the function. A module-level constant would compile to an
+ * `exports.` reference that does not exist in the page.
  */
 
 export type ScriptTokenKind = "comment" | "key" | "op" | "string" | "number" | "bool" | "brace" | "text";
@@ -17,17 +23,21 @@ export interface ScriptToken {
   kind: ScriptTokenKind;
 }
 
-/** Characters that end a bare word. */
-const BREAK = /[\s{}"#=<>!?]/;
-const OPERATOR = "=<>!?";
-const NUMBER = /^-?\d+(\.\d+)?$/;
-
 /**
  * Split one line into colorable tokens. Every character of the input lands in
  * exactly one token, in order, so joining the texts returns the line unchanged
  * (whitespace included) and the renderer needs no separate spacing rules.
  */
 export function tokenizeScriptLine(line: string): ScriptToken[] {
+  /** Characters that end a bare word. */
+  const BREAK = /[\s{}"#=<>!?]/;
+  const OPERATOR = "=<>!?";
+  const NUMBER = /^-?\d+(\.\d+)?$/;
+  const valueKind = (word: string): ScriptTokenKind => {
+    if (NUMBER.test(word)) return "number";
+    if (word === "yes" || word === "no") return "bool";
+    return "text";
+  };
   const out: ScriptToken[] = [];
   const push = (text: string, kind: ScriptTokenKind): void => {
     if (text !== "") out.push({ text, kind });
@@ -79,10 +89,4 @@ export function tokenizeScriptLine(line: string): ScriptToken[] {
     i = j;
   }
   return out;
-}
-
-function valueKind(word: string): ScriptTokenKind {
-  if (NUMBER.test(word)) return "number";
-  if (word === "yes" || word === "no") return "bool";
-  return "text";
 }

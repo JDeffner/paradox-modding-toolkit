@@ -76,6 +76,7 @@ import { sidePanel } from "../../shared/sidePanel";
 import {
   closePopover,
   confirmDialog,
+  isPopoverAnchor,
   menu,
   popover,
   toast as pxToast,
@@ -136,10 +137,13 @@ import {
   chunk,
   LIBRARY_PAGE,
   LIBRARY_SECTIONS,
+  libraryDoc,
   libraryEntries,
+  libraryGroup,
   libraryTiles,
   libraryTip,
   previewEntryFor,
+  WIDGET_GROUPS,
   type LibraryEntry,
   type LibrarySection,
 } from "./library";
@@ -968,9 +972,22 @@ interface Tile {
 }
 const tileEls = new Map<string, Tile>();
 let tileObserver: IntersectionObserver | null = null;
-/** The tile bitmap, in CSS pixels; the canvas is scaled by the device ratio. */
-const TILE_W = 112;
-const TILE_H = 72;
+/** The card bitmap, in CSS pixels; the canvas is scaled by the device ratio. */
+const TILE_W = 220;
+const TILE_H = 110;
+
+/** The showcase's group order: this file's own pieces first, then the widget groups, then the stores. */
+const LIBRARY_GROUP_ORDER = [
+  "This file's templates",
+  "Declared types",
+  ...WIDGET_GROUPS,
+  "Templates",
+  "Saved components",
+];
+function libraryGroupRank(group: string): number {
+  const at = LIBRARY_GROUP_ORDER.indexOf(group);
+  return at < 0 ? LIBRARY_GROUP_ORDER.length : at;
+}
 
 /**
  * Previews the host has answered for THIS document version, by tile key. A
@@ -1034,7 +1051,7 @@ function renderLibrary(): void {
     el(
       "span",
       "px-muted px-sm",
-      "Click a tile to add it to the selected container, or drag it onto the canvas"
+      "Every element previewed as the game draws it. Click a card to add it to the selected container, or drag it onto the canvas"
     )
   );
   titleRow.appendChild(el("span", "px-grow"));
@@ -1080,7 +1097,17 @@ function renderLibrary(): void {
     libraryEl.appendChild(el("div", "note", "No widget vocabulary for this game yet."));
     return;
   }
-  const tiles = libraryTiles(libraryEntries(vocabulary, components), librarySection, libraryQuery);
+  let tiles = libraryTiles(libraryEntries(vocabulary, components), librarySection, libraryQuery);
+  // The showcase groups elements by their job, like the game's own GUI
+  // overview window. A search keeps the match order instead: headers over two
+  // hits fragment more than they explain.
+  const grouped = libraryQuery.trim() === "";
+  if (grouped) {
+    tiles = tiles
+      .map((entry, i) => ({ entry, i, rank: libraryGroupRank(libraryGroup(entry)) }))
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .map((t) => t.entry);
+  }
   if (tiles.length === 0) {
     libraryEl.appendChild(
       el(
@@ -1112,9 +1139,17 @@ function renderLibrary(): void {
   });
   tileObserver = observer;
   let shown = 0;
+  let lastGroup: string | null = null;
   const appendPage = (): void => {
     const end = Math.min(tiles.length, shown + LIBRARY_PAGE);
     for (; shown < end; shown++) {
+      if (grouped) {
+        const group = libraryGroup(tiles[shown]);
+        if (group !== lastGroup) {
+          lastGroup = group;
+          grid.appendChild(el("div", "groupHead", group));
+        }
+      }
       const tile = libraryTile(tiles[shown]);
       grid.appendChild(tile.node);
       observer.observe(tile.node);
@@ -1138,7 +1173,10 @@ function libraryTile(entry: LibraryEntry): Tile {
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = TILE_W * ratio;
   canvas.height = TILE_H * ratio;
-  node.append(canvas, el("div", "name", entry.name), el("div", "src", entry.source));
+  node.append(canvas, el("div", "name", entry.name));
+  const doc = libraryDoc(entry);
+  if (doc) node.appendChild(el("div", "desc", doc));
+  node.appendChild(el("div", "src", entry.source));
   node.addEventListener("pointerdown", (ev) => {
     if (ev.button !== 0 || committing) return;
     const ghost = el("div", "px-drag-ghost paletteGhost", entry.name);
@@ -2400,8 +2438,52 @@ function sendOps(
 
 function awaitVerdict(build: (id: number) => AppToHost, onVerdict: (verdict: EditVerdict) => void): void {
   const id = nextEditId++;
-  pendingEdits.set(id, onVerdict);
-  host.send(build(id));
+  const message = build(id);
+  // Every message that commits a document change funnels through here, so this
+  // is where the session change log records it (once the verdict says it went in).
+  const label = commitLabelOf(message);
+  pendingEdits.set(id, (verdict) => {
+    if (label !== null && !verdict.refused) recordChange(label);
+    onVerdict(verdict);
+  });
+  host.send(message);
+}
+
+/** The change-log label of a message that WRITES the document; null for checks and reads. */
+function commitLabelOf(message: AppToHost): string | null {
+  switch (message.type) {
+    case "applyEdit":
+      return message.properties.length === 1
+        ? `set ${message.properties[0].key}`
+        : `set ${message.properties.length} properties`;
+    case "reorder":
+      return "reorder children";
+    case "applyOps":
+      return describeOps(message.ops);
+    case "pasteInto":
+      return "paste from clipboard";
+    case "insertComponent":
+      return `insert ${message.name}`;
+    default:
+      return null;
+  }
+}
+
+function describeOps(ops: GuiSourceOp[]): string {
+  const verbs: Record<string, string> = {
+    setProperties: "edit",
+    insert: "insert",
+    insertRaw: "insert",
+    reorder: "reorder",
+    delete: "delete",
+    blockText: "read",
+  };
+  const counts = new Map<string, number>();
+  for (const op of ops) {
+    const verb = verbs[op.kind] ?? op.kind;
+    counts.set(verb, (counts.get(verb) ?? 0) + 1);
+  }
+  return [...counts].map(([verb, n]) => (n > 1 ? `${verb} ${n} widgets` : `${verb} a widget`)).join(", ");
 }
 
 // ---- selection -------------------------------------------------------------
@@ -2738,6 +2820,8 @@ const host = connectHost((message) => {
       // same law the server laid the widgets out with.
       setLineHeightRatio(message.lineHeightRatio);
       showSaveSource(message.save);
+      docDirty = message.dirty ?? false;
+      syncChanges();
       onLayout(
         message.result,
         message.textures,
@@ -2756,6 +2840,15 @@ const host = connectHost((message) => {
       return;
     case "reference":
       if (message.url) loadReference(message.name, message.url);
+      return;
+    case "saved":
+      if (message.ok) {
+        docDirty = false;
+        syncChanges();
+        toast(`Saved ${file}`, "info");
+      } else {
+        toast("The editor could not save the file.", "refused");
+      }
       return;
     case "widgetInfo": {
       const item = selectedItem();
@@ -4521,7 +4614,13 @@ function renderUses(): void {
       const target = revealLink(chain.name, chain.file, chain.line);
       target.classList.add("name");
       entry.appendChild(target);
-      entry.appendChild(el("span", "meta", chain.kind));
+      // A script value is denoted <SV> everywhere, and its tooltip leads with
+      // what that means, so the shorthand teaches itself.
+      const kindEl = el("span", "meta", chain.kind === "script_value" ? "<SV>" : chain.kind);
+      if (chain.kind === "script_value") {
+        kindEl.title = "Script Value: a number computed by script, defined under common/script_values.";
+      }
+      entry.appendChild(kindEl);
       uses.appendChild(entry);
       if (chain.via.length > 0) uses.appendChild(el("div", "via sub", `via ${chain.via.join(" → ")}`));
     }
@@ -5162,6 +5261,11 @@ window.addEventListener("keydown", (ev) => {
       else pasteIntoSelection();
       return;
     }
+    if (key === "s") {
+      ev.preventDefault();
+      saveEl.click();
+      return;
+    }
   }
   if ((ev.key === "Delete" || ev.key === "Backspace") && !chord) {
     ev.preventDefault();
@@ -5317,8 +5421,107 @@ async function deleteSelectionConfirmed(): Promise<void> {
 
 // ---- toolbar ---------------------------------------------------------------
 
-document.getElementById("undo")!.addEventListener("click", () => host.send({ type: "undo" }));
-document.getElementById("redo")!.addEventListener("click", () => host.send({ type: "redo" }));
+// The session change log and the Save button. Edits land in the in-memory
+// document only (rule one: the host owns the text, undo is the document's),
+// so Save is how a session reaches disk. The log lists what this panel
+// committed, and each row undoes back to before that change by running the
+// document's own undo the right number of times, which is the only honest
+// way to take back change i of n from a single linear history.
+const saveEl = document.getElementById("save") as HTMLButtonElement;
+const changesEl = document.getElementById("changes") as HTMLButtonElement;
+/** Labels of this panel's committed changes, oldest first, and the undone ones. */
+const sessionChanges: string[] = [];
+const undoneChanges: string[] = [];
+let docDirty = false;
+
+function syncChanges(): void {
+  const count = sessionChanges.length;
+  changesEl.disabled = count === 0;
+  changesEl.querySelector(".count")!.textContent = String(count);
+  changesEl.dataset.tip =
+    count === 0
+      ? "No changes yet this session"
+      : `List the ${count} change${count === 1 ? "" : "s"} made here, newest last; each row can be undone`;
+  if (count === 0 && isPopoverAnchor(changesEl)) closePopover();
+  saveEl.disabled = !docDirty;
+  saveEl.dataset.tip = docDirty
+    ? "Write the changes to the .gui file on disk (Ctrl+S)"
+    : "Nothing to save: the file on disk already matches";
+}
+
+function recordChange(label: string): void {
+  sessionChanges.push(label);
+  undoneChanges.length = 0;
+  docDirty = true;
+  syncChanges();
+}
+
+/** Undo the last `count` changes through the document's own history. */
+function undoBack(count: number): void {
+  for (let i = 0; i < count && sessionChanges.length > 0; i++) {
+    undoneChanges.push(sessionChanges.pop()!);
+    host.send({ type: "undo" });
+  }
+  syncChanges();
+}
+
+changesEl.addEventListener("click", () => {
+  if (isPopoverAnchor(changesEl)) {
+    closePopover();
+    return;
+  }
+  const list = el("div", "px-list");
+  list.id = "changeList";
+  sessionChanges.forEach((label, index) => {
+    const row = el("div", "px-item");
+    row.title = label;
+    const after = sessionChanges.length - 1 - index;
+    row.appendChild(el("span", "what", label));
+    row.appendChild(
+      button(
+        "",
+        () => {
+          closePopover();
+          undoBack(sessionChanges.length - index);
+        },
+        {
+          icon: "undo",
+          variant: "ghost",
+          size: "icon-xs",
+          tip: after === 0 ? "Undo this change" : `Undo this change and the ${after} after it`,
+        }
+      )
+    );
+    list.appendChild(row);
+  });
+  popover(changesEl, list);
+});
+
+saveEl.addEventListener("click", () => {
+  if (saveEl.disabled) return;
+  host.send({ type: "save" });
+});
+
+document.getElementById("undo")!.addEventListener("click", () => {
+  // Best effort: the log cannot see edits typed in the text editor, so it
+  // tracks the toolbar's own undo and redo and stays a session log, not a truth.
+  if (sessionChanges.length > 0) undoneChanges.push(sessionChanges.pop()!);
+  syncChanges();
+  host.send({ type: "undo" });
+});
+document.getElementById("redo")!.addEventListener("click", () => {
+  if (undoneChanges.length > 0) sessionChanges.push(undoneChanges.pop()!);
+  syncChanges();
+  host.send({ type: "redo" });
+});
+
+document
+  .getElementById("zoomOutBtn")!
+  .addEventListener("click", () => zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom / 1.25));
+document
+  .getElementById("zoomInBtn")!
+  .addEventListener("click", () => zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * 1.25));
+document.getElementById("zoomFitBtn")!.addEventListener("click", fitView);
 
 // Fit means "fit what is on screen", and under a subtree focus that is the
 // subtree, not the 1920x1080 reference viewport around it. The wheel zooms;
@@ -5447,7 +5650,13 @@ let lastNodes: GuiLayoutNode[] = [];
 /** A click asked for a layout; the next push reports how many widgets it showed or hid. */
 let clickPending = false;
 
+// Interact mode is a deferred feature: hidden in the toolbar and inert here
+// until it is fleshed out (docs/deferred-features.md). A widened boolean, not
+// a literal `false`, so the mode comparisons below keep typechecking.
+const interactEnabled: boolean = false;
+
 function setMode(next: ToolMode): void {
+  if (next === "interact" && !interactEnabled) return;
   if (mode === next) return;
   mode = next;
   modeEditEl.setAttribute("aria-pressed", next === "edit" ? "true" : "false");

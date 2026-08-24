@@ -858,12 +858,17 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Two-line rows breathe: without the padding and the description's own
+   margin, one row's description sat flush against the next row's label and
+   the list read as alternating unrelated lines rather than as pairs. */
 .px-menu-item[data-two-line] {
-  padding-top: 4px;
-  padding-bottom: 4px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .px-menu-item > .px-grow > .px-menu-description {
   display: block;
+  margin-top: 2px;
+  line-height: 1.35;
   font-size: var(--px-text-xs);
   color: var(--px-muted-fg);
   overflow: hidden;

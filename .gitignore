@@ -21,6 +21,9 @@ docs/*
 # Per-release notes: release.yml reads docs/release-notes-<version>.md as the
 # GitHub Release body and the Discord announcement.
 !docs/release-notes-*.md
+# Features hidden from users until they are fleshed out; code comments point
+# at it, so it travels with the repo.
+!docs/deferred-features.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).

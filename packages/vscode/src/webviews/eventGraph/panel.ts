@@ -75,7 +75,7 @@ export class EventGraphPanel {
 
     this.panel = vscode.window.createWebviewPanel(
       EventGraphPanel.viewType,
-      "Paradox Event Graph",
+      "Event Graph",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -145,7 +145,7 @@ export class EventGraphPanel {
     );
     if (answer === "Save") {
       const result = await this.applyEdits(pending);
-      if (result.error) void vscode.window.showErrorMessage(`Paradox Event Graph: ${result.error}`);
+      if (result.error) void vscode.window.showErrorMessage(`Event Graph: ${result.error}`);
       return;
     }
     if (answer === "Discard") return;
@@ -317,7 +317,7 @@ export class EventGraphPanel {
         selection: new vscode.Range(position, position),
       });
     } catch (err) {
-      void vscode.window.showErrorMessage(`Paradox Event Graph: cannot open ${file}: ${message(err)}`);
+      void vscode.window.showErrorMessage(`Event Graph: cannot open ${file}: ${message(err)}`);
     }
   }
 
@@ -332,7 +332,7 @@ export class EventGraphPanel {
       await vscode.workspace.fs.writeFile(target, Buffer.from(svg, "utf8"));
       void vscode.window.showInformationMessage(`Event graph exported to ${target.fsPath}`);
     } catch (err) {
-      void vscode.window.showErrorMessage(`Paradox Event Graph: export failed: ${message(err)}`);
+      void vscode.window.showErrorMessage(`Event Graph: export failed: ${message(err)}`);
     }
   }
 
