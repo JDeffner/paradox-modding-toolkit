@@ -4,8 +4,8 @@
  * from main.ts, and every gesture is reported back so the history can record
  * it.
  */
-import type { EventGraph, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
-import { NODE_H, NODE_W, type LayoutPos } from "../layout";
+import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
+import { NODE_H, NODE_W, rankNodes, type LayoutPos } from "../layout";
 import { ForceSim } from "../force";
 import { iconEl } from "../../shared/icons";
 
@@ -13,9 +13,16 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 /**
  * Edge labels render permanently only in sparse graphs; above this count they
  * appear on demand, for the selected node's own edges (label overlap is the
- * classic dense-graph failure).
+ * classic dense-graph failure). Delay/weight chips are exempt: they are the
+ * WHEN of an edge, short, and few.
  */
 const LABELS_ALWAYS_MAX = 25;
+/** Cards grow step rows only while the graph is small enough to afford them. */
+const STEPS_MAX_NODES = 150;
+/** The compact card is the header; rows stack under it. */
+const HEADER_H = NODE_H;
+const ROW_H = 20;
+const CARD_PAD_BOTTOM = 6;
 /** Pointer travel that turns a press into a drag rather than a click. */
 const DRAG_SLOP = 4;
 /**
@@ -49,6 +56,31 @@ interface EdgeItem {
   path: SVGPathElement;
   label: SVGTextElement | null;
   labelsAlways: boolean;
+  /** Row index the edge leaves from on the source card, or null = the border. */
+  fromRow: number | null;
+  /** Closes a cycle: drawn as a return arc, not a forward step. */
+  back: boolean;
+  /** The always-on "when" chip (delay or weight), positioned with the path. */
+  chip: SVGGElement | null;
+}
+
+/** How many rows a card gets; the true option count backs the "+N more" row. */
+function stepRows(node: EventGraphNode): number {
+  const steps = node.steps ?? [];
+  if (steps.length === 0) return 0;
+  const shownOptions = steps.filter((s) => s.phase === "option").length;
+  const more = (node.options ?? 0) > shownOptions ? 1 : 0;
+  return steps.length + more;
+}
+
+function nodeHeight(node: EventGraphNode, stepsOn: boolean): number {
+  const rows = stepsOn ? stepRows(node) : 0;
+  return rows === 0 ? NODE_H : HEADER_H + rows * ROW_H + CARD_PAD_BOTTOM;
+}
+
+/** ① ② …: an option row's number, compact enough for a card. */
+function circled(index: number): string {
+  return index < 20 ? String.fromCharCode(0x2460 + index) : String(index + 1);
 }
 
 function svgEl<K extends keyof SVGElementTagNameMap>(
@@ -86,6 +118,11 @@ export class GraphView {
   private banners = new Map<string, string | null>();
   private askedBanners = new Set<string>();
   private lastGraph: EventGraph | null = null;
+  /** Per-node card height (steps grow a card); the layout keeps the boxes apart. */
+  private heights = new Map<string, number>();
+  private stepsOn = true;
+  /** `from→to` pairs that close a cycle: drawn as return arcs. */
+  private backSet = new Set<string>();
   /**
    * The live simulation. It outlives a redraw: a title-mode switch or a banner
    * arriving rebuilds the DOM over the SAME positions, and only a different
@@ -138,11 +175,16 @@ export class GraphView {
     const edges = graph.edges ?? [];
     if (nodes.length === 0) return;
 
+    this.stepsOn = nodes.length <= STEPS_MAX_NODES;
+    this.heights = new Map(nodes.map((n) => [n.id, nodeHeight(n, this.stepsOn)]));
+    this.backSet = rankNodes(nodes, edges).back;
+
     // The simulation is fed only when the graph itself changed; cards that
     // survive a refocus keep their place and glide to the new one.
     const key = `${this.rootId ?? ""}|${nodes.map((n) => n.id).join(",")}|${edges.map((e) => `${e.from}>${e.to}`).join(",")}`;
-    if (!this.sim) this.sim = new ForceSim(nodes, edges, this.rootId ?? undefined);
-    else if (key !== this.simKey) this.sim.update(nodes, edges, this.rootId ?? undefined);
+    const simNodes = nodes.map((n) => ({ id: n.id, height: this.heights.get(n.id) }));
+    if (!this.sim) this.sim = new ForceSim(simNodes, edges, this.rootId ?? undefined);
+    else if (key !== this.simKey) this.sim.update(simNodes, edges, this.rootId ?? undefined);
     this.simKey = key;
     // A dragged card stays where the user put it; everything else is the
     // simulation's, so a re-layout never silently undoes a drag.
@@ -161,12 +203,20 @@ export class GraphView {
     const edgeLayer = svgEl("g");
     g.appendChild(edgeLayer);
     const labelsAlways = edges.length <= LABELS_ALWAYS_MAX;
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
     for (const edge of edges) {
-      const from = this.positions.get(edge.from);
-      const to = this.positions.get(edge.to);
-      if (!from || !to) continue;
-      const item = this.drawEdge(edgeLayer, edge.from, edge.to, edge.label, edge.via, from, to, labelsAlways);
+      if (!this.positions.has(edge.from) || !this.positions.has(edge.to)) continue;
+      // The row the edge leaves from, by SOURCE LINE: a capped row list can
+      // never mis-anchor an edge, it just falls back to the card's border.
+      let fromRow: number | null = null;
+      const steps = this.stepsOn ? nodeById.get(edge.from)?.steps : undefined;
+      if (steps && edge.fromLine !== undefined) {
+        const i = steps.findIndex((s) => s.line === edge.fromLine);
+        if (i >= 0) fromRow = i;
+      }
+      const item = this.drawEdge(edgeLayer, edge, labelsAlways, fromRow);
       this.edgeItems.push(item);
+      this.placeEdge(item);
     }
 
     for (const node of nodes) {
@@ -211,21 +261,47 @@ export class GraphView {
   private placeAll(): void {
     for (const [id, group] of this.nodeGroups) {
       const at = this.positions.get(id);
-      if (at) group.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`);
-    }
-    for (const item of this.edgeItems) {
-      const a = this.positions.get(item.from);
-      const b = this.positions.get(item.to);
-      if (!a || !b) continue;
-      const start = borderPoint(a, b);
-      const end = borderPoint(b, a);
-      const mx = (start.x + end.x) / 2;
-      const my = (start.y + end.y) / 2;
-      item.path.setAttribute("d", `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`);
-      if (item.label) {
-        item.label.setAttribute("x", String(mx));
-        item.label.setAttribute("y", String(my - 4));
+      if (at) {
+        const h = this.heights.get(id) ?? NODE_H;
+        group.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - h / 2})`);
       }
+    }
+    for (const item of this.edgeItems) this.placeEdge(item);
+  }
+
+  /**
+   * Route one edge: out of the source's own row (its port) when it has one,
+   * out of the border otherwise, into the target's border, as an S-bend with
+   * horizontal tangents — the readable curve in a columnar layout. A back
+   * edge takes the same geometry with its own style: it loops right-to-left,
+   * which is exactly what "loops back" should look like.
+   */
+  private placeEdge(item: EdgeItem): void {
+    const a = this.positions.get(item.from);
+    const b = this.positions.get(item.to);
+    if (!a || !b) return;
+    const ha = this.heights.get(item.from) ?? NODE_H;
+    const hb = this.heights.get(item.to) ?? NODE_H;
+    let sx: number;
+    let sy: number;
+    if (item.fromRow !== null) {
+      sx = a.x + NODE_W / 2 + 2;
+      sy = a.y - ha / 2 + HEADER_H + item.fromRow * ROW_H + ROW_H / 2;
+    } else {
+      const start = borderPoint(a, b, ha);
+      sx = start.x;
+      sy = start.y;
+    }
+    const end = borderPoint(b, { x: sx, y: sy }, hb);
+    const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
+    item.path.setAttribute("d", `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`);
+    // Horizontal tangents make the cubic's midpoint the plain average.
+    const mx = (sx + end.x) / 2;
+    const my = (sy + end.y) / 2;
+    if (item.chip) item.chip.setAttribute("transform", `translate(${mx},${my})`);
+    if (item.label) {
+      item.label.setAttribute("x", String(mx));
+      item.label.setAttribute("y", String(my - (item.chip ? 14 : 4)));
     }
   }
 
@@ -287,58 +363,68 @@ export class GraphView {
 
   private drawEdge(
     layer: SVGGElement,
-    from: string,
-    to: string,
-    label: string | undefined,
-    via: string,
-    a: LayoutPos,
-    b: LayoutPos,
-    labelsAlways: boolean
+    edge: EventGraphEdge,
+    labelsAlways: boolean,
+    fromRow: number | null
   ): EdgeItem {
-    // Meet the cards at their borders rather than their centres, so the
-    // arrowhead lands on the edge of the box it points at.
-    const start = borderPoint(a, b);
-    const end = borderPoint(b, a);
-    const mx = (start.x + end.x) / 2;
-    const my = (start.y + end.y) / 2;
-    const d = `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`;
+    const back = this.backSet.has(`${edge.from}→${edge.to}`);
     const path = svgEl("path", {
-      class: "edge-path",
-      d,
+      class: "edge-path" + (back ? " edge-back" : ""),
       "stroke-width": "1.3",
       "marker-end": "url(#arrow)",
     });
     const title = svgEl("title");
-    title.textContent = `${from} → ${to}  (${label || via || ""})`;
+    title.textContent =
+      `${edge.from} → ${edge.to}  (${edge.label || edge.via || ""})` +
+      (edge.delay ? `\nafter ${edge.delay}` : "") +
+      (edge.weight !== undefined ? `\nrandom, weight ${edge.weight}` : "") +
+      (back ? "\nloops back to an earlier step" : "");
     path.appendChild(title);
     layer.appendChild(path);
 
+    // The WHEN chip: a delay ("30d") or a random weight ("w 100"), always on.
+    const chipText = edge.delay ?? (edge.weight !== undefined ? `w ${edge.weight}` : null);
+    let chip: SVGGElement | null = null;
+    if (chipText) {
+      chip = svgEl("g", { class: "edge-chip" + (edge.delay ? "" : " edge-chip-random") });
+      const w = chipText.length * 6.5 + 10;
+      chip.appendChild(
+        svgEl("rect", { x: String(-w / 2), y: "-8", width: String(w), height: "16", rx: "8" })
+      );
+      const t = svgEl("text", { x: "0", y: "4", "text-anchor": "middle" });
+      t.textContent = chipText;
+      chip.appendChild(t);
+      layer.appendChild(chip);
+    }
+
+    // A row-anchored edge already SHOWS its origin (the port it leaves from);
+    // a text label would say the same thing twice.
     let text: SVGTextElement | null = null;
-    if (label) {
+    if (edge.label && fromRow === null) {
       text = svgEl("text", {
         class: "edge-label" + (labelsAlways ? "" : " hidden"),
-        x: String(mx),
-        y: String(my - 4),
         "text-anchor": "middle",
       });
-      text.textContent = label;
+      text.textContent = edge.label;
       layer.appendChild(text);
     }
-    return { from, to, path, label: text, labelsAlways };
+    return { from: edge.from, to: edge.to, path, label: text, labelsAlways, fromRow, back, chip };
   }
 
   /**
    * One card: the name in a size you can read across the canvas, then what kind
-   * of thing it is, then what it asks for and what it leads to. The kind is
-   * said twice, as a bar and as the border's hue, so it survives an
-   * illustration behind the card.
+   * of thing it is, then what it asks for and what it leads to — and, for a
+   * mod event, its STEP ROWS in execution order (immediate, the options, after),
+   * each with the port its edges leave from. The kind is said twice, as a bar
+   * and as the border's hue, so it survives an illustration behind the card.
    */
   private drawNode(node: EventGraphNode, at: LayoutPos): SVGGElement {
     const isRoot = this.rootId !== null && node.id === this.rootId;
     const kind = kindKey(node.kind);
+    const h = this.heights.get(node.id) ?? NODE_H;
     const group = svgEl("g", {
       class: "node" + (isRoot ? " root" : ""),
-      transform: `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`,
+      transform: `translate(${at.x - NODE_W / 2},${at.y - h / 2})`,
     });
     group.dataset.id = node.id;
     group.dataset.kind = kind;
@@ -346,7 +432,7 @@ export class GraphView {
     const rect = svgEl("rect", {
       class: "node-rect",
       width: String(NODE_W),
-      height: String(NODE_H),
+      height: String(h),
       rx: "6",
       ry: "6",
       "stroke-dasharray": sourceDash(node.source),
@@ -371,7 +457,7 @@ export class GraphView {
         x: "6",
         y: "8",
         width: "3",
-        height: String(NODE_H - 16),
+        height: String(h - 16),
         rx: "1.5",
         fill: `var(--eg-${kind})`,
         "pointer-events": "none",
@@ -384,7 +470,7 @@ export class GraphView {
           x: "-3",
           y: "-3",
           width: String(NODE_W + 6),
-          height: String(NODE_H + 6),
+          height: String(h + 6),
           rx: "8",
           ry: "8",
         })
@@ -400,6 +486,53 @@ export class GraphView {
     const sub = svgEl("text", { class: "node-sub", x: "16", y: "61" });
     sub.textContent = clip(subLine(node), 35);
     group.append(title, meta, sub);
+
+    // The step rows: what happens, in the order it happens, each with the
+    // port its edges leave from. A port with nothing wired to it is honest
+    // too: that choice ends the chain.
+    const steps = this.stepsOn ? (node.steps ?? []) : [];
+    if (steps.length > 0) {
+      group.appendChild(
+        svgEl("line", {
+          class: "step-sep",
+          x1: "8",
+          y1: String(HEADER_H - 4),
+          x2: String(NODE_W - 8),
+          y2: String(HEADER_H - 4),
+        })
+      );
+      steps.forEach((step, i) => {
+        const y = HEADER_H + i * ROW_H;
+        const row = svgEl("text", {
+          class: "node-step" + (step.phase === "option" ? "" : " node-step-auto"),
+          x: "16",
+          y: String(y + 14),
+        });
+        row.textContent =
+          step.phase === "option"
+            ? `${circled(step.index ?? i)} ${clip(step.text ?? "option", 30)}`
+            : step.phase;
+        group.appendChild(row);
+        group.appendChild(
+          svgEl("circle", {
+            class: "step-port" + (step.phase === "option" ? "" : " step-port-auto"),
+            cx: String(NODE_W - 10),
+            cy: String(y + ROW_H / 2),
+            r: "3",
+          })
+        );
+      });
+      const hidden = (node.options ?? 0) - steps.filter((s) => s.phase === "option").length;
+      if (hidden > 0) {
+        const more = svgEl("text", {
+          class: "node-step node-step-auto",
+          x: "16",
+          y: String(HEADER_H + steps.length * ROW_H + 14),
+        });
+        more.textContent = `+${hidden} more option${hidden === 1 ? "" : "s"}`;
+        group.appendChild(more);
+      }
+    }
     if (node.file) group.appendChild(this.drawOpenButton(node));
 
     group.addEventListener("dblclick", (ev) => {
@@ -560,6 +693,7 @@ export class GraphView {
         e.label.classList.toggle("hidden", !e.labelsAlways && !touches);
         e.label.classList.toggle("dim", id !== null && !touches);
       }
+      if (e.chip) e.chip.classList.toggle("dim", id !== null && !touches);
     }
   }
 
@@ -591,11 +725,12 @@ export class GraphView {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    this.positions.forEach((p) => {
+    this.positions.forEach((p, id) => {
+      const half = (this.heights.get(id) ?? NODE_H) / 2;
       minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
+      minY = Math.min(minY, p.y - half + NODE_H / 2);
       maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
+      maxY = Math.max(maxY, p.y + half - NODE_H / 2);
     });
     const rect = this.svg.getBoundingClientRect();
     const vw = rect.width || 800;
@@ -741,11 +876,11 @@ export class GraphView {
     // open anything.
     for (const button of Array.from(clone.querySelectorAll(".card-open"))) button.remove();
     // Bake the computed colors in: the exported file has no stylesheet, and the
-    // live one paints through CSS variables.
-    const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text")).filter(
+    // live one paints through CSS variables. Circles are the step ports.
+    const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text, circle, line")).filter(
       (node) => node.closest(".card-open") === null
     );
-    const copies = clone.querySelectorAll<SVGElement>("rect, path, text");
+    const copies = clone.querySelectorAll<SVGElement>("rect, path, text, circle, line");
     live.forEach((node, i) => {
       const cs = getComputedStyle(node);
       const copy = copies[i];
@@ -772,13 +907,13 @@ export class GraphView {
   }
 }
 
-/** Where the line from `a` to `b` leaves a's card. */
-function borderPoint(a: LayoutPos, b: LayoutPos): LayoutPos {
+/** Where the line from `a` to `b` leaves a's card (`h` = a's card height). */
+function borderPoint(a: LayoutPos, b: LayoutPos, h: number): LayoutPos {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   if (dx === 0 && dy === 0) return { x: a.x, y: a.y };
   const halfW = NODE_W / 2 + 2;
-  const halfH = NODE_H / 2 + 2;
+  const halfH = h / 2 + 2;
   const scale = Math.min(
     dx === 0 ? Infinity : halfW / Math.abs(dx),
     dy === 0 ? Infinity : halfH / Math.abs(dy)

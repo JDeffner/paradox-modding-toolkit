@@ -417,13 +417,34 @@ $("helpBtn").onclick = () =>
   helpDialog({
     title: "Event Graph",
     intro:
-      "Every event, on_action and decision of your mod as cards, with an arrow for every “this fires that” the index found. Use it to follow an event chain, spot dead ends, and edit an event without leaving the picture.",
+      "Every event, on_action and decision of your mod as cards, laid out so that LEFT TO RIGHT IS TIME: a card fires the cards in the columns to its right. Use it to follow an event chain, spot dead ends, and edit an event without leaving the picture.",
     sections: [
+      {
+        title: "Reading the sequence",
+        items: [
+          {
+            lead: "Columns are steps:",
+            text: "what starts a chain (usually an on_action) sits leftmost, and every arrow goes one or more columns to the right. A dashed arrow curving back LEFT closes a loop: the chain returns to an earlier event.",
+          },
+          {
+            lead: "A card's rows",
+            text: "are its own sequence, top to bottom: immediate runs when the event appears, the numbered rows are the player's options, after runs once any option was picked. Each row's dot is where its arrows leave; a row with no arrow ends the chain.",
+          },
+          {
+            lead: "The chip on an arrow",
+            text: "is its WHEN: “30d” fires 30 days later, “7–14d” somewhere in that window, “2mo” in months, “1y” in years. A dashed “w 100” chip is a random pool's raw weight, not a delay.",
+          },
+          {
+            lead: "Arrows labeled “via”",
+            text: "go through a scripted effect: the event does not name the target itself, the effect it calls does. What happens inside the effect (including any delay) is not shown.",
+          },
+        ],
+      },
       {
         title: "Reading a card",
         items: [
           {
-            lead: "Line by line:",
+            lead: "The header:",
             text: "the name (or localized title), then the kind and how many options it has, then what its trigger asks for and how often other content fires it.",
           },
           {
@@ -432,11 +453,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "The border",
-            text: "says where it comes from: solid is your mod, dashed is vanilla, dotted is a parent mod.",
-          },
-          {
-            lead: "Arrows",
-            text: "point from the thing that fires to the thing fired. One labeled “via” goes through a scripted effect: the event does not name the target itself, the effect it calls does.",
+            text: "says where it comes from: solid is your mod, dashed is vanilla, dotted is a parent mod. Only your mod's events grow rows; vanilla cards stay compact.",
           },
           {
             lead: "With a card selected,",

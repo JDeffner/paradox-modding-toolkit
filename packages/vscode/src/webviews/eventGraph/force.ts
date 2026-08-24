@@ -1,25 +1,31 @@
 /**
- * The event graph's force simulation: what makes the map settle into a shape
- * and react to a change the way a reader expects a graph to.
+ * The event graph's layout: a force simulation whose X AXIS IS TIME. Every
+ * card gets a rank (longest path from the chains' entry points, cycles broken
+ * into marked back edges), ranks become columns, and a strong pull keeps each
+ * card on its column while the usual forces (edge springs, repulsion,
+ * collision) sort the vertical order out. Left to right therefore reads
+ * "happens after", which is the one thing an event graph is for.
  *
- * Modelled on the d3-force loop everybody knows from Obsidian's graph view: a
- * temperature (`alpha`) that decays toward zero, and per tick a spring along
- * every edge, a repulsion between every pair of cards, a pull toward the
- * middle, a pull toward the card's own cluster (its namespace), and a nudge
- * that keeps what fires the focus on its left and what it fires on its right.
- * When the temperature is out the simulation STOPS: nothing moves while
- * nothing changes, and a change (a new graph, a refocus, a dragged card)
- * only re-heats it, so surviving cards glide from where they were.
+ * The loop itself is the d3-force shape everybody knows from Obsidian's graph
+ * view: a temperature (`alpha`) that decays toward zero, and when it is out
+ * the simulation STOPS: nothing moves while nothing changes, and a change (a
+ * new graph, a refocus, a dragged card) only re-heats it, so surviving cards
+ * glide from where they were.
  *
- * Deterministic: no Math.random, seeds come from a phyllotaxis spiral in a
- * fixed order, and two runs of the same inputs land on the same pixels. Pure:
- * no DOM, so `settle()` runs the whole thing headless in a test.
+ * Cards are boxes of one width but VARIABLE height (an event card grows a row
+ * per option); repulsion and collision keep the boxes apart, not just points.
+ *
+ * Deterministic: no Math.random, seeds follow the input order, and two runs of
+ * the same inputs land on the same pixels. Pure: no DOM, so `settle()` runs
+ * the whole thing headless in a test.
  */
 
 export interface SimNodeInput {
   id: string;
   /** Cards of one cluster (a namespace) gather; absent = the id's own prefix. */
   cluster?: string;
+  /** Card height in px; the compact card's when absent. */
+  height?: number;
 }
 export interface SimEdgeInput {
   from: string;
@@ -37,8 +43,10 @@ export interface SimNode extends SimPos {
   /** Pinned: the root, and a card the user put somewhere. */
   fixed: boolean;
   cluster: string;
-  /** 1 = downstream of the root (right), -1 = upstream (left), 0 = neither. */
-  side: number;
+  /** Sequence column: 0 = an entry nothing in the graph fires. */
+  rank: number;
+  /** Card height; collision keeps (a.h + b.h) / 2 + GAP clear. */
+  h: number;
   degree: number;
 }
 
@@ -47,6 +55,8 @@ export const NODE_W = 260;
 export const NODE_H = 70;
 /** Clear space demanded between two cards, on both axes. */
 export const GAP = 24;
+/** Column pitch: a card plus room for edge curves and their delay chips. */
+export const COL_W = NODE_W + 150;
 const PITCH_X = NODE_W + GAP;
 const PITCH_Y = NODE_H + GAP;
 
@@ -58,19 +68,97 @@ const VELOCITY_DECAY = 0.55;
 const CHARGE = 3000;
 /** Beyond this, cards no longer repel each other: keeps a 400-node mod bounded. */
 const CHARGE_RANGE = PITCH_X * 3;
-/** Edge rest length, and how much a busy hub stretches its own edges. */
+/** Edge rest length; springs mostly order the columns' vertical neighborhoods. */
 const LINK_LENGTH = PITCH_X * 1.05;
 const HUB_STRETCH = 0.1;
-/** Cluster homes sit on a ring of this radius per cluster (scaled by their count). */
-const CLUSTER_RING = PITCH_X * 1.4;
-/** A card beside the root never sits over the root's own column. */
-const MIN_SIDE_X = NODE_W / 2 + GAP;
+/** Namespaces stack as horizontal bands this far apart (multi-cluster views). */
+const CLUSTER_BAND = PITCH_Y * 3;
+
+/**
+ * Sequence ranks: longest path from the entry points, over the graph with its
+ * cycles broken. A DFS in input order marks the edges that close a cycle
+ * ("back" edges, drawn as return arcs); the remaining DAG is ranked so that
+ * every forward edge goes strictly left to right. Deterministic in input order.
+ */
+export function rankNodes(
+  nodes: readonly { id: string }[],
+  edges: readonly SimEdgeInput[]
+): { ranks: Map<string, number>; back: Set<string> } {
+  const ids: string[] = [];
+  const known = new Set<string>();
+  for (const n of nodes) {
+    if (known.has(n.id)) continue;
+    known.add(n.id);
+    ids.push(n.id);
+  }
+  const out = new Map<string, string[]>();
+  for (const id of ids) out.set(id, []);
+  const pairSeen = new Set<string>();
+  for (const e of edges) {
+    if (e.from === e.to || !known.has(e.from) || !known.has(e.to)) continue;
+    const key = `${e.from}→${e.to}`;
+    if (pairSeen.has(key)) continue;
+    pairSeen.add(key);
+    out.get(e.from)!.push(e.to);
+  }
+
+  // Iterative DFS, colors: 0 unseen, 1 on the stack, 2 done.
+  const color = new Map<string, number>();
+  const back = new Set<string>();
+  for (const start of ids) {
+    if (color.get(start)) continue;
+    const stack: Array<{ id: string; next: number }> = [{ id: start, next: 0 }];
+    color.set(start, 1);
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      const targets = out.get(top.id)!;
+      if (top.next >= targets.length) {
+        color.set(top.id, 2);
+        stack.pop();
+        continue;
+      }
+      const to = targets[top.next++];
+      const c = color.get(to) ?? 0;
+      if (c === 1) back.add(`${top.id}→${to}`);
+      else if (c === 0) {
+        color.set(to, 1);
+        stack.push({ id: to, next: 0 });
+      }
+    }
+  }
+
+  // Longest path over the remaining DAG (Kahn), entries at rank 0.
+  const ranks = new Map<string, number>();
+  const indeg = new Map<string, number>();
+  for (const id of ids) indeg.set(id, 0);
+  for (const from of ids) {
+    for (const to of out.get(from)!) {
+      if (back.has(`${from}→${to}`)) continue;
+      indeg.set(to, indeg.get(to)! + 1);
+    }
+  }
+  const queue: string[] = ids.filter((id) => indeg.get(id) === 0);
+  for (const id of queue) ranks.set(id, 0);
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const rank = ranks.get(id)!;
+    for (const to of out.get(id)!) {
+      if (back.has(`${id}→${to}`)) continue;
+      ranks.set(to, Math.max(ranks.get(to) ?? 0, rank + 1));
+      const left = indeg.get(to)! - 1;
+      indeg.set(to, left);
+      if (left === 0) queue.push(to);
+    }
+  }
+  for (const id of ids) if (!ranks.has(id)) ranks.set(id, 0);
+  return { ranks, back };
+}
 
 export class ForceSim {
   readonly nodes: SimNode[] = [];
   private byId = new Map<string, SimNode>();
   private links: Array<{ a: SimNode; b: SimNode; rest: number; strength: number }> = [];
-  private clusters = new Map<string, { home: SimPos; members: SimNode[] }>();
+  private clusters = new Map<string, { homeY: number; members: SimNode[] }>();
   private root: string | null = null;
   alpha = 0;
 
@@ -115,31 +203,20 @@ export class ForceSim {
 
   /**
    * A new graph (or a new focus): cards that survive keep their place and
-   * glide, new cards start beside a neighbour they are wired to, or on their
-   * cluster's spiral. Pins survive too, the root's moving to the new root.
+   * glide, new cards are born on their column, laddering out from its middle.
+   * Pins survive too, the root's moving to the new root.
    */
   update(nodes: readonly SimNodeInput[], edges: readonly SimEdgeInput[], root?: string): void {
     const previous = this.byId;
     const known = new Set<string>();
-    const keep: SimNode[] = [];
-    const fresh: SimNodeInput[] = [];
+    const inputs: SimNodeInput[] = [];
     for (const input of nodes) {
       if (known.has(input.id)) continue;
       known.add(input.id);
-      const old = previous.get(input.id);
-      if (old) {
-        old.cluster = input.cluster ?? clusterOf(input.id);
-        keep.push(old);
-      } else fresh.push(input);
+      inputs.push(input);
     }
-    this.nodes.length = 0;
-    this.byId = new Map();
-    for (const n of keep) {
-      if (n.id === this.root) n.fixed = false;
-      this.nodes.push(n);
-      this.byId.set(n.id, n);
-    }
-    // Adjacency, for sides, degrees and where a new card is born.
+    const { ranks } = rankNodes(inputs, edges);
+
     const out = new Map<string, string[]>();
     const inc = new Map<string, string[]>();
     for (const id of known) {
@@ -151,80 +228,80 @@ export class ForceSim {
       out.get(e.from)!.push(e.to);
       inc.get(e.to)!.push(e.from);
     }
-    // The focus is the centre; without one the busiest card is (ties by id),
-    // so a namespace view still has a middle instead of a drifting cloud.
+    const oldRoot = this.root;
     this.root = root && known.has(root) ? root : busiest(known, out, inc);
-    const side = this.sides(known, out, inc);
 
-    // Cluster homes: every namespace gets a spot on a ring, sorted by name so
-    // the same mod always lands the same way. A root's own cluster sits in the
-    // middle, since the root does.
-    // A cluster of one (an on_action, a lone decision) has no home: it goes
-    // where its edges take it instead of being pulled onto the ring.
+    // Namespace bands, sorted by name so the same mod always lands the same
+    // way. A cluster of one (an on_action, a lone decision) has no band.
     const counts = new Map<string, number>();
-    for (const id of known) {
-      const name = this.clusterName(id, nodes);
+    for (const input of inputs) {
+      const name = input.cluster ?? clusterOf(input.id);
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
-    const names = [...counts.keys()].filter((name) => counts.get(name)! > 1).sort();
-    const rootCluster = this.root ? this.clusterName(this.root, nodes) : null;
-    const ring = names.filter((n) => n !== rootCluster);
-    const radius = ring.length <= 1 ? 0 : CLUSTER_RING * Math.sqrt(ring.length);
+    const bands = [...counts.keys()].filter((name) => counts.get(name)! > 1).sort();
     this.clusters = new Map();
-    ring.forEach((name, i) => {
-      const angle = (i / ring.length) * Math.PI * 2 - Math.PI / 2;
-      this.clusters.set(name, {
-        home: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
-        members: [],
-      });
+    bands.forEach((name, i) => {
+      this.clusters.set(name, { homeY: (i - (bands.length - 1) / 2) * CLUSTER_BAND, members: [] });
     });
-    if (rootCluster && names.includes(rootCluster))
-      this.clusters.set(rootCluster, { home: { x: 0, y: 0 }, members: [] });
 
-    // New cards: next to a placed neighbour when they have one, else on their
-    // cluster's spiral, in input order.
-    const spiralIndex = new Map<string, number>();
-    /** How many new cards were born beside each placed card: they fan out, not pile up. */
-    const born = new Map<string, number>();
-    for (const input of fresh) {
+    this.nodes.length = 0;
+    this.byId = new Map();
+    /** New cards stack out from their column's middle, below then above,
+     *  by their own heights, so even the very first paint has no pile. */
+    const ladder = new Map<number, { down: number; up: number; k: number }>();
+    for (const input of inputs) {
       const id = input.id;
       const cluster = input.cluster ?? clusterOf(id);
-      const neighbours = [...(out.get(id) ?? []), ...(inc.get(id) ?? [])]
-        .map((n) => this.byId.get(n))
-        .filter((n): n is SimNode => n !== undefined);
-      let x: number;
-      let y: number;
-      const home = this.clusters.get(cluster)?.home ?? { x: 0, y: 0 };
-      if (neighbours.length > 0 && id !== this.root) {
-        const n = neighbours[0];
-        const s = side.get(id) ?? 0;
-        const k = born.get(n.id) ?? 0;
-        born.set(n.id, k + 1);
-        // 0, -1, +1, -2, +2 ... rows beside the neighbour, a column out from it.
-        const row = k === 0 ? 0 : (k % 2 === 1 ? -1 : 1) * Math.ceil(k / 2);
-        x = n.x + (s === 0 ? PITCH_X : s * PITCH_X) + (k % 3) * 30;
-        y = n.y + row * PITCH_Y * 0.9;
+      const rank = ranks.get(id) ?? 0;
+      const h = input.height ?? NODE_H;
+      const old = previous.get(id);
+      let node: SimNode;
+      if (old) {
+        node = old;
+        node.cluster = cluster;
+        node.rank = rank;
+        node.h = h;
+        if (node.id === oldRoot) node.fixed = false;
       } else {
-        const k = spiralIndex.get(cluster) ?? 0;
-        spiralIndex.set(cluster, k + 1);
-        // Phyllotaxis: r grows with sqrt(k), the golden angle spreads them.
-        const r = PITCH_Y * Math.sqrt(k);
-        const a = k * 2.399963;
-        x = home.x + Math.cos(a) * r * (PITCH_X / PITCH_Y);
-        y = home.y + Math.sin(a) * r;
+        const homeY = this.clusters.get(cluster)?.homeY ?? 0;
+        let col = ladder.get(rank);
+        if (!col) ladder.set(rank, (col = { down: homeY, up: homeY, k: 0 }));
+        let y: number;
+        if (col.k === 0) {
+          y = homeY;
+          col.down = y + h / 2;
+          col.up = y - h / 2;
+        } else if (col.k % 2 === 1) {
+          y = col.down + GAP + h / 2;
+          col.down = y + h / 2;
+        } else {
+          y = col.up - GAP - h / 2;
+          col.up = y - h / 2;
+        }
+        col.k++;
+        node = {
+          id,
+          x: rank * COL_W,
+          y,
+          vx: 0,
+          vy: 0,
+          fixed: false,
+          cluster,
+          rank,
+          h,
+          degree: 0,
+        };
       }
-      const node: SimNode = { id, x, y, vx: 0, vy: 0, fixed: false, cluster, side: 0, degree: 0 };
       this.nodes.push(node);
       this.byId.set(id, node);
     }
     for (const n of this.nodes) {
-      n.side = side.get(n.id) ?? 0;
       n.degree = (out.get(n.id)?.length ?? 0) + (inc.get(n.id)?.length ?? 0);
       this.clusters.get(n.cluster)?.members.push(n);
     }
     if (this.root) {
       const r = this.byId.get(this.root)!;
-      r.x = 0;
+      r.x = r.rank * COL_W;
       r.y = 0;
       r.vx = 0;
       r.vy = 0;
@@ -264,7 +341,8 @@ export class ForceSim {
     }
     const nodes = this.nodes;
 
-    // Springs.
+    // Springs: with x owned by the columns, these order each column's
+    // vertical neighborhood so wired cards sit level with each other.
     for (const l of this.links) {
       let dx = l.b.x - l.a.x;
       let dy = l.b.y - l.a.y;
@@ -274,20 +352,12 @@ export class ForceSim {
         dy = 0;
         d = 1;
       }
+      // Only y: x belongs to the columns, and a spring that pulled on x would
+      // drag a whole chain off its ranks.
       const f = ((d - l.rest) / d) * alpha * l.strength;
       const share = l.a.degree / (l.a.degree + l.b.degree || 1);
-      l.b.vx -= dx * f * share;
       l.b.vy -= dy * f * share;
-      l.a.vx += dx * f * (1 - share);
       l.a.vy += dy * f * (1 - share);
-      // Reading direction: what a card fires sits to its right, what fires it
-      // to its left, the same way the root's two sides are laid out. Only the
-      // card further from the root is nudged, so a chain unrolls outward.
-      if (l.b.side !== 0 && l.b.side === l.a.side) {
-        const want = l.a.x + l.b.side * LINK_LENGTH * 0.7;
-        if ((l.b.x - want) * l.b.side < 0) l.b.vx += (want - l.b.x) * 0.1 * alpha;
-        l.b.vy += (l.a.y - l.b.y) * 0.03 * alpha;
-      }
     }
     // Repulsion, in card units so a wide card pushes sideways as a tall one
     // pushes up: the x axis is squashed by the card's aspect.
@@ -302,51 +372,33 @@ export class ForceSim {
         let l2 = dx * dx + dy * dy;
         if (l2 >= range2) continue;
         // Coincident or nearly so: the kick is capped at a card's height, and
-        // two cards on one spot part along x (the collision pass does the rest).
+        // two cards on one spot part along y (the collision pass does the rest).
         const near = l2 < PITCH_Y * PITCH_Y;
         if (near) l2 = PITCH_Y * PITCH_Y;
         const w = (CHARGE * alpha) / l2;
-        const px = (near && dx === 0 && dy === 0 ? PITCH_Y : dx) * w * aspect;
-        const py = dy * w;
-        a.vx -= px;
+        // y only: x belongs to the columns.
+        const py = (near && dy === 0 ? PITCH_Y : dy) * w;
         a.vy -= py;
-        b.vx += px;
         b.vy += py;
       }
     }
-    // Gravity toward the middle, the cluster's home, and the card's side.
+    // y-gravity toward the middle and the cluster's band.
     for (const n of nodes) {
-      n.vx -= n.x * 0.0015 * alpha;
       n.vy -= n.y * 0.0015 * alpha;
-      const home = this.clusters.get(n.cluster)?.home;
-      if (home && this.clusters.size > 1) {
-        n.vx += (home.x - n.x) * 0.04 * alpha;
-        n.vy += (home.y - n.y) * 0.04 * alpha;
-      }
-      if (n.side !== 0) {
-        const want = n.side * PITCH_X;
-        if (Math.sign(n.x) !== n.side || Math.abs(n.x) < PITCH_X * 0.6) n.vx += (want - n.x) * 0.12 * alpha;
-      }
+      const cluster = this.clusters.get(n.cluster);
+      if (cluster && this.clusters.size > 1) n.vy += (cluster.homeY - n.y) * 0.04 * alpha;
     }
-    // Integrate. A card keeps its side of the root: the boundary is a wedge,
-    // so a card beside the root stays off its column while one far above or
-    // below may drift over it, and a crowded side wraps instead of stacking.
+    // Integrate. x is not a force at all: a free card rides onto its rank's
+    // column and stays there, so the sequence axis is exact, not approximate.
     for (const n of nodes) {
       if (n.fixed) {
         n.vx = 0;
         n.vy = 0;
         continue;
       }
-      n.vx *= VELOCITY_DECAY;
       n.vy *= VELOCITY_DECAY;
-      n.x += n.vx;
       n.y += n.vy;
-      if (n.side !== 0) {
-        const slack = Math.min(MIN_SIDE_X - 8, Math.max(0, Math.abs(n.y) - PITCH_Y) * 0.7);
-        const limit = MIN_SIDE_X - slack;
-        if (n.side === 1 && n.x < limit) n.x = limit;
-        if (n.side === -1 && n.x > -limit) n.x = -limit;
-      }
+      n.x += (n.rank * COL_W - n.x) * 0.3;
     }
     // Collision, on the positions themselves: cards are boxes, and a box that
     // overlaps another is moved apart along the shallower axis, most of the
@@ -361,36 +413,6 @@ export class ForceSim {
       /* run down */
     }
     return this.positions();
-  }
-
-  private clusterName(id: string, nodes: readonly SimNodeInput[]): string {
-    return nodes.find((n) => n.id === id)?.cluster ?? clusterOf(id);
-  }
-
-  /** BFS from the root: downstream cards are side 1, upstream side -1. */
-  private sides(
-    known: Set<string>,
-    out: Map<string, string[]>,
-    inc: Map<string, string[]>
-  ): Map<string, number> {
-    const side = new Map<string, number>();
-    if (!this.root) return side;
-    side.set(this.root, 0);
-    for (const [links, s] of [
-      [out, 1],
-      [inc, -1],
-    ] as const) {
-      const queue = [this.root];
-      while (queue.length > 0) {
-        const id = queue.shift()!;
-        for (const next of links.get(id) ?? []) {
-          if (side.has(next)) continue;
-          side.set(next, s);
-          queue.push(next);
-        }
-      }
-    }
-    return side;
   }
 }
 
@@ -416,8 +438,8 @@ export function clusterOf(id: string): string {
 
 /**
  * The hard guarantee after the forces are spent: no two cards inside each
- * other's gap. A few bounded sweeps along the shallower axis; pinned cards do
- * not move.
+ * other's gap (per-pair, since heights vary). A few bounded sweeps along the
+ * shallower axis; pinned cards do not move.
  */
 function separate(nodes: SimNode[], passes = 400, strength = 1): void {
   for (let pass = 0; pass < passes; pass++) {
@@ -428,8 +450,9 @@ function separate(nodes: SimNode[], passes = 400, strength = 1): void {
         const b = nodes[j];
         const dx = b.x - a.x;
         const dy = b.y - a.y;
+        const pitchY = (a.h + b.h) / 2 + GAP;
         const ox = PITCH_X - Math.abs(dx);
-        const oy = PITCH_Y - Math.abs(dy);
+        const oy = pitchY - Math.abs(dy);
         if (ox <= 0 || oy <= 0) continue;
         if (a.fixed && b.fixed) continue;
         moved = true;

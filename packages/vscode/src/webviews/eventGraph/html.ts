@@ -204,12 +204,26 @@ ${uiCss}
   .banner-missing-label { fill: var(--px-muted-fg); font-size: 9px; font-family: var(--px-font); pointer-events: none; }
   /* Focus + context: the selection's 1-hop neighborhood stays, the rest dims
      (never hides, so the mental map survives). In and out edges differ. */
-  .node.dim, .edge-path.dim, .edge-label.dim { opacity: 0.25; }
+  .node.dim, .edge-path.dim, .edge-label.dim, .edge-chip.dim { opacity: 0.25; }
   .edge-path { fill: none; stroke: var(--px-fg); stroke-opacity: 0.35; transition: opacity var(--px-ease); }
   .edge-path.out-of-sel { stroke: var(--eg-event); stroke-opacity: 0.95; }
   .edge-path.into-sel { stroke: var(--eg-other); stroke-opacity: 0.95; }
   .edge-label { pointer-events: none; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .edge-label.hidden { display: none; }
+  /* A cycle's return arc: unmistakably not a forward step. */
+  .edge-path.edge-back { stroke-dasharray: 6 4; stroke-opacity: 0.3; }
+  /* The WHEN chip: an edge's delay ("30d") or random weight ("w 100"). */
+  .edge-chip { pointer-events: none; }
+  .edge-chip rect { fill: var(--px-popover); stroke: color-mix(in oklch, var(--px-fg) 35%, transparent); stroke-width: 1; }
+  .edge-chip text { fill: var(--px-fg); font-size: 10px; font-family: var(--px-mono, monospace); text-anchor: middle; }
+  .edge-chip.edge-chip-random rect { stroke-dasharray: 3 2; }
+  .edge-chip.edge-chip-random text { fill: var(--px-muted-fg); }
+  /* Step rows: the card's own sequence, in execution order. */
+  .step-sep { stroke: color-mix(in oklch, var(--px-fg) 18%, transparent); stroke-width: 1; }
+  .node-step { pointer-events: none; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
+  .node-step-auto { fill: var(--px-muted-fg); font-style: italic; }
+  .step-port { fill: var(--eg-event); }
+  .step-port-auto { fill: var(--px-muted-fg); }
   .arrow-plain { fill: var(--px-fg); opacity: 0.5; }
   .arrow-out { fill: var(--eg-event); }
   .arrow-in { fill: var(--eg-other); }

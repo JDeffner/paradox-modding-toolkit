@@ -1144,6 +1144,20 @@ export interface EventGraphParams {
    *  event file, and only a client that draws the theme's art needs it. */
   themes?: boolean;
 }
+/**
+ * One row of a mod event's card, in EXECUTION order (immediate, then the
+ * options, then after) rather than file order. `line` is the join key an edge
+ * uses to anchor at the row that fires it ({@link EventGraphEdge.fromLine}).
+ */
+export interface EventGraphStep {
+  phase: "immediate" | "option" | "after";
+  /** Option ordinal within the event, 0-based. */
+  index?: number;
+  /** The option's localized text, when resolvable. */
+  text?: string;
+  /** 0-based line of the step's key in the event's file. */
+  line: number;
+}
 export interface EventGraphNode {
   id: string;
   kind: string;
@@ -1160,6 +1174,8 @@ export interface EventGraphNode {
   triggerSummary?: string;
   /** How many other nodes of this graph it fires; absent when it fires none. */
   fires?: number;
+  /** The card's rows (mod events only), capped; {@link EventGraphNode.options} is the true count. */
+  steps?: EventGraphStep[];
 }
 export interface EventGraphEdge {
   from: string;
@@ -1168,6 +1184,14 @@ export interface EventGraphEdge {
   via: string;
   /** Where in the source event the reference sits: an option's text, or immediate/after/… */
   label?: string;
+  /** The block the reference sits in, normalized (option/immediate/after/effect/…). */
+  phase?: string;
+  /** 0-based line of that block's key: matches a step's `line` on the source node. */
+  fromLine?: number;
+  /** The trigger_event delay at this site, pre-rendered short: "30d", "7–14d", "2mo", "1y". */
+  delay?: string;
+  /** random_events weight at this site (raw script number). */
+  weight?: number;
 }
 /**
  * What a query box may offer: the whole mod-side vocabulary of the graph, NOT
