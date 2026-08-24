@@ -184,6 +184,9 @@ ${uiCss}
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #bar .px-separator { height: 20px; align-self: center; }
+  /* The name has its own padding-free text edge; the buttons carry inner padding.
+     Extra margin around this divider keeps the visual gaps equal. */
+  #fileNameWrap + .px-separator { margin: 0 4px; }
   #fileNameWrap { position: relative; display: flex; min-width: 0; }
   #fileName { font-weight: 600; max-width: 260px; cursor: pointer; }
   #copyToast {
@@ -194,14 +197,14 @@ ${uiCss}
   }
   #copyToast.show { opacity: 1; }
   /* The toast owns the spot below the name; mute the hover tooltip while it shows. */
-  #fileNameWrap:has(> #copyToast.show) [data-tip]::after { opacity: 0; }
+  #fileNameWrap:has(> #copyToast.show)::after { opacity: 0 !important; }
   /* A checkbox inside a toggle: hidden, its state shown on the label (the px-switch pattern). */
   .px-toggle > input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
   .px-toggle:has(> input:checked) { background: var(--px-muted); }
   .px-toggle:has(> input:focus-visible) { border-color: var(--px-ring); box-shadow: 0 0 0 3px var(--px-ring-soft); }
   /* Panning moves the image outside the stage, so clip rather than scroll. */
   #stage { flex: 1 1 auto; position: relative; overflow: hidden; background: #101010; }
-  #stage.panning { cursor: grabbing; }
+  #stage.panning, #stage.panning #img { cursor: grabbing; }
   #img {
     position: absolute; top: 0; left: 0; transform-origin: 0 0;
     image-rendering: auto; cursor: grab;
@@ -228,7 +231,7 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="bar">
-    <span id="fileNameWrap"><span id="fileName" class="px-truncate" data-tip="Copy the file name">${escapeHtml(name)}</span><span id="copyToast">Copied!</span></span>
+    <span id="fileNameWrap" data-tip="Click to copy the file name"><span id="fileName" class="px-truncate">${escapeHtml(name)}</span><span id="copyToast">Copied!</span></span>
     <div class="px-separator" data-orientation="vertical"></div>
     ${barButton("copyPath", "copy", "Copy path", "Copy the path from the gfx/ root, as script references it")}
     ${barButton("reveal", "folderOpen", "Reveal", "Show the file in the system file explorer")}
