@@ -143,7 +143,7 @@ ${uiCss}
   /* It covers #main (stage AND side panels), so the showcase always has the
      full window's width; being outside #stage also keeps its wheel events off
      the canvas zoom handler, which used to eat the library's own scrolling. */
-  #libraryOverlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: color-mix(in oklch, var(--px-bg) 97%, transparent); }
+  #libraryOverlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--px-bg); }
   #libraryOverlay[hidden] { display: none; }
   #libraryOverlay > #library { flex: 1 1 auto; min-height: 0; border-top: 0; }
   #info[data-warning] { color: var(--px-destructive); }
