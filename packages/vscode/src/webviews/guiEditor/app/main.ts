@@ -2334,7 +2334,12 @@ function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTM
   swatch.addEventListener("click", () => {
     const start = input.value;
     colorPicker(swatch, rgb, {
-      format: { write, parse: parseColorValue },
+      format: {
+        label: "rgb",
+        writeValues: (c) => c.map((v) => round(v / 255)).join(" "),
+        write,
+        parse: parseColorValue,
+      },
       alpha: alpha === null ? undefined : Number(alpha),
       onChange: (next) => {
         rgb = next;

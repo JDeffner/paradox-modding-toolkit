@@ -1,14 +1,17 @@
 /**
- * A color picker in a popover: saturation/value square, hue bar, and a value
- * field in the color's OWN notation (hex when the caller has none), with copy
- * and liberal paste. The same shape as VS Code's editor color picker, so it
- * reads as the one the toolkit already uses on `rgb { }` literals in script
- * files (which cannot be summoned inside a webview). Browser code, styled by
- * ui.css (`.px-picker`).
+ * A color picker in a popover, mirroring VS Code's editor color picker (the
+ * one on `rgb { }` literals in script files, which cannot be summoned inside
+ * a webview and cannot be restyled): a value header on top, then the
+ * saturation/value square with vertical opacity and hue strips beside it.
+ * The header field holds the BARE component values in the color's own
+ * notation ("216 50 70" under an "hsv360" label; hex when the caller has
+ * none), with copy and liberal paste. Browser code, styled by ui.css
+ * (`.px-picker`).
  *
  * Alpha is SIMULATED, never edited: a source that spells a fourth component
- * shows it blended over a checkerboard, but there is no slider for it. Script
- * colors are not meant to grow alpha channels by accident.
+ * shows it blended over a checkerboard and marked on a display-only opacity
+ * strip, but nothing here adjusts it. Script colors are not meant to grow
+ * alpha channels by accident.
  */
 import { iconEl } from "./icons";
 import { popover } from "./overlay";
@@ -17,9 +20,14 @@ export type Rgb = [number, number, number];
 
 /** The color's own notation for the picker's value field. */
 export interface ColorValueFormat {
-  /** The value text for the current color, e.g. `hsv360 { 216 50 70 }`. */
+  /** The notation's name, shown as a label before the field ("rgb", "hsv360"). */
+  label: string;
+  /** The bare component values for the field, e.g. `216 50 70` — no braces. */
+  writeValues: (rgb: Rgb) => string;
+  /** The full script form the copy button yields, e.g. `hsv360 { 216 50 70 }`. */
   write: (rgb: Rgb) => string;
-  /** Typed or pasted text back to a color; null while it is not one. */
+  /** Typed or pasted text back to a color; null while it is not one. Bare
+   *  numbers are read in THIS notation, tagged or hex text in its own. */
   parse: (text: string) => Rgb | null;
 }
 
@@ -99,18 +107,10 @@ export function paintSwatch(swatch: HTMLElement, rgb: Rgb, alpha?: number): void
 export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPickerOptions): void {
   let [h, s, v] = rgbToHsv(initial);
 
+  // The same shape as the editor's native picker on script literals: a header
+  // with the value, then the square with vertical opacity and hue strips.
   const root = document.createElement("div");
   root.className = "px-picker";
-  const square = document.createElement("div");
-  square.className = "px-picker-square";
-  const squareThumb = document.createElement("div");
-  squareThumb.className = "px-picker-thumb";
-  square.append(squareThumb);
-  const hue = document.createElement("div");
-  hue.className = "px-picker-hue";
-  const hueThumb = document.createElement("div");
-  hueThumb.className = "px-picker-thumb";
-  hue.append(hueThumb);
   const row = document.createElement("div");
   row.className = "px-row";
   const preview = document.createElement("span");
@@ -119,9 +119,17 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
   value.className = "px-input px-mono";
   value.dataset.size = "sm";
   value.spellcheck = false;
-  row.append(preview, value);
+  row.append(preview);
+  if (options.format) {
+    const label = document.createElement("span");
+    label.className = "px-picker-label px-mono";
+    label.textContent = options.format.label;
+    row.append(label);
+  }
+  row.append(value);
 
-  const write = options.format?.write ?? rgbToHex;
+  const writeValues = options.format?.writeValues ?? rgbToHex;
+  const writeFull = options.format?.write ?? rgbToHex;
   // The hex form always parses, whatever notation the field displays.
   const parse = (text: string): Rgb | null => options.format?.parse(text) ?? hexToRgb(text);
   if (!options.format) value.maxLength = 7;
@@ -131,22 +139,53 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
     copy.className = "px-btn";
     copy.dataset.variant = "ghost";
     copy.dataset.size = "icon-xs";
-    copy.dataset.tip = "Copy the value";
+    copy.dataset.tip = options.format ? `Copy ${options.format.label} { … }` : "Copy the value";
     copy.append(iconEl("copy"));
-    copy.onclick = () => options.onCopy!(write(current()));
+    copy.onclick = () => options.onCopy!(writeFull(current()));
     row.append(copy);
   }
-  root.append(square, hue, row);
+
+  const body = document.createElement("div");
+  body.className = "px-picker-body";
+  const square = document.createElement("div");
+  square.className = "px-picker-square";
+  const squareThumb = document.createElement("div");
+  squareThumb.className = "px-picker-thumb";
+  square.append(squareThumb);
+  body.append(square);
+  // The locked alpha, shown where the native picker puts its opacity strip.
+  // Display only: the thumb marks the source's value and nothing drags.
+  let alphaFill: HTMLElement | null = null;
+  if (options.alpha !== undefined) {
+    const alpha = document.createElement("div");
+    alpha.className = "px-picker-alpha";
+    alpha.title = "Alpha comes from the script; edit the text to change it.";
+    alphaFill = document.createElement("div");
+    alphaFill.className = "px-picker-alpha-fill";
+    const alphaThumb = document.createElement("div");
+    alphaThumb.className = "px-picker-thumb";
+    alphaThumb.style.top = `${(1 - options.alpha) * 100}%`;
+    alpha.append(alphaFill, alphaThumb);
+    body.append(alpha);
+  }
+  const hue = document.createElement("div");
+  hue.className = "px-picker-hue";
+  const hueThumb = document.createElement("div");
+  hueThumb.className = "px-picker-thumb";
+  hue.append(hueThumb);
+  body.append(hue);
+  root.append(row, body);
 
   const current = (): Rgb => hsvToRgb(h, s, v);
   const paint = (): void => {
     square.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${h} 100% 50%))`;
     squareThumb.style.left = `${s * 100}%`;
     squareThumb.style.top = `${(1 - v) * 100}%`;
-    hueThumb.style.left = `${(h / 360) * 100}%`;
+    hueThumb.style.top = `${(h / 360) * 100}%`;
     const rgb = current();
     paintSwatch(preview, rgb, options.alpha);
-    if (document.activeElement !== value) value.value = write(rgb);
+    if (alphaFill) alphaFill.style.background = `linear-gradient(to bottom, ${rgbToHex(rgb)}, transparent)`;
+    if (document.activeElement !== value) value.value = writeValues(rgb);
   };
   const emit = (): void => {
     paint();
@@ -178,8 +217,8 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
     s = x;
     v = 1 - y;
   });
-  drag(hue, (x) => {
-    h = x * 360;
+  drag(hue, (_x, y) => {
+    h = y * 360;
   });
   value.oninput = () => {
     const rgb = parse(value.value);

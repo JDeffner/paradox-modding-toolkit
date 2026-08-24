@@ -924,22 +924,41 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 220px;
+  width: 240px;
+}
+/* The editor's native picker shape: square, then vertical opacity + hue strips. */
+.px-picker-body {
+  display: flex;
+  gap: 8px;
+  height: 140px;
 }
 .px-picker-square {
   position: relative;
-  height: 140px;
+  flex: 1 1 auto;
   border-radius: var(--px-radius-md);
   cursor: crosshair;
   touch-action: none;
 }
 .px-picker-hue {
   position: relative;
-  height: 12px;
+  width: 12px;
   border-radius: 999px;
-  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-  cursor: ew-resize;
+  background: linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  cursor: ns-resize;
   touch-action: none;
+}
+/* Display only: marks the source's alpha, drags nowhere. */
+.px-picker-alpha {
+  position: relative;
+  width: 12px;
+  border-radius: 999px;
+  background: repeating-conic-gradient(rgba(127, 127, 127, 0.45) 0% 25%, transparent 0% 50%) 0 0 / 8px 8px;
+  cursor: not-allowed;
+}
+.px-picker-alpha-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
 }
 .px-picker-thumb {
   position: absolute;
@@ -951,8 +970,14 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
-.px-picker-hue > .px-picker-thumb {
-  top: 50%;
+.px-picker-hue > .px-picker-thumb,
+.px-picker-alpha > .px-picker-thumb {
+  left: 50%;
+}
+.px-picker-label {
+  flex: 0 0 auto;
+  font-size: var(--px-text-sm);
+  color: var(--px-muted-fg);
 }
 .px-picker .px-input {
   flex: 1 1 0;

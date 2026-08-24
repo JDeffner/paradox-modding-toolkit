@@ -140,6 +140,18 @@ function parseColorRgb(text: string): Rgb | null {
   return p.kind === "rgb" ? p.value : hsvToRgb(p.value[0], p.value[1] / 100, p.value[2] / 100);
 }
 
+/** The hsv360 field shows bare values, so bare numbers ARE hsv360 there;
+ *  tagged or hex text still reads in its own notation. */
+function parseHsv360Values(text: string): Rgb | null {
+  const t = text.trim();
+  if (/^[\d.\s,]+$/.test(t)) {
+    const n = t.split(/[\s,]+/).map(Number);
+    if (n.length !== 3 || n.some((x) => !Number.isFinite(x))) return null;
+    return hsvToRgb(n[0], n[1] / 100, n[2] / 100);
+  }
+  return parseColorRgb(t);
+}
+
 // ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
@@ -630,8 +642,18 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
       const literal = color;
       const format: ColorValueFormat =
         literal.kind === "rgb"
-          ? { write: (c) => `rgb { ${c.join(" ")} }`, parse: parseColorRgb }
-          : { write: (c) => `hsv360 { ${rgbToHsv360(c).join(" ")} }`, parse: parseColorRgb };
+          ? {
+              label: "rgb",
+              writeValues: (c) => c.join(" "),
+              write: (c) => `rgb { ${c.join(" ")} }`,
+              parse: parseColorRgb,
+            }
+          : {
+              label: "hsv360",
+              writeValues: (c) => rgbToHsv360(c).join(" "),
+              write: (c) => `hsv360 { ${rgbToHsv360(c).join(" ")} }`,
+              parse: parseHsv360Values,
+            };
       const edit = button(
         "",
         () =>
