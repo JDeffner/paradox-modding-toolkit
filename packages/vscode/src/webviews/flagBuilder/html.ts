@@ -51,7 +51,8 @@ ${uiCss}
   #stageTools { left: 8px; }
   #stageInfo { right: 8px; gap: 8px; }
   #resetName[hidden] { display: none; }
-  [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
+  #origin { padding-left: 8px; }
+  #origin:empty { display: none; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 18px 92px minmax(0, 1fr) 24px; align-items: center; gap: 6px; }
@@ -113,14 +114,14 @@ ${uiCss}
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="right" data-tip-wrap>${icon("unlock")}</button>
-        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="right" data-tip-wrap>${icon("maximize")}</button>
+        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="top" data-tip-wrap>${icon("unlock")}</button>
+        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
         <span id="hint" class="px-muted px-xs"></span>
       </div>
       <div id="stageInfo">
         <span id="origin" class="px-muted px-xs"></span>
-        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
+        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
       </div>
     </div>
     <div id="side" class="px-sidepanel" data-side="right">

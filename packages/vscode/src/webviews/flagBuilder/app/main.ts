@@ -1232,6 +1232,8 @@ stage.addEventListener(
   { passive: false }
 );
 stage.addEventListener("pointerdown", (down) => {
+  // Drags starting on the floating stage chrome interact with it, never pan.
+  if (down.target instanceof Element && down.target.closest("#stageTools, #stageInfo")) return;
   if (view.frozen || down.button !== 1) return;
   down.preventDefault();
   stage.setPointerCapture(down.pointerId);

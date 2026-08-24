@@ -359,10 +359,10 @@ ${uiCss}
       <div id="textTip" class="px-popover" hidden></div>
       <div id="clickTip" class="px-popover" hidden></div>
       <div id="stageTools">
-        <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Ctrl+0 fits the 1920x1080 viewport, Shift+F the selection" data-tip-side="right" data-tip-wrap>100%</span>
+        <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Ctrl+0 fits the 1920x1080 viewport, Shift+F the selection" data-tip-side="top" data-tip-wrap>100%</span>
       </div>
       <div id="stageInfo">
-        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="left" data-tip-wrap>${icon("info")}</button>
+        <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
       </div>
       <div id="libraryOverlay" hidden>
         <div id="library" hidden></div>

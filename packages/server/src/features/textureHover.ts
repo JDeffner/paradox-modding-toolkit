@@ -9,7 +9,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import * as fs from "fs";
 import * as path from "path";
-import { ddsToPngDataUri } from "../dds";
+import { ddsFormatInfo, ddsToPngDataUri } from "../dds";
 import { getLineText } from "../documents";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetRoots, bareNameBaseDirs } from "./assetPaths";
@@ -17,30 +17,53 @@ import { assetRoots, bareNameBaseDirs } from "./assetPaths";
 const DDS_PATH = /[A-Za-z0-9_\-./\\]+\.dds/gi;
 const CACHE_MAX = 100;
 
-/** data-URI cache keyed by fsPath:mtime. */
-const cache = new Map<string, string | null>();
+interface TexturePreview {
+  /** PNG data URI, or null when the format can't be decoded. */
+  uri: string | null;
+  format: string;
+  width: number;
+  height: number;
+  fileBytes: number;
+}
 
-function cachedDataUri(fsPath: string): string | null {
-  let mtime: number;
+/** Preview cache keyed by fsPath:mtime. */
+const cache = new Map<string, TexturePreview | null>();
+
+function cachedPreview(fsPath: string): TexturePreview | null {
+  let stat: fs.Stats;
   try {
-    mtime = fs.statSync(fsPath).mtimeMs;
+    stat = fs.statSync(fsPath);
   } catch {
     return null;
   }
-  const key = `${fsPath}:${mtime}`;
+  const key = `${fsPath}:${stat.mtimeMs}`;
   if (cache.has(key)) return cache.get(key) ?? null;
-  let uri: string | null;
+  let entry: TexturePreview | null = null;
   try {
-    uri = ddsToPngDataUri(fs.readFileSync(fsPath), 256);
+    const buf = fs.readFileSync(fsPath);
+    const info = ddsFormatInfo(buf);
+    if (info) {
+      let uri: string | null;
+      try {
+        uri = ddsToPngDataUri(buf, 256);
+      } catch {
+        uri = null; // unsupported format → caller degrades to a file link
+      }
+      entry = { uri, format: info.format, width: info.width, height: info.height, fileBytes: stat.size };
+    }
   } catch {
-    uri = null; // unsupported format → caller degrades to a file link
+    entry = null;
   }
   if (cache.size >= CACHE_MAX) {
     const first = cache.keys().next().value;
     if (first !== undefined) cache.delete(first);
   }
-  cache.set(key, uri);
-  return uri;
+  cache.set(key, entry);
+  return entry;
+}
+
+function formatBytes(n: number): string {
+  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`;
 }
 
 export function provideTextureHover(
@@ -107,9 +130,14 @@ export function provideTextureHover(
     end: { line: position.line, character: hit.end },
   };
   const fileLink = URI.file(resolved.fsPath).toString();
-  const dataUri = cachedDataUri(resolved.fsPath);
-  const body = dataUri
-    ? `![texture](${dataUri})\n\n*${rel} (${resolved.label})* — [open file](${fileLink})`
-    : `Texture *${rel}* (${resolved.label}) — format not previewable, [open file](${fileLink})`;
+  const preview = cachedPreview(resolved.fsPath);
+  // The path is what's hovered, so the caption carries what the file itself
+  // knows: dimensions, encoding, size on disk, and where it resolved.
+  const meta = preview
+    ? `${preview.width}×${preview.height} · ${preview.format} · ${formatBytes(preview.fileBytes)} · ${resolved.label}`
+    : `texture (${resolved.label})`;
+  const body = preview?.uri
+    ? `![texture](${preview.uri})\n\n*${meta}* — [open file](${fileLink})`
+    : `*${meta}* — not previewable, [open file](${fileLink})`;
   return { contents: { kind: MarkupKind.Markdown, value: body }, range };
 }
