@@ -1,18 +1,39 @@
 /**
- * A color picker in a popover: saturation/value square, hue bar, hex field.
- * The same shape as VS Code's editor color picker, so it reads as the one the
- * toolkit already uses on `rgb { }` literals in script files (which cannot be
- * summoned inside a webview). Browser code, styled by ui.css (`.px-picker`).
+ * A color picker in a popover: saturation/value square, hue bar, and a value
+ * field in the color's OWN notation (hex when the caller has none), with copy
+ * and liberal paste. The same shape as VS Code's editor color picker, so it
+ * reads as the one the toolkit already uses on `rgb { }` literals in script
+ * files (which cannot be summoned inside a webview). Browser code, styled by
+ * ui.css (`.px-picker`).
+ *
+ * Alpha is SIMULATED, never edited: a source that spells a fourth component
+ * shows it blended over a checkerboard, but there is no slider for it. Script
+ * colors are not meant to grow alpha channels by accident.
  */
+import { iconEl } from "./icons";
 import { popover } from "./overlay";
 
 export type Rgb = [number, number, number];
+
+/** The color's own notation for the picker's value field. */
+export interface ColorValueFormat {
+  /** The value text for the current color, e.g. `hsv360 { 216 50 70 }`. */
+  write: (rgb: Rgb) => string;
+  /** Typed or pasted text back to a color; null while it is not one. */
+  parse: (text: string) => Rgb | null;
+}
 
 export interface ColorPickerOptions {
   /** Every change while dragging. */
   onChange: (rgb: Rgb) => void;
   /** When the picker closes (the undo step). */
   onClose?: () => void;
+  /** The value field's notation; a plain hex field when absent. */
+  format?: ColorValueFormat;
+  /** A source alpha in 0..1, blended into the preview. Not adjustable here. */
+  alpha?: number;
+  /** Routes the copy button's text; webview hosts own the clipboard. */
+  onCopy?: (text: string) => void;
 }
 
 export function rgbToHsv(rgb: Rgb): [number, number, number] {
@@ -64,6 +85,17 @@ export function hexToRgb(hex: string): Rgb | null {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/** Paint a swatch element, blending a locked alpha over the checkerboard. */
+export function paintSwatch(swatch: HTMLElement, rgb: Rgb, alpha?: number): void {
+  if (alpha !== undefined && alpha < 1) {
+    swatch.setAttribute("data-checker", "");
+    swatch.style.setProperty("--px-swatch", `rgb(${rgb.join(" ")} / ${alpha})`);
+  } else {
+    swatch.removeAttribute("data-checker");
+    swatch.style.setProperty("--px-swatch", rgbToHex(rgb));
+  }
+}
+
 export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPickerOptions): void {
   let [h, s, v] = rgbToHsv(initial);
 
@@ -83,12 +115,27 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
   row.className = "px-row";
   const preview = document.createElement("span");
   preview.className = "px-swatch";
-  const hex = document.createElement("input");
-  hex.className = "px-input px-mono";
-  hex.dataset.size = "sm";
-  hex.spellcheck = false;
-  hex.maxLength = 7;
-  row.append(preview, hex);
+  const value = document.createElement("input");
+  value.className = "px-input px-mono";
+  value.dataset.size = "sm";
+  value.spellcheck = false;
+  row.append(preview, value);
+
+  const write = options.format?.write ?? rgbToHex;
+  // The hex form always parses, whatever notation the field displays.
+  const parse = (text: string): Rgb | null => options.format?.parse(text) ?? hexToRgb(text);
+  if (!options.format) value.maxLength = 7;
+
+  if (options.onCopy) {
+    const copy = document.createElement("button");
+    copy.className = "px-btn";
+    copy.dataset.variant = "ghost";
+    copy.dataset.size = "icon-xs";
+    copy.dataset.tip = "Copy the value";
+    copy.append(iconEl("copy"));
+    copy.onclick = () => options.onCopy!(write(current()));
+    row.append(copy);
+  }
   root.append(square, hue, row);
 
   const current = (): Rgb => hsvToRgb(h, s, v);
@@ -98,8 +145,8 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
     squareThumb.style.top = `${(1 - v) * 100}%`;
     hueThumb.style.left = `${(h / 360) * 100}%`;
     const rgb = current();
-    preview.style.setProperty("--px-swatch", rgbToHex(rgb));
-    if (document.activeElement !== hex) hex.value = rgbToHex(rgb);
+    paintSwatch(preview, rgb, options.alpha);
+    if (document.activeElement !== value) value.value = write(rgb);
   };
   const emit = (): void => {
     paint();
@@ -134,8 +181,8 @@ export function colorPicker(anchor: HTMLElement, initial: Rgb, options: ColorPic
   drag(hue, (x) => {
     h = x * 360;
   });
-  hex.oninput = () => {
-    const rgb = hexToRgb(hex.value);
+  value.oninput = () => {
+    const rgb = parse(value.value);
     if (!rgb) return;
     [h, s, v] = rgbToHsv(rgb);
     emit();

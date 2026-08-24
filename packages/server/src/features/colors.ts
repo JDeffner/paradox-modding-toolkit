@@ -187,11 +187,19 @@ export function provideDocumentColors(document: TextDocument): ColorSite[] {
 
 const FORMATS: readonly ColorFormat[] = ["rgb", "hsv", "hsv360", "hex", "float", "int"];
 
-export function renderColor(color: Color, format: ColorFormat, alpha: boolean): string {
+/**
+ * `alpha` is the SOURCE's fourth component (null = the source spelled none),
+ * not the picker's: the editor's opacity slider always exists and cannot be
+ * hidden, so presentations pin alpha to what the file already says. A color
+ * with alpha keeps exactly that alpha, a color without one never gains one —
+ * script colors are not meant to grow alpha channels from a stray drag.
+ */
+export function renderColor(color: Color, format: ColorFormat, alpha: number | null): string {
   const i = (n: number) => Math.round(n * 255);
   const f = (n: number) => String(Math.round(n * 1000) / 1000);
-  const withAlpha = alpha || color.alpha < 1;
-  const { red: r, green: g, blue: b, alpha: a } = color;
+  const withAlpha = alpha !== null;
+  const { red: r, green: g, blue: b } = color;
+  const a = alpha ?? 1;
   switch (format) {
     case "rgb":
       return `rgb { ${i(r)} ${i(g)} ${i(b)}${withAlpha ? ` ${i(a)}` : ""} }`;
@@ -228,7 +236,8 @@ export function provideColorPresentations(
     (s) => s.range.start.line === range.start.line && s.range.start.character === range.start.character
   );
   const own = site?.format ?? "rgb";
-  const alpha = site?.alpha ?? false;
+  // The source's own alpha, never the picker's: the opacity slider is inert.
+  const alpha = site?.alpha ? site.color.alpha : null;
   return [own, ...FORMATS.filter((f) => f !== own)].map((format) => ({
     label: renderColor(color, format, alpha),
   }));
