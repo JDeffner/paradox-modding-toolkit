@@ -174,7 +174,11 @@ function refocus(id: string): void {
  * Client-side, so the Chain tool costs no round trip and undo brings the
  * full graph straight back.
  */
-function clusterGraph(graph: EventGraph, id: string, depth?: number): EventGraph {
+function clusterGraph(
+  graph: EventGraph,
+  id: string,
+  depth?: number
+): { graph: EventGraph; continuations: Record<string, { in: number; out: number }> } {
   const out = new Map<string, string[]>();
   const inc = new Map<string, string[]>();
   const link = (map: Map<string, string[]>, a: string, b: string): void => {
@@ -204,10 +208,34 @@ function clusterGraph(graph: EventGraph, id: string, depth?: number): EventGraph
       }
     }
   }
+  // What the cut hides: distinct hidden neighbors per kept card, so the view
+  // can draw "the chain continues" stubs instead of silently ending.
+  const hiddenIn = new Map<string, Set<string>>();
+  const hiddenOut = new Map<string, Set<string>>();
+  const note = (map: Map<string, Set<string>>, at: string, other: string): void => {
+    const set = map.get(at);
+    if (set) set.add(other);
+    else map.set(at, new Set([other]));
+  };
+  for (const e of graph.edges) {
+    const fromKept = keep.has(e.from);
+    const toKept = keep.has(e.to);
+    if (fromKept && !toKept) note(hiddenOut, e.from, e.to);
+    if (!fromKept && toKept) note(hiddenIn, e.to, e.from);
+  }
+  const continuations: Record<string, { in: number; out: number }> = {};
+  for (const n of graph.nodes) {
+    const inCount = hiddenIn.get(n.id)?.size ?? 0;
+    const outCount = hiddenOut.get(n.id)?.size ?? 0;
+    if (keep.has(n.id) && (inCount > 0 || outCount > 0)) continuations[n.id] = { in: inCount, out: outCount };
+  }
   return {
-    ...graph,
-    nodes: graph.nodes.filter((n) => keep.has(n.id)),
-    edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+    graph: {
+      ...graph,
+      nodes: graph.nodes.filter((n) => keep.has(n.id)),
+      edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+    },
+    continuations,
   };
 }
 
@@ -536,26 +564,32 @@ $("toolCenter").onclick = () => {
   selectNode(id);
 };
 
-// The chain's depth: keep only nodes within 1..4 hops of the chained card,
-// or the whole chain (∞). The head chip unfolds the picker.
+// The chain's depth: a slider from 1 hop to the whole chain (the right end,
+// shown as ∞). The head chip unfolds it.
+const depthSlider = $("chainDepthSlider") as HTMLInputElement;
+const SLIDER_INF = depthSlider.max;
 $("chainDepthHead").onclick = () => {
   const open = $("chainDepthOptions").hidden;
   $("chainDepthOptions").hidden = !open;
   $("chainDepthHead").toggleAttribute("data-open", open);
 };
-for (const btn of Array.from($("chainDepthOptions").children) as HTMLElement[]) {
-  btn.onclick = () => {
-    if (!renderedCluster || !currentGraph) return;
-    const id = renderedCluster;
-    const depth = btn.dataset.depth === "inf" ? undefined : Number(btn.dataset.depth);
-    history.push(`chain depth ${btn.textContent}`, { ...history.state, clusterDepth: depth });
-    afterHistoryChange();
-    renderGraph(currentGraph, currentParams);
-    selectNode(id);
-  };
-}
+const depthText = (): string => (depthSlider.value === SLIDER_INF ? "∞" : depthSlider.value);
+// While sliding, only the label follows; the graph re-cuts on release.
+depthSlider.addEventListener("input", () => {
+  $("chainDepthLabel").textContent = depthText();
+});
+depthSlider.addEventListener("change", () => {
+  if (!renderedCluster || !currentGraph) return;
+  const id = renderedCluster;
+  const depth = depthSlider.value === SLIDER_INF ? undefined : Number(depthSlider.value);
+  if (depth === history.state.clusterDepth) return;
+  history.push(`chain depth ${depthText()}`, { ...history.state, clusterDepth: depth });
+  afterHistoryChange();
+  renderGraph(currentGraph, currentParams);
+  selectNode(id);
+});
 
-/** Show the depth control only while a chain is on, with its current step lit. */
+/** Show the depth control only while a chain is on, at its current step. */
 function updateChainDepth(): void {
   const depth = history.state.clusterDepth;
   $("chainDepth").hidden = renderedCluster === null;
@@ -563,11 +597,8 @@ function updateChainDepth(): void {
     $("chainDepthOptions").hidden = true;
     $("chainDepthHead").removeAttribute("data-open");
   }
+  depthSlider.value = depth === undefined ? SLIDER_INF : String(depth);
   $("chainDepthLabel").textContent = depth === undefined ? "∞" : String(depth);
-  for (const btn of Array.from($("chainDepthOptions").children) as HTMLElement[]) {
-    const mine = btn.dataset.depth === "inf" ? undefined : Number(btn.dataset.depth);
-    btn.setAttribute("aria-pressed", String(mine === depth));
-  }
 }
 $("toolAll").onclick = () => {
   queryEl.value = "";
@@ -1007,7 +1038,8 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
   // in `currentGraph` and undoing the chain is a redraw, not a fetch.
   const cluster = history.state.cluster ?? null;
   const clustered = cluster !== null && (graph.nodes ?? []).some((n) => n.id === cluster);
-  const shown = clustered ? clusterGraph(graph, cluster, history.state.clusterDepth) : graph;
+  const cut = clustered ? clusterGraph(graph, cluster!, history.state.clusterDepth) : null;
+  const shown = cut?.graph ?? graph;
   renderedCluster = clustered ? cluster : null;
   updateChainDepth();
 
@@ -1031,6 +1063,7 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
     positions: history.state.positions,
     titleMode: ui.titleMode,
     banner: ui.banner,
+    continuations: cut?.continuations,
   });
   // The focus itself is already in the query box; this line only flags a view
   // that hides something (truncation, cluster). A cluster cut from a truncated

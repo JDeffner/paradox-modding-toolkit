@@ -50,6 +50,8 @@ export interface RenderOptions {
   positions: Record<string, { x: number; y: number }>;
   titleMode: "raw" | "loc";
   banner: boolean;
+  /** Chain view only: how many hidden neighbors each visible card still has. */
+  continuations?: Record<string, { in: number; out: number }>;
 }
 
 interface EdgeItem {
@@ -80,11 +82,6 @@ function stepRows(node: EventGraphNode): number {
 function nodeHeight(node: EventGraphNode, stepsOn: boolean): number {
   const rows = stepsOn ? stepRows(node) : 0;
   return rows === 0 ? NODE_H : HEADER_H + rows * ROW_H + CARD_PAD_BOTTOM;
-}
-
-/** ① ② …: an option row's number, compact enough for a card. */
-function circled(index: number): string {
-  return index < 20 ? String.fromCharCode(0x2460 + index) : String(index + 1);
 }
 
 /** A hub grows with its wiring: up to +35% for a card ten edges touch. */
@@ -337,13 +334,31 @@ export class GraphView {
     const sy =
       item.fromRow !== null ? a.y - ha / 2 + (HEADER_H + item.fromRow * ROW_H + ROW_H / 2) * sa : a.y;
     const end = { x: b.x - wb / 2 - 2, y: b.y };
-    const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
-    const d = `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`;
+    let c1x: number;
+    let c1y: number;
+    let c2x: number;
+    let c2y: number;
+    if (item.from === item.to) {
+      // A self-loop (an option re-firing its own event): out of the row's
+      // port, under the card, back into its left-center.
+      const drop = ha / 2 + 36;
+      c1x = sx + 70;
+      c1y = a.y + drop;
+      c2x = end.x - 70;
+      c2y = a.y + drop;
+    } else {
+      const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
+      c1x = sx + k;
+      c1y = sy;
+      c2x = end.x - k;
+      c2y = end.y;
+    }
+    const d = `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${end.x} ${end.y}`;
     item.path.setAttribute("d", d);
     item.hit.setAttribute("d", d);
-    // Horizontal tangents make the cubic's midpoint the plain average.
-    const mx = (sx + end.x) / 2;
-    const my = (sy + end.y) / 2;
+    // The cubic's midpoint, exact: B(0.5) = (P0 + 3·C1 + 3·C2 + P3) / 8.
+    const mx = (sx + 3 * c1x + 3 * c2x + end.x) / 8;
+    const my = (sy + 3 * c1y + 3 * c2y + end.y) / 8;
     if (item.chip) item.chip.setAttribute("transform", `translate(${mx},${my})`);
     if (item.label) {
       item.label.setAttribute("x", String(mx));
@@ -429,7 +444,8 @@ export class GraphView {
       (edge.label || edge.phase ? `\nfrom: ${edge.label ?? edge.phase}` : "") +
       (edge.delay ? `\nwhen: ${delayTitle(edge.delay)}` : "") +
       (edge.weight !== undefined ? `\nwhen: picked at random from this pool, weight ${edge.weight}` : "") +
-      (back ? "\nloops back to an earlier step in the sequence" : "");
+      (back ? "\nloops back to an earlier step in the sequence" : "") +
+      (edge.from === edge.to ? "\nfires itself again: a repeating chain" : "");
     hit.appendChild(title);
     layer.appendChild(hit);
 
@@ -539,6 +555,44 @@ export class GraphView {
       );
     }
 
+    // The chain continues past this card: dashed stubs say so, with counts.
+    const cont = this.options.continuations?.[node.id];
+    if (cont) {
+      const stub = (side: "in" | "out", count: number): void => {
+        if (count <= 0) return;
+        const cy = h / 2;
+        const g = svgEl("g", { class: "chain-stub" });
+        const [x1, x2, tx, anchor] =
+          side === "in" ? [-26, -5, -30, "end"] : [NODE_W + 5, NODE_W + 26, NODE_W + 30, "start"];
+        g.appendChild(
+          svgEl("line", {
+            class: "chain-stub-line",
+            x1: String(x1),
+            y1: String(cy),
+            x2: String(x2),
+            y2: String(cy),
+          })
+        );
+        const t = svgEl("text", {
+          class: "chain-stub-text",
+          x: String(tx),
+          y: String(cy + 3),
+          "text-anchor": anchor,
+        });
+        t.textContent = `+${count}`;
+        g.appendChild(t);
+        const tip = svgEl("title");
+        tip.textContent =
+          side === "in"
+            ? `${count} more event${count === 1 ? "" : "s"} lead${count === 1 ? "s" : ""} here, outside this view. Raise the chain depth (top left) to see them.`
+            : `The chain continues: ${count} more event${count === 1 ? "" : "s"} follow from here, outside this view. Raise the chain depth (top left) to see them.`;
+        g.appendChild(tip);
+        group.appendChild(g);
+      };
+      stub("in", cont.in);
+      stub("out", cont.out);
+    }
+
     const primary = this.options.titleMode === "loc" && node.title ? node.title : node.id;
     const title = svgEl("text", { class: "node-title", x: "16", y: "24" });
     // The title stops short of the corner the hover button sits in.
@@ -565,19 +619,35 @@ export class GraphView {
       );
       steps.forEach((step, i) => {
         const y = HEADER_H + i * ROW_H;
+        // The whole row is the click target, with the toolkit's usual grayish
+        // hover; the texts above it stay pointer-inert.
+        const bg = svgEl("rect", {
+          class: "step-row-bg",
+          x: "8",
+          y: String(y + 1),
+          width: String(NODE_W - 16),
+          height: String(ROW_H - 2),
+          rx: "4",
+          "data-step-line": String(step.line),
+        });
+        const rowTip = svgEl("title");
+        rowTip.textContent = "Click: open this step in the inspector";
+        bg.appendChild(rowTip);
+        group.appendChild(bg);
         const row = svgEl("text", {
           class: "node-step" + (step.phase === "option" ? "" : " node-step-auto"),
           x: "16",
           y: String(y + 14),
-          "data-step-line": String(step.line),
         });
-        row.textContent =
-          step.phase === "option"
-            ? `${circled(step.index ?? i)} ${clip(step.text ?? "option", 30)}`
-            : step.phase;
-        const rowTip = svgEl("title");
-        rowTip.textContent = "Click: open this step in the inspector";
-        row.appendChild(rowTip);
+        if (step.phase === "option") {
+          const num = svgEl("tspan", { class: "step-num" });
+          num.textContent = `${(step.index ?? i) + 1}. `;
+          const text = svgEl("tspan");
+          text.textContent = clip(step.text ?? "option", 30);
+          row.append(num, text);
+        } else {
+          row.textContent = step.phase === "immediate" ? "Immediate" : "After";
+        }
         group.appendChild(row);
         group.appendChild(
           svgEl("circle", {
@@ -585,7 +655,6 @@ export class GraphView {
             cx: String(NODE_W - 10),
             cy: String(y + ROW_H / 2),
             r: "3",
-            "data-step-line": String(step.line),
           })
         );
       });

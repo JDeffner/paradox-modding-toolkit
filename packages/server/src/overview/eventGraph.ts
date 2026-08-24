@@ -229,9 +229,10 @@ export function computeEventGraph(
     if (!fires && !call) continue;
     const from = containerOf(ref);
     if (!from) continue;
-    if (from.name === ref.name) continue;
     if (call) {
-      if (isScriptedEffect(ref.name)) addCall(from.name, ref.name);
+      // An effect calling ITSELF would loop the expansion; an event firing
+      // itself (a repeating chain) is a real edge and stays.
+      if (from.name !== ref.name && isScriptedEffect(ref.name)) addCall(from.name, ref.name);
       continue;
     }
     const edge: Edge = {

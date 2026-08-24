@@ -70,7 +70,13 @@ seq.2 = { type = character_event }
 
 seq.3 = { type = character_event }
 
-seq.4 = { type = character_event }
+seq.4 = {
+	type = character_event
+	option = {
+		name = seq.4.a
+		trigger_event = { id = seq.4 days = 100 }
+	}
+}
 `;
 
 const SEQ_ON_ACTION_TXT = `seq_pulse = {
@@ -179,6 +185,12 @@ describe("sequencing: steps, phases, delays, weights", () => {
     const ranged = graph.edges.find((e) => e.to === "seq.3" && e.delay);
     expect(ranged?.delay).toBe("7–14d");
     expect(edge("seq.4")).toMatchObject({ phase: "after", delay: "2mo" });
+  });
+
+  it("an option that fires its own event is a self-edge, not silence", () => {
+    const graph = computeEventGraph(data, { namespace: "seq" });
+    const self = graph.edges.find((e) => e.from === "seq.4" && e.to === "seq.4");
+    expect(self).toMatchObject({ phase: "option", delay: "100d", fromLine: 26 });
   });
 
   it("an on_action's random_events entries carry their raw weights", () => {

@@ -157,7 +157,12 @@ ${uiCss}
   #chainDepth[hidden], #chainDepthOptions[hidden] { display: none; }
   #chainDepthHead .px-icon { transition: transform var(--px-ease); }
   #chainDepthHead[data-open] .px-icon { transform: rotate(90deg); }
-  #chainDepthOptions { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
+  #chainDepthOptions {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border: 1px solid var(--px-border); border-radius: var(--px-radius);
+    background: color-mix(in oklch, var(--px-bg) 82%, transparent);
+  }
+  #chainDepthSlider { width: 110px; accent-color: var(--eg-event); cursor: pointer; }
   /* Bottom-left view controls, the same group the GUI editor uses. */
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #zoomGroup {
@@ -231,12 +236,17 @@ ${uiCss}
   .edge-chip.edge-chip-random text { fill: var(--px-muted-fg); }
   /* Step rows: the card's own sequence, in execution order. */
   .step-sep { stroke: color-mix(in oklch, var(--px-fg) 18%, transparent); stroke-width: 1; }
-  /* Rows are click targets: a click opens the step in the inspector. */
-  .node-step { pointer-events: all; cursor: pointer; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
-  .node-step:hover { fill: var(--px-fg); text-decoration: underline; }
+  /* The row's own hover surface: the toolkit's usual grayish highlight. */
+  .step-row-bg { fill: transparent; cursor: pointer; }
+  .step-row-bg:hover { fill: color-mix(in oklch, var(--px-fg) 10%, transparent); }
+  .node-step { pointer-events: none; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
+  .node-step .step-num { fill: var(--px-muted-fg); }
   .node-step-auto { fill: var(--px-muted-fg); font-style: italic; }
   .step-port { fill: var(--eg-event); }
   .step-port-auto { fill: var(--px-muted-fg); }
+  /* Chain stubs: the sequence continues past what the view keeps. */
+  .chain-stub-line { stroke: var(--px-muted-fg); stroke-opacity: 0.6; stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .chain-stub-text { fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .arrow-plain { fill: var(--px-fg); opacity: 0.5; }
   .arrow-out { fill: var(--eg-event); }
   .arrow-in { fill: var(--eg-other); }
@@ -368,8 +378,10 @@ ${uiCss}
       <div id="railBar">
         <div id="chainDepth" hidden>
           <button id="chainDepthHead" class="px-btn" data-variant="outline" data-size="sm" data-tip="Chain depth: how many steps around the selected card stay visible" data-tip-side="right" data-tip-wrap>${icon("chevronRight")}<span id="chainDepthLabel">∞</span></button>
-          <div id="chainDepthOptions" class="px-toggle-group" hidden>
-            ${["1", "2", "3", "4", "∞"].map((label) => `<button class="px-toggle" data-size="sm" data-depth="${label === "∞" ? "inf" : label}" aria-pressed="${label === "∞"}">${label}</button>`).join("")}
+          <div id="chainDepthOptions" hidden>
+            <span class="px-muted px-xs">1</span>
+            <input id="chainDepthSlider" type="range" min="1" max="5" step="1" value="5" data-tip="Slide left to keep fewer steps of the chain; the right end shows the whole chain (∞)" data-tip-side="bottom" data-tip-wrap />
+            <span class="px-muted px-xs">∞</span>
           </div>
         </div>
         <span id="actingOn" class="px-muted px-xs"></span>
