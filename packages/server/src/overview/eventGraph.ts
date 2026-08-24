@@ -164,7 +164,9 @@ function labelEdges(data: ServerData, edges: EventGraphEdge[], sites: Map<EventG
         if (block) edge.delay = delayOf(block);
       }
     }
-    if (label) edge.label = label;
+    // A "via effect" chain label wins over the section name: the chain is the
+    // part the reader cannot see from the row anchor alone.
+    if (label && !edge.label) edge.label = label;
   }
 }
 
@@ -215,12 +217,14 @@ export function computeEventGraph(
   const direct = new Set<string>();
   /** scripted effect -> the events / on_actions its own body fires. */
   const effectFires = new Map<string, Edge[]>();
-  /** definition -> the scripted effects it calls (graph nodes and effects alike). */
-  const effectCalls = new Map<string, Set<string>>();
-  const addCall = (from: string, effect: string) => {
-    let set = effectCalls.get(from);
-    if (!set) effectCalls.set(from, (set = new Set()));
-    set.add(effect);
+  /** definition -> the scripted effects it calls, each with its FIRST call
+   *  site: the expansion edge anchors there (the caller's own option or
+   *  immediate block), not somewhere inside the effect's file. */
+  const effectCalls = new Map<string, Map<string, { file: string; line: number; char: number }>>();
+  const addCall = (from: string, effect: string, site: { file: string; line: number; char: number }) => {
+    let calls = effectCalls.get(from);
+    if (!calls) effectCalls.set(from, (calls = new Map()));
+    if (!calls.has(effect)) calls.set(effect, site);
   };
 
   for (const ref of data.refIndex.all()) {
@@ -232,7 +236,8 @@ export function computeEventGraph(
     if (call) {
       // An effect calling ITSELF would loop the expansion; an event firing
       // itself (a repeating chain) is a real edge and stays.
-      if (from.name !== ref.name && isScriptedEffect(ref.name)) addCall(from.name, ref.name);
+      if (from.name !== ref.name && isScriptedEffect(ref.name))
+        addCall(from.name, ref.name, { file: ref.file, line: ref.line, char: ref.startChar });
       continue;
     }
     const edge: Edge = {
@@ -259,13 +264,19 @@ export function computeEventGraph(
   for (const [from, firstHop] of effectCalls) {
     if (!vocabulary.has(from)) continue; // an effect calling an effect: expanded from its callers
     const visited = new Set<string>();
-    let frontier: Array<{ effect: string; chain: string[] }> = [];
-    for (const effect of firstHop) {
+    // The whole chain anchors where the CALLER calls its first effect: that is
+    // the option (or immediate/after block) the reader's event fires it from.
+    let frontier: Array<{
+      effect: string;
+      chain: string[];
+      site: { file: string; line: number; char: number };
+    }> = [];
+    for (const [effect, site] of firstHop) {
       visited.add(effect);
-      frontier.push({ effect, chain: [effect] });
+      frontier.push({ effect, chain: [effect], site });
     }
     for (let hop = 0; hop < MAX_EFFECT_HOPS && frontier.length > 0; hop++) {
-      const next: Array<{ effect: string; chain: string[] }> = [];
+      const next: typeof frontier = [];
       for (const step of frontier) {
         for (const fired of effectFires.get(step.effect) ?? []) {
           if (fired.to === from || direct.has(`${from}→${fired.to}`)) continue;
@@ -274,16 +285,16 @@ export function computeEventGraph(
             from,
             to: fired.to,
             via: fired.via,
-            file: fired.file,
-            line: fired.line,
-            char: fired.char,
+            file: step.site.file,
+            line: step.site.line,
+            char: step.site.char,
             label: `via ${step.chain.join(" → ")}`,
           });
         }
-        for (const deeper of effectCalls.get(step.effect) ?? []) {
+        for (const [deeper] of effectCalls.get(step.effect) ?? []) {
           if (visited.has(deeper)) continue;
           visited.add(deeper);
-          next.push({ effect: deeper, chain: [...step.chain, deeper] });
+          next.push({ effect: deeper, chain: [...step.chain, deeper], site: step.site });
         }
       }
       frontier = next;
@@ -358,11 +369,11 @@ export function computeEventGraph(
     edgeSeen.add(key);
     const out: EventGraphEdge = { from: e.from, to: e.to, via: e.via };
     graphEdges.push(out);
-    // A "via X" edge already knows its own origin; re-reading the effect's file
-    // would relabel it with the section INSIDE the effect, which is not where
-    // the reader's event calls it.
+    // A "via X" edge keeps its chain label, but its SITE is the caller's own
+    // call line, so the pass below still anchors it at the option (or
+    // immediate/after block) that fires the chain.
     if (e.label) out.label = e.label;
-    else sites.set(out, e);
+    sites.set(out, e);
   }
   labelEdges(data, graphEdges, sites);
 

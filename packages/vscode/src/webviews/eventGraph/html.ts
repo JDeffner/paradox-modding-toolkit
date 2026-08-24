@@ -153,16 +153,24 @@ ${uiCss}
   #actingOn:empty { display: none; }
   /* The chain depth control: a compact head that unfolds the 1 2 3 4 ∞ row.
      The [hidden] guard is explicit because display rules beat the attribute. */
-  #chainDepth { display: flex; align-items: center; gap: 6px; }
+  /* Beside the rail's Chain tool: the control is that button's own setting.
+     Collapsed it is just the arrow; open, the slider with ONE value: the
+     current depth. */
+  #chainDepth {
+    position: absolute; left: 6px; top: 38px; z-index: 6;
+    display: flex; align-items: center; gap: 6px;
+  }
   #chainDepth[hidden], #chainDepthOptions[hidden] { display: none; }
+  #chainDepth .px-btn { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
   #chainDepthHead .px-icon { transition: transform var(--px-ease); }
   #chainDepthHead[data-open] .px-icon { transform: rotate(90deg); }
   #chainDepthOptions {
-    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    display: flex; align-items: center; gap: 8px; padding: 4px 10px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 82%, transparent);
   }
   #chainDepthSlider { width: 110px; accent-color: var(--eg-event); cursor: pointer; }
+  #chainDepthLabel { min-width: 14px; text-align: center; font-weight: 600; }
   /* Bottom-left view controls, the same group the GUI editor uses. */
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #zoomGroup {
@@ -192,6 +200,8 @@ ${uiCss}
   .node-rect { fill: var(--px-popover); stroke-width: 1; }
   .node:hover .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 0.55; }
   .node.selected .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 1; stroke-width: 2; }
+  /* A selected root would wear BOTH outlines; one is enough. */
+  .node.root.selected .node-outline { display: none; }
   .node-outline { fill: none; stroke: var(--px-primary); stroke-width: 2; pointer-events: none; }
   .node-title { pointer-events: none; fill: var(--px-fg); font-size: 15px; font-weight: 600; font-family: var(--px-font); }
   .node-sub { pointer-events: none; fill: var(--px-muted-fg); font-size: 12px; font-family: var(--px-font); }
@@ -376,15 +386,14 @@ ${uiCss}
     </div>
     <div id="graphWrap">
       <div id="railBar">
-        <div id="chainDepth" hidden>
-          <button id="chainDepthHead" class="px-btn" data-variant="outline" data-size="sm" data-tip="Chain depth: how many steps around the selected card stay visible" data-tip-side="right" data-tip-wrap>${icon("chevronRight")}<span id="chainDepthLabel">∞</span></button>
-          <div id="chainDepthOptions" hidden>
-            <span class="px-muted px-xs">1</span>
-            <input id="chainDepthSlider" type="range" min="1" max="5" step="1" value="5" data-tip="Slide left to keep fewer steps of the chain; the right end shows the whole chain (∞)" data-tip-side="bottom" data-tip-wrap />
-            <span class="px-muted px-xs">∞</span>
-          </div>
-        </div>
         <span id="actingOn" class="px-muted px-xs"></span>
+      </div>
+      <div id="chainDepth" hidden>
+        <button id="chainDepthHead" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Chain depth: how many steps around the selected card stay visible" data-tip-side="bottom" data-tip-wrap>${icon("chevronRight")}</button>
+        <div id="chainDepthOptions" hidden>
+          <input id="chainDepthSlider" type="range" min="1" max="5" step="1" value="5" />
+          <span id="chainDepthLabel" class="px-xs">∞</span>
+        </div>
       </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">

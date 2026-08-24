@@ -156,6 +156,16 @@ describe("edges through scripted effects", () => {
     // The effects themselves are not nodes: the reader asked about events.
     expect(graph.nodes.map((n) => n.id)).not.toContain("ns_outer_effect");
   });
+
+  it("anchors a via-effect edge at the CALLER'S block, not inside the effect", () => {
+    const graph = computeEventGraph(data, { root: "ns.1" });
+    const edge = graph.edges.find((e) => e.from === "ns.1" && e.to === "ns.2")!;
+    // ns.1 calls ns_outer_effect from its immediate block (line 4).
+    expect(edge.phase).toBe("immediate");
+    expect(edge.fromLine).toBe(4);
+    // No delay is claimed: whatever waits inside the effect is not visible here.
+    expect(edge.delay).toBeUndefined();
+  });
 });
 
 describe("sequencing: steps, phases, delays, weights", () => {

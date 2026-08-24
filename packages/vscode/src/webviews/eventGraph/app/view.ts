@@ -405,10 +405,25 @@ export class GraphView {
       })
     );
     defs.appendChild(hatch);
-    // Clip so an illustration stays inside its card's rounded corners.
+    // Clip so an illustration stays inside its card's rounded TOP corners;
+    // the bottom edge is square, because on a card with rows the banner ends
+    // mid-card and rounded bottom corners there read as a seam.
     const clip = svgEl("clipPath", { id: "cardClip" });
-    clip.appendChild(svgEl("rect", { width: String(NODE_W), height: String(NODE_H), rx: "6", ry: "6" }));
+    clip.appendChild(
+      svgEl("path", {
+        d: `M 0 ${NODE_H} V 6 Q 0 0 6 0 H ${NODE_W - 6} Q ${NODE_W} 0 ${NODE_W} 6 V ${NODE_H} Z`,
+      })
+    );
     defs.appendChild(clip);
+    // The banner's bottom fades into the card's own background, so the
+    // illustration transitions flat into the rows below it.
+    const fade = svgEl("linearGradient", { id: "bannerFade", x1: "0", y1: "0", x2: "0", y2: "1" });
+    const fadeTop = svgEl("stop", { offset: "0" });
+    fadeTop.setAttribute("style", "stop-color: var(--px-popover); stop-opacity: 0");
+    const fadeBottom = svgEl("stop", { offset: "1" });
+    fadeBottom.setAttribute("style", "stop-color: var(--px-popover); stop-opacity: 1");
+    fade.append(fadeTop, fadeBottom);
+    defs.appendChild(fade);
     // The scrim over an illustration. Text never sits on the picture itself:
     // the side the words start on is the dark end, and it lightens away.
     const scrim = svgEl("linearGradient", { id: "scrim", x1: "0", y1: "0", x2: "1", y2: "0" });
@@ -750,6 +765,18 @@ export class GraphView {
       holder.appendChild(
         svgEl("rect", { width: String(NODE_W), height: String(NODE_H), fill: "url(#scrim)" })
       );
+      // A card with rows continues below the banner: fade the picture into
+      // the card's background, so header and rows read as ONE surface.
+      if (this.stepsOn && (node.steps?.length ?? 0) > 0) {
+        holder.appendChild(
+          svgEl("rect", {
+            y: String(NODE_H - 30),
+            width: String(NODE_W),
+            height: "30",
+            fill: "url(#bannerFade)",
+          })
+        );
+      }
     } else {
       holder.appendChild(
         svgEl("rect", {
