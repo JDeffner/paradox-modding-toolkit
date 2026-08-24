@@ -96,7 +96,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     const messages = panel.webview.onDidReceiveMessage(async (msg: { type?: string }) => {
       switch (msg?.type) {
         case "copyPath":
-          await vscode.env.clipboard.writeText(document.uri.fsPath);
+          await vscode.env.clipboard.writeText(scriptPath(document.uri.fsPath));
           break;
         case "copyName":
           await vscode.env.clipboard.writeText(name);
@@ -119,6 +119,16 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
   }
 }
 
+/**
+ * The path as script references it: from the gfx/ root, forward slashes
+ * (`gfx/interface/icons/traits/reveler.dds`). Falls back to the full path for
+ * a texture outside any gfx/ folder.
+ */
+function scriptPath(fsPath: string): string {
+  const m = /(?:^|[\\/])(gfx[\\/].+)$/i.exec(fsPath);
+  return m ? m[1].replace(/\\/g, "/") : fsPath;
+}
+
 function formatBytes(n: number): string {
   return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`;
 }
@@ -136,8 +146,9 @@ function pageHtml(opts: {
   const toolButton = (id: string, name_: Parameters<typeof icon>[0], tip: string): string =>
     `<button id="${id}" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="${tip}" data-tip-wrap>${icon(name_)}</button>`;
 
+  const stageInfo = meta ? `<div id="stageInfo">${escapeHtml(meta)}</div>` : "";
   const stage = error
-    ? `<div class="err">${escapeHtml(error)}</div>`
+    ? `<div class="err">${escapeHtml(error)}</div>${stageInfo}`
     : /* html */ `
   <img id="img" src="${dataUri}" />
   <div id="stageTools">
@@ -149,7 +160,8 @@ function pageHtml(opts: {
     ${toolButton("recenter", "locate", "Recenter at the current zoom")}
     <div class="px-separator" data-orientation="vertical"></div>
     <label class="px-toggle" data-size="sm" data-tip="Pixelated: nearest-neighbour scaling to inspect single pixels. Off matches how the game samples the texture (smooth)" data-tip-wrap><input id="pix" type="checkbox" />${icon("grid")}</label>
-  </div>`;
+  </div>
+  ${stageInfo}`;
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -166,8 +178,17 @@ ${uiCss}
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #bar .px-separator { height: 20px; align-self: center; }
-  #fileName { font-weight: 600; max-width: 260px; }
-  #meta { color: var(--px-muted-fg); font-size: var(--px-text-sm); white-space: nowrap; }
+  #fileNameWrap { position: relative; display: flex; min-width: 0; }
+  #fileName { font-weight: 600; max-width: 260px; cursor: pointer; }
+  #copyToast {
+    position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
+    padding: 3px 8px; border-radius: var(--px-radius-md); z-index: 61;
+    font-size: var(--px-text-xs); color: var(--px-bg); background: var(--px-fg);
+    opacity: 0; transition: opacity var(--px-ease); pointer-events: none; white-space: nowrap;
+  }
+  #copyToast.show { opacity: 1; }
+  /* The toast owns the spot below the name; mute the hover tooltip while it shows. */
+  #fileNameWrap:has(> #copyToast.show) [data-tip]::after { opacity: 0; }
   /* A checkbox inside a toggle: hidden, its state shown on the label (the px-switch pattern). */
   .px-toggle > input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
   .px-toggle:has(> input:checked) { background: var(--px-muted); }
@@ -190,17 +211,22 @@ ${uiCss}
   #zoomLabel { min-width: 44px; height: var(--px-h-sm); line-height: var(--px-h-sm); padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
   /* The tools sit on the bottom edge, so their tooltips open upward. */
   #stageTools [data-tip]::after { top: auto; bottom: calc(100% + 6px); }
+  #stageInfo {
+    position: absolute; right: 8px; bottom: 8px;
+    padding: 4px 10px; border-radius: var(--px-radius);
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); font-variant-numeric: tabular-nums;
+    background: color-mix(in oklch, var(--px-bg) 75%, transparent);
+    pointer-events: none;
+  }
   .err { padding: 24px; color: var(--px-destructive); }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="bar">
-    <span id="fileName" class="px-truncate">${escapeHtml(name)}</span>
-    ${meta ? `<span id="meta">${escapeHtml(meta)}</span>` : ""}
-    <span class="px-grow"></span>
-    ${barButton("copyName", "copy", "Copy name", "Copy the file name to the clipboard")}
-    ${barButton("copyPath", "copy", "Copy path", "Copy the full path to the clipboard")}
+    <span id="fileNameWrap"><span id="fileName" class="px-truncate" data-tip="Copy the file name">${escapeHtml(name)}</span><span id="copyToast">Copied!</span></span>
+    <div class="px-separator" data-orientation="vertical"></div>
+    ${barButton("copyPath", "copy", "Copy path", "Copy the path from the gfx/ root, as script references it")}
     ${barButton("reveal", "folderOpen", "Reveal", "Show the file in the system file explorer")}
     ${dataUri ? barButton("savePng", "imageDown", "Save PNG", "Decode the texture and save it as a .png") : ""}
   </div>
@@ -208,10 +234,18 @@ ${uiCss}
 </div>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
-  for (const id of ["copyName", "copyPath", "reveal", "savePng"]) {
+  for (const id of ["copyPath", "reveal", "savePng"]) {
     const el = document.getElementById(id);
     if (el) el.addEventListener("click", () => vscode.postMessage({ type: id }));
   }
+  const copyToast = document.getElementById("copyToast");
+  let toastTimer = 0;
+  document.getElementById("fileName").addEventListener("click", () => {
+    vscode.postMessage({ type: "copyName" });
+    copyToast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => copyToast.classList.remove("show"), 1200);
+  });
 
   const stage = document.getElementById("stage");
   const img = document.getElementById("img");
