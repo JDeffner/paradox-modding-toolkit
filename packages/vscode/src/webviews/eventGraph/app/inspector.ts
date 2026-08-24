@@ -3,12 +3,13 @@
  *
  * Every block the event runs — immediate, after, each option's effects, its
  * trigger, its ai_chance — renders as an indented tree of the real script.
- * Every scalar `key = value` line in those trees is editable in place: a
- * dropdown when the server can enumerate the values, an input with inline
- * completions otherwise. Block rows collapse, and each block has its own
- * "+" that inserts INSIDE it at the right depth, offering triggers inside
- * trigger blocks and effects elsewhere, from the game's own token lists
- * with the engine's one-line docs.
+ * The tree READS as plain tokenized text: a value only becomes a control
+ * (a menu when the server can enumerate the values, an input with inline
+ * completions otherwise) when it is clicked, so a hundred lines never look
+ * like a hundred form fields. The same restraint applies to inserts: every
+ * "Add …" is one muted button that expands into its picker on demand, and
+ * Settings, Options and References start folded, each header carrying
+ * enough (the option's text, the keys set) to be read without unfolding.
  *
  * No edit reaches disk from here. Every change is handed to `onEdit` as a
  * PendingEdit, which the history records and the toolbar's Save applies. Until
@@ -30,7 +31,7 @@ import type {
   EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
 import type { PendingEdit } from "../history";
-import type { MenuItem } from "../../shared/overlay";
+import { menu, type MenuItem } from "../../shared/overlay";
 import { iconEl } from "../../shared/icons";
 import { attachSuggest, badge, button, dropdown, el, iconButton, input } from "./dom";
 import { fieldRowKey, locRowKey, pendingOverlay, type PendingOverlay } from "./pendingView";
@@ -65,8 +66,9 @@ export class Inspector {
   private view: PendingOverlay = EMPTY_OVERLAY;
   /** The mod's own event ids, so firing keys get completions, not a blank. */
   private eventIds: string[] = [];
-  /** Collapsed blocks, by `<event>:<line>`; forgotten with the panel. */
-  private folded = new Set<string>();
+  /** Explicit fold choices, by `<event>:<line>`; forgotten with the panel.
+   *  Blocks without an entry use their own default (options start folded). */
+  private folded = new Map<string, boolean>();
 
   constructor(
     private readonly root: HTMLElement,
@@ -99,6 +101,8 @@ export class Inspector {
   revealLine(line: number): void {
     const target = this.root.querySelector<HTMLElement>(`[data-line="${line}"]`);
     if (!target) return;
+    const body = target.querySelector<HTMLElement>(".bbody");
+    if (body?.hidden) target.querySelector<HTMLElement>(".head")?.click();
     target.scrollIntoView({ block: "start", behavior: "smooth" });
     target.classList.add("revealed");
     setTimeout(() => target.classList.remove("revealed"), 1600);
@@ -142,24 +146,34 @@ export class Inspector {
   }
 
   private renderFields(detail: EventDetail): void {
-    this.section("Settings", "How the game presents this event. Lists come from your game files.");
     const written = new Set(detail.fields.map((f) => f.key.toLowerCase()));
     const owned = locKeys([detail.title, detail.desc, detail.flavor]);
-    for (const field of detail.fields) {
-      if (owned.has(field.value)) continue;
-      this.root.appendChild(this.scalarRow(detail, field.key, field.value, field.line, 1, 0, "="));
-    }
-    this.insertedRows(detail.bodyLine, this.root);
-    const offerable = this.vocabulary.eventKeys.filter(
-      (k) => k.hint !== BLOCK_HINT && !written.has(k.value.toLowerCase())
+    const fields = detail.fields.filter((f) => !owned.has(f.value));
+    const block = this.foldable(
+      detail,
+      "settings",
+      "Settings",
+      detail.line,
+      (body) => {
+        if (fields.length === 0) body.appendChild(el("div", "hint", "Nothing set beyond the defaults."));
+        for (const field of fields) {
+          body.appendChild(this.scalarRow(detail, field.key, field.value, field.line, 1, 0, "="));
+        }
+        this.insertedRows(detail.bodyLine, body);
+        const offerable = this.vocabulary.eventKeys.filter(
+          (k) => k.hint !== BLOCK_HINT && !written.has(k.value.toLowerCase())
+        );
+        if (offerable.length > 0) {
+          body.appendChild(
+            this.addRow("Add field", offerable, "A key this event does not set yet", (key, value) => {
+              this.insertEdit(detail, key, value, detail.bodyLine, 1);
+            })
+          );
+        }
+      },
+      { folded: true, subtitle: fields.map((f) => f.key).join(" · ") }
     );
-    if (offerable.length > 0) {
-      this.root.appendChild(
-        this.addRow("Add field", offerable, "A key this event does not set yet", (key, value) => {
-          this.insertEdit(detail, key, value, detail.bodyLine, 1);
-        })
-      );
-    }
+    this.root.appendChild(block);
   }
 
   /** An event-level block (trigger, immediate, after…): a collapsible tree. */
@@ -219,6 +233,7 @@ export class Inspector {
   }
 
   private optionBlock(detail: EventDetail, option: EventOptionInfo, index: number): HTMLElement {
+    const opts = { folded: true, subtitle: option.name?.text ?? option.name?.key ?? "" };
     const block = this.foldable(detail, `opt:${option.line}`, `Option ${index + 1}`, option.line, (body) => {
       this.locRow("Text", option.name, detail.id, body);
 
@@ -253,7 +268,7 @@ export class Inspector {
             "plus",
             "Insert ai_chance = { base = 100 }; tune the base and add modifiers after",
             () => this.insertEdit(detail, "ai_chance", "{ base = 100 }", option.bodyLine, 2),
-            "outline"
+            "ghost"
           )
       );
 
@@ -268,7 +283,7 @@ export class Inspector {
           (key, value) => this.insertEdit(detail, key, value, option.bodyLine, 2)
         )
       );
-    });
+    }, opts);
     block.dataset.line = String(option.line);
     return block;
   }
@@ -304,10 +319,24 @@ export class Inspector {
 
   private renderRefs(detail: EventDetail): void {
     if (detail.refs.length === 0) return;
-    this.section(
+    const block = this.foldable(
+      detail,
+      "refs",
       `References (${detail.refs.length})`,
-      "Every scope, variable, scripted effect and value this event names. Click one to jump to where it is defined."
+      detail.line,
+      (body) => body.appendChild(this.refList(detail)),
+      { folded: true }
     );
+    block
+      .querySelector(".btitle")
+      ?.setAttribute(
+        "data-tip",
+        "Every scope, variable, scripted effect and value this event names. Click one to jump to where it is defined."
+      );
+    this.root.appendChild(block);
+  }
+
+  private refList(detail: EventDetail): HTMLElement {
     const list = el("div", "px-list");
     const order = ["saved_scope", "variable", "scripted_effect", "scripted_trigger", "script_value", "event"];
     const labels: Record<string, string> = {
@@ -337,7 +366,7 @@ export class Inspector {
         list.appendChild(row);
       }
     }
-    this.root.appendChild(list);
+    return list;
   }
 
   // --- the script tree ------------------------------------------------------
@@ -434,13 +463,12 @@ export class Inspector {
     const foldKey = `${detail.id}:${line.line}`;
     const caret = iconEl("chevronDown", "px-icon caret");
     const applyFold = (): void => {
-      const folded = this.folded.has(foldKey);
+      const folded = this.folded.get(foldKey) ?? false;
       children.hidden = folded;
       caret.classList.toggle("closed", folded);
     };
     caret.addEventListener("click", () => {
-      if (this.folded.has(foldKey)) this.folded.delete(foldKey);
-      else this.folded.add(foldKey);
+      this.folded.set(foldKey, !(this.folded.get(foldKey) ?? false));
       applyFold();
     });
     row.appendChild(caret);
@@ -454,18 +482,16 @@ export class Inspector {
         context === "trigger" ? "Add a condition inside this block" : "Add an entry inside this block",
         () => {
           if (!adder) {
-            adder = this.addRow(
+            adder = this.addRowExpanded(
               context === "trigger" ? "condition" : "entry",
               context === "trigger" ? this.vocabulary.triggers : this.vocabulary.effects,
-              "Inserted at the top of this block",
               (k, v) => this.insertEdit(detail, k, v, line.line + 1, baseIndent + line.depth + 1)
             );
-            adder.classList.add("tadd");
             children.prepend(adder);
           } else {
             adder.hidden = !adder.hidden;
           }
-          this.folded.delete(foldKey);
+          this.folded.set(foldKey, false);
           applyFold();
         },
         "icon-xs"
@@ -484,7 +510,12 @@ export class Inspector {
     return row;
   }
 
-  /** One editable `key op value` row of a tree (or of the Settings list). */
+  /**
+   * One editable `key op value` row of a tree (or of the Settings list). The
+   * value READS as plain tokenized text; clicking it opens the editor — a
+   * menu when the values can be enumerated, an inline input otherwise — so
+   * a long event never renders as a wall of form controls.
+   */
   private scalarRow(
     detail: EventDetail,
     key: string,
@@ -497,7 +528,7 @@ export class Inspector {
     const row = el("div", "trow");
     row.style.paddingLeft = `${depth * 14 + 4}px`;
     row.appendChild(el("span", "tk", key));
-    if (op && op !== "=") row.appendChild(el("span", "top", op));
+    row.appendChild(el("span", "top", op));
     const current = this.view.values.get(fieldRowKey(detail.file, key, line)) ?? rawValue;
     const commit = (value: string): void => {
       if (value === rawValue || value.trim() === "") return;
@@ -514,15 +545,17 @@ export class Inspector {
     };
     const holder = el("span", "tv");
     const options = this.vocabulary.values[key];
+    const val = el("span", `tval ${tokClass(current)}`, current);
     if (options && options.length > 0) {
-      holder.appendChild(
-        dropdown(current, "choose", menuItems(options), docFor(options, current, key), commit)
+      val.dataset.tip = docFor(options, current, key);
+      val.dataset.tipWrap = "";
+      val.addEventListener("click", () =>
+        menu(val, menuItems(options), { value: current, width: 300, onPick: commit })
       );
     } else {
-      const field = input(current, "value", commit);
-      attachSuggest(field, () => this.valueSuggestions(key));
-      holder.appendChild(field);
+      val.addEventListener("click", () => this.editValue(val, current, key, commit));
     }
+    holder.appendChild(val);
     if (current !== rawValue) holder.appendChild(el("span", "pendingMark px-xs", "unsaved"));
     row.appendChild(holder);
     const tools = el("span", "ttools");
@@ -538,11 +571,29 @@ export class Inspector {
     return row;
   }
 
+  /** Swap a value's text for a focused input; text comes back on blur. */
+  private editValue(span: HTMLElement, current: string, key: string, commit: (v: string) => void): void {
+    const field = input(current, "value", commit);
+    attachSuggest(field, () => this.valueSuggestions(key));
+    span.replaceWith(field);
+    field.focus();
+    field.select();
+    // A commit that changes the value re-renders the panel; this restore is
+    // for the click-in, click-out case. The delay lets a suggestion click land.
+    field.addEventListener("blur", () =>
+      setTimeout(() => {
+        if (field.isConnected) field.replaceWith(span);
+      }, 120)
+    );
+  }
+
   // --- rows -----------------------------------------------------------------
 
   private section(title: string, hint: string): void {
-    this.root.appendChild(el("div", "sub", title));
-    this.root.appendChild(el("div", "hint", hint));
+    const head = el("div", "sub", title);
+    head.dataset.tip = hint;
+    head.dataset.tipWrap = "";
+    this.root.appendChild(head);
   }
 
   private subhead(title: string, hint: string): HTMLElement {
@@ -552,32 +603,33 @@ export class Inspector {
     return head;
   }
 
-  /** A collapsible titled block (a section, an option). */
+  /** A collapsible titled block (a section, an option, the settings). */
   private foldable(
     detail: EventDetail,
     key: string,
     title: string,
     line: number,
-    fill: (body: HTMLElement) => void
+    fill: (body: HTMLElement) => void,
+    opts: { folded?: boolean; subtitle?: string } = {}
   ): HTMLElement {
     const block = el("div", "block");
     const head = el("div", "head");
     const foldKey = `${detail.id}:${key}`;
+    const isFolded = (): boolean => this.folded.get(foldKey) ?? opts.folded ?? false;
     const caret = iconEl("chevronDown", "px-icon caret");
     const body = el("div", "bbody");
     const applyFold = (): void => {
-      const folded = this.folded.has(foldKey);
-      body.hidden = folded;
-      caret.classList.toggle("closed", folded);
+      body.hidden = isFolded();
+      caret.classList.toggle("closed", isFolded());
     };
     head.addEventListener("click", (ev) => {
       if ((ev.target as HTMLElement).closest("button")) return;
-      if (this.folded.has(foldKey)) this.folded.delete(foldKey);
-      else this.folded.add(foldKey);
+      this.folded.set(foldKey, !isFolded());
       applyFold();
     });
     head.appendChild(caret);
     head.appendChild(el("span", "btitle", title));
+    head.appendChild(el("span", "bsub px-muted px-xs px-truncate", opts.subtitle ?? ""));
     head.appendChild(
       iconButton(
         "cornerDownRight",
@@ -628,15 +680,33 @@ export class Inspector {
   }
 
   /**
-   * The "pick a key, type its value, insert it" row shared by fields, effects
-   * and conditions. The value control follows the key: a key that fires an
-   * event gets the mod's own event ids, everything else a free input with
-   * inline completions, defaulting to `yes`.
+   * Every "Add …" is ONE muted button until it is wanted: clicking it swaps
+   * in the expanded picker row. A panel with ten insert points therefore
+   * shows ten quiet words, not ten dropdown-and-input pairs.
    */
   private addRow(
     label: string,
     items: EventVocabularyItem[],
     tip: string,
+    onAdd: (key: string, value: string) => void
+  ): HTMLElement {
+    const row = el("div", "trow tadd");
+    const reveal = button(label, "plus", tip, () => {
+      row.replaceWith(this.addRowExpanded(label, items, onAdd));
+    });
+    row.appendChild(reveal);
+    return row;
+  }
+
+  /**
+   * The "pick a key, type its value, insert it" row shared by fields, effects
+   * and conditions. The value control follows the key: a key that fires an
+   * event gets the mod's own event ids, everything else a free input with
+   * inline completions, defaulting to `yes`.
+   */
+  private addRowExpanded(
+    label: string,
+    items: EventVocabularyItem[],
     onAdd: (key: string, value: string) => void
   ): HTMLElement {
     const row = el("div", "trow tadd");
@@ -666,7 +736,7 @@ export class Inspector {
       },
       "icon-xs"
     );
-    const picker = dropdown("", "choose", menuItems(items), tip, (picked) => {
+    const picker = dropdown("", "choose", menuItems(items), "Pick what to add", (picked) => {
       key = picked;
       setValueControl();
     });
@@ -695,7 +765,10 @@ export class Inspector {
     into: HTMLElement = this.root
   ): void {
     const row = el("div", "locrow");
-    row.appendChild(el("div", "k px-muted px-xs", label + (loc?.key ? ` · ${loc.key}` : "")));
+    const k = el("div", "k px-muted px-xs", label);
+    // The loc key matters when hunting a string in the .yml, not before.
+    if (loc?.key) k.dataset.tip = loc.key;
+    row.appendChild(k);
     if (!loc) {
       row.appendChild(el("div", "hint", "This event sets no such text."));
     } else if (loc.dynamic) {
@@ -734,6 +807,13 @@ function locKeys(fields: Array<EventLocField | undefined>): Set<string> {
 
 function cap(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** The syntax color a value would get in the read-only script view. */
+function tokClass(value: string): string {
+  if (/^-?[\d.]+$/.test(value)) return "tok-number";
+  if (value === "yes" || value === "no") return "tok-bool";
+  return "tok-string";
 }
 
 function menuItems(items: EventVocabularyItem[]): MenuItem[] {

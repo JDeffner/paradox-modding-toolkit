@@ -322,7 +322,7 @@ ${uiCss}
   #inspector h2 { margin: 0; font-size: 14px; font-weight: 600; word-break: break-all; }
   #inspector .sub {
     margin-top: 8px; font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--px-muted-fg);
+    text-transform: uppercase; color: var(--px-muted-fg); width: fit-content;
   }
   #inspector .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .badges { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -342,7 +342,8 @@ ${uiCss}
   .block { display: flex; flex-direction: column; gap: 4px; }
   .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; cursor: pointer; user-select: none; }
   .block > .head .caret { transition: transform var(--px-ease); cursor: pointer; }
-  .block > .head .btitle { flex: 1 1 auto; font-weight: 600; font-size: var(--px-text-sm); }
+  .block > .head .btitle { flex: 0 0 auto; font-weight: 600; font-size: var(--px-text-sm); }
+  .block > .head .bsub { flex: 1 1 auto; min-width: 0; }
   .block + .block { border-top: 1px solid var(--px-border); padding-top: 4px; }
   .bbody { display: flex; flex-direction: column; gap: 4px; }
   #inspector .caret.closed { transform: rotate(-90deg); }
@@ -371,7 +372,16 @@ ${uiCss}
   .trow.thead .tk { font-weight: 600; color: var(--px-fg); flex: 1 1 auto; }
   .trow.thead .caret { cursor: pointer; flex: 0 0 auto; }
   .trow.tbare .tk { color: var(--px-muted-fg); }
+  /* A value is text until it is clicked; the hover says "editable" quietly. */
+  .trow .tval {
+    font-family: var(--px-font-mono); font-size: var(--px-text-sm); cursor: pointer;
+    padding: 1px 4px; margin-left: -4px; border-radius: var(--px-radius-sm);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .trow .tval:hover { background: var(--px-muted); }
   .trow.tadd:hover { background: none; }
+  .trow.tadd > .px-btn { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .trow.tadd > .px-btn:hover { color: var(--px-fg); }
   .trow-more { align-self: flex-start; padding: 0 4px; font-size: var(--px-text-xs); }
   .gateAdd { margin-top: 2px; }
   #inspector .revealed { box-shadow: 0 0 0 1.5px var(--eg-hit); border-radius: var(--px-radius-md); transition: box-shadow 0.2s; }
