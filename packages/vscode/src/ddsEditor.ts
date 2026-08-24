@@ -282,11 +282,19 @@ ${uiCss}
       apply();
     }
 
-    img.addEventListener("load", () => center(fitScale() > 0 ? fitScale() : 1));
-    if (img.complete && img.naturalWidth > 0) center(fitScale() > 0 ? fitScale() : 1);
+    const fit = () => center(fitScale() > 0 ? fitScale() : 1);
+    img.addEventListener("load", fit);
+    if (img.complete && img.naturalWidth > 0) fit();
+
+    // The webview often lays out at a provisional size before the editor pane
+    // settles, so a load-time fit is wrong minutes later. Keep the image
+    // fitted on every stage resize until the user zooms or pans themselves.
+    let touched = false;
+    new ResizeObserver(() => { if (!touched) fit(); }).observe(stage);
 
     stage.addEventListener("wheel", (e) => {
       e.preventDefault();
+      touched = true;
       const r = stage.getBoundingClientRect();
       zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.15 : 1 / 1.15);
     }, { passive: false });
@@ -298,6 +306,7 @@ ${uiCss}
       if (e.target instanceof Element && e.target.closest("#stageTools")) return;
       if (e.button !== 0 && e.button !== 1) return;
       e.preventDefault();
+      touched = true;
       panning = true; panX = e.clientX; panY = e.clientY;
       stage.classList.add("panning");
     });
@@ -315,10 +324,11 @@ ${uiCss}
     img.addEventListener("dragstart", (e) => e.preventDefault());
 
     const cx = () => stage.clientWidth / 2, cy = () => stage.clientHeight / 2;
-    document.getElementById("zin").addEventListener("click", () => zoomAt(cx(), cy(), 1.25));
-    document.getElementById("zout").addEventListener("click", () => zoomAt(cx(), cy(), 1 / 1.25));
-    document.getElementById("zfit").addEventListener("click", () => center(fitScale()));
-    document.getElementById("recenter").addEventListener("click", () => center(scale));
+    document.getElementById("zin").addEventListener("click", () => { touched = true; zoomAt(cx(), cy(), 1.25); });
+    document.getElementById("zout").addEventListener("click", () => { touched = true; zoomAt(cx(), cy(), 1 / 1.25); });
+    // Fit re-arms the auto-fit: the view should stay fitted through resizes again.
+    document.getElementById("zfit").addEventListener("click", () => { touched = false; fit(); });
+    document.getElementById("recenter").addEventListener("click", () => { touched = true; center(scale); });
     document.getElementById("pix").addEventListener("change", (e) => img.classList.toggle("pixelated", e.target.checked));
   }
 </script>
