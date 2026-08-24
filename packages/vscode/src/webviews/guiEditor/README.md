@@ -270,7 +270,7 @@ these ids: `canvas`, `stage`, `tree`, `layers`, `library`, `libraryOverlay`,
 `meta`, `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`,
 `pulses`, `heatmap`, `heatmapMenu`, `libraryToggle`, `modeEdit`,
 `modeInteract`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`, `save`,
-`changes` (with a `.count` child), `zoomOutBtn`, `zoomInBtn`, `zoomFitBtn`,
+`changes` (with a `.count` child), `zoomOutBtn`, `zoomInBtn`, `zoomFitBtn`, `helpBtn`,
 `dropTarget`, `textTip`, `clickTip`, `locResolved`, `locRaw`, `side`, `right`,
 `toggleSide`, `toggleRight`, and the four collapsible sections `sec-tree`,
 `sec-layers`, `sec-inspector`, `sec-devtools` (each a `.px-section` whose

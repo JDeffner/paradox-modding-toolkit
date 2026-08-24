@@ -296,55 +296,5 @@ export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
   });
 }
 
-/** A read-only dialog of titled paragraphs (a quick tutorial), closed by its button, Escape or the backdrop. */
-export function infoDialog(title: string, sections: [string, string][]): void {
-  const backdrop = document.createElement("div");
-  backdrop.className = "px-dialog-backdrop";
-  const dialog = document.createElement("div");
-  dialog.className = "px-dialog px-dialog-wide";
-  dialog.setAttribute("role", "dialog");
-  const h = document.createElement("div");
-  h.className = "px-dialog-title";
-  h.textContent = title;
-  dialog.append(h);
-  const body = document.createElement("div");
-  body.className = "px-dialog-sections";
-  for (const [heading, text] of sections) {
-    const sec = document.createElement("div");
-    const hh = document.createElement("div");
-    hh.className = "px-dialog-section-title";
-    hh.textContent = heading;
-    const p = document.createElement("div");
-    p.className = "px-dialog-description";
-    p.textContent = text;
-    sec.append(hh, p);
-    body.append(sec);
-  }
-  dialog.append(body);
-  const actions = document.createElement("div");
-  actions.className = "px-dialog-actions";
-  const ok = document.createElement("button");
-  ok.className = "px-btn";
-  ok.dataset.variant = "default";
-  ok.textContent = "Got it";
-  actions.append(ok);
-  dialog.append(actions);
-  backdrop.append(dialog);
-  const done = (): void => {
-    document.removeEventListener("keydown", onKey, true);
-    backdrop.remove();
-  };
-  const onKey = (ev: KeyboardEvent): void => {
-    if (ev.key === "Escape" || ev.key === "Enter") {
-      ev.stopPropagation();
-      done();
-    }
-  };
-  ok.onclick = done;
-  backdrop.onclick = (e) => {
-    if (e.target === backdrop) done();
-  };
-  document.addEventListener("keydown", onKey, true);
-  document.body.append(backdrop);
-  ok.focus();
-}
+// The ? button's tutorial dialog moved to help.ts (helpDialog): structured
+// sections with lead-ins and key chips replaced the plain titled paragraphs.

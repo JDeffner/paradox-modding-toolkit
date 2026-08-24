@@ -987,25 +987,93 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-dialog-description {
   color: var(--px-muted-fg);
 }
-.px-dialog-wide {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-}
-.px-dialog-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow: auto;
-  min-height: 0;
-}
-.px-dialog-section-title {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
 .px-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/* -------------------------------------------------- help tutorial (help.ts) --- */
+
+.px-help {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  gap: 0;
+  padding: 0;
+}
+.px-help-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--px-border);
+}
+.px-help-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+.px-help-intro {
+  margin-top: 3px;
+  color: var(--px-muted-fg);
+  line-height: 1.55;
+}
+.px-help-body {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 4px;
+}
+.px-help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.px-help-section + .px-help-section {
+  border-top: 1px solid var(--px-border);
+  padding-top: 14px;
+}
+.px-help-section-title {
+  font-weight: 600;
+}
+.px-help-prose,
+.px-help-item {
+  line-height: 1.6;
+  color: var(--px-muted-fg);
+}
+.px-help-item > .lead {
+  color: var(--px-fg);
+  font-weight: 600;
+}
+.px-help .keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.px-help .keys .plus {
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-xs);
+}
+.px-help-keysGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 14px;
+  align-items: baseline;
+  margin-top: 2px;
+}
+.px-help-keysGrid > .keys {
+  justify-self: start;
+}
+.px-help-keysGrid > .does {
+  color: var(--px-muted-fg);
+  line-height: 1.5;
+}
+.px-help-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px 16px;
 }
 @keyframes px-fade {
   from {

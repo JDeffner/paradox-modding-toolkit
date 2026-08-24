@@ -320,7 +320,7 @@ ${uiCss}
     <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="No changes to save yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="export" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Export the graph as SVG" data-tip-side="left">${icon("download")}</button>
-    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How to read this view" data-tip-side="left">${icon("circleHelp")}</button>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works: reading, editing, saving, shortcuts" data-tip-side="left" data-tip-wrap>${icon("circleHelp")}</button>
     <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">

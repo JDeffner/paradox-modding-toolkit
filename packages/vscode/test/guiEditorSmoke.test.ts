@@ -2677,11 +2677,31 @@ describe("keyboard navigation", () => {
 });
 
 describe("the toolbar, increment 1", () => {
-  it("undo and redo are requests for the host's own history", () => {
-    openGroup();
+  it("undo and redo are session-scoped requests for the host's own history", () => {
+    const layout = openGroup();
+    // Nothing committed from this panel yet: the buttons are disabled, so a
+    // click sends nothing and the document's pre-session history stays safe.
+    const before = editor.sent.length;
     editor.document.getElementById("undo")!.click();
     editor.document.getElementById("redo")!.click();
-    expect(editor.sent.slice(-2)).toEqual([{ type: "undo" }, { type: "redo" }]);
+    expect(editor.sent.length).toBe(before);
+
+    // One committed drag arms them: undo sends the host request, and taking
+    // it back arms redo.
+    withoutGuides();
+    const at = centreOf(layout, "px_g5_a");
+    editor.press(at.x, at.y);
+    serveEdits();
+    editor.move(at.x + 40, at.y + 20);
+    editor.up(at.x + 40, at.y + 20);
+    serveEdits();
+    editor.document.getElementById("undo")!.click();
+    expect(editor.sent[editor.sent.length - 1]).toEqual({ type: "undo" });
+    editor.document.getElementById("redo")!.click();
+    expect(editor.sent[editor.sent.length - 1]).toEqual({ type: "redo" });
+    // The session log is empty again: both buttons are off.
+    expect((editor.document.getElementById("undo") as HTMLButtonElement).disabled).toBe(false);
+    expect((editor.document.getElementById("redo") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("the snap and grid toggles are remembered by the host and boot the next panel", () => {

@@ -82,6 +82,7 @@ import {
   toast as pxToast,
   type MenuItem,
 } from "../../shared/overlay";
+import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, type Rgb } from "../../shared/colorPicker";
 import {
@@ -5423,6 +5424,8 @@ async function deleteSelectionConfirmed(): Promise<void> {
 // way to take back change i of n from a single linear history.
 const saveEl = document.getElementById("save") as HTMLButtonElement;
 const changesEl = document.getElementById("changes") as HTMLButtonElement;
+const undoBtn = document.getElementById("undo") as HTMLButtonElement;
+const redoBtn = document.getElementById("redo") as HTMLButtonElement;
 /** Labels of this panel's committed changes, oldest first, and the undone ones. */
 const sessionChanges: string[] = [];
 const undoneChanges: string[] = [];
@@ -5437,10 +5440,24 @@ function syncChanges(): void {
       ? "No changes yet this session"
       : `List the ${count} change${count === 1 ? "" : "s"} made here, newest last; each row can be undone`;
   if (count === 0 && isPopoverAnchor(changesEl)) closePopover();
+  // Undo and redo are SCOPED TO THIS PANEL'S SESSION: with nothing of ours to
+  // take back, the buttons are off, so the panel can never walk into the
+  // document's older history (edits made in the text editor before or beside
+  // this session stay that editor's to undo).
+  undoBtn.disabled = count === 0;
+  undoBtn.dataset.tip =
+    count === 0
+      ? "Nothing from this panel to undo. The text editor's own history stays its own"
+      : `Undo ${sessionChanges[count - 1]}`;
+  redoBtn.disabled = undoneChanges.length === 0;
+  redoBtn.dataset.tip =
+    undoneChanges.length === 0 ? "Nothing to redo" : `Redo ${undoneChanges[undoneChanges.length - 1]}`;
   saveEl.disabled = !docDirty;
-  saveEl.dataset.tip = docDirty
-    ? "Write the changes to the .gui file on disk (Ctrl+S)"
-    : "Nothing to save: the file on disk already matches";
+  saveEl.dataset.tip = !docDirty
+    ? "Nothing to save: the file on disk already matches"
+    : count > 0
+      ? "Write the changes to the .gui file on disk (Ctrl+S)"
+      : "Write the document to disk (Ctrl+S). Its unsaved changes were made outside this panel";
 }
 
 function recordChange(label: string): void {
@@ -5496,15 +5513,18 @@ saveEl.addEventListener("click", () => {
   host.send({ type: "save" });
 });
 
-document.getElementById("undo")!.addEventListener("click", () => {
-  // Best effort: the log cannot see edits typed in the text editor, so it
-  // tracks the toolbar's own undo and redo and stays a session log, not a truth.
-  if (sessionChanges.length > 0) undoneChanges.push(sessionChanges.pop()!);
+undoBtn.addEventListener("click", () => {
+  // Session-scoped: only a change this panel made is ever taken back, so the
+  // button never reaches the document's pre-session history. Best effort past
+  // that: the log cannot see keystrokes typed in the text editor in between.
+  if (sessionChanges.length === 0) return;
+  undoneChanges.push(sessionChanges.pop()!);
   syncChanges();
   host.send({ type: "undo" });
 });
-document.getElementById("redo")!.addEventListener("click", () => {
-  if (undoneChanges.length > 0) sessionChanges.push(undoneChanges.pop()!);
+redoBtn.addEventListener("click", () => {
+  if (undoneChanges.length === 0) return;
+  sessionChanges.push(undoneChanges.pop()!);
   syncChanges();
   host.send({ type: "redo" });
 });
@@ -5516,6 +5536,170 @@ document
   .getElementById("zoomInBtn")!
   .addEventListener("click", () => zoomToPoint(stage.clientWidth / 2, stage.clientHeight / 2, zoom * 1.25));
 document.getElementById("zoomFitBtn")!.addEventListener("click", fitView);
+
+document.getElementById("helpBtn")!.addEventListener("click", () =>
+  helpDialog({
+    title: "GUI Editor",
+    intro:
+      "Your .gui file laid out exactly as the game lays it out, and editable in place. The file stays the truth: every gesture becomes a real edit to the script, checked against the engine's own rules — an edit the engine would ignore or misread is refused, with the reason.",
+    sections: [
+      {
+        title: "Selecting",
+        items: [
+          {
+            lead: "Click",
+            text: "a widget to select and inspect it. Shift+click adds to the selection; dragging on empty canvas draws a marquee.",
+          },
+          {
+            lead: "Overlapping widgets:",
+            text: "Alt+click steps outward through everything under the pointer, one layer per click.",
+          },
+          {
+            lead: "From the keyboard:",
+            text: "Tab and Shift+Tab walk siblings, Enter descends into the first child, Shift+Enter climbs back out.",
+          },
+          {
+            lead: "Jump to the source",
+            text: "of the selected line with Ctrl+Shift+click; the tree and layers panels select the same widgets by row.",
+          },
+          { lead: "Esc", text: "clears the selection first, then leaves a focused subtree." },
+        ],
+      },
+      {
+        title: "Moving and resizing",
+        items: [
+          {
+            lead: "Drag",
+            text: "a widget to move it, or grab a corner or edge handle to resize; a multi-selection moves and resizes together as one change. If the engine would not honour the write, the gesture is refused before anything moves.",
+          },
+          {
+            lead: "Snapping:",
+            text: "the magnet snaps to sibling and parent edges, centres, equal gaps and equal sizes; the grid toggle adds an 8 px grid. Both live at the bottom left.",
+          },
+          {
+            lead: "Nudge",
+            text: "the selection with the arrow keys, one pixel at a time; hold Alt for one grid step.",
+          },
+          {
+            lead: "Duplicate in place",
+            text: "with Alt+drag: the copy is inserted next to the original and follows your pointer.",
+          },
+        ],
+      },
+      {
+        title: "Editing properties",
+        items: [
+          {
+            lead: "The inspector",
+            text: "lists the selected widget's properties. Type a value, drag a number sideways to scrub it, or use the anchor grid for parentanchor and widgetanchor.",
+          },
+          {
+            lead: "Add a property",
+            text: "with the row at the bottom: it completes from the properties the game's own files actually write on this widget type.",
+          },
+          {
+            lead: "Where a value comes from",
+            text: "is written under it when it is inherited from a template or type rather than set on this line.",
+          },
+        ],
+      },
+      {
+        title: "Saving and the change log",
+        intro:
+          "Edits land in the open document, not on disk: the editor and the text editor share one file and one undo history.",
+        items: [
+          {
+            lead: "Save",
+            text: "writes the document to disk; the button lights up whenever something is unsaved.",
+            keys: ["Ctrl", "S"],
+          },
+          {
+            lead: "The Changes button",
+            text: "lists every edit made from this panel this session, newest last. Each row's undo takes the document back to before that change (and the ones after it, since history is one line).",
+          },
+          {
+            lead: "Undo and redo",
+            text: "take back this panel's own changes, newest first. Underneath they run the document's real undo, but they never reach past what this session did: the file's older history stays the text editor's to undo.",
+          },
+        ],
+      },
+      {
+        title: "The element library",
+        items: [
+          {
+            lead: "Open it",
+            text: "with the Library button or L. Every element is shown as the game draws it, grouped by job, with a line on what it is for.",
+          },
+          {
+            lead: "Click a card",
+            text: "to insert it next to the selection (or into the first root); drag it onto the canvas to choose the container it drops into.",
+          },
+          {
+            lead: "Templates",
+            text: "are not widgets: clicking one applies it to the selected widget as `using = name`.",
+          },
+          {
+            lead: "A fresh widget has no size",
+            text: "and draws nothing until you give it one — the toast reminds you.",
+          },
+        ],
+      },
+      {
+        title: "Panels and devtools",
+        items: [
+          {
+            lead: "Tree:",
+            text: "the whole widget hierarchy. The focus button (or F) narrows the canvas to one subtree and back.",
+          },
+          {
+            lead: "Layers:",
+            text: "the selected container's children in draw order. Drag rows to reorder; the eye hides, the lock makes unclickable, solo dims everything else.",
+          },
+          {
+            lead: "Devtools:",
+            text: "why a widget is where it is (the placement trace), its textures frame by frame, conditional visibility, what script it reaches, the type and texture browsers, your saved components and presets, and a reference screenshot to calibrate against.",
+          },
+        ],
+      },
+      {
+        title: "The view",
+        items: [
+          {
+            lead: "Bottom left:",
+            text: "zoom buttons and percent, then the display toggles — outline every widget, snap, grid, the selected widget's constraints, and a flash on every widget a re-layout moved.",
+          },
+          {
+            lead: "Resolved / Raw",
+            text: "shows textboxes as the game would render them, or verbatim as the file writes them.",
+          },
+          {
+            lead: "Heatmap",
+            text: "tints the scene by one property of the tree (sizes, depths, …) to spot outliers.",
+          },
+        ],
+      },
+      {
+        title: "Keyboard",
+        shortcuts: [
+          { keys: ["L"], does: "Open and close the library" },
+          { keys: ["F"], does: "Focus the selected subtree, or leave the focus" },
+          { keys: ["Shift", "F"], does: "Fit the view to the selection" },
+          { keys: ["Ctrl", "0"], does: "Fit the reference viewport (Home too)" },
+          { keys: ["Ctrl", "+"], does: "Zoom in (Ctrl+− out; the wheel zooms, middle mouse pans)" },
+          { keys: ["Tab"], does: "Next sibling (Shift+Tab previous)" },
+          { keys: ["Enter"], does: "Into the first child (Shift+Enter to the parent)" },
+          { keys: ["←", "↑", "→", "↓"], does: "Nudge by 1 px (Alt: one grid step)" },
+          { keys: ["Ctrl", "C"], does: "Copy the selected blocks" },
+          { keys: ["Ctrl", "V"], does: "Paste into the selection" },
+          { keys: ["Ctrl", "D"], does: "Duplicate the selection" },
+          { keys: ["Del"], does: "Delete the selection (multi-deletes ask first)" },
+          { keys: ["Ctrl", "S"], does: "Save the document to disk" },
+          { keys: ["Esc"], does: "Cancel the drag, else clear selection, else leave the focus" },
+        ],
+      },
+    ],
+  })
+);
 
 // Fit means "fit what is on screen", and under a subtree focus that is the
 // subtree, not the 1920x1080 reference viewport around it. The wheel zooms;

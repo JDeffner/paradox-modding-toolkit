@@ -20,7 +20,8 @@ import {
 import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiState } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { confirmDialog, infoDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
@@ -1395,32 +1396,103 @@ $("png").onclick = () => {
 };
 $("togglePanel").onclick = () => panel.toggle();
 $("help").onclick = () =>
-  infoDialog("How to build a flag", [
-    [
-      "Start",
-      "New gives you a solid flag with one color. Open shows every flag of the game and your mods as a preview; pick one to start from it. Paste reads a definition from the clipboard.",
+  helpDialog({
+    title: "Flag Builder",
+    intro:
+      "Builds a coat_of_arms definition — the game's own flag script — visually. What you see is rendered from the same textures the game uses, and Save writes real script into your mod.",
+    sections: [
+      {
+        title: "Starting a flag",
+        items: [
+          { lead: "New", text: "gives you a solid flag with one color to build on." },
+          {
+            lead: "Open",
+            text: "browses every flag of the game and your mods as previews; pick one to start from it. Saving it back under the same file name overrides the original.",
+          },
+          {
+            lead: "Paste",
+            text: "reads a coat_of_arms definition straight from the clipboard — handy for a snippet from a wiki or another mod.",
+          },
+        ],
+      },
+      {
+        title: "Pattern and flag colors",
+        items: [
+          {
+            lead: "The pattern",
+            text: "is the base texture. Its red, yellow and white areas are placeholders: they become color1, color2 and color3 of your flag.",
+          },
+          {
+            lead: "Change either",
+            text: "by selecting the Pattern row in the panel: the browser shows every pattern, and the color rows recolor the flag.",
+          },
+        ],
+      },
+      {
+        title: "Layers",
+        intro:
+          "A flag is the pattern plus layers drawn on top, in row order — later rows draw over earlier ones. Drag rows to reorder.",
+        items: [
+          {
+            lead: "Colored emblem:",
+            text: "a recolorable shape; its color1–3 can be a named game color, an rgb or hsv value, or “same as” one of the flag's colors.",
+          },
+          { lead: "Textured emblem:", text: "a texture drawn as-is, no recoloring." },
+          {
+            lead: "Sub flag:",
+            text: "another whole flag placed inside this one (how quartered arms are built).",
+          },
+          {
+            lead: "Mask",
+            text: "limits an emblem to the area one pattern color covers, so it follows the pattern's shape.",
+          },
+        ],
+      },
+      {
+        title: "Placing an emblem",
+        items: [
+          {
+            lead: "On the canvas:",
+            text: "click an emblem to select it, drag it to move it, and drag a corner to resize it (the aspect ratio stays).",
+          },
+          {
+            lead: "By numbers:",
+            text: "each layer has instances — position as a fraction of the flag (0.5 0.5 is the center), scale as a fraction of its size, rotation in degrees. Drag any number sideways to scrub it.",
+          },
+          {
+            lead: "Several instances",
+            text: "on one layer repeat the same emblem: one shape, stamped at several places.",
+          },
+          {
+            lead: "The camera:",
+            text: "the wheel zooms and the middle mouse button pans; the lock at the bottom left freezes the view, the button next to it recenters it.",
+          },
+        ],
+      },
+      {
+        title: "Saving",
+        items: [
+          {
+            lead: "Pick the mod",
+            text: "in the toolbar first: Save writes the script into that mod's coat_of_arms folder.",
+          },
+          {
+            lead: "Copy",
+            text: "puts the script on the clipboard instead, and Export PNG renders the preview to an image.",
+          },
+          { lead: "Undo and redo", text: "cover every step, including canvas drags." },
+        ],
+      },
+      {
+        title: "Keyboard",
+        shortcuts: [
+          { keys: ["Esc"], does: "Close the browser, else deselect the emblem" },
+          { keys: ["Ctrl", "Z"], does: "Undo" },
+          { keys: ["Ctrl", "Y"], does: "Redo (Ctrl+Shift+Z too)" },
+        ],
+      },
     ],
-    [
-      "Pattern and colors",
-      "The pattern is the base texture; its red, yellow and white areas become color1, color2 and color3 of the flag. Select the Pattern row to change it and the flag colors.",
-    ],
-    [
-      "Layers",
-      "Add a colored emblem (recolorable shape), a textured emblem (drawn as is) or a sub flag (another flag inside this one). Drag rows to change the draw order; later rows draw on top.",
-    ],
-    [
-      "Placing",
-      "Each layer has instances: position is a fraction of the flag (0.5 0.5 = center), scale a fraction of its size, rotation in degrees. Drag a number sideways to scrub it. On the canvas, click an emblem to select it, drag it to move it and drag a corner to resize it (the aspect ratio stays); Esc deselects. The wheel zooms and the middle mouse button pans until you freeze the view.",
-    ],
-    [
-      "Emblem colors",
-      "An emblem's color1..3 can be a named game color, an rgb or hsv value, or \"same as\" one of the flag's colors. Mask limits an emblem to one pattern color's area.",
-    ],
-    [
-      "Saving",
-      "Choose the mod in the toolbar, then Save writes the script into its coat_of_arms folder. Saving to the same file name as the opened flag overrides the game's flag. Copy puts the script on the clipboard; Export PNG renders the preview.",
-    ],
-  ]);
+  });
 $("addLayer").onclick = () =>
   menu(
     $("addLayer"),

@@ -352,8 +352,8 @@ ${uiCss}
     <span id="fileName" class="px-truncate"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Lay the document out again">${icon("rotate")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Undo the last change (Ctrl+Z; the document's own undo)">${icon("undo")}</button>
-    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Redo the change you just undid">${icon("redo")}</button>
+    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing from this panel to undo. The text editor's own history stays its own" data-tip-wrap disabled>${icon("undo")}</button>
+    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
     <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet this session" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
     <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="Nothing to save: the file on disk already matches" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
@@ -372,6 +372,7 @@ ${uiCss}
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can add to the canvas, with previews (L)" data-tip-wrap>${icon("shapes")}Library</button>
     <div class="px-separator" data-orientation="vertical"></div>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this editor works: selecting, editing, saving, the library, shortcuts" data-tip-side="left" data-tip-wrap>${icon("circleHelp")}</button>
     <button id="toggleRight" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">

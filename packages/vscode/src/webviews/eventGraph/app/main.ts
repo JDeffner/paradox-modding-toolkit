@@ -13,6 +13,7 @@ import { GraphHistory, type GraphState } from "../history";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
+import { helpDialog } from "../../shared/help";
 import { el, iconButton } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
@@ -412,30 +413,119 @@ function updateRailTools(): void {
   $("actingOn").textContent = has ? `Acting on: ${labelFor(selectedId!)}` : "";
 }
 
-$("helpBtn").onclick = () => {
-  const anchor = $("helpBtn");
-  if (isPopoverAnchor(anchor)) {
-    closePopover();
-    return;
-  }
-  const help = el("div", "help");
-  help.appendChild(el("div", "px-popover-title", "How to read the graph"));
-  const list = el("ul");
-  for (const text of [
-    "The card in the middle is what you are looking at. What fires it is on the left, what it fires is on the right, further hops one ring further out.",
-    "A card says its name, then its kind and how many options it has, then what its trigger asks for and how much it fires.",
-    "The colored bar is the kind. Dashed borders are vanilla content, solid is your mod, dotted is a parent mod.",
-    "Click a card to focus and inspect it, drag it to move it, double-click to open its source, right-click to re-centre the graph on it.",
-    "The Cluster tool keeps only the cards connected to the selected one, so you can follow one sequence. Undo brings the rest back.",
-    'An arrow labeled "via" goes through a scripted effect: the event does not name the target itself, the effect it calls does.',
-    "Edits in the inspector are held here until you press Save. The Changes button lists them, and each row goes back to before it.",
-    "Drag the canvas to pan, scroll to zoom. + / − / 0 or the buttons at the bottom left do the same.",
-  ]) {
-    list.appendChild(el("li", "", text));
-  }
-  help.appendChild(list);
-  popover(anchor, help);
-};
+$("helpBtn").onclick = () =>
+  helpDialog({
+    title: "Event Graph",
+    intro:
+      "Every event, on_action and decision of your mod as cards, with an arrow for every “this fires that” the index found. Use it to follow an event chain, spot dead ends, and edit an event without leaving the picture.",
+    sections: [
+      {
+        title: "Reading a card",
+        items: [
+          {
+            lead: "Line by line:",
+            text: "the name (or localized title), then the kind and how many options it has, then what its trigger asks for and how often other content fires it.",
+          },
+          {
+            lead: "The colored bar",
+            text: "on the left is the kind: blue events, purple on_actions, green decisions, orange everything else. The chips at the bottom left dim a kind in the whole graph.",
+          },
+          {
+            lead: "The border",
+            text: "says where it comes from: solid is your mod, dashed is vanilla, dotted is a parent mod.",
+          },
+          {
+            lead: "Arrows",
+            text: "point from the thing that fires to the thing fired. One labeled “via” goes through a scripted effect: the event does not name the target itself, the effect it calls does.",
+          },
+          {
+            lead: "With a card selected,",
+            text: "its own arrows color up (outgoing blue, incoming orange) and everything unrelated dims, so the neighborhood stays readable in a big graph.",
+          },
+        ],
+      },
+      {
+        title: "Moving around",
+        items: [
+          {
+            lead: "Pan and zoom:",
+            text: "drag the canvas, scroll to zoom, and the buttons at the bottom left zoom and fit.",
+          },
+          {
+            lead: "Search:",
+            text: "the box at the top left takes an event id (namespace.123), an on_action or decision name, or a whole namespace; suggestions appear as you type, and typing also outlines every matching card.",
+          },
+          {
+            lead: "Move a card",
+            text: "by dragging it; it stays where you put it and the rest of the map makes room. Undo puts it back.",
+          },
+        ],
+      },
+      {
+        title: "The tools on the left",
+        intro: "The first, second and last need a card selected.",
+        items: [
+          {
+            lead: "Simulate",
+            text: "walks through the selected event block by block, in the order the game runs them, in a floating window you can step deeper from.",
+          },
+          {
+            lead: "Cluster",
+            text: "keeps only the cards connected to the selected one — the sequence it belongs to — and hides the rest. Undo brings the whole graph back.",
+          },
+          { lead: "All nodes", text: "loads everything the mod has, connected or not." },
+          {
+            lead: "Source",
+            text: "opens the selected card's file beside the graph. Double-clicking a card and the small button on its corner do the same; right-click re-centres the graph on it instead.",
+          },
+        ],
+      },
+      {
+        title: "Editing and saving",
+        intro: "Nothing touches your files until you press Save; until then every edit lives in this view.",
+        items: [
+          {
+            lead: "Click a card",
+            text: "to open it in the inspector: its fields with dropdowns listing the game's own values, its title and description text, its options, and every scope, effect and value it references.",
+          },
+          {
+            lead: "Add things",
+            text: "with the “Add field”, “Add effect”, “Add trigger” and “Add option” rows; each list comes from your game files, with the engine's own one-line documentation.",
+          },
+          {
+            lead: "<SV>",
+            text: "marks a script value: a number computed by script, defined under common/script_values.",
+          },
+          {
+            lead: "Changed rows say “unsaved”.",
+            text: "The Changes button lists every pending edit, and each row's undo takes you back to before it. Save writes them all to your mod files, in a safe order.",
+          },
+        ],
+      },
+      {
+        title: "Display options",
+        items: [
+          { lead: "Raw / Loc", text: "captions every card with its id or its localized title." },
+          {
+            lead: "The image button",
+            text: "draws each event's real background behind its card (its override_background, or its theme's). A background that cannot be resolved gets a hatched placeholder instead of a wrong picture.",
+          },
+        ],
+      },
+      {
+        title: "Keyboard",
+        shortcuts: [
+          { keys: ["+", "−"], does: "Zoom in and out" },
+          { keys: ["0"], does: "Fit the whole graph (F does the same)" },
+          { keys: ["/"], does: "Focus the search box" },
+          { keys: ["Esc"], does: "Close the simulation, else clear the selection" },
+          { keys: ["Ctrl", "Z"], does: "Undo (edits, moves, focus changes alike)" },
+          { keys: ["Ctrl", "Shift", "Z"], does: "Redo" },
+          { keys: ["Ctrl", "S"], does: "Save the pending edits to your files" },
+        ],
+      },
+    ],
+  });
 
 // ---------------------------------------------------------------------------
 // Query box
