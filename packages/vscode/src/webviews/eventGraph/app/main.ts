@@ -110,7 +110,15 @@ const view = new GraphView(svg, {
     view.setOptions({ positions });
   },
   onNeedBanner: (theme) => send({ type: "banner", theme }),
+  onOpenStep: (id, line) => {
+    // The detail arrives async; the reveal waits for it.
+    pendingRevealLine = line;
+    selectNode(id);
+  },
 });
+
+/** A card row was clicked: scroll the inspector to it once the detail lands. */
+let pendingRevealLine: number | null = null;
 
 const inspector = new Inspector($("inspector"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
@@ -160,13 +168,13 @@ function refocus(id: string): void {
 /**
  * The node's CHAIN: everything that leads to `id` and everything it leads to,
  * following edge DIRECTION — not the whole connected component, which in a
- * wired-up mod is most of the graph. `precedingDepth` caps how many hops
- * UPSTREAM the chain reaches (undefined = all of them); downstream is always
- * followed to the end, because "what does this lead to" is the question.
+ * wired-up mod is most of the graph. `depth` caps how many hops the chain
+ * reaches in EITHER direction (undefined = all of them), so the cap visibly
+ * shrinks the view whichever side of the selection is the busy one.
  * Client-side, so the Chain tool costs no round trip and undo brings the
  * full graph straight back.
  */
-function clusterGraph(graph: EventGraph, id: string, precedingDepth?: number): EventGraph {
+function clusterGraph(graph: EventGraph, id: string, depth?: number): EventGraph {
   const out = new Map<string, string[]>();
   const inc = new Map<string, string[]>();
   const link = (map: Map<string, string[]>, a: string, b: string): void => {
@@ -180,8 +188,8 @@ function clusterGraph(graph: EventGraph, id: string, precedingDepth?: number): E
   }
   const keep = new Set<string>([id]);
   for (const [links, limit] of [
-    [out, undefined],
-    [inc, precedingDepth],
+    [out, depth],
+    [inc, depth],
   ] as const) {
     // Breadth-first, so the first visit is the SHORTEST hop count and the
     // depth cap never drops a node that a nearer path would have kept.
@@ -528,8 +536,14 @@ $("toolCenter").onclick = () => {
   selectNode(id);
 };
 
-// The chain's upstream depth: 1..4 hops of preceding nodes, or all of them.
-for (const btn of Array.from($("chainDepth").children) as HTMLElement[]) {
+// The chain's depth: keep only nodes within 1..4 hops of the chained card,
+// or the whole chain (∞). The head chip unfolds the picker.
+$("chainDepthHead").onclick = () => {
+  const open = $("chainDepthOptions").hidden;
+  $("chainDepthOptions").hidden = !open;
+  $("chainDepthHead").toggleAttribute("data-open", open);
+};
+for (const btn of Array.from($("chainDepthOptions").children) as HTMLElement[]) {
   btn.onclick = () => {
     if (!renderedCluster || !currentGraph) return;
     const id = renderedCluster;
@@ -541,12 +555,16 @@ for (const btn of Array.from($("chainDepth").children) as HTMLElement[]) {
   };
 }
 
-/** Show the depth picker only while a chain is on, with its current step lit. */
+/** Show the depth control only while a chain is on, with its current step lit. */
 function updateChainDepth(): void {
-  const group = $("chainDepth");
-  group.hidden = renderedCluster === null;
   const depth = history.state.clusterDepth;
-  for (const btn of Array.from(group.children) as HTMLElement[]) {
+  $("chainDepth").hidden = renderedCluster === null;
+  if (renderedCluster === null) {
+    $("chainDepthOptions").hidden = true;
+    $("chainDepthHead").removeAttribute("data-open");
+  }
+  $("chainDepthLabel").textContent = depth === undefined ? "∞" : String(depth);
+  for (const btn of Array.from($("chainDepthOptions").children) as HTMLElement[]) {
     const mine = btn.dataset.depth === "inf" ? undefined : Number(btn.dataset.depth);
     btn.setAttribute("aria-pressed", String(mine === depth));
   }
@@ -663,7 +681,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "Chain",
-            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. The 1 2 3 4 ∞ picker at the bottom caps how many steps of PRECEDING events stay visible. Undo brings the whole graph back.",
+            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. The depth chip at the top left caps how many steps around the card stay visible (1–4 or the whole chain). Undo brings the whole graph back.",
           },
           { lead: "All nodes", text: "loads everything the mod has, connected or not." },
           {
@@ -922,9 +940,11 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       lastDetail = msg.detail;
       try {
         inspector.render(msg.detail, msg.id, history.pending);
+        if (pendingRevealLine !== null) inspector.revealLine(pendingRevealLine);
       } catch (e) {
         $("inspector").textContent = `Inspector error: ${e instanceof Error ? e.message : String(e)}`;
       }
+      pendingRevealLine = null;
       return;
     case "sim":
       sim.show(msg.detail, msg.id);

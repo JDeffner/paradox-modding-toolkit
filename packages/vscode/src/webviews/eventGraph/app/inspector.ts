@@ -83,6 +83,15 @@ export class Inspector {
     this.root.replaceChildren(el("div", "hint", `Loading ${id}…`));
   }
 
+  /** Scroll to the option or section that starts at source `line`, and flash it. */
+  revealLine(line: number): void {
+    const target = this.root.querySelector<HTMLElement>(`[data-line="${line}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: "start", behavior: "smooth" });
+    target.classList.add("revealed");
+    setTimeout(() => target.classList.remove("revealed"), 1600);
+  }
+
   render(detail: EventDetail | null, id: string, pending: PendingEdit[]): void {
     this.view = pendingOverlay(id, pending);
     this.root.replaceChildren();
@@ -153,6 +162,7 @@ export class Inspector {
     this.section("Logic", "The blocks the game runs, in source order. Click one to open it.");
     for (const s of detail.sections) {
       const row = el("div", "locrow");
+      row.dataset.line = String(s.line);
       row.appendChild(this.link(s.name, () => this.cb.onOpen(detail.file, s.line + 1)));
       const chips = el("div", "badges");
       for (const key of s.keys) chips.appendChild(badge(key, "outline"));
@@ -202,6 +212,7 @@ export class Inspector {
 
   private optionBlock(detail: EventDetail, option: EventOptionInfo, index: number): HTMLElement {
     const block = el("div", "block");
+    block.dataset.line = String(option.line);
     const head = el("div", "head");
     const caret = iconEl("chevronDown", "px-icon caret");
     caret.addEventListener("click", () => block.toggleAttribute("data-collapsed"));

@@ -42,6 +42,8 @@ export interface ViewCallbacks {
   onMove(id: string, x: number, y: number): void;
   /** A theme whose illustration has not been asked for yet. */
   onNeedBanner(theme: string): void;
+  /** A card's step row was clicked: the inspector should land on it. */
+  onOpenStep(id: string, line: number): void;
 }
 
 export interface RenderOptions {
@@ -97,6 +99,25 @@ function delayTitle(delay: string): string {
   const unit = m[2] === "d" ? "day" : m[2] === "mo" ? "month" : "year";
   const plural = m[1] === "1" ? unit : `${unit}s`;
   return `Fires ${m[1]} ${plural} after this step runs (trigger_event delay)`;
+}
+
+/** What an edge label's shorthand means, spelled out for its hover. */
+function labelTitle(label: string): string {
+  if (label.startsWith("via "))
+    return `Fired through scripted effects: the source calls ${label.slice(4)}, and the last one names the target. Any delay lives inside those effects and is not shown here.`;
+  if (label.startsWith("option"))
+    return `Fired when the player picks this option${label.startsWith("option: ") ? `: “${label.slice(8)}”` : ""}.`;
+  const sections: Record<string, string> = {
+    immediate: "Runs the moment the event appears, before the player chooses (immediate block).",
+    after: "Runs once the player has picked any option (after block).",
+    random_events: "Picked at random from this on_action's pool.",
+    events: "Fired by this on_action, all entries together.",
+    first_valid: "The first entry whose trigger holds fires; the rest are skipped.",
+    on_actions: "Chains into another on_action.",
+    trigger: "Referenced inside a trigger block: a condition mentions it, it is not necessarily fired.",
+    effect: "Fired from the effect block.",
+  };
+  return sections[label] ?? `Fired from the ${label} block.`;
 }
 
 function svgEl<K extends keyof SVGElementTagNameMap>(
@@ -297,12 +318,12 @@ export class GraphView {
   }
 
   /**
-   * Route one edge: out of the source's own row (its port) when it has one,
-   * out of the border otherwise, into the CENTER OF THE TARGET'S LEFT SIDE —
-   * one entry point per card, so fan-in reads as convergence — as an S-bend
-   * with horizontal tangents. A back edge takes the same geometry with its
-   * own style: it loops right-to-left, which is what "loops back" should
-   * look like.
+   * Route one edge: out of the RIGHT SIDE of the source (its own row's port
+   * when it has one, the card's center-right otherwise) into the CENTER OF
+   * THE TARGET'S LEFT SIDE — one exit side, one entry point, so the flow
+   * always reads left-to-right — as an S-bend with horizontal tangents. A
+   * back edge takes the same geometry with its own style: it loops
+   * right-to-left, which is what "loops back" should look like.
    */
   private placeEdge(item: EdgeItem): void {
     const a = this.positions.get(item.from);
@@ -312,16 +333,9 @@ export class GraphView {
     const wa = this.widths.get(item.from) ?? NODE_W;
     const wb = this.widths.get(item.to) ?? NODE_W;
     const sa = this.scales.get(item.from) ?? 1;
-    let sx: number;
-    let sy: number;
-    if (item.fromRow !== null) {
-      sx = a.x + wa / 2 + 2;
-      sy = a.y - ha / 2 + (HEADER_H + item.fromRow * ROW_H + ROW_H / 2) * sa;
-    } else {
-      const start = borderPoint(a, b, wa, ha);
-      sx = start.x;
-      sy = start.y;
-    }
+    const sx = a.x + wa / 2 + 2;
+    const sy =
+      item.fromRow !== null ? a.y - ha / 2 + (HEADER_H + item.fromRow * ROW_H + ROW_H / 2) * sa : a.y;
     const end = { x: b.x - wb / 2 - 2, y: b.y };
     const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
     const d = `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`;
@@ -449,6 +463,9 @@ export class GraphView {
         "text-anchor": "middle",
       });
       text.textContent = edge.label;
+      const labelTip = svgEl("title");
+      labelTip.textContent = labelTitle(edge.label);
+      text.appendChild(labelTip);
       layer.appendChild(text);
     }
     return { from: edge.from, to: edge.to, path, hit, label: text, labelsAlways, fromRow, back, chip };
@@ -552,11 +569,15 @@ export class GraphView {
           class: "node-step" + (step.phase === "option" ? "" : " node-step-auto"),
           x: "16",
           y: String(y + 14),
+          "data-step-line": String(step.line),
         });
         row.textContent =
           step.phase === "option"
             ? `${circled(step.index ?? i)} ${clip(step.text ?? "option", 30)}`
             : step.phase;
+        const rowTip = svgEl("title");
+        rowTip.textContent = "Click: open this step in the inspector";
+        row.appendChild(rowTip);
         group.appendChild(row);
         group.appendChild(
           svgEl("circle", {
@@ -564,6 +585,7 @@ export class GraphView {
             cx: String(NODE_W - 10),
             cy: String(y + ROW_H / 2),
             r: "3",
+            "data-step-line": String(step.line),
           })
         );
       });
@@ -832,6 +854,8 @@ export class GraphView {
     from: { x: number; y: number };
     origin: LayoutPos;
     moved: boolean;
+    /** The step row the press landed on, so a plain click can open it. */
+    stepLine: number | null;
   } | null = null;
 
   private beginNodeDrag(ev: PointerEvent, node: EventGraphNode): void {
@@ -839,6 +863,7 @@ export class GraphView {
     const at = this.positions.get(node.id);
     if (!at) return;
     ev.stopPropagation();
+    const stepEl = (ev.target as Element | null)?.closest?.("[data-step-line]");
     this.nodeDrag = {
       id: node.id,
       node,
@@ -846,6 +871,7 @@ export class GraphView {
       from: { x: ev.clientX, y: ev.clientY },
       origin: { x: at.x, y: at.y },
       moved: false,
+      stepLine: stepEl ? Number(stepEl.getAttribute("data-step-line")) : null,
     };
   }
 
@@ -906,6 +932,10 @@ export class GraphView {
           // Redrawing the edges is the cheapest correct answer; a graph small
           // enough to hand-arrange is small enough to redraw.
           this.cb.onMove(drag.id, at.x, at.y);
+        } else if (drag.stepLine !== null) {
+          // One path, not select-then-open: a second select would re-render
+          // the inspector and wipe the reveal the first one just did.
+          this.cb.onOpenStep(drag.id, drag.stepLine);
         } else {
           this.cb.onSelect(drag.id);
         }
@@ -977,20 +1007,6 @@ export class GraphView {
     clone.insertBefore(bg, clone.firstChild);
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
   }
-}
-
-/** Where the line from `a` to `b` leaves a's card (`w`/`h` = a's card box). */
-function borderPoint(a: LayoutPos, b: LayoutPos, w: number, h: number): LayoutPos {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if (dx === 0 && dy === 0) return { x: a.x, y: a.y };
-  const halfW = w / 2 + 2;
-  const halfH = h / 2 + 2;
-  const scale = Math.min(
-    dx === 0 ? Infinity : halfW / Math.abs(dx),
-    dy === 0 ? Infinity : halfH / Math.abs(dy)
-  );
-  return { x: a.x + dx * scale, y: a.y + dy * scale };
 }
 
 function clip(text: string, max: number): string {

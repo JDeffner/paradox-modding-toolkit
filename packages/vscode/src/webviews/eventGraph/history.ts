@@ -61,7 +61,7 @@ export interface GraphState {
   focus: EventGraphParams;
   /** Show only the selected node's chain (the Chain tool). */
   cluster?: string;
-  /** How many hops of PRECEDING nodes the chain keeps; absent = all of them. */
+  /** How many hops around the chained node stay visible; absent = the whole chain. */
   clusterDepth?: number;
   /** Node id -> position a drag put it at. Absent = wherever the layout says. */
   positions: Record<string, { x: number; y: number }>;

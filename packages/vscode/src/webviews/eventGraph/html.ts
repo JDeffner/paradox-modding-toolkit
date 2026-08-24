@@ -151,6 +151,13 @@ ${uiCss}
   #railBar .px-btn { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
   #actingOn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #actingOn:empty { display: none; }
+  /* The chain depth control: a compact head that unfolds the 1 2 3 4 ∞ row.
+     The [hidden] guard is explicit because display rules beat the attribute. */
+  #chainDepth { display: flex; align-items: center; gap: 6px; }
+  #chainDepth[hidden], #chainDepthOptions[hidden] { display: none; }
+  #chainDepthHead .px-icon { transition: transform var(--px-ease); }
+  #chainDepthHead[data-open] .px-icon { transform: rotate(90deg); }
+  #chainDepthOptions { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
   /* Bottom-left view controls, the same group the GUI editor uses. */
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #zoomGroup {
@@ -208,7 +215,8 @@ ${uiCss}
   .edge-path { fill: none; stroke: var(--px-fg); stroke-opacity: 0.35; transition: opacity var(--px-ease); }
   .edge-path.out-of-sel { stroke: var(--eg-event); stroke-opacity: 0.95; }
   .edge-path.into-sel { stroke: var(--eg-other); stroke-opacity: 0.95; }
-  .edge-label { pointer-events: none; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
+  /* Hoverable: the label's <title> spells out what the shorthand means. */
+  .edge-label { pointer-events: all; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .edge-label.hidden { display: none; }
   /* A cycle's return arc: unmistakably not a forward step. */
   .edge-path.edge-back { stroke-dasharray: 6 4; stroke-opacity: 0.3; }
@@ -223,7 +231,9 @@ ${uiCss}
   .edge-chip.edge-chip-random text { fill: var(--px-muted-fg); }
   /* Step rows: the card's own sequence, in execution order. */
   .step-sep { stroke: color-mix(in oklch, var(--px-fg) 18%, transparent); stroke-width: 1; }
-  .node-step { pointer-events: none; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
+  /* Rows are click targets: a click opens the step in the inspector. */
+  .node-step { pointer-events: all; cursor: pointer; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
+  .node-step:hover { fill: var(--px-fg); text-decoration: underline; }
   .node-step-auto { fill: var(--px-muted-fg); font-style: italic; }
   .step-port { fill: var(--eg-event); }
   .step-port-auto { fill: var(--px-muted-fg); }
@@ -313,6 +323,7 @@ ${uiCss}
   .block[data-collapsed] > .head .caret { transform: rotate(-90deg); }
   .block[data-collapsed] > :not(.head) { display: none; }
   .block + .block { border-top: 1px solid var(--px-border); padding-top: 4px; }
+  #inspector .revealed { box-shadow: 0 0 0 1.5px var(--eg-hit); border-radius: var(--px-radius-md); transition: box-shadow 0.2s; }
   #inspector .px-list { padding: 0; }
   #inspector .px-item > .px-item-kind { width: 64px; }
   #inspector .px-item > .px-item-label.px-xs { color: var(--px-muted-fg); flex: 0 0 auto; }
@@ -355,6 +366,12 @@ ${uiCss}
     </div>
     <div id="graphWrap">
       <div id="railBar">
+        <div id="chainDepth" hidden>
+          <button id="chainDepthHead" class="px-btn" data-variant="outline" data-size="sm" data-tip="Chain depth: how many steps around the selected card stay visible" data-tip-side="right" data-tip-wrap>${icon("chevronRight")}<span id="chainDepthLabel">∞</span></button>
+          <div id="chainDepthOptions" class="px-toggle-group" hidden>
+            ${["1", "2", "3", "4", "∞"].map((label) => `<button class="px-toggle" data-size="sm" data-depth="${label === "∞" ? "inf" : label}" aria-pressed="${label === "∞"}">${label}</button>`).join("")}
+          </div>
+        </div>
         <span id="actingOn" class="px-muted px-xs"></span>
       </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -366,9 +383,6 @@ ${uiCss}
           <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="top">${icon("maximize")}</button>
         </div>
         <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-side="top" data-tip-wrap>${kindToggles}</div>
-        <div id="chainDepth" class="px-toggle-group" data-tip="How many steps of preceding events the chain keeps (what leads to the card); ∞ keeps them all" data-tip-side="top" data-tip-wrap hidden>
-          ${["1", "2", "3", "4", "∞"].map((label) => `<button class="px-toggle" data-size="sm" data-depth="${label === "∞" ? "inf" : label}" aria-pressed="${label === "∞"}">${label}</button>`).join("")}
-        </div>
         <span id="focusLine" class="px-muted px-xs"></span>
       </div>
       <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
