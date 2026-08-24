@@ -83,6 +83,20 @@ function circled(index: number): string {
   return index < 20 ? String.fromCharCode(0x2460 + index) : String(index + 1);
 }
 
+/** A hub grows with its wiring: up to +35% for a card ten edges touch. */
+function hubScale(degree: number): number {
+  return Math.min(1.35, 1 + Math.max(0, degree - 2) * 0.045);
+}
+
+/** "30d" / "7–14d" / "2mo" back into a sentence for the chip's hover. */
+function delayTitle(delay: string): string {
+  const m = /^(.+?)(d|mo|y)$/.exec(delay);
+  if (!m) return `Fires ${delay} after this step`;
+  const unit = m[2] === "d" ? "day" : m[2] === "mo" ? "month" : "year";
+  const plural = m[1] === "1" ? unit : `${unit}s`;
+  return `Fires ${m[1]} ${plural} after this step runs (trigger_event delay)`;
+}
+
 function svgEl<K extends keyof SVGElementTagNameMap>(
   tag: K,
   attrs: Record<string, string> = {}
@@ -118,8 +132,10 @@ export class GraphView {
   private banners = new Map<string, string | null>();
   private askedBanners = new Set<string>();
   private lastGraph: EventGraph | null = null;
-  /** Per-node card height (steps grow a card); the layout keeps the boxes apart. */
+  /** Per-node card box, already hub-scaled; the layout keeps the boxes apart. */
   private heights = new Map<string, number>();
+  private widths = new Map<string, number>();
+  private scales = new Map<string, number>();
   private stepsOn = true;
   /** `from→to` pairs that close a cycle: drawn as return arcs. */
   private backSet = new Set<string>();
@@ -131,7 +147,6 @@ export class GraphView {
   private sim: ForceSim | null = null;
   private simKey = "";
   private frame: number | null = null;
-  private refitWhenCool = false;
 
   constructor(
     private readonly svg: SVGSVGElement,
@@ -176,13 +191,25 @@ export class GraphView {
     if (nodes.length === 0) return;
 
     this.stepsOn = nodes.length <= STEPS_MAX_NODES;
-    this.heights = new Map(nodes.map((n) => [n.id, nodeHeight(n, this.stepsOn)]));
+    // A hub's card grows with its degree, so the busy nodes read as the busy ones.
+    const degree = new Map<string, number>();
+    for (const e of edges) {
+      degree.set(e.from, (degree.get(e.from) ?? 0) + 1);
+      degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
+    }
+    this.scales = new Map(nodes.map((n) => [n.id, hubScale(degree.get(n.id) ?? 0)]));
+    this.heights = new Map(nodes.map((n) => [n.id, nodeHeight(n, this.stepsOn) * this.scales.get(n.id)!]));
+    this.widths = new Map(nodes.map((n) => [n.id, NODE_W * this.scales.get(n.id)!]));
     this.backSet = rankNodes(nodes, edges).back;
 
     // The simulation is fed only when the graph itself changed; cards that
-    // survive a refocus keep their place and glide to the new one.
+    // survive a refocus keep their place.
     const key = `${this.rootId ?? ""}|${nodes.map((n) => n.id).join(",")}|${edges.map((e) => `${e.from}>${e.to}`).join(",")}`;
-    const simNodes = nodes.map((n) => ({ id: n.id, height: this.heights.get(n.id) }));
+    const simNodes = nodes.map((n) => ({
+      id: n.id,
+      height: this.heights.get(n.id),
+      width: this.widths.get(n.id),
+    }));
     if (!this.sim) this.sim = new ForceSim(simNodes, edges, this.rootId ?? undefined);
     else if (key !== this.simKey) this.sim.update(simNodes, edges, this.rootId ?? undefined);
     this.simKey = key;
@@ -193,6 +220,10 @@ export class GraphView {
       if (at) this.sim.pin(n.id, at.x, at.y);
       else this.sim.unpin(n.id);
     }
+    // Settle BEFORE the first paint: the reader never sees cards shuffling
+    // into place (or briefly overlapping) on a transition. Only a drag
+    // animates, because there a moving picture is the point.
+    if (this.sim.running) this.sim.settle();
     this.positions = this.sim.positions();
 
     this.svg.appendChild(this.defs());
@@ -225,18 +256,15 @@ export class GraphView {
     }
 
     this.applyFocus();
-    if (refit) {
-      this.fit();
-      this.refitWhenCool = true;
-    }
+    if (refit) this.fit();
     this.applyTransform();
-    this.animate();
   }
 
   /**
    * Run the simulation at the frame rate until it cools, moving the cards and
-   * their edges each frame. Idle is silent: no frame is scheduled while the
-   * temperature is out, and a drag or a new graph is what lights it again.
+   * their edges each frame — the DRAG path only: a new graph settles before
+   * its first paint instead. Idle is silent: no frame is scheduled while the
+   * temperature is out.
    */
   private animate(): void {
     if (this.frame !== null || !this.sim) return;
@@ -248,11 +276,6 @@ export class GraphView {
       this.positions = sim.positions();
       this.placeAll();
       if (warm) this.frame = requestAnimationFrame(step);
-      else if (this.refitWhenCool) {
-        this.refitWhenCool = false;
-        this.fit();
-        this.applyTransform();
-      }
     };
     this.frame = requestAnimationFrame(step);
   }
@@ -263,7 +286,9 @@ export class GraphView {
       const at = this.positions.get(id);
       if (at) {
         const h = this.heights.get(id) ?? NODE_H;
-        group.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - h / 2})`);
+        const w = this.widths.get(id) ?? NODE_W;
+        const s = this.scales.get(id) ?? 1;
+        group.setAttribute("transform", `translate(${at.x - w / 2},${at.y - h / 2}) scale(${s})`);
       }
     }
     for (const item of this.edgeItems) this.placeEdge(item);
@@ -271,28 +296,31 @@ export class GraphView {
 
   /**
    * Route one edge: out of the source's own row (its port) when it has one,
-   * out of the border otherwise, into the target's border, as an S-bend with
-   * horizontal tangents — the readable curve in a columnar layout. A back
-   * edge takes the same geometry with its own style: it loops right-to-left,
-   * which is exactly what "loops back" should look like.
+   * out of the border otherwise, into the CENTER OF THE TARGET'S LEFT SIDE —
+   * one entry point per card, so fan-in reads as convergence — as an S-bend
+   * with horizontal tangents. A back edge takes the same geometry with its
+   * own style: it loops right-to-left, which is what "loops back" should
+   * look like.
    */
   private placeEdge(item: EdgeItem): void {
     const a = this.positions.get(item.from);
     const b = this.positions.get(item.to);
     if (!a || !b) return;
     const ha = this.heights.get(item.from) ?? NODE_H;
-    const hb = this.heights.get(item.to) ?? NODE_H;
+    const wa = this.widths.get(item.from) ?? NODE_W;
+    const wb = this.widths.get(item.to) ?? NODE_W;
+    const sa = this.scales.get(item.from) ?? 1;
     let sx: number;
     let sy: number;
     if (item.fromRow !== null) {
-      sx = a.x + NODE_W / 2 + 2;
-      sy = a.y - ha / 2 + HEADER_H + item.fromRow * ROW_H + ROW_H / 2;
+      sx = a.x + wa / 2 + 2;
+      sy = a.y - ha / 2 + (HEADER_H + item.fromRow * ROW_H + ROW_H / 2) * sa;
     } else {
-      const start = borderPoint(a, b, ha);
+      const start = borderPoint(a, b, wa, ha);
       sx = start.x;
       sy = start.y;
     }
-    const end = borderPoint(b, { x: sx, y: sy }, hb);
+    const end = { x: b.x - wb / 2 - 2, y: b.y };
     const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
     item.path.setAttribute("d", `M ${sx} ${sy} C ${sx + k} ${sy}, ${end.x - k} ${end.y}, ${end.x} ${end.y}`);
     // Horizontal tangents make the cubic's midpoint the plain average.
@@ -382,7 +410,8 @@ export class GraphView {
     path.appendChild(title);
     layer.appendChild(path);
 
-    // The WHEN chip: a delay ("30d") or a random weight ("w 100"), always on.
+    // The WHEN chip: a delay ("30d") or a random weight ("w 100"), always on,
+    // and it explains itself on hover.
     const chipText = edge.delay ?? (edge.weight !== undefined ? `w ${edge.weight}` : null);
     let chip: SVGGElement | null = null;
     if (chipText) {
@@ -394,6 +423,11 @@ export class GraphView {
       const t = svgEl("text", { x: "0", y: "4", "text-anchor": "middle" });
       t.textContent = chipText;
       chip.appendChild(t);
+      const chipTip = svgEl("title");
+      chipTip.textContent = edge.delay
+        ? delayTitle(edge.delay)
+        : `Picked at random from this pool: weight ${edge.weight} (relative chance against the pool's other entries)`;
+      chip.appendChild(chipTip);
       layer.appendChild(chip);
     }
 
@@ -421,10 +455,12 @@ export class GraphView {
   private drawNode(node: EventGraphNode, at: LayoutPos): SVGGElement {
     const isRoot = this.rootId !== null && node.id === this.rootId;
     const kind = kindKey(node.kind);
-    const h = this.heights.get(node.id) ?? NODE_H;
+    // Content draws at base size; the hub scale lives in the transform.
+    const h = nodeHeight(node, this.stepsOn);
+    const s = this.scales.get(node.id) ?? 1;
     const group = svgEl("g", {
       class: "node" + (isRoot ? " root" : ""),
-      transform: `translate(${at.x - NODE_W / 2},${at.y - h / 2})`,
+      transform: `translate(${at.x - (NODE_W * s) / 2},${at.y - (h * s) / 2}) scale(${s})`,
     });
     group.dataset.id = node.id;
     group.dataset.kind = kind;
@@ -659,35 +695,62 @@ export class GraphView {
   }
 
   /**
-   * Focus and context: the selection's 1-hop neighborhood stays lit, the rest
-   * dims (never hides, so the mental map survives), and its in and out edges
-   * differ in color. The kind filter dims through the same path.
+   * Focus and context: the selection's WHOLE CHAIN stays lit — everything
+   * that leads to it (orange) and everything it leads to (blue), however
+   * many hops away — and the rest dims (never hides, so the mental map
+   * survives). The kind filter dims through the same path.
    */
   private applyFocus(): void {
     const id = this.selectedId;
-    const neighbors = new Set<string>();
+    const anc = new Set<string>();
+    const desc = new Set<string>();
     if (id !== null) {
-      neighbors.add(id);
+      const out = new Map<string, string[]>();
+      const inc = new Map<string, string[]>();
+      const link = (map: Map<string, string[]>, a: string, b: string): void => {
+        const list = map.get(a);
+        if (list) list.push(b);
+        else map.set(a, [b]);
+      };
       for (const e of this.edgeItems) {
-        if (e.from === id) neighbors.add(e.to);
-        if (e.to === id) neighbors.add(e.from);
+        link(out, e.from, e.to);
+        link(inc, e.to, e.from);
+      }
+      for (const [links, set] of [
+        [out, desc],
+        [inc, anc],
+      ] as const) {
+        const queue: string[] = [id];
+        while (queue.length > 0) {
+          for (const next of links.get(queue.pop()!) ?? []) {
+            if (next === id || set.has(next)) continue;
+            set.add(next);
+            queue.push(next);
+          }
+        }
       }
     }
+    const lit = (nid: string): boolean => nid === id || anc.has(nid) || desc.has(nid);
     this.nodeGroups.forEach((group, nid) => {
       group.classList.toggle("selected", id !== null && nid === id);
       group.classList.toggle(
         "dim",
-        (id !== null && !neighbors.has(nid)) || this.hiddenKinds.has(group.dataset.kind ?? "")
+        (id !== null && !lit(nid)) || this.hiddenKinds.has(group.dataset.kind ?? "")
       );
     });
     for (const e of this.edgeItems) {
-      const touches = id !== null && (e.from === id || e.to === id);
+      // An edge is on the chain when it lies on a directed path INTO the
+      // selection (upstream) or OUT of it (downstream) — not merely when both
+      // ends happen to be lit.
+      const down = id !== null && (e.from === id || desc.has(e.from)) && desc.has(e.to);
+      const up = id !== null && anc.has(e.from) && (e.to === id || anc.has(e.to));
+      const touches = down || up;
       e.path.classList.toggle("dim", id !== null && !touches);
-      e.path.classList.toggle("out-of-sel", touches && e.from === id);
-      e.path.classList.toggle("into-sel", touches && e.to === id && e.from !== id);
+      e.path.classList.toggle("out-of-sel", down);
+      e.path.classList.toggle("into-sel", up && !down);
       e.path.setAttribute(
         "marker-end",
-        touches ? (e.from === id ? "url(#arrowOut)" : "url(#arrowIn)") : "url(#arrow)"
+        touches ? (down ? "url(#arrowOut)" : "url(#arrowIn)") : "url(#arrow)"
       );
       if (e.label) {
         e.label.classList.toggle("hidden", !e.labelsAlways && !touches);
@@ -907,12 +970,12 @@ export class GraphView {
   }
 }
 
-/** Where the line from `a` to `b` leaves a's card (`h` = a's card height). */
-function borderPoint(a: LayoutPos, b: LayoutPos, h: number): LayoutPos {
+/** Where the line from `a` to `b` leaves a's card (`w`/`h` = a's card box). */
+function borderPoint(a: LayoutPos, b: LayoutPos, w: number, h: number): LayoutPos {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   if (dx === 0 && dy === 0) return { x: a.x, y: a.y };
-  const halfW = NODE_W / 2 + 2;
+  const halfW = w / 2 + 2;
   const halfH = h / 2 + 2;
   const scale = Math.min(
     dx === 0 ? Infinity : halfW / Math.abs(dx),

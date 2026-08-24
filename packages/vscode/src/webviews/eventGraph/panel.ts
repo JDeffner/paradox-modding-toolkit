@@ -26,6 +26,15 @@ export interface EventGraphActions {
   editLoc(key: string, value: string, file?: string, line?: number): Promise<void>;
   /** Insert a scaffolded option before `endLine` and create its loc key. */
   addOption(id: string, file: string, endLine: number, count: number): Promise<void>;
+  /** Append a scaffolded event (file created if null) and its loc keys. */
+  createEvent(
+    id: string,
+    file: string | null,
+    type: string,
+    title: string,
+    desc: string,
+    options: number
+  ): Promise<void>;
   /** Mod root and game root, for resolving a texture path. */
   textureRoots(): TextureRoots;
   /** A mod file changed on disk (re-index). */
@@ -233,6 +242,8 @@ export class EventGraphPanel {
           await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
         } else if (edit.kind === "addOption") {
           await this.actions.addOption(edit.id, edit.file, edit.endLine, edit.count);
+        } else if (edit.kind === "createEvent") {
+          await this.actions.createEvent(edit.id, edit.file, edit.type, edit.title, edit.desc, edit.options);
         } else {
           await this.setField(edit);
         }
@@ -383,6 +394,7 @@ function writeOrder(edits: PendingEdit[]): PendingEdit[] {
 function describe(edit: PendingEdit): string {
   if (edit.kind === "editLoc") return `localization ${edit.key}`;
   if (edit.kind === "addOption") return `new option on ${edit.id}`;
+  if (edit.kind === "createEvent") return `new event ${edit.id}`;
   return `${edit.key} on ${edit.id}`;
 }
 

@@ -28,24 +28,24 @@ const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsC
   {
     id: "toolSimulate",
     icon: "flaskConical",
-    tip: "Simulate: walk through the selected event block by block, in the order the game runs them. Needs a card selected",
+    tip: "Simulate the selected event (S)",
     needsCard: true,
   },
   {
     id: "toolCenter",
     icon: "locate",
-    tip: "Cluster: keep only the cards connected to the selected one, so you see the sequence it belongs to. Undo brings the rest back. Needs a card selected",
+    tip: "Chain: only what leads to the selected card and what it leads to (C)",
     needsCard: true,
   },
   {
     id: "toolAll",
     icon: "waypoints",
-    tip: "All nodes: every event, on_action and decision of this mod, connected or not",
+    tip: "All nodes of this mod (A)",
   },
   {
     id: "toolSource",
     icon: "fileText",
-    tip: "Source: open the selected event's file beside the graph. Needs a card selected",
+    tip: "Open the selected card's source (O)",
     needsCard: true,
   },
 ];
@@ -212,8 +212,9 @@ ${uiCss}
   .edge-label.hidden { display: none; }
   /* A cycle's return arc: unmistakably not a forward step. */
   .edge-path.edge-back { stroke-dasharray: 6 4; stroke-opacity: 0.3; }
-  /* The WHEN chip: an edge's delay ("30d") or random weight ("w 100"). */
-  .edge-chip { pointer-events: none; }
+  /* The WHEN chip: an edge's delay ("30d") or random weight ("w 100").
+     Hoverable: its <title> says what the number means. */
+  .edge-chip { pointer-events: all; }
   .edge-chip rect { fill: var(--px-popover); stroke: color-mix(in oklch, var(--px-fg) 35%, transparent); stroke-width: 1; }
   .edge-chip text { fill: var(--px-fg); font-size: 10px; font-family: var(--px-mono, monospace); text-anchor: middle; }
   .edge-chip.edge-chip-random rect { stroke-dasharray: 3 2; }
@@ -292,6 +293,10 @@ ${uiCss}
   #inspector .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .badges { display: flex; gap: 4px; flex-wrap: wrap; }
   .field { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; }
+  /* The "New event" popover form shares the inspector's row anatomy. */
+  .newEventForm { display: flex; flex-direction: column; gap: 8px; width: 300px; }
+  .newEventForm .sub { font-weight: 600; font-size: var(--px-text-sm); }
+  .newEventForm .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .field > .k { color: var(--px-muted-fg); font-size: var(--px-text-xs); overflow: hidden; text-overflow: ellipsis; }
   .field > .v { min-width: 0; display: flex; gap: 4px; align-items: center; }
   .field .px-dropdown, .field .px-input { flex: 1 1 auto; min-width: 0; }
@@ -319,6 +324,7 @@ ${uiCss}
       <div id="suggest" role="listbox"><div class="px-menu-list"></div></div>
     </div>
     <button id="go" class="px-btn" data-variant="outline" data-size="sm" data-tip="Load the graph for the id or namespace">Go</button>
+    <button id="newEvent" class="px-btn" data-variant="outline" data-size="sm" data-tip="Create a new event (N)">${icon("plus")}New</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-toggle-group" data-tip="What the cards are captioned with" data-tip-wrap>
       <button id="titleRaw" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Caption every card with its raw id (cultivation_scheme.101)" data-tip-wrap>Raw</button>

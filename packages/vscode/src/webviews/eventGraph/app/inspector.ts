@@ -57,6 +57,8 @@ const EMPTY_OVERLAY: PendingOverlay = { values: new Map(), inserted: new Map(), 
 export class Inspector {
   private vocabulary: EventVocabularyResult = EMPTY_VOCABULARY;
   private view: PendingOverlay = EMPTY_OVERLAY;
+  /** The mod's own event ids, so firing keys get a dropdown, not a blank. */
+  private eventIds: string[] = [];
 
   constructor(
     private readonly root: HTMLElement,
@@ -65,6 +67,10 @@ export class Inspector {
 
   setVocabulary(vocabulary: EventVocabularyResult): void {
     this.vocabulary = vocabulary;
+  }
+
+  setCatalog(ids: string[]): void {
+    this.eventIds = ids;
   }
 
   showPlaceholder(): void {
@@ -342,7 +348,12 @@ export class Inspector {
     }
   }
 
-  /** The "pick a key, type its value, insert it" row shared by fields and effects. */
+  /**
+   * The "pick a key, type its value, insert it" row shared by fields and
+   * effects. The value control follows the key: a key that fires an event
+   * (`trigger_event`) gets a searchable dropdown of the mod's own event ids,
+   * everything else keeps a free input defaulting to `yes`.
+   */
   private addRow(
     label: string,
     items: EventVocabularyItem[],
@@ -353,21 +364,47 @@ export class Inspector {
     row.appendChild(el("span", "k", label));
     const holder = el("div", "v");
     let key = "";
-    const value = input("yes", "value", () => undefined);
+    const valueBox = el("span");
+    valueBox.style.display = "contents";
+    let readValue: () => string = () => "yes";
+    const setValueControl = (): void => {
+      valueBox.replaceChildren();
+      if (key === "trigger_event" && this.eventIds.length > 0) {
+        let picked = "";
+        valueBox.appendChild(
+          dropdown(
+            "",
+            "event id",
+            this.eventIds.map((id) => ({ value: id, label: id })),
+            "The event this fires. The list is your mod's own events",
+            (v) => (picked = v)
+          )
+        );
+        readValue = () => picked;
+      } else {
+        const field = input("yes", "value", () => undefined);
+        field.style.maxWidth = "72px";
+        valueBox.appendChild(field);
+        readValue = () => field.value.trim() || "yes";
+      }
+    };
     const add = iconButton(
       "plus",
       "Add it. Nothing is written until you save",
       () => {
         if (key === "") return;
-        onAdd(key, value.value.trim() === "" ? "yes" : value.value.trim());
+        const value = readValue();
+        if (value === "") return;
+        onAdd(key, value);
       },
       "icon-xs"
     );
     const picker = dropdown("", "choose", menuItems(items), tip, (picked) => {
       key = picked;
+      setValueControl();
     });
-    value.style.maxWidth = "72px";
-    holder.append(picker, value, add);
+    setValueControl();
+    holder.append(picker, valueBox, add);
     row.appendChild(holder);
     return row;
   }

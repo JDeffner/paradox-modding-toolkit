@@ -109,4 +109,21 @@ describe("the Changes list", () => {
       "option 3, with its localization key",
     ]);
   });
+
+  it("a created event is a Changes entry, not an overlay (no card exists yet)", () => {
+    const create = {
+      kind: "createEvent",
+      id: "a.9",
+      file: null,
+      type: "character_event",
+      title: "T",
+      desc: "D",
+      options: 2,
+    } as const;
+    expect(editKind(create)).toBe("new event");
+    expect(describeEdit(create)).toBe("a.9 (character_event, 2 options), with its localization keys");
+    const view = pendingOverlay("a.9", [create]);
+    expect(view.values.size).toBe(0);
+    expect(view.options).toBe(0);
+  });
 });

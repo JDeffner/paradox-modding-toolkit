@@ -7,14 +7,14 @@
  * edit becomes a PendingEdit in the history, undo and redo move through them,
  * and the host only ever receives a `save` with the whole list.
  */
-import type { EventGraph, EventGraphParams } from "@px-lsp/protocol/protocol";
+import type { EventGraph, EventGraphParams, EventVocabularyResult } from "@px-lsp/protocol/protocol";
 import type { AppToHost, HostToApp, UiState } from "../messages";
 import { GraphHistory, type GraphState } from "../history";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
-import { el, iconButton } from "./dom";
+import { button, dropdown, el, iconButton, input } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";
@@ -44,6 +44,9 @@ let ui: UiState = {
 };
 let currentGraph: EventGraph | null = null;
 let currentParams: EventGraphParams = {};
+let vocab: EventVocabularyResult | null = null;
+/** Re-select this card once the post-save graph arrives. */
+let reselectAfterGraph: string | null = null;
 /** The cluster filter the LAST render actually drew (null = the whole graph). */
 let renderedCluster: string | null = null;
 const hiddenKinds = new Set<string>();
@@ -154,28 +157,32 @@ function refocus(id: string): void {
 }
 
 /**
- * The subgraph connected to `id`, following edges both ways: the sequence the
- * node belongs to, with every unrelated card gone. Client-side, so the Cluster
- * tool costs no round trip and undo brings the full graph straight back.
+ * The node's CHAIN: everything that leads to `id` and everything it leads to,
+ * following edge DIRECTION — not the whole connected component, which in a
+ * wired-up mod is most of the graph. Client-side, so the Chain tool costs no
+ * round trip and undo brings the full graph straight back.
  */
 function clusterGraph(graph: EventGraph, id: string): EventGraph {
-  const adjacent = new Map<string, string[]>();
-  const link = (a: string, b: string): void => {
-    const list = adjacent.get(a);
+  const out = new Map<string, string[]>();
+  const inc = new Map<string, string[]>();
+  const link = (map: Map<string, string[]>, a: string, b: string): void => {
+    const list = map.get(a);
     if (list) list.push(b);
-    else adjacent.set(a, [b]);
+    else map.set(a, [b]);
   };
   for (const edge of graph.edges) {
-    link(edge.from, edge.to);
-    link(edge.to, edge.from);
+    link(out, edge.from, edge.to);
+    link(inc, edge.to, edge.from);
   }
   const keep = new Set<string>([id]);
-  const queue = [id];
-  while (queue.length > 0) {
-    for (const next of adjacent.get(queue.pop()!) ?? []) {
-      if (keep.has(next)) continue;
-      keep.add(next);
-      queue.push(next);
+  for (const links of [out, inc]) {
+    const queue = [id];
+    while (queue.length > 0) {
+      for (const next of links.get(queue.pop()!) ?? []) {
+        if (keep.has(next)) continue;
+        keep.add(next);
+        queue.push(next);
+      }
     }
   }
   return {
@@ -183,6 +190,127 @@ function clusterGraph(graph: EventGraph, id: string): EventGraph {
     nodes: graph.nodes.filter((n) => keep.has(n.id)),
     edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
   };
+}
+
+// ---------------------------------------------------------------------------
+// New event
+// ---------------------------------------------------------------------------
+
+/** `my_ns.4`: the next free number under the namespace the view is looking at. */
+function suggestEventId(): string {
+  const ns =
+    currentParams.namespace ??
+    (selectedId ? selectedId.split(".")[0] : undefined) ??
+    catalog.namespaces[0] ??
+    "my_mod";
+  let max = 0;
+  for (const id of catalog.ids) {
+    if (!id.startsWith(ns + ".")) continue;
+    const n = Number(id.slice(ns.length + 1));
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return `${ns}.${max + 1}`;
+}
+
+/**
+ * The "New event" form: everything a working event needs, nothing else. It
+ * becomes ONE pending edit (the scaffold block plus its localization keys),
+ * so Save writes it and undo takes it back like any other change.
+ */
+function openNewEventForm(anchor: HTMLElement): void {
+  if (isPopoverAnchor(anchor)) {
+    closePopover();
+    return;
+  }
+  const form = el("div", "newEventForm");
+  const row = (label: string, tip: string, control: HTMLElement): void => {
+    const r = el("div", "field");
+    const k = el("span", "k", label);
+    k.dataset.tip = tip;
+    k.dataset.tipWrap = "";
+    const v = el("div", "v");
+    v.appendChild(control);
+    r.append(k, v);
+    form.appendChild(r);
+  };
+  form.appendChild(el("div", "sub", "New event"));
+  form.appendChild(
+    el(
+      "div",
+      "hint",
+      "Saved as a scaffold you then fill in here or in the source. Nothing is written until you press Save."
+    )
+  );
+  const idInput = input(suggestEventId(), "namespace.number", () => undefined);
+  row("id", "The event's name in script: its namespace, a dot, and a free number", idInput);
+  let type = "character_event";
+  const types = vocab?.values["type"] ?? [];
+  row(
+    "type",
+    "Who the event happens to and how it is shown. character_event is the everyday letter-style event",
+    types.length > 0
+      ? dropdown(
+          type,
+          "choose",
+          types.map((t) => ({ value: t.value, label: t.value, description: t.doc, hint: t.hint })),
+          "Pick the event's type",
+          (v) => (type = v)
+        )
+      : input(type, "character_event", (v) => (type = v))
+  );
+  const titleInput = input("", "The window's heading", () => undefined);
+  row("title", "What the player reads at the top of the event window", titleInput);
+  const descInput = input("", "What is happening", () => undefined);
+  row("desc", "The event's body text, under the illustration", descInput);
+  let options = 1;
+  row(
+    "options",
+    "How many choices the player gets. Each becomes an option block with its own text key",
+    dropdown(
+      "1",
+      "1",
+      ["0", "1", "2", "3"].map((n) => ({ value: n, label: n })),
+      "Scaffolded option blocks",
+      (v) => (options = Number(v))
+    )
+  );
+  const create = button(
+    "Create on Save",
+    "plus",
+    "Adds the event to your unsaved changes; Save writes the file and its localization",
+    () => {
+      const id = idInput.value.trim();
+      if (!/^[A-Za-z0-9_]+\.[0-9]+$/.test(id)) {
+        toast("An event id looks like namespace.123 (letters, digits and _ before the dot).", "destructive");
+        return;
+      }
+      if (catalogIds.has(id)) {
+        toast(`${id} already exists. Pick a free number.`, "destructive");
+        return;
+      }
+      const ns = id.split(".")[0];
+      // Append to the file the namespace already lives in, when it is the mod's.
+      const home = currentGraph?.nodes.find(
+        (n) => n.source === "mod" && n.file !== undefined && n.id.startsWith(ns + ".")
+      );
+      history.pushEdit(`create ${id}`, {
+        kind: "createEvent",
+        id,
+        file: home?.file ?? null,
+        type,
+        title: titleInput.value.trim(),
+        desc: descInput.value.trim(),
+        options,
+      });
+      afterHistoryChange();
+      closePopover();
+      toast(`${id} is in your unsaved changes. Press Save to write it.`);
+    },
+    "default"
+  );
+  create.style.alignSelf = "flex-end";
+  form.appendChild(create);
+  popover(anchor, form);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +439,17 @@ window.addEventListener("keydown", (ev) => {
   } else if (ev.key === "0" || ev.key === "f") {
     ev.preventDefault();
     view.fit();
+  } else if (ev.key === "s") {
+    $("toolSimulate").click();
+  } else if (ev.key === "c") {
+    $("toolCenter").click();
+  } else if (ev.key === "a") {
+    $("toolAll").click();
+  } else if (ev.key === "o") {
+    $("toolSource").click();
+  } else if (ev.key === "n") {
+    ev.preventDefault();
+    openNewEventForm($("newEvent"));
   } else if (ev.key === "Escape") {
     if (sim.isOpen) sim.close();
     else if (selectedId !== null) selectNode(null);
@@ -343,6 +482,7 @@ function setTitleMode(mode: "raw" | "loc"): void {
 }
 
 $("refresh").onclick = () => fetchGraph(currentParams);
+$("newEvent").onclick = () => openNewEventForm($("newEvent"));
 $("export").onclick = () => send({ type: "export", svg: view.serializeSvg() });
 $("zoomIn").onclick = () => view.zoomBy(1.25);
 $("zoomOut").onclick = () => view.zoomBy(1 / 1.25);
@@ -369,9 +509,9 @@ $("toolSimulate").onclick = () => {
 $("toolCenter").onclick = () => {
   if (!selectedId || !currentGraph) return;
   const id = selectedId;
-  // A view-only step: the graph we hold is filtered down to the nodes connected
-  // to the selection. Undo restores the full view; nothing is fetched.
-  history.push(`cluster around ${id}`, { ...history.state, cluster: id, positions: {} });
+  // A view-only step: the graph we hold is filtered down to the selection's
+  // chain. Undo restores the full view; nothing is fetched.
+  history.push(`chain of ${id}`, { ...history.state, cluster: id, positions: {} });
   afterHistoryChange();
   renderGraph(currentGraph, currentParams);
   selectNode(id);
@@ -457,7 +597,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "With a card selected,",
-            text: "its own arrows color up (outgoing blue, incoming orange) and everything unrelated dims, so the neighborhood stays readable in a big graph.",
+            text: "its whole chain lights up — everything leading to it in orange, everything it leads to in blue, however many hops away — and the rest dims. The Chain tool (C) hides the rest entirely.",
           },
         ],
       },
@@ -487,8 +627,8 @@ $("helpBtn").onclick = () =>
             text: "walks through the selected event block by block, in the order the game runs them, in a floating window you can step deeper from.",
           },
           {
-            lead: "Cluster",
-            text: "keeps only the cards connected to the selected one — the sequence it belongs to — and hides the rest. Undo brings the whole graph back.",
+            lead: "Chain",
+            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. Undo brings the whole graph back.",
           },
           { lead: "All nodes", text: "loads everything the mod has, connected or not." },
           {
@@ -506,8 +646,12 @@ $("helpBtn").onclick = () =>
             text: "to open it in the inspector: its fields with dropdowns listing the game's own values, its title and description text, its options, and every scope, effect and value it references.",
           },
           {
+            lead: "New event (N)",
+            text: "scaffolds a whole event: id, type, title, description and its option blocks, localization keys included. It lands in your unsaved changes; Save writes the file (creating it for a fresh namespace).",
+          },
+          {
             lead: "Add things",
-            text: "with the “Add field”, “Add effect”, “Add trigger” and “Add option” rows; each list comes from your game files, with the engine's own one-line documentation.",
+            text: "with the “Add field”, “Add effect”, “Add trigger” and “Add option” rows; each list comes from your game files, with the engine's own one-line documentation. Picking trigger_event offers your mod's own event ids.",
           },
           {
             lead: "<SV>",
@@ -691,7 +835,7 @@ function updateInfo(graph: EventGraph, params: EventGraphParams, cluster: string
   const lines = [`${graph.nodes.length} nodes · ${graph.edges.length} edges`];
   if (graph.truncated) lines.push("Truncated: this view hides part of the graph.");
   if (cluster)
-    lines.push(`Clustered around ${cluster}: only the cards connected to it. Undo brings the rest back.`);
+    lines.push(`Chain of ${cluster}: what leads to it and what it leads to. Undo brings the rest back.`);
   lines.push(
     params.root
       ? `Focused on ${params.root}: what it fires, what fires it, and one hop further.`
@@ -735,6 +879,7 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       setFocusLine(`Error: ${msg.message}`, "error");
       return;
     case "vocabulary":
+      vocab = msg.vocabulary;
       inspector.setVocabulary(msg.vocabulary);
       return;
     case "detail":
@@ -761,8 +906,10 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       history.markSaved();
       afterHistoryChange();
       toast(`Saved ${msg.applied} change${msg.applied === 1 ? "" : "s"}`);
-      // The files changed under the inspector; re-read the selected event.
-      if (selectedId) send({ type: "select", id: selectedId });
+      // The files changed under the graph and the inspector: refetch so a
+      // created event gets its card, and put the selection back afterwards.
+      reselectAfterGraph = selectedId;
+      fetchGraph(currentParams);
       return;
     case "restore":
       history.push("keep unsaved changes", msg.state);
@@ -774,6 +921,7 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       if (msg.graph?.suggestions) {
         catalog = msg.graph.suggestions;
         catalogIds = new Set(catalog.ids);
+        inspector.setCatalog(catalog.ids);
       }
       if (currentParams.root) queryEl.value = currentParams.root;
       else if (currentParams.namespace) queryEl.value = currentParams.namespace;
@@ -783,6 +931,10 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       history.state.focus = currentParams;
       try {
         renderGraph(msg.graph, currentParams);
+        if (reselectAfterGraph && msg.graph.nodes.some((n) => n.id === reselectAfterGraph)) {
+          selectNode(reselectAfterGraph);
+        }
+        reselectAfterGraph = null;
       } catch (e) {
         setFocusLine(`Render error: ${e instanceof Error ? e.message : String(e)}`, "error");
       }
@@ -829,7 +981,7 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
   // graph says both: its component may be missing members the server never sent.
   setFocusLine(
     clustered
-      ? `Cluster: ${shown.nodes.length} connected cards${graph.truncated ? " · truncated view" : ""}`
+      ? `Chain: ${shown.nodes.length} cards${graph.truncated ? " · truncated view" : ""}`
       : graph.truncated
         ? "Truncated view"
         : "",

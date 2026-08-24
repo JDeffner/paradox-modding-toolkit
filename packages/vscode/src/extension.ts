@@ -646,6 +646,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         notifyModFileChanged(locFile);
       }
     },
+    async createEvent(
+      id: string,
+      file: string | null,
+      type: string,
+      title: string,
+      desc: string,
+      options: number
+    ): Promise<void> {
+      const ns = id.split(".")[0];
+      let target = file;
+      if (!target) {
+        if (!cfg.modPath) throw new Error("no mod folder configured");
+        target = path.join(cfg.modPath, "events", `${ns}_events.txt`);
+      }
+      const letters = Array.from({ length: Math.min(options, 26) }, (_, i) => String.fromCharCode(97 + i));
+      const optionBlocks = letters.map((l) => `\toption = {\n\t\tname = ${id}.${l}\n\t}\n`).join("");
+      const block = `${id} = {\n\ttype = ${type}\n\ttitle = ${id}.t\n\tdesc = ${id}.desc\n${optionBlocks}}\n`;
+      if (!fs.existsSync(target)) {
+        // A fresh namespace file: the BOM and the namespace header the engine wants.
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `\uFEFFnamespace = ${ns}\n\n${block}`, "utf8");
+      } else {
+        const text = fs.readFileSync(target, "utf8");
+        const sep = text.endsWith("\n\n") ? "" : text.endsWith("\n") ? "\n" : "\n\n";
+        fs.appendFileSync(target, `${sep}${block}`, "utf8");
+      }
+      notifyModFileChanged(target);
+      const owner = modRootFor(target, cfg);
+      const locCfg = owner && owner !== cfg.modPath ? { ...cfg, modPath: owner } : cfg;
+      if (locCfg.modPath) {
+        const writes: Array<[string, string]> = [
+          [`${id}.t`, title || "New event"],
+          [`${id}.desc`, desc || "Describe what is happening here."],
+          ...letters.map((l): [string, string] => [`${id}.${l}`, "New option"]),
+        ];
+        for (const [key, value] of writes) notifyModFileChanged(upsertNewModLoc(locCfg, key, value));
+      }
+    },
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.refreshViews", () => views.refreshAll()),

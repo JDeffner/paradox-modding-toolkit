@@ -29,6 +29,20 @@ export type PendingEdit =
     }
   | { kind: "addOption"; id: string; file: string; endLine: number; count: number }
   | {
+      /** A whole new event: scaffold block plus its localization keys. */
+      kind: "createEvent";
+      /** The full id, `namespace.N`. */
+      id: string;
+      /** The namespace's existing MOD file to append to; null = create
+       *  `events/<namespace>_events.txt` with its namespace header. */
+      file: string | null;
+      type: string;
+      title: string;
+      desc: string;
+      /** Scaffolded `option` blocks, each with its own loc key. */
+      options: number;
+    }
+  | {
       kind: "setField";
       id: string;
       file: string;

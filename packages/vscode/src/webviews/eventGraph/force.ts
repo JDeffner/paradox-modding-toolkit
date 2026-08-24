@@ -26,6 +26,8 @@ export interface SimNodeInput {
   cluster?: string;
   /** Card height in px; the compact card's when absent. */
   height?: number;
+  /** Card width in px (a hub scales up); the standard card's when absent. */
+  width?: number;
 }
 export interface SimEdgeInput {
   from: string;
@@ -45,8 +47,9 @@ export interface SimNode extends SimPos {
   cluster: string;
   /** Sequence column: 0 = an entry nothing in the graph fires. */
   rank: number;
-  /** Card height; collision keeps (a.h + b.h) / 2 + GAP clear. */
+  /** Card box; collision keeps (a.h + b.h) / 2 + GAP clear, same for widths. */
   h: number;
+  w: number;
   degree: number;
 }
 
@@ -254,6 +257,7 @@ export class ForceSim {
       const cluster = input.cluster ?? clusterOf(id);
       const rank = ranks.get(id) ?? 0;
       const h = input.height ?? NODE_H;
+      const w = input.width ?? NODE_W;
       const old = previous.get(id);
       let node: SimNode;
       if (old) {
@@ -261,6 +265,7 @@ export class ForceSim {
         node.cluster = cluster;
         node.rank = rank;
         node.h = h;
+        node.w = w;
         if (node.id === oldRoot) node.fixed = false;
       } else {
         const homeY = this.clusters.get(cluster)?.homeY ?? 0;
@@ -289,6 +294,7 @@ export class ForceSim {
           cluster,
           rank,
           h,
+          w,
           degree: 0,
         };
       }
@@ -451,7 +457,8 @@ function separate(nodes: SimNode[], passes = 400, strength = 1): void {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const pitchY = (a.h + b.h) / 2 + GAP;
-        const ox = PITCH_X - Math.abs(dx);
+        const pitchX = (a.w + b.w) / 2 + GAP;
+        const ox = pitchX - Math.abs(dx);
         const oy = pitchY - Math.abs(dy);
         if (ox <= 0 || oy <= 0) continue;
         if (a.fixed && b.fixed) continue;

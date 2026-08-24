@@ -46,6 +46,8 @@ export function pendingOverlay(id: string, pending: PendingEdit[]): PendingOverl
     if (edit.id !== id) continue;
     if (edit.kind === "editLoc") {
       values.set(locRowKey(edit.key), edit.value);
+    } else if (edit.kind === "createEvent") {
+      // No card exists before Save; the Changes list is where it shows.
     } else if (edit.kind === "addOption") {
       options++;
     } else if (edit.line === null) {
@@ -63,6 +65,8 @@ export function pendingOverlay(id: string, pending: PendingEdit[]): PendingOverl
 export function describeEdit(edit: PendingEdit): string {
   if (edit.kind === "editLoc") return `${edit.key} = "${edit.value}"`;
   if (edit.kind === "addOption") return `option ${edit.count + 1}, with its localization key`;
+  if (edit.kind === "createEvent")
+    return `${edit.id} (${edit.type}, ${edit.options} option${edit.options === 1 ? "" : "s"}), with its localization keys`;
   if (edit.line === null) return `${edit.key} = ${edit.value}, a new line`;
   return `${edit.key} = ${edit.value} on line ${edit.line + 1}`;
 }
@@ -71,5 +75,6 @@ export function describeEdit(edit: PendingEdit): string {
 export function editKind(edit: PendingEdit): string {
   if (edit.kind === "editLoc") return "text";
   if (edit.kind === "addOption") return "option";
+  if (edit.kind === "createEvent") return "new event";
   return edit.line === null ? "add field" : "field";
 }
