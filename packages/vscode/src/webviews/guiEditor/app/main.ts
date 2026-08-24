@@ -84,7 +84,7 @@ import {
 } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
-import { colorPicker, type Rgb } from "../../shared/colorPicker";
+import { colorPicker, paintSwatch, type Rgb } from "../../shared/colorPicker";
 import {
   applyScrollOffsets,
   buildScene,
@@ -2317,6 +2317,10 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
  * color picker. A color is written the way the engine reads one, `{ r g b a }`
  * in 0..1, and the picker's close is the commit, so a drag through the square
  * is one write and one undo step.
+ *
+ * A source alpha rides along verbatim and is SIMULATED in the swatch and the
+ * picker's preview; the picker offers no way to adjust it. Script colors are
+ * not meant to grow alpha channels by accident.
  */
 function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTMLElement {
   const wrap = el("span", "valRow");
@@ -2324,14 +2328,23 @@ function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTM
   swatch.className = "px-swatch";
   swatch.dataset.tip = "Pick a color";
   swatch.dataset.tipSide = "left";
-  swatch.style.setProperty("--px-swatch", `rgb(${rgb.join(" ")})`);
+  paintSwatch(swatch, rgb, alpha === null ? undefined : Number(alpha));
+  const write = (c: Rgb): string =>
+    `{ ${c.map((v) => round(v / 255)).join(" ")}${alpha === null ? "" : ` ${alpha}`} }`;
   swatch.addEventListener("click", () => {
     const start = input.value;
     colorPicker(swatch, rgb, {
+      format: {
+        label: "rgb",
+        writeValues: (c) => c.map((v) => round(v / 255)).join(" "),
+        write,
+        parse: parseColorValue,
+      },
+      alpha: alpha === null ? undefined : Number(alpha),
       onChange: (next) => {
         rgb = next;
-        swatch.style.setProperty("--px-swatch", `rgb(${next.join(" ")})`);
-        input.value = `{ ${next.map((v) => round(v / 255)).join(" ")}${alpha === null ? "" : ` ${alpha}`} }`;
+        paintSwatch(swatch, next, alpha === null ? undefined : Number(alpha));
+        input.value = write(next);
       },
       onClose: () => {
         if (input.value !== start) input.dispatchEvent(new Event("change"));
@@ -2341,6 +2354,16 @@ function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTM
   wrap.appendChild(input);
   wrap.appendChild(swatch);
   return wrap;
+}
+
+/** A pasted or typed color for the picker's field: `{ r g b [a] }` floats, a
+ *  0..255 triple, or hex. A pasted alpha is dropped; the source's is kept. */
+function parseColorValue(text: string): Rgb | null {
+  const m = /^\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,]+[\d.]+)?\s*\}?$/.exec(text.trim());
+  if (!m) return null;
+  const n = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const k = n.every((x) => x <= 1) ? 255 : 1;
+  return [0, 1, 2].map((i) => Math.max(0, Math.min(255, Math.round(n[i] * k)))) as Rgb;
 }
 
 /** `{ r g b [a] }` in 0..1 on a `*color*` property, as the picker's 0..255 triple plus the alpha text. */

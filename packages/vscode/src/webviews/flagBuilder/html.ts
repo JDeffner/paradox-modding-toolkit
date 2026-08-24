@@ -55,9 +55,9 @@ ${uiCss}
   #origin:empty { display: none; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
-  .color-row { display: grid; grid-template-columns: 44px 18px 92px minmax(0, 1fr) 24px; align-items: center; gap: 6px; }
-  .color-values { display: flex; align-items: center; gap: 4px; padding-left: 68px; min-width: 0; }
-  .color-values .px-mono { flex: 1 1 auto; font-size: var(--px-text-sm); }
+  .color-row { display: grid; grid-template-columns: 44px 92px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+  .color-tools { display: flex; align-items: center; gap: 2px; }
+  .color-tools > .px-swatch { margin-right: 4px; }
   .instance { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
   .instance + .instance { border-top: 1px solid var(--px-border); }
   .instance > .subhead { cursor: pointer; user-select: none; }

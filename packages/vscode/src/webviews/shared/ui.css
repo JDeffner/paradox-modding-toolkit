@@ -959,7 +959,7 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 220px;
+  width: 240px;
 }
 .px-picker-square {
   position: relative;
@@ -988,6 +988,18 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 .px-picker-hue > .px-picker-thumb {
   top: 50%;
+}
+.px-picker-label {
+  flex: 0 0 auto;
+  font-size: var(--px-text-sm);
+  color: var(--px-muted-fg);
+}
+.px-picker .px-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.px-picker .px-btn {
+  flex: 0 0 auto;
 }
 
 /* --------------------------------------------------------------- dialog --- */
@@ -1309,6 +1321,12 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 .px-swatch[data-missing] {
   background: repeating-linear-gradient(45deg, var(--px-destructive) 0 3px, transparent 3px 6px);
+}
+/* A translucent color over a checkerboard: alpha is shown, never hidden. */
+.px-swatch[data-checker] {
+  background:
+    linear-gradient(var(--px-swatch, transparent), var(--px-swatch, transparent)),
+    repeating-conic-gradient(rgba(127, 127, 127, 0.45) 0% 25%, transparent 0% 50%) 0 0 / 10px 10px;
 }
 button.px-swatch {
   border: none;

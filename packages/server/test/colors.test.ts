@@ -90,4 +90,17 @@ describe("colorPresentation, the multi-format cycle", () => {
     expect(provideColorPresentations(d, a.color, a.range)[0].label).toBe("{ 0.5 0.5 0.5 0.25 }");
     expect(provideColorPresentations(d, b.color, b.range)[0].label).toBe("{ 128 128 128 }");
   });
+
+  it("the opacity slider is inert: alpha stays what the source spelled", () => {
+    const d = doc("color = { 0.5 0.5 0.5 0.25 }\ncolor = { 128 128 128 }");
+    const [a, b] = provideDocumentColors(d);
+    // The picker hands back a dragged alpha; the presentation keeps the file's.
+    expect(provideColorPresentations(d, { ...a.color, alpha: 0.9 }, a.range)[0].label).toBe(
+      "{ 0.5 0.5 0.5 0.25 }"
+    );
+    // A color without alpha never gains a fourth component from the slider.
+    const labels = provideColorPresentations(d, { ...b.color, alpha: 0.5 }, b.range).map((p) => p.label);
+    expect(labels[0]).toBe("{ 128 128 128 }");
+    expect(labels).toContain("rgb { 128 128 128 }");
+  });
 });
