@@ -84,7 +84,7 @@ import {
 } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
-import { colorPicker, paintSwatch, type Rgb } from "../../shared/colorPicker";
+import { colorPicker, hexToRgb, paintSwatch, type Rgb } from "../../shared/colorPicker";
 import {
   applyScrollOffsets,
   buildScene,
@@ -2357,11 +2357,15 @@ function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTM
 }
 
 /** A pasted or typed color for the picker's field: `{ r g b [a] }` floats, a
- *  0..255 triple, or hex. A pasted alpha is dropped; the source's is kept. */
+ *  0..255 triple (optionally `rgb`-tagged), or hex. A pasted alpha is dropped;
+ *  the source's is kept. */
 function parseColorValue(text: string): Rgb | null {
-  const m = /^\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,]+[\d.]+)?\s*\}?$/.exec(text.trim());
+  const hex = hexToRgb(text);
+  if (hex) return hex;
+  const m = /^(?:rgb\s*)?\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,]+[\d.]+)?\s*\}?$/i.exec(text.trim());
   if (!m) return null;
   const n = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (!n.every(Number.isFinite)) return null;
   const k = n.every((x) => x <= 1) ? 255 : 1;
   return [0, 1, 2].map((i) => Math.max(0, Math.min(255, Math.round(n[i] * k)))) as Rgb;
 }
