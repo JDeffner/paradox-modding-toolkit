@@ -130,6 +130,8 @@ export interface RefField {
   key: string;
   kinds: string[];
   form?: RefFieldForm; // default "scalar"
+  /** List also accepts weighted entries (`<number> = name`), like random_events. */
+  weighted?: boolean;
 }
 
 /** JSON shape of the optional workspace overlay at <configDir>/schema.json. */

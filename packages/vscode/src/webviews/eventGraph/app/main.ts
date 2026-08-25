@@ -7,13 +7,19 @@
  * edit becomes a PendingEdit in the history, undo and redo move through them,
  * and the host only ever receives a `save` with the whole list.
  */
-import type { EventGraph, EventGraphParams } from "@px-lsp/protocol/protocol";
+import type {
+  EventGraph,
+  EventGraphParams,
+  EventValueOptionsResult,
+  EventVocabularyResult,
+} from "@px-lsp/protocol/protocol";
 import type { AppToHost, HostToApp, UiState } from "../messages";
 import { GraphHistory, type GraphState } from "../history";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
-import { el, iconButton } from "./dom";
+import { helpDialog } from "../../shared/help";
+import { button, dropdown, el, iconButton, input } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";
@@ -43,6 +49,11 @@ let ui: UiState = {
 };
 let currentGraph: EventGraph | null = null;
 let currentParams: EventGraphParams = {};
+let vocab: EventVocabularyResult | null = null;
+/** Re-select this card once the post-save graph arrives. */
+let reselectAfterGraph: string | null = null;
+/** The cluster filter the LAST render actually drew (null = the whole graph). */
+let renderedCluster: string | null = null;
 const hiddenKinds = new Set<string>();
 
 const history = new GraphHistory({ focus: {}, positions: {}, pending: [] });
@@ -58,31 +69,16 @@ const side = sidePanel($("side"), {
     updatePanelToggle();
   },
 });
-// A strip of icons has no width to choose, so the rail only ever opens and
-// closes, and its handle rides on the canvas edge where it stays reachable.
-const rail = sidePanel($("rail"), {
-  min: 40,
-  max: 40,
-  width: 40,
-  onChange: (s) => {
-    ui = { ...ui, railCollapsed: s.collapsed };
-    saveUi();
-    updateRailToggle();
-  },
-});
+// The tools rail is a fixed 40px strip and simply always there: a collapse
+// that saves 40px was not worth its buttons.
+sidePanel($("rail"), { min: 40, max: 40, width: 40, onChange: () => undefined });
 
 function updatePanelToggle(): void {
   const btn = $("togglePanel");
   btn.replaceChildren(iconEl(side.collapsed ? "panelRightOpen" : "panelRightClose"));
   btn.dataset.tip = side.collapsed ? "Show inspector" : "Hide inspector";
 }
-function updateRailToggle(): void {
-  const btn = $("railToggle");
-  btn.replaceChildren(iconEl(rail.collapsed ? "panelLeftOpen" : "panelLeftClose"));
-  btn.dataset.tip = rail.collapsed ? "Show the tools" : "Hide the tools";
-}
 $("togglePanel").onclick = () => side.toggle();
-$("railToggle").onclick = () => rail.toggle();
 
 function saveUi(): void {
   send({ type: "uiState", state: ui });
@@ -103,10 +99,40 @@ const view = new GraphView(svg, {
     view.setOptions({ positions });
   },
   onNeedBanner: (theme) => send({ type: "banner", theme }),
+  onOpenStep: (id, line) => {
+    // The detail arrives async; the reveal waits for it.
+    pendingRevealLine = line;
+    selectNode(id);
+  },
 });
+
+/** A card row was clicked: scroll the inspector to it once the detail lands. */
+let pendingRevealLine: number | null = null;
+
+/** In-flight value-set asks, by value; the host answers by value, not by call. */
+const valueOptionWaiters = new Map<string, Array<(r: EventValueOptionsResult | null) => void>>();
+function fetchValueOptions(value: string): Promise<EventValueOptionsResult | null> {
+  return new Promise((resolve) => {
+    const list = valueOptionWaiters.get(value);
+    if (list) {
+      list.push(resolve);
+      return;
+    }
+    valueOptionWaiters.set(value, [resolve]);
+    send({ type: "valueOptions", value });
+    // A host that never answers (old host, closed panel) must not hang a click.
+    setTimeout(() => {
+      const waiters = valueOptionWaiters.get(value);
+      if (!waiters) return;
+      valueOptionWaiters.delete(value);
+      for (const r of waiters) r(null);
+    }, 2000);
+  });
+}
 
 const inspector = new Inspector($("inspector"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
+  onValueOptions: fetchValueOptions,
   onEdit: (label, edit) => {
     history.pushEdit(label, edit);
     afterHistoryChange();
@@ -145,9 +171,204 @@ function selectNode(id: string | null): void {
 function refocus(id: string): void {
   const focus: EventGraphParams = { ...baseParams(), root: id };
   // A refocus is a history step: undo takes the reader back where they were.
-  history.push(`focus ${id}`, { ...history.state, focus, positions: {} });
+  history.push(`focus ${id}`, { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
+}
+
+/**
+ * The node's CHAIN: everything that leads to `id` and everything it leads to,
+ * following edge DIRECTION — not the whole connected component, which in a
+ * wired-up mod is most of the graph. `depth` caps how many hops the chain
+ * reaches in EITHER direction (undefined = all of them), so the cap visibly
+ * shrinks the view whichever side of the selection is the busy one.
+ * Client-side, so the Chain tool costs no round trip and undo brings the
+ * full graph straight back.
+ */
+function clusterGraph(
+  graph: EventGraph,
+  id: string,
+  depth?: number
+): { graph: EventGraph; continuations: Record<string, { in: number; out: number }> } {
+  const out = new Map<string, string[]>();
+  const inc = new Map<string, string[]>();
+  const link = (map: Map<string, string[]>, a: string, b: string): void => {
+    const list = map.get(a);
+    if (list) list.push(b);
+    else map.set(a, [b]);
+  };
+  for (const edge of graph.edges) {
+    link(out, edge.from, edge.to);
+    link(inc, edge.to, edge.from);
+  }
+  const keep = new Set<string>([id]);
+  for (const [links, limit] of [
+    [out, depth],
+    [inc, depth],
+  ] as const) {
+    // Breadth-first, so the first visit is the SHORTEST hop count and the
+    // depth cap never drops a node that a nearer path would have kept.
+    const queue: Array<{ id: string; hops: number }> = [{ id, hops: 0 }];
+    while (queue.length > 0) {
+      const at = queue.shift()!;
+      if (limit !== undefined && at.hops >= limit) continue;
+      for (const next of links.get(at.id) ?? []) {
+        if (keep.has(next)) continue;
+        keep.add(next);
+        queue.push({ id: next, hops: at.hops + 1 });
+      }
+    }
+  }
+  // What the cut hides: distinct hidden neighbors per kept card, so the view
+  // can draw "the chain continues" stubs instead of silently ending.
+  const hiddenIn = new Map<string, Set<string>>();
+  const hiddenOut = new Map<string, Set<string>>();
+  const note = (map: Map<string, Set<string>>, at: string, other: string): void => {
+    const set = map.get(at);
+    if (set) set.add(other);
+    else map.set(at, new Set([other]));
+  };
+  for (const e of graph.edges) {
+    const fromKept = keep.has(e.from);
+    const toKept = keep.has(e.to);
+    if (fromKept && !toKept) note(hiddenOut, e.from, e.to);
+    if (!fromKept && toKept) note(hiddenIn, e.to, e.from);
+  }
+  const continuations: Record<string, { in: number; out: number }> = {};
+  for (const n of graph.nodes) {
+    const inCount = hiddenIn.get(n.id)?.size ?? 0;
+    const outCount = hiddenOut.get(n.id)?.size ?? 0;
+    if (keep.has(n.id) && (inCount > 0 || outCount > 0)) continuations[n.id] = { in: inCount, out: outCount };
+  }
+  return {
+    graph: {
+      ...graph,
+      nodes: graph.nodes.filter((n) => keep.has(n.id)),
+      edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+    },
+    continuations,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// New event
+// ---------------------------------------------------------------------------
+
+/** `my_ns.4`: the next free number under the namespace the view is looking at. */
+function suggestEventId(): string {
+  const ns =
+    currentParams.namespace ??
+    (selectedId ? selectedId.split(".")[0] : undefined) ??
+    catalog.namespaces[0] ??
+    "my_mod";
+  let max = 0;
+  for (const id of catalog.ids) {
+    if (!id.startsWith(ns + ".")) continue;
+    const n = Number(id.slice(ns.length + 1));
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return `${ns}.${max + 1}`;
+}
+
+/**
+ * The "New event" form: everything a working event needs, nothing else. It
+ * becomes ONE pending edit (the scaffold block plus its localization keys),
+ * so Save writes it and undo takes it back like any other change.
+ */
+function openNewEventForm(anchor: HTMLElement): void {
+  if (isPopoverAnchor(anchor)) {
+    closePopover();
+    return;
+  }
+  const form = el("div", "newEventForm");
+  const row = (label: string, tip: string, control: HTMLElement): void => {
+    const r = el("div", "field");
+    const k = el("span", "k", label);
+    k.dataset.tip = tip;
+    k.dataset.tipWrap = "";
+    const v = el("div", "v");
+    v.appendChild(control);
+    r.append(k, v);
+    form.appendChild(r);
+  };
+  form.appendChild(el("div", "sub", "New event"));
+  form.appendChild(
+    el(
+      "div",
+      "hint",
+      "Saved as a scaffold you then fill in here or in the source. Nothing is written until you press Save."
+    )
+  );
+  const idInput = input(suggestEventId(), "namespace.number", () => undefined);
+  row("id", "The event's name in script: its namespace, a dot, and a free number", idInput);
+  let type = "character_event";
+  const types = vocab?.values["type"] ?? [];
+  row(
+    "type",
+    "Who the event happens to and how it is shown. character_event is the everyday letter-style event",
+    types.length > 0
+      ? dropdown(
+          type,
+          "choose",
+          types.map((t) => ({ value: t.value, label: t.value, description: t.doc, hint: t.hint })),
+          "Pick the event's type",
+          (v) => (type = v)
+        )
+      : input(type, "character_event", (v) => (type = v))
+  );
+  const titleInput = input("", "The window's heading", () => undefined);
+  row("title", "What the player reads at the top of the event window", titleInput);
+  const descInput = input("", "What is happening", () => undefined);
+  row("desc", "The event's body text, under the illustration", descInput);
+  let options = 1;
+  row(
+    "options",
+    "How many choices the player gets. Each becomes an option block with its own text key",
+    dropdown(
+      "1",
+      "1",
+      ["0", "1", "2", "3"].map((n) => ({ value: n, label: n })),
+      "Scaffolded option blocks",
+      (v) => (options = Number(v))
+    )
+  );
+  const create = button(
+    "Create on Save",
+    "plus",
+    "Adds the event to your unsaved changes; Save writes the file and its localization",
+    () => {
+      const id = idInput.value.trim();
+      if (!/^[A-Za-z0-9_]+\.[0-9]+$/.test(id)) {
+        toast("An event id looks like namespace.123 (letters, digits and _ before the dot).", "destructive");
+        return;
+      }
+      if (catalogIds.has(id)) {
+        toast(`${id} already exists. Pick a free number.`, "destructive");
+        return;
+      }
+      const ns = id.split(".")[0];
+      // Append to the file the namespace already lives in, when it is the mod's.
+      const home = currentGraph?.nodes.find(
+        (n) => n.source === "mod" && n.file !== undefined && n.id.startsWith(ns + ".")
+      );
+      history.pushEdit(`create ${id}`, {
+        kind: "createEvent",
+        id,
+        file: home?.file ?? null,
+        type,
+        title: titleInput.value.trim(),
+        desc: descInput.value.trim(),
+        options,
+      });
+      afterHistoryChange();
+      closePopover();
+      toast(`${id} is in your unsaved changes. Press Save to write it.`);
+    },
+    "default"
+  );
+  create.style.alignSelf = "flex-end";
+  form.appendChild(create);
+  popover(anchor, form);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +401,14 @@ function applyState(state: GraphState): void {
   view.setOptions({ positions: state.positions });
   if (lastDetail && selectedId) inspector.render(lastDetail, selectedId, state.pending);
   afterHistoryChange();
-  if (!sameFocus(state.focus, currentParams)) fetchGraph(state.focus);
+  if (!sameFocus(state.focus, currentParams)) {
+    fetchGraph(state.focus);
+    return;
+  }
+  // Same focus but a different cluster: redraw from the graph we already hold.
+  if ((state.cluster ?? null) !== renderedCluster && currentGraph) {
+    renderGraph(currentGraph, currentParams);
+  }
 }
 
 function sameFocus(a: EventGraphParams, b: EventGraphParams): boolean {
@@ -269,6 +497,17 @@ window.addEventListener("keydown", (ev) => {
   } else if (ev.key === "0" || ev.key === "f") {
     ev.preventDefault();
     view.fit();
+  } else if (ev.key === "s") {
+    $("toolSimulate").click();
+  } else if (ev.key === "c") {
+    $("toolCenter").click();
+  } else if (ev.key === "a") {
+    $("toolAll").click();
+  } else if (ev.key === "o") {
+    $("toolSource").click();
+  } else if (ev.key === "n") {
+    ev.preventDefault();
+    openNewEventForm($("newEvent"));
   } else if (ev.key === "Escape") {
     if (sim.isOpen) sim.close();
     else if (selectedId !== null) selectNode(null);
@@ -301,6 +540,7 @@ function setTitleMode(mode: "raw" | "loc"): void {
 }
 
 $("refresh").onclick = () => fetchGraph(currentParams);
+$("newEvent").onclick = () => openNewEventForm($("newEvent"));
 $("export").onclick = () => send({ type: "export", svg: view.serializeSvg() });
 $("zoomIn").onclick = () => view.zoomBy(1.25);
 $("zoomOut").onclick = () => view.zoomBy(1 / 1.25);
@@ -325,13 +565,57 @@ $("toolSimulate").onclick = () => {
   if (selectedId) sim.open(selectedId);
 };
 $("toolCenter").onclick = () => {
-  if (selectedId) refocus(selectedId);
+  if (!selectedId || !currentGraph) return;
+  const id = selectedId;
+  // A view-only step: the graph we hold is filtered down to the selection's
+  // chain. Undo restores the full view; nothing is fetched.
+  history.push(`chain of ${id}`, { ...history.state, cluster: id, positions: {} });
+  afterHistoryChange();
+  renderGraph(currentGraph, currentParams);
+  selectNode(id);
 };
+
+// The chain's depth: a slider from 1 hop to the whole chain (the right end,
+// shown as ∞). The head chip unfolds it.
+const depthSlider = $("chainDepthSlider") as HTMLInputElement;
+const SLIDER_INF = depthSlider.max;
+$("chainDepthHead").onclick = () => {
+  const open = $("chainDepthOptions").hidden;
+  $("chainDepthOptions").hidden = !open;
+  $("chainDepthHead").toggleAttribute("data-open", open);
+};
+const depthText = (): string => (depthSlider.value === SLIDER_INF ? "∞" : depthSlider.value);
+// While sliding, only the label follows; the graph re-cuts on release.
+depthSlider.addEventListener("input", () => {
+  $("chainDepthLabel").textContent = depthText();
+});
+depthSlider.addEventListener("change", () => {
+  if (!renderedCluster || !currentGraph) return;
+  const id = renderedCluster;
+  const depth = depthSlider.value === SLIDER_INF ? undefined : Number(depthSlider.value);
+  if (depth === history.state.clusterDepth) return;
+  history.push(`chain depth ${depthText()}`, { ...history.state, clusterDepth: depth });
+  afterHistoryChange();
+  renderGraph(currentGraph, currentParams);
+  selectNode(id);
+});
+
+/** Show the depth control only while a chain is on, at its current step. */
+function updateChainDepth(): void {
+  const depth = history.state.clusterDepth;
+  $("chainDepth").hidden = renderedCluster === null;
+  if (renderedCluster === null) {
+    $("chainDepthOptions").hidden = true;
+    $("chainDepthHead").removeAttribute("data-open");
+  }
+  depthSlider.value = depth === undefined ? SLIDER_INF : String(depth);
+  $("chainDepthLabel").textContent = depth === undefined ? "∞" : String(depth);
+}
 $("toolAll").onclick = () => {
   queryEl.value = "";
   hideSuggest();
   const focus: EventGraphParams = { maxNodes: 5000 };
-  history.push("show all nodes", { ...history.state, focus, positions: {} });
+  history.push("show all nodes", { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 };
@@ -364,29 +648,140 @@ function updateRailTools(): void {
   $("actingOn").textContent = has ? `Acting on: ${labelFor(selectedId!)}` : "";
 }
 
-$("helpBtn").onclick = () => {
-  const anchor = $("helpBtn");
-  if (isPopoverAnchor(anchor)) {
-    closePopover();
-    return;
-  }
-  const help = el("div", "help");
-  help.appendChild(el("div", "px-popover-title", "How to read the graph"));
-  const list = el("ul");
-  for (const text of [
-    "The card in the middle is what you are looking at. What fires it is on the left, what it fires is on the right, further hops one ring further out.",
-    "A card says its name, then its kind and how many options it has, then what its trigger asks for and how much it fires.",
-    "The colored bar is the kind. Dashed borders are vanilla content, solid is your mod, dotted is a parent mod.",
-    "Click a card to focus and inspect it, drag it to move it, double-click to open its source, right-click to re-centre the graph on it.",
-    'An arrow labeled "via" goes through a scripted effect: the event does not name the target itself, the effect it calls does.',
-    "Edits in the inspector are held here until you press Save. The Changes button lists them, and each row goes back to before it.",
-    "Drag the canvas to pan, scroll to zoom. + / − / 0 or the buttons at the bottom left do the same.",
-  ]) {
-    list.appendChild(el("li", "", text));
-  }
-  help.appendChild(list);
-  popover(anchor, help);
-};
+$("helpBtn").onclick = () =>
+  helpDialog({
+    title: "Event Graph",
+    intro:
+      "Every event, on_action and decision of your mod as cards, laid out so that LEFT TO RIGHT IS TIME: a card fires the cards in the columns to its right. Use it to follow an event chain, spot dead ends, and edit an event without leaving the picture.",
+    sections: [
+      {
+        title: "Reading the sequence",
+        items: [
+          {
+            lead: "Columns are steps:",
+            text: "what starts a chain (usually an on_action) sits leftmost, and every arrow goes one or more columns to the right. A dashed arrow curving back LEFT closes a loop: the chain returns to an earlier event.",
+          },
+          {
+            lead: "A card's rows",
+            text: "are its own sequence, top to bottom: immediate runs when the event appears, the numbered rows are the player's options, after runs once any option was picked. Each row's dot is where its arrows leave; a row with no arrow ends the chain.",
+          },
+          {
+            lead: "The chip on an arrow",
+            text: "is its WHEN: “30d” fires 30 days later, “7–14d” somewhere in that window, “2mo” in months, “1y” in years. A dashed “w 100” chip is a random pool's raw weight, not a delay.",
+          },
+          {
+            lead: "Arrows labeled “via”",
+            text: "go through a scripted effect: the event does not name the target itself, the effect it calls does. What happens inside the effect (including any delay) is not shown.",
+          },
+        ],
+      },
+      {
+        title: "Reading a card",
+        items: [
+          {
+            lead: "The header:",
+            text: "the name (or localized title), then the kind and how many options it has, then what its trigger asks for and how often other content fires it.",
+          },
+          {
+            lead: "The colored bar",
+            text: "on the left is the kind: blue events, purple on_actions, green decisions, orange everything else. The chips at the bottom left dim a kind in the whole graph.",
+          },
+          {
+            lead: "The border",
+            text: "says where it comes from: solid is your mod, dashed is vanilla, dotted is a parent mod. Only your mod's events grow rows; vanilla cards stay compact.",
+          },
+          {
+            lead: "With a card selected,",
+            text: "its whole chain lights up — everything leading to it in orange, everything it leads to in blue, however many hops away — and the rest dims. The Chain tool (C) hides the rest entirely.",
+          },
+        ],
+      },
+      {
+        title: "Moving around",
+        items: [
+          {
+            lead: "Pan and zoom:",
+            text: "drag the canvas, scroll to zoom, and the buttons at the bottom left zoom and fit.",
+          },
+          {
+            lead: "Search:",
+            text: "the box at the top left takes an event id (namespace.123), an on_action or decision name, or a whole namespace; suggestions appear as you type, and typing also outlines every matching card.",
+          },
+          {
+            lead: "Move a card",
+            text: "by dragging it; it stays where you put it and the rest of the map makes room. Undo puts it back.",
+          },
+        ],
+      },
+      {
+        title: "The tools on the left",
+        intro: "The first, second and last need a card selected.",
+        items: [
+          {
+            lead: "Simulate",
+            text: "walks through the selected event block by block, in the order the game runs them, in a floating window you can step deeper from.",
+          },
+          {
+            lead: "Chain",
+            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. The depth chip at the top left caps how many steps around the card stay visible (1–4 or the whole chain). Undo brings the whole graph back.",
+          },
+          { lead: "All nodes", text: "loads everything the mod has, connected or not." },
+          {
+            lead: "Source",
+            text: "opens the selected card's file beside the graph. Double-clicking a card and the small button on its corner do the same; right-click re-centres the graph on it instead.",
+          },
+        ],
+      },
+      {
+        title: "Editing and saving",
+        intro: "Nothing touches your files until you press Save; until then every edit lives in this view.",
+        items: [
+          {
+            lead: "Click a card",
+            text: "to open it in the inspector: its fields with dropdowns listing the game's own values, its title and description text, its options, and every scope, effect and value it references.",
+          },
+          {
+            lead: "New event (N)",
+            text: "scaffolds a whole event: id, type, title, description and its option blocks, localization keys included. It lands in your unsaved changes; Save writes the file (creating it for a fresh namespace).",
+          },
+          {
+            lead: "Add things",
+            text: "with the “Add field”, “Add effect”, “Add trigger” and “Add option” rows; each list comes from your game files, with the engine's own one-line documentation. Picking trigger_event offers your mod's own event ids.",
+          },
+          {
+            lead: "<SV>",
+            text: "marks a script value: a number computed by script, defined under common/script_values.",
+          },
+          {
+            lead: "Changed rows say “unsaved”.",
+            text: "The Changes button lists every pending edit, and each row's undo takes you back to before it. Save writes them all to your mod files, in a safe order.",
+          },
+        ],
+      },
+      {
+        title: "Display options",
+        items: [
+          { lead: "Raw / Loc", text: "captions every card with its id or its localized title." },
+          {
+            lead: "The image button",
+            text: "draws each event's real background behind its card (its override_background, or its theme's). A background that cannot be resolved gets a hatched placeholder instead of a wrong picture.",
+          },
+        ],
+      },
+      {
+        title: "Keyboard",
+        shortcuts: [
+          { keys: ["+", "−"], does: "Zoom in and out" },
+          { keys: ["0"], does: "Fit the whole graph (F does the same)" },
+          { keys: ["/"], does: "Focus the search box" },
+          { keys: ["Esc"], does: "Close the simulation, else clear the selection" },
+          { keys: ["Ctrl", "Z"], does: "Undo (edits, moves, focus changes alike)" },
+          { keys: ["Ctrl", "Shift", "Z"], does: "Redo" },
+          { keys: ["Ctrl", "S"], does: "Save the pending edits to your files" },
+        ],
+      },
+    ],
+  });
 
 // ---------------------------------------------------------------------------
 // Query box
@@ -409,7 +804,7 @@ function parseQuery(): EventGraphParams {
 function submitQuery(): void {
   hideSuggest();
   const focus = parseQuery();
-  history.push("change focus", { ...history.state, focus, positions: {} });
+  history.push("change focus", { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 }
@@ -491,7 +886,7 @@ function pick(index: number): void {
   hideSuggest();
   view.highlight(entry.text);
   const focus = paramsFor(entry.text, entry.kind);
-  history.push(`focus ${entry.text}`, { ...history.state, focus, positions: {} });
+  history.push(`focus ${entry.text}`, { ...history.state, focus, cluster: undefined, positions: {} });
   afterHistoryChange();
   fetchGraph(focus);
 }
@@ -531,9 +926,11 @@ function setFocusLine(text: string, state: "" | "warn" | "error"): void {
   else delete focusLineEl.dataset.state;
 }
 
-function updateInfo(graph: EventGraph, params: EventGraphParams): void {
+function updateInfo(graph: EventGraph, params: EventGraphParams, cluster: string | null): void {
   const lines = [`${graph.nodes.length} nodes · ${graph.edges.length} edges`];
   if (graph.truncated) lines.push("Truncated: this view hides part of the graph.");
+  if (cluster)
+    lines.push(`Chain of ${cluster}: what leads to it and what it leads to. Undo brings the rest back.`);
   lines.push(
     params.root
       ? `Focused on ${params.root}: what it fires, what fires it, and one hop further.`
@@ -553,13 +950,11 @@ function applyUi(next: UiState | undefined): void {
   ui = { ...ui, ...next };
   side.setWidth(ui.panelWidth);
   if (ui.panelCollapsed !== side.collapsed) side.toggle(ui.panelCollapsed);
-  if (ui.railCollapsed !== rail.collapsed) rail.toggle(ui.railCollapsed);
   setTitleMode(ui.titleMode);
   $("toolBanner").setAttribute("aria-pressed", String(ui.banner));
   view.setOptions({ banner: ui.banner });
   if (ui.simX !== undefined && ui.simY !== undefined) sim.setPosition(ui.simX, ui.simY);
   updatePanelToggle();
-  updateRailToggle();
 }
 
 window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
@@ -577,16 +972,25 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       setFocusLine(`Error: ${msg.message}`, "error");
       return;
     case "vocabulary":
+      vocab = msg.vocabulary;
       inspector.setVocabulary(msg.vocabulary);
       return;
+    case "valueOptions": {
+      const waiters = valueOptionWaiters.get(msg.value);
+      valueOptionWaiters.delete(msg.value);
+      for (const resolve of waiters ?? []) resolve(msg.result);
+      return;
+    }
     case "detail":
       if (msg.id !== selectedId) return; // stale
       lastDetail = msg.detail;
       try {
         inspector.render(msg.detail, msg.id, history.pending);
+        if (pendingRevealLine !== null) inspector.revealLine(pendingRevealLine);
       } catch (e) {
         $("inspector").textContent = `Inspector error: ${e instanceof Error ? e.message : String(e)}`;
       }
+      pendingRevealLine = null;
       return;
     case "sim":
       sim.show(msg.detail, msg.id);
@@ -597,14 +1001,23 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
     case "saved":
       if (msg.error) {
         toast(msg.error, "destructive", 5200);
+        // The edits that DID land leave the history, so a retry saves only
+        // the failed one and the rest; the files they changed get refetched.
+        if (msg.applied.length > 0) {
+          history.dropPending(msg.applied);
+          reselectAfterGraph = selectedId;
+          fetchGraph(currentParams);
+        }
         afterHistoryChange();
         return;
       }
       history.markSaved();
       afterHistoryChange();
-      toast(`Saved ${msg.applied} change${msg.applied === 1 ? "" : "s"}`);
-      // The files changed under the inspector; re-read the selected event.
-      if (selectedId) send({ type: "select", id: selectedId });
+      toast(`Saved ${msg.applied.length} change${msg.applied.length === 1 ? "" : "s"}`);
+      // The files changed under the graph and the inspector: refetch so a
+      // created event gets its card, and put the selection back afterwards.
+      reselectAfterGraph = selectedId;
+      fetchGraph(currentParams);
       return;
     case "restore":
       history.push("keep unsaved changes", msg.state);
@@ -616,13 +1029,20 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       if (msg.graph?.suggestions) {
         catalog = msg.graph.suggestions;
         catalogIds = new Set(catalog.ids);
+        inspector.setCatalog(catalog.ids);
       }
       if (currentParams.root) queryEl.value = currentParams.root;
       else if (currentParams.namespace) queryEl.value = currentParams.namespace;
-      // The focus the host loaded is the focus the history should hold.
+      // The focus the host loaded is the focus the history should hold. A
+      // cluster from another focus would filter the wrong graph: drop it.
+      if (!sameFocus(history.state.focus, currentParams)) history.state.cluster = undefined;
       history.state.focus = currentParams;
       try {
         renderGraph(msg.graph, currentParams);
+        if (reselectAfterGraph && msg.graph.nodes.some((n) => n.id === reselectAfterGraph)) {
+          selectNode(reselectAfterGraph);
+        }
+        reselectAfterGraph = null;
       } catch (e) {
         setFocusLine(`Render error: ${e instanceof Error ? e.message : String(e)}`, "error");
       }
@@ -636,36 +1056,55 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
   updateRailTools();
   inspector.showPlaceholder();
 
-  if ((graph.nodes ?? []).length === 0) {
+  // The Chain tool's filter: applied at render time so the full graph stays
+  // in `currentGraph` and undoing the chain is a redraw, not a fetch.
+  const cluster = history.state.cluster ?? null;
+  const clustered = cluster !== null && (graph.nodes ?? []).some((n) => n.id === cluster);
+  const cut = clustered ? clusterGraph(graph, cluster!, history.state.clusterDepth) : null;
+  const shown = cut?.graph ?? graph;
+  renderedCluster = clustered ? cluster : null;
+  updateChainDepth();
+
+  if ((shown.nodes ?? []).length === 0) {
     emptyEl.classList.add("show");
     emptyEl.replaceChildren(
       el(
         "div",
         "help",
-        params.namespace
-          ? `Nothing indexed under namespace ${params.namespace}. Check the spelling, or use All nodes to see what this mod has.`
-          : "No events here yet. Put the cursor in an event and press Ctrl+Alt+G, type a namespace above, or use All nodes."
+        // The server's reason wins: "it exists, but in another mod / vanilla"
+        // beats sending the user hunting a typo that is not there.
+        graph.emptyReason ??
+          (params.namespace
+            ? `Nothing indexed under namespace ${params.namespace}. Check the spelling, or use All nodes to see what this mod has.`
+            : "No events here yet. Put the cursor in an event and press Ctrl+Alt+G, type a namespace above, or use All nodes.")
       )
     );
     setFocusLine("Nothing to show", "warn");
-    updateInfo(graph, params);
+    updateInfo(shown, params, renderedCluster);
     return;
   }
   emptyEl.classList.remove("show");
-  view.render(graph, params, {
+  view.render(shown, clustered ? { ...params, root: cluster } : params, {
     positions: history.state.positions,
     titleMode: ui.titleMode,
     banner: ui.banner,
+    continuations: cut?.continuations,
   });
+  // The focus itself is already in the query box; this line only flags a view
+  // that hides something (truncation, cluster). A cluster cut from a truncated
+  // graph says both: its component may be missing members the server never sent.
   setFocusLine(
-    params.root ? `Around ${params.root}` : params.namespace ? `Namespace ${params.namespace}` : "All nodes",
+    clustered
+      ? `Chain: ${shown.nodes.length} cards${graph.truncated ? " · truncated view" : ""}`
+      : graph.truncated
+        ? "Truncated view"
+        : "",
     graph.truncated ? "warn" : ""
   );
-  updateInfo(graph, params);
+  updateInfo(shown, params, renderedCluster);
 }
 
 updatePanelToggle();
-updateRailToggle();
 updateRailTools();
 inspector.showPlaceholder();
 afterHistoryChange();

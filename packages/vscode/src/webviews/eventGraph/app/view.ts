@@ -4,8 +4,8 @@
  * from main.ts, and every gesture is reported back so the history can record
  * it.
  */
-import type { EventGraph, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
-import { NODE_H, NODE_W, type LayoutPos } from "../layout";
+import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } from "@px-lsp/protocol/protocol";
+import { NODE_H, NODE_W, rankNodes, type LayoutPos } from "../layout";
 import { ForceSim } from "../force";
 import { iconEl } from "../../shared/icons";
 
@@ -13,9 +13,16 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 /**
  * Edge labels render permanently only in sparse graphs; above this count they
  * appear on demand, for the selected node's own edges (label overlap is the
- * classic dense-graph failure).
+ * classic dense-graph failure). Delay/weight chips are exempt: they are the
+ * WHEN of an edge, short, and few.
  */
 const LABELS_ALWAYS_MAX = 25;
+/** Cards grow step rows only while the graph is small enough to afford them. */
+const STEPS_MAX_NODES = 150;
+/** The compact card is the header; rows stack under it. */
+const HEADER_H = NODE_H;
+const ROW_H = 20;
+const CARD_PAD_BOTTOM = 6;
 /** Pointer travel that turns a press into a drag rather than a click. */
 const DRAG_SLOP = 4;
 /**
@@ -35,20 +42,79 @@ export interface ViewCallbacks {
   onMove(id: string, x: number, y: number): void;
   /** A theme whose illustration has not been asked for yet. */
   onNeedBanner(theme: string): void;
+  /** A card's step row was clicked: the inspector should land on it. */
+  onOpenStep(id: string, line: number): void;
 }
 
 export interface RenderOptions {
   positions: Record<string, { x: number; y: number }>;
   titleMode: "raw" | "loc";
   banner: boolean;
+  /** Chain view only: how many hidden neighbors each visible card still has. */
+  continuations?: Record<string, { in: number; out: number }>;
 }
 
 interface EdgeItem {
   from: string;
   to: string;
   path: SVGPathElement;
+  /** The invisible wide twin that makes the thin line hoverable. */
+  hit: SVGPathElement;
   label: SVGTextElement | null;
   labelsAlways: boolean;
+  /** Row index the edge leaves from on the source card, or null = the border. */
+  fromRow: number | null;
+  /** Closes a cycle: drawn as a return arc, not a forward step. */
+  back: boolean;
+  /** The always-on "when" chip (delay or weight), positioned with the path. */
+  chip: SVGGElement | null;
+}
+
+/** How many rows a card gets; the true option count backs the "+N more" row. */
+function stepRows(node: EventGraphNode): number {
+  const steps = node.steps ?? [];
+  if (steps.length === 0) return 0;
+  const shownOptions = steps.filter((s) => s.phase === "option").length;
+  const more = (node.options ?? 0) > shownOptions ? 1 : 0;
+  return steps.length + more;
+}
+
+function nodeHeight(node: EventGraphNode, stepsOn: boolean): number {
+  const rows = stepsOn ? stepRows(node) : 0;
+  return rows === 0 ? NODE_H : HEADER_H + rows * ROW_H + CARD_PAD_BOTTOM;
+}
+
+/** A hub grows with its wiring: up to +35% for a card ten edges touch. */
+function hubScale(degree: number): number {
+  return Math.min(1.35, 1 + Math.max(0, degree - 2) * 0.045);
+}
+
+/** "30d" / "7–14d" / "2mo" back into a sentence for the chip's hover. */
+function delayTitle(delay: string): string {
+  const m = /^(.+?)(d|mo|y)$/.exec(delay);
+  if (!m) return `Fires ${delay} after this step`;
+  const unit = m[2] === "d" ? "day" : m[2] === "mo" ? "month" : "year";
+  const plural = m[1] === "1" ? unit : `${unit}s`;
+  return `Fires ${m[1]} ${plural} after this step runs (trigger_event delay)`;
+}
+
+/** What an edge label's shorthand means, spelled out for its hover. */
+function labelTitle(label: string): string {
+  if (label.startsWith("via "))
+    return `Fired through scripted effects: the source calls ${label.slice(4)}, and the last one names the target. Any delay lives inside those effects and is not shown here.`;
+  if (label.startsWith("option"))
+    return `Fired when the player picks this option${label.startsWith("option: ") ? `: “${label.slice(8)}”` : ""}.`;
+  const sections: Record<string, string> = {
+    immediate: "Runs the moment the event appears, before the player chooses (immediate block).",
+    after: "Runs once the player has picked any option (after block).",
+    random_events: "Picked at random from this on_action's pool.",
+    events: "Fired by this on_action, all entries together.",
+    first_valid: "The first entry whose trigger holds fires; the rest are skipped.",
+    on_actions: "Chains into another on_action.",
+    trigger: "Referenced inside a trigger block: a condition mentions it, it is not necessarily fired.",
+    effect: "Fired from the effect block.",
+  };
+  return sections[label] ?? `Fired from the ${label} block.`;
 }
 
 function svgEl<K extends keyof SVGElementTagNameMap>(
@@ -86,6 +152,13 @@ export class GraphView {
   private banners = new Map<string, string | null>();
   private askedBanners = new Set<string>();
   private lastGraph: EventGraph | null = null;
+  /** Per-node card box, already hub-scaled; the layout keeps the boxes apart. */
+  private heights = new Map<string, number>();
+  private widths = new Map<string, number>();
+  private scales = new Map<string, number>();
+  private stepsOn = true;
+  /** `from→to` pairs that close a cycle: drawn as return arcs. */
+  private backSet = new Set<string>();
   /**
    * The live simulation. It outlives a redraw: a title-mode switch or a banner
    * arriving rebuilds the DOM over the SAME positions, and only a different
@@ -94,7 +167,6 @@ export class GraphView {
   private sim: ForceSim | null = null;
   private simKey = "";
   private frame: number | null = null;
-  private refitWhenCool = false;
 
   constructor(
     private readonly svg: SVGSVGElement,
@@ -138,11 +210,28 @@ export class GraphView {
     const edges = graph.edges ?? [];
     if (nodes.length === 0) return;
 
+    this.stepsOn = nodes.length <= STEPS_MAX_NODES;
+    // A hub's card grows with its degree, so the busy nodes read as the busy ones.
+    const degree = new Map<string, number>();
+    for (const e of edges) {
+      degree.set(e.from, (degree.get(e.from) ?? 0) + 1);
+      degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
+    }
+    this.scales = new Map(nodes.map((n) => [n.id, hubScale(degree.get(n.id) ?? 0)]));
+    this.heights = new Map(nodes.map((n) => [n.id, nodeHeight(n, this.stepsOn) * this.scales.get(n.id)!]));
+    this.widths = new Map(nodes.map((n) => [n.id, NODE_W * this.scales.get(n.id)!]));
+    this.backSet = rankNodes(nodes, edges).back;
+
     // The simulation is fed only when the graph itself changed; cards that
-    // survive a refocus keep their place and glide to the new one.
+    // survive a refocus keep their place.
     const key = `${this.rootId ?? ""}|${nodes.map((n) => n.id).join(",")}|${edges.map((e) => `${e.from}>${e.to}`).join(",")}`;
-    if (!this.sim) this.sim = new ForceSim(nodes, edges, this.rootId ?? undefined);
-    else if (key !== this.simKey) this.sim.update(nodes, edges, this.rootId ?? undefined);
+    const simNodes = nodes.map((n) => ({
+      id: n.id,
+      height: this.heights.get(n.id),
+      width: this.widths.get(n.id),
+    }));
+    if (!this.sim) this.sim = new ForceSim(simNodes, edges, this.rootId ?? undefined);
+    else if (key !== this.simKey) this.sim.update(simNodes, edges, this.rootId ?? undefined);
     this.simKey = key;
     // A dragged card stays where the user put it; everything else is the
     // simulation's, so a re-layout never silently undoes a drag.
@@ -151,6 +240,10 @@ export class GraphView {
       if (at) this.sim.pin(n.id, at.x, at.y);
       else this.sim.unpin(n.id);
     }
+    // Settle BEFORE the first paint: the reader never sees cards shuffling
+    // into place (or briefly overlapping) on a transition. Only a drag
+    // animates, because there a moving picture is the point.
+    if (this.sim.running) this.sim.settle();
     this.positions = this.sim.positions();
 
     this.svg.appendChild(this.defs());
@@ -161,12 +254,20 @@ export class GraphView {
     const edgeLayer = svgEl("g");
     g.appendChild(edgeLayer);
     const labelsAlways = edges.length <= LABELS_ALWAYS_MAX;
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
     for (const edge of edges) {
-      const from = this.positions.get(edge.from);
-      const to = this.positions.get(edge.to);
-      if (!from || !to) continue;
-      const item = this.drawEdge(edgeLayer, edge.from, edge.to, edge.label, edge.via, from, to, labelsAlways);
+      if (!this.positions.has(edge.from) || !this.positions.has(edge.to)) continue;
+      // The row the edge leaves from, by SOURCE LINE: a capped row list can
+      // never mis-anchor an edge, it just falls back to the card's border.
+      let fromRow: number | null = null;
+      const steps = this.stepsOn ? nodeById.get(edge.from)?.steps : undefined;
+      if (steps && edge.fromLine !== undefined) {
+        const i = steps.findIndex((s) => s.line === edge.fromLine);
+        if (i >= 0) fromRow = i;
+      }
+      const item = this.drawEdge(edgeLayer, edge, labelsAlways, fromRow);
       this.edgeItems.push(item);
+      this.placeEdge(item);
     }
 
     for (const node of nodes) {
@@ -175,18 +276,15 @@ export class GraphView {
     }
 
     this.applyFocus();
-    if (refit) {
-      this.fit();
-      this.refitWhenCool = true;
-    }
+    if (refit) this.fit();
     this.applyTransform();
-    this.animate();
   }
 
   /**
    * Run the simulation at the frame rate until it cools, moving the cards and
-   * their edges each frame. Idle is silent: no frame is scheduled while the
-   * temperature is out, and a drag or a new graph is what lights it again.
+   * their edges each frame — the DRAG path only: a new graph settles before
+   * its first paint instead. Idle is silent: no frame is scheduled while the
+   * temperature is out.
    */
   private animate(): void {
     if (this.frame !== null || !this.sim) return;
@@ -198,11 +296,6 @@ export class GraphView {
       this.positions = sim.positions();
       this.placeAll();
       if (warm) this.frame = requestAnimationFrame(step);
-      else if (this.refitWhenCool) {
-        this.refitWhenCool = false;
-        this.fit();
-        this.applyTransform();
-      }
     };
     this.frame = requestAnimationFrame(step);
   }
@@ -211,21 +304,65 @@ export class GraphView {
   private placeAll(): void {
     for (const [id, group] of this.nodeGroups) {
       const at = this.positions.get(id);
-      if (at) group.setAttribute("transform", `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`);
-    }
-    for (const item of this.edgeItems) {
-      const a = this.positions.get(item.from);
-      const b = this.positions.get(item.to);
-      if (!a || !b) continue;
-      const start = borderPoint(a, b);
-      const end = borderPoint(b, a);
-      const mx = (start.x + end.x) / 2;
-      const my = (start.y + end.y) / 2;
-      item.path.setAttribute("d", `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`);
-      if (item.label) {
-        item.label.setAttribute("x", String(mx));
-        item.label.setAttribute("y", String(my - 4));
+      if (at) {
+        const h = this.heights.get(id) ?? NODE_H;
+        const w = this.widths.get(id) ?? NODE_W;
+        const s = this.scales.get(id) ?? 1;
+        group.setAttribute("transform", `translate(${at.x - w / 2},${at.y - h / 2}) scale(${s})`);
       }
+    }
+    for (const item of this.edgeItems) this.placeEdge(item);
+  }
+
+  /**
+   * Route one edge: out of the RIGHT SIDE of the source (its own row's port
+   * when it has one, the card's center-right otherwise) into the CENTER OF
+   * THE TARGET'S LEFT SIDE — one exit side, one entry point, so the flow
+   * always reads left-to-right — as an S-bend with horizontal tangents. A
+   * back edge takes the same geometry with its own style: it loops
+   * right-to-left, which is what "loops back" should look like.
+   */
+  private placeEdge(item: EdgeItem): void {
+    const a = this.positions.get(item.from);
+    const b = this.positions.get(item.to);
+    if (!a || !b) return;
+    const ha = this.heights.get(item.from) ?? NODE_H;
+    const wa = this.widths.get(item.from) ?? NODE_W;
+    const wb = this.widths.get(item.to) ?? NODE_W;
+    const sa = this.scales.get(item.from) ?? 1;
+    const sx = a.x + wa / 2 + 2;
+    const sy =
+      item.fromRow !== null ? a.y - ha / 2 + (HEADER_H + item.fromRow * ROW_H + ROW_H / 2) * sa : a.y;
+    const end = { x: b.x - wb / 2 - 2, y: b.y };
+    let c1x: number;
+    let c1y: number;
+    let c2x: number;
+    let c2y: number;
+    if (item.from === item.to) {
+      // A self-loop (an option re-firing its own event): out of the row's
+      // port, under the card, back into its left-center.
+      const drop = ha / 2 + 36;
+      c1x = sx + 70;
+      c1y = a.y + drop;
+      c2x = end.x - 70;
+      c2y = a.y + drop;
+    } else {
+      const k = Math.max(50, Math.abs(end.x - sx) * 0.35);
+      c1x = sx + k;
+      c1y = sy;
+      c2x = end.x - k;
+      c2y = end.y;
+    }
+    const d = `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${end.x} ${end.y}`;
+    item.path.setAttribute("d", d);
+    item.hit.setAttribute("d", d);
+    // The cubic's midpoint, exact: B(0.5) = (P0 + 3·C1 + 3·C2 + P3) / 8.
+    const mx = (sx + 3 * c1x + 3 * c2x + end.x) / 8;
+    const my = (sy + 3 * c1y + 3 * c2y + end.y) / 8;
+    if (item.chip) item.chip.setAttribute("transform", `translate(${mx},${my})`);
+    if (item.label) {
+      item.label.setAttribute("x", String(mx));
+      item.label.setAttribute("y", String(my - (item.chip ? 14 : 4)));
     }
   }
 
@@ -268,10 +405,28 @@ export class GraphView {
       })
     );
     defs.appendChild(hatch);
-    // Clip so an illustration stays inside its card's rounded corners.
+    // Two banner clips: a compact card's illustration fills the WHOLE card,
+    // so every corner rounds with it; on a card with rows the banner ends
+    // mid-card, where square bottom corners avoid a seam.
     const clip = svgEl("clipPath", { id: "cardClip" });
     clip.appendChild(svgEl("rect", { width: String(NODE_W), height: String(NODE_H), rx: "6", ry: "6" }));
     defs.appendChild(clip);
+    const clipRows = svgEl("clipPath", { id: "cardClipRows" });
+    clipRows.appendChild(
+      svgEl("path", {
+        d: `M 0 ${NODE_H} V 6 Q 0 0 6 0 H ${NODE_W - 6} Q ${NODE_W} 0 ${NODE_W} 6 V ${NODE_H} Z`,
+      })
+    );
+    defs.appendChild(clipRows);
+    // The banner's bottom fades into the card's own background, so the
+    // illustration transitions flat into the rows below it.
+    const fade = svgEl("linearGradient", { id: "bannerFade", x1: "0", y1: "0", x2: "0", y2: "1" });
+    const fadeTop = svgEl("stop", { offset: "0" });
+    fadeTop.setAttribute("style", "stop-color: var(--px-popover); stop-opacity: 0");
+    const fadeBottom = svgEl("stop", { offset: "1" });
+    fadeBottom.setAttribute("style", "stop-color: var(--px-popover); stop-opacity: 1");
+    fade.append(fadeTop, fadeBottom);
+    defs.appendChild(fade);
     // The scrim over an illustration. Text never sits on the picture itself:
     // the side the words start on is the dark end, and it lightens away.
     const scrim = svgEl("linearGradient", { id: "scrim", x1: "0", y1: "0", x2: "1", y2: "0" });
@@ -287,58 +442,85 @@ export class GraphView {
 
   private drawEdge(
     layer: SVGGElement,
-    from: string,
-    to: string,
-    label: string | undefined,
-    via: string,
-    a: LayoutPos,
-    b: LayoutPos,
-    labelsAlways: boolean
+    edge: EventGraphEdge,
+    labelsAlways: boolean,
+    fromRow: number | null
   ): EdgeItem {
-    // Meet the cards at their borders rather than their centres, so the
-    // arrowhead lands on the edge of the box it points at.
-    const start = borderPoint(a, b);
-    const end = borderPoint(b, a);
-    const mx = (start.x + end.x) / 2;
-    const my = (start.y + end.y) / 2;
-    const d = `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`;
+    const back = this.backSet.has(`${edge.from}→${edge.to}`);
     const path = svgEl("path", {
-      class: "edge-path",
-      d,
+      class: "edge-path" + (back ? " edge-back" : ""),
       "stroke-width": "1.3",
       "marker-end": "url(#arrow)",
     });
-    const title = svgEl("title");
-    title.textContent = `${from} → ${to}  (${label || via || ""})`;
-    path.appendChild(title);
     layer.appendChild(path);
+    // A 1.3px stroke is no hover target: an invisible wide twin under the
+    // pointer carries the connector's story.
+    const hit = svgEl("path", { class: "edge-hit" });
+    const title = svgEl("title");
+    title.textContent =
+      `${edge.from} → ${edge.to}` +
+      (edge.label || edge.phase ? `\nfrom: ${edge.label ?? edge.phase}` : "") +
+      (edge.delay ? `\nwhen: ${delayTitle(edge.delay)}` : "") +
+      (edge.weight !== undefined ? `\nwhen: picked at random from this pool, weight ${edge.weight}` : "") +
+      (back ? "\nloops back to an earlier step in the sequence" : "") +
+      (edge.from === edge.to ? "\nfires itself again: a repeating chain" : "");
+    hit.appendChild(title);
+    layer.appendChild(hit);
 
+    // The WHEN chip: a delay ("30d") or a random weight ("w 100"), always on,
+    // and it explains itself on hover.
+    const chipText = edge.delay ?? (edge.weight !== undefined ? `w ${edge.weight}` : null);
+    let chip: SVGGElement | null = null;
+    if (chipText) {
+      chip = svgEl("g", { class: "edge-chip" + (edge.delay ? "" : " edge-chip-random") });
+      const w = chipText.length * 6.5 + 10;
+      chip.appendChild(
+        svgEl("rect", { x: String(-w / 2), y: "-8", width: String(w), height: "16", rx: "8" })
+      );
+      const t = svgEl("text", { x: "0", y: "4", "text-anchor": "middle" });
+      t.textContent = chipText;
+      chip.appendChild(t);
+      const chipTip = svgEl("title");
+      chipTip.textContent = edge.delay
+        ? delayTitle(edge.delay)
+        : `Picked at random from this pool: weight ${edge.weight} (relative chance against the pool's other entries)`;
+      chip.appendChild(chipTip);
+      layer.appendChild(chip);
+    }
+
+    // A row-anchored edge already SHOWS its origin (the port it leaves from);
+    // a text label would say the same thing twice.
     let text: SVGTextElement | null = null;
-    if (label) {
+    if (edge.label && fromRow === null) {
       text = svgEl("text", {
         class: "edge-label" + (labelsAlways ? "" : " hidden"),
-        x: String(mx),
-        y: String(my - 4),
         "text-anchor": "middle",
       });
-      text.textContent = label;
+      text.textContent = edge.label;
+      const labelTip = svgEl("title");
+      labelTip.textContent = labelTitle(edge.label);
+      text.appendChild(labelTip);
       layer.appendChild(text);
     }
-    return { from, to, path, label: text, labelsAlways };
+    return { from: edge.from, to: edge.to, path, hit, label: text, labelsAlways, fromRow, back, chip };
   }
 
   /**
    * One card: the name in a size you can read across the canvas, then what kind
-   * of thing it is, then what it asks for and what it leads to. The kind is
-   * said twice, as a bar and as the border's hue, so it survives an
-   * illustration behind the card.
+   * of thing it is, then what it asks for and what it leads to — and, for a
+   * mod event, its STEP ROWS in execution order (immediate, the options, after),
+   * each with the port its edges leave from. The kind is said twice, as a bar
+   * and as the border's hue, so it survives an illustration behind the card.
    */
   private drawNode(node: EventGraphNode, at: LayoutPos): SVGGElement {
     const isRoot = this.rootId !== null && node.id === this.rootId;
     const kind = kindKey(node.kind);
+    // Content draws at base size; the hub scale lives in the transform.
+    const h = nodeHeight(node, this.stepsOn);
+    const s = this.scales.get(node.id) ?? 1;
     const group = svgEl("g", {
       class: "node" + (isRoot ? " root" : ""),
-      transform: `translate(${at.x - NODE_W / 2},${at.y - NODE_H / 2})`,
+      transform: `translate(${at.x - (NODE_W * s) / 2},${at.y - (h * s) / 2}) scale(${s})`,
     });
     group.dataset.id = node.id;
     group.dataset.kind = kind;
@@ -346,7 +528,7 @@ export class GraphView {
     const rect = svgEl("rect", {
       class: "node-rect",
       width: String(NODE_W),
-      height: String(NODE_H),
+      height: String(h),
       rx: "6",
       ry: "6",
       "stroke-dasharray": sourceDash(node.source),
@@ -371,7 +553,7 @@ export class GraphView {
         x: "6",
         y: "8",
         width: "3",
-        height: String(NODE_H - 16),
+        height: String(h - 16),
         rx: "1.5",
         fill: `var(--eg-${kind})`,
         "pointer-events": "none",
@@ -384,11 +566,49 @@ export class GraphView {
           x: "-3",
           y: "-3",
           width: String(NODE_W + 6),
-          height: String(NODE_H + 6),
+          height: String(h + 6),
           rx: "8",
           ry: "8",
         })
       );
+    }
+
+    // The chain continues past this card: dashed stubs say so, with counts.
+    const cont = this.options.continuations?.[node.id];
+    if (cont) {
+      const stub = (side: "in" | "out", count: number): void => {
+        if (count <= 0) return;
+        const cy = h / 2;
+        const g = svgEl("g", { class: "chain-stub" });
+        const [x1, x2, tx, anchor] =
+          side === "in" ? [-26, -5, -30, "end"] : [NODE_W + 5, NODE_W + 26, NODE_W + 30, "start"];
+        g.appendChild(
+          svgEl("line", {
+            class: "chain-stub-line",
+            x1: String(x1),
+            y1: String(cy),
+            x2: String(x2),
+            y2: String(cy),
+          })
+        );
+        const t = svgEl("text", {
+          class: "chain-stub-text",
+          x: String(tx),
+          y: String(cy + 3),
+          "text-anchor": anchor,
+        });
+        t.textContent = `+${count}`;
+        g.appendChild(t);
+        const tip = svgEl("title");
+        tip.textContent =
+          side === "in"
+            ? `${count} more event${count === 1 ? "" : "s"} lead${count === 1 ? "s" : ""} here, outside this view. Raise the chain depth (top left) to see them.`
+            : `The chain continues: ${count} more event${count === 1 ? "" : "s"} follow from here, outside this view. Raise the chain depth (top left) to see them.`;
+        g.appendChild(tip);
+        group.appendChild(g);
+      };
+      stub("in", cont.in);
+      stub("out", cont.out);
     }
 
     const primary = this.options.titleMode === "loc" && node.title ? node.title : node.id;
@@ -400,6 +620,73 @@ export class GraphView {
     const sub = svgEl("text", { class: "node-sub", x: "16", y: "61" });
     sub.textContent = clip(subLine(node), 35);
     group.append(title, meta, sub);
+
+    // The step rows: what happens, in the order it happens, each with the
+    // port its edges leave from. A port with nothing wired to it is honest
+    // too: that choice ends the chain.
+    const steps = this.stepsOn ? (node.steps ?? []) : [];
+    if (steps.length > 0) {
+      group.appendChild(
+        svgEl("line", {
+          class: "step-sep",
+          x1: "8",
+          y1: String(HEADER_H - 4),
+          x2: String(NODE_W - 8),
+          y2: String(HEADER_H - 4),
+        })
+      );
+      steps.forEach((step, i) => {
+        const y = HEADER_H + i * ROW_H;
+        // The whole row is the click target, with the toolkit's usual grayish
+        // hover; the texts above it stay pointer-inert.
+        const bg = svgEl("rect", {
+          class: "step-row-bg",
+          x: "4",
+          y: String(y + 1),
+          width: String(NODE_W - 8),
+          height: String(ROW_H - 2),
+          rx: "4",
+          "data-step-line": String(step.line),
+        });
+        const rowTip = svgEl("title");
+        rowTip.textContent = "Click: open this step in the inspector";
+        bg.appendChild(rowTip);
+        group.appendChild(bg);
+        const row = svgEl("text", {
+          class: "node-step" + (step.phase === "option" ? "" : " node-step-auto"),
+          x: "16",
+          y: String(y + 14),
+        });
+        if (step.phase === "option") {
+          const num = svgEl("tspan", { class: "step-num" });
+          num.textContent = `${(step.index ?? i) + 1}. `;
+          const text = svgEl("tspan");
+          text.textContent = clip(step.text ?? "option", 30);
+          row.append(num, text);
+        } else {
+          row.textContent = step.phase === "immediate" ? "Immediate" : "After";
+        }
+        group.appendChild(row);
+        group.appendChild(
+          svgEl("circle", {
+            class: "step-port" + (step.phase === "option" ? "" : " step-port-auto"),
+            cx: String(NODE_W - 10),
+            cy: String(y + ROW_H / 2),
+            r: "3",
+          })
+        );
+      });
+      const hidden = (node.options ?? 0) - steps.filter((s) => s.phase === "option").length;
+      if (hidden > 0) {
+        const more = svgEl("text", {
+          class: "node-step node-step-auto",
+          x: "16",
+          y: String(HEADER_H + steps.length * ROW_H + 14),
+        });
+        more.textContent = `+${hidden} more option${hidden === 1 ? "" : "s"}`;
+        group.appendChild(more);
+      }
+    }
     if (node.file) group.appendChild(this.drawOpenButton(node));
 
     group.addEventListener("dblclick", (ev) => {
@@ -465,7 +752,11 @@ export class GraphView {
       return false;
     }
     const url = this.banners.get(theme) ?? null;
-    const holder = svgEl("g", { "clip-path": "url(#cardClip)", "pointer-events": "none" });
+    const hasRows = this.stepsOn && (node.steps?.length ?? 0) > 0;
+    const holder = svgEl("g", {
+      "clip-path": hasRows ? "url(#cardClipRows)" : "url(#cardClip)",
+      "pointer-events": "none",
+    });
     if (url) {
       holder.appendChild(
         svgEl("image", {
@@ -481,6 +772,18 @@ export class GraphView {
       holder.appendChild(
         svgEl("rect", { width: String(NODE_W), height: String(NODE_H), fill: "url(#scrim)" })
       );
+      // A card with rows continues below the banner: fade the picture into
+      // the card's background, so header and rows read as ONE surface.
+      if (hasRows) {
+        holder.appendChild(
+          svgEl("rect", {
+            y: String(NODE_H - 30),
+            width: String(NODE_W),
+            height: "30",
+            fill: "url(#bannerFade)",
+          })
+        );
+      }
     } else {
       holder.appendChild(
         svgEl("rect", {
@@ -526,40 +829,68 @@ export class GraphView {
   }
 
   /**
-   * Focus and context: the selection's 1-hop neighborhood stays lit, the rest
-   * dims (never hides, so the mental map survives), and its in and out edges
-   * differ in color. The kind filter dims through the same path.
+   * Focus and context: the selection's WHOLE CHAIN stays lit — everything
+   * that leads to it (orange) and everything it leads to (blue), however
+   * many hops away — and the rest dims (never hides, so the mental map
+   * survives). The kind filter dims through the same path.
    */
   private applyFocus(): void {
     const id = this.selectedId;
-    const neighbors = new Set<string>();
+    const anc = new Set<string>();
+    const desc = new Set<string>();
     if (id !== null) {
-      neighbors.add(id);
+      const out = new Map<string, string[]>();
+      const inc = new Map<string, string[]>();
+      const link = (map: Map<string, string[]>, a: string, b: string): void => {
+        const list = map.get(a);
+        if (list) list.push(b);
+        else map.set(a, [b]);
+      };
       for (const e of this.edgeItems) {
-        if (e.from === id) neighbors.add(e.to);
-        if (e.to === id) neighbors.add(e.from);
+        link(out, e.from, e.to);
+        link(inc, e.to, e.from);
+      }
+      for (const [links, set] of [
+        [out, desc],
+        [inc, anc],
+      ] as const) {
+        const queue: string[] = [id];
+        while (queue.length > 0) {
+          for (const next of links.get(queue.pop()!) ?? []) {
+            if (next === id || set.has(next)) continue;
+            set.add(next);
+            queue.push(next);
+          }
+        }
       }
     }
+    const lit = (nid: string): boolean => nid === id || anc.has(nid) || desc.has(nid);
     this.nodeGroups.forEach((group, nid) => {
       group.classList.toggle("selected", id !== null && nid === id);
       group.classList.toggle(
         "dim",
-        (id !== null && !neighbors.has(nid)) || this.hiddenKinds.has(group.dataset.kind ?? "")
+        (id !== null && !lit(nid)) || this.hiddenKinds.has(group.dataset.kind ?? "")
       );
     });
     for (const e of this.edgeItems) {
-      const touches = id !== null && (e.from === id || e.to === id);
+      // An edge is on the chain when it lies on a directed path INTO the
+      // selection (upstream) or OUT of it (downstream) — not merely when both
+      // ends happen to be lit.
+      const down = id !== null && (e.from === id || desc.has(e.from)) && desc.has(e.to);
+      const up = id !== null && anc.has(e.from) && (e.to === id || anc.has(e.to));
+      const touches = down || up;
       e.path.classList.toggle("dim", id !== null && !touches);
-      e.path.classList.toggle("out-of-sel", touches && e.from === id);
-      e.path.classList.toggle("into-sel", touches && e.to === id && e.from !== id);
+      e.path.classList.toggle("out-of-sel", down);
+      e.path.classList.toggle("into-sel", up && !down);
       e.path.setAttribute(
         "marker-end",
-        touches ? (e.from === id ? "url(#arrowOut)" : "url(#arrowIn)") : "url(#arrow)"
+        touches ? (down ? "url(#arrowOut)" : "url(#arrowIn)") : "url(#arrow)"
       );
       if (e.label) {
         e.label.classList.toggle("hidden", !e.labelsAlways && !touches);
         e.label.classList.toggle("dim", id !== null && !touches);
       }
+      if (e.chip) e.chip.classList.toggle("dim", id !== null && !touches);
     }
   }
 
@@ -591,11 +922,12 @@ export class GraphView {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    this.positions.forEach((p) => {
+    this.positions.forEach((p, id) => {
+      const half = (this.heights.get(id) ?? NODE_H) / 2;
       minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
+      minY = Math.min(minY, p.y - half + NODE_H / 2);
       maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
+      maxY = Math.max(maxY, p.y + half - NODE_H / 2);
     });
     const rect = this.svg.getBoundingClientRect();
     const vw = rect.width || 800;
@@ -625,6 +957,8 @@ export class GraphView {
     from: { x: number; y: number };
     origin: LayoutPos;
     moved: boolean;
+    /** The step row the press landed on, so a plain click can open it. */
+    stepLine: number | null;
   } | null = null;
 
   private beginNodeDrag(ev: PointerEvent, node: EventGraphNode): void {
@@ -632,6 +966,7 @@ export class GraphView {
     const at = this.positions.get(node.id);
     if (!at) return;
     ev.stopPropagation();
+    const stepEl = (ev.target as Element | null)?.closest?.("[data-step-line]");
     this.nodeDrag = {
       id: node.id,
       node,
@@ -639,6 +974,7 @@ export class GraphView {
       from: { x: ev.clientX, y: ev.clientY },
       origin: { x: at.x, y: at.y },
       moved: false,
+      stepLine: stepEl ? Number(stepEl.getAttribute("data-step-line")) : null,
     };
   }
 
@@ -699,6 +1035,10 @@ export class GraphView {
           // Redrawing the edges is the cheapest correct answer; a graph small
           // enough to hand-arrange is small enough to redraw.
           this.cb.onMove(drag.id, at.x, at.y);
+        } else if (drag.stepLine !== null) {
+          // One path, not select-then-open: a second select would re-render
+          // the inspector and wipe the reveal the first one just did.
+          this.cb.onOpenStep(drag.id, drag.stepLine);
         } else {
           this.cb.onSelect(drag.id);
         }
@@ -737,15 +1077,15 @@ export class GraphView {
   serializeSvg(): string {
     const clone = this.svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute("xmlns", SVG_NS);
-    // The hover button belongs to the canvas, not to a file: a picture cannot
-    // open anything.
-    for (const button of Array.from(clone.querySelectorAll(".card-open"))) button.remove();
+    // The hover button and the hover-only hit paths belong to the canvas,
+    // not to a file: a picture cannot open anything or show a tooltip.
+    for (const node of Array.from(clone.querySelectorAll(".card-open, .edge-hit"))) node.remove();
     // Bake the computed colors in: the exported file has no stylesheet, and the
-    // live one paints through CSS variables.
-    const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text")).filter(
-      (node) => node.closest(".card-open") === null
+    // live one paints through CSS variables. Circles are the step ports.
+    const live = Array.from(this.svg.querySelectorAll<SVGElement>("rect, path, text, circle, line")).filter(
+      (node) => node.closest(".card-open") === null && !node.classList.contains("edge-hit")
     );
-    const copies = clone.querySelectorAll<SVGElement>("rect, path, text");
+    const copies = clone.querySelectorAll<SVGElement>("rect, path, text, circle, line");
     live.forEach((node, i) => {
       const cs = getComputedStyle(node);
       const copy = copies[i];
@@ -770,20 +1110,6 @@ export class GraphView {
     clone.insertBefore(bg, clone.firstChild);
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
   }
-}
-
-/** Where the line from `a` to `b` leaves a's card. */
-function borderPoint(a: LayoutPos, b: LayoutPos): LayoutPos {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if (dx === 0 && dy === 0) return { x: a.x, y: a.y };
-  const halfW = NODE_W / 2 + 2;
-  const halfH = NODE_H / 2 + 2;
-  const scale = Math.min(
-    dx === 0 ? Infinity : halfW / Math.abs(dx),
-    dy === 0 ? Infinity : halfH / Math.abs(dy)
-  );
-  return { x: a.x + dx * scale, y: a.y + dy * scale };
 }
 
 function clip(text: string, max: number): string {

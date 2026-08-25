@@ -354,6 +354,7 @@ export class GuiEditorPanel {
           : this.state.get<string>(SAVE_KEY)
             ? null
             : undefined,
+        dirty: source.isDirty,
         lineHeightRatio: this.meta.guiTextMetrics
           ? this.meta.guiTextMetrics.lineHeight / this.meta.guiTextMetrics.baseFontsize
           : undefined,
@@ -913,6 +914,15 @@ export class GuiEditorPanel {
       }
       case "clearPreviewValue": {
         await this.updatePreviewValues(message.expression, undefined);
+        return;
+      }
+      case "save": {
+        // The commits landed in the in-memory document; this is the one step
+        // that writes it to disk. The save event triggers a layout push whose
+        // `dirty: false` resets the button.
+        const doc = await vscode.workspace.openTextDocument(this.sourceUri);
+        const ok = doc.isDirty ? await doc.save() : true;
+        this.post({ type: "saved", ok });
         return;
       }
       case "undo":

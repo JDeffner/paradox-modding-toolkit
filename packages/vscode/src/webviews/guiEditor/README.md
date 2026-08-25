@@ -177,6 +177,12 @@ each has to actually do.
   WITH focus first, because VS Code's `undo` command acts on the active
   editor and a webview panel is not one, then runs the command; the changed
   text comes back down through the normal document-change `layout` push.
+- **`save` / `saved`** Write the source document to disk and answer whether it
+  reached it. Commits land in the in-memory document only, so this is how a
+  session's edits become a file. Each `layout` push carries `dirty`, which is
+  what enables the toolbar's Save button; the app also keeps a SESSION change
+  log (the Changes button) whose per-row undo is N requests for the document's
+  own undo, never a second history.
 - **`setUiState`** Store the inspector's value display mode, the side panels
   and the snap/grid toggles (each field optional: absent leaves the stored one
   alone) and answer NOTHING.
@@ -263,12 +269,15 @@ these ids: `canvas`, `stage`, `tree`, `layers`, `library`, `libraryOverlay`,
 `focusBar`, `inspector`, `status`, `statusBar`, `stats`, `visibilityBadge`,
 `meta`, `fileName`, `zoomLabel`, `outlines`, `snap`, `grid`, `constraints`,
 `pulses`, `heatmap`, `heatmapMenu`, `libraryToggle`, `modeEdit`,
-`modeInteract`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`,
+`modeInteract`, `haloTabs`, `haloBody`, `refresh`, `undo`, `redo`, `save`,
+`changes` (with a `.count` child), `zoomOutBtn`, `zoomInBtn`, `zoomFitBtn`, `helpBtn`,
 `dropTarget`, `textTip`, `clickTip`, `locResolved`, `locRaw`, `side`, `right`,
 `toggleSide`, `toggleRight`, and the four collapsible sections `sec-tree`,
 `sec-layers`, `sec-inspector`, `sec-devtools` (each a `.px-section` whose
 `.px-section-head` button toggles `data-collapsed`; the devtools halo is "open"
-when its section is). `libraryOverlay` covers the stage and holds `library`;
+when its section is). `libraryOverlay` covers the whole editor area (`#main`,
+side panels included) and holds `library`; it must NOT live inside the stage,
+or its wheel events reach the canvas zoom handler;
 `clickTip` is the popover interact mode fills with what a click did.
 `modeEdit` / `modeInteract` are the tool mode toggle group. `locResolved` and `locRaw` are the two buttons of
 a px-toggle-group (the app sets their `aria-pressed`); `textTip` is a hidden

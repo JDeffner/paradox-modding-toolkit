@@ -373,6 +373,14 @@ export type AppToHost =
   | { type: "undo" }
   | { type: "redo" }
   /**
+   * Write the source document to disk. Every edit the editor commits lands in
+   * the in-memory document only (that is what makes undo the document's own),
+   * so the toolbar's Save is how a session's work reaches the file. The host
+   * answers `saved`; the `dirty` flag on each `layout` push is what enables
+   * the button.
+   */
+  | { type: "save" }
+  /**
    * Read one loc key through the host's index (a widget's `tooltip`, which
    * the layout never resolves). The host answers `loc` with the value, null
    * when no definition exists.
@@ -437,6 +445,11 @@ export type HostToApp =
       previewValues?: Record<string, string>;
       /** The save the preview values partly come from, when one is chosen. */
       save?: { name: string; date: string; file: string } | null;
+      /**
+       * The source document holds unsaved changes. Drives the toolbar's Save
+       * button; absent is read as false (older hosts).
+       */
+      dirty?: boolean;
     }
   /**
    * Answer to `requestWidgetInfo`. `line` is echoed so the app can drop an
@@ -516,6 +529,8 @@ export type HostToApp =
   | { type: "userData"; components: SavedComponent[]; presets: SavedPreset[] }
   | { type: "loc"; key: string; value: string | null }
   | { type: "reference"; name: string; url: string | null }
+  /** The answer to `save`: the document reached disk, or why it did not. */
+  | { type: "saved"; ok: boolean }
   /** Layout failed; the message is shown as-is. */
   | { type: "error"; message: string };
 

@@ -35,9 +35,10 @@ export function guiEditorHtml(options: GuiEditorHtmlOptions): string {
     ? `@font-face { font-family: "PxGuiGameFont"; src: url("${fontDataUri}") format("opentype"); }`
     : "";
 
-  /** A checkbox dressed as a px-toggle: the app reads `.checked`, the page shows the pressed state. */
+  /** A checkbox dressed as a px-toggle: the app reads `.checked`, the page shows the pressed state.
+   *  They live in the stage's bottom-left strip, so their tooltips open upward. */
   const viewToggle = (id: string, name: IconName, tip: string, checked = false): string =>
-    `<label class="px-toggle" data-size="sm" data-tip="${tip}" data-tip-wrap><input id="${id}" type="checkbox"${checked ? " checked" : ""} />${icon(name)}</label>`;
+    `<label class="px-toggle" data-size="sm" data-tip="${tip}" data-tip-side="top" data-tip-wrap><input id="${id}" type="checkbox"${checked ? " checked" : ""} />${icon(name)}</label>`;
 
   /** A collapsible panel section: the header toggles `data-collapsed` on the section (main.ts wires it). */
   const section = (id: string, title: string, inner: string, collapsed = false): string =>
@@ -61,6 +62,21 @@ ${uiCss}
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #toolbar .px-separator { height: 20px; align-self: center; }
+  /* Deferred features, hidden until they are fleshed out: the interact mode
+     and the save-game preview source. See docs/deferred-features.md. The
+     elements stay in the DOM because app/ queries their ids. */
+  #modeGroup[hidden], #saveSource[hidden] { display: none; }
+  /* The session-changes count rides the Changes button, like the event graph's. */
+  #changes .count {
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums;
+    background: var(--px-primary); color: var(--px-primary-fg);
+  }
+  #changes[disabled] .count { display: none; }
+  #changeList { display: flex; flex-direction: column; gap: 2px; width: 340px; max-height: 320px; overflow: auto; }
+  #changeList .px-item-kind { width: 62px; }
+  #changeList .what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #fileName { font-weight: 600; max-width: 260px; }
   #fileName:empty::before { content: "GUI Editor"; color: var(--px-muted-fg); font-weight: 500; }
   /* A checkbox inside a toggle: hidden, its state shown on the label (the px-switch pattern). */
@@ -81,7 +97,9 @@ ${uiCss}
   #textTip .seg .arrow, #textTip .seg .note { color: var(--px-muted-fg); }
 
   /* ---- stage ---- */
-  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  /* Relative: the library overlay is positioned against it, so it can cover
+     the side panels as well as the stage. */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
   /* The canvas paints this same color under the world (render.ts CANVAS_BG), so a resize shows no flash. */
   #stage { flex: 1 1 auto; overflow: hidden; background: #101010; position: relative; min-width: 0; }
   #canvas { display: block; }
@@ -90,7 +108,8 @@ ${uiCss}
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #stageTools { left: 8px; }
+  #stageTools { left: 8px; gap: 4px; }
+  #stageTools .px-separator { height: 18px; }
   #stageInfo { right: 8px; }
   #zoomLabel { min-width: 44px; height: var(--px-h-sm); line-height: var(--px-h-sm); padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
   /* What a click did in interact mode (main.ts fills it). */
@@ -120,8 +139,11 @@ ${uiCss}
   #sec-tree[data-collapsed] ~ #sec-layers:not([data-collapsed]) { flex: 1 1 0; }
   #sec-devtools:not([data-collapsed]) { flex: 0 0 55%; }
   #sec-inspector[data-collapsed] ~ #sec-devtools:not([data-collapsed]) { flex: 1 1 0; }
-  /* ---- the library, over the stage ---- */
-  #libraryOverlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: color-mix(in oklch, var(--px-bg) 96%, transparent); }
+  /* ---- the library, over the whole editor ---- */
+  /* It covers #main (stage AND side panels), so the showcase always has the
+     full window's width; being outside #stage also keeps its wheel events off
+     the canvas zoom handler, which used to eat the library's own scrolling. */
+  #libraryOverlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--px-bg); }
   #libraryOverlay[hidden] { display: none; }
   #libraryOverlay > #library { flex: 1 1 auto; min-height: 0; border-top: 0; }
   #info[data-warning] { color: var(--px-destructive); }
@@ -179,24 +201,36 @@ ${uiCss}
   #layers .row .layerTools .toggle:not([aria-pressed="true"]) { color: var(--px-muted-fg); }
   #layers .row[data-dragging] { opacity: 0.35; }
   #layers .row.hiddenWidget .label { text-decoration: line-through; opacity: 0.6; }
-  /* ---- the library's tiles ---- */
-  #library .tileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; padding: 8px 12px; }
-  #library .tile {
-    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; min-width: 0;
-    border-radius: var(--px-radius-md); cursor: grab; transition: background-color var(--px-ease);
+  /* ---- the library's showcase cards ---- */
+  /* Modeled on the game's own GUI overview window: each element rendered at a
+     readable size, named, and explained, so a new modder learns what it IS
+     from the card rather than from trying it. */
+  #library .tileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding: 10px 16px 18px; }
+  #library .groupHead {
+    grid-column: 1 / -1; padding: 14px 2px 0; color: var(--px-muted-fg);
+    font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
   }
-  #library .tile:hover { background: var(--px-muted); }
+  #library .groupHead:first-child { padding-top: 2px; }
+  #library .tile {
+    display: flex; flex-direction: column; gap: 6px; padding: 10px; min-width: 0;
+    border: 1px solid var(--px-border); background: var(--px-bg);
+    border-radius: var(--px-radius-md); cursor: grab;
+    transition: background-color var(--px-ease), border-color var(--px-ease);
+  }
+  #library .tile:hover { background: var(--px-muted); border-color: color-mix(in oklch, var(--px-fg) 25%, var(--px-border)); }
   #library .tile[data-dragging] { opacity: 0.5; }
   #library .tile canvas {
-    width: 112px; height: 72px; max-width: 100%; border-radius: var(--px-radius-sm);
+    width: 220px; height: 110px; max-width: 100%; align-self: center; border-radius: var(--px-radius-sm);
     background: color-mix(in oklch, var(--px-bg), var(--px-fg) 8%); box-shadow: inset 0 0 0 1px var(--px-border);
   }
   #library .tile[data-empty] canvas { background: transparent; box-shadow: none; border: 1px dashed var(--px-border); box-sizing: border-box; }
-  #library .tile .name, #library .tile .src { width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #library .tile .name { font-size: var(--px-text-sm); }
+  #library .tile .name, #library .tile .src { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #library .tile .name { font-size: var(--px-text-sm); font-weight: 600; }
+  #library .tile .desc { font-size: var(--px-text-xs); color: var(--px-muted-fg); white-space: normal; line-height: 1.45; }
   #library .tile .src { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   #library .tileMore { height: 1px; }
   #library .note.count { text-align: center; font-size: var(--px-text-xs); }
+  #library .head { padding: 10px 16px 4px; }
   /* The chip that follows a library drag, and the container it would drop into. */
   .paletteGhost { padding: 0 10px; height: var(--px-h-sm); line-height: var(--px-h-sm); border-radius: var(--px-radius-md); font-size: var(--px-text-sm); white-space: nowrap; }
   #dropTarget { position: absolute; pointer-events: none; box-sizing: border-box; border: 2px solid var(--px-primary); border-radius: 2px; }
@@ -318,31 +352,27 @@ ${uiCss}
     <span id="fileName" class="px-truncate"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Lay the document out again">${icon("rotate")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Undo the last change to the .gui file (the text editor's own undo)">${icon("undo")}</button>
-    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Redo the change you just undid">${icon("redo")}</button>
+    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing from this panel to undo. The text editor's own history stays its own" data-tip-wrap disabled>${icon("undo")}</button>
+    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
+    <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet this session" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
+    <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="Nothing to save: the file on disk already matches" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <div class="px-toggle-group" id="modeGroup">
+    <div class="px-toggle-group" id="modeGroup" hidden>
       <button id="modeEdit" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Edit: select, drag, resize and write to the file (V)" data-tip-wrap>${icon("mousePointer")}Edit</button>
       <button id="modeInteract" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Interact: click buttons and scroll lists as in game. Variable-driven tabs and windows react; nothing is written (I)" data-tip-wrap>${icon("hand")}Interact</button>
     </div>
     <span class="px-grow"></span>
     <div class="px-toggle-group">
-      ${viewToggle("outlines", "squareDashed", "Outline every widget")}
-      ${viewToggle("snap", "magnet", "Snap a drag to sibling and parent edges, centres, equal gaps and equal sizes", true)}
-      ${viewToggle("grid", "grid", "Draw an 8 px grid and snap a drag to it (Alt+arrow nudges by one step)")}
-      ${viewToggle("constraints", "ruler", "Show the selected widget's parent box, its anchors and the offset between them")}
-      ${viewToggle("pulses", "activity", "Flash the widgets each re-layout moved")}
-    </div>
-    <div class="px-toggle-group">
       <button id="locResolved" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Show textboxes as the game would: localization keys as their text, [datafunctions] as what the preview can know" data-tip-wrap>Resolved</button>
       <button id="locRaw" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Show textboxes as the file has them: the text = value verbatim" data-tip-wrap>Raw</button>
-      <button id="saveSource" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;max-width:260px" data-tip="Real values for [datafunctions] from a save game (plain text, not ironman)" data-tip-wrap>${icon("fileText")}<span class="px-truncate">No save</span>${icon("chevronDown")}</button>
+      <button id="saveSource" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;max-width:260px" data-tip="Real values for [datafunctions] from a save game (plain text, not ironman)" data-tip-wrap hidden>${icon("fileText")}<span class="px-truncate">No save</span>${icon("chevronDown")}</button>
     </div>
     <select id="heatmap"></select>
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can add to the canvas, with previews (L)" data-tip-wrap>${icon("shapes")}Library</button>
     <div class="px-separator" data-orientation="vertical"></div>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this editor works: selecting, editing, saving, the library, shortcuts" data-tip-side="left" data-tip-wrap>${icon("circleHelp")}</button>
     <button id="toggleRight" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
@@ -359,13 +389,21 @@ ${uiCss}
       <div id="textTip" class="px-popover" hidden></div>
       <div id="clickTip" class="px-popover" hidden></div>
       <div id="stageTools">
+        <button id="zoomOutBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (Ctrl+−)" data-tip-side="top">${icon("zoomOut")}</button>
+        <button id="zoomInBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (Ctrl++)" data-tip-side="top">${icon("zoomIn")}</button>
+        <button id="zoomFitBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the view (Ctrl+0)" data-tip-side="top">${icon("maximize")}</button>
         <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Ctrl+0 fits the 1920x1080 viewport, Shift+F the selection" data-tip-side="top" data-tip-wrap>100%</span>
+        <div class="px-separator" data-orientation="vertical"></div>
+        <div class="px-toggle-group">
+          ${viewToggle("outlines", "squareDashed", "Outline every widget")}
+          ${viewToggle("snap", "magnet", "Snap a drag to sibling and parent edges, centres, equal gaps and equal sizes", true)}
+          ${viewToggle("grid", "grid", "Draw an 8 px grid and snap a drag to it (Alt+arrow nudges by one step)")}
+          ${viewToggle("constraints", "ruler", "Show the selected widget's parent box, its anchors and the offset between them")}
+          ${viewToggle("pulses", "activity", "Flash the widgets each re-layout moved")}
+        </div>
       </div>
       <div id="stageInfo">
         <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
-      </div>
-      <div id="libraryOverlay" hidden>
-        <div id="library" hidden></div>
       </div>
     </div>
     <div id="right" class="px-sidepanel" data-side="right">
@@ -374,6 +412,9 @@ ${uiCss}
         ${section("inspector", "Inspector", `<div id="inspector"></div>`)}
         ${section("devtools", "Devtools", `<div id="halo"><div id="haloTabs" class="px-tabs" data-variant="line"></div><div id="haloBody"></div></div>`, true)}
       </div>
+    </div>
+    <div id="libraryOverlay" hidden>
+      <div id="library" hidden></div>
     </div>
   </div>
   <div id="statusBar">

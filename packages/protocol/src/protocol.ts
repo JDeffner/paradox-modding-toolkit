@@ -352,6 +352,13 @@ export interface EventSectionInfo {
   /** Real target count before `targets` was capped. */
   targetsTotal: number;
 }
+/** A gate block (trigger / ai_chance) rendered for in-place editing. */
+export interface EventGateInfo {
+  /** 0-based line of the block's key. */
+  line: number;
+  lines: EventScriptLine[];
+  totalLines: number;
+}
 export interface EventOptionInfo {
   line: number;
   /** Line the option's first statement may be inserted before (0-based). */
@@ -362,6 +369,10 @@ export interface EventOptionInfo {
   effectKeys: string[];
   hasTrigger: boolean;
   hasAiChance: boolean;
+  /** The option's own trigger block, rendered, when it has one. */
+  trigger?: EventGateInfo;
+  /** The option's ai_chance block, rendered, when it has one. */
+  aiChance?: EventGateInfo;
   /** The option's effects rendered as pseudo-script (name/trigger/ai_chance/
    * ai_value dropped: they gate the option, they are not its effect), capped. */
   lines: EventScriptLine[];
@@ -1144,6 +1155,20 @@ export interface EventGraphParams {
    *  event file, and only a client that draws the theme's art needs it. */
   themes?: boolean;
 }
+/**
+ * One row of a mod event's card, in EXECUTION order (immediate, then the
+ * options, then after) rather than file order. `line` is the join key an edge
+ * uses to anchor at the row that fires it ({@link EventGraphEdge.fromLine}).
+ */
+export interface EventGraphStep {
+  phase: "immediate" | "option" | "after";
+  /** Option ordinal within the event, 0-based. */
+  index?: number;
+  /** The option's localized text, when resolvable. */
+  text?: string;
+  /** 0-based line of the step's key in the event's file. */
+  line: number;
+}
 export interface EventGraphNode {
   id: string;
   kind: string;
@@ -1160,6 +1185,8 @@ export interface EventGraphNode {
   triggerSummary?: string;
   /** How many other nodes of this graph it fires; absent when it fires none. */
   fires?: number;
+  /** The card's rows (mod events only), capped; {@link EventGraphNode.options} is the true count. */
+  steps?: EventGraphStep[];
 }
 export interface EventGraphEdge {
   from: string;
@@ -1168,6 +1195,14 @@ export interface EventGraphEdge {
   via: string;
   /** Where in the source event the reference sits: an option's text, or immediate/after/… */
   label?: string;
+  /** The block the reference sits in, normalized (option/immediate/after/effect/…). */
+  phase?: string;
+  /** 0-based line of that block's key: matches a step's `line` on the source node. */
+  fromLine?: number;
+  /** The trigger_event delay at this site, pre-rendered short: "30d", "7–14d", "2mo", "1y". */
+  delay?: string;
+  /** random_events weight at this site (raw script number). */
+  weight?: number;
 }
 /**
  * What a query box may offer: the whole mod-side vocabulary of the graph, NOT
@@ -1186,6 +1221,13 @@ export interface EventGraph {
   truncated: boolean;
   /** Absent from servers that predate it; a client must tolerate that. */
   suggestions?: EventGraphSuggestions;
+  /**
+   * Set only when the graph is empty AND the server knows why: the queried
+   * namespace/root exists, but outside what the graph shows (another workspace
+   * mod when a focus filter is on, a dependency mod, or vanilla). One
+   * user-readable sentence; absent = the generic "nothing found" story.
+   */
+  emptyReason?: string;
 }
 
 /**
@@ -1240,6 +1282,30 @@ export interface EventVocabularyItem {
 /** Caps: an editor lists a page at a time, and these ride on every open. */
 export const EVENT_VOCABULARY_MAX_TOKENS = 600;
 export const EVENT_VOCABULARY_MAX_VALUES = 400;
+
+/**
+ * Request: the value set a VALUE belongs to, resolved through the definition
+ * index; {@link EventValueOptionsParams} -> {@link EventValueOptionsResult} |
+ * null. The static vocabulary maps a KEY to its values, which only works where
+ * the schema knows the key's context (an event's or option's own fields). Deep
+ * inside an effect tree the same key name means something else (`type` in
+ * `random_secret` is a secret, not an event type), so there the editor asks
+ * about the value it already has: `secret_cultivator` is an indexed `secret`,
+ * and the answer is every secret the index knows. Null = the value resolves to
+ * nothing enumerable; the editor falls back to a free input.
+ */
+export const eventValueOptionsRequest = "paradox/eventValueOptions";
+export interface EventValueOptionsParams {
+  value: string;
+  /** Restrict mod-side entries to one workspace mod (plus vanilla/parents). */
+  modRoot?: string | null;
+}
+export interface EventValueOptionsResult {
+  /** The definition kind the value resolved to (trait, secret, faith…). */
+  kind: string;
+  /** Every indexed definition of that kind, mod entries first, capped. */
+  items: EventVocabularyItem[];
+}
 export interface EventVocabularyResult {
   /** Keys valid at an event's top level, most used first. */
   eventKeys: EventVocabularyItem[];

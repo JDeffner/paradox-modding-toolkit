@@ -366,9 +366,11 @@ export function extractReferences(
           const kinds = dynamicRefKinds(key);
           if (kinds) {
             pushRef(value.text, kinds, value.range.start);
-          } else if ((key === "variable" || key === "list") && !value.text.includes("$")) {
-            // `variable = X` / `list = X` inside an in-list iterator block
-            // references a variable list / ad-hoc list (BLOCK_REF_FIELDS).
+          } else if (!value.text.includes("$")) {
+            // Keys too generic for a global ref field, resolved by their
+            // enclosing block (BLOCK_REF_FIELDS): `variable` / `list` in an
+            // in-list iterator, `id` in `trigger_event = { … }` (the delayed
+            // form the event graph needs), `reference` in override_background.
             for (let i = ancestors.length - 1; i >= 0; i--) {
               const a = ancestors[i];
               if (a.kind === "assignment" && !a.key.quoted) {
@@ -391,6 +393,18 @@ export function extractReferences(
           if (
             s.kind === "value" &&
             s.value.kind === "scalar" &&
+            !s.value.quoted &&
+            !s.value.text.includes(":")
+          ) {
+            pushRef(s.value.text, field.kinds, s.value.range.start);
+          } else if (
+            // Weighted entries: `random_events = { 100 = my.event }`. Only on
+            // fields the schema marks weighted; elsewhere a numeric key is a
+            // map entry, not a reference.
+            field.weighted === true &&
+            s.kind === "assignment" &&
+            /^\d+$/.test(s.key.text) &&
+            s.value?.kind === "scalar" &&
             !s.value.quoted &&
             !s.value.text.includes(":")
           ) {

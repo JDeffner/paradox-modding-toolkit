@@ -109,3 +109,88 @@ export function badge(
   b.dataset.variant = variant;
   return b;
 }
+
+/**
+ * Inline autocomplete on a plain input: a list under the field that filters
+ * as you type, arrows + Enter pick, Escape or blur dismisses. The completion
+ * story `menu()` cannot tell, because its filter box would steal the focus
+ * from the field being typed in.
+ */
+export function attachSuggest(field: HTMLInputElement, provide: () => MenuItem[]): void {
+  let list: HTMLElement | null = null;
+  let rows: HTMLElement[] = [];
+  let items: MenuItem[] = [];
+  let active = -1;
+
+  const close = (): void => {
+    list?.remove();
+    list = null;
+    rows = [];
+    active = -1;
+  };
+  const pick = (value: string): void => {
+    field.value = value;
+    close();
+    field.dispatchEvent(new Event("change"));
+  };
+  const mark = (index: number): void => {
+    rows[active]?.removeAttribute("data-active");
+    active = index;
+    const row = rows[active];
+    if (row) {
+      row.setAttribute("data-active", "");
+      row.scrollIntoView({ block: "nearest" });
+    }
+  };
+  const update = (): void => {
+    const q = field.value.trim().toLowerCase();
+    items = provide()
+      .filter((i) => !q || i.value.toLowerCase().includes(q))
+      .slice(0, 8);
+    if (items.length === 0 || (items.length === 1 && items[0].value === field.value)) {
+      close();
+      return;
+    }
+    if (!list) {
+      list = el("div", "px-menu px-suggest");
+      document.body.appendChild(list);
+    }
+    const r = field.getBoundingClientRect();
+    list.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 308))}px`;
+    list.style.top = `${r.bottom + 4}px`;
+    rows = items.map((item, i) => {
+      const row = el("div", "px-menu-item");
+      const label = el("span", "px-grow", item.value);
+      if (item.description) label.appendChild(el("span", "px-menu-description", item.description));
+      if (item.description) row.setAttribute("data-two-line", "");
+      row.appendChild(label);
+      row.addEventListener("pointerdown", (ev) => ev.preventDefault());
+      row.addEventListener("click", () => pick(item.value));
+      row.addEventListener("pointerenter", () => mark(i));
+      return row;
+    });
+    list.replaceChildren(...rows);
+    active = -1;
+  };
+
+  field.addEventListener("input", update);
+  field.addEventListener("focus", update);
+  // After the click on a row has had its chance (pointerdown prevents blur-close races).
+  field.addEventListener("blur", () => setTimeout(close, 100));
+  field.addEventListener("keydown", (ev) => {
+    if (!list) return;
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      mark(Math.min(rows.length - 1, active + 1));
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      mark(Math.max(0, active - 1));
+    } else if (ev.key === "Enter" && active >= 0) {
+      ev.preventDefault();
+      pick(items[active].value);
+    } else if (ev.key === "Escape") {
+      ev.stopPropagation();
+      close();
+    }
+  });
+}

@@ -210,13 +210,23 @@ function option(
   for (const s of block.statements) {
     if (s.kind !== "assignment") continue;
     const key = s.key.text.toLowerCase();
+    const sub = childBlock(s);
     if (key === "name") {
       if (s.value?.kind === "scalar") info.name = locField(data, s.value.text);
       else if (!info.name) info.name = { key: "", dynamic: true };
       continue;
     }
-    if (key === "trigger") info.hasTrigger = true;
-    if (key === "ai_chance") info.hasAiChance = true;
+    if (key === "trigger") {
+      info.hasTrigger = true;
+      // Rendered so the inspector can EDIT the gate, not merely mention it.
+      if (sub && !info.trigger)
+        info.trigger = { line: lineOf(s.key.range.start), ...renderBlock(sub, lineOf) };
+    }
+    if (key === "ai_chance") {
+      info.hasAiChance = true;
+      if (sub && !info.aiChance)
+        info.aiChance = { line: lineOf(s.key.range.start), ...renderBlock(sub, lineOf) };
+    }
     if (OPTION_META_KEYS.has(key) || seen.has(s.key.text)) continue;
     seen.add(s.key.text);
     if (info.effectKeys.length < MAX_SECTION_KEYS) info.effectKeys.push(s.key.text);

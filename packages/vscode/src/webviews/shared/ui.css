@@ -835,6 +835,18 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   padding: 4px;
   min-width: 160px;
 }
+/* Inline completions under a focused input: a floating px-menu of its own. */
+.px-suggest {
+  position: fixed;
+  z-index: 70;
+  width: 300px;
+  max-height: 240px;
+  overflow: hidden auto;
+  border-radius: var(--px-radius);
+  border: 1px solid var(--px-border);
+  background: var(--px-popover);
+  box-shadow: var(--px-shadow-md);
+}
 .px-menu-list {
   max-height: 280px;
   overflow: hidden auto;
@@ -847,6 +859,9 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   align-items: center;
   gap: 8px;
   min-height: 28px;
+  /* The list is a max-height flex column: without this, a long list SHRINKS
+     its rows to min-height and two-line rows overflow into their neighbours. */
+  flex-shrink: 0;
   padding: 0 8px;
   border-radius: var(--px-radius-md);
   font-size: var(--px-text);
@@ -858,20 +873,45 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Two-line rows breathe: without the padding and the description's own
+   margin, one row's description sat flush against the next row's label and
+   the list read as alternating unrelated lines rather than as pairs. The
+   name leads (medium weight, first line), the doc sits under it in muted
+   small text, and the hint rides the FIRST line — centered against two
+   lines it looked like it belonged to neither row. A hairline between
+   two-line rows keeps the pairs apart even while scrolling fast. */
 .px-menu-item[data-two-line] {
-  padding-top: 4px;
-  padding-bottom: 4px;
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  white-space: normal;
+}
+.px-menu-item[data-two-line] > .px-grow {
+  font-weight: 500;
+}
+/* Air between pairs, NOT borders: a separator line rides the row and breaks
+   the hover highlight's top edge. */
+.px-menu-list:has(> .px-menu-item[data-two-line]) {
+  gap: 3px;
 }
 .px-menu-item > .px-grow > .px-menu-description {
   display: block;
+  margin-top: 2px;
+  line-height: 1.35;
   font-size: var(--px-text-xs);
+  font-weight: 400;
   color: var(--px-muted-fg);
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 .px-menu-item > .px-menu-hint {
   font-size: var(--px-text-xs);
   color: var(--px-muted-fg);
+}
+.px-menu-item[data-two-line] > .px-menu-hint,
+.px-menu-item[data-two-line] > svg.px-icon.check {
+  margin-top: 3px;
 }
 .px-menu-item[data-active],
 .px-menu-item:hover {
@@ -919,7 +959,7 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 220px;
+  width: 240px;
 }
 .px-picker-square {
   position: relative;
@@ -948,6 +988,18 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 .px-picker-hue > .px-picker-thumb {
   top: 50%;
+}
+.px-picker-label {
+  flex: 0 0 auto;
+  font-size: var(--px-text-sm);
+  color: var(--px-muted-fg);
+}
+.px-picker .px-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.px-picker .px-btn {
+  flex: 0 0 auto;
 }
 
 /* --------------------------------------------------------------- dialog --- */
@@ -982,25 +1034,93 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 .px-dialog-description {
   color: var(--px-muted-fg);
 }
-.px-dialog-wide {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-}
-.px-dialog-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow: auto;
-  min-height: 0;
-}
-.px-dialog-section-title {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
 .px-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/* -------------------------------------------------- help tutorial (help.ts) --- */
+
+.px-help {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  gap: 0;
+  padding: 0;
+}
+.px-help-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--px-border);
+}
+.px-help-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+.px-help-intro {
+  margin-top: 3px;
+  color: var(--px-muted-fg);
+  line-height: 1.55;
+}
+.px-help-body {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 4px;
+}
+.px-help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.px-help-section + .px-help-section {
+  border-top: 1px solid var(--px-border);
+  padding-top: 14px;
+}
+.px-help-section-title {
+  font-weight: 600;
+}
+.px-help-prose,
+.px-help-item {
+  line-height: 1.6;
+  color: var(--px-muted-fg);
+}
+.px-help-item > .lead {
+  color: var(--px-fg);
+  font-weight: 600;
+}
+.px-help .keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.px-help .keys .plus {
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-xs);
+}
+.px-help-keysGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 14px;
+  align-items: baseline;
+  margin-top: 2px;
+}
+.px-help-keysGrid > .keys {
+  justify-self: start;
+}
+.px-help-keysGrid > .does {
+  color: var(--px-muted-fg);
+  line-height: 1.5;
+}
+.px-help-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px 16px;
 }
 @keyframes px-fade {
   from {
@@ -1037,6 +1157,13 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 [data-tip]:focus-visible::after {
   opacity: 1;
   transition-delay: 400ms;
+}
+/* No tooltip while the element is being pressed or holds an open popover:
+   a tip floating over the menu you just opened reads as a glitch. */
+[data-tip]:active::after,
+[data-tip][aria-expanded="true"]::after {
+  opacity: 0;
+  transition: none;
 }
 [data-tip][data-tip-wrap]::after {
   white-space: normal;
@@ -1194,6 +1321,12 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
 }
 .px-swatch[data-missing] {
   background: repeating-linear-gradient(45deg, var(--px-destructive) 0 3px, transparent 3px 6px);
+}
+/* A translucent color over a checkerboard: alpha is shown, never hidden. */
+.px-swatch[data-checker] {
+  background:
+    linear-gradient(var(--px-swatch, transparent), var(--px-swatch, transparent)),
+    repeating-conic-gradient(rgba(127, 127, 127, 0.45) 0% 25%, transparent 0% 50%) 0 0 / 10px 10px;
 }
 button.px-swatch {
   border: none;

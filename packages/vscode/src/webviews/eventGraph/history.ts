@@ -29,6 +29,20 @@ export type PendingEdit =
     }
   | { kind: "addOption"; id: string; file: string; endLine: number; count: number }
   | {
+      /** A whole new event: scaffold block plus its localization keys. */
+      kind: "createEvent";
+      /** The full id, `namespace.N`. */
+      id: string;
+      /** The namespace's existing MOD file to append to; null = create
+       *  `events/<namespace>_events.txt` with its namespace header. */
+      file: string | null;
+      type: string;
+      title: string;
+      desc: string;
+      /** Scaffolded `option` blocks, each with its own loc key. */
+      options: number;
+    }
+  | {
       kind: "setField";
       id: string;
       file: string;
@@ -45,6 +59,10 @@ export type PendingEdit =
 export interface GraphState {
   /** What the graph is showing (root / namespace / everything). */
   focus: EventGraphParams;
+  /** Show only the selected node's chain (the Chain tool). */
+  cluster?: string;
+  /** How many hops around the chained node stay visible; absent = the whole chain. */
+  clusterDepth?: number;
   /** Node id -> position a drag put it at. Absent = wherever the layout says. */
   positions: Record<string, { x: number; y: number }>;
   /** File edits waiting for Save, oldest first. */
@@ -55,6 +73,8 @@ export interface GraphState {
 function clone(state: GraphState): GraphState {
   return {
     focus: { ...state.focus },
+    cluster: state.cluster,
+    clusterDepth: state.clusterDepth,
     positions: { ...state.positions },
     pending: state.pending.map((edit) => ({ ...edit })),
   };
@@ -142,5 +162,23 @@ export class GraphHistory {
     this.past = this.past.map(strip);
     this.future = this.future.map(strip);
     this.current = { ...this.current, pending: [] };
+  }
+
+  /**
+   * Part of a save batch reached disk before an edit failed. The applied
+   * edits leave the current state and every stored one, exactly like
+   * markSaved but only for those indices; the failed and unapplied edits
+   * stay pending. Pending lists grow by appending, so an index into the
+   * saved batch names the same edit in every state that is long enough.
+   */
+  dropPending(indices: number[]): void {
+    const drop = new Set(indices);
+    const strip = (entry: { label: string; state: GraphState }) => ({
+      label: entry.label,
+      state: { ...entry.state, pending: entry.state.pending.filter((_, i) => !drop.has(i)) },
+    });
+    this.past = this.past.map(strip);
+    this.future = this.future.map(strip);
+    this.current = strip({ label: "", state: this.current }).state;
   }
 }

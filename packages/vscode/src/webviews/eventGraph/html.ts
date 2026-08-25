@@ -28,24 +28,24 @@ const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsC
   {
     id: "toolSimulate",
     icon: "flaskConical",
-    tip: "Simulate: walk through the selected event block by block, in the order the game runs them. Needs a card selected",
+    tip: "Simulate the selected event (S)",
     needsCard: true,
   },
   {
     id: "toolCenter",
     icon: "locate",
-    tip: "Center: rebuild the graph around the selected event. Needs a card selected",
+    tip: "Chain: only what leads to the selected card and what it leads to (C)",
     needsCard: true,
   },
   {
     id: "toolAll",
     icon: "waypoints",
-    tip: "All nodes: every event, on_action and decision of this mod, connected or not",
+    tip: "All nodes of this mod (A)",
   },
   {
     id: "toolSource",
     icon: "fileText",
-    tip: "Source: open the selected event's file beside the graph. Needs a card selected",
+    tip: "Open the selected card's source (O)",
     needsCard: true,
   },
 ];
@@ -53,7 +53,7 @@ const TOOLS: { id: string; icon: Parameters<typeof icon>[0]; tip: string; needsC
 export function eventGraphHtml({ scriptSrc, nonce, csp }: EventGraphHtmlOptions): string {
   const kindToggles = KINDS.map(
     (k) =>
-      `<button class="px-toggle" data-size="sm" data-kind="${k.kind}" aria-pressed="true" data-tip="${k.tip}"><i class="swatch" style="background:var(--eg-${k.kind})"></i>${k.label}</button>`
+      `<button class="px-toggle" data-size="sm" data-kind="${k.kind}" aria-pressed="true" data-tip="${k.tip}" data-tip-side="top"><i class="swatch" style="background:var(--eg-${k.kind})"></i>${k.label}</button>`
   ).join("");
   const tools = TOOLS.map(
     (t) =>
@@ -111,8 +111,12 @@ ${uiCss}
     background: var(--px-primary); color: var(--px-primary-fg);
   }
   #changes[disabled] .count { display: none; }
-  /* Compact kind chips: a swatch, a word, one row. */
-  #kinds { gap: 6px; }
+  /* Compact kind chips: a swatch, a word, one row. They sit on the canvas
+     next to the zoom group, so they get the same translucent backing. */
+  #kinds {
+    gap: 4px; padding: 2px; border-radius: var(--px-radius);
+    background: color-mix(in oklch, var(--px-bg) 75%, transparent);
+  }
   #kinds .px-toggle { height: var(--px-h-sm); padding: 0 8px; gap: 5px; font-size: var(--px-text-sm); }
   #kinds .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
   #kinds .px-toggle[aria-pressed="false"] { color: var(--px-muted-fg); }
@@ -147,6 +151,26 @@ ${uiCss}
   #railBar .px-btn { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
   #actingOn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #actingOn:empty { display: none; }
+  /* The chain depth control: a compact head that unfolds the 1 2 3 4 ∞ row.
+     The [hidden] guard is explicit because display rules beat the attribute. */
+  /* Beside the rail's Chain tool: the control is that button's own setting.
+     Collapsed it is just the arrow; open, the slider with ONE value: the
+     current depth. */
+  #chainDepth {
+    position: absolute; left: 6px; top: 38px; z-index: 6;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #chainDepth[hidden], #chainDepthOptions[hidden] { display: none; }
+  #chainDepth .px-btn { background: color-mix(in oklch, var(--px-bg) 82%, transparent); }
+  #chainDepthHead .px-icon { transition: transform var(--px-ease); }
+  #chainDepthHead[data-open] .px-icon { transform: rotate(90deg); }
+  #chainDepthOptions {
+    display: flex; align-items: center; gap: 8px; padding: 4px 10px;
+    border: 1px solid var(--px-border); border-radius: var(--px-radius);
+    background: color-mix(in oklch, var(--px-bg) 82%, transparent);
+  }
+  #chainDepthSlider { width: 110px; accent-color: var(--eg-event); cursor: pointer; }
+  #chainDepthLabel { min-width: 14px; text-align: center; font-weight: 600; }
   /* Bottom-left view controls, the same group the GUI editor uses. */
   #stageTools { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
   #zoomGroup {
@@ -176,6 +200,8 @@ ${uiCss}
   .node-rect { fill: var(--px-popover); stroke-width: 1; }
   .node:hover .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 0.55; }
   .node.selected .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 1; stroke-width: 2; }
+  /* A selected root would wear BOTH outlines; one is enough. */
+  .node.root.selected .node-outline { display: none; }
   .node-outline { fill: none; stroke: var(--px-primary); stroke-width: 2; pointer-events: none; }
   .node-title { pointer-events: none; fill: var(--px-fg); font-size: 15px; font-weight: 600; font-family: var(--px-font); }
   .node-sub { pointer-events: none; fill: var(--px-muted-fg); font-size: 12px; font-family: var(--px-font); }
@@ -200,12 +226,37 @@ ${uiCss}
   .banner-missing-label { fill: var(--px-muted-fg); font-size: 9px; font-family: var(--px-font); pointer-events: none; }
   /* Focus + context: the selection's 1-hop neighborhood stays, the rest dims
      (never hides, so the mental map survives). In and out edges differ. */
-  .node.dim, .edge-path.dim, .edge-label.dim { opacity: 0.25; }
+  .node.dim, .edge-path.dim, .edge-label.dim, .edge-chip.dim { opacity: 0.25; }
   .edge-path { fill: none; stroke: var(--px-fg); stroke-opacity: 0.35; transition: opacity var(--px-ease); }
   .edge-path.out-of-sel { stroke: var(--eg-event); stroke-opacity: 0.95; }
   .edge-path.into-sel { stroke: var(--eg-other); stroke-opacity: 0.95; }
-  .edge-label { pointer-events: none; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
+  /* Hoverable: the label's <title> spells out what the shorthand means. */
+  .edge-label { pointer-events: all; fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .edge-label.hidden { display: none; }
+  /* A cycle's return arc: unmistakably not a forward step. */
+  .edge-path.edge-back { stroke-dasharray: 6 4; stroke-opacity: 0.3; }
+  /* The connector's hover target: wide, invisible, carries the <title>. */
+  .edge-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
+  /* The WHEN chip: an edge's delay ("30d") or random weight ("w 100").
+     Hoverable: its <title> says what the number means. */
+  .edge-chip { pointer-events: all; }
+  .edge-chip rect { fill: var(--px-popover); stroke: color-mix(in oklch, var(--px-fg) 35%, transparent); stroke-width: 1; }
+  .edge-chip text { fill: var(--px-fg); font-size: 10px; font-family: var(--px-mono, monospace); text-anchor: middle; }
+  .edge-chip.edge-chip-random rect { stroke-dasharray: 3 2; }
+  .edge-chip.edge-chip-random text { fill: var(--px-muted-fg); }
+  /* Step rows: the card's own sequence, in execution order. */
+  .step-sep { stroke: color-mix(in oklch, var(--px-fg) 18%, transparent); stroke-width: 1; }
+  /* The row's own hover surface: the toolkit's usual grayish highlight. */
+  .step-row-bg { fill: transparent; cursor: pointer; }
+  .step-row-bg:hover { fill: color-mix(in oklch, var(--px-fg) 10%, transparent); }
+  .node-step { pointer-events: none; fill: var(--px-fg); font-size: 11px; font-family: var(--px-font); }
+  .node-step .step-num { fill: var(--px-muted-fg); }
+  .node-step-auto { fill: var(--px-muted-fg); font-style: italic; }
+  .step-port { fill: var(--eg-event); }
+  .step-port-auto { fill: var(--px-muted-fg); }
+  /* Chain stubs: the sequence continues past what the view keeps. */
+  .chain-stub-line { stroke: var(--px-muted-fg); stroke-opacity: 0.6; stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .chain-stub-text { fill: var(--px-muted-fg); font-size: 10px; font-family: var(--px-font); }
   .arrow-plain { fill: var(--px-fg); opacity: 0.5; }
   .arrow-out { fill: var(--eg-event); }
   .arrow-in { fill: var(--eg-other); }
@@ -215,10 +266,12 @@ ${uiCss}
      positioned box takes its static position, which here is under a
      full-height <svg>, so the window would open outside the clipped wrapper.
      A drag sets left, which wins over right from then on. */
+  /* Fixed, not absolute: the window drags over the WHOLE page (topbar,
+     inspector, rail), not just the canvas it was born in. */
   #sim {
-    position: absolute; z-index: 40; right: 16px; top: 16px;
-    width: 440px; max-width: calc(100% - 24px);
-    display: flex; flex-direction: column; max-height: calc(100% - 24px);
+    position: fixed; z-index: 40; right: 16px; top: 44px;
+    width: 440px; max-width: calc(100vw - 24px);
+    display: flex; flex-direction: column; max-height: calc(100vh - 60px);
     border-radius: var(--px-radius); background: var(--px-popover);
     box-shadow: var(--px-shadow-md), 0 0 0 1px var(--px-border);
   }
@@ -269,11 +322,15 @@ ${uiCss}
   #inspector h2 { margin: 0; font-size: 14px; font-weight: 600; word-break: break-all; }
   #inspector .sub {
     margin-top: 8px; font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--px-muted-fg);
+    text-transform: uppercase; color: var(--px-muted-fg); width: fit-content;
   }
   #inspector .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .badges { display: flex; gap: 4px; flex-wrap: wrap; }
   .field { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; }
+  /* The "New event" popover form shares the inspector's row anatomy. */
+  .newEventForm { display: flex; flex-direction: column; gap: 8px; width: 300px; }
+  .newEventForm .sub { font-weight: 600; font-size: var(--px-text-sm); }
+  .newEventForm .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); white-space: normal; line-height: 1.45; }
   .field > .k { color: var(--px-muted-fg); font-size: var(--px-text-xs); overflow: hidden; text-overflow: ellipsis; }
   .field > .v { min-width: 0; display: flex; gap: 4px; align-items: center; }
   .field .px-dropdown, .field .px-input { flex: 1 1 auto; min-width: 0; }
@@ -283,11 +340,69 @@ ${uiCss}
   .locrow .edit .px-input { flex: 1 1 auto; min-width: 0; }
   .pendingMark { color: var(--px-primary); flex: 0 0 auto; }
   .block { display: flex; flex-direction: column; gap: 4px; }
-  .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; }
+  .block > .head { display: flex; align-items: center; gap: 4px; min-height: 24px; cursor: pointer; user-select: none; }
   .block > .head .caret { transition: transform var(--px-ease); cursor: pointer; }
-  .block[data-collapsed] > .head .caret { transform: rotate(-90deg); }
-  .block[data-collapsed] > :not(.head) { display: none; }
+  .block > .head .btitle { flex: 0 0 auto; font-weight: 600; font-size: var(--px-text-sm); }
+  .block > .head .bsub { flex: 1 1 auto; min-width: 0; }
   .block + .block { border-top: 1px solid var(--px-border); padding-top: 4px; }
+  .bbody { display: flex; flex-direction: column; gap: 4px; }
+  /* These set display, which beats the hidden attribute; restate it, or no
+     fold in the inspector ever closes. */
+  .bbody[hidden], .tchildren[hidden], .trow[hidden] { display: none; }
+  #inspector .caret.closed { transform: rotate(-90deg); }
+  /* ---- the structured script editor ---- */
+  #inspector .insHead { display: flex; align-items: center; gap: 4px; }
+  #inspector .insHead h2 { flex: 1 1 auto; }
+  .subhead2 {
+    margin-top: 2px; font-size: var(--px-text-xs); font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--px-muted-fg); width: fit-content;
+  }
+  .tree { display: flex; flex-direction: column; gap: 1px; }
+  .tchildren { display: flex; flex-direction: column; gap: 1px; }
+  .trow {
+    display: flex; align-items: center; gap: 6px; min-height: 24px;
+    padding-right: 2px; border-radius: var(--px-radius-sm);
+  }
+  .trow:hover { background: color-mix(in oklch, var(--px-fg) 5%, transparent); }
+  /* Keys read as words ("add gold"), not as code; only VALUES keep the mono
+     face, which is also what marks them as the editable half of the row. */
+  .trow .tk { font-size: var(--px-text-sm); color: var(--px-fg); }
+  .trow .top { font-family: var(--px-font-mono); font-size: var(--px-text-sm); color: var(--px-muted-fg); }
+  .trow .tv { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
+  .trow .tv .px-input, .trow .tv .px-dropdown { flex: 1 1 auto; min-width: 0; height: 24px; font-size: var(--px-text-sm); }
+  .trow .ttools { display: flex; align-items: center; opacity: 0; transition: opacity var(--px-ease); }
+  .trow:hover .ttools, .trow.thead .ttools { opacity: 1; }
+  .trow.thead .ttools { opacity: 0; }
+  .trow.thead:hover .ttools { opacity: 1; }
+  .trow.thead .tk { font-weight: 600; color: var(--px-fg); flex: 1 1 auto; }
+  .trow.thead .caret { cursor: pointer; flex: 0 0 auto; }
+  .trow.tbare .tk { color: var(--px-muted-fg); font-family: var(--px-font-mono); }
+  /* A value is text until it is clicked; the hover says "editable" quietly. */
+  .trow .tval {
+    font-family: var(--px-font-mono); font-size: var(--px-text-sm); cursor: pointer;
+    padding: 1px 4px; margin-left: -4px; border-radius: var(--px-radius-sm);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .trow .tval:hover { background: var(--px-muted); }
+  /* An enumerable value wears its chevron at rest: it LOOKS like a choice. */
+  .trow .tval.tchoice {
+    display: inline-flex; align-items: center; gap: 3px; margin-left: 0;
+    padding: 1px 4px 1px 6px; border: 1px solid var(--px-border); background: var(--px-bg);
+  }
+  .trow .tval.tchoice .px-icon { width: 12px; height: 12px; flex: 0 0 auto; color: var(--px-muted-fg); }
+  .trow .tval.tchoice:hover { background: var(--px-muted); }
+  /* The datatype tag beside a free input: what kind of value belongs here. */
+  .ttype {
+    flex: 0 0 auto; font-size: var(--px-text-xs); line-height: 16px; white-space: nowrap;
+    color: var(--px-muted-fg); border: 1px solid var(--px-border); border-radius: 999px; padding: 0 6px;
+  }
+  .editWrap { display: contents; }
+  .trow.tadd:hover { background: none; }
+  .trow.tadd > .px-btn { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .trow.tadd > .px-btn:hover { color: var(--px-fg); }
+  .trow-more { align-self: flex-start; padding: 0 4px; font-size: var(--px-text-xs); }
+  .gateAdd { margin-top: 2px; }
+  #inspector .revealed { box-shadow: 0 0 0 1.5px var(--eg-hit); border-radius: var(--px-radius-md); transition: box-shadow 0.2s; }
   #inspector .px-list { padding: 0; }
   #inspector .px-item > .px-item-kind { width: 64px; }
   #inspector .px-item > .px-item-label.px-xs { color: var(--px-muted-fg); flex: 0 0 auto; }
@@ -301,36 +416,41 @@ ${uiCss}
       <div id="suggest" role="listbox"><div class="px-menu-list"></div></div>
     </div>
     <button id="go" class="px-btn" data-variant="outline" data-size="sm" data-tip="Load the graph for the id or namespace">Go</button>
+    <button id="newEvent" class="px-btn" data-variant="outline" data-size="sm" data-tip="Create a new event (N)">${icon("plus")}New</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-toggle-group" data-tip="What the cards are captioned with" data-tip-wrap>
       <button id="titleRaw" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Caption every card with its raw id (cultivation_scheme.101)" data-tip-wrap>Raw</button>
       <button id="titleLoc" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Caption every card with its localized title, falling back to the id where there is none" data-tip-wrap>Loc</button>
     </div>
+    <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Event background: draw each event's background illustration behind its card. A background that cannot be resolved gets a hatched placeholder that says so" data-tip-wrap>${icon("image")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to undo" disabled>${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>
-    <div class="px-separator" data-orientation="vertical"></div>
-    <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-wrap>${kindToggles}</div>
     <span class="px-grow"></span>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reload the current graph from the index">${icon("rotate")}</button>
     <button id="changes" class="px-btn" data-variant="ghost" data-size="sm" data-tip="No changes yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("list")}<span class="count">0</span></button>
     <button id="save" class="px-btn" data-variant="default" data-size="sm" data-tip="No changes to save yet. Edits stay in this view until you save them" data-tip-wrap disabled>${icon("save")}Save</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="export" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Export the graph as SVG" data-tip-side="left">${icon("download")}</button>
-    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How to read this view" data-tip-side="left">${icon("circleHelp")}</button>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works: reading, editing, saving, shortcuts" data-tip-side="left" data-tip-wrap>${icon("circleHelp")}</button>
     <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide inspector" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
     <div id="rail" class="px-sidepanel" data-side="left">
       <div class="px-sidepanel-body">
         ${tools}
-        <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Event banner: draw each event's theme illustration behind its card. A theme whose picture cannot be resolved gets a hatched placeholder that says so" data-tip-side="right" data-tip-wrap>${icon("image")}</button>
       </div>
     </div>
     <div id="graphWrap">
       <div id="railBar">
-        <button id="railToggle" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
         <span id="actingOn" class="px-muted px-xs"></span>
+      </div>
+      <div id="chainDepth" hidden>
+        <button id="chainDepthHead" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Chain depth: how many steps around the selected card stay visible" data-tip-side="bottom" data-tip-wrap>${icon("chevronRight")}</button>
+        <div id="chainDepthOptions" hidden>
+          <input id="chainDepthSlider" type="range" min="1" max="5" step="1" value="5" />
+          <span id="chainDepthLabel" class="px-xs">∞</span>
+        </div>
       </div>
       <svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="stageTools">
@@ -339,6 +459,7 @@ ${uiCss}
           <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (+)" data-tip-side="top">${icon("zoomIn")}</button>
           <button id="zoomFit" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the graph (0)" data-tip-side="top">${icon("maximize")}</button>
         </div>
+        <div id="kinds" class="px-toggle-group" data-tip="Click a kind to dim it in the graph" data-tip-side="top" data-tip-wrap>${kindToggles}</div>
         <span id="focusLine" class="px-muted px-xs"></span>
       </div>
       <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>

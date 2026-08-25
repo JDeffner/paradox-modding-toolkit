@@ -49,6 +49,7 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  eventValueOptionsRequest,
   eventVocabularyRequest,
   guiTreeRequest,
   locCoverageRequest,
@@ -57,6 +58,7 @@ import {
   type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
+  type EventValueOptionsParams,
   type EventVocabularyParams,
   type GuiTreeParams,
   guiLayoutRequest,
@@ -166,7 +168,7 @@ import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
-import { computeEventVocabulary } from "./overview/eventVocabulary";
+import { computeEventVocabulary, computeValueOptions } from "./overview/eventVocabulary";
 import { computeEventBanner } from "./overview/eventBanner";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
@@ -1290,6 +1292,12 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
 // Never a hand-written name list.
 connection.onRequest(eventVocabularyRequest, (params: EventVocabularyParams | null) =>
   computeEventVocabulary(data, schema, focusFilter(params?.modRoot))
+);
+
+// The value set one VALUE belongs to, for the graph inspector's nested rows:
+// resolve the value through the index, answer every definition of its kind.
+connection.onRequest(eventValueOptionsRequest, (params: EventValueOptionsParams | null) =>
+  computeValueOptions(data, params?.value ?? "", focusFilter(params?.modRoot))
 );
 
 // The theme's illustration, through the game's own event_themes ->

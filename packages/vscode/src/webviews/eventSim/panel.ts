@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { EventDetail } from "@px-lsp/protocol/protocol";
 import { simulationSteps } from "./steps";
+import { tokenizeScriptLine } from "../eventGraph/tokenize";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
@@ -189,8 +190,10 @@ ${uiCss}
   .step { margin: 4px 0; }
   .step > .px-panel-title { padding-left: 4px; cursor: pointer; border-radius: var(--px-radius-md); transition: background-color var(--px-ease); }
   .step > .px-panel-title:hover { background: var(--px-muted); }
-  .step > .px-panel-title .caret { transition: transform var(--px-ease); color: var(--px-muted-fg); }
-  .step[data-collapsed] > .px-panel-title .caret { transform: rotate(-90deg); }
+  /* The caret is a button, and its tooltip is that button's ::after, so
+     rotating the button would turn the words on their side. Rotate the icon. */
+  .step > .px-panel-title .caret > svg { transition: transform var(--px-ease); color: var(--px-muted-fg); }
+  .step[data-collapsed] > .px-panel-title .caret > svg { transform: rotate(-90deg); }
   .step[data-collapsed] > .step-body { display: none; }
   .step > .px-panel-title .t { color: var(--px-fg); }
   .step > .px-panel-title .s { flex: 1 1 auto; min-width: 0; font-weight: 400; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -202,6 +205,13 @@ ${uiCss}
     transition: background-color var(--px-ease);
   }
   .script .ln:hover { background: var(--px-muted); }
+  .tok-key { color: var(--px-tok-key); }
+  .tok-op { color: var(--px-tok-op); }
+  .tok-string { color: var(--px-tok-string); }
+  .tok-number { color: var(--px-tok-number); }
+  .tok-bool { color: var(--px-tok-bool); }
+  .tok-comment { color: var(--px-tok-comment); font-style: italic; }
+  .tok-brace { color: var(--px-tok-brace); }
   .note, .more { padding: 4px 8px; color: var(--px-muted-fg); }
   .leads { padding: 4px 0 2px; }
   .target { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; }
@@ -230,9 +240,14 @@ const vscode = acquireVsCodeApi();
 // === Shipped arrangement: exact source of the unit-tested simulationSteps ===
 const simulationSteps = ${stepsSource};
 
-const ICON_CARET = ${JSON.stringify(icon("chevronDown", "px-icon caret"))};
+// === Shipped tokenizer: exact source of the unit-tested tokenizeScriptLine
+// (self-contained by design; see tokenize.ts header) ===
+const tokenizeScriptLine = ${tokenizeScriptLine.toString()};
+
+const ICON_CARET = ${JSON.stringify(icon("chevronDown"))};
 const ICON_STEP = ${JSON.stringify(icon("cornerDownRight"))};
 const ICON_CRUMB = ${JSON.stringify(icon("chevronRight"))};
+const ICON_FILE = ${JSON.stringify(icon("fileText"))};
 
 const bodyEl = document.getElementById("body");
 const chainEl = document.getElementById("chain");
@@ -312,18 +327,25 @@ function renderTarget(container, target, indent) {
 function renderStep(detail, step) {
   const card = el("div", "step " + step.kind);
   const head = el("div", "px-panel-title");
-  head.innerHTML = ICON_CARET;
+  // The caret is a real button that folds the section; the rest of the header
+  // opens the source. A decorative caret that swallowed clicks was the bug.
+  const fold = el("button", "px-btn caret");
+  fold.dataset.variant = "ghost";
+  fold.dataset.size = "icon-xs";
+  fold.dataset.tip = "Fold this section";
+  fold.innerHTML = ICON_CARET;
+  fold.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    card.toggleAttribute("data-collapsed");
+    fold.dataset.tip = card.hasAttribute("data-collapsed") ? "Unfold this section" : "Fold this section";
+  });
+  head.appendChild(fold);
   head.appendChild(el("span", "t", step.title));
   head.appendChild(el("span", "s", step.subtitle));
   head.appendChild(el("span", "at", "line " + (step.line + 1)));
   head.dataset.tip = "Open " + detail.file + " at line " + (step.line + 1);
   head.dataset.tipWrap = "";
-  // The caret folds the section; the rest of the header opens the source.
-  head.addEventListener("click", function (ev) {
-    if (ev.target.closest(".caret")) {
-      card.toggleAttribute("data-collapsed");
-      return;
-    }
+  head.addEventListener("click", function () {
     vscode.postMessage({ type: "open", file: detail.file, line: step.line });
   });
   card.appendChild(head);
@@ -334,7 +356,10 @@ function renderStep(detail, step) {
   if (step.lines.length > 0) {
     const script = el("div", "script");
     for (const line of step.lines) {
-      const row = el("div", "ln", "  ".repeat(line.depth) + line.text);
+      const row = el("div", "ln");
+      for (const token of tokenizeScriptLine("  ".repeat(line.depth) + line.text)) {
+        row.appendChild(el("span", "tok-" + token.kind, token.text));
+      }
       row.title = "Open line " + (line.line + 1);
       row.addEventListener("click", function () {
         vscode.postMessage({ type: "open", file: detail.file, line: line.line });
@@ -398,7 +423,11 @@ function render(msg) {
   if (detail.type) badges.appendChild(badge(detail.type));
   if (detail.theme) badges.appendChild(badge("theme: " + detail.theme));
   if (detail.hidden) badges.appendChild(badge("hidden"));
-  badges.appendChild(openLink("Open source", detail.file, detail.line));
+  const source = linkButton("Open source", ICON_FILE);
+  source.addEventListener("click", function () {
+    vscode.postMessage({ type: "open", file: detail.file, line: detail.line || 0 });
+  });
+  badges.appendChild(source);
   bodyEl.appendChild(badges);
 
   const steps = simulationSteps(detail);

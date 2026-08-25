@@ -527,7 +527,7 @@ export const VIC3_REF_FIELDS: RefField[] = [
   { key: "events", kinds: ["event"], form: "list" }, // 97
   // Vic3's random_events is WEIGHTED (`10 = ns.1`), so only the rare bare-list
   // form resolves through this field; kept because the bare form is still legal.
-  { key: "random_events", kinds: ["event"], form: "list" },
+  { key: "random_events", kinds: ["event"], form: "list", weighted: true },
   // NOT `first_valid`. common/on_actions/_on_actions.md documents it as an
   // on_action's "pick the first valid event" list, but all 405 vanilla sites
   // are the LOCALIZATION construct `desc = { first_valid = { triggered_desc

@@ -5,6 +5,7 @@ import type {
   EventDetail,
   EventGraph,
   EventGraphParams,
+  EventValueOptionsResult,
   EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "../guiEditor/textureCache";
@@ -20,12 +21,23 @@ const UI_KEY = "px.eventGraph.ui";
 export interface EventGraphActions {
   fetchDetail(id: string): Promise<EventDetail | null>;
   fetchVocabulary(): Promise<EventVocabularyResult>;
+  /** The value set `value` belongs to (all secrets, all traits…), or null. */
+  fetchValueOptions(value: string): Promise<EventValueOptionsResult | null>;
   /** Resolve one event theme to the texture behind its window. */
   fetchBanner(theme: string): Promise<EventBannerResult>;
   /** Write a loc value: in place when file/line given, else via the replace file. */
   editLoc(key: string, value: string, file?: string, line?: number): Promise<void>;
   /** Insert a scaffolded option before `endLine` and create its loc key. */
   addOption(id: string, file: string, endLine: number, count: number): Promise<void>;
+  /** Append a scaffolded event (file created if null) and its loc keys. */
+  createEvent(
+    id: string,
+    file: string | null,
+    type: string,
+    title: string,
+    desc: string,
+    options: number
+  ): Promise<void>;
   /** Mod root and game root, for resolving a texture path. */
   textureRoots(): TextureRoots;
   /** A mod file changed on disk (re-index). */
@@ -75,7 +87,7 @@ export class EventGraphPanel {
 
     this.panel = vscode.window.createWebviewPanel(
       EventGraphPanel.viewType,
-      "Paradox Event Graph",
+      "Event Graph",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -145,7 +157,7 @@ export class EventGraphPanel {
     );
     if (answer === "Save") {
       const result = await this.applyEdits(pending);
-      if (result.error) void vscode.window.showErrorMessage(`Paradox Event Graph: ${result.error}`);
+      if (result.error) void vscode.window.showErrorMessage(`Event Graph: ${result.error}`);
       return;
     }
     if (answer === "Discard") return;
@@ -208,6 +220,16 @@ export class EventGraphPanel {
       case "banner":
         await this.sendBanner(msg.theme);
         break;
+      case "valueOptions": {
+        let result: EventValueOptionsResult | null = null;
+        try {
+          result = (await this.actions?.fetchValueOptions(msg.value)) ?? null;
+        } catch {
+          /* null = no menu; the inspector falls back to a plain input */
+        }
+        this.post({ type: "valueOptions", value: msg.value, result });
+        break;
+      }
       case "save": {
         const result = await this.applyEdits(msg.edits);
         this.post({ type: "saved", applied: result.applied, error: result.error });
@@ -220,23 +242,26 @@ export class EventGraphPanel {
   }
 
   /**
-   * Apply the pending edits. Stops at the first failure and reports it: a
-   * half-applied batch the user knows about beats a silent one, and the app
-   * keeps whatever it still holds.
+   * Apply the pending edits. Stops at the first failure and reports it, with
+   * the batch indices of the edits that DID land: a half-applied batch the
+   * user knows about beats a silent one, and the app drops exactly the
+   * applied edits so a retry never writes one twice.
    */
-  private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number; error?: string }> {
-    if (!this.actions) return { applied: 0, error: "this graph is read-only" };
-    let applied = 0;
-    for (const edit of writeOrder(edits)) {
+  private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number[]; error?: string }> {
+    if (!this.actions) return { applied: [], error: "this graph is read-only" };
+    const applied: number[] = [];
+    for (const { edit, index } of writeOrder(edits)) {
       try {
         if (edit.kind === "editLoc") {
           await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
         } else if (edit.kind === "addOption") {
           await this.actions.addOption(edit.id, edit.file, edit.endLine, edit.count);
+        } else if (edit.kind === "createEvent") {
+          await this.actions.createEvent(edit.id, edit.file, edit.type, edit.title, edit.desc, edit.options);
         } else {
           await this.setField(edit);
         }
-        applied++;
+        applied.push(index);
       } catch (err) {
         return { applied, error: `${describe(edit)} failed: ${message(err)}` };
       }
@@ -317,7 +342,7 @@ export class EventGraphPanel {
         selection: new vscode.Range(position, position),
       });
     } catch (err) {
-      void vscode.window.showErrorMessage(`Paradox Event Graph: cannot open ${file}: ${message(err)}`);
+      void vscode.window.showErrorMessage(`Event Graph: cannot open ${file}: ${message(err)}`);
     }
   }
 
@@ -332,7 +357,7 @@ export class EventGraphPanel {
       await vscode.workspace.fs.writeFile(target, Buffer.from(svg, "utf8"));
       void vscode.window.showInformationMessage(`Event graph exported to ${target.fsPath}`);
     } catch (err) {
-      void vscode.window.showErrorMessage(`Paradox Event Graph: export failed: ${message(err)}`);
+      void vscode.window.showErrorMessage(`Event Graph: export failed: ${message(err)}`);
     }
   }
 
@@ -363,26 +388,27 @@ export class EventGraphPanel {
  * insertions at the same point are written back to front, which leaves them in
  * the file in the order they were added.
  */
-function writeOrder(edits: PendingEdit[]): PendingEdit[] {
+function writeOrder(edits: PendingEdit[]): Array<{ edit: PendingEdit; index: number }> {
   const at = (edit: PendingEdit): number | null => {
     if (edit.kind === "addOption") return edit.endLine;
     if (edit.kind === "setField" && edit.line === null) return edit.insertLine;
     return null;
   };
-  const keep: PendingEdit[] = [];
+  const keep: Array<{ edit: PendingEdit; index: number }> = [];
   const inserts: Array<{ edit: PendingEdit; line: number; index: number }> = [];
   edits.forEach((edit, index) => {
     const line = at(edit);
-    if (line === null) keep.push(edit);
+    if (line === null) keep.push({ edit, index });
     else inserts.push({ edit, line, index });
   });
   inserts.sort((a, b) => b.line - a.line || b.index - a.index);
-  return [...keep, ...inserts.map((i) => i.edit)];
+  return [...keep, ...inserts.map(({ edit, index }) => ({ edit, index }))];
 }
 
 function describe(edit: PendingEdit): string {
   if (edit.kind === "editLoc") return `localization ${edit.key}`;
   if (edit.kind === "addOption") return `new option on ${edit.id}`;
+  if (edit.kind === "createEvent") return `new event ${edit.id}`;
   return `${edit.key} on ${edit.id}`;
 }
 

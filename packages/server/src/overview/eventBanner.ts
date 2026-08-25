@@ -24,14 +24,25 @@ import { decode, parseScript, type BlockNode, type Statement } from "../parser";
 const TEXTURE_PATH = /\.(dds|tga|png)$/i;
 
 export function computeEventBanner(data: ServerData, theme: string): EventBannerResult {
-  const themeRef = referenceOf(data, theme, "event_theme");
-  if (themeRef === null) return { theme, reason: "no theme definition with a background" };
-  if (TEXTURE_PATH.test(themeRef)) return { theme, texture: themeRef };
+  // The graph sends whatever the event itself names: an override_background
+  // reference (an event_background key, or already a texture path) wins over
+  // the theme, because that is the picture the game actually shows.
+  if (TEXTURE_PATH.test(theme)) return { theme, texture: theme };
 
-  const backgroundRef = referenceOf(data, themeRef, "event_background");
-  if (backgroundRef === null) return { theme, reason: `no background definition named ${themeRef}` };
-  if (!TEXTURE_PATH.test(backgroundRef)) return { theme, reason: `${themeRef} names no texture` };
-  return { theme, texture: backgroundRef };
+  const themeRef = referenceOf(data, theme, "event_theme");
+  if (themeRef !== null) {
+    if (TEXTURE_PATH.test(themeRef)) return { theme, texture: themeRef };
+    const backgroundRef = referenceOf(data, themeRef, "event_background");
+    if (backgroundRef === null) return { theme, reason: `no background definition named ${themeRef}` };
+    if (!TEXTURE_PATH.test(backgroundRef)) return { theme, reason: `${themeRef} names no texture` };
+    return { theme, texture: backgroundRef };
+  }
+
+  // Not a theme: an event_background named directly (override_background).
+  const direct = referenceOf(data, theme, "event_background");
+  if (direct === null) return { theme, reason: "no theme or background definition with a background" };
+  if (!TEXTURE_PATH.test(direct)) return { theme, reason: `${theme} names no texture` };
+  return { theme, texture: direct };
 }
 
 /**

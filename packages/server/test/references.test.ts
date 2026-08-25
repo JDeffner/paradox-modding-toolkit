@@ -27,6 +27,15 @@ describe("extractReferences", () => {
     ]);
   });
 
+  it("records weighted entries only on weighted fields (random_events)", () => {
+    const r = refs(
+      "on_x = {\n\trandom_events = {\n\t\t100 = my.1\n\t}\n\tevents = {\n\t\t100 = my.2\n\t}\n}\n"
+    );
+    const names = r.references.filter((x) => x.kinds.includes("event")).map((x) => x.name);
+    expect(names).toContain("my.1");
+    expect(names).not.toContain("my.2");
+  });
+
   it("records scope:x usages with the range of the name only", () => {
     const text = "e = {\n\tscope:my_target = { add_gold = 5 }\n\tdeath = { killer = scope:my_target }\n}\n";
     const r = refs(text);

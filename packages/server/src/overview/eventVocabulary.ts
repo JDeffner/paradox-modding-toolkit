@@ -20,6 +20,7 @@
 import {
   EVENT_VOCABULARY_MAX_TOKENS,
   EVENT_VOCABULARY_MAX_VALUES,
+  type EventValueOptionsResult,
   type EventVocabularyItem,
   type EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
@@ -44,7 +45,14 @@ function keyItems(specs: Map<string, KeySpec> | undefined): EventVocabularyItem[
   return out.map((spec) => ({
     value: spec.key,
     doc: short(spec.doc),
-    hint: spec.values === "block" ? "block" : spec.values === "bool" ? "yes/no" : undefined,
+    hint:
+      spec.values === "block"
+        ? "block"
+        : spec.values === "bool"
+          ? "yes/no"
+          : spec.values === "loc"
+            ? "loc"
+            : undefined,
   }));
 }
 
@@ -148,4 +156,59 @@ export function computeEventVocabulary(
     triggers,
     savedScopes: savedScopes.slice(0, EVENT_VOCABULARY_MAX_VALUES),
   };
+}
+
+/**
+ * Kinds whose full listing is not a useful dropdown: sites rather than
+ * choices (loc keys, saved scopes, variables), bodies rather than values
+ * (scripted effects/triggers), and the id spaces so large a capped list
+ * would silently lie (events, on_actions, decisions — those get inline
+ * completions instead).
+ */
+const VALUE_KIND_SKIP = new Set([
+  "event",
+  "on_action",
+  "decision",
+  "loc_key",
+  "saved_scope",
+  "variable",
+  "scripted_effect",
+  "scripted_trigger",
+  "script_value",
+]);
+
+/**
+ * The value set `value` belongs to: resolve it through the definition index
+ * (`secret_cultivator` is a `secret`), then list every definition of that
+ * kind, mod entries first. Null when the value resolves to nothing
+ * enumerable — a number, yes/no, a scope chain, an unindexed name.
+ */
+export function computeValueOptions(
+  data: ServerData,
+  value: string,
+  inFocus: (file: string) => boolean = () => true
+): EventValueOptionsResult | null {
+  const name = value.trim();
+  if (name === "" || name === "yes" || name === "no") return null;
+  if (/^-?[\d.]+$/.test(name) || name.includes(":") || name.includes(".")) return null;
+  const def = data.index.lookup(name).find((d) => !VALUE_KIND_SKIP.has(d.kind));
+  if (!def) return null;
+  const seen = new Set<string>();
+  const mod: EventVocabularyItem[] = [];
+  const rest: EventVocabularyItem[] = [];
+  for (const d of data.index.allDefinitions()) {
+    if (d.kind !== def.kind || seen.has(d.name)) continue;
+    if (d.source === "mod" && !inFocus(d.file)) continue;
+    seen.add(d.name);
+    (d.source === "mod" ? mod : rest).push({
+      value: d.name,
+      doc: short(d.doc),
+      hint: d.source === "mod" ? "this mod" : d.source,
+    });
+  }
+  mod.sort((a, b) => a.value.localeCompare(b.value));
+  rest.sort((a, b) => a.value.localeCompare(b.value));
+  const items = [...mod, ...rest].slice(0, EVENT_VOCABULARY_MAX_VALUES);
+  // A single entry (the value itself) enumerates nothing worth a menu.
+  return items.length > 1 ? { kind: def.kind, items } : null;
 }

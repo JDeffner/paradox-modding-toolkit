@@ -20,9 +20,10 @@ import {
 import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiState } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { confirmDialog, infoDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
-import { colorPicker } from "../../shared/colorPicker";
+import { colorPicker, hsvToRgb, type ColorValueFormat } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "./render";
 import {
@@ -130,6 +131,25 @@ function parseColorText(text: string): { kind: "rgb" | "hsv360"; value: [number,
   if (tag === "hsv360") return { kind: "hsv360", value: [n[0], n[1], n[2]] };
   const rgb = n.every((x) => x <= 1) ? n.map((x) => Math.round(x * 255)) : n.map(Math.round);
   return { kind: "rgb", value: [rgb[0], rgb[1], rgb[2]] };
+}
+
+/** The same liberal reading, resolved to plain rgb for the picker's field. */
+function parseColorRgb(text: string): Rgb | null {
+  const p = parseColorText(text);
+  if (!p) return null;
+  return p.kind === "rgb" ? p.value : hsvToRgb(p.value[0], p.value[1] / 100, p.value[2] / 100);
+}
+
+/** The hsv360 field shows bare values, so bare numbers ARE hsv360 there;
+ *  tagged or hex text still reads in its own notation. */
+function parseHsv360Values(text: string): Rgb | null {
+  const t = text.trim();
+  if (/^[\d.\s,]+$/.test(t)) {
+    const n = t.split(/[\s,]+/).map(Number);
+    if (n.length !== 3 || n.some((x) => !Number.isFinite(x))) return null;
+    return hsvToRgb(n[0], n[1] / 100, n[2] / 100);
+  }
+  return parseColorRgb(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -341,11 +361,6 @@ function numberInput(value: number, step: number, onChange: (v: number) => void)
   return i;
 }
 
-/** A number field with a short prefix inside it ("h", "s", "v"). */
-function labeled(prefix: string, input: HTMLInputElement): HTMLElement {
-  return el("label", "px-labeled", el("span", undefined, prefix), input);
-}
-
 function field(label: string, ...value: (HTMLElement | string)[]): HTMLElement {
   const v = el("div", "px-row", ...value);
   v.style.minWidth = "0";
@@ -555,7 +570,6 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
 
     const value = el("div", "px-row");
     value.style.minWidth = "0";
-    let values: HTMLElement | null = null;
     const copyText = (text: string): void => send({ type: "copy", text });
     const pasteColor = async (): Promise<void> => {
       const parsed = parseColorText(await readClipboard());
@@ -567,6 +581,31 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
       colors[i] = { name: color.name, ...parsed };
       refresh();
     };
+    /** The swatch is the preview; the values live in its tooltip and in the picker. */
+    const tipText = (): string => {
+      const c = colorToRgb(color, db!.namedColors, flag.colors);
+      if (!c) return "unresolved color";
+      switch (color.kind) {
+        case "rgb":
+          return `rgb { ${color.value.join(" ")} } · ${rgbHex(c)}`;
+        case "hsv360":
+          return `hsv360 { ${color.value.map(Math.round).join(" ")} } · ${rgbHex(c)}`;
+        case "named":
+          return `${color.value} · rgb { ${c.join(" ")} }`;
+        case "ref":
+          return `same as ${color.value} · rgb { ${c.join(" ")} }`;
+      }
+    };
+    const copyValue = (): string => {
+      if (color.kind === "rgb") return `rgb { ${color.value.join(" ")} }`;
+      if (color.kind === "hsv360") return `hsv360 { ${color.value.map(Math.round).join(" ")} }`;
+      const c = colorToRgb(color, db!.namedColors, flag.colors);
+      return c ? `rgb { ${c.join(" ")} }` : "";
+    };
+    sw.removeAttribute("title");
+    sw.dataset.tip = tipText();
+    sw.dataset.tipSide = "left";
+
     if (color.kind === "named") {
       value.append(
         dropdown(
@@ -579,63 +618,7 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
           { small: true, search: true }
         )
       );
-    } else if (color.kind === "rgb") {
-      const text = el("span", "px-mono px-truncate");
-      const show = (): void => {
-        text.textContent = `R ${color.value[0]}  G ${color.value[1]}  B ${color.value[2]}`;
-      };
-      show();
-      const edit = button(
-        "",
-        () =>
-          colorPicker(edit, color.value, {
-            onChange: (rgb) => {
-              color.value = rgb;
-              sw.style.setProperty("--px-swatch", rgbHex(rgb));
-              show();
-              draw();
-            },
-            onClose: commit,
-          }),
-        { icon: "pencil", size: "icon-xs", tip: "Pick a color" }
-      );
-      values = el(
-        "div",
-        "color-values",
-        text,
-        edit,
-        button("", () => copyText(`rgb { ${color.value.join(" ")} }`), {
-          icon: "copy",
-          size: "icon-xs",
-          tip: "Copy rgb { r g b }",
-        }),
-        button("", () => void pasteColor(), { icon: "paste", size: "icon-xs", tip: "Paste a color" })
-      );
-    } else if (color.kind === "hsv360") {
-      const v = color.value;
-      values = el(
-        "div",
-        "color-values",
-        labeled(
-          "h",
-          numberInput(v[0], 1, (x) => (v[0] = x))
-        ),
-        labeled(
-          "s",
-          numberInput(v[1], 1, (x) => (v[1] = x))
-        ),
-        labeled(
-          "v",
-          numberInput(v[2], 1, (x) => (v[2] = x))
-        ),
-        button("", () => copyText(`hsv360 { ${v.map(Math.round).join(" ")} }`), {
-          icon: "copy",
-          size: "icon-xs",
-          tip: "Copy hsv360 { h s v }",
-        }),
-        button("", () => void pasteColor(), { icon: "paste", size: "icon-xs", tip: "Paste a color" })
-      );
-    } else {
+    } else if (color.kind === "ref") {
       const bases = flag.colors.filter((b) => !(colors === flag.colors && b.name === color.name));
       value.append(
         dropdown(
@@ -653,25 +636,62 @@ function colorEditor(colors: CoaColor[], title: string): HTMLElement {
         )
       );
     }
-    wrap.append(
-      el(
-        "div",
-        "color-row",
-        el("span", "px-muted px-sm", color.name),
-        sw,
-        kind,
-        value,
-        button(
-          "",
-          () => {
-            colors.splice(colors.indexOf(color), 1);
-            refresh();
-          },
-          { icon: "x", size: "icon-xs", tip: "Remove color" }
-        )
+
+    const tools = el("div", "color-tools", sw);
+    if (color.kind === "rgb" || color.kind === "hsv360") {
+      const literal = color;
+      const format: ColorValueFormat =
+        literal.kind === "rgb"
+          ? {
+              label: "rgb",
+              writeValues: (c) => c.join(" "),
+              write: (c) => `rgb { ${c.join(" ")} }`,
+              parse: parseColorRgb,
+            }
+          : {
+              label: "hsv360",
+              writeValues: (c) => rgbToHsv360(c).join(" "),
+              write: (c) => `hsv360 { ${rgbToHsv360(c).join(" ")} }`,
+              parse: parseHsv360Values,
+            };
+      const edit = button(
+        "",
+        () =>
+          colorPicker(edit, colorToRgb(literal, db!.namedColors, flag.colors) ?? [255, 255, 255], {
+            format,
+            onCopy: copyText,
+            onChange: (c) => {
+              literal.value = literal.kind === "rgb" ? c : rgbToHsv360(c);
+              sw.style.setProperty("--px-swatch", rgbHex(c));
+              sw.removeAttribute("data-missing");
+              sw.dataset.tip = tipText();
+              draw();
+            },
+            // No refresh here: a rebuild mid-close would eat the click that
+            // lands on another control. The row repaints itself in onChange.
+            onClose: commit,
+          }),
+        { icon: "pencil", size: "icon-xs", tip: "Pick a color" }
+      );
+      tools.append(edit);
+    }
+    tools.append(
+      button("", () => copyText(copyValue()), {
+        icon: "copy",
+        size: "icon-xs",
+        tip: color.kind === "hsv360" ? "Copy hsv360 { h s v }" : "Copy rgb { r g b }",
+      }),
+      button("", () => void pasteColor(), { icon: "paste", size: "icon-xs", tip: "Paste a color" }),
+      button(
+        "",
+        () => {
+          colors.splice(colors.indexOf(color), 1);
+          refresh();
+        },
+        { icon: "x", size: "icon-xs", tip: "Remove color" }
       )
     );
-    if (values) wrap.append(values);
+    wrap.append(el("div", "color-row", el("span", "px-muted px-sm", color.name), kind, value, tools));
   }
   return wrap;
 }
@@ -1395,32 +1415,103 @@ $("png").onclick = () => {
 };
 $("togglePanel").onclick = () => panel.toggle();
 $("help").onclick = () =>
-  infoDialog("How to build a flag", [
-    [
-      "Start",
-      "New gives you a solid flag with one color. Open shows every flag of the game and your mods as a preview; pick one to start from it. Paste reads a definition from the clipboard.",
+  helpDialog({
+    title: "Flag Builder",
+    intro:
+      "Builds a coat_of_arms definition — the game's own flag script — visually. What you see is rendered from the same textures the game uses, and Save writes real script into your mod.",
+    sections: [
+      {
+        title: "Starting a flag",
+        items: [
+          { lead: "New", text: "gives you a solid flag with one color to build on." },
+          {
+            lead: "Open",
+            text: "browses every flag of the game and your mods as previews; pick one to start from it. Saving it back under the same file name overrides the original.",
+          },
+          {
+            lead: "Paste",
+            text: "reads a coat_of_arms definition straight from the clipboard — handy for a snippet from a wiki or another mod.",
+          },
+        ],
+      },
+      {
+        title: "Pattern and flag colors",
+        items: [
+          {
+            lead: "The pattern",
+            text: "is the base texture. Its red, yellow and white areas are placeholders: they become color1, color2 and color3 of your flag.",
+          },
+          {
+            lead: "Change either",
+            text: "by selecting the Pattern row in the panel: the browser shows every pattern, and the color rows recolor the flag.",
+          },
+        ],
+      },
+      {
+        title: "Layers",
+        intro:
+          "A flag is the pattern plus layers drawn on top, in row order — later rows draw over earlier ones. Drag rows to reorder.",
+        items: [
+          {
+            lead: "Colored emblem:",
+            text: "a recolorable shape; its color1–3 can be a named game color, an rgb or hsv value, or “same as” one of the flag's colors.",
+          },
+          { lead: "Textured emblem:", text: "a texture drawn as-is, no recoloring." },
+          {
+            lead: "Sub flag:",
+            text: "another whole flag placed inside this one (how quartered arms are built).",
+          },
+          {
+            lead: "Mask",
+            text: "limits an emblem to the area one pattern color covers, so it follows the pattern's shape.",
+          },
+        ],
+      },
+      {
+        title: "Placing an emblem",
+        items: [
+          {
+            lead: "On the canvas:",
+            text: "click an emblem to select it, drag it to move it, and drag a corner to resize it (the aspect ratio stays).",
+          },
+          {
+            lead: "By numbers:",
+            text: "each layer has instances — position as a fraction of the flag (0.5 0.5 is the center), scale as a fraction of its size, rotation in degrees. Drag any number sideways to scrub it.",
+          },
+          {
+            lead: "Several instances",
+            text: "on one layer repeat the same emblem: one shape, stamped at several places.",
+          },
+          {
+            lead: "The camera:",
+            text: "the wheel zooms and the middle mouse button pans; the lock at the bottom left freezes the view, the button next to it recenters it.",
+          },
+        ],
+      },
+      {
+        title: "Saving",
+        items: [
+          {
+            lead: "Pick the mod",
+            text: "in the toolbar first: Save writes the script into that mod's coat_of_arms folder.",
+          },
+          {
+            lead: "Copy",
+            text: "puts the script on the clipboard instead, and Export PNG renders the preview to an image.",
+          },
+          { lead: "Undo and redo", text: "cover every step, including canvas drags." },
+        ],
+      },
+      {
+        title: "Keyboard",
+        shortcuts: [
+          { keys: ["Esc"], does: "Close the browser, else deselect the emblem" },
+          { keys: ["Ctrl", "Z"], does: "Undo" },
+          { keys: ["Ctrl", "Y"], does: "Redo (Ctrl+Shift+Z too)" },
+        ],
+      },
     ],
-    [
-      "Pattern and colors",
-      "The pattern is the base texture; its red, yellow and white areas become color1, color2 and color3 of the flag. Select the Pattern row to change it and the flag colors.",
-    ],
-    [
-      "Layers",
-      "Add a colored emblem (recolorable shape), a textured emblem (drawn as is) or a sub flag (another flag inside this one). Drag rows to change the draw order; later rows draw on top.",
-    ],
-    [
-      "Placing",
-      "Each layer has instances: position is a fraction of the flag (0.5 0.5 = center), scale a fraction of its size, rotation in degrees. Drag a number sideways to scrub it. On the canvas, click an emblem to select it, drag it to move it and drag a corner to resize it (the aspect ratio stays); Esc deselects. The wheel zooms and the middle mouse button pans until you freeze the view.",
-    ],
-    [
-      "Emblem colors",
-      "An emblem's color1..3 can be a named game color, an rgb or hsv value, or \"same as\" one of the flag's colors. Mask limits an emblem to one pattern color's area.",
-    ],
-    [
-      "Saving",
-      "Choose the mod in the toolbar, then Save writes the script into its coat_of_arms folder. Saving to the same file name as the opened flag overrides the game's flag. Copy puts the script on the clipboard; Export PNG renders the preview.",
-    ],
-  ]);
+  });
 $("addLayer").onclick = () =>
   menu(
     $("addLayer"),
