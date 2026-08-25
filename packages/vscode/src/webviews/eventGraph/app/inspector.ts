@@ -98,7 +98,12 @@ export class Inspector {
   setVocabulary(vocabulary: EventVocabularyResult): void {
     this.vocabulary = vocabulary;
     this.keyInfo.clear();
-    for (const list of [vocabulary.eventKeys, vocabulary.optionKeys, vocabulary.effects, vocabulary.triggers]) {
+    for (const list of [
+      vocabulary.eventKeys,
+      vocabulary.optionKeys,
+      vocabulary.effects,
+      vocabulary.triggers,
+    ]) {
       for (const item of list) {
         if (!this.keyInfo.has(item.value)) this.keyInfo.set(item.value, { doc: item.doc, hint: item.hint });
       }
@@ -216,18 +221,25 @@ export class Inspector {
   /** An event-level block (trigger, immediate, after…): a collapsible tree. */
   private renderSection(detail: EventDetail, s: EventSectionInfo): void {
     const context = TRIGGER_BLOCKS.has(s.name.toLowerCase()) ? "trigger" : "effect";
-    const block = this.foldable(detail, `sec:${s.line}`, cap(friendly(s.name)), s.line, (body) => {
-      this.tree(detail, s.lines, s.totalLines, 2, s.line, context, body);
-      this.insertedRows(s.line + 1, body);
-      body.appendChild(
-        this.addRow(
-          context === "trigger" ? "Add condition" : "Add effect",
-          context === "trigger" ? this.vocabulary.triggers : this.vocabulary.effects,
-          context === "trigger" ? "A check this block also requires" : "An effect this block also runs",
-          (key, value) => this.insertEdit(detail, key, value, s.line + 1, 2)
-        )
-      );
-    }, { subtitle: SECTION_HINTS[s.name.toLowerCase()] });
+    const block = this.foldable(
+      detail,
+      `sec:${s.line}`,
+      cap(friendly(s.name)),
+      s.line,
+      (body) => {
+        this.tree(detail, s.lines, s.totalLines, 2, s.line, context, body);
+        this.insertedRows(s.line + 1, body);
+        body.appendChild(
+          this.addRow(
+            context === "trigger" ? "Add condition" : "Add effect",
+            context === "trigger" ? this.vocabulary.triggers : this.vocabulary.effects,
+            context === "trigger" ? "A check this block also requires" : "An effect this block also runs",
+            (key, value) => this.insertEdit(detail, key, value, s.line + 1, 2)
+          )
+        );
+      },
+      { subtitle: SECTION_HINTS[s.name.toLowerCase()] }
+    );
     block.dataset.line = String(s.line);
     this.root.appendChild(block);
   }
@@ -271,56 +283,63 @@ export class Inspector {
 
   private optionBlock(detail: EventDetail, option: EventOptionInfo, index: number): HTMLElement {
     const opts = { folded: true, subtitle: option.name?.text ?? option.name?.key ?? "" };
-    const block = this.foldable(detail, `opt:${option.line}`, `Option ${index + 1}`, option.line, (body) => {
-      this.locRow("Text", option.name, detail.id, body);
+    const block = this.foldable(
+      detail,
+      `opt:${option.line}`,
+      `Option ${index + 1}`,
+      option.line,
+      (body) => {
+        this.locRow("Text", option.name, detail.id, body);
 
-      // The gate: when the option is offered at all.
-      this.gate(
-        detail,
-        body,
-        "Condition",
-        "Shown to the player only while this holds",
-        option.trigger,
-        "trigger",
-        () =>
+        // The gate: when the option is offered at all.
+        this.gate(
+          detail,
+          body,
+          "Condition",
+          "Shown to the player only while this holds",
+          option.trigger,
+          "trigger",
+          () =>
+            this.addRow(
+              "Add condition",
+              this.vocabulary.triggers,
+              "Creates the option's trigger block with this first check",
+              (key, value) => this.insertEdit(detail, "trigger", `{ ${key} = ${value} }`, option.bodyLine, 2)
+            )
+        );
+
+        // The AI's willingness to pick it.
+        this.gate(
+          detail,
+          body,
+          "AI chance",
+          "How much the AI wants this option",
+          option.aiChance,
+          "effect",
+          () =>
+            button(
+              "Add AI chance",
+              "plus",
+              "Insert ai_chance = { base = 100 }; tune the base and add modifiers after",
+              () => this.insertEdit(detail, "ai_chance", "{ base = 100 }", option.bodyLine, 2),
+              "ghost"
+            )
+        );
+
+        body.appendChild(this.subhead("Effects", "What happens when the player picks it"));
+        this.tree(detail, option.lines, option.totalLines, 2, option.line, "effect", body, true);
+        this.insertedRows(option.bodyLine, body);
+        body.appendChild(
           this.addRow(
-            "Add condition",
-            this.vocabulary.triggers,
-            "Creates the option's trigger block with this first check",
-            (key, value) => this.insertEdit(detail, "trigger", `{ ${key} = ${value} }`, option.bodyLine, 2)
+            "Add effect",
+            this.vocabulary.effects,
+            "An effect that runs when this option is picked",
+            (key, value) => this.insertEdit(detail, key, value, option.bodyLine, 2)
           )
-      );
-
-      // The AI's willingness to pick it.
-      this.gate(
-        detail,
-        body,
-        "AI chance",
-        "How much the AI wants this option",
-        option.aiChance,
-        "effect",
-        () =>
-          button(
-            "Add AI chance",
-            "plus",
-            "Insert ai_chance = { base = 100 }; tune the base and add modifiers after",
-            () => this.insertEdit(detail, "ai_chance", "{ base = 100 }", option.bodyLine, 2),
-            "ghost"
-          )
-      );
-
-      body.appendChild(this.subhead("Effects", "What happens when the player picks it"));
-      this.tree(detail, option.lines, option.totalLines, 2, option.line, "effect", body, true);
-      this.insertedRows(option.bodyLine, body);
-      body.appendChild(
-        this.addRow(
-          "Add effect",
-          this.vocabulary.effects,
-          "An effect that runs when this option is picked",
-          (key, value) => this.insertEdit(detail, key, value, option.bodyLine, 2)
-        )
-      );
-    }, opts);
+        );
+      },
+      opts
+    );
     block.dataset.line = String(option.line);
     return block;
   }
@@ -848,8 +867,7 @@ export class Inspector {
       field.style.maxWidth = "110px";
       valueBox.append(field, el("span", "ttype", type));
       // An empty flag still means "yes"; an empty number or id means "not yet".
-      readValue = () =>
-        field.value.trim() || (type === "text" || type === "yes / no" ? "yes" : "");
+      readValue = () => field.value.trim() || (type === "text" || type === "yes / no" ? "yes" : "");
     };
     const add = iconButton(
       "plus",

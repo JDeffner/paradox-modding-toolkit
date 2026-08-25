@@ -28,11 +28,7 @@ describe("computeValueOptions", () => {
   it("resolves a value to every definition of its kind, mod entries first", () => {
     const result = computeValueOptions(data, "secret_cultivator");
     expect(result?.kind).toBe("secret");
-    expect(result?.items.map((i) => i.value)).toEqual([
-      "secret_cultivator",
-      "secret_murder",
-      "secret_witch",
-    ]);
+    expect(result?.items.map((i) => i.value)).toEqual(["secret_cultivator", "secret_murder", "secret_witch"]);
     expect(result?.items[0].hint).toBe("this mod");
   });
 

@@ -459,7 +459,12 @@ function emptyReason(
   if (!hit) return null;
   if (hit.source === "mod") {
     const root = data.modRootOf?.(hit.file);
-    const mod = root ? root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : null;
+    const mod = root
+      ? root
+          .replace(/[\\/]+$/, "")
+          .split(/[\\/]/)
+          .pop()
+      : null;
     return `${what} exists in another workspace mod${mod ? ` (${mod})` : ""}, outside the current focus mod. Switch the focus mod (Paradox: Pick Focus Mod), or open the graph from one of that mod's files.`;
   }
   if (hit.source === "parent") {

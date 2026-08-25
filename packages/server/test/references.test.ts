@@ -28,7 +28,9 @@ describe("extractReferences", () => {
   });
 
   it("records weighted entries only on weighted fields (random_events)", () => {
-    const r = refs("on_x = {\n\trandom_events = {\n\t\t100 = my.1\n\t}\n\tevents = {\n\t\t100 = my.2\n\t}\n}\n");
+    const r = refs(
+      "on_x = {\n\trandom_events = {\n\t\t100 = my.1\n\t}\n\tevents = {\n\t\t100 = my.2\n\t}\n}\n"
+    );
     const names = r.references.filter((x) => x.kinds.includes("event")).map((x) => x.name);
     expect(names).toContain("my.1");
     expect(names).not.toContain("my.2");
