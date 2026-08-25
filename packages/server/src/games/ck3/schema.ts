@@ -310,10 +310,10 @@ export const REF_FIELDS: RefField[] = [
   { key: "on_action", kinds: ["on_action"] }, // trigger_event = { on_action = x }, scheme phases, travel…
   { key: "on_actions", kinds: ["on_action"], form: "list" },
   // Weighted block (`<weight> = <on_action>`) and fallback list, like random_events.
-  { key: "random_on_action", kinds: ["on_action"], form: "list" },
+  { key: "random_on_action", kinds: ["on_action"], form: "list", weighted: true },
   { key: "first_valid_on_action", kinds: ["on_action"], form: "list" },
   { key: "events", kinds: ["event"], form: "list" },
-  { key: "random_events", kinds: ["event"], form: "list" },
+  { key: "random_events", kinds: ["event"], form: "list", weighted: true },
   { key: "first_valid", kinds: ["event"], form: "list" },
   // `theme = X` in events: X is an event theme, never the faith/culture scope
   // link of the same name — the ref kind lets hover/semantic tokens disambiguate.

@@ -398,7 +398,10 @@ export function extractReferences(
           ) {
             pushRef(s.value.text, field.kinds, s.value.range.start);
           } else if (
-            // Weighted entries: `random_events = { 100 = my.event }`.
+            // Weighted entries: `random_events = { 100 = my.event }`. Only on
+            // fields the schema marks weighted; elsewhere a numeric key is a
+            // map entry, not a reference.
+            field.weighted === true &&
             s.kind === "assignment" &&
             /^\d+$/.test(s.key.text) &&
             s.value?.kind === "scalar" &&
