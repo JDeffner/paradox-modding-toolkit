@@ -87,12 +87,15 @@ describe("preferPlainBinary", () => {
 });
 
 describe("checkedDownloadUrl", () => {
-  it("accepts the two hosts a GitHub release download resolves to", () => {
+  it("accepts the hosts a GitHub release download resolves to", () => {
     expect(checkedDownloadUrl("https://github.com/amtep/ck3-tiger/releases/download/v1/a.zip")?.host).toBe(
       "github.com"
     );
     expect(checkedDownloadUrl("https://objects.githubusercontent.com/x/a.zip")?.host).toBe(
       "objects.githubusercontent.com"
+    );
+    expect(checkedDownloadUrl("https://release-assets.githubusercontent.com/github-production-release-asset/526667028/x?sp=r&sig=abc")?.host).toBe(
+      "release-assets.githubusercontent.com"
     );
   });
 

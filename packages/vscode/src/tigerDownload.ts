@@ -27,7 +27,12 @@ import { isCk3, metaFor } from "./meta";
  */
 const execFileAsync = promisify(execFile);
 
-const ALLOWED_DOWNLOAD_HOSTS = new Set(["github.com", "objects.githubusercontent.com"]);
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  "github.com",
+  "objects.githubusercontent.com",
+  // GitHub started redirecting release assets here in 2025 (both hosts remain in use).
+  "release-assets.githubusercontent.com",
+]);
 
 /**
  * The parsed download URL, or null when it is not a GitHub release URL.
