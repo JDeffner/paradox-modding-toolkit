@@ -2362,7 +2362,9 @@ function colorCell(input: HTMLInputElement, rgb: Rgb, alpha: string | null): HTM
 function parseColorValue(text: string): Rgb | null {
   const hex = hexToRgb(text);
   if (hex) return hex;
-  const m = /^(?:rgb\s*)?\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,]+[\d.]+)?\s*\}?$/i.exec(text.trim());
+  const m = /^(?:rgb\s*)?\{?\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,]+[\d.]+)?\s*\}?$/i.exec(
+    text.trim()
+  );
   if (!m) return null;
   const n = [Number(m[1]), Number(m[2]), Number(m[3])];
   if (!n.every(Number.isFinite)) return null;
