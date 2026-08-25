@@ -1001,12 +1001,19 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
     case "saved":
       if (msg.error) {
         toast(msg.error, "destructive", 5200);
+        // The edits that DID land leave the history, so a retry saves only
+        // the failed one and the rest; the files they changed get refetched.
+        if (msg.applied.length > 0) {
+          history.dropPending(msg.applied);
+          reselectAfterGraph = selectedId;
+          fetchGraph(currentParams);
+        }
         afterHistoryChange();
         return;
       }
       history.markSaved();
       afterHistoryChange();
-      toast(`Saved ${msg.applied} change${msg.applied === 1 ? "" : "s"}`);
+      toast(`Saved ${msg.applied.length} change${msg.applied.length === 1 ? "" : "s"}`);
       // The files changed under the graph and the inspector: refetch so a
       // created event gets its card, and put the selection back afterwards.
       reselectAfterGraph = selectedId;

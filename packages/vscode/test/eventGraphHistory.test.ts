@@ -51,6 +51,23 @@ describe("GraphHistory", () => {
     expect(history.pendingCount).toBe(0);
   });
 
+  it("a partial save drops the applied edits everywhere, keeps the rest", () => {
+    const history = new GraphHistory(start());
+    history.pushEdit("edit title", locEdit("ns.1.t", "A"));
+    history.pushEdit("edit description", locEdit("ns.1.desc", "B"));
+    history.pushEdit("edit option", locEdit("ns.1.a", "C"));
+    // The first and third landed before the second failed.
+    history.dropPending([0, 2]);
+    const keys = (p: (typeof history)["pending"]) => p.map((e) => (e.kind === "editLoc" ? e.key : ""));
+    expect(keys(history.pending)).toEqual(["ns.1.desc"]);
+
+    // Undo walks the view back but never re-offers an applied edit.
+    history.undo();
+    expect(keys(history.pending)).toEqual(["ns.1.desc"]);
+    history.undo();
+    expect(history.pendingCount).toBe(0);
+  });
+
   it("keeps the view history after a save but never the applied edits", () => {
     const history = new GraphHistory(start());
     history.push("move ns.1", { ...history.state, positions: { "ns.1": { x: 5, y: 5 } } });

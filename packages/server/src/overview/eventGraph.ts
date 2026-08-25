@@ -362,9 +362,10 @@ export function computeEventGraph(
   const edgeSeen = new Set<string>();
   for (const e of edges) {
     if (!selected.has(e.from) || !selected.has(e.to)) continue;
-    // The site line keeps edges from DIFFERENT origins apart: two options that
+    // The site keeps edges from DIFFERENT origins apart: two options that
     // both fire X are two sequences, and each anchors at its own card row.
-    const key = `${e.from}→${e.to}:${e.via}:${e.label ?? ""}:${e.line}`;
+    // char included so two same-target refs on one line stay two edges.
+    const key = `${e.from}→${e.to}:${e.via}:${e.label ?? ""}:${e.line}:${e.char}`;
     if (edgeSeen.has(key)) continue;
     edgeSeen.add(key);
     const out: EventGraphEdge = { from: e.from, to: e.to, via: e.via };

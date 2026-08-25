@@ -61,6 +61,8 @@ export type HostToApp =
   | { type: "banner"; result: EventBannerResult; url: string | null }
   /** Answer to a valueOptions ask; null = nothing enumerable, use an input. */
   | { type: "valueOptions"; value: string; result: EventValueOptionsResult | null }
-  | { type: "saved"; applied: number; error?: string }
+  /** Save result. `applied` = batch indices of the edits that reached disk;
+   *  with `error` set the batch stopped there and the rest were not written. */
+  | { type: "saved"; applied: number[]; error?: string }
   /** The user cancelled an unsaved close: put the session back as it was. */
   | { type: "restore"; state: GraphState };

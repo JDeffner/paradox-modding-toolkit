@@ -163,4 +163,22 @@ export class GraphHistory {
     this.future = this.future.map(strip);
     this.current = { ...this.current, pending: [] };
   }
+
+  /**
+   * Part of a save batch reached disk before an edit failed. The applied
+   * edits leave the current state and every stored one, exactly like
+   * markSaved but only for those indices; the failed and unapplied edits
+   * stay pending. Pending lists grow by appending, so an index into the
+   * saved batch names the same edit in every state that is long enough.
+   */
+  dropPending(indices: number[]): void {
+    const drop = new Set(indices);
+    const strip = (entry: { label: string; state: GraphState }) => ({
+      label: entry.label,
+      state: { ...entry.state, pending: entry.state.pending.filter((_, i) => !drop.has(i)) },
+    });
+    this.past = this.past.map(strip);
+    this.future = this.future.map(strip);
+    this.current = strip({ label: "", state: this.current }).state;
+  }
 }

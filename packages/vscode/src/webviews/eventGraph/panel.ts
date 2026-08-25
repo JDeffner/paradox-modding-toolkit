@@ -242,14 +242,15 @@ export class EventGraphPanel {
   }
 
   /**
-   * Apply the pending edits. Stops at the first failure and reports it: a
-   * half-applied batch the user knows about beats a silent one, and the app
-   * keeps whatever it still holds.
+   * Apply the pending edits. Stops at the first failure and reports it, with
+   * the batch indices of the edits that DID land: a half-applied batch the
+   * user knows about beats a silent one, and the app drops exactly the
+   * applied edits so a retry never writes one twice.
    */
-  private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number; error?: string }> {
-    if (!this.actions) return { applied: 0, error: "this graph is read-only" };
-    let applied = 0;
-    for (const edit of writeOrder(edits)) {
+  private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number[]; error?: string }> {
+    if (!this.actions) return { applied: [], error: "this graph is read-only" };
+    const applied: number[] = [];
+    for (const { edit, index } of writeOrder(edits)) {
       try {
         if (edit.kind === "editLoc") {
           await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
@@ -260,7 +261,7 @@ export class EventGraphPanel {
         } else {
           await this.setField(edit);
         }
-        applied++;
+        applied.push(index);
       } catch (err) {
         return { applied, error: `${describe(edit)} failed: ${message(err)}` };
       }
@@ -387,21 +388,21 @@ export class EventGraphPanel {
  * insertions at the same point are written back to front, which leaves them in
  * the file in the order they were added.
  */
-function writeOrder(edits: PendingEdit[]): PendingEdit[] {
+function writeOrder(edits: PendingEdit[]): Array<{ edit: PendingEdit; index: number }> {
   const at = (edit: PendingEdit): number | null => {
     if (edit.kind === "addOption") return edit.endLine;
     if (edit.kind === "setField" && edit.line === null) return edit.insertLine;
     return null;
   };
-  const keep: PendingEdit[] = [];
+  const keep: Array<{ edit: PendingEdit; index: number }> = [];
   const inserts: Array<{ edit: PendingEdit; line: number; index: number }> = [];
   edits.forEach((edit, index) => {
     const line = at(edit);
-    if (line === null) keep.push(edit);
+    if (line === null) keep.push({ edit, index });
     else inserts.push({ edit, line, index });
   });
   inserts.sort((a, b) => b.line - a.line || b.index - a.index);
-  return [...keep, ...inserts.map((i) => i.edit)];
+  return [...keep, ...inserts.map(({ edit, index }) => ({ edit, index }))];
 }
 
 function describe(edit: PendingEdit): string {
