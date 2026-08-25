@@ -55,6 +55,26 @@ regeneration) still stands and is required reading.
 | `dev-0.3.1` | The 0.3.1 working history, moved off `main` on 2026-08-20. Active work branch. |
 | `monorepo` | Older full working history, pushed to `origin/monorepo`. |
 
+## Changelogs and versions (keep them current, Joel will not)
+
+The 0.3.2 release shipped with a half-written changelog and no release notes
+file. Do not let that happen again:
+
+- **When a feature or fix PR is opened, its changelog entry goes in the same
+  PR**: a bullet under an "Unreleased" (or next-version) section at the top of
+  `packages/vscode/CHANGELOG.md`. Server or protocol changes also get a bullet
+  in that package's own `CHANGELOG.md`.
+- **Versioning is not lockstep** (since 0.3.3): `packages/vscode` + root
+  package.json carry the release version and bump every release;
+  `packages/server` and `packages/protocol` bump only when they changed, in
+  their own changelogs. Details in `docs/RELEASING.md`.
+- **Before a release PR**: check `git log v<prev>..HEAD` against the
+  changelog, and write `docs/release-notes-<version>.md` (it becomes the
+  GitHub Release body and the Discord announcement).
+- The user-facing feature story lives in `packages/vscode/README.md` (the
+  Marketplace listing). When a release adds a user-visible feature, check that
+  README's Highlights and the root README's short list still tell the truth.
+
 ## Test builds (automatic)
 
 Whenever Joel asks you to create, change or fix something in the extension,

@@ -94,9 +94,11 @@ describe("checkedDownloadUrl", () => {
     expect(checkedDownloadUrl("https://objects.githubusercontent.com/x/a.zip")?.host).toBe(
       "objects.githubusercontent.com"
     );
-    expect(checkedDownloadUrl("https://release-assets.githubusercontent.com/github-production-release-asset/526667028/x?sp=r&sig=abc")?.host).toBe(
-      "release-assets.githubusercontent.com"
-    );
+    expect(
+      checkedDownloadUrl(
+        "https://release-assets.githubusercontent.com/github-production-release-asset/526667028/x?sp=r&sig=abc"
+      )?.host
+    ).toBe("release-assets.githubusercontent.com");
   });
 
   it("refuses anything else, since the bytes are unpacked and executed", () => {

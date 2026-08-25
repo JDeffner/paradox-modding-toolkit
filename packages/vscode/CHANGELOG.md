@@ -11,7 +11,10 @@
   GitHub still uses both. Verified against a live download of
   ck3-tiger v1.19.0.
 
-## 0.3.2 (preview) - Flag Builder
+## 0.3.2 (beta) - Flag Builder, temporal event graph, GUI editor round
+
+*(This entry was completed after the release: the version shipped with only
+the Flag Builder paragraph written down.)*
 
 ### Added
 
@@ -22,9 +25,43 @@
   masks, rotated instances), and writes the script: to the clipboard, into
   the mod's `common/coat_of_arms/coat_of_arms/` folder, or as a PNG. Every
   vanilla flag opens as a starting point. Approach ported from
-  kaiser-chris/pdx-flag-builder (MIT).
+  kaiser-chris/pdx-flag-builder (MIT). The canvas edits like the GUI editor:
+  click selects, drag moves, corner handles resize with the aspect locked.
 - `.tga` textures decode (the vanilla flag patterns are TGA), in the Flag
   Builder and the GUI editor alike.
+- **Event graph rework: the x axis is time.** Left to right means "happens
+  after": cards grow a row per execution phase, edges carry delays and random
+  weights, chains focus to an adjustable depth, and a Cluster tool groups
+  related cards. The graph launches from anywhere inside an event, a
+  namespace lists its definitions even without edges, and chains through
+  scripted effects appear as "A → B via effect" edges. The inspector edits
+  the event as words rather than script and saves all pending edits in one
+  go; events can be created from the graph with localization scaffolding.
+- **GUI editor round**: Save with a session change log, a widget library
+  overlay where every element previews as the game draws it, collapsible
+  panel sections, a right-click context menu, and a Reference tab that lays
+  an in-game screenshot under, over or as a difference against the scene.
+- **DDS hover shows dimensions, exact encoding (DXT1/3/5, BC7, ...), file
+  size and origin** under the image preview (closes #15), and the DDS viewer
+  wears the shared px-ui chrome with floating zoom tools. Smooth (bilinear)
+  view is the default, matching how the game samples textures.
+- **One color picker everywhere**: the same picker style in script, `.gui`
+  and the webviews, a format-native value field that accepts hex and
+  `rgb { r g b }` input, and alpha shown but never silently edited.
+
+### Fixed
+
+- The 2026-08 adversarial audit round (#13): DDS decode budgets by pixel
+  count so a hostile header cannot allocate gigabytes, the `gfx/` texture
+  walk budget counts every entry visited, the GUI editor recovers from a
+  `.gui` file vanishing mid-session, and the tiger download no longer blocks
+  the extension host while tar runs.
+- GUI editor engine fixes behind the "black bars": `blockoverride` applies
+  inside `background = {}`, fills carry `alpha` and `fittype = centercrop`,
+  and `using =` inside block content is spliced. Verified against in-game
+  screenshots.
+- Numeric map keys outside schema-marked weighted fields no longer create
+  false event-graph edges.
 
 ## 0.3.1 (beta) - Victoria 3 feels right, and the panel learns some manners
 
