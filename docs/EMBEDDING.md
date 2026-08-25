@@ -29,9 +29,10 @@ not an API call:
 | `--socket=<port>` (or `--socket <port>`) | TCP: the server connects out to `127.0.0.1:<port>`, so the host listens. |
 | `--pipe=<name>` (or `--pipe <name>`) | Named pipe / unix domain socket, same direction. |
 
-With none of them the process throws on startup instead of guessing, so a
-missing `--stdio` shows up immediately rather than as a client that never
-connects.
+With none of them, the server defaults to `--stdio` (unless it was forked over
+node IPC, which it detects from `process.send`), so a bare `px-lsp` behaves
+like `px-lsp --stdio`. `px-lsp --version` prints the server version and exits
+without a handshake, for install scripts and health checks.
 
 ```
 node /path/to/px-lsp-server-0.3.0/dist/server.js --stdio

@@ -12,19 +12,20 @@ next to this file is the guide for that: the process contract, the
 initialization options worth sending, URI and document-sync conventions, and
 the in-tree reference clients. This document stays the per-method reference.
 
-**Versioning**: the protocol is versioned with the packages (lockstep with
-the extension). Treat any change here as an API change; additions are
-backward-compatible, renames/removals are called out in the changelog.
-Current as of 0.3.0 (the Paradox Toolkit rebrand and the three game
-profiles; `paradox/*` has been the method prefix since 0.1.2). Four additions
-are in the repository but not yet in a release: `serverInfo` in the
-`initialize` result, the `client` capability object superseding
-`clientCommands`, `paradox/scopeAt`, and `dataDir`. All four are additive:
-a client written against 0.3.0 keeps working unchanged.
+**Versioning**: the protocol is versioned with `@px-lsp/protocol` (its own
+version, independent of the extension since extension 0.3.3; first npm
+release 0.1.0). Treat any change here as an API change: additions are
+backward-compatible, renames/removals are called out in the package's
+`CHANGELOG.md`. Current as of `@px-lsp/protocol` 0.1.0, which carries the
+full contract below including `serverInfo` in the `initialize` result, the
+`client` capability object superseding `clientCommands`, `paradox/scopeAt`,
+and `dataDir` (`paradox/*` has been the method prefix since extension
+0.1.2).
 
 ## Transport and lifecycle
 
-- Transports: `--stdio` (auto-detected from argv; what external clients use)
+- Transports: `--stdio` (what external clients use; also the default when no
+  transport argument is given and the process was not forked over IPC)
   and node-ipc (VSCode). `--socket=<port>` and `--pipe=<name>` are accepted by
   the underlying library, but nothing ships using them. Standard JSON-RPC 2.0
   LSP framing. The process-level contract around this (the `processId` orphan
