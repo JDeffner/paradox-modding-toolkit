@@ -10,7 +10,11 @@ The published package ships compiled JavaScript with type declarations, so it
 works from plain Node and from any bundler:
 
 ```ts
-import { modOverviewRequest, type ModOverview } from "@px-lsp/protocol/protocol";
+// The root export is the wire contract (request/notification names + payload types):
+import { modOverviewRequest, type ModOverview } from "@px-lsp/protocol";
+// The helpers live in named modules:
+import { parseTigerJson } from "@px-lsp/protocol/tigerParser";
+import { parseDescriptor } from "@px-lsp/protocol/descriptorMod";
 ```
 
 Clients in other languages should code against the documented contract instead:

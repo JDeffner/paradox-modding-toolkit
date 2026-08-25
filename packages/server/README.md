@@ -34,7 +34,8 @@ mirror in the log. Nothing has to be configured for that.
 
 ```bash
 npm install -g @px-lsp/server
-px-lsp --stdio
+px-lsp --version   # prints the server version
+px-lsp             # runs over stdio (--stdio is the default transport)
 ```
 
 The npm package carries the same payload as the release tarball: the bundled

@@ -1,10 +1,13 @@
 # @px-lsp/protocol changelog
 
-The protocol has its own version since 0.3.3 of the extension: it only gets a
-bump when the wire contract or the shared helpers change. Up to and including
-0.3.2 it moved in lockstep with the extension; see the extension changelog
-(`packages/vscode/CHANGELOG.md`) for that history.
+The protocol has its own version, separate from the extension: it starts at
+0.1.0 for its first npm release and only gets a bump when the wire contract or
+the shared helpers change. Before the split it moved inside the extension's
+version (up to 0.3.2); that history is in the extension changelog
+(`packages/vscode/CHANGELOG.md`).
 
-## 0.3.2
+## 0.1.0
 
-Last lockstep version. No changes of its own in the 0.3.3 extension release.
+First npm release. The wire contract (custom `paradox/*` requests and
+notifications, settings types) and the shared helpers, compiled to CommonJS
+with type declarations.
