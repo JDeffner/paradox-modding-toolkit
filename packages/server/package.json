@@ -28,7 +28,9 @@
     "LICENSE",
     "THIRD-PARTY-NOTICES.md"
   ],
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     "./dds": "./src/dds/index.ts",
     "./parser": "./src/parser/index.ts",
@@ -36,7 +38,8 @@
   },
   "scripts": {
     "compile": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --banner:js=\"#!/usr/bin/env node\"",
-    "watch": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --watch"
+    "watch": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --watch",
+    "prepack": "pnpm run compile"
   },
   "dependencies": {
     "@px-lsp/protocol": "workspace:*",

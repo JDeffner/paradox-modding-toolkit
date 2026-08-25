@@ -30,9 +30,20 @@ mirror in the log. Nothing has to be configured for that.
 
 ## Install
 
-The release tarball is the distribution. This package is not on npm: inside the
-repository its `exports` point at TypeScript sources, which the bundler consumes
-directly and a published package could not.
+### From npm
+
+```bash
+npm install -g @px-lsp/server
+px-lsp --stdio
+```
+
+The npm package carries the same payload as the release tarball: the bundled
+`dist/server.js` (the `px-lsp` bin), the `data/` fallbacks, and the TypeScript
+sources. The sources exist for bundler consumers (esbuild, Vite) that import
+pieces like `@px-lsp/server/parser` directly; plain Node cannot import them,
+use the bin or the wire protocol instead.
+
+### The release tarball
 
 Download `px-lsp-server-<version>.tar.gz` from the
 [GitHub releases](https://github.com/JDeffner/paradox-modding-toolkit/releases)
