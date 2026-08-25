@@ -117,10 +117,10 @@ own toggles for what gets indexed and which mod the views follow.*
 *Simulate Event walks an event beside its source, options and the effects they
 run included.*
 
-![Event graph](media/screenshots/event-graph-focus.png)
+![Event graph](media/screenshots/event-graph.png)
 
-*Select a node in the event graph: blue is what it fires, orange is what fires
-it.*
+*Select a card in the event graph: blue is what it fires, orange is what fires
+it, and left to right means "happens after".*
 
 ## Quick start
 

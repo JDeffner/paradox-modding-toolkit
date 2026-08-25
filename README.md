@@ -51,11 +51,11 @@ its own toggles for indexing and for which mod the views follow.*
 *Simulate Event walks an event beside its source, with each option and the
 effects it runs.*
 
-![Event graph](packages/vscode/media/screenshots/event-graph-focus.png)
+![Event graph](packages/vscode/media/screenshots/event-graph.png)
 
-*Select a node in the event graph: blue is what it fires, orange is what fires
-it. The layout puts time on the x axis, so left to right means "happens
-after".*
+*Select a card in the event graph: blue is what it fires, orange is what fires
+it, and the inspector edits the event as words. The layout puts time on the x
+axis, so left to right means "happens after".*
 
 ![GUI editor](packages/vscode/media/screenshots/gui-editor.png)
 
