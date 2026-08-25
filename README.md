@@ -7,7 +7,8 @@
 **A language workbench for Paradox mods.** Crusader Kings III, Victoria 3 and
 Europa Universalis V: a real script parser, scope-aware completion, instant
 diagnostics for the bugs the game swallows in silence, deep
-[tiger](https://github.com/amtep/tiger) integration, a visual GUI editor, and a
+[tiger](https://github.com/amtep/tiger) integration, a visual GUI editor, an
+event graph laid out in firing order, a coat-of-arms Flag Builder, and a
 localization workflow no other tool has.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -21,7 +22,7 @@ localization workflow no other tool has.
 
 </div>
 
-> **Beta (0.3.0).** Young project, useful day to day, rough edges included.
+> **Beta (0.3.x).** Young project, useful day to day, rough edges included.
 > Bug reports and missing-feature complaints are the point, not a nuisance:
 > open an [issue](https://github.com/JDeffner/paradox-modding-toolkit/issues).
 
@@ -53,7 +54,18 @@ effects it runs.*
 ![Event graph](packages/vscode/media/screenshots/event-graph-focus.png)
 
 *Select a node in the event graph: blue is what it fires, orange is what fires
-it.*
+it. The layout puts time on the x axis, so left to right means "happens
+after".*
+
+![GUI editor](packages/vscode/media/screenshots/gui-editor.png)
+
+*The GUI editor draws your `.gui` file with a measured layout engine and lets
+you work in it: tree, layers, canvas, inspector, element library.*
+
+![Flag Builder](packages/vscode/media/screenshots/flag-builder.png)
+
+*The Flag Builder (Victoria 3, EU5) composes a coat of arms exactly as the
+game recolors it, and saves it back as script.*
 
 - **Completion that knows the grammar and the scope.** Key positions offer
   triggers and effects, value positions offer traits, events, on_actions and loc
@@ -66,14 +78,20 @@ it.*
 - **tiger, integrated.** Auto-download of ck3-tiger or vic3-tiger, reports as
   native Problems, dependency mods passed through as `load_mod`, and a baseline
   workflow so a legacy mod shows only new findings.
-- **A visual GUI editor.** A pixel-accurate rendering of your window that you
-  can work in: click to select, drag, resize, edit properties. Every change is
-  one surgical text edit and one undo, and the editor refuses gestures the
+- **A visual GUI editor** (CK3, Vic3). A pixel-accurate rendering of your
+  window that you can work in: click to select, drag, resize, edit properties,
+  insert from a library where every element previews as the game draws it.
+  Every change is a surgical text edit, and the editor refuses gestures the
   engine would ignore instead of writing a line the game drops.
+- **A Flag Builder** (Vic3, EU5). Compose coats of arms from the game's and
+  your mods' patterns and emblems, drag them on the canvas, and save script.
+- **Event tooling.** An event graph whose x axis is time, with a structured
+  inspector that edits events as words rather than script; a simulator that
+  walks a whole chain; and a mod report you can read top to bottom.
 - **Localization that keeps up.** Inline loc as inlay hints, BOM-correct
   editing, a coverage view, and scaffolding for entire translation mods.
-- **Event tooling.** An interactive event graph, a static event simulator that
-  walks a whole chain, and a mod report you can read top to bottom.
+- **DDS tooling.** Inline texture previews on hover, a zoomable viewer with
+  PNG export, image-to-DDS conversion, and measured size guidelines.
 
 The full tour with screenshots is the
 [Feature Overview](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Feature-Overview).
@@ -85,7 +103,8 @@ The full tour with screenshots is the
 | Language support | full | full | full |
 | Folder schema | verified against a live install | verified against a live install | community-sourced, **not yet verified** |
 | Deep validation | ck3-tiger | vic3-tiger | none exists yet |
-| Visual GUI editor | yes | no | no |
+| Visual GUI editor | yes | yes | no |
+| Flag Builder | no | yes | yes |
 
 CK3 is where the toolkit grew up and where every feature exists. The exact
 per-game limits, the detection ladder and the EU5 honesty note are on

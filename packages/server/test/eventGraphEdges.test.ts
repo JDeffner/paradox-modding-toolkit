@@ -145,6 +145,17 @@ describe("event graph node selection", () => {
     const ids = computeEventGraph(data, {}).nodes.map((n) => n.id);
     expect(ids).toContain("ns.9");
   });
+
+  it("an empty graph says WHY when the namespace exists outside the focus", () => {
+    const graph = computeEventGraph(data, { namespace: "ns" }, () => false);
+    expect(graph.nodes).toHaveLength(0);
+    expect(graph.emptyReason).toContain("another workspace mod");
+  });
+
+  it("a namespace the index has never seen keeps the generic empty story", () => {
+    const graph = computeEventGraph(data, { namespace: "no_such_ns" });
+    expect(graph.emptyReason).toBeUndefined();
+  });
 });
 
 describe("edges through scripted effects", () => {

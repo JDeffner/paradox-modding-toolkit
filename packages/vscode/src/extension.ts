@@ -89,6 +89,9 @@ import {
   type EventDetailParams,
   type EventGraph,
   type EventGraphParams,
+  eventValueOptionsRequest,
+  type EventValueOptionsParams,
+  type EventValueOptionsResult,
   type EventVocabularyParams,
   type EventVocabularyResult,
   type GuiTree,
@@ -613,6 +616,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       lc.sendRequest<EventVocabularyResult>(eventVocabularyRequest, {
         modRoot: views.focusRoot(),
       } satisfies EventVocabularyParams),
+    // A nested row's value resolved to the set it belongs to (a secret, a
+    // trait…), so the inspector can offer the honest dropdown the static
+    // key-name vocabulary cannot.
+    fetchValueOptions: (value: string) =>
+      lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, {
+        value,
+        modRoot: views.focusRoot(),
+      } satisfies EventValueOptionsParams),
     fetchBanner: (theme: string) =>
       lc.sendRequest<EventBannerResult>(eventBannerRequest, { theme } satisfies EventBannerParams),
     textureRoots: () => ({ gamePath: cfg.gamePath, modPath: cfg.modPath }),
@@ -724,7 +735,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       EventSimPanel.show(fetchEventDetail, id);
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
-      EventGraphPanel.show(context, fetchGraph, seedGraphParams(), graphActions);
+      EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
@@ -941,24 +952,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * definition in these folders, and this way the command answers without a round
  * trip to a server that may still be indexing.
  */
-function seedGraphParams(): EventGraphParams {
+function seedGraphParams(cfg: PxConfig): EventGraphParams {
   const editor = vscode.window.activeTextEditor;
   if (!editor || !isScriptLang(editor.document.languageId)) return {};
+  // The graph shows the mod the file belongs to, focus pin or no focus pin:
+  // launching it from an AGOT file and getting "nothing indexed" because the
+  // focus was pinned elsewhere reads as a bug, not as a filter.
+  const owner = modRootFor(editor.document.uri.fsPath, cfg);
+  const scoped = (p: EventGraphParams): EventGraphParams => (owner ? { ...p, modRoot: owner } : p);
   const fsPath = editor.document.uri.fsPath.replace(/\\/g, "/").toLowerCase();
   const named = /\/(on_action|decisions)\//.test(fsPath);
   const range = editor.document.getWordRangeAtPosition(editor.selection.active, /[A-Za-z0-9_.-]+/);
   const word = range ? editor.document.getText(range) : "";
-  if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) return { root: word };
-  if (named && /^[A-Za-z0-9_-]{3,}$/.test(word)) return { root: word };
+  if (/^[A-Za-z0-9_-]+\.\d+$/.test(word)) return scoped({ root: word });
+  if (named && /^[A-Za-z0-9_-]{3,}$/.test(word)) return scoped({ root: word });
 
   for (let line = editor.selection.active.line; line >= 0; line--) {
     const match = /^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*\{/.exec(editor.document.lineAt(line).text);
     if (!match) continue;
-    if (/^[A-Za-z0-9_-]+\.\d+$/.test(match[1]) || named) return { root: match[1] };
+    if (/^[A-Za-z0-9_-]+\.\d+$/.test(match[1]) || named) return scoped({ root: match[1] });
     break;
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
-  return ns ? { namespace: ns[1] } : {};
+  return scoped(ns ? { namespace: ns[1] } : {});
 }
 
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {

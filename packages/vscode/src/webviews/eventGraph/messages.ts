@@ -12,6 +12,7 @@ import type {
   EventDetail,
   EventGraph,
   EventGraphParams,
+  EventValueOptionsResult,
   EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
 import type { GraphState, PendingEdit } from "./history";
@@ -44,6 +45,8 @@ export type AppToHost =
   /** Mirror of the app's session, so the host can guard an unsaved close. */
   | { type: "state"; state: GraphState; dirty: number }
   | { type: "banner"; theme: string }
+  /** What set does this VALUE belong to (all secrets, all traits…)? */
+  | { type: "valueOptions"; value: string }
   | { type: "uiState"; state: UiState };
 
 export type HostToApp =
@@ -56,6 +59,8 @@ export type HostToApp =
   | { type: "vocabulary"; vocabulary: EventVocabularyResult }
   /** One theme's illustration, resolved to a webview url (null = draw the placeholder). */
   | { type: "banner"; result: EventBannerResult; url: string | null }
+  /** Answer to a valueOptions ask; null = nothing enumerable, use an input. */
+  | { type: "valueOptions"; value: string; result: EventValueOptionsResult | null }
   | { type: "saved"; applied: number; error?: string }
   /** The user cancelled an unsaved close: put the session back as it was. */
   | { type: "restore"; state: GraphState };

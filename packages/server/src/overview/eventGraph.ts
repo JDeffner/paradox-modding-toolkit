@@ -422,7 +422,50 @@ export function computeEventGraph(
     nodes.push(node);
   }
   nodes.sort((a, b) => a.id.localeCompare(b.id));
-  return { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
+  const graph: EventGraph = { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
+  if (nodes.length === 0) {
+    const reason = emptyReason(data, params, inFocus);
+    if (reason) graph.emptyReason = reason;
+  }
+  return graph;
+}
+
+/**
+ * Why an empty graph is empty, when the index can say: the queried namespace
+ * or root EXISTS, just outside what this graph shows (another workspace mod
+ * while a focus filter is on, a dependency mod, or vanilla). "Check the
+ * spelling" for content that is sitting right there sends the user hunting a
+ * typo that does not exist.
+ */
+function emptyReason(
+  data: ServerData,
+  params: EventGraphParams,
+  inFocus: (file: string) => boolean
+): string | null {
+  const matches = (name: string): boolean =>
+    params.root ? name === params.root : params.namespace ? name.startsWith(params.namespace + ".") : false;
+  if (!params.root && !params.namespace) return null;
+  const what = params.root ?? `namespace ${params.namespace}`;
+  let hit: { source: string; file: string } | null = null;
+  for (const def of data.index.allDefinitions()) {
+    if (!GRAPH_KINDS.has(def.kind) || !matches(def.name)) continue;
+    // A mod definition outside the focus is the sharpest answer: stop there.
+    if (def.source === "mod" && !inFocus(def.file)) {
+      hit = def;
+      break;
+    }
+    if (def.source !== "mod" && !hit) hit = def;
+  }
+  if (!hit) return null;
+  if (hit.source === "mod") {
+    const root = data.modRootOf?.(hit.file);
+    const mod = root ? root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : null;
+    return `${what} exists in another workspace mod${mod ? ` (${mod})` : ""}, outside the current focus mod. Switch the focus mod (Paradox: Pick Focus Mod), or open the graph from one of that mod's files.`;
+  }
+  if (hit.source === "parent") {
+    return `${what} is in a dependency (parent) mod. The graph shows only the workspace mods being edited.`;
+  }
+  return `${what} is vanilla content. The graph shows only the workspace mods being edited.`;
 }
 
 /** One card row before loc resolution: the name KEY travels, not the text. */

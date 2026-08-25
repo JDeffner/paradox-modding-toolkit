@@ -1221,6 +1221,13 @@ export interface EventGraph {
   truncated: boolean;
   /** Absent from servers that predate it; a client must tolerate that. */
   suggestions?: EventGraphSuggestions;
+  /**
+   * Set only when the graph is empty AND the server knows why: the queried
+   * namespace/root exists, but outside what the graph shows (another workspace
+   * mod when a focus filter is on, a dependency mod, or vanilla). One
+   * user-readable sentence; absent = the generic "nothing found" story.
+   */
+  emptyReason?: string;
 }
 
 /**
@@ -1275,6 +1282,30 @@ export interface EventVocabularyItem {
 /** Caps: an editor lists a page at a time, and these ride on every open. */
 export const EVENT_VOCABULARY_MAX_TOKENS = 600;
 export const EVENT_VOCABULARY_MAX_VALUES = 400;
+
+/**
+ * Request: the value set a VALUE belongs to, resolved through the definition
+ * index; {@link EventValueOptionsParams} -> {@link EventValueOptionsResult} |
+ * null. The static vocabulary maps a KEY to its values, which only works where
+ * the schema knows the key's context (an event's or option's own fields). Deep
+ * inside an effect tree the same key name means something else (`type` in
+ * `random_secret` is a secret, not an event type), so there the editor asks
+ * about the value it already has: `secret_cultivator` is an indexed `secret`,
+ * and the answer is every secret the index knows. Null = the value resolves to
+ * nothing enumerable; the editor falls back to a free input.
+ */
+export const eventValueOptionsRequest = "paradox/eventValueOptions";
+export interface EventValueOptionsParams {
+  value: string;
+  /** Restrict mod-side entries to one workspace mod (plus vanilla/parents). */
+  modRoot?: string | null;
+}
+export interface EventValueOptionsResult {
+  /** The definition kind the value resolved to (trait, secret, faith…). */
+  kind: string;
+  /** Every indexed definition of that kind, mod entries first, capped. */
+  items: EventVocabularyItem[];
+}
 export interface EventVocabularyResult {
   /** Keys valid at an event's top level, most used first. */
   eventKeys: EventVocabularyItem[];

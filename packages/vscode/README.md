@@ -16,7 +16,7 @@ overview, and a localization workflow no other tool has.
 
 </div>
 
-> **Beta (0.3.0).** This is a young project and things will change. It is
+> **Beta (0.3.x).** This is a young project and things will change. It is
 > already useful day to day, but you will hit rough edges. Feedback is not just
 > welcome, it is the point: see [Contributing](#contributing--feedback) below.
 
@@ -46,8 +46,12 @@ bottom says exactly where they stop.
   creates. EU5 has no tiger build, so the toolkit says so instead of
   pretending.
 - **Sidebar**: mod overview, localization coverage, overrides and conflicts
-  (with the LIOS/FIOS winner), an interactive event graph with a node inspector
-  (Ctrl+Alt+G), a GUI widget tree (Ctrl+Alt+W) and a mod report (Ctrl+Alt+R).
+  (with the LIOS/FIOS winner), a GUI widget tree (Ctrl+Alt+W) and a mod report
+  (Ctrl+Alt+R).
+- **Event graph** (Ctrl+Alt+G): events, on_actions and decisions drawn with
+  time on the x axis, so left to right means "happens after". Cards grow a row
+  per phase, chains focus to an adjustable depth, and the inspector edits the
+  event as words rather than script, saving all pending edits in one go.
 - **The Project panel is the home of every tool**: each one has a row there, so
   you never have to remember which tab or status bar item hides the button.
   Editor buttons and the chords stay as the fast path while you work: the
@@ -83,8 +87,12 @@ bottom says exactly where they stop.
   one surgical edit to your file (comments, tabs and single-line bodies
   survive), and one Ctrl+Z. When the engine would ignore what a gesture asks
   for, the editor says so before the widget moves instead of writing a line the
-  game drops. CK3-only, since its layout engine was calibrated against CK3
+  game drops. CK3 and Victoria 3; the layout engine was calibrated against
   in-game screenshots.
+- **Flag Builder** (**Open Flag Builder**, Victoria 3 and EU5): compose a coat
+  of arms from the game's and your mods' patterns and emblems, recolored
+  exactly as the game does it, drag and scale emblems on the canvas, and save
+  it back as script into the mod you choose.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
 - **The workspace looks like the game you mod**: script files carry a per-game

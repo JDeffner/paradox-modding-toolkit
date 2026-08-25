@@ -7,7 +7,12 @@
  * edit becomes a PendingEdit in the history, undo and redo move through them,
  * and the host only ever receives a `save` with the whole list.
  */
-import type { EventGraph, EventGraphParams, EventVocabularyResult } from "@px-lsp/protocol/protocol";
+import type {
+  EventGraph,
+  EventGraphParams,
+  EventValueOptionsResult,
+  EventVocabularyResult,
+} from "@px-lsp/protocol/protocol";
 import type { AppToHost, HostToApp, UiState } from "../messages";
 import { GraphHistory, type GraphState } from "../history";
 import { iconEl } from "../../shared/icons";
@@ -104,8 +109,30 @@ const view = new GraphView(svg, {
 /** A card row was clicked: scroll the inspector to it once the detail lands. */
 let pendingRevealLine: number | null = null;
 
+/** In-flight value-set asks, by value; the host answers by value, not by call. */
+const valueOptionWaiters = new Map<string, Array<(r: EventValueOptionsResult | null) => void>>();
+function fetchValueOptions(value: string): Promise<EventValueOptionsResult | null> {
+  return new Promise((resolve) => {
+    const list = valueOptionWaiters.get(value);
+    if (list) {
+      list.push(resolve);
+      return;
+    }
+    valueOptionWaiters.set(value, [resolve]);
+    send({ type: "valueOptions", value });
+    // A host that never answers (old host, closed panel) must not hang a click.
+    setTimeout(() => {
+      const waiters = valueOptionWaiters.get(value);
+      if (!waiters) return;
+      valueOptionWaiters.delete(value);
+      for (const r of waiters) r(null);
+    }, 2000);
+  });
+}
+
 const inspector = new Inspector($("inspector"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
+  onValueOptions: fetchValueOptions,
   onEdit: (label, edit) => {
     history.pushEdit(label, edit);
     afterHistoryChange();
@@ -948,6 +975,12 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       vocab = msg.vocabulary;
       inspector.setVocabulary(msg.vocabulary);
       return;
+    case "valueOptions": {
+      const waiters = valueOptionWaiters.get(msg.value);
+      valueOptionWaiters.delete(msg.value);
+      for (const resolve of waiters ?? []) resolve(msg.result);
+      return;
+    }
     case "detail":
       if (msg.id !== selectedId) return; // stale
       lastDetail = msg.detail;
@@ -1031,9 +1064,12 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
       el(
         "div",
         "help",
-        params.namespace
-          ? `Nothing indexed under namespace ${params.namespace}. Check the spelling, or use All nodes to see what this mod has.`
-          : "No events here yet. Put the cursor in an event and press Ctrl+Alt+G, type a namespace above, or use All nodes."
+        // The server's reason wins: "it exists, but in another mod / vanilla"
+        // beats sending the user hunting a typo that is not there.
+        graph.emptyReason ??
+          (params.namespace
+            ? `Nothing indexed under namespace ${params.namespace}. Check the spelling, or use All nodes to see what this mod has.`
+            : "No events here yet. Put the cursor in an event and press Ctrl+Alt+G, type a namespace above, or use All nodes.")
       )
     );
     setFocusLine("Nothing to show", "warn");

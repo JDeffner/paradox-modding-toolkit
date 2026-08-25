@@ -5,6 +5,7 @@ import type {
   EventDetail,
   EventGraph,
   EventGraphParams,
+  EventValueOptionsResult,
   EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM, type TextureRoots } from "../guiEditor/textureCache";
@@ -20,6 +21,8 @@ const UI_KEY = "px.eventGraph.ui";
 export interface EventGraphActions {
   fetchDetail(id: string): Promise<EventDetail | null>;
   fetchVocabulary(): Promise<EventVocabularyResult>;
+  /** The value set `value` belongs to (all secrets, all traits…), or null. */
+  fetchValueOptions(value: string): Promise<EventValueOptionsResult | null>;
   /** Resolve one event theme to the texture behind its window. */
   fetchBanner(theme: string): Promise<EventBannerResult>;
   /** Write a loc value: in place when file/line given, else via the replace file. */
@@ -217,6 +220,16 @@ export class EventGraphPanel {
       case "banner":
         await this.sendBanner(msg.theme);
         break;
+      case "valueOptions": {
+        let result: EventValueOptionsResult | null = null;
+        try {
+          result = (await this.actions?.fetchValueOptions(msg.value)) ?? null;
+        } catch {
+          /* null = no menu; the inspector falls back to a plain input */
+        }
+        this.post({ type: "valueOptions", value: msg.value, result });
+        break;
+      }
       case "save": {
         const result = await this.applyEdits(msg.edits);
         this.post({ type: "saved", applied: result.applied, error: result.error });

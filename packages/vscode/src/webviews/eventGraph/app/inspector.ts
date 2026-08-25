@@ -30,6 +30,7 @@ import type {
   EventOptionInfo,
   EventScriptLine,
   EventSectionInfo,
+  EventValueOptionsResult,
   EventVocabularyItem,
   EventVocabularyResult,
 } from "@px-lsp/protocol/protocol";
@@ -42,6 +43,8 @@ import { fieldRowKey, locRowKey, pendingOverlay, type PendingOverlay } from "./p
 export interface InspectorCallbacks {
   onOpen(file: string, line?: number): void;
   onEdit(label: string, edit: PendingEdit): void;
+  /** The value set `value` belongs to (all secrets, all traits…), or null. */
+  onValueOptions(value: string): Promise<EventValueOptionsResult | null>;
 }
 
 /** Keys that open a block: they are sections and options, not scalar fields. */
@@ -84,6 +87,8 @@ export class Inspector {
   private folded = new Map<string, boolean>();
   /** Doc and type hint per key, across every vocabulary list. */
   private keyInfo = new Map<string, { doc?: string; hint?: string }>();
+  /** Answered value-set asks, by value; null = nothing enumerable. */
+  private valueOptionsCache = new Map<string, EventValueOptionsResult | null>();
 
   constructor(
     private readonly root: HTMLElement,
@@ -305,7 +310,7 @@ export class Inspector {
       );
 
       body.appendChild(this.subhead("Effects", "What happens when the player picks it"));
-      this.tree(detail, option.lines, option.totalLines, 2, option.line, "effect", body);
+      this.tree(detail, option.lines, option.totalLines, 2, option.line, "effect", body, true);
       this.insertedRows(option.bodyLine, body);
       body.appendChild(
         this.addRow(
@@ -409,6 +414,11 @@ export class Inspector {
    * "+ inside"; closers vanish; bare scalars (list entries) stay read-only.
    * `baseIndent` is the FILE indent of the block's direct children, so an
    * in-place rewrite or a nested insert lands at the right depth.
+   *
+   * `enumTop`: the static key→values vocabulary describes an OPTION's own
+   * fields, so only an option body's direct children may use it. Anywhere
+   * deeper the same key name means something else (`type` in `random_secret`
+   * is a secret, not an event type), and the row resolves its VALUE instead.
    */
   private tree(
     detail: EventDetail,
@@ -417,7 +427,8 @@ export class Inspector {
     baseIndent: number,
     blockLine: number,
     context: "trigger" | "effect",
-    into: HTMLElement
+    into: HTMLElement,
+    enumTop = false
   ): void {
     if (lines.length === 0 && totalLines === 0) {
       into.appendChild(el("div", "hint", "Empty."));
@@ -463,7 +474,8 @@ export class Inspector {
             line.line,
             baseIndent + line.depth,
             line.depth,
-            scalar[2]
+            scalar[2],
+            enumTop && line.depth === 0
           )
         );
         continue;
@@ -570,7 +582,8 @@ export class Inspector {
     line: number,
     indent: number,
     depth: number,
-    op: string
+    op: string,
+    allowEnum = true
   ): HTMLElement {
     const row = el("div", "trow");
     row.style.paddingLeft = `${depth * 14 + 4}px`;
@@ -600,7 +613,7 @@ export class Inspector {
       });
     };
     const holder = el("span", "tv");
-    const options = this.vocabulary.values[key];
+    const options = allowEnum ? this.vocabulary.values[key] : undefined;
     let val: HTMLElement;
     if (options && options.length > 0) {
       // A pickable value is visibly a dropdown, chevron and all.
@@ -613,7 +626,7 @@ export class Inspector {
       );
     } else {
       val = el("span", `tval ${tokClass(current)}`, current);
-      val.addEventListener("click", () => this.editValue(val, current, key, commit));
+      val.addEventListener("click", () => void this.openValueEditor(val, current, key, commit, allowEnum));
     }
     holder.appendChild(val);
     if (current !== rawValue) holder.appendChild(el("span", "pendingMark px-xs", "unsaved"));
@@ -631,13 +644,48 @@ export class Inspector {
     return row;
   }
 
+  /**
+   * A clicked value with no static value set: ask what set the VALUE belongs
+   * to (`secret_cultivator` → every secret, `brave` → every trait). A menu
+   * when the index can enumerate it, the typed input otherwise. Values that
+   * cannot resolve (numbers, yes/no, scope chains, dotted ids) skip the
+   * round trip.
+   */
+  private async openValueEditor(
+    span: HTMLElement,
+    current: string,
+    key: string,
+    commit: (v: string) => void,
+    allowEnum: boolean
+  ): Promise<void> {
+    const unresolvable =
+      current === "yes" || current === "no" || /^-?[\d.]+$/.test(current) || /[.:]/.test(current);
+    let resolved = unresolvable ? null : this.valueOptionsCache.get(current);
+    if (resolved === undefined) {
+      resolved = await this.cb.onValueOptions(current);
+      this.valueOptionsCache.set(current, resolved);
+    }
+    if (!span.isConnected) return; // the panel re-rendered while waiting
+    if (resolved && resolved.items.length > 1) {
+      menu(span, menuItems(resolved.items), { value: current, width: 300, onPick: commit });
+      return;
+    }
+    this.editValue(span, current, key, commit, allowEnum);
+  }
+
   /** Swap a value's text for a focused input, with a tag saying what type
    *  belongs in it; text comes back on blur. */
-  private editValue(span: HTMLElement, current: string, key: string, commit: (v: string) => void): void {
+  private editValue(
+    span: HTMLElement,
+    current: string,
+    key: string,
+    commit: (v: string) => void,
+    allowEnum = true
+  ): void {
     const type = this.typeOf(key, current);
     const wrap = el("span", "editWrap");
     const field = input(current, type, commit);
-    attachSuggest(field, () => this.valueSuggestions(key));
+    attachSuggest(field, () => this.valueSuggestions(key, allowEnum));
     wrap.append(field, el("span", "ttype", type));
     span.replaceWith(wrap);
     field.focus();
@@ -824,8 +872,10 @@ export class Inspector {
     return row;
   }
 
-  private valueSuggestions(key: string): MenuItem[] {
-    const known = this.vocabulary.values[key];
+  private valueSuggestions(key: string, allowEnum = true): MenuItem[] {
+    // The static key→values map only speaks for event/option-level keys; a
+    // nested key sharing a name (`type`) would get the wrong list.
+    const known = allowEnum ? this.vocabulary.values[key] : undefined;
     if (known && known.length > 0) return menuItems(known);
     if (key === "trigger_event") return this.eventIds.map((id) => ({ value: id, label: id }));
     return [
