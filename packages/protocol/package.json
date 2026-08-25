@@ -1,6 +1,6 @@
 {
   "name": "@px-lsp/protocol",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "license": "GPL-3.0-or-later",
   "description": "Wire contract (custom LSP requests/notifications, settings types) and shared helpers for the px-lsp language server and its clients.",
   "keywords": [

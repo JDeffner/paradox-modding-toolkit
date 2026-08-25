@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 (beta) - tiger download fix
+
+### Fixed
+
+- **The tiger download works again.** GitHub now serves release assets from
+  a new host (`release-assets.githubusercontent.com`), and the downloader's
+  host allowlist refused the redirect with "refusing to follow the
+  redirect". The new host is on the allowlist; the old one stays, since
+  GitHub still uses both. Verified against a live download of
+  ck3-tiger v1.19.0.
+
 ## 0.3.2 (preview) - Flag Builder
 
 ### Added
