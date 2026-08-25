@@ -44,7 +44,14 @@ function keyItems(specs: Map<string, KeySpec> | undefined): EventVocabularyItem[
   return out.map((spec) => ({
     value: spec.key,
     doc: short(spec.doc),
-    hint: spec.values === "block" ? "block" : spec.values === "bool" ? "yes/no" : undefined,
+    hint:
+      spec.values === "block"
+        ? "block"
+        : spec.values === "bool"
+          ? "yes/no"
+          : spec.values === "loc"
+            ? "loc"
+            : undefined,
   }));
 }
 

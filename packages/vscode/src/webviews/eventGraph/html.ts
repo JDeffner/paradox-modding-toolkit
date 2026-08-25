@@ -346,6 +346,9 @@ ${uiCss}
   .block > .head .bsub { flex: 1 1 auto; min-width: 0; }
   .block + .block { border-top: 1px solid var(--px-border); padding-top: 4px; }
   .bbody { display: flex; flex-direction: column; gap: 4px; }
+  /* These set display, which beats the hidden attribute; restate it, or no
+     fold in the inspector ever closes. */
+  .bbody[hidden], .tchildren[hidden], .trow[hidden] { display: none; }
   #inspector .caret.closed { transform: rotate(-90deg); }
   /* ---- the structured script editor ---- */
   #inspector .insHead { display: flex; align-items: center; gap: 4px; }
@@ -361,7 +364,9 @@ ${uiCss}
     padding-right: 2px; border-radius: var(--px-radius-sm);
   }
   .trow:hover { background: color-mix(in oklch, var(--px-fg) 5%, transparent); }
-  .trow .tk { font-family: var(--px-font-mono); font-size: var(--px-text-sm); color: var(--px-tok-key, var(--px-fg)); }
+  /* Keys read as words ("add gold"), not as code; only VALUES keep the mono
+     face, which is also what marks them as the editable half of the row. */
+  .trow .tk { font-size: var(--px-text-sm); color: var(--px-fg); }
   .trow .top { font-family: var(--px-font-mono); font-size: var(--px-text-sm); color: var(--px-muted-fg); }
   .trow .tv { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
   .trow .tv .px-input, .trow .tv .px-dropdown { flex: 1 1 auto; min-width: 0; height: 24px; font-size: var(--px-text-sm); }
@@ -371,7 +376,7 @@ ${uiCss}
   .trow.thead:hover .ttools { opacity: 1; }
   .trow.thead .tk { font-weight: 600; color: var(--px-fg); flex: 1 1 auto; }
   .trow.thead .caret { cursor: pointer; flex: 0 0 auto; }
-  .trow.tbare .tk { color: var(--px-muted-fg); }
+  .trow.tbare .tk { color: var(--px-muted-fg); font-family: var(--px-font-mono); }
   /* A value is text until it is clicked; the hover says "editable" quietly. */
   .trow .tval {
     font-family: var(--px-font-mono); font-size: var(--px-text-sm); cursor: pointer;
@@ -379,6 +384,19 @@ ${uiCss}
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .trow .tval:hover { background: var(--px-muted); }
+  /* An enumerable value wears its chevron at rest: it LOOKS like a choice. */
+  .trow .tval.tchoice {
+    display: inline-flex; align-items: center; gap: 3px; margin-left: 0;
+    padding: 1px 4px 1px 6px; border: 1px solid var(--px-border); background: var(--px-bg);
+  }
+  .trow .tval.tchoice .px-icon { width: 12px; height: 12px; flex: 0 0 auto; color: var(--px-muted-fg); }
+  .trow .tval.tchoice:hover { background: var(--px-muted); }
+  /* The datatype tag beside a free input: what kind of value belongs here. */
+  .ttype {
+    flex: 0 0 auto; font-size: var(--px-text-xs); line-height: 16px; white-space: nowrap;
+    color: var(--px-muted-fg); border: 1px solid var(--px-border); border-radius: 999px; padding: 0 6px;
+  }
+  .editWrap { display: contents; }
   .trow.tadd:hover { background: none; }
   .trow.tadd > .px-btn { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .trow.tadd > .px-btn:hover { color: var(--px-fg); }
