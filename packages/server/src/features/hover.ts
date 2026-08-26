@@ -14,7 +14,7 @@ import { URI } from "vscode-uri";
 import type { SchemaEntry } from "../schema/types";
 import type { TokenData } from "@px-lsp/protocol/types";
 import { clientCommands } from "@px-lsp/protocol/protocol";
-import { canRunCommand } from "../clientMode";
+import { canRunCommand, fileLinks } from "../clientMode";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { scopePrefixBefore, wordRangeAt } from "../wordAt";
@@ -118,7 +118,9 @@ export function provideHover(
     const doc =
       setDefs.length > 0
         ? setDefs
-            .map((d) => `set in [${path.basename(d.file)}:${d.line + 1}](${URI.file(d.file)}#L${d.line + 1})`)
+            .map(
+              (d) => `set in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, `L${d.line + 1}`)}`
+            )
             .join("  \n")
         : undefined;
     cards.push(renderCard({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc }));
@@ -336,16 +338,19 @@ function definitionCards(
   return cards;
 }
 
-/** The "N references" command link (or plain count) for a name, once per hover. */
+/** The "N references" command link for a name, once per hover. Clients that do
+ * not register the references command get NOTHING: a count nobody can click
+ * answers no question the card was not already answering. */
 function referencesFooter(
   data: ServerData,
   name: string,
   at?: { uri: string; line: number; character: number }
 ): string | null {
+  if (!canRunCommand(clientCommands.showReferences)) return null;
   const refs = data.refIndex.lookup(name).length;
   if (refs === 0) return null;
   const label = `${refs.toLocaleString("en-US")} reference${refs === 1 ? "" : "s"}`;
-  return at && canRunCommand(clientCommands.showReferences)
+  return at
     ? `[${label}](command:${clientCommands.showReferences}?${encodeURIComponent(
         JSON.stringify([at.uri, at.line, at.character])
       )} "Show all references")`
@@ -425,13 +430,18 @@ function definitionCard(
 
 /** `file.txt:line` provenance, as a markdown link when a file URI is feasible. */
 function provenance(def: { file: string; line: number }): string {
-  const label = `${path.basename(def.file)}:${def.line + 1}`;
-  // Plain text when no absolute path is available (fail-soft, e.g. synthetic defs).
-  if (!def.file || !path.isAbsolute(def.file)) return label;
-  const target = URI.file(def.file)
-    .with({ fragment: String(def.line + 1) })
-    .toString();
-  return `[${label}](${target})`;
+  return fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, String(def.line + 1));
+}
+
+/**
+ * The single chokepoint for every `file:` link a hover card emits. Plain text
+ * when no absolute path is available (fail-soft, e.g. synthetic defs) OR when
+ * the client did not declare `fileLinks`: the same label, minus a link its
+ * hover renderer would not navigate.
+ */
+function fileLink(file: string, label: string, fragment: string): string {
+  if (!fileLinks() || !file || !path.isAbsolute(file)) return label;
+  return `[${label}](${URI.file(file).with({ fragment }).toString()})`;
 }
 
 /**
@@ -481,7 +491,9 @@ function savedScopeCard(
     if (sites.length > 0) {
       doc.push(
         sites
-          .map((d) => `saved in [${path.basename(d.file)}:${d.line + 1}](${URI.file(d.file)}#L${d.line + 1})`)
+          .map(
+            (d) => `saved in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, `L${d.line + 1}`)}`
+          )
           .join("  \n")
       );
     } else {
@@ -713,10 +725,7 @@ function defineSourceLink(e: DefineEntry): string {
   const norm = e.file.replace(/\\/g, "/");
   const i = norm.toLowerCase().lastIndexOf("/common/defines/");
   const rel = i >= 0 ? `${norm.slice(i + 1)}:${e.line + 1}` : `${path.basename(e.file)}:${e.line + 1}`;
-  const target = URI.file(e.file)
-    .with({ fragment: String(e.line + 1) })
-    .toString();
-  return `${e.layer} · [${rel}](${target})`;
+  return `${e.layer} · ${fileLink(e.file, rel, String(e.line + 1))}`;
 }
 
 /** root/ROOT/this/prev(prev…)/from(from…) — scope navigation keywords. */
