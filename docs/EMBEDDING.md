@@ -225,8 +225,9 @@ arrives as a real `WorkspaceEdit` instead of a command it could not run.
 `clientCommands: boolean` is the **deprecated** predecessor and should not be
 used in new code. It conflated three unrelated questions behind one "is this VS
 Code" switch. It still works: `true` means
-`{ hoverHtml: true, commands: <every id>, ownFileWatcher: true }`, `false` or
-absent means all-off, and `client` wins when both are sent.
+`{ hoverHtml: true, commands: <every id>, ownFileWatcher: true, fileLinks:
+true }` plus snippet support, `false` or absent means all-off, and `client`
+wins when both are sent.
 
 One more capability matters here and is NOT part of this object, because
 standard LSP already carries it: snippet support. Declare
