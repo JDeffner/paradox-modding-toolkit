@@ -173,6 +173,25 @@ import { computeEventBanner } from "./overview/eventBanner";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
+// The px-lsp bin, before the connection claims stdio:
+//  - `px-lsp --version` answers and exits, so health checks and install
+//    scripts do not need an LSP handshake.
+//  - A bare `px-lsp` defaults to --stdio instead of dying with a stack trace
+//    ("Connection input stream is not set"). Editors that spawn over node-ipc
+//    (the VS Code client) pass --node-ipc themselves, and an ipc fork is
+//    recognizable by process.send, so the default cannot misfire there.
+if (process.argv.includes("--version") || process.argv.includes("-v")) {
+  process.stdout.write(SERVER_VERSION + "\n");
+  process.exit(0);
+}
+const TRANSPORT_FLAGS = ["--node-ipc", "--stdio", "--socket", "--pipe"];
+if (
+  !process.send &&
+  !process.argv.some((arg) => TRANSPORT_FLAGS.some((flag) => arg === flag || arg.startsWith(flag + "=")))
+) {
+  process.argv.push("--stdio");
+}
+
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 

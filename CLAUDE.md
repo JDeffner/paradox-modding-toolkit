@@ -74,6 +74,11 @@ file. Do not let that happen again:
 - The user-facing feature story lives in `packages/vscode/README.md` (the
   Marketplace listing). When a release adds a user-visible feature, check that
   README's Highlights and the root README's short list still tell the truth.
+- The wiki mirrors two repo docs: `docs/EMBEDDING.md` -> wiki "Embedding" and
+  `docs/PROTOCOL.md` -> wiki "Protocol Reference" (repo copies are canonical).
+  Whenever you change either repo doc, port the change to the wiki page in the
+  same session (clone `paradox-modding-toolkit.wiki.git`, edit, push). Joel
+  does not want to do this by hand.
 
 ## Test builds (automatic)
 
