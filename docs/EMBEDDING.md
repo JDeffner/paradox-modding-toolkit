@@ -211,6 +211,7 @@ interface ParadoxClientCapabilities {
   hoverHtml?: boolean;      // renders the sanitized <span style="color:var(--vscode-*)"> hover markup
   commands?: string[];      // the px.* command ids this client actually registers
   ownFileWatcher?: boolean; // client watches the mod tree and pushes paradox/modFileChanged
+  fileLinks?: boolean;      // hover renderer navigates file: links
 }
 ```
 
@@ -226,6 +227,21 @@ used in new code. It conflated three unrelated questions behind one "is this VS
 Code" switch. It still works: `true` means
 `{ hoverHtml: true, commands: <every id>, ownFileWatcher: true }`, `false` or
 absent means all-off, and `client` wins when both are sent.
+
+One more capability matters here and is NOT part of this object, because
+standard LSP already carries it: snippet support. Declare
+`textDocument.completion.completionItem.snippetSupport: true` in the
+`initialize` capabilities if your editor expands `${1:…}` tabstops.
+
+The full set an embedder should consider, and what each one buys:
+
+| Declare | If your client | Without it |
+|---|---|---|
+| `snippetSupport` (standard LSP) | expands `${1:…}` tabstops in completion inserts | completion inserts are plain-text skeletons: same block shape, no tabstops, never a literal `${` |
+| `client.hoverHtml` | renders the sanitized `<span style="color:var(--vscode-*)">` hover markup | hover cards are plain markdown; the span content is self-sufficient text, so nothing is lost but color |
+| `client.commands` | registers some/all `px.*` commands | command-link affordances degrade per id: the localization quick fix becomes a plain `WorkspaceEdit`, the hover reference-count line is dropped |
+| `client.fileLinks` | navigates `file:` links from hover markdown | provenance and set-site lines render as plain `file.txt:12` labels instead of dead links |
+| `client.ownFileWatcher` | watches the mod tree and pushes `paradox/modFileChanged` | the server registers its own `didChangeWatchedFiles` watcher (needs dynamic registration) |
 
 The concrete per-capability behavior (what the hover looks like without
 `hoverHtml`, which quick fix replaces which) is the "Degraded modes" section of

@@ -6,6 +6,16 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## 0.1.1
+
+- `ParadoxClientCapabilities.fileLinks` (optional, default false): the
+  client's hover renderer navigates `file:` links, so provenance lines may be
+  markdown links instead of plain labels. Backward compatible: absent means
+  off, which is the pre-0.1.1 behavior for object-declaring clients.
+- The deprecated `clientCommands: true` alias is documented to also imply
+  `fileLinks: true` (and snippet support, which is standard LSP, not part of
+  this object).
+
 ## 0.1.0
 
 First npm release. The wire contract (custom `paradox/*` requests and

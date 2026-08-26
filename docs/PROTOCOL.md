@@ -16,11 +16,11 @@ the in-tree reference clients. This document stays the per-method reference.
 version, independent of the extension since extension 0.3.3; first npm
 release 0.1.0). Treat any change here as an API change: additions are
 backward-compatible, renames/removals are called out in the package's
-`CHANGELOG.md`. Current as of `@px-lsp/protocol` 0.1.0, which carries the
+`CHANGELOG.md`. Current as of `@px-lsp/protocol` 0.1.1, which carries the
 full contract below including `serverInfo` in the `initialize` result, the
-`client` capability object superseding `clientCommands`, `paradox/scopeAt`,
-and `dataDir` (`paradox/*` has been the method prefix since extension
-0.1.2).
+`client` capability object superseding `clientCommands`, `client.fileLinks`,
+`paradox/scopeAt`, and `dataDir` (`paradox/*` has been the method prefix
+since extension 0.1.2).
 
 ## Transport and lifecycle
 
@@ -69,6 +69,7 @@ interface ParadoxClientCapabilities {
   hoverHtml?: boolean;      // client renders the sanitized <span style="color:var(--vscode-*)"> hover markup
   commands?: string[];      // the px.* command ids this client registers (see "Client command ids")
   ownFileWatcher?: boolean; // client watches the mod tree itself and pushes paradox/modFileChanged
+  fileLinks?: boolean;      // client's hover renderer navigates file: links (since @px-lsp/protocol 0.1.1)
 }
 
 interface ParadoxSettings {
@@ -91,11 +92,17 @@ client declares exactly what it implements and the server tailors its output
 per capability (see "Degraded modes"). A client can take the hover markup
 without registering any command, or register one command and not the others.
 
+One capability an embedder should declare is NOT in `client`, because LSP
+already has it: `${1:…}` completion snippets are gated on the standard
+`capabilities.textDocument.completion.completionItem.snippetSupport` of the
+`initialize` params. Without it every completion insert is plain text (see
+"Degraded modes").
+
 `clientCommands: true` is a **deprecated** alias kept for older clients: it
 resolves to `{ hoverHtml: true, commands: <every id below>, ownFileWatcher:
-true }`, which is what the VSCode extension used to declare. `false` or absent
-resolves to all-off. It is ignored when `client` is present. New clients should
-send `client`.
+true, fileLinks: true }` plus snippet support, which is what the VSCode
+extension used to declare. `false` or absent resolves to all-off. It is
+ignored when `client` is present. New clients should send `client`.
 
 One server instance serves one game at a time, and choosing it is the client's
 job: there is no server-side auto-detection. The VSCode extension detects it
@@ -491,8 +498,20 @@ capability at a time. A client declaring nothing (every field off) gets:
   `<locRoot>/<lang>/zzz_px_lsp_edits_l_<lang>.yml`, creating it BOM-first when
   absent), and the "edit localization" action is omitted;
 - **`px.openLocalizationSideBySide` not listed** — that action is omitted;
-- **`px.showReferences` not listed** — the hover reference count renders as
-  plain text instead of a `command:` link;
+- **`px.showReferences` not listed** — the hover reference line is dropped
+  entirely. A count the user cannot click answers no question, so the card
+  ends with the provenance instead (changed in server 0.2.0: it used to
+  render the count as plain text);
+- **`fileLinks` off** — every `file:` link a hover would carry (provenance,
+  variable and saved-scope set sites, define sources) renders as the same
+  `file.txt:12` label without the link, so a renderer that cannot navigate
+  `file:` targets never shows a dead link (since server 0.2.0);
+- **standard `snippetSupport` off** — no completion item carries `${…}` or
+  `insertTextFormat: Snippet`. Inserts that would be snippets (parameter
+  skeletons for scripted effects, `key = { }` for schema keys that open a
+  block, engine block templates from the `usage:` dumps) arrive as plain-text
+  skeletons instead: same shape, no tabstops (since server 0.2.0; before
+  that, snippet syntax could reach clients that never declared it);
 - **`ownFileWatcher` off** — the server dynamically registers
   `workspace/didChangeWatchedFiles` when the client supports dynamic
   registration, so external edits re-index without a restart. Declare
