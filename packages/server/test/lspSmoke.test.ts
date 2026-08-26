@@ -242,7 +242,12 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       processId: process.pid,
       rootUri: toUri(modDir),
       workspaceFolders: [{ uri: toUri(modDir), name: "smoke" }],
-      capabilities: {},
+      // The real thing the VSCode client sends: snippetSupport is a STANDARD
+      // LSP capability, so the server must read it from here and not from the
+      // paradox initializationOptions.
+      capabilities: {
+        textDocument: { completion: { completionItem: { snippetSupport: true } } },
+      },
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-storage-")),
         wikidocsDir: WIKIDOCS,
@@ -332,6 +337,31 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     const doc =
       typeof resolved.documentation === "string" ? resolved.documentation : resolved.documentation?.value;
     expect(doc).toContain("Gives gold");
+  });
+
+  // The VSCode path takes its capabilities from the real client, while every
+  // module-level test takes them from the all-on module default: a regression
+  // that silenced snippets or hover links for VSCode would be invisible there.
+  // This is the tripwire.
+  it("VSCode path: completion still carries snippets, hover still carries file links", async () => {
+    const uri = toUri(path.join(modDir, "events", "smoke_snippets.txt"));
+    const text = "namespace = snip\n\nsnip.1 = {\n\ttype = character_event\n\timmediate = {\n\t\t\n\t}\n}\n";
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text },
+    });
+    const result = (await conn.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 5, character: 2 },
+    })) as { items: Array<{ label: string; insertText?: string; insertTextFormat?: number }> };
+    const effect = result.items.find((i) => i.label === "my_smoke_effect")!;
+    expect(effect.insertText).toBe("my_smoke_effect = ${1|yes,no|}");
+    expect(effect.insertTextFormat).toBe(2); // InsertTextFormat.Snippet
+
+    const hover = (await conn.sendRequest("textDocument/hover", {
+      textDocument: { uri: eventsUri },
+      position: { line: 6, character: 4 },
+    })) as { contents: { value: string } };
+    expect(hover.contents.value).toContain("](file:");
   });
 
   it("hover on the scripted effect shows its card with a references link", async () => {
@@ -985,7 +1015,7 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
     fs.rmSync(modDir, { recursive: true, force: true });
   });
 
-  it("hoverHtml without commands: sanitized spans, references footer as plain text", async () => {
+  it("hoverHtml without commands or fileLinks: spans stay, dead links and counts go", async () => {
     const hover = (await conn.sendRequest("textDocument/hover", {
       textDocument: { uri: eventsUri },
       position: { line: 6, character: 4 },
@@ -994,7 +1024,28 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
     const md = hover!.contents.value;
     expect(md).toContain("my_smoke_effect");
     expect(md).toContain("<span"); // client.hoverHtml
-    expect(md).toMatch(/\d+ reference/);
     expect(md).not.toContain("command:"); // client.commands is empty
+    // A count nobody can click, and a link nobody can follow, both drop; the
+    // provenance stays as a readable label.
+    expect(md).not.toMatch(/reference/);
+    expect(md).not.toContain("](file:");
+    expect(md).toContain("smoke_effects.txt:2");
+  });
+
+  it("no snippetSupport declared: completion never ships `${`", async () => {
+    const uri = toUri(path.join(modDir, "events", "caps_snippets.txt"));
+    const text = "namespace = caps\n\ncaps.1 = {\n\ttype = character_event\n\timmediate = {\n\t\t\n\t}\n}\n";
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text },
+    });
+    const result = (await conn.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 5, character: 2 },
+    })) as { items: Array<{ label: string; insertText?: string; insertTextFormat?: number }> };
+    expect(result.items.find((i) => i.label === "my_smoke_effect")!.insertText).toBe("my_smoke_effect = yes");
+    for (const item of result.items) {
+      expect(item.insertTextFormat, item.label).toBeUndefined();
+      expect(item.insertText ?? "", item.label).not.toContain("${");
+    }
   });
 });
