@@ -14,6 +14,7 @@ localization workflow no other tool has.
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 ![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)
 [![VS Code extension](https://img.shields.io/badge/VS%20Code-Paradox%20Modding%20Toolkit-007ACC.svg?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
+[![npm @px-lsp/server](https://img.shields.io/npm/v/@px-lsp/server?logo=npm&label=%40px-lsp%2Fserver)](https://www.npmjs.com/package/@px-lsp/server)
 ![Editor agnostic](https://img.shields.io/badge/also-any%20LSP%20client-brightgreen.svg)
 
 [Install](#install) · [What you get](#what-you-get) ·
@@ -113,10 +114,17 @@ per-game limits, the detection ladder and the EU5 honesty note are on
 ## Not just VS Code
 
 The language server is standard LSP over `--stdio` and runs from neovim, Zed,
-Helix or your own application. Grab `px-lsp-server-<version>.tar.gz` from the
-[releases](https://github.com/JDeffner/paradox-modding-toolkit/releases), or
-`px-lsp-win-x64-<version>.zip` for one download that already contains Node and a
-launcher.
+Helix or your own application. It is on npm:
+
+```bash
+npm install -g @px-lsp/server
+px-lsp                       # stdio is the default transport
+```
+
+The [releases](https://github.com/JDeffner/paradox-modding-toolkit/releases)
+page carries the same payload for people who would rather not use npm:
+`px-lsp-server-<version>.tar.gz`, or `px-lsp-win-x64-<version>.zip` for one
+download that already contains Node and a launcher.
 
 - [`packages/server/README.md`](packages/server/README.md) covers standalone
   setup and the per-language capability table.
@@ -134,8 +142,8 @@ a separate server process, and everything game-specific sits behind one
 | Package | |
 |---|---|
 | [`packages/vscode`](packages/vscode) | The **Paradox Modding Toolkit** extension, the primary client. Its [README](packages/vscode/README.md) is the user-facing one. |
-| [`packages/server`](packages/server) | `@px-lsp/server`: parser, index, scope engine, features, per-game profiles, bundled data. Speaks node-ipc and `--stdio`. |
-| [`packages/protocol`](packages/protocol) | `@px-lsp/protocol`: the wire contract and the helpers shared between server and clients. |
+| [`packages/server`](packages/server) | [`@px-lsp/server`](https://www.npmjs.com/package/@px-lsp/server) on npm: parser, index, scope engine, features, per-game profiles, bundled data. Speaks node-ipc and `--stdio`. |
+| [`packages/protocol`](packages/protocol) | [`@px-lsp/protocol`](https://www.npmjs.com/package/@px-lsp/protocol) on npm: the wire contract and the helpers shared between server and clients. |
 
 ## Development
 
