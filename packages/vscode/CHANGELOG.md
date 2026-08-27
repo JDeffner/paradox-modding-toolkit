@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Values no longer render colourless while the server catches up.** Bare
+  identifiers in value position (`has_trait = brave`, entries of
+  `traits = { … }`) had no TextMate scope, so they showed the theme's
+  default foreground until the language server's semantic tokens arrived —
+  on a big workspace or during the initial index build, that is the "text
+  stays white for a while before it gets colour coded" report. A catch-all
+  grammar rule now gives them a base string colour immediately, in all
+  games and .gui files; semantic tokens refine it as before once the index
+  answers.
+
 ### Added
 
 - **`Paradox: Reduce VS Code Indexing Load`** for large workspaces (field
