@@ -73,9 +73,7 @@ describe.skipIf(!RUN)("index scaling (PX_PERF_SCALING=1)", () => {
       const { index, names } = buildIndex(DEFS);
       const buildMs = Math.round(performance.now() - t0);
       const stats = index.stats();
-      console.log(
-        `built ${stats.total} definitions over ${names.length} distinct names in ${buildMs}ms`
-      );
+      console.log(`built ${stats.total} definitions over ${names.length} distinct names in ${buildMs}ms`);
 
       const rows: Array<{ label: string; ms: number; produced: number }> = [];
 
@@ -92,9 +90,7 @@ describe.skipIf(!RUN)("index scaling (PX_PERF_SCALING=1)", () => {
           let n = 0;
           for (const _ of index.entries(
             (d) =>
-              d.kind === "scripted_effect" ||
-              d.kind === "scripted_trigger" ||
-              d.kind === "scripted_modifier"
+              d.kind === "scripted_effect" || d.kind === "scripted_trigger" || d.kind === "scripted_modifier"
           ))
             n++;
           return n;
@@ -125,7 +121,8 @@ describe.skipIf(!RUN)("index scaling (PX_PERF_SCALING=1)", () => {
         })
       );
 
-      for (const r of rows) console.log(`  ${r.label.padEnd(52)} ${String(r.ms).padStart(7)} ms  → ${r.produced} items`);
+      for (const r of rows)
+        console.log(`  ${r.label.padEnd(52)} ${String(r.ms).padStart(7)} ms  → ${r.produced} items`);
 
       // A completion request calls entries() SEVEN times (completion.ts).
       const oneWalk = rows[1].ms;

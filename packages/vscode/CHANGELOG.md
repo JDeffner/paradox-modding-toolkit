@@ -4,6 +4,20 @@
 
 ### Fixed
 
+- **Typing and saving no longer stall on a large workspace.** Profiling the
+  server on the game plus AGOT found that the first completion after any
+  index change cost 4.3 s, and that a save invalidates exactly the caches
+  involved — so every Ctrl+S made the next completion pay full price. Three
+  causes, all fixed: the scope aggregation resolved "which schema folder is
+  this file in" once per reference (4.1M times for 3,944 distinct answers,
+  each rebuilding the parent-mod list), it scanned the entire reference
+  index to find the 4% that are call sites, and the file scan read one file
+  at a time. Measured on game + AGOT: completion after a save 4180 ms →
+  606 ms, first completion after an index change 4314 ms → 800 ms, time to
+  indexed 32 s → 25 s warm and 82 s → 70 s cold. Semantic highlighting was
+  always 1 ms; it was queued behind the completion, which is why text sat
+  colourless. Numbers and method in `docs/PERFORMANCE.md`.
+
 - **Values no longer render colourless while the server catches up.** Bare
   identifiers in value position (`has_trait = brave`, entries of
   `traits = { … }`) had no TextMate scope, so they showed the theme's

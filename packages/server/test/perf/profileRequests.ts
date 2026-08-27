@@ -125,9 +125,11 @@ const completionPos = { line: 6, character: 3 }; // inside immediate = { }
 
 async function timed(label: string, method: string, params: unknown): Promise<number> {
   const t0 = performance.now();
-  const res: any = await conn.sendRequest(method, params);
+  const res: unknown = await conn.sendRequest(method, params);
   const ms = performance.now() - t0;
-  const count = Array.isArray(res) ? res.length : (res?.items?.length ?? -1);
+  const count = Array.isArray(res)
+    ? res.length
+    : ((res as { items?: unknown[] } | null)?.items?.length ?? -1);
   console.log(`  ${label.padEnd(34)} ${String(Math.round(ms)).padStart(8)} ms   items=${count}`);
   return ms;
 }

@@ -48,10 +48,46 @@ workspace: while the index is building there, a single completion request can
 take over a minute, and everything queued behind it (semantic tokens, hover)
 waits with it. It is also most of why that workspace's "time to indexed" reads
 547 s: the scanning is a minority of that and the interactive requests served
-in between are the rest. On the same workspace the first completion after the
-build finished cost 78 s once, after which saves and highlighting were back to
-milliseconds. This is the remaining known cost, it is not fixed, and it is why
-a big workspace feels dead for its first minutes.
+in between are the rest.
+
+### Where that time actually went (2026-08-27)
+
+The row above was measured, not explained. Profiling the server with
+`--cpu-prof` on game + AGOT named three causes, all now fixed:
+
+- **A completion cost seconds because of config resolution, not ranking.**
+  Aggregating the scopes a scripted effect is called from asked "which schema
+  folder is this file in?" once per REFERENCE — 4,124,139 times for 3,944
+  distinct answers — and each miss rebuilt the content-root list (parent mods,
+  playset probes) and walked every schema entry. It is memoized per file now.
+- **That aggregation also scanned the whole reference index** to find the 4%
+  of references that are call sites with a key chain. Those are tracked
+  separately now, and each distinct (root scope, chain) pair is resolved once
+  instead of once per site.
+- **The scan read one file at a time.** A cold read costs about 10 ms per
+  file no matter how big it is, because the cost is the round trip, not the
+  bytes; 80% of a cold startup was spent inside `readFileUtf8` waiting. Batches
+  are read with several reads in flight now.
+
+| operation (game + AGOT) | before | after |
+|---|---|---|
+| completion, first after an index change | 4314 ms | 800 ms |
+| completion, first after a **save** | 4180 ms | 606 ms |
+| completion, cache warm | 20 ms | 18 ms |
+| time to indexed, warm file cache | 32 s | 25 s |
+| time to indexed, cold file cache | 82 s | 70 s |
+
+The save row is the one that decided how the extension felt: the caches above
+are keyed on the index revision, every save changes it, so the next completion
+paid full price EVERY time. Semantic highlighting was never itself slow (1 ms
+throughout) — it was queued behind that completion on the server's single
+thread, which is what "the text stays white for a while" was.
+
+The two cold-cache numbers come from an A/B under the same partial cache
+eviction. A first-ever open on a machine where nothing is cached is colder than
+that and was measured once at 185 s before the change; there is no way to
+reproduce that state on demand, so the honest claim is the 82 → 70 s A/B, with
+the per-file measurements suggesting a larger gap the colder the cache is.
 
 ## Configuring a big workspace
 
