@@ -93,34 +93,43 @@ The toolkit's index never reads binary files: the definition scan walks the
 schema folders with an extension filter (`.txt`, `.yml`, `.gui`), and the file
 watchers glob the same extensions. A `.dds` never enters it.
 
-VS Code's own machinery is a different story. The built-in file watcher and
-search walk every workspace folder whole, and most of a game install is
-textures, meshes and audio. **`Paradox: Reduce VS Code Indexing Load`** (also
-a button on the big-workspace warning) writes workspace-scoped
-`files.watcherExclude` and `search.exclude` patterns for the asset trees
-(`gfx/`, `map_data/`, `music/`, `sound/`, `soundtrack/`, `dlc/`, `binaries/`,
-plus loose `.dds`/`.tga`/`.mesh`/`.anim` for the watcher). The write is
-additive — your existing patterns survive, and a pattern you set to `false`
-stays `false` — and the confirmation offers one-click Undo. The visible
-trade: search and Quick Open stop listing files under those folders.
+VS Code's own machinery is a different story. The built-in search and file
+watcher walk every workspace folder whole, and 62% of a game install plus a
+total conversion is textures, meshes and audio.
+**`Paradox: Reduce VS Code Indexing Load`** (also a button on the
+big-workspace warning) writes workspace-scoped `search.exclude` and
+`files.watcherExclude` patterns for binary EXTENSIONS: `.dds`, `.tga`,
+`.mesh`, `.anim`, `.png`, `.bk2`, `.bank`, `.wav`, `.ttf`, `.otf`. The write
+is additive — your existing patterns survive, and a pattern you set to
+`false` stays `false` — and the confirmation offers one-click Undo.
 
 Measured 2026-08-27 on the CK3 install (48,481 files) plus AGOT (21,431
-files), warm cache, NVMe, VS Code 1.134 on Windows:
+files), NVMe, VS Code 1.134 on Windows:
 
-- The patterns remove 51,834 of the 69,912 files (74%).
-- **Find in Files across the workspace: ~110 s without the excludes, ~30 s
-  with them** (ripgrep, the engine VS Code search runs, with the same
-  globs). This is the number that changes daily life. Quick Open
-  enumeration barely moves (250 ms → 80 ms).
-- The file watcher does NOT get cheaper on Windows: its process sat at
-  123 MB vs 124 MB with the excludes, and the initial crawl cost ~0.4 s of
-  CPU either way, because Windows watches a whole root with one recursive
-  OS handle. The watcher half of the command is for Linux, where every
-  directory costs an inotify watch and the game tree can blow the system
-  limit, and for event churn when Steam updates the game mid-session.
+| Find in Files, whole workspace | without | with |
+|---|---|---|
+| binaries warm in the OS cache | 1.7 s | 0.65 s |
+| binaries evicted (the normal case) | up to 106 s | 0.65 s |
 
-So on Windows this command is a search lever, not a memory lever. The memory
-levers are the mod-index settings above, and fewer windows.
+The patterns skip 43,067 of 69,912 files, and search never opens them, so the
+time is stable instead of depending on what the cache happens to hold.
+
+**Extensions, never directories.** Excluding whole asset trees looks
+equivalent and is not: `gfx/`, `music/`, `map_data/` and `dlc/` hold real
+script. CK3 maps seven schema folders under `gfx/` alone (portrait modifiers,
+court scene, scripted illustrations), and game + AGOT hold 584 script files
+under `gfx/`, 47 under `music/` and 3,537 under `dlc/`. A directory exclude
+would hide those from search and, because VS Code applies
+`files.watcherExclude` to recursive watchers including the extension's own,
+would stop a save in them from re-indexing. A test
+(`editorExcludesSafety.test.ts`) fails the build if a directory pattern ever
+comes back.
+
+The watcher half is not a memory lever on Windows: the watcher process
+measured 123 MB without the excludes and 124 MB with them, because Windows
+watches a root with a single recursive handle. It earns its place by keeping
+a Steam update that rewrites 27k textures from becoming 27k events, and on
+Linux, where inotify costs one watch per directory.
 
 ## Reporting a slow session
 

@@ -19,19 +19,19 @@
 - **`Paradox: Reduce VS Code Indexing Load`** for large workspaces (field
   report: game install + 40 mods). The toolkit's own index already skips
   binary files, but VS Code's built-in search and file watcher crawl every
-  workspace folder whole, and most of a game install is `.dds`/mesh/audio.
-  The command writes workspace-scoped `search.exclude` and
-  `files.watcherExclude` patterns for the asset trees (`gfx/`, `map_data/`,
-  `music/`, `sound/`, `soundtrack/`, `dlc/`, `binaries/`, plus loose
-  `.dds`/`.tga`/`.mesh`/`.anim` for the watcher). Measured on game + AGOT
-  (69,912 files, 74% removed by the patterns): Find in Files drops from
-  ~110 s to ~30 s. The watcher half matters on Linux (inotify watch per
-  directory) and against Steam-update churn; on Windows the watcher costs
-  the same either way (one recursive OS handle per root — measured 123 vs
-  124 MB). Additive and undoable: existing patterns survive, a pattern set
-  to `false` stays `false`, and the confirmation offers one-click Undo.
-  Also a button on the big-workspace warning. Numbers in
-  `docs/PERFORMANCE.md`.
+  workspace folder whole, and 62% of a game install is textures, meshes and
+  audio. The command writes workspace-scoped `search.exclude` and
+  `files.watcherExclude` patterns for binary EXTENSIONS (`.dds`, `.tga`,
+  `.mesh`, `.anim`, `.png`, `.bk2`, `.bank`, `.wav`, `.ttf`, `.otf`).
+  Measured on game + AGOT (69,912 files, 43,067 skipped): whole-workspace
+  Find in Files goes from 1.7 s warm (up to 106 s when the binaries are not
+  in the OS cache) to a stable 0.65 s. Patterns match extensions only, never
+  directories, so script under `gfx/`, `music/` or `dlc/` stays searchable
+  and still re-indexes on save; a test enforces that. Additive and undoable:
+  existing patterns survive, a pattern set to `false` stays `false`, and the
+  confirmation offers one-click Undo. Also a button on the big-workspace
+  warning. Numbers in `docs/PERFORMANCE.md`.
+
 - **The exclude picker offers "Keep as Read-Only Context".** Excluding a mod
   removes it entirely; the new follow-up moves newly excluded mods into
   `px.parentMods` instead, indexing them like dependency parents: completion,
