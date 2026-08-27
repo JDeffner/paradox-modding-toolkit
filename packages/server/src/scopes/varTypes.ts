@@ -117,7 +117,9 @@ export function callSiteScopes(
   const revision = `${data.index.revision}:${data.refIndex.revision}`;
   const cached = callSiteCache.get(data);
   if (cached && cached.revision === revision) return cached.map;
-  const map = buildCallSiteScopes(data.refIndex.all(), data.scopeModel, rootScopesForFile);
+  // chainedCalls(), not all(): the builder skips everything else anyway, and on
+  // a big workspace that skip was 96% of a 4.1M-reference walk (perf round 2).
+  const map = buildCallSiteScopes(data.refIndex.chainedCalls(), data.scopeModel, rootScopesForFile);
   callSiteCache.set(data, { revision, map });
   return map;
 }
@@ -136,9 +138,41 @@ export function buildCallSiteScopes(
   rootScopesForFile: (file: string) => Set<Scope> | null
 ): Map<string, Set<Scope>> {
   const map = new Map<string, Set<Scope>>();
+  /**
+   * (root scopes, chain) → resolution, for the length of this build.
+   *
+   * Call sites repeat their chain relentlessly: an `immediate` or
+   * `option.effect` chain occurs in every event file of a mod, and every file
+   * of one schema folder shares one root-scope Set. Resolving each one from
+   * scratch allocates several Sets per call site, and on game + AGOT that is
+   * 175,373 resolutions collapsing to a few hundred distinct pairs.
+   *
+   * Keyed on the Set's IDENTITY, which is sound because rootScopesForFile
+   * memoizes per file and hands back the same instance (server.ts). A caller
+   * that returned fresh Sets would only lose the sharing, never correctness.
+   * The cached Set is never handed out: both branches below copy it.
+   */
+  const byRoot = new Map<Set<Scope> | null, Map<string, Set<Scope> | null>>();
+  // Call sites arrive grouped by file (ReferenceIndex.chainedCalls), so
+  // remembering the last one answers for a whole file at a time: the lookup
+  // itself has to lower-case a long path, and that measured 1.1 s of a request
+  // when it ran per reference. Correct for ungrouped input too, just slower.
+  let lastFile: string | undefined;
+  let lastRootScopes: Set<Scope> | null = null;
   for (const ref of refs) {
     if (!ref.call || ref.chain === undefined) continue;
-    const resolved = resolveKeyChainScopes(ref.chain.split("."), model, rootScopesForFile(ref.file));
+    if (ref.file !== lastFile) {
+      lastFile = ref.file;
+      lastRootScopes = rootScopesForFile(ref.file);
+    }
+    const rootScopes = lastRootScopes;
+    let byChain = byRoot.get(rootScopes);
+    if (!byChain) byRoot.set(rootScopes, (byChain = new Map()));
+    let resolved = byChain.get(ref.chain);
+    if (resolved === undefined) {
+      resolved = resolveKeyChainScopes(ref.chain.split("."), model, rootScopes);
+      byChain.set(ref.chain, resolved);
+    }
     if (!resolved || resolved.size === 0) continue;
     const prev = map.get(ref.name);
     if (prev) for (const s of resolved) prev.add(s);

@@ -347,9 +347,42 @@ function readPlaysetCached(modRoot: string): string[] {
   return v;
 }
 
-/** Content roots in precedence order: mod, parents, vanilla. */
+/**
+ * Content roots in precedence order: mod, parents, vanilla.
+ *
+ * Memoized with playsetCache (same lifetime, same clear): this is called once
+ * per REFERENCE by the scope aggregation below, and rebuilding two arrays plus
+ * a playset probe per mod, 4.1M times, was measured as seconds per request
+ * (perf round 2).
+ */
+let contentRootsCache: string[] | null = null;
 function contentRoots(): string[] {
-  return [settings.modPath, ...parentRoots(), settings.gamePath].filter((r): r is string => r !== null);
+  if (contentRootsCache) return contentRootsCache;
+  return (contentRootsCache = [settings.modPath, ...parentRoots(), settings.gamePath].filter(
+    (r): r is string => r !== null
+  ));
+}
+
+/**
+ * Root scopes per FILE, memoized (perf round 2).
+ *
+ * `buildCallSiteScopes` asks for every reference's file, and a mod holds
+ * millions of references across thousands of files: the AGOT corpus measures
+ * 4,124,139 usage sites in 3,944 files, a 1000:1 ratio of calls to distinct
+ * answers. Each miss walks contentRoots, then every schema entry
+ * (classifyFile), then allocates a Set. Cleared with playsetCache, so a
+ * settings or schema change cannot serve a stale answer.
+ *
+ * The cached Set is shared, never copied per call. Safe because the only
+ * consumer, resolveKeyChainScopes, copies it before touching it.
+ */
+const fileRootScopesCache = new Map<string, Set<string> | null>();
+
+/** Drop everything derived from the current settings/schema (reindex path). */
+function clearPathCaches(): void {
+  playsetCache.clear();
+  contentRootsCache = null;
+  fileRootScopesCache.clear();
 }
 
 /** Engine-layer roots shipped next to `<game>`, lowest content priority
@@ -393,11 +426,19 @@ function schemaEntryForFile(fsPath: string): SchemaEntry | null {
   return null;
 }
 
-/** Schema-declared root scopes for the folder a file lives in (AD-5 seed). */
+/** Schema-declared root scopes for the folder a file lives in (AD-5 seed).
+ *  Memoized per file: see fileRootScopesCache. */
 function rootScopesForFile(fsPath: string): Set<string> | null {
+  const key = process.platform === "win32" ? fsPath.toLowerCase() : fsPath;
+  const hit = fileRootScopesCache.get(key);
+  if (hit !== undefined) return hit;
   const entry = schemaEntryForFile(fsPath);
-  if (!entry?.rootScopes || entry.rootScopes.length === 0) return null;
-  return new Set(entry.rootScopes.map((s) => s.toLowerCase()));
+  const scopes =
+    !entry?.rootScopes || entry.rootScopes.length === 0
+      ? null
+      : new Set(entry.rootScopes.map((s) => s.toLowerCase()));
+  fileRootScopesCache.set(key, scopes);
+  return scopes;
 }
 // Static variable-type resolution (scopes/varTypes.ts) resolves root-anchored
 // set_variable values through the set-file's schema root scopes.
@@ -699,6 +740,43 @@ function readFileStripBom(file: string): string | null {
 }
 
 /**
+ * Read a batch of files with several reads in flight (perf round 2).
+ *
+ * The scan used readFileSync per file, so exactly one read was ever
+ * outstanding and every file cost a full disk round trip. That is the whole
+ * difference between a cold and a warm first open: measured on game + AGOT,
+ * time-to-indexed was 185 s cold against 32 s warm, and a CPU profile
+ * attributed 157 s of the cold run (80% of the process) to readFileUtf8
+ * waiting. Reads issued together let the drive overlap them: on a 3,852-file
+ * mod, 437 ms serial against 239 ms with this, warm, where there is no
+ * latency left to hide.
+ *
+ * Bounded by libuv's thread pool (4 by default), so the concurrency here is
+ * an upper bound, not a promise. Order is preserved and a failed read is
+ * `null`, exactly like the serial version it replaces.
+ */
+async function readBatchStripBom(files: string[]): Promise<Array<string | null>> {
+  const out = new Array<string | null>(files.length);
+  let next = 0;
+  const workers = Math.min(16, files.length);
+  await Promise.all(
+    Array.from({ length: workers }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= files.length) return;
+        try {
+          const content = await fs.promises.readFile(files[i], "utf8");
+          out[i] = content.replace(/^﻿/, "");
+        } catch {
+          out[i] = null;
+        }
+      }
+    })
+  );
+  return out;
+}
+
+/**
  * Chunked schema-driven folder scan: yields to the event loop between file
  * batches so requests keep flowing, reports progress and aborts when a newer
  * scan supersedes it.
@@ -742,9 +820,11 @@ async function scanRootChunked(
     for (let i = 0; i < files.length; i += BATCH) {
       if (generation !== scanGeneration) return null; // superseded
       const batch = files.slice(i, i + BATCH);
-      for (const file of batch) {
-        const content = readFileStripBom(file);
-        if (content !== null) pushAll(defs, extractDefinitions(content, entry, file, source));
+      const contents = await readBatchStripBom(batch);
+      if (generation !== scanGeneration) return null; // superseded while reading
+      for (let k = 0; k < batch.length; k++) {
+        const content = contents[k];
+        if (content !== null) pushAll(defs, extractDefinitions(content, entry, batch[k], source));
       }
       done += batch.length;
       onProgress?.(totalFiles === 0 ? 100 : Math.round((done / totalFiles) * 100), entry.path);
@@ -782,9 +862,13 @@ async function scanModReferences(
   let refCount = 0;
   for (let i = 0; i < files.length; i += BATCH) {
     if (generation !== scanGeneration) return false;
-    for (const file of files.slice(i, i + BATCH)) {
-      const content = readFileStripBom(file);
+    const batch = files.slice(i, i + BATCH);
+    const contents = await readBatchStripBom(batch);
+    if (generation !== scanGeneration) return false; // superseded while reading
+    for (let k = 0; k < batch.length; k++) {
+      const content = contents[k];
       if (content === null) continue;
+      const file = batch[k];
       const extracted = extractReferences(content, file, source, schema, isEngineToken);
       data.refIndex.addAll(extracted.references);
       if (extracted.implicitDefs.length > 0) data.index.addAll(extracted.implicitDefs);
@@ -836,7 +920,7 @@ function readPlayset(modPath: string): string[] {
 async function buildIndex(): Promise<void> {
   const tBuild = Date.now();
   const generation = ++scanGeneration;
-  playsetCache.clear();
+  clearPathCaches();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),

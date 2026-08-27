@@ -430,6 +430,16 @@ export class ReferenceIndex {
   private byFile = new Map<string, Reference[]>();
   /** Per-name count of non-call references (the §C2 ranking signal). */
   private rankCounts = new Map<string, number>();
+  /**
+   * Call sites carrying a key chain, per file — the ONLY references the scope
+   * aggregation (buildCallSiteScopes) reads (perf round 2).
+   *
+   * It runs on every index change, i.e. every save, and used to iterate the
+   * whole reference index to find them: measured on game + AGOT, 4,124,139
+   * references of which 175,373 (4%) are chained call sites, so 96% of the
+   * walk was `continue`. Same shape as DefinitionIndex.trackedNames (§B2).
+   */
+  private chainedCallsByFile = new Map<string, Reference[]>();
   revision = 0;
 
   addAll(refs: Reference[]): void {
@@ -442,8 +452,18 @@ export class ReferenceIndex {
       let flist = this.byFile.get(fkey);
       if (!flist) this.byFile.set(fkey, (flist = []));
       flist.push(ref);
+      if (ref.call && ref.chain !== undefined) {
+        let clist = this.chainedCallsByFile.get(fkey);
+        if (!clist) this.chainedCallsByFile.set(fkey, (clist = []));
+        clist.push(ref);
+      }
     }
     if (refs.length > 0) this.revision++;
+  }
+
+  /** Every chained call site, the input buildCallSiteScopes actually wants. */
+  *chainedCalls(): IterableIterator<Reference> {
+    for (const list of this.chainedCallsByFile.values()) yield* list;
   }
 
   /**
@@ -460,6 +480,7 @@ export class ReferenceIndex {
     const refs = this.byFile.get(fkey);
     if (!refs) return;
     this.byFile.delete(fkey);
+    this.chainedCallsByFile.delete(fkey);
     const dropped = new Map<string, Set<Reference>>();
     for (const ref of refs) {
       let set = dropped.get(ref.name);
@@ -524,6 +545,7 @@ export class ReferenceIndex {
     this.byName.clear();
     this.byFile.clear();
     this.rankCounts.clear();
+    this.chainedCallsByFile.clear();
     this.revision++;
   }
 }
