@@ -62,6 +62,14 @@ In rough order of effect:
   biggest lever: excluding one total conversion you are not editing gives back
   roughly a gigabyte per window. The sidebar's *Workspace Mods* group has an
   **Exclude Mods from Indexing** picker for it.
+- **Read-only context** is the middle ground the picker offers after you
+  exclude: listing an excluded mod in `px.parentMods` indexes it like a
+  dependency parent — definitions only, so completion, hover and
+  go-to-definition still see its content, but none of the reference index,
+  which is the expensive half (a reference costs ~149 B and big mods hold
+  millions). A mod you load but never edit — an unofficial patch, a framework
+  mod, anything that carries copies of vanilla files — belongs here, not in
+  the full index.
 - **Fewer windows.** Windows multiply everything above. One window per mod you
   are actually editing, not one per folder you might look at.
 - **`px.parentMods`** should list only the dependencies your mod really builds
@@ -78,6 +86,24 @@ The extension warns once on activation when a workspace passes 6 indexed mod
 roots or 10,000 script files. That warning names `px.excludedMods` and offers
 the picker as a button, and it names `px.tigerRunOn` only when you have set it
 to `"save"`.
+
+## What VS Code itself indexes
+
+The toolkit's index never reads binary files: the definition scan walks the
+schema folders with an extension filter (`.txt`, `.yml`, `.gui`), and the file
+watchers glob the same extensions. A `.dds` never enters it.
+
+VS Code's own machinery is a different story. The built-in file watcher and
+search walk every workspace folder whole, and a game install is ~100k files
+of mostly textures, meshes and audio; a workspace with the game plus dozens
+of mods multiplies that. **`Paradox: Reduce VS Code Indexing Load`** (also a
+button on the big-workspace warning) writes workspace-scoped
+`files.watcherExclude` and `search.exclude` patterns for the asset trees
+(`gfx/`, `map_data/`, `music/`, `sound/`, `soundtrack/`, `dlc/`, `binaries/`,
+plus loose `.dds`/`.tga`/`.mesh`/`.anim` for the watcher). The write is
+additive — your existing patterns survive, and a pattern you set to `false`
+stays `false` — and the confirmation offers one-click Undo. The visible
+trade: search and Quick Open stop listing files under those folders.
 
 ## Reporting a slow session
 

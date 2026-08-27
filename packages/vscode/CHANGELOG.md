@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`Paradox: Reduce VS Code Indexing Load`** for large workspaces (field
+  report: game install + 40 mods). The toolkit's own index already skips
+  binary files, but VS Code's built-in file watcher and search crawl every
+  workspace folder whole — a game install is ~100k files of mostly
+  `.dds`/mesh/audio. The command writes workspace-scoped
+  `files.watcherExclude` and `search.exclude` patterns for the asset trees
+  (`gfx/`, `map_data/`, `music/`, `sound/`, `soundtrack/`, `dlc/`,
+  `binaries/`, plus loose `.dds`/`.tga`/`.mesh`/`.anim` for the watcher).
+  Additive and undoable: existing patterns survive, a pattern set to `false`
+  stays `false`, and the confirmation offers one-click Undo. Also a button on
+  the big-workspace warning.
+- **The exclude picker offers "Keep as Read-Only Context".** Excluding a mod
+  removes it entirely; the new follow-up moves newly excluded mods into
+  `px.parentMods` instead, indexing them like dependency parents: completion,
+  hover and go-to-definition still see their content, without the reference
+  index (the expensive half). The right tier for vanilla-copy packs (an
+  unofficial patch) and framework mods you load but never edit. Un-excluding
+  a mod pulls it back out of `px.parentMods`. `docs/PERFORMANCE.md` explains
+  the tiers.
+
 ## 0.3.3 (beta) - tiger download fix
 
 ### Fixed

@@ -57,6 +57,7 @@ import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
 import { serverHeapMb } from "./serverHeap";
 import { planWatchRoots } from "./watchRoots";
 import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
+import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
@@ -198,9 +199,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!context.workspaceState.get<boolean>("px.bigWorkspaceNotice")) {
         void context.workspaceState.update("px.bigWorkspaceNotice", true);
         void vscode.window
-          .showWarningMessage(`Paradox Modding Toolkit: ${bigWorkspace}`, "Exclude Mods...", "Settings")
+          .showWarningMessage(
+            `Paradox Modding Toolkit: ${bigWorkspace}`,
+            "Exclude Mods...",
+            "Reduce VS Code Load",
+            "Settings"
+          )
           .then((choice) => {
             if (choice === "Exclude Mods...") void vscode.commands.executeCommand("px.excludeMods");
+            else if (choice === "Reduce VS Code Load")
+              void vscode.commands.executeCommand("px.reduceEditorLoad");
             else if (choice === "Settings")
               void vscode.commands.executeCommand("workbench.action.openSettings", "px.excludedMods");
           });
@@ -703,6 +711,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.addDependencyMod", () =>
       addDependencyModCommand(cfg, views.focusRoot())
     ),
+    vscode.commands.registerCommand("px.reduceEditorLoad", () => reduceEditorLoadCommand()),
     vscode.commands.registerCommand("px.showDependencies", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !isScriptLang(editor.document.languageId)) {

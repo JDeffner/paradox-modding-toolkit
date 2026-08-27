@@ -270,6 +270,12 @@
         "icon": "$(eye-closed)"
       },
       {
+        "command": "px.reduceEditorLoad",
+        "category": "Paradox",
+        "title": "Reduce VS Code Indexing Load (exclude game assets)",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "px.addDependencyMod",
         "category": "Paradox",
         "title": "Add Dependency Mod (parent mod)",
@@ -803,6 +809,10 @@
         },
         {
           "command": "px.excludeMods",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.reduceEditorLoad",
           "when": "px.isCk3Workspace"
         },
         {
