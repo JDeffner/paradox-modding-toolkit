@@ -94,16 +94,33 @@ schema folders with an extension filter (`.txt`, `.yml`, `.gui`), and the file
 watchers glob the same extensions. A `.dds` never enters it.
 
 VS Code's own machinery is a different story. The built-in file watcher and
-search walk every workspace folder whole, and a game install is ~100k files
-of mostly textures, meshes and audio; a workspace with the game plus dozens
-of mods multiplies that. **`Paradox: Reduce VS Code Indexing Load`** (also a
-button on the big-workspace warning) writes workspace-scoped
+search walk every workspace folder whole, and most of a game install is
+textures, meshes and audio. **`Paradox: Reduce VS Code Indexing Load`** (also
+a button on the big-workspace warning) writes workspace-scoped
 `files.watcherExclude` and `search.exclude` patterns for the asset trees
 (`gfx/`, `map_data/`, `music/`, `sound/`, `soundtrack/`, `dlc/`, `binaries/`,
 plus loose `.dds`/`.tga`/`.mesh`/`.anim` for the watcher). The write is
 additive — your existing patterns survive, and a pattern you set to `false`
 stays `false` — and the confirmation offers one-click Undo. The visible
 trade: search and Quick Open stop listing files under those folders.
+
+Measured 2026-08-27 on the CK3 install (48,481 files) plus AGOT (21,431
+files), warm cache, NVMe, VS Code 1.134 on Windows:
+
+- The patterns remove 51,834 of the 69,912 files (74%).
+- **Find in Files across the workspace: ~110 s without the excludes, ~30 s
+  with them** (ripgrep, the engine VS Code search runs, with the same
+  globs). This is the number that changes daily life. Quick Open
+  enumeration barely moves (250 ms → 80 ms).
+- The file watcher does NOT get cheaper on Windows: its process sat at
+  123 MB vs 124 MB with the excludes, and the initial crawl cost ~0.4 s of
+  CPU either way, because Windows watches a whole root with one recursive
+  OS handle. The watcher half of the command is for Linux, where every
+  directory costs an inotify watch and the game tree can blow the system
+  limit, and for event churn when Steam updates the game mid-session.
+
+So on Windows this command is a search lever, not a memory lever. The memory
+levers are the mod-index settings above, and fewer windows.
 
 ## Reporting a slow session
 
