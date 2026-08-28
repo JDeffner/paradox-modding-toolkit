@@ -426,6 +426,20 @@ function schemaEntryForFile(fsPath: string): SchemaEntry | null {
   return null;
 }
 
+const entryRootScopesCache = new WeakMap<SchemaEntry, Set<string> | null>();
+
+/** The shared lowercased root-scope Set of one schema entry. */
+function entryRootScopes(entry: SchemaEntry): Set<string> | null {
+  const hit = entryRootScopesCache.get(entry);
+  if (hit !== undefined) return hit;
+  const scopes =
+    !entry.rootScopes || entry.rootScopes.length === 0
+      ? null
+      : new Set(entry.rootScopes.map((s) => s.toLowerCase()));
+  entryRootScopesCache.set(entry, scopes);
+  return scopes;
+}
+
 /** Schema-declared root scopes for the folder a file lives in (AD-5 seed).
  *  Memoized per file: see fileRootScopesCache. */
 function rootScopesForFile(fsPath: string): Set<string> | null {
@@ -433,10 +447,11 @@ function rootScopesForFile(fsPath: string): Set<string> | null {
   const hit = fileRootScopesCache.get(key);
   if (hit !== undefined) return hit;
   const entry = schemaEntryForFile(fsPath);
-  const scopes =
-    !entry?.rootScopes || entry.rootScopes.length === 0
-      ? null
-      : new Set(entry.rootScopes.map((s) => s.toLowerCase()));
+  // One Set per schema ENTRY, not per file: there are ~156 entries against
+  // tens of thousands of files, and a Set of one string costs 242 B. Safe to
+  // share because buildCallSiteScopes keys on Set identity and copies before
+  // mutating (varTypes.ts).
+  const scopes = entry === null ? null : entryRootScopes(entry);
   fileRootScopesCache.set(key, scopes);
   return scopes;
 }
@@ -1027,6 +1042,13 @@ async function buildIndex(): Promise<void> {
     }
   } finally {
     if (generation === scanGeneration) {
+      // The scan built every bucket with `[]` + push, which leaves V8's
+      // 16-slot growth capacity attached to names holding one entry (perf
+      // round 3). Reclaim it once, here, rather than on every mutation.
+      const tCompact = Date.now();
+      data.index.compact();
+      data.refIndex.compact();
+      perf(`compacted index buckets ${Date.now() - tCompact}ms`);
       indexing = false;
       sendProgress("index", "done");
       sendStatus();

@@ -183,17 +183,19 @@ export function extractReferences(
     // "type:value" = script-value math save (always a value scope).
     if (key !== null && SAVE_SCOPE_KEYS.has(key) && value?.kind === "scalar" && !value.quoted) {
       if (NAME_OK.test(value.text)) {
+        // `value` and `container` go IN the literal (perf round 3): assigning
+        // an optional field after the object is built moves it into a
+        // PropertyArray, measured at 40 B against 16 B for two in-object slots.
         const def: Definition = {
           name: value.text,
           kind: "saved_scope",
           file,
           line: lines.positionAt(value.range.start).line,
           source,
+          value:
+            key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`,
+          container: topLevelName(ancestors),
         };
-        def.value =
-          key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`;
-        const container = topLevelName(ancestors);
-        if (container !== undefined) def.container = container;
         implicitDefs.push(def);
       }
       return;
@@ -475,6 +477,13 @@ export class ReferenceIndex {
   /** Every chained call site, the input buildCallSiteScopes actually wants. */
   *chainedCalls(): IterableIterator<Reference> {
     for (const list of this.chainedCallsByFile.values()) yield* list;
+  }
+
+  /** Trim every bucket to its exact length. See DefinitionIndex.compact. */
+  compact(): void {
+    for (const [name, list] of this.byName) this.byName.set(name, list.slice());
+    for (const [file, list] of this.byFile) this.byFile.set(file, list.slice());
+    for (const [file, list] of this.chainedCallsByFile) this.chainedCallsByFile.set(file, list.slice());
   }
 
   /**
