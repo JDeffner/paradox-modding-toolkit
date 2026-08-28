@@ -416,6 +416,100 @@ describe("call-site scope aggregation (scripted effects without @scope)", () => 
     };
     expect(scopesAt("my_effect = {\n\t|\n}", null, ctx)).toEqual(["artifact"]);
   });
+
+  /**
+   * Equivalence guard for the perf-round-2 rewrite of buildCallSiteScopes.
+   *
+   * That rewrite makes three assumptions, any of which would silently change
+   * scope inference (and so completion ranking and hover) rather than fail:
+   * that only chained call sites matter, that a (root scopes, chain) pair
+   * resolves the same wherever it occurs, and that a SHARED root-scope Set is
+   * as good as a fresh one per call. This reimplements the pre-optimization
+   * version — walk everything, resolve every site, fresh Set every time — and
+   * demands an identical map.
+   */
+  it("matches a naive full walk, including shared vs fresh root-scope Sets", () => {
+    // Per-file root scopes, so several distinct Set identities are in play.
+    const rootsOf = (file: string): Set<string> | null => {
+      if (file.startsWith("events/")) return new Set(["character"]);
+      if (file.startsWith("common/province/")) return new Set(["province"]);
+      if (file.startsWith("common/untyped/")) return null; // unknown root
+      return new Set(["character", "landed_title"]);
+    };
+    // The optimized path is handed ONE shared Set per file, as server.ts's
+    // memoized rootScopesForFile now does.
+    const shared = new Map<string, Set<string> | null>();
+    const sharedRoots = (file: string) => {
+      if (!shared.has(file)) shared.set(file, rootsOf(file));
+      return shared.get(file)!;
+    };
+    // The naive path gets a fresh Set every single call, as the old code did.
+    const freshRoots = (file: string) => {
+      const r = rootsOf(file);
+      return r ? new Set(r) : null;
+    };
+
+    const files = [
+      "events/a.txt",
+      "events/b.txt",
+      "common/province/p.txt",
+      "common/untyped/u.txt",
+      "common/other/o.txt",
+    ];
+    const chains = [
+      "immediate",
+      "immediate.every_held_title",
+      "immediate.scope:mystery", // unresolvable: must contribute nothing
+      "immediate.liege.culture",
+      "", // top-level chain
+      "immediate.random_list",
+    ];
+    // Repeat the same (file, chain) pairs so the memo is actually exercised,
+    // and interleave files so the per-file hoist sees the value change back.
+    const refs = [];
+    for (let round = 0; round < 3; round++) {
+      for (const file of files) {
+        for (let c = 0; c < chains.length; c++) {
+          refs.push(callRef(`eff_${c % 4}`, chains[c], file));
+        }
+      }
+    }
+    // TWO names sharing ONE chain, in this order, inside one file. This is the
+    // only shape that catches a memoized Set being handed out instead of
+    // copied: `poll_a` takes the cached resolution of "immediate", its second
+    // call site unions "landed_title" INTO that same object, and `poll_b` then
+    // reads the corrupted entry. With each chain used by a single name the
+    // corruption is self-consistent and invisible, which is how the first
+    // version of this test passed against that bug.
+    refs.push(callRef("poll_a", "immediate", "events/a.txt"));
+    refs.push(callRef("poll_a", "immediate.every_held_title", "events/a.txt"));
+    refs.push(callRef("poll_b", "immediate", "events/a.txt"));
+    // Non-call and chain-less references: the optimized path never sees these
+    // (ReferenceIndex filters them out), the naive one must skip them itself.
+    const noise = refs.slice(0, 5).map((r) => ({ ...r, call: false as const }));
+    const chainless = refs.slice(5, 9).map((r) => {
+      const { chain: _drop, ...rest } = r;
+      return rest as typeof r;
+    });
+
+    const naive = new Map<string, Set<string>>();
+    for (const ref of [...refs, ...noise, ...chainless]) {
+      if (!ref.call || ref.chain === undefined) continue;
+      const resolved = resolveKeyChainScopes(ref.chain.split("."), model, freshRoots(ref.file));
+      if (!resolved || resolved.size === 0) continue;
+      const prev = naive.get(ref.name);
+      if (prev) for (const s of resolved) prev.add(s);
+      else naive.set(ref.name, new Set(resolved));
+    }
+
+    const optimized = buildCallSiteScopes(refs, model, sharedRoots);
+
+    expect(optimized.size).toBe(naive.size);
+    expect(optimized.size).toBeGreaterThan(0); // the fixture must actually resolve
+    for (const [name, scopes] of naive) {
+      expect([...(optimized.get(name) ?? [])].sort(), `scopes of ${name}`).toEqual([...scopes].sort());
+    }
+  });
 });
 
 describe("collectSavedScopeTypes: save_temporary_value_as", () => {
