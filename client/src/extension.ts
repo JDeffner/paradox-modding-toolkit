@@ -16,6 +16,7 @@ import { modRootFor, readConfig, type Ck3Config } from "./config";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { findDownloadedTiger } from "./tigerDownload";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
+import { maybeNudgeMigration, openParadoxToolkit } from "./migrate";
 import { Ck3StatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
 import {
@@ -575,9 +576,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("ck3.setup", () => runSetup(setupDeps)),
-    vscode.commands.registerCommand("ck3.downloadTiger", () => downloadTigerCommand(setupDeps, false))
+    vscode.commands.registerCommand("ck3.downloadTiger", () => downloadTigerCommand(setupDeps, false)),
+    vscode.commands.registerCommand("ck3.openParadoxToolkit", () => openParadoxToolkit())
   );
-  maybeNudgeSetup(context, cfg);
+  // Deprecated id: point the remaining users at JDeffner.px-toolkit, once. It
+  // outranks the setup nudge — two popups at startup is one too many, and
+  // configuring a dead extension is not the advice anyone needs now.
+  if (!maybeNudgeMigration(context)) maybeNudgeSetup(context, cfg);
 }
 
 export function deactivate(): Thenable<void> | undefined {

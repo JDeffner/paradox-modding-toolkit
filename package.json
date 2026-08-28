@@ -1,6 +1,6 @@
 {
   "name": "ck3-modding-toolkit",
-  "displayName": "CK3 Modding Toolkit",
+  "displayName": "CK3 Modding Toolkit (deprecated — use Paradox Modding Toolkit)",
   "description": "This extension has moved to Paradox Toolkit (JDeffner.px-toolkit) with Victoria 3 and Europa Universalis V support. Install the new extension to keep getting updates.",
   "version": "0.1.4",
   "publisher": "JDeffner",
@@ -157,6 +157,11 @@
       }
     },
     "commands": [
+      {
+        "command": "ck3.openParadoxToolkit",
+        "title": "Switch to the Paradox Modding Toolkit (this extension is deprecated)",
+        "category": "CK3"
+      },
       {
         "command": "ck3.reloadScriptDocs",
         "category": "CK3",
@@ -358,9 +363,20 @@
     "walkthroughs": [
       {
         "id": "ck3.gettingStarted",
-        "title": "Get started with the CK3 Modding Toolkit",
-        "description": "Configure the extension and try its features on your mod.",
+        "title": "CK3 Modding Toolkit: moved to the Paradox Modding Toolkit",
+        "description": "This extension is deprecated. Switch to JDeffner.px-toolkit.",
         "steps": [
+          {
+            "id": "ck3.step.moved",
+            "title": "Switch to the Paradox Modding Toolkit",
+            "description": "This extension is deprecated and continues as JDeffner.px-toolkit, with Victoria 3 and Europa Universalis V support. Install it and uninstall this one.\n[Open the Paradox Modding Toolkit](command:ck3.openParadoxToolkit)",
+            "media": {
+              "markdown": "media/walkthrough/moved.md"
+            },
+            "completionEvents": [
+              "onCommand:ck3.openParadoxToolkit"
+            ]
+          },
           {
             "id": "ck3.step.setup",
             "title": "Run automatic setup",
@@ -901,15 +917,14 @@
   },
   "icon": "media/icon.png",
   "keywords": [
+    "deprecated",
     "ck3",
     "crusader kings",
     "paradox",
-    "modding",
-    "language server",
-    "ck3-tiger"
+    "modding"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/JDeffner/ck3-modding-toolkit.git"
+    "url": "https://github.com/JDeffner/paradox-modding-toolkit.git"
   }
 }

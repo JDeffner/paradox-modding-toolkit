@@ -2,7 +2,22 @@
 
 ## 0.1.4
 
-- Final release under this id. The extension continues as Paradox Toolkit (JDeffner.px-toolkit) with Victoria 3 and Europa Universalis V support; install it to keep getting updates.
+Final release under this id. The extension continues as the **Paradox Modding
+Toolkit** (`JDeffner.px-toolkit`), which adds Victoria 3 and Europa Universalis V
+and is where every fix and feature lands from now on.
+
+- **Deprecated listing.** Display name, description and README now say so and
+  link to the new listing. Nothing here will be fixed again.
+- **One-time migration notice** on activation, with buttons to open the new
+  extension's page or the migration notes. It shows once per install, stays
+  quiet afterwards, and never appears if `JDeffner.px-toolkit` is already
+  installed.
+- **New command `CK3: Switch to the Paradox Modding Toolkit`**, the permanent
+  way to the new listing after that notice is gone.
+- Moving over: install `JDeffner.px-toolkit`, uninstall this one, and rename
+  your `ck3.*` settings to `px.*` (`ck3.gamePath` becomes `px.gamePath`).
+  Commands are prefixed **Paradox** instead of **CK3**, and the suppression
+  comment is `# px:ignore` instead of `# ck3m:ignore`. Mod files are untouched.
 
 ## Unreleased
 

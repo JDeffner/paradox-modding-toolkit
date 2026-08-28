@@ -1,5 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
+  - name: This extension is deprecated — file issues on the Paradox Modding Toolkit
+    url: https://github.com/JDeffner/paradox-modding-toolkit/issues
+    about: The CK3 Modding Toolkit continues as JDeffner.px-toolkit. Bugs and requests belong there; this id gets no more fixes.
+  - name: Install the Paradox Modding Toolkit
+    url: https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit
+    about: Same tool, further along, with Victoria 3 and Europa Universalis V support.
   - name: Documentation (wiki)
-    url: https://github.com/JDeffner/ck3-modding-toolkit/wiki
-    about: Setup, data sources, and feature docs live here — worth a look before filing.
+    url: https://github.com/JDeffner/paradox-modding-toolkit/wiki
+    about: Setup, data sources, and feature docs for the current extension.
