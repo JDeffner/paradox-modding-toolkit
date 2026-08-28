@@ -93,6 +93,9 @@ game recolors it, and saves it back as script.*
   editing, a coverage view, and scaffolding for entire translation mods.
 - **DDS tooling.** Inline texture previews on hover, a zoomable viewer with
   PNG export, image-to-DDS conversion, and measured size guidelines.
+- **Large workspaces are the design case.** A game install plus five Workshop
+  mods, all indexed, opens in 61 s cold where it used to take 143, and one
+  command stops VS Code itself crawling the game's textures and audio.
 
 The full tour with screenshots is the
 [Feature Overview](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Feature-Overview).

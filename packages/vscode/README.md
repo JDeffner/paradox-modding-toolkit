@@ -95,6 +95,15 @@ bottom says exactly where they stop.
   it back as script into the mod you choose.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
+- **Built for the big workspaces**: a game install plus five Workshop mods,
+  all indexed, opens in 61 s from a cold disk where it used to take 143, and
+  the server holds 1.5 GB instead of 1.7. `Paradox: Reduce VS Code Indexing
+  Load` also stops VS Code's own search and watcher crawling 43,000 texture
+  and audio files, which turns a whole-workspace Find in Files from up to
+  106 s into under a second. `px.excludedMods` drops a mod you are not
+  editing; read-only context keeps its definitions without the reference
+  index. Numbers and method in
+  [PERFORMANCE.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PERFORMANCE.md).
 - **The workspace looks like the game you mod**: script files carry a per-game
   file icon (the crown for Crusader Kings III, the PX box for the others) and
   the status bar names the game, e.g. "Paradox Script (Victoria 3)". Snippets
