@@ -118,8 +118,10 @@ const child: ChildProcess = fork(SERVER, ["--node-ipc"], {
   stdio: ["ignore", "pipe", "pipe", "ipc"],
   silent: true,
   execArgv,
-  // Env is inherited, so `UV_THREADPOOL_SIZE=N node …profileWorkspace.ts` A/Bs
-  // the read concurrency the batcher actually gets (libuv defaults to 4).
+  // Match what extension.ts gives the shipped server, so a run measures the
+  // real configuration. `UV_THREADPOOL_SIZE=N node …profileWorkspace.ts`
+  // still overrides it, which is how the 4-against-16 cold A/B was taken.
+  env: { ...process.env, UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || "16" },
 });
 
 /**
