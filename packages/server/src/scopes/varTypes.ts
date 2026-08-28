@@ -17,6 +17,7 @@
 import type { Definition, Reference } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import type { ServerData } from "../serverData";
+import type { DefinitionIndex } from "../index/indexer";
 import { resolveKeyChainScopes, type InferenceContext } from "./inference";
 import type { Scope, ScopeModel } from "./model";
 
@@ -52,6 +53,11 @@ export interface VariableTypeInfo {
 }
 
 interface Cache {
+  /** The index the info was built from. buildIndex installs a FRESH
+   * DefinitionIndex whose revision restarts at 0, so a revision match alone
+   * can hand back a map built from the previous index once the new one climbs
+   * back to the same number. */
+  index: DefinitionIndex;
   revision: number;
   info: VariableTypeInfo;
 }
@@ -187,7 +193,8 @@ export function variableTypes(
   rootScopesForFile: (file: string) => Set<Scope> | null
 ): VariableTypeInfo {
   const cached = cache.get(data);
-  if (cached && cached.revision === data.index.revision) return cached.info;
+  if (cached && cached.index === data.index && cached.revision === data.index.revision)
+    return cached.info;
   const info = buildVariableTypes(
     data.index.entries(
       (d) =>
@@ -199,7 +206,7 @@ export function variableTypes(
     data.scopeModel,
     rootScopesForFile
   );
-  cache.set(data, { revision: data.index.revision, info });
+  cache.set(data, { index: data.index, revision: data.index.revision, info });
   return info;
 }
 
