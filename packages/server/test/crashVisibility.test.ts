@@ -146,7 +146,8 @@ describe.skipIf(!hasServer)("crash visibility (§A1)", () => {
     // Attributable: which build, which fault, and the stack frame that threw.
     expect(text).toContain("index build failed (startup)");
     expect(text).toContain("px fault injection: scan throw (PX_FAULT_SCAN=sync)");
-    expect(text).toContain("scanRootChunked");
+    // The fixture configures a mod root only, which the fused scan owns.
+    expect(text).toContain("scanModRootBoth");
     // The rejection is caught, so the process is still there to answer requests
     // (before §A1 this path either died or went quiet with an empty index).
     expect(s.exited).toBe(false);

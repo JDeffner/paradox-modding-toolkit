@@ -31,6 +31,7 @@ import {
   walkStatements,
   type AssignmentNode,
   type BlockNode,
+  type RootNode,
   type ScalarNode,
   type Statement,
 } from "../parser";
@@ -82,7 +83,25 @@ export function extractReferences(
   isEngineToken?: (name: string) => boolean
 ): ExtractedRefs {
   const { root } = parseScript(content);
-  const lines = new LineIndex(content);
+  return extractReferencesParsed(root, new LineIndex(content), file, source, schema, isEngineToken);
+}
+
+/**
+ * The body of `extractReferences` over a CST the caller already has.
+ *
+ * The mod scan reads and parses each script file once and feeds that parse to
+ * both extractors (see `extractDefinitionsParsed`). `extractReferences` above
+ * is the same function with the parse in front and stays the entry point for
+ * the incremental rescan and for callers holding only text.
+ */
+export function extractReferencesParsed(
+  root: RootNode,
+  lines: LineIndex,
+  file: string,
+  source: DefSource,
+  schema: SchemaData,
+  isEngineToken?: (name: string) => boolean
+): ExtractedRefs {
   const references: Reference[] = [];
   const implicitDefs: Definition[] = [];
   const namespaces: string[] = [];
@@ -192,8 +211,7 @@ export function extractReferences(
           file,
           line: lines.positionAt(value.range.start).line,
           source,
-          value:
-            key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`,
+          value: key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`,
           container: topLevelName(ancestors),
         };
         implicitDefs.push(def);

@@ -145,14 +145,36 @@ Peak RSS is why this was worth doing before anything else: this workspace
 peaked at 4081 MB against the server's 4096 MB ceiling. It was close to
 failing, not close to being slow.
 
-**What is still on the table.** A mod's `.txt` files are read and parsed
-twice, once by the definition scan over the schema folders and once by the
-reference scan over the whole root, because `extractDefinitions` and
-`extractReferences` each call `parseScript` themselves. Reference scanning is
-54% of the build on this workspace. Also unfixed: a Steam update that rewrites
-5,000 script files becomes 5,000 separate rescans, each with its own 150 ms
-timer, which needs a "root invalidated" verb in the protocol rather than an
-optimization.
+**Every mod file was read twice and parsed twice.** The definition scan walked
+the ~156 schema folders; the reference scan then walked the whole root for
+`.txt` and read it all again, because `extractDefinitions` and
+`extractReferences` each called `parseScript` themselves. 154 of the 156 CK3
+schema entries are `.txt`, so the two file sets overlapped on essentially all
+script. A workspace mod root is now walked once: each file is read once,
+parsed once, and that one CST feeds both extractors, with `classifyFile`
+supplying the schema entry the folder walk would have found it under.
+Localization (`.yml`) and `gui` (`.gui`) are not `.txt` and keep the
+schema-folder listing. Dependency parents stay definition-only, and vanilla
+references are still lazy.
+
+| time to indexed, all round 3 changes | warm | cold |
+|---|---|---|
+| round 2 (libuv pool 4, two passes) | 52.4-53.3 s | 142.9 s |
+| pool 16, two passes | 53.8 s | 71.8 s |
+| pool 16, one fused pass | 44.4-44.7 s | 61.5 s |
+
+`packages/server/test/fusedScan.test.ts` is the guard: it reimplements the two
+passes and demands identical definitions, references, implicit definitions and
+namespaces over a fixture root, in the style of the `buildCallSiteScopes`
+equivalence test from round 2.
+
+**What is still on the table.** A Steam update that rewrites 5,000 script
+files becomes 5,000 separate rescans, each with its own 150 ms timer. That
+needs a "root invalidated" verb in the protocol rather than an optimization.
+The reference index is also still object-per-reference: a columnar layout
+measured 121 B down to 27 B per reference on a model, about 710 MB here, and
+would move those bytes into ArrayBuffers where the 4096 MB heap ceiling does
+not bind. Both are larger changes than this round took on.
 
 ## Configuring a big workspace
 

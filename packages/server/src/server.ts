@@ -129,6 +129,7 @@ import {
 import { internedCount, resetInternTable } from "./index/intern";
 import { extractDefinitions } from "./index/extract";
 import { extractReferences } from "./index/references";
+import { scanModRootFused } from "./index/fusedScan";
 import { LazyReferenceScanner, type LazyRefRoot } from "./index/lazyRefs";
 import { ModOriginResolver } from "./index/modOrigin";
 import { loadSchema, type SchemaData } from "./schema/loader";
@@ -853,51 +854,46 @@ async function scanRootChunked(
   return defs;
 }
 
-/** Reference pass over every .txt in a workspace mod root (references live
- * everywhere, not just schema folders). Runs for the mod AND every other
- * workspace mod, so find-references/usage counts span multi-mod workspaces. */
-async function scanModReferences(
-  root: string,
-  source: "mod" | "parent",
-  generation: number
-): Promise<boolean> {
+/**
+ * Definitions AND references for one workspace-mod root, from a single walk
+ * that reads and parses each `.txt` once (perf round 3). Runs for the mod AND
+ * every other workspace mod, so find-references/usage counts span multi-mod
+ * workspaces. Read-only dependency parents stay definition-only and keep
+ * `scanRootChunked`; so does vanilla, whose references are lazy (AD-4).
+ *
+ * Returns the definition count, or null when a newer scan superseded this one.
+ */
+async function scanModRootBoth(root: string, generation: number): Promise<number | null> {
+  if (faultScan) injectScanFault();
   const t0 = Date.now();
-  // A mod root is walked whole here, gfx/ and all, so the listing yields on the
-  // same rhythm as the read loop below rather than blocking through it.
-  const files: string[] = [];
-  for (const file of iterFiles(root, ".txt")) {
-    if (file === null) {
-      if (generation !== scanGeneration) return false;
-      await yieldNow();
-    } else {
-      files.push(file);
-    }
-  }
-  const BATCH = 150;
-  let refCount = 0;
-  for (let i = 0; i < files.length; i += BATCH) {
-    if (generation !== scanGeneration) return false;
-    const batch = files.slice(i, i + BATCH);
-    const contents = await readBatchStripBom(batch);
-    if (generation !== scanGeneration) return false; // superseded while reading
-    for (let k = 0; k < batch.length; k++) {
-      const content = contents[k];
-      if (content === null) continue;
-      const file = batch[k];
-      const extracted = extractReferences(content, file, source, schema, isEngineToken);
-      data.refIndex.addAll(extracted.references);
-      if (extracted.implicitDefs.length > 0) data.index.addAll(extracted.implicitDefs);
-      if (extracted.namespaces.length > 0) namespacesByFile.set(file.toLowerCase(), extracted.namespaces);
-      refCount += extracted.references.length;
-    }
-    await yieldNow();
-  }
+  const result = await scanModRootFused(root, {
+    schema,
+    // Both callers are workspace mods; dependency parents never reach here.
+    source: "mod",
+    locLanguage: settings.locLanguage,
+    isEngineToken,
+    readBatch: readBatchStripBom,
+    superseded: () => generation !== scanGeneration,
+    yieldNow,
+    addReferences: (refs) => data.refIndex.addAll(refs),
+    setNamespaces: (file, ns) => namespacesByFile.set(file.toLowerCase(), ns),
+  });
+  if (result === null) return null;
+  // Schema definitions first, then the implicit ones the reference pass finds,
+  // which is the order the two passes added them in.
+  data.index.addAll(result.defs);
+  if (result.implicitDefs.length > 0) data.index.addAll(result.implicitDefs);
   rebuildModNamespaces();
+  perf(`scan ${path.basename(root)} listed ${result.files} files ${result.listMs}ms`);
+  perf(
+    `scan ${path.basename(root)} (mod) read+extract ${result.defs.length} defs ` +
+      `and ${result.references} refs from ${result.files} files ${Date.now() - t0 - result.listMs}ms`
+  );
   log(
     `indexed ${path.basename(root)} references: ` +
-      `${refCount} usage sites in ${files.length} files (${Date.now() - t0}ms)`
+      `${result.references} usage sites in ${result.scriptFiles} files (${Date.now() - t0}ms)`
   );
-  return true;
+  return result.defs.length;
 }
 
 function rebuildModNamespaces(): void {
@@ -961,12 +957,10 @@ async function buildIndex(): Promise<void> {
   try {
     if (settings.modPath) {
       const t0 = Date.now();
-      const defs = await scanRootChunked(settings.modPath, "mod", generation);
-      if (defs === null) return;
-      data.index.addAll(defs);
-      if (!(await scanModReferences(settings.modPath, "mod", generation))) return;
+      const count = await scanModRootBoth(settings.modPath, generation);
+      if (count === null) return;
       indexChanged("mod scan");
-      log(`indexed mod: ${defs.length} definitions (${Date.now() - t0}ms)`);
+      log(`indexed mod: ${count} definitions (${Date.now() - t0}ms)`);
     }
 
     const wsMods = new Set(workspaceModRoots().map((r) => r.toLowerCase()));
@@ -976,16 +970,19 @@ async function buildIndex(): Promise<void> {
       // reference indexing, views, ranking). Only dependency parents from
       // the parent-mods setting / playset.json are read-only "parent" context.
       const isWorkspaceMod = wsMods.has(parent.toLowerCase());
-      const parentDefs = await scanRootChunked(parent, isWorkspaceMod ? "mod" : "parent", generation);
-      if (parentDefs === null) return;
-      data.index.addAll(parentDefs);
+      let count: number | null;
       if (isWorkspaceMod) {
-        if (!(await scanModReferences(parent, "mod", generation))) return;
+        count = await scanModRootBoth(parent, generation);
+      } else {
+        const parentDefs = await scanRootChunked(parent, "parent", generation);
+        count = parentDefs === null ? null : parentDefs.length;
+        if (parentDefs !== null) data.index.addAll(parentDefs);
       }
+      if (count === null) return;
       indexChanged(`parent scan ${path.basename(parent)}`);
       log(
         `indexed ${isWorkspaceMod ? "workspace mod" : "parent mod"} ${path.basename(parent)}: ` +
-          `${parentDefs.length} definitions (${Date.now() - t1}ms)`
+          `${count} definitions (${Date.now() - t1}ms)`
       );
     }
 

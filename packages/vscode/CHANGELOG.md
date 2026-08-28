@@ -27,6 +27,13 @@
   sounds: this workspace peaked at 4081 MB against the server's 4096 MB
   ceiling, so it was running out of headroom, not out of speed.
 
+  The last of it was plain duplicated work. A mod's script files were read and
+  parsed twice, once for definitions over the schema folders and once for
+  references over the whole mod, because the two extractors each parsed the
+  file themselves. A mod is now walked once and each file parsed once, feeding
+  both. Together with the thread pool: **time to indexed 142.9 s to 61.5 s
+  cold, and 52.9 s to 44.5 s warm.**
+
 - **A window that has nothing to do with modding no longer indexes the game.**
   The extension activates in every VS Code window, and the game path was
   auto-detected from the Steam library whether or not the workspace held a
