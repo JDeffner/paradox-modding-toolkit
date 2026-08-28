@@ -18,6 +18,7 @@ import {
   VARIABLE_LIST_SET_KINDS,
   VARIABLE_READ_KINDS,
   VAR_PREFIX_KINDS,
+  variableReadKinds,
 } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
 import { isLocProperty } from "@px-lsp/protocol/locProperties";
@@ -51,6 +52,16 @@ const VAR_PREFIXES = new Set(Object.keys(VAR_PREFIX_KINDS));
 
 /** What a key-position call (`my_effect = yes`) may refer to. */
 const CALL_KINDS = ["scripted_effect", "scripted_trigger", "scripted_modifier"];
+
+/**
+ * Shared `kinds` arrays for the sites that used to build one per reference
+ * (perf round 3). Nothing mutates a reference's `kinds` — the only reader is
+ * `ReferenceIndex.byKind` — so one array per distinct kind set is enough, and
+ * at 7.5M references on a game + 5 mods workspace the per-reference array
+ * header and backing store were worth hundreds of megabytes.
+ */
+const SAVED_SCOPE_KINDS = ["saved_scope"];
+const LOC_KEY_KINDS = ["loc_key"];
 
 export interface ExtractedRefs {
   references: Reference[];
@@ -107,7 +118,7 @@ export function extractReferences(
     if (VAR_PREFIXES.has(prefix)) {
       pushRef(name, VAR_PREFIX_KINDS[prefix], offset);
     } else if (prefix === "scope") {
-      pushRef(name, ["saved_scope"], offset);
+      pushRef(name, SAVED_SCOPE_KINDS, offset);
     } else {
       const kinds = schema.prefixRefs[prefix];
       if (kinds) pushRef(name, kinds, offset);
@@ -153,7 +164,7 @@ export function extractReferences(
         if (dot >= 0) name = name.slice(0, dot);
         const offset = stmt.key.range.start + prefix.length + 1;
         if (VAR_PREFIXES.has(prefix)) pushRef(name, VAR_PREFIX_KINDS[prefix], offset);
-        else if (prefix === "scope") pushRef(name, ["saved_scope"], offset);
+        else if (prefix === "scope") pushRef(name, SAVED_SCOPE_KINDS, offset);
       }
     }
 
@@ -325,7 +336,7 @@ export function extractReferences(
       ) {
         // List reads accept only lists; scalar reads accept both (has_variable
         // is true for a list variable).
-        const kinds = readKind.endsWith("_list") ? [readKind] : [readKind, `${readKind}_list`];
+        const kinds = variableReadKinds(readKind);
         pushRef(nameScalar.text, kinds, nameScalar.range.start);
       }
       return;
@@ -384,7 +395,7 @@ export function extractReferences(
       }
       // Loc-key-valued properties (both `desc = key` and `desc = "key"`).
       if (key !== null && isLocProperty(key) && NAME_OK.test(value.text)) {
-        pushRef(value.text, ["loc_key"], value.range.start + (value.quoted ? 1 : 0));
+        pushRef(value.text, LOC_KEY_KINDS, value.range.start + (value.quoted ? 1 : 0));
       }
     } else if (value?.kind === "block" && key !== null) {
       const field = schema.refFields.get(key);
