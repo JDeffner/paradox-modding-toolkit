@@ -49,7 +49,11 @@ function write(file: string, content: string): string {
 
 /** A game install, not a mod: the shape `config.ts#looksLikeGameDir` probes for. */
 function looksLikeGameDir(p: string): boolean {
-  return fs.existsSync(path.join(p, "common")) && fs.existsSync(path.join(p, "events")) && !fs.existsSync(path.join(p, "descriptor.mod"));
+  return (
+    fs.existsSync(path.join(p, "common")) &&
+    fs.existsSync(path.join(p, "events")) &&
+    !fs.existsSync(path.join(p, "descriptor.mod"))
+  );
 }
 
 // JSONC: `.code-workspace` files allow comments and trailing commas.
@@ -85,7 +89,18 @@ const scratchRoot = path.join(tmp, "scratch-mod");
 write(path.join(scratchRoot, "descriptor.mod"), 'version="1.0"\nname="prof"\nsupported_version="1.16.*"\n');
 const scratchFile = write(
   path.join(scratchRoot, "events", "prof_events.txt"),
-  ["namespace = prof", "", "prof.1 = {", "\ttype = character_event", "\ttitle = prof.1.t", "\timmediate = {", "\t\tadd_gold = 5", "\t}", "}", ""].join("\n")
+  [
+    "namespace = prof",
+    "",
+    "prof.1 = {",
+    "\ttype = character_event",
+    "\ttitle = prof.1.t",
+    "\timmediate = {",
+    "\t\tadd_gold = 5",
+    "\t}",
+    "}",
+    "",
+  ].join("\n")
 );
 
 const settings = {
@@ -185,7 +200,9 @@ async function timed(label: string, method: string, params: unknown): Promise<nu
   const t0 = performance.now();
   const res: unknown = await conn.sendRequest(method, params);
   const ms = performance.now() - t0;
-  const count = Array.isArray(res) ? res.length : ((res as { items?: unknown[] } | null)?.items?.length ?? -1);
+  const count = Array.isArray(res)
+    ? res.length
+    : ((res as { items?: unknown[] } | null)?.items?.length ?? -1);
   console.log(`  ${label.padEnd(34)} ${String(Math.round(ms)).padStart(8)} ms   items=${count}`);
   return Math.round(ms);
 }
@@ -215,22 +232,43 @@ results.definitions = definitions;
 console.log(`index built, uninterrupted: ${results.timeToIndexedMs} ms, ${definitions} definitions\n`);
 
 console.log("request timings:");
-results.completionCold = await timed("completion (cold cache)", "textDocument/completion", { textDocument: { uri }, position: completionPos });
-results.completionWarm = await timed("completion (warm cache)", "textDocument/completion", { textDocument: { uri }, position: completionPos });
-results.semanticTokens = await timed("semanticTokens/full", "textDocument/semanticTokens/full", { textDocument: { uri } });
-results.hover = await timed("hover", "textDocument/hover", { textDocument: { uri }, position: { line: 6, character: 5 } });
-results.documentSymbol = await timed("documentSymbol", "textDocument/documentSymbol", { textDocument: { uri } });
+results.completionCold = await timed("completion (cold cache)", "textDocument/completion", {
+  textDocument: { uri },
+  position: completionPos,
+});
+results.completionWarm = await timed("completion (warm cache)", "textDocument/completion", {
+  textDocument: { uri },
+  position: completionPos,
+});
+results.semanticTokens = await timed("semanticTokens/full", "textDocument/semanticTokens/full", {
+  textDocument: { uri },
+});
+results.hover = await timed("hover", "textDocument/hover", {
+  textDocument: { uri },
+  position: { line: 6, character: 5 },
+});
+results.documentSymbol = await timed("documentSymbol", "textDocument/documentSymbol", {
+  textDocument: { uri },
+});
 
 // A save invalidates the index revision: the cache-miss path a user hits on
 // EVERY Ctrl+S, and the row that decided how round 2 felt.
 const text = `${baseText}\n# profile touch\n`;
 fs.writeFileSync(scratchFile, text, "utf8");
-void conn.sendNotification("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text }] });
+void conn.sendNotification("textDocument/didChange", {
+  textDocument: { uri, version: 2 },
+  contentChanges: [{ text }],
+});
 void conn.sendNotification("textDocument/didSave", { textDocument: { uri }, text });
 void conn.sendNotification("paradox/modFileChanged", { fsPath: scratchFile });
 await sleep(1200);
-results.completionAfterSave = await timed("completion (after save)", "textDocument/completion", { textDocument: { uri }, position: completionPos });
-results.tokensAfterSave = await timed("semanticTokens (after save)", "textDocument/semanticTokens/full", { textDocument: { uri } });
+results.completionAfterSave = await timed("completion (after save)", "textDocument/completion", {
+  textDocument: { uri },
+  position: completionPos,
+});
+results.tokensAfterSave = await timed("semanticTokens (after save)", "textDocument/semanticTokens/full", {
+  textDocument: { uri },
+});
 
 // The server logs `index built: … heap N MB (post-gc), rss N MB` under tracePerf.
 const built = logs.find((l) => l.includes("index built:")) ?? "";

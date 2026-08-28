@@ -257,9 +257,7 @@ export function readConfig(): PxConfig {
   // deliberate game-data-only window keeps working.
   const paradoxWorkspace =
     (cfg.get<boolean>("enableForWorkspace") ?? true) &&
-    (workspaceGameDir !== null ||
-      (modPath !== null && looksLikeMod(modPath)) ||
-      workspaceRoots.length > 0);
+    (workspaceGameDir !== null || (modPath !== null && looksLikeMod(modPath)) || workspaceRoots.length > 0);
   if (gameId !== ck3Meta.id) {
     // workspaceGameDir probes for a CK3-shaped install; never borrow it here.
     gamePath = explicitGamePath ?? (paradoxWorkspace ? findGameFolder(activeMeta.name) : null);

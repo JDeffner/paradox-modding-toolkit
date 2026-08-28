@@ -193,8 +193,7 @@ export function variableTypes(
   rootScopesForFile: (file: string) => Set<Scope> | null
 ): VariableTypeInfo {
   const cached = cache.get(data);
-  if (cached && cached.index === data.index && cached.revision === data.index.revision)
-    return cached.info;
+  if (cached && cached.index === data.index && cached.revision === data.index.revision) return cached.info;
   const info = buildVariableTypes(
     data.index.entries(
       (d) =>
