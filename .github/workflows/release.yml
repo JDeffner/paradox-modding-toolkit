@@ -8,7 +8,9 @@
 #    "Releasing".
 #
 # The "prerelease" input controls the Marketplace pre-release flag (alpha/beta
-# channel users must opt in inside VS Code). Keep it on until 1.0.
+# channel users must opt in inside VS Code). It now defaults to OFF: the only
+# release left on this id is the 0.1.4 deprecation build, and it has to reach
+# stable-channel users — they are the whole point of shipping it.
 name: Release
 
 on:
@@ -21,9 +23,9 @@ on:
         type: boolean
         default: false
       prerelease:
-        description: "Mark as pre-release (alpha/beta channel)"
+        description: "Mark as pre-release (alpha/beta channel) — leave OFF for the 0.1.4 deprecation build"
         type: boolean
-        default: true
+        default: false
 
 jobs:
   release:
