@@ -35,14 +35,13 @@ export async function openParadoxToolkit(): Promise<void> {
   }
 }
 
-/** Returns true when a notification was shown, so callers can avoid stacking their own. */
-export function maybeNudgeMigration(context: vscode.ExtensionContext): boolean {
-  if (context.globalState.get<boolean>(NUDGED_KEY)) return false;
+export function maybeNudgeMigration(context: vscode.ExtensionContext): void {
+  if (context.globalState.get<boolean>(NUDGED_KEY)) return;
 
   // Already moved over: record the nudge as spent instead of spending it.
   if (vscode.extensions.getExtension(NEW_EXTENSION_ID)) {
     void context.globalState.update(NUDGED_KEY, true);
-    return false;
+    return;
   }
 
   void context.globalState.update(NUDGED_KEY, true);
@@ -62,6 +61,4 @@ export function maybeNudgeMigration(context: vscode.ExtensionContext): boolean {
       if (choice === install) void openParadoxToolkit();
       else if (choice === whatChanged) void vscode.env.openExternal(vscode.Uri.parse(MIGRATION_NOTES_URL));
     });
-
-  return true;
 }
