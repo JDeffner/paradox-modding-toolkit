@@ -4,6 +4,44 @@
 
 ### Fixed
 
+- **A large workspace opens in half the time and holds 229 MB less.** Measured
+  on a real field report: a `.code-workspace` with the CK3 install and 5
+  Workshop mods, all indexed, nothing excluded. 87,250 files, 29,641 of them
+  script, 1,304,861 definitions and 7,553,947 references.
+
+  The scan reads file batches with 16 reads in flight, but every read runs on
+  libuv's thread pool, which defaults to four. Four outstanding disk requests
+  is not enough to keep a drive busy, and a cold index build waits on latency
+  rather than bandwidth. The forked server now gets a pool of 16. With the
+  page cache evicted between runs, time to indexed went **142.9 s to 71.8 s**.
+  A warm build is a second or two slower, because those reads come from RAM
+  and the extra threads only add contention.
+
+  Memory came from three allocation fixes. V8 grows an empty array's backing
+  store to 16 slots on the first push, so every name in the definition and
+  reference indexes carried 16 slots even though most hold one; both indexes
+  are now compacted once when the scan finishes. The schema root-scope `Set`
+  was rebuilt per file instead of per schema entry. Five sites built a fresh
+  `kinds` array for every reference, and nothing ever mutates one. Post-GC
+  heap after the build went **1735 MB to 1506 MB**. That matters more than it
+  sounds: this workspace peaked at 4081 MB against the server's 4096 MB
+  ceiling, so it was running out of headroom, not out of speed.
+
+- **A window that has nothing to do with modding no longer indexes the game.**
+  The extension activates in every VS Code window, and the game path was
+  auto-detected from the Steam library whether or not the workspace held a
+  mod. A Rust or web project window therefore forked a server that read the
+  36.3 MB vanilla index cache and held 253 MB for it, to answer questions
+  nobody could ask: without a mod in the workspace, no file is ever given a
+  Paradox language id. Auto-detection now needs a workspace that holds a mod
+  or a game install. An explicit `px.gamePath` still works everywhere.
+
+- **The variable-type cache could answer from the previous index.** It was
+  keyed on the definition index's revision counter, but a rebuild installs a
+  fresh index whose counter restarts at zero. Once the new index counted back
+  up to the cached number, one stale map was served. Found while profiling
+  the heap, not from a report.
+
 - **Typing and saving no longer stall on a large workspace.** Profiling the
   server on the game plus AGOT found that the first completion after any
   index change cost 4.3 s, and that a save invalidates exactly the caches

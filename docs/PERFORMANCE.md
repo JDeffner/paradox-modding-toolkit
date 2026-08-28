@@ -89,6 +89,71 @@ that and was measured once at 185 s before the change; there is no way to
 reproduce that state on demand, so the honest claim is the 82 → 70 s A/B, with
 the per-file measurements suggesting a larger gap the colder the cache is.
 
+### Round 3: the thread pool and the containers (2026-08-28)
+
+Rounds 1 and 2 were measured on the game plus AGOT. Round 3 uses a bigger
+workspace from a field report, and one that cannot be configured out of its
+problem: a `.code-workspace` holding the CK3 install and 5 Steam Workshop
+mods, with `px.excludedMods` and `px.parentMods` both empty, so all six roots
+are full first-class roots. 87,250 files, 29,641 of them script, 1188 MB of
+script text, 1,304,861 definitions, 7,553,947 references.
+
+The driver is `packages/server/test/perf/profileWorkspace.ts`, which takes the
+`.code-workspace` file itself and rebuilds the settings `config.ts` would
+derive from it.
+
+**The scan was never allowed to use the disk.** Round 2 replaced serial
+`readFileSync` with batches of up to 16 reads in flight and noted that libuv's
+thread pool was "an upper bound, not a promise". It was the binding
+constraint. Every `fs.promises.readFile` runs on that pool, it defaults to
+four, and a cold build waits on latency rather than bandwidth, so four
+outstanding requests left the drive idle most of the time. The client now
+forks the server with `UV_THREADPOOL_SIZE=16`.
+
+| time to indexed, page cache evicted | |
+|---|---|
+| libuv pool 4 (the old default) | 142,933 ms |
+| libuv pool 16 (shipped) | 71,776 ms |
+| libuv pool 32 | 63,531 ms |
+
+Each run was preceded by streaming 24 GB of game binaries through the page
+cache to evict the script text, on a drive that reads about 0.2 GB/s. 32
+measured better than 16 and is a one-character change, but 16 is what ships:
+it takes 71 of the 79 seconds, and the default has to hold on hardware slower
+than the machine these numbers come from. Warm, a larger pool is slightly
+worse (53.8 s against 51.3 s), because the reads come from RAM and only the
+contention is left.
+
+Two synthetic benchmarks disagreed about this setting, one of them showing a
+20% regression, which is why the table above is an A/B on the real workspace.
+
+**The containers cost more than the objects in them.** Node x64 has no pointer
+compression, so an object header is 24 B and every slot is 8 B. V8 also grows
+an empty array's backing store to capacity 16 on the first push, and most
+names in both indexes hold one entry, so each was carrying fifteen empty
+slots. `DefinitionIndex.compact()` and `ReferenceIndex.compact()` slice every
+bucket to its exact length once, when the scan finishes; a later save re-grows
+only the names it touches.
+
+| post-GC heap after the index build | |
+|---|---|
+| round 2 | 1735 MB |
+| shared `kinds` arrays | 1693 MB |
+| compacted buckets, shared root-scope Sets | 1506 MB |
+
+Peak RSS is why this was worth doing before anything else: this workspace
+peaked at 4081 MB against the server's 4096 MB ceiling. It was close to
+failing, not close to being slow.
+
+**What is still on the table.** A mod's `.txt` files are read and parsed
+twice, once by the definition scan over the schema folders and once by the
+reference scan over the whole root, because `extractDefinitions` and
+`extractReferences` each call `parseScript` themselves. Reference scanning is
+54% of the build on this workspace. Also unfixed: a Steam update that rewrites
+5,000 script files becomes 5,000 separate rescans, each with its own 150 ms
+timer, which needs a "root invalidated" verb in the protocol rather than an
+optimization.
+
 ## Configuring a big workspace
 
 In rough order of effect:
@@ -115,8 +180,11 @@ In rough order of effect:
   else while you type.
 - **`px.scopeInlayHints`** is off by default; on, every index change re-requests
   hints for every visible editor.
-- **`px.enableForWorkspace: false`** is the hard off switch for one workspace:
-  files stay in plain text mode and no server starts.
+- **`px.enableForWorkspace: false`** is the off switch for one workspace:
+  files stay in plain text mode, and since 2026-08-28 the server that still
+  forks finds no game install to index, so it holds nothing. Before that date
+  this line claimed no server started at all, which was never true: the
+  process forked and indexed the whole vanilla tree regardless.
 
 The extension warns once on activation when a workspace passes 6 indexed mod
 roots or 10,000 script files. That warning names `px.excludedMods` and offers
