@@ -69,7 +69,9 @@ const spread = time("spread (32 files round-robin)", 5000, (i) => {
   definitionBody(d.file, d.line);
 });
 
-const sizes = defs.map((d) => (definitionBody(d.file, d.line) ?? "").split("\n").length).sort((a, b) => a - b);
+const sizes = defs
+  .map((d) => (definitionBody(d.file, d.line) ?? "").split("\n").length)
+  .sort((a, b) => a - b);
 const pct = (p: number) => sizes[Math.min(sizes.length - 1, Math.floor((sizes.length * p) / 100))];
 console.log();
 console.log(`body lines  median=${pct(50)}  p90=${pct(90)}  max=${sizes[sizes.length - 1]}`);

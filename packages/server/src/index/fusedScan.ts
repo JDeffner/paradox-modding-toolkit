@@ -3,7 +3,7 @@
  *
  * A mod root used to be walked twice: once over the ~156 schema folders for
  * definitions, then once over the whole root for `.txt` references. 154 of the
- * 156 CK3 schema entries are `.txt`, so the two file sets overlap on
+ * default profile's 156 schema entries are `.txt`, so the two file sets overlap on
  * essentially all script and every file was read twice and parsed twice.
  * Measured on game + 5 Workshop mods (29,641 script files): AGOT alone spent
  * 8,743 ms on 3,482 definition files and 30,023 ms on 4,497 reference files.

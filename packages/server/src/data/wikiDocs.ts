@@ -169,7 +169,7 @@ export interface WikiMergeOptions {
    * `script_docs` is what the engine registered when the game ran, so a name it
    * omits does not exist in that patch. The bundled wiki lists say as much
    * themselves ("be aware that it is outdated. Some effects have been
-   * deprecated"). Measured against a real CK3 install: of 2,336 wiki tokens,
+   * deprecated"). Measured against a real install: of 2,336 wiki tokens,
    * 2,262 were already in the dump and 74 were not, and the ones sampled from
    * that 74 (`every_activity_invited`, `every_participant`,
    * `accept_invitation_for_character`) appear in zero vanilla files. They are

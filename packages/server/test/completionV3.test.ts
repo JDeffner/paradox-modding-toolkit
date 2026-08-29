@@ -339,15 +339,6 @@ describe("completion — engine block templates from usage examples", () => {
     const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\ti| = yes\n\t}\n}");
     expect(items.find((i) => i.label === "if")!.insertText).toBeUndefined();
   });
-
-  it("a client without snippetSupport gets the plain skeleton instead", () => {
-    asClient({ client: {} });
-    const env = templateEnv();
-    const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\ti|\n\t}\n}");
-    const item = items.find((i) => i.label === "if")!;
-    expect(item.insertText).toBe("if = {\n\tlimit = {\n\t\t<triggers>\n\t}\n\t<effects>\n}");
-    expect(item.insertTextFormat).toBeUndefined();
-  });
 });
 
 describe("completion — a client that did not declare snippetSupport", () => {
