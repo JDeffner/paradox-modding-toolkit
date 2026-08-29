@@ -195,6 +195,23 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           : []),
       ],
     },
+    {
+      label: "Share",
+      items: [
+        {
+          label: "Publish to Steam Workshop",
+          command: "px.publishToWorkshop",
+          icon: "arrowUp",
+          tip: "Upload the focused mod to the Steam Workshop through the running Steam client - no launcher needed. New items start private.",
+        },
+        {
+          label: "Open Workshop Page",
+          command: "px.openWorkshopPage",
+          icon: "externalLink",
+          tip: "Open the mod's Steam Workshop page in the browser (description, visibility, comments).",
+        },
+      ],
+    },
   ];
 }
 

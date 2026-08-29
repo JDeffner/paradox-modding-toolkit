@@ -61,6 +61,7 @@ import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
+import { registerWorkshop } from "./steam/workshop";
 import * as fs from "fs";
 import {
   allClientCommandIds,
@@ -939,6 +940,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // ---- workflow accelerators ---------------------------------------------------
+
+  // Steam Workshop publishing (px.publishToWorkshop / px.openWorkshopPage).
+  registerWorkshop(context, { cfg: () => cfg, focusRoot: () => views.focusRoot(), log });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
