@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 (beta) - the large-workspace round
+## 0.3.4 (beta, pre-release) - the large-workspace round
 
 ### Fixed
 
