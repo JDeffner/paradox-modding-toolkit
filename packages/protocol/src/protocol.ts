@@ -30,6 +30,12 @@ export interface ParadoxSettings {
   locLanguage: string;
   /** Show inferred scope after scope-changing block openers (off by default). */
   scopeInlayHints: boolean;
+  /**
+   * How much a hover shows. `standard` applies every cap in the design;
+   * `compact` drops prose and examples; `full` lifts the example cap and shows
+   * every distinct meaning.
+   */
+  hoverDetail?: "compact" | "standard" | "full";
   /** Our diagnostic codes to suppress everywhere. */
   diagnosticsIgnore: string[];
   /** Glob patterns (workspace-relative paths) whose diagnostics are suppressed. */
@@ -68,6 +74,14 @@ export interface ParadoxClientCapabilities {
    * registers one whenever the client supports dynamic registration.
    */
   ownFileWatcher?: boolean;
+  /**
+   * The client renders `$(codicon)` theme icons in hover markdown, i.e. it sets
+   * `supportThemeIcons` on the MarkdownString. Default false, and the default
+   * matters: a client without it prints the literal text `$(symbol-method)`,
+   * which is worse than the plain `■` it would otherwise get. Implies
+   * {@link ParadoxClientCapabilities.hoverHtml} is respected for colour.
+   */
+  hoverIcons?: boolean;
 }
 
 /** initializationOptions passed at LanguageClient start. All fields optional:

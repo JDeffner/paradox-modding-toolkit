@@ -140,6 +140,7 @@ import { URI } from "vscode-uri";
 import { ServerData } from "./serverData";
 import { CompletionFeature } from "./features/completion";
 import { provideHover } from "./features/hover";
+import { setHoverDetail } from "./features/hoverRender";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
@@ -253,6 +254,7 @@ function defaultSettings(): ParadoxSettings {
     workspaceMods: [],
     locLanguage: "english",
     scopeInlayHints: false,
+    hoverDetail: "standard",
     diagnosticsIgnore: [],
     diagnosticsIgnorePatterns: [],
     diagnosticsVanilla: false,
@@ -1092,6 +1094,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   // Merge onto the defaults: bare clients may send partial settings (e.g.
   // only gameId), and every downstream consumer assumes the full shape.
   if (init.settings) settings = { ...defaultSettings(), ...init.settings };
+  setHoverDetail(settings.hoverDetail ?? "standard");
   setActiveProfile(resolveProfile(settings.gameId));
   deriveBundledDataDirs();
   if (!storageDir) {
@@ -1195,6 +1198,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
       JSON.stringify(settings.diagnosticsIgnorePatterns) ||
     newSettings.diagnosticsVanilla !== settings.diagnosticsVanilla;
   settings = newSettings;
+  setHoverDetail(settings.hoverDetail ?? "standard");
   completion.setSettings(settings);
   if (pathsChanged) {
     log("paths changed; rebuilding data...");

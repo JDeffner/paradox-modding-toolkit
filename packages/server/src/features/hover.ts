@@ -31,6 +31,9 @@ import { KEYWORD_DOCS, scopeWordDoc } from "../data/keywordDocs";
 import { matchTemplatedModifier, templatedModifierDoc } from "../data/modifierTemplates";
 import type { Scope } from "../scopes/model";
 import {
+  fencedBlock,
+  hoverCaps,
+  hoverFooter,
   renderCard,
   renderDocBody,
   renderHover,
@@ -39,6 +42,7 @@ import {
   scopeType,
   type CardInput,
 } from "./hoverRender";
+import { definitionBody } from "./definitionBody";
 import type { Definition } from "@px-lsp/protocol/types";
 import type { DefineEntry } from "../data/defines";
 
@@ -61,7 +65,7 @@ export function provideHover(
     const card = definesCard(data, defineHit.namespace, defineHit.name);
     if (card) {
       return {
-        contents: { kind: MarkupKind.Markdown, value: renderHover([card], null) },
+        contents: { kind: MarkupKind.Markdown, value: renderHover([renderCard(card)], null) },
         range: {
           start: { line: position.line, character: defineHit.start },
           end: { line: position.line, character: defineHit.end },
@@ -87,7 +91,7 @@ export function provideHover(
   }
   const word = range.word;
 
-  const cards: string[] = [];
+  const cards: CardInput[] = [];
 
   // Current scope at the cursor, computed once and shared by the pills and the
   // single footer line (§D2/§D3). null when we can't infer.
@@ -121,7 +125,7 @@ export function provideHover(
             .map((d) => `set in [${path.basename(d.file)}:${d.line + 1}](${URI.file(d.file)}#L${d.line + 1})`)
             .join("  \n")
         : undefined;
-    cards.push(renderCard({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc }));
+    cards.push({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc });
   }
 
   // When the word is the VALUE of a schema ref field (`theme = faith`,
@@ -177,18 +181,32 @@ export function provideHover(
 
   if (cards.length === 0) return null;
 
-  // Scope context appears once, last (§D2). Suppressed for a `scope:` hover
-  // (its own card already carries the scope) to match the prior behavior.
-  let footer: string | null = null;
+  // Scope context appears once, last. Suppressed for a `scope:` hover (its own
+  // card already carries the scope) to match the prior behavior.
+  let scopeLine: string | null = null;
   if (prefix !== "scope") {
     const scopes = current && current.size > 0 ? [...current].join(" | ") : "unknown";
     const inference = scopeInference(data, document, position, rootScopes, entry);
     const chain = inference.chain.length > 1 ? inference.chain.join(" · ") : null;
-    footer = scopeHereLine(scopes, chain);
+    scopeLine = scopeHereLine(scopes, chain);
+  }
+
+  // A single-card hover has no separate footer block: its provenance and
+  // reference links ride the scope line, which has to exist anyway. That is
+  // worth three lines (the row, its blank, and the rule above it) on the most
+  // common hover there is. Multi-card hovers keep provenance per card, because
+  // there it belongs to one meaning rather than to the hover.
+  const actions: string[] = [];
+  if (cards.length === 1 && cards[0].provenance) {
+    actions.push(cards[0].provenance);
+    cards[0] = { ...cards[0], provenance: undefined };
   }
 
   return {
-    contents: { kind: MarkupKind.Markdown, value: renderHover(cards, footer) },
+    contents: {
+      kind: MarkupKind.Markdown,
+      value: renderHover(cards.map(renderCard), hoverFooter(scopeLine, actions)),
+    },
     range: {
       start: { line: position.line, character: range.start },
       end: { line: position.line, character: range.end },
@@ -202,7 +220,7 @@ export function provideHover(
  * it runs in / the scope it returns. No vanilla-frequency line — engine tokens
  * never carry one and the user does not want it.
  */
-function tokenCard(token: TokenData, current: ReadonlySet<string> | null): string {
+function tokenCard(token: TokenData, current: ReadonlySet<string> | null): CardInput {
   const card: CardInput = { kind: token.kind, name: token.name };
   const { input, output, plain } = partitionScopes(token.scopes);
 
@@ -210,27 +228,27 @@ function tokenCard(token: TokenData, current: ReadonlySet<string> | null): strin
   // this token's real "datatype".
   if (output.length > 0) card.headTail = `→ ${output.map(scopeType).join(" | ")}`;
 
-  // Description, then the expected value datatype (the user's core ask).
-  const docParts: string[] = [];
-  if (token.doc) docParts.push(token.doc);
-  const shape = valueShape(token);
-  if (shape) docParts.push(`Value: ${shape}`);
-  if (docParts.length > 0) card.doc = docParts.join("\n\n");
+  // Prose only. The value datatype used to sit here as its own `Value:` line
+  // and then say much the same thing again in the traits line under the
+  // example; both now fold into the single facts line below.
+  if (token.doc) card.doc = token.doc;
 
-  // Syntax example, fenced (from a script_docs `usage:` block or the wiki).
-  if (token.usage) card.example = token.usage;
+  // Syntax example from a script_docs `usage:` block or the wiki, capped.
+  const caps = hoverCaps();
+  if (token.usage) card.example = fencedBlock(token.usage, caps.exampleLines, caps.disclosedLines);
 
-  // Remaining metadata (targets, categories, requires-data, wiki note); the
-  // `Traits:` line is already folded into the value datatype above.
-  const meta = otherTraitBits(token.traits);
-  if (meta.length > 0) card.traits = meta.join(" · ");
-
-  // Input scope(s) you call it from — matched against the current cursor scope.
+  // One facts line: the scopes you call it from (matched against the cursor
+  // scope), the shape its value takes, then whatever metadata is left.
+  const facts: string[] = [];
   const scopeVals = plain.length > 0 ? plain : input;
   if (scopeVals.length > 0) {
-    card.footer = [`Supported scopes: ${scopeVals.map((s) => scopePill(s, current)).join(" ")}`];
+    facts.push(`${scopeVals.map((s) => scopePill(s, current)).join(" | ")} scope`);
   }
-  return renderCard(card);
+  const shape = valueShape(token);
+  if (shape) facts.push(shape);
+  facts.push(...otherTraitBits(token.traits));
+  if (facts.length > 0) card.facts = facts.join(" · ");
+  return card;
 }
 
 /** Split raw scope strings into the input / output / plain buckets. */
@@ -311,7 +329,7 @@ function definitionCards(
   data: ServerData,
   defs: Array<ReturnType<ServerData["index"]["lookup"]>[number]>,
   at?: { uri: string; line: number; character: number }
-): string[] {
+): CardInput[] {
   const order: string[] = [];
   const byKind = new Map<string, typeof defs>();
   for (const def of defs) {
@@ -322,7 +340,7 @@ function definitionCards(
     }
     group.push(def);
   }
-  const cards: string[] = [];
+  const cards: CardInput[] = [];
   let withRefs = true;
   for (const kind of order) {
     const group = byKind.get(kind)!;
@@ -359,7 +377,7 @@ function definitionGroupCard(
   group: Array<ReturnType<ServerData["index"]["lookup"]>[number]>,
   at?: { uri: string; line: number; character: number },
   withRefs = true
-): string {
+): CardInput {
   const def = group[0];
   const origins = [...new Set(group.map((d) => data.originLabel(d)))];
   const card: CardInput = {
@@ -371,15 +389,30 @@ function definitionGroupCard(
         ? `· ${origins[0]} (${group.length} sites)`
         : `· ${group.length} sites in ${origins.join(", ")}`,
   };
-  const footer = group.slice(0, 3).map(provenance);
-  if (group.length > 3) footer.push(`+${group.length - 3} more`);
+  const links = group.slice(0, 3).map(provenance);
+  if (group.length > 3) links.push(`+${group.length - 3} more`);
   if (withRefs) {
     const refs = referencesFooter(data, def.name, at);
-    if (refs) footer.push(refs);
+    if (refs) links.push(refs);
   }
-  card.footer = footer;
-  return renderCard(card);
+  card.provenance = links.join(" · ");
+  return card;
 }
+
+/**
+ * Kinds whose source block is worth showing in the hover. A scripted trigger or
+ * effect IS its body, so reading it back answers the question without a jump. A
+ * loc key's "body" is one string already in the doc slot, and an event's is
+ * hundreds of lines of option blocks that no cap makes useful.
+ */
+const BODY_KINDS = new Set([
+  "scripted_trigger",
+  "scripted_effect",
+  "scripted_modifier",
+  "script_value",
+  "scripted_list",
+  "scripted_rule",
+]);
 
 /** An indexed-definition card: badge, name, `· source`, provenance link (§D2 mock 2). */
 function definitionCard(
@@ -387,7 +420,7 @@ function definitionCard(
   def: ReturnType<ServerData["index"]["lookup"]>[number],
   at?: { uri: string; line: number; character: number },
   withRefs = true
-): string {
+): CardInput {
   const card: CardInput = { kind: def.kind, badgeLabel: def.kind.replace(/_/g, " "), name: def.name };
   // Origin: the owning mod's descriptor name where known ("· My Mod"), the raw
   // source tag ("· vanilla") otherwise.
@@ -406,10 +439,21 @@ function definitionCard(
   // fills the fenced slot; `@deprecated` strikes the name. Empty when absent.
   const body = extractDoc(def);
   if (body.doc) card.doc = body.doc;
-  if (body.example) card.example = body.example;
   if (body.deprecated) card.name = `~~${def.name}~~`;
 
-  const footer: string[] = [provenance(def)];
+  // The fenced slot: an explicit `@example` wins, otherwise the definition's
+  // own source block, which is what "show me what this scripted trigger is"
+  // actually means. Capped inline and disclosed beyond that, because only 11%
+  // of vanilla scripted triggers are 3 lines or shorter.
+  const caps = hoverCaps();
+  if (body.example) {
+    card.example = fencedBlock(body.example, caps.exampleLines, caps.disclosedLines);
+  } else if (caps.bodyLines > 0 && BODY_KINDS.has(def.kind)) {
+    const src = definitionBody(def.file, def.line);
+    if (src) card.example = fencedBlock(src, caps.bodyLines, caps.disclosedLines);
+  }
+
+  const links: string[] = [provenance(def)];
   // Full count including key-position call sites (usageCount excludes those).
   // A command link opens the references view; the client's hover middleware
   // trusts exactly this command (extension.ts). Plain text without an anchor.
@@ -417,10 +461,10 @@ function definitionCard(
   // the NAME, so repeating it per meaning taught nothing.
   if (withRefs) {
     const refs = referencesFooter(data, def.name, at);
-    if (refs) footer.push(refs);
+    if (refs) links.push(refs);
   }
-  card.footer = footer;
-  return renderCard(card);
+  card.provenance = links.join(" · ");
+  return card;
 }
 
 /** `file.txt:line` provenance, as a markdown link when a file URI is feasible. */
@@ -450,7 +494,7 @@ function savedScopeCard(
   name: string,
   rootScopes: Set<Scope> | null,
   entry: SchemaEntry | null
-): string {
+): CardInput {
   const ambient = entry?.ambientScopes?.find((a) => a.name === name);
   const ictx = inferenceContextFor(data, entry);
   const saved = getSavedScopes(document, data.scopeModel, rootScopes, entry?.ambientScopes, ictx);
@@ -490,7 +534,7 @@ function savedScopeCard(
   }
 
   if (doc.length > 0) card.doc = doc.join("  \n");
-  return renderCard(card);
+  return card;
 }
 
 /** Line (0-based) of the first `save_scope_as`/`save_temporary_scope_as`/
@@ -517,7 +561,7 @@ function structureKeyCard(
   word: string,
   entry: SchemaEntry,
   getSchema: () => SchemaData
-): string | null {
+): CardInput | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
   const ctx = structureContextAt(result, offset, entry.kind, getSchema().structures);
@@ -533,7 +577,7 @@ function structureKeyCard(
   };
   if (where) card.headTail = where;
   card.doc = spec.doc ? `${spec.doc} *(${source})*` : `*(${source})*`;
-  return renderCard(card);
+  return card;
 }
 
 /** `type = character_event` — the value is a member of the key's structure enum. */
@@ -543,7 +587,7 @@ function enumValueCard(
   word: string,
   entry: SchemaEntry,
   getSchema: () => SchemaData
-): string | null {
+): CardInput | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
   const hit = nodeAtOffset(result.root, offset);
@@ -556,12 +600,12 @@ function enumValueCard(
   if (!spec?.values?.startsWith("enum:")) return null;
   const members = spec.values.slice(5).split("|");
   if (!members.includes(word)) return null;
-  return renderCard({
+  return {
     kind: "structure_key",
     badgeLabel: `${last.key.text} value`,
     name: word,
     doc: `One of: ${members.map((m) => (m === word ? `**${m}**` : m)).join(" · ")}`,
-  });
+  };
 }
 
 /** `my_effect = { AMOUNT = 3 }` — the key is a $PARAM$ of the called scripted effect/trigger. */
@@ -570,7 +614,7 @@ function macroParamCard(
   document: TextDocument,
   position: Position,
   word: string
-): string | null {
+): CardInput | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
   const hit = nodeAtOffset(result.root, offset);
@@ -583,13 +627,13 @@ function macroParamCard(
   for (const def of data.index.lookup(callee)) {
     if (def.kind !== "scripted_effect" && def.kind !== "scripted_trigger") continue;
     if (!def.params?.includes(word)) continue;
-    return renderCard({
+    return {
       kind: "macro_param",
       badgeLabel: "parameter",
       name: word,
       headTail: `of ${def.kind.replace(/_/g, " ")} \`${callee}\``,
       doc: `Replaces \`$${word}$\` in the ${def.kind.replace(/_/g, " ")}'s body.`,
-    });
+    };
   }
   return null;
 }
@@ -598,7 +642,7 @@ function macroParamCard(
  * `has_relation_dao_guide` — triggers/effects the engine generates per scripted
  * relation (`has_relation_X`, `set_relation_X`, `remove_relation_X`).
  */
-function relationTriggerCard(data: ServerData, word: string): string | null {
+function relationTriggerCard(data: ServerData, word: string): CardInput | null {
   const m = /^(has|set|remove)_relation_([A-Za-z0-9_]+)$/.exec(word);
   if (!m) return null;
   const def = data.index.lookup(m[2]).find((d) => d.kind === "scripted_relation");
@@ -609,12 +653,12 @@ function relationTriggerCard(data: ServerData, word: string): string | null {
       : m[1] === "set"
         ? "Effect: gives the scoped character"
         : "Effect: removes the scoped character's";
-  return renderCard({
+  return {
     kind: m[1] === "has" ? "trigger" : "effect",
     name: word,
     headTail: `· generated from \`${m[2]}\``,
     doc: `${verb} the scripted relation \`${m[2]}\` (${path.basename(def.file)}:${def.line + 1}) with the target character.`,
-  });
+  };
 }
 
 /**
@@ -623,7 +667,7 @@ function relationTriggerCard(data: ServerData, word: string): string | null {
  * definition index (never materialized: AGOT-scale mods define thousands of
  * cultures).
  */
-function templatedModifierCard(data: ServerData, word: string): string | null {
+function templatedModifierCard(data: ServerData, word: string): CardInput | null {
   const m = matchTemplatedModifier(word, data.modifierTemplates, (n) => data.index.lookup(n));
   if (!m) return null;
   const card: CardInput = {
@@ -632,8 +676,8 @@ function templatedModifierCard(data: ServerData, word: string): string | null {
     headTail: `· generated from \`${m.template.name}\``,
     doc: templatedModifierDoc(m),
   };
-  if (m.template.traits) card.traits = m.template.traits.split("\n").join(" · ");
-  return renderCard(card);
+  if (m.template.traits) card.facts = m.template.traits.split("\n").join(" · ");
+  return card;
 }
 
 /**
@@ -646,7 +690,7 @@ function effectArgumentCard(
   document: TextDocument,
   position: Position,
   word: string
-): string | null {
+): CardInput | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
   const hit = nodeAtOffset(result.root, offset);
@@ -664,18 +708,18 @@ function effectArgumentCard(
     headTail: `of ${token.kind.replace(/_/g, " ")} \`${token.name}\``,
   };
   if (token.doc) card.doc = token.doc;
-  return renderCard(card);
+  return card;
 }
 
 /** `cultivation_ruin` in `trigger_event = cultivation_ruin.5` etc. — a declared event namespace. */
-function namespaceCard(data: ServerData, word: string): string | null {
+function namespaceCard(data: ServerData, word: string): CardInput | null {
   if (!data.modNamespaces.has(word)) return null;
-  return renderCard({
+  return {
     kind: "namespace",
     badgeLabel: "event namespace",
     name: word,
     doc: `Events in this namespace are named \`${word}.<n>\`.`,
-  });
+  };
 }
 
 /** The `define:NS|CONST` reference spanning the cursor, or null. */
@@ -694,18 +738,18 @@ function defineRefAt(
 }
 
 /** A define card: name, resolved value, source file + layer, "overrides <layer>". */
-function definesCard(data: ServerData, namespace: string, name: string): string | null {
+function definesCard(data: ServerData, namespace: string, name: string): CardInput | null {
   const res = data.defines.resolve(namespace, name);
   if (!res) return null;
-  const footer = [defineSourceLink(res.winner)];
-  if (res.shadowed.length > 0) footer.push(`overrides ${res.shadowed.map((s) => s.layer).join(", ")}`);
-  return renderCard({
+  const links = [defineSourceLink(res.winner)];
+  if (res.shadowed.length > 0) links.push(`overrides ${res.shadowed.map((s) => s.layer).join(", ")}`);
+  return {
     kind: "define",
     badgeLabel: "define",
     name: `${namespace}|${name}`,
     headTail: `= ${res.winner.value}`,
-    footer,
-  });
+    provenance: links.join(" · "),
+  };
 }
 
 /** `<layer> · [common/defines/…:line](uri)` provenance for a define entry. */
@@ -720,17 +764,17 @@ function defineSourceLink(e: DefineEntry): string {
 }
 
 /** root/ROOT/this/prev(prev…)/from(from…) — scope navigation keywords. */
-function scopeWordCard(word: string): string | null {
+function scopeWordCard(word: string): CardInput | null {
   const hit = scopeWordDoc(word);
   if (!hit) return null;
-  return renderCard({ kind: "scope_word", badgeLabel: "scope", name: hit.name, doc: hit.doc });
+  return { kind: "scope_word", badgeLabel: "scope", name: hit.name, doc: hit.doc };
 }
 
 /** Grammar/math glue vocabulary (limit, NOT, base, days…): curated docs. */
-function keywordCard(word: string): string | null {
+function keywordCard(word: string): CardInput | null {
   const doc = KEYWORD_DOCS[word];
   if (!doc) return null;
-  return renderCard({ kind: "keyword", name: word, doc });
+  return { kind: "keyword", name: word, doc };
 }
 
 /**

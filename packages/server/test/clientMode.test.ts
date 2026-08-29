@@ -32,13 +32,19 @@ const fileUri = (p: string): string => URI.file(p).toString();
 afterEach(() => asClient({ clientCommands: true }));
 
 describe("capability resolution", () => {
-  const allOff = { hoverHtml: false, commands: new Set<string>(), ownFileWatcher: false };
+  const allOff = {
+    hoverHtml: false,
+    commands: new Set<string>(),
+    ownFileWatcher: false,
+    hoverIcons: false,
+  };
 
   it("deprecated clientCommands: true means every capability", () => {
     expect(resolveClientCapabilities({ clientCommands: true })).toEqual({
       hoverHtml: true,
       commands: new Set(allClientCommandIds),
       ownFileWatcher: true,
+      hoverIcons: true,
     });
   });
 
@@ -59,6 +65,10 @@ describe("capability resolution", () => {
     expect(resolveClientCapabilities({ client: { ownFileWatcher: true } })).toEqual({
       ...allOff,
       ownFileWatcher: true,
+    });
+    expect(resolveClientCapabilities({ client: { hoverIcons: true } })).toEqual({
+      ...allOff,
+      hoverIcons: true,
     });
     expect(resolveClientCapabilities({ client: {} })).toEqual(allOff);
   });

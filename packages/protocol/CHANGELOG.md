@@ -6,6 +6,20 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+### Added
+
+- `kinds.ts`: one map from a concept (`trigger`, `saved_scope`, `data_type`, a
+  GUI widget type) to its codicon, its `CompletionItemKind` name and its colour
+  family. Shared by the server's hover and completion and by the VS Code
+  client's tree views, so the three surfaces cannot drift apart. Carries the two
+  facts that make the table easy to re-break: codicon aliases collapse to one
+  picture, and only `CompletionItemKind` reaches the suggest widget.
+- `ParadoxClientCapabilities.hoverIcons`: the client renders `$(codicon)` in
+  hover markdown. Default false.
+- `ParadoxSettings.hoverDetail`: `compact` | `standard` | `full`.
+
 ## 0.1.0
 
 First npm release. The wire contract (custom `paradox/*` requests and

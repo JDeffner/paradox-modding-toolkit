@@ -1,55 +1,39 @@
 /**
- * Hover markdown builders (§D). Pure string assembly, no LSP or `vscode` types,
- * so the card layout is unit-testable in plain Node against the D2 mocks.
+ * Hover card markdown. Pure string assembly, no LSP or `vscode` types, so the
+ * layout is unit-testable in plain Node.
  *
- * Rendering contract (§D1): the only HTML emitted is sanitized
- * `<span style="color:var(--vscode-*)">…</span>` — VS Code renders the color
- * when `supportHtml` is on and strips the tag (keeping the plain text) when it
- * is not. Every span's *content* is therefore self-sufficient plain text (a
- * "■ trigger" badge, a scope name), so older clients degrade to markdown with
- * no loss of meaning. Do not introduce any other HTML here.
+ * The card is four slots in a fixed order, and only the first is mandatory:
+ *
+ *   <glyph> <kind> **name** <tail>     head
+ *   prose                              doc
+ *   ```paradox …```                    example
+ *   scope · value shape · traits       facts
+ *
+ * The hover then writes ONE footer line for the whole hover, never one per
+ * card: the scope context with the action links on the end of it. A separate
+ * action row would cost three lines (itself, a blank, and a rule above it) to
+ * say what fits on a line that has to exist anyway.
+ *
+ * Rendering contract, three tiers, driven by client capabilities:
+ *
+ *   hoverIcons + hoverHtml  `<span style="color:…">$(symbol-method) trigger</span>`
+ *   hoverHtml only          `<span style="color:…">■ trigger</span>`
+ *   neither                 `■ trigger`
+ *
+ * Every span's *content* is self-sufficient plain text, so a client that strips
+ * the tag keeps the meaning. The only HTML emitted is that span plus the
+ * `<details>` disclosure; both are on VS Code's markdown sanitizer allowlist.
+ * Do not introduce any other HTML: the sanitizer permits `style` on `<span>`
+ * alone, and only `color`, `background-color` and `border-radius`.
  */
 
-/** `--vscode-charts-*` / semantic color slot per kind family (§D2). */
-type ChartColor = "purple" | "red" | "yellow" | "green" | "orange" | "blue" | "foreground";
+import { FAMILY_COLOR, kindStyle, type KindFamily } from "@px-lsp/protocol/kinds";
+import { hoverHtml, hoverIcons } from "../clientMode";
 
-import { hoverHtml } from "../clientMode";
-
-function colorVar(c: ChartColor): string {
-  return c === "foreground" ? "var(--vscode-charts-foreground)" : `var(--vscode-charts-${c})`;
-}
-
-/** A sanitized colored span. Content is plain text so it survives HTML stripping.
- * Plain-markdown clients (no `client.hoverHtml`) get the bare text. */
-function span(color: ChartColor, text: string): string {
-  if (!hoverHtml()) return text;
-  return `<span style="color:${colorVar(color)};">${text}</span>`;
-}
-
-/** Kind → badge color (fixed per kind family, §D2). Definition kinds default green. */
-function badgeColor(kind: string): ChartColor {
-  switch (kind) {
-    case "trigger":
-      return "purple";
-    case "effect":
-      return "red";
-    case "structure_key":
-    case "keyword":
-    case "text_format":
-      return "yellow";
-    case "define":
-      return "blue";
-    case "saved_scope":
-    case "scope_word":
-    case "macro_param":
-      return "orange";
-    case "loc_key":
-      return "foreground";
-    default:
-      // Definition kinds (scripted_effect/trigger/modifier, script_value, event,
-      // decision, …) all read green.
-      return "green";
-  }
+/** A sanitized colored span. Content is plain text so it survives stripping. */
+function span(family: KindFamily, text: string): string {
+  if (family === "default" || !hoverHtml()) return text;
+  return `<span style="color:${FAMILY_COLOR[family]};">${text}</span>`;
 }
 
 /** Human label for a kind badge ("scripted trigger", "trigger", "saved scope"). */
@@ -58,25 +42,31 @@ function kindLabel(kind: string): string {
   return kind.replace(/_/g, " ");
 }
 
-/** `■ kind` badge, colored per family. */
+/**
+ * The head-line badge: glyph (or square) plus the kind word. The kind word
+ * stays even once glyphs carry meaning, because a glyph alone is only legible
+ * after you have learned it.
+ */
 export function kindBadge(kind: string, label = kindLabel(kind)): string {
-  return span(badgeColor(kind), `■ ${label}`);
+  const style = kindStyle(kind);
+  const mark = hoverIcons() ? `$(${style.codicon})` : "■";
+  return span(style.family, `${mark} ${label}`);
 }
 
 /**
- * A scope pill: blue when it matches the current cursor scope, muted otherwise
- * (§D3). Content is the plain scope name so stripping the span leaves it legible.
+ * A scope pill: blue when it matches the current cursor scope, muted otherwise.
+ * Content is the plain scope name so stripping the span leaves it legible.
  */
 export function scopePill(scope: string, current: ReadonlySet<string> | null): string {
   const matches = current !== null && current.has(scope.toLowerCase());
-  if (matches) return span("blue", scope);
+  if (matches) return span("data", scope);
   if (!hoverHtml()) return scope;
   return `<span style="color:var(--vscode-descriptionForeground);">${scope}</span>`;
 }
 
 /** Blue scope-type span for the "→ character" tail on badges/pills. */
 export function scopeType(type: string): string {
-  return span("blue", type);
+  return span("data", type);
 }
 
 /**
@@ -91,6 +81,106 @@ export function colorSwatch(rgb: [number, number, number]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Detail levels and caps
+// ---------------------------------------------------------------------------
+
+export type HoverDetail = "compact" | "standard" | "full";
+
+/**
+ * Caps per detail level. The two example caps are separate because the two
+ * distributions are nothing alike, measured against a real CK3 install:
+ *
+ *  - engine `usage:` blocks: two thirds are 3 lines or shorter, and no block is
+ *    exactly 4 lines, so 3 and 4 truncate the identical 22 tokens.
+ *  - scripted definition bodies: only 11% are 3 lines or shorter, median 10,
+ *    p90 32, longest 232. A 3-line cap here would truncate 89% of them, which
+ *    is why the overflow goes into a `<details>` disclosure rather than being
+ *    dropped.
+ */
+export interface HoverCaps {
+  /** Cards shown before "N more meanings". */
+  cards: number;
+  /** Fenced lines from an engine `usage:` block. */
+  exampleLines: number;
+  /** Fenced lines from a definition body before the disclosure opens. */
+  bodyLines: number;
+  /** Lines inside the disclosure; a hover cannot grow past the viewport. */
+  disclosedLines: number;
+  /** Doc paragraphs. */
+  docParagraphs: number;
+}
+
+export const CAPS: Record<HoverDetail, HoverCaps> = {
+  compact: { cards: 1, exampleLines: 0, bodyLines: 0, disclosedLines: 0, docParagraphs: 0 },
+  standard: { cards: 3, exampleLines: 3, bodyLines: 3, disclosedLines: 40, docParagraphs: 2 },
+  full: { cards: 6, exampleLines: Infinity, bodyLines: 24, disclosedLines: 200, docParagraphs: 4 },
+};
+
+let detail: HoverDetail = "standard";
+
+export function setHoverDetail(value: HoverDetail): void {
+  detail = value;
+}
+
+export function hoverCaps(): HoverCaps {
+  return CAPS[detail];
+}
+
+export function hoverDetail(): HoverDetail {
+  return detail;
+}
+
+/** The language id our TextMate grammar registers (package.json `languages`). */
+const FENCE_LANG = "paradox";
+
+/** Strip the indentation every non-empty line shares, so a nested body reads flush. */
+export function stripCommonIndent(body: string): string {
+  const lines = body.split("\n");
+  let common = Infinity;
+  for (const line of lines) {
+    if (line.trim() === "") continue;
+    const indent = line.length - line.replace(/^[\t ]+/, "").length;
+    if (indent < common) common = indent;
+  }
+  if (!isFinite(common) || common === 0) return body;
+  return lines.map((l) => (l.trim() === "" ? l : l.slice(common))).join("\n");
+}
+
+/**
+ * A fenced block, capped. Overflow beyond `head` goes into a `<details>`
+ * disclosure when the client renders HTML.
+ *
+ * `<details>`/`<summary>` are on VS Code's markdown sanitizer allowlist, and
+ * the hover widget really does render the twisty, expand in place and stay
+ * open, verified by hand in a live editor. That is in-place hover expansion
+ * without the `editorHoverVerbosityLevel` proposed API, which cannot ship to
+ * the Marketplace. The one measured limit: a hover cannot grow past the editor
+ * viewport, so the disclosed body is capped too.
+ */
+export function fencedBlock(body: string, head: number, disclosed: number): string {
+  const text = stripCommonIndent(body.replace(/\s+$/, ""));
+  const lines = text.split("\n");
+  if (head <= 0) return "";
+  if (lines.length <= head) return fence(lines);
+
+  const shown = fence([...lines.slice(0, head), "…"]);
+  if (!hoverHtml() || disclosed <= 0) return shown;
+
+  const rest = lines.slice(head);
+  const inside = rest.slice(0, disclosed);
+  const hidden = rest.length - inside.length;
+  const summary = `${rest.length.toLocaleString("en-US")} more line${rest.length === 1 ? "" : "s"}`;
+  const body2 = hidden > 0 ? [...inside, `… and ${hidden.toLocaleString("en-US")} further`] : inside;
+  return [shown, "", `<details><summary>${summary}</summary>`, "", fence(body2), "", "</details>"].join(
+    "\n"
+  );
+}
+
+function fence(lines: string[]): string {
+  return `\`\`\`${FENCE_LANG}\n${lines.join("\n")}\n\`\`\``;
+}
+
+// ---------------------------------------------------------------------------
 // Card model
 // ---------------------------------------------------------------------------
 
@@ -99,64 +189,67 @@ export interface CardInput {
   /** Badge label override (e.g. "scripted trigger" for a mod def). */
   badgeLabel?: string;
   name: string;
-  /** Rendered inline after the name on line 1: pills, `· mod`, `→ character`. */
+  /** Rendered inline after the name on line 1: `· mod`, `→ character`, `= 0.5`. */
   headTail?: string;
-  /** Doc prose (blank slot workstream E extends). */
+  /** Doc prose. */
   doc?: string;
-  /** Italic traits line ("*Traits: yes/no · comparison ok*"). */
-  traits?: string;
-  /** A fenced example body (rendered ```paradox); short bodies only (§D2 mock 2). */
+  /** Already-fenced example block (build it with {@link fencedBlock}). */
   example?: string;
-  /** Footer fragments merged into one compact line (provenance, refs). */
-  footer?: string[];
+  /** One muted line: scopes, value shape and traits, joined with ` · `. */
+  facts?: string;
+  /**
+   * Per-card provenance, rendered as a muted line with no rule above it. Only
+   * multi-card hovers use it; a single-card hover puts its links on the shared
+   * footer line instead, which is two lines cheaper.
+   */
+  provenance?: string;
 }
 
-/** The language id our TextMate grammar registers (package.json `languages`). */
-const FENCE_LANG = "paradox";
-
-/** Build one card's markdown per the D2 layout. */
+/** Build one card's markdown. */
 export function renderCard(card: CardInput): string {
   const badge = kindBadge(card.kind, card.badgeLabel);
-  const head = card.headTail ? `${badge} **${card.name}** ${card.headTail}` : `${badge} **${card.name}**`;
-  const lines: string[] = [head];
-
-  if (card.doc) lines.push(card.doc);
-  if (card.example) lines.push(`\`\`\`${FENCE_LANG}\n${card.example}\n\`\`\``);
-  if (card.traits) lines.push(`*${card.traits}*`);
-
-  let md = lines.join("\n\n");
-  if (card.footer && card.footer.length > 0) {
-    md += `\n\n---\n${card.footer.join(" · ")}`;
-  }
-  return md;
+  const head = card.headTail
+    ? `${badge} **${card.name}** ${card.headTail}`
+    : `${badge} **${card.name}**`;
+  const parts: string[] = [head];
+  if (card.doc) parts.push(card.doc);
+  if (card.example) parts.push(card.example);
+  if (card.facts) parts.push(`*${card.facts}*`);
+  if (card.provenance) parts.push(card.provenance);
+  return parts.join("\n\n");
 }
 
 /**
- * Join up to `MAX_CARDS` cards, appending "*n more meanings*" when capped, then
- * the single shared scope-context footer line (§D2: scope context always last,
- * once per hover).
+ * Join cards and append the single shared footer line. Cards are separated by a
+ * rule; nothing is written above the first card or below the last one except
+ * that footer, which carries the scope context and the action links.
  */
-export const MAX_CARDS = 3;
-
-export function renderHover(cards: string[], scopeFooter: string | null): string {
-  const shown = cards.slice(0, MAX_CARDS);
+export function renderHover(cards: string[], footer: string | null): string {
+  const max = hoverCaps().cards;
+  const shown = cards.slice(0, max);
   const parts = [...shown];
   const extra = cards.length - shown.length;
   if (extra > 0) parts.push(`*${extra} more meaning${extra === 1 ? "" : "s"}*`);
   let md = parts.join("\n\n---\n\n");
-  if (scopeFooter) md += `\n\n${scopeFooter}`;
+  if (footer) md += `\n\n${footer}`;
   return md;
 }
 
-/** "Scope here: **X** (chain)" — the shared footer line appended once (§D2). */
-export function scopeHereLine(scopes: string, chain: string | null): string {
-  return chain ? `Scope here: **${scopes}** (${chain})` : `Scope here: **${scopes}**`;
+/**
+ * The shared last line: scope context, then the action links. They ride here
+ * rather than in a row of their own because this line always exists, so the
+ * links cost nothing.
+ */
+export function hoverFooter(scope: string | null, actions: string[]): string | null {
+  const parts: string[] = [];
+  if (scope) parts.push(scope);
+  parts.push(...actions);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-/** True when a definition body is short enough to inline as an example (§D2). */
-export function isShortExample(body: string): boolean {
-  const lines = body.split("\n").filter((l) => l.trim() !== "");
-  return lines.length > 0 && lines.length < 4;
+/** "Scope here: **X** (chain)" — the scope half of the footer. */
+export function scopeHereLine(scopes: string, chain: string | null): string {
+  return chain ? `Scope here: **${scopes}** (${chain})` : `Scope here: **${scopes}**`;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,20 +262,19 @@ interface DocTagLike {
 }
 
 export interface DocBody {
-  /** Prose + structured-tag markdown for the card's `doc` slot. Empty → undefined. */
+  /** Prose + structured-tag markdown for the card's `doc` slot. */
   doc?: string;
-  /** `@example` body for the card's fenced `example` slot. */
+  /** `@example` body, unfenced; the caller caps and fences it. */
   example?: string;
-  /** True when `@deprecated` is present — the card renders the name prominently. */
+  /** True when `@deprecated` is present. */
   deprecated?: boolean;
 }
 
 /**
- * Turn PdxDoc prose + tags (§E) into the card's `doc`/`example` slots.
- * Prose renders first, then structured tags compactly (§E3): `@param` as
- * `*@param NAME — desc*` lines, `@deprecated` as a prominent ⚠ line, other
- * recognized/unknown tags as compact italic lines. `@example` fills the fenced
- * slot. Fail-soft: absent fields yield an empty body.
+ * Turn PdxDoc prose + tags (§E) into the card's `doc`/`example` slots. Prose
+ * first, then structured tags compactly: `@param` as `*@param NAME — desc*`,
+ * `@deprecated` as a prominent ⚠ line, other tags as compact italic lines.
+ * Fail-soft: absent fields yield an empty body.
  */
 export function renderDocBody(def: { doc?: string; tags?: DocTagLike[] }): DocBody {
   const out: DocBody = {};
@@ -200,7 +292,6 @@ export function renderDocBody(def: { doc?: string; tags?: DocTagLike[] }): DocBo
         tagLines.push(t.text ? `⚠ **Deprecated** — ${t.text}` : `⚠ **Deprecated**`);
         break;
       case "param": {
-        // `@param NAME desc` → `*@param NAME — desc*`.
         const m = /^(\S+)\s*(.*)$/.exec(t.text);
         if (m) {
           const desc = m[2].trim();
@@ -211,12 +302,12 @@ export function renderDocBody(def: { doc?: string; tags?: DocTagLike[] }): DocBo
         break;
       }
       default:
-        // @scope, @saves, @returns, and unknown tags: compact italic line.
         tagLines.push(t.text ? `*@${t.tag} ${t.text}*` : `*@${t.tag}*`);
     }
   }
   if (tagLines.length > 0) lines.push(tagLines.join("  \n"));
 
-  if (lines.length > 0) out.doc = lines.join("\n\n");
+  const capped = lines.slice(0, Math.max(1, hoverCaps().docParagraphs));
+  if (hoverCaps().docParagraphs > 0 && capped.length > 0) out.doc = capped.join("\n\n");
   return out;
 }

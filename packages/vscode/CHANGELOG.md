@@ -4,14 +4,47 @@
 
 ### Added
 
-- **Hovering a data type now says how to obtain one.** The hover for a
-  datafunction type (`Story`, `Character`) already listed what the type gives
-  you; it now also lists what gives you the type, ranked by vanilla usage:
-  `Produced by: GetPlayer WarOverviewWindow.GetPlayer … +314 more`. The spread
-  is what makes it useful: `Story` has exactly two producers, so the answer
-  fits on the line, while `Character` has 320 and the six most-used ones plus
-  a count still beats nothing. Suggested by a user who wanted to know what
-  can and cannot be used in a GUI expression.
+- **Hovers have icons, and the icons mean something.** Kind badges are real
+  codicons instead of a coloured square, and the same glyph now appears in the
+  completion list and the tree for the same concept. This fixed a live defect:
+  `trigger` mapped to `CompletionItemKind.Function` and `effect` to `Method`,
+  which share one codepoint in the codicon font and take the same colour, so a
+  condition and an action, the one distinction in Paradox script that causes
+  silent bugs, were drawn identically in the suggest widget.
+- **Hovering a scripted trigger or effect shows what it is.** The card now
+  carries the definition's own source block, so you do not have to jump to the
+  file to see what a mod's `is_human` actually tests. Long bodies open in place
+  through a disclosure: only 11% of vanilla scripted triggers are three lines or
+  shorter, median 10, longest 232.
+- **Hovering a data type says how to obtain one.** The datafunction hover for
+  `Story` or `Character` already listed what the type gives you; it now also
+  lists what gives you the type, ranked by vanilla usage. `Story` has exactly
+  two producers, `Character` has 320.
+- **`px.hover.detail`** (`compact` | `standard` | `full`, default `standard`)
+  controls how much a hover shows. Nothing is hidden permanently: longer
+  examples stay one click away inside the hover.
+
+### Changed
+
+- **Hovers are quieter.** Seven chart colours become the three VS Code uses for
+  its own symbols plus plain default, which is what 12 of the 23 script kinds
+  now render as, so most badges emit no colour markup at all. Scopes, the value
+  shape and the traits line merge into one muted facts line. A single-card hover
+  writes no footer block: its provenance and reference links ride the scope line
+  that has to exist anyway, which is worth three lines on the most common hover
+  there is.
+- GUI widget types and GUI properties had never been added to the badge colour
+  switch, so they fell through to the "definition kinds read green" default and
+  a widget type read the same green as a scripted trigger. They now have their
+  own entries, as do datafunction data types, promotes and functions, GUI
+  templates and enum values, and text format tags.
+
+### Fixed
+
+- A datafunction promote was drawn as a blue variable when global and a grey
+  wrench when it was a member, decided by nothing but which branch of the
+  completion builder produced it. Both are blue now: blue is a thing you have,
+  purple is a call you make.
 
 ## 0.3.3 (beta) - tiger download fix
 

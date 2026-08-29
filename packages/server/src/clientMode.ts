@@ -17,6 +17,8 @@ export interface ClientCapabilities {
   commands: ReadonlySet<string>;
   /** Client watches the mod tree itself and pushes paradox/modFileChanged. */
   ownFileWatcher: boolean;
+  /** Client renders `$(codicon)` in hover markdown (supportThemeIcons). */
+  hoverIcons: boolean;
 }
 
 /**
@@ -31,12 +33,18 @@ export function resolveClientCapabilities(init: Partial<ParadoxInitOptions>): Cl
       hoverHtml: init.client.hoverHtml === true,
       commands: new Set(init.client.commands ?? []),
       ownFileWatcher: init.client.ownFileWatcher === true,
+      hoverIcons: init.client.hoverIcons === true,
     };
   }
   if (init.clientCommands === true) {
-    return { hoverHtml: true, commands: new Set(allClientCommandIds), ownFileWatcher: true };
+    return {
+      hoverHtml: true,
+      commands: new Set(allClientCommandIds),
+      ownFileWatcher: true,
+      hoverIcons: true,
+    };
   }
-  return { hoverHtml: false, commands: new Set(), ownFileWatcher: false };
+  return { hoverHtml: false, commands: new Set(), ownFileWatcher: false, hoverIcons: false };
 }
 
 let caps: ClientCapabilities = resolveClientCapabilities({ clientCommands: true });
@@ -52,6 +60,11 @@ export function clientCapabilities(): ClientCapabilities {
 /** Whether hover markdown may carry the sanitized colored spans. */
 export function hoverHtml(): boolean {
   return caps.hoverHtml;
+}
+
+/** Whether hover badges may use `$(codicon)` glyphs instead of a `■` square. */
+export function hoverIcons(): boolean {
+  return caps.hoverIcons;
 }
 
 /** Whether the client registers `id`, so a `command:` link or command action reaches it. */

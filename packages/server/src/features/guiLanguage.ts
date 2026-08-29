@@ -268,7 +268,7 @@ export function provideGuiHover(
       const combinable = enumCombinable().has(enumKey);
       cards.push(
         renderCard({
-          kind: "keyword",
+          kind: "gui_enum_value",
           badgeLabel: "gui enum value",
           name: lower,
           headTail: `of \`${enumKey}\``,
@@ -325,12 +325,12 @@ export function provideGuiHover(
       }
       cards.push(
         renderCard({
-          kind: "gui_type",
+          kind: resolved.kind === "template" ? "gui_template" : "gui_type",
           badgeLabel: resolved.kind,
           name: resolved.kind === "template" ? word : resolved.name,
           headTail: resolved.kind === "type" ? `= ${(def as GuiTypeDef).base}` : undefined,
           doc: docParts.length > 0 ? docParts.join("\n\n") : undefined,
-          footer: footer.length > 0 ? footer : undefined,
+          provenance: footer.length > 0 ? footer.join(" · ") : undefined,
         })
       );
     }
@@ -349,7 +349,7 @@ export function provideGuiHover(
           badgeLabel: "template / type",
           name: def.name,
           headTail: `· ${data.originLabel(def)}`,
-          footer: [link],
+          provenance: link,
         })
       );
     }

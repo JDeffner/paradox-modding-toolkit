@@ -319,7 +319,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // HTML, and runs its own tuned file watcher (pushing paradox/modFileChanged).
     // Clients declaring less get plain markdown, WorkspaceEdits instead of
     // command actions, and a server-side watcher.
-    client: { hoverHtml: true, commands: allClientCommandIds, ownFileWatcher: true },
+    client: {
+      hoverHtml: true,
+      hoverIcons: true,
+      commands: allClientCommandIds,
+      ownFileWatcher: true,
+    },
     settings: toSettings(cfg),
   };
   // Server deaths were invisible: the client restarts silently up to five
@@ -375,6 +380,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           for (const content of hover.contents) {
             if (content instanceof vscode.MarkdownString) {
               content.isTrusted = { enabledCommands: ["px.showReferences"] };
+              // Theme icons must be enabled per MarkdownString: the
+              // `markdown: { supportHtml: true }` client option above does NOT
+              // cover them. Without this the kind badges arrive as the literal
+              // text `$(symbol-method)`, which is why the server gates them on
+              // the `hoverIcons` capability we declare in initOptions.
+              content.supportThemeIcons = true;
             }
           }
         }

@@ -39,6 +39,7 @@
  * two-digit frequency bucket F (log2×6 scale; dense rank for structure keys),
  * source tiebreak S ("0" mod, "1" other), label as final alphabetical tiebreak.
  */
+import { kindStyle } from "@px-lsp/protocol/kinds";
 import {
   CompletionItemKind,
   InsertTextFormat,
@@ -78,33 +79,21 @@ export interface CompletionResult {
   items: CompletionItem[];
 }
 
-const TOKEN_ITEM_KINDS: Record<TokenData["kind"], CompletionItemKind> = {
-  trigger: CompletionItemKind.Function,
-  effect: CompletionItemKind.Method,
-  event_target: CompletionItemKind.Variable,
-  modifier: CompletionItemKind.Property,
-};
-
-// Distinct kinds so user/vanilla definitions are visually different from engine tokens.
-// Schema-driven kinds are an open set; unlisted ones fall back to Reference.
-const DEF_ITEM_KINDS: Record<string, CompletionItemKind> = {
-  scripted_effect: CompletionItemKind.Struct,
-  scripted_trigger: CompletionItemKind.Interface,
-  event: CompletionItemKind.Event,
-  on_action: CompletionItemKind.Event,
-  script_value: CompletionItemKind.Value,
-  scripted_modifier: CompletionItemKind.Unit,
-  loc_key: CompletionItemKind.Text,
-  trait: CompletionItemKind.EnumMember,
-  decision: CompletionItemKind.Operator,
-  saved_scope: CompletionItemKind.Variable,
-  variable: CompletionItemKind.Variable,
-  local_variable: CompletionItemKind.Variable,
-  global_variable: CompletionItemKind.Variable,
-  variable_list: CompletionItemKind.Variable,
-  local_variable_list: CompletionItemKind.Variable,
-  global_variable_list: CompletionItemKind.Variable,
-};
+/**
+ * The suggest-widget icon for a kind, from the one shared map in
+ * `@px-lsp/protocol/kinds`, so the completion list and the hover badge cannot
+ * drift apart. Kinds the map does not name fall back to `Reference`, which is
+ * also what the map's own default resolves to.
+ *
+ * This replaced two hand-maintained tables. The old one sent `trigger` to
+ * `Function` and `effect` to `Method`, which share a codepoint in the codicon
+ * font and take the same colour, so a condition and an action were drawn
+ * identically in the suggest widget.
+ */
+function itemKind(kind: string): CompletionItemKind {
+  const name = kindStyle(kind).completionKind as keyof typeof CompletionItemKind;
+  return CompletionItemKind[name] ?? CompletionItemKind.Reference;
+}
 
 const TIER_STRUCTURE = "0";
 const TIER_VALID = "1";
@@ -150,7 +139,7 @@ function structureItem(spec: KeySpec, kind: string, rank: number): CompletionIte
 }
 
 function tokenItem(t: TokenData): CompletionItem {
-  const item: CompletionItem = { label: t.name, kind: TOKEN_ITEM_KINDS[t.kind] };
+  const item: CompletionItem = { label: t.name, kind: itemKind(t.kind) };
   item.detail = t.kind + (t.scopes.length > 0 ? ` (${t.scopes.join(", ")})` : "");
   item.data = { t: "tok", k: t.kind, n: t.name };
   return item;
@@ -159,7 +148,7 @@ function tokenItem(t: TokenData): CompletionItem {
 function defItem(d: Definition, origin: string = d.source): CompletionItem {
   const item: CompletionItem = {
     label: d.name,
-    kind: DEF_ITEM_KINDS[d.kind] ?? CompletionItemKind.Reference,
+    kind: itemKind(d.kind),
   };
   item.detail = `${d.kind.replace(/_/g, " ")} (${origin})`;
   item.data = { t: "def", k: d.kind, n: d.name };

@@ -114,7 +114,7 @@ export function provideFormatTagHover(
   if (rgb) doc.push(`Color: ${colorSwatch(rgb)} ${rgbCss(rgb)}`);
   if (entry.layer === "builtin") doc.push("Engine built-in format.");
   if (doc.length > 0) card.doc = doc.join("  \n");
-  if (entry.file) card.footer = [sourceLink(entry)];
+  if (entry.file) card.provenance = sourceLink(entry);
   return { markdown: renderCard(card), start: hit.start, end: hit.end };
 }
 

@@ -1,161 +1,215 @@
 /**
- * §D hover-render fixtures, derived from the three D2 mocks. These pin the card
- * structure (badge spans, scope pills, single shared footer) and the plain-text
- * fallback (span *content* stays legible when the tag is stripped).
+ * Hover card layout. These pin the three-tier rendering contract (glyph, square,
+ * plain), the single shared footer, the caps, and the `<details>` disclosure.
+ *
+ * The fixtures call `renderCard` directly, which is NOT what production does:
+ * `hover.ts` builds a `CardInput` through `tokenCard`/`definitionCard` first,
+ * and those filter fields out. Do not read a "what the hover looks like today"
+ * claim off this file.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
-  isShortExample,
+  CAPS,
+  fencedBlock,
+  hoverFooter,
   kindBadge,
   renderCard,
   renderHover,
   scopeHereLine,
   scopePill,
   scopeType,
+  setHoverDetail,
+  stripCommonIndent,
 } from "../src/features/hoverRender";
+import { resolveClientCapabilities, setClientCapabilities } from "../src/clientMode";
+import { kindStyle, mappedKinds } from "@px-lsp/protocol/kinds";
 
-describe("kind badges (§D2)", () => {
-  it("colors each kind family per the plan", () => {
-    expect(kindBadge("trigger")).toBe('<span style="color:var(--vscode-charts-purple);">■ trigger</span>');
-    expect(kindBadge("effect")).toBe('<span style="color:var(--vscode-charts-red);">■ effect</span>');
-    expect(kindBadge("structure_key", "character interaction key")).toBe(
-      '<span style="color:var(--vscode-charts-yellow);">■ character interaction key</span>'
+const NL = String.fromCharCode(10);
+
+/** Capability tiers, as the degradation matrix in the design sheet describes them. */
+const TIERS = {
+  vscode: { client: { hoverHtml: true, hoverIcons: true, commands: [] } },
+  html: { client: { hoverHtml: true, hoverIcons: false, commands: [] } },
+  bare: { client: { hoverHtml: false, hoverIcons: false, commands: [] } },
+};
+const tier = (t: keyof typeof TIERS) => setClientCapabilities(resolveClientCapabilities(TIERS[t]));
+
+afterEach(() => {
+  setClientCapabilities(resolveClientCapabilities({ clientCommands: true }));
+  setHoverDetail("standard");
+});
+
+describe("kind badges: one glyph per concept, three tiers", () => {
+  it("draws a codicon when the client renders theme icons", () => {
+    tier("vscode");
+    expect(kindBadge("trigger")).toBe(
+      '<span style="color:var(--vscode-symbolIcon-functionForeground);">$(symbol-method) trigger</span>'
     );
-    expect(kindBadge("scripted_trigger")).toContain("var(--vscode-charts-green)");
-    expect(kindBadge("saved_scope")).toContain("var(--vscode-charts-orange)");
-    expect(kindBadge("loc_key")).toContain("var(--vscode-charts-foreground)");
+    expect(kindBadge("effect")).toBe(
+      '<span style="color:var(--vscode-symbolIcon-classForeground);">$(symbol-event) effect</span>'
+    );
+    expect(kindBadge("saved_scope")).toBe(
+      '<span style="color:var(--vscode-symbolIcon-variableForeground);">$(symbol-variable) saved scope</span>'
+    );
   });
 
-  it("badge content is plain text so HTML stripping stays legible", () => {
-    const stripped = kindBadge("trigger").replace(/<[^>]+>/g, "");
-    expect(stripped).toBe("■ trigger");
+  it("falls back to a square when the client renders HTML but not icons", () => {
+    tier("html");
+    expect(kindBadge("trigger")).toBe(
+      '<span style="color:var(--vscode-symbolIcon-functionForeground);">■ trigger</span>'
+    );
+  });
+
+  it("falls back to plain text on a bare LSP client", () => {
+    tier("bare");
+    expect(kindBadge("trigger")).toBe("■ trigger");
+    expect(kindBadge("structure_key", "character interaction key")).toBe("■ character interaction key");
+  });
+
+  it("emits no span at all for the default colour family", () => {
+    tier("vscode");
+    // 12 of the mapped kinds are deliberately uncoloured; they should cost no markup.
+    expect(kindBadge("define")).toBe("$(symbol-constant) define");
+    expect(kindBadge("loc_key")).toBe("$(symbol-key) loc key");
+  });
+
+  it("badge content stays legible once the tag is stripped", () => {
+    tier("vscode");
+    expect(kindBadge("trigger").replace(/<[^>]+>/g, "")).toBe("$(symbol-method) trigger");
   });
 });
 
-describe("scope pills (§D3)", () => {
-  it("blue when the scope matches the current cursor scope, muted otherwise", () => {
-    const current = new Set(["character"]);
-    expect(scopePill("character", current)).toBe(
-      '<span style="color:var(--vscode-charts-blue);">character</span>'
-    );
-    expect(scopePill("province", current)).toBe(
-      '<span style="color:var(--vscode-descriptionForeground);">province</span>'
-    );
+describe("the kind map", () => {
+  it("never draws a condition and an action with the same glyph", () => {
+    // The old map sent trigger to Function and effect to Method, which are one
+    // codepoint in the codicon font, so the two opposite concepts in Paradox
+    // script were drawn identically.
+    expect(kindStyle("trigger").codicon).not.toBe(kindStyle("effect").codicon);
+    expect(kindStyle("trigger").family).toBe("condition");
+    expect(kindStyle("effect").family).toBe("action");
   });
 
-  it("muted when no current scope is known", () => {
-    expect(scopePill("character", null)).toContain("descriptionForeground");
+  it("gives the engine and mod versions of one concept the same glyph", () => {
+    expect(kindStyle("scripted_trigger").codicon).toBe(kindStyle("trigger").codicon);
+    expect(kindStyle("scripted_effect").codicon).toBe(kindStyle("effect").codicon);
+  });
+
+  it("keeps every mapped kind on a real codicon and a real completion kind", () => {
+    for (const k of mappedKinds()) {
+      const style = kindStyle(k);
+      expect(style.codicon).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(style.completionKind).toMatch(/^[A-Z][A-Za-z]+$/);
+    }
+  });
+
+  it("falls through to a neutral style for a kind it does not name", () => {
+    expect(kindStyle("something_new").codicon).toBe("go-to-file");
+    expect(kindStyle("something_new").family).toBe("default");
   });
 });
 
-describe("Mock 1 — engine trigger (is_ai-shaped)", () => {
-  const md = renderCard({
-    kind: "trigger",
-    name: "is_ai",
-    doc: "Is the character AI-controlled? A player-controlled character returns no.",
-    traits: "Traits: yes/no · comparison ok",
-    footer: [`Supported scopes: ${scopePill("character", new Set(["character"]))}`],
+describe("card layout", () => {
+  it("puts the badge, bold name and tail on line 1", () => {
+    tier("vscode");
+    const md = renderCard({
+      kind: "trigger",
+      name: "is_ai",
+      doc: "is the character played by AI?",
+      facts: "character scope · yes/no",
+    });
+    const lines = md.split(NL);
+    expect(lines[0]).toContain("$(symbol-method) trigger");
+    expect(lines[0]).toContain("**is_ai**");
+    expect(md).toContain("*character scope · yes/no*");
   });
 
-  it("badge + bold name on line 1", () => {
-    expect(md.startsWith('<span style="color:var(--vscode-charts-purple);">■ trigger</span> **is_ai**')).toBe(
-      true
-    );
-  });
-
-  it("prose, italic traits, and a --- footer with a blue scope pill", () => {
-    expect(md).toContain("Is the character AI-controlled?");
-    expect(md).toContain("*Traits: yes/no · comparison ok*");
-    expect(md).toContain(
-      '\n---\nSupported scopes: <span style="color:var(--vscode-charts-blue);">character</span>'
-    );
+  it("writes per-card provenance with no rule above it", () => {
+    const md = renderCard({
+      kind: "scripted_trigger",
+      badgeLabel: "scripted trigger",
+      name: "is_human",
+      headTail: "· mod",
+      provenance: "[00_triggers.txt:1](file:///x) · 4,116 references",
+    });
+    expect(md).toContain("4,116 references");
+    expect(md).not.toContain("---");
   });
 });
 
-describe("Mock 2 — mod scripted trigger with reference count", () => {
-  const md = renderCard({
-    kind: "scripted_trigger",
-    badgeLabel: "scripted trigger",
-    name: "is_human",
-    headTail: "· mod",
-    example: "is_shown = { scope:secondary_recipient = { is_human = yes } }",
-    footer: ["[00_agot_character_triggers.txt:1](file:///x)", "4,116 references"],
+describe("the shared footer", () => {
+  it("puts the action links on the end of the scope line, not in a row", () => {
+    const footer = hoverFooter(scopeHereLine("character", null), ["[file.txt:12](file:///x)"]);
+    expect(footer).toBe("Scope here: **character** · [file.txt:12](file:///x)");
+    expect(footer!.split(NL)).toHaveLength(1);
   });
 
-  it("green badge, name, · mod on line 1", () => {
-    expect(
-      md.startsWith(
-        '<span style="color:var(--vscode-charts-green);">■ scripted trigger</span> **is_human** · mod'
-      )
-    ).toBe(true);
+  it("is null when there is nothing to say", () => {
+    expect(hoverFooter(null, [])).toBeNull();
   });
 
-  it("fences the example with the paradox language id", () => {
-    expect(md).toContain("```paradox\nis_shown = { scope:secondary_recipient = { is_human = yes } }\n```");
+  it("separates cards with a rule and appends the footer once", () => {
+    const md = renderHover(["A", "B"], "Scope here: **character**");
+    expect(md).toBe(["A", "", "---", "", "B", "", "Scope here: **character**"].join(NL));
   });
 
-  it("merges provenance link and reference count into one footer line", () => {
-    expect(md).toContain("\n---\n[00_agot_character_triggers.txt:1](file:///x) · 4,116 references");
+  it("caps the cards and says how many meanings were dropped", () => {
+    const md = renderHover(["A", "B", "C", "D"], null);
+    expect(md).toContain("*1 more meaning*");
+    setHoverDetail("compact");
+    expect(renderHover(["A", "B", "C"], null)).toContain("*2 more meanings*");
   });
 });
 
-describe("Mock 3 — saved scope", () => {
-  const md = renderCard({
-    kind: "saved_scope",
-    name: "scope:secondary_recipient",
-    headTail: `→ ${scopeType("character")}`,
-    doc: "Saved in this file: 00_agot_bastard_interactions.txt:13",
+describe("fenced blocks and the disclosure", () => {
+  const body = ["a = {", "  b = 1", "  c = 2", "  d = 3", "  e = 4", "}"].join(NL);
+
+  it("fences a short block whole, with no disclosure", () => {
+    const md = fencedBlock("x = yes", 3, 40);
+    expect(md).toBe(["```paradox", "x = yes", "```"].join(NL));
+    expect(md).not.toContain("<details>");
   });
 
-  it("orange badge, name, blue → type on line 1", () => {
-    expect(md).toContain(
-      '<span style="color:var(--vscode-charts-orange);">■ saved scope</span> **scope:secondary_recipient**'
+  it("caps the inline part and discloses the rest", () => {
+    tier("vscode");
+    const md = fencedBlock(body, 3, 40);
+    expect(md).toContain(["```paradox", "a = {", "  b = 1", "  c = 2", "…", "```"].join(NL));
+    expect(md).toContain("<details><summary>3 more lines</summary>");
+    expect(md).toContain("  e = 4");
+  });
+
+  it("truncates inside the disclosure too, because a hover cannot outgrow the viewport", () => {
+    tier("vscode");
+    const md = fencedBlock(body, 1, 2);
+    expect(md).toContain("… and 3 further");
+  });
+
+  it("drops the disclosure entirely on a client that strips HTML", () => {
+    tier("bare");
+    const md = fencedBlock(body, 3, 40);
+    expect(md).not.toContain("<details>");
+    expect(md).toContain("…");
+  });
+
+  it("strips the indentation every line shares", () => {
+    expect(stripCommonIndent(["    a", "      b", "", "    c"].join(NL))).toBe(
+      ["a", "  b", "", "c"].join(NL)
     );
-    expect(md).toContain('→ <span style="color:var(--vscode-charts-blue);">character</span>');
   });
 
-  it("carries the save-site line in prose", () => {
-    expect(md).toContain("Saved in this file: 00_agot_bastard_interactions.txt:13");
+  it("shows no example at all in compact mode", () => {
+    setHoverDetail("compact");
+    expect(CAPS.compact.exampleLines).toBe(0);
+    expect(fencedBlock(body, CAPS.compact.bodyLines, CAPS.compact.disclosedLines)).toBe("");
   });
 });
 
-describe("hover assembly (§D2)", () => {
-  it("appends the scope footer exactly once, after the cards", () => {
-    const md = renderHover(
-      [renderCard({ kind: "trigger", name: "a" }), renderCard({ kind: "effect", name: "b" })],
-      scopeHereLine("character", "root · every_vassal")
+describe("scope pills", () => {
+  it("is blue when it matches the cursor scope and muted otherwise", () => {
+    tier("vscode");
+    expect(scopePill("character", new Set(["character"]))).toBe(
+      '<span style="color:var(--vscode-symbolIcon-variableForeground);">character</span>'
     );
-    expect(md.match(/Scope here:/g)).toHaveLength(1);
-    expect(md.trimEnd().endsWith("Scope here: **character** (root · every_vassal)")).toBe(true);
-    // Cards are joined by the --- separator.
-    expect(md).toContain("\n\n---\n\n");
-  });
-
-  it("caps at 3 cards and reports the remainder", () => {
-    const cards = ["a", "b", "c", "d", "e"].map((n) => renderCard({ kind: "trigger", name: n }));
-    const md = renderHover(cards, null);
-    expect(md).toContain("*2 more meanings*");
-    expect(md).not.toContain("**d**");
-  });
-
-  it("singular remainder wording", () => {
-    const cards = ["a", "b", "c", "d"].map((n) => renderCard({ kind: "trigger", name: n }));
-    expect(renderHover(cards, null)).toContain("*1 more meaning*");
-  });
-
-  it("omits the footer when scope inference is unavailable (fail-soft)", () => {
-    const md = renderHover([renderCard({ kind: "trigger", name: "a" })], null);
-    expect(md).not.toContain("Scope here");
-  });
-});
-
-describe("isShortExample (§D2)", () => {
-  it("true for bodies under 4 non-blank lines", () => {
-    expect(isShortExample("is_human = yes")).toBe(true);
-    expect(isShortExample("a\nb\nc")).toBe(true);
-  });
-  it("false for longer bodies or empty ones", () => {
-    expect(isShortExample("a\nb\nc\nd")).toBe(false);
-    expect(isShortExample("")).toBe(false);
+    expect(scopePill("province", new Set(["character"]))).toContain("descriptionForeground");
+    expect(scopeType("character")).toContain("symbolIcon-variableForeground");
   });
 });

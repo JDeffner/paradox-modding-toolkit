@@ -36,6 +36,7 @@ export interface PxConfig {
   excludedMods: string[];
   locLanguage: string;
   scopeInlayHints: boolean;
+  hoverDetail: "compact" | "standard" | "full";
   tigerRunOn: "save" | "manual";
   enableForWorkspace: boolean;
   /** Diagnostic codes (ours + tiger keys) to suppress everywhere. */
@@ -278,6 +279,7 @@ export function readConfig(): PxConfig {
     excludedMods,
     locLanguage: (cfg.get<string>("locLanguage") ?? "english").trim().toLowerCase() || "english",
     scopeInlayHints: cfg.get<boolean>("scopeInlayHints") ?? false,
+    hoverDetail: cfg.get<"compact" | "standard" | "full">("hover.detail") ?? "standard",
     tigerRunOn,
     enableForWorkspace,
     diagnosticsIgnore: sanitizeStringList(cfg.get("diagnostics.ignore")),

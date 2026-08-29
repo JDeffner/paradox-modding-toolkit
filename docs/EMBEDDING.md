@@ -211,6 +211,7 @@ interface ParadoxClientCapabilities {
   hoverHtml?: boolean;      // renders the sanitized <span style="color:var(--vscode-*)"> hover markup
   commands?: string[];      // the px.* command ids this client actually registers
   ownFileWatcher?: boolean; // client watches the mod tree and pushes paradox/modFileChanged
+  hoverIcons?: boolean;     // client sets supportThemeIcons, so hover badges may use $(codicon) glyphs
 }
 ```
 
