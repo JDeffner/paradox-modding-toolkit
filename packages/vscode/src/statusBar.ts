@@ -12,6 +12,8 @@ export interface PxStatus {
   /** The script_docs tokens are the bundled snapshot, not the user's dump. */
   tokensFromBundledDumps: boolean;
   definitions: number;
+  /** Tokens the bundled wiki added on top of script_docs (mostly deprecated). */
+  tokensWikiOnly?: number;
   gameOk: boolean;
   modOk: boolean;
   tigerOk: boolean;
@@ -71,11 +73,18 @@ export class PxStatusBar implements vscode.Disposable {
     const mark = (phase: string, ok: boolean) =>
       this.phaseState(phase) === "running" ? "○" : ok ? "✓" : "✗";
 
+    // Say where the tokens came from, with the split, because "script_docs +
+    // wiki" reads as though the wiki is doing half the work. It is not: with a
+    // real dump loaded the wiki contributes a handful of extra NAMES (mostly
+    // deprecated API the current patch no longer has) on top of usage examples
+    // for tokens the dump already had.
+    const wikiOnly = s.tokensWikiOnly ?? 0;
+    const own = s.tokens - wikiOnly;
     const tokenSource = s.tokensFromBundledDumps
-      ? "bundled script_docs snapshot, dump your own to match your patch"
+      ? "bundled snapshot — run script_docs in the game console to match your patch"
       : s.tokensFromScriptDocs
-        ? "your script_docs, plus the wiki"
-        : "bundled wiki only, run DumpDataTypes for your patch";
+        ? `${n(own)} from your script_docs${wikiOnly > 0 ? `, ${n(wikiOnly)} wiki-only` : ""}`
+        : "bundled wiki only — run script_docs in the game console";
 
     // Loading rows first, then configuration. Each phase reports INTO its own
     // value row rather than adding a second one: "harvesting engine tokens…"

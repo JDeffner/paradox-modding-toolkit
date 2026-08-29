@@ -186,6 +186,10 @@ export interface StatusPayload {
    * (data/<gameId>/script_docs) rather than the user's own dump. */
   tokensFromBundledDumps?: boolean;
   definitions: number;
+  /** Tokens the bundled wiki added that script_docs did not have. The wiki is
+   * merged even when the user has their own dump, but its real contribution is
+   * usage examples; the extra NAMES are mostly deprecated API. */
+  tokensWikiOnly?: number;
   /** True while a (re)scan is running. */
   indexing: boolean;
 }

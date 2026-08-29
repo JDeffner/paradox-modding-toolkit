@@ -267,6 +267,7 @@ let wikidocsDir = "";
 let freqsDir = "";
 let tokensFromScriptDocs = false;
 let tokensFromBundledDumps = false;
+let tokensWikiOnly = 0;
 let indexing = false;
 /** Bumped whenever paths change; in-flight scans abort when superseded. */
 let scanGeneration = 0;
@@ -459,6 +460,7 @@ function sendStatus(): void {
     tokensFromScriptDocs,
     tokensFromBundledDumps,
     definitions: total,
+    tokensWikiOnly,
     indexing,
   };
   void connection.sendNotification(statusNotification, payload);
@@ -582,6 +584,7 @@ function loadDocs(force: boolean): void {
   const t1 = Date.now();
   const wikiTokens = loadWikiTokens(wikidocsDir);
   const merged = mergeWikiTokens(scriptTokens, wikiTokens);
+  tokensWikiOnly = merged.length - scriptTokens.length;
   data.setTokens(merged);
   log(`wiki docs: ${wikiTokens.length} tokens, merged total ${merged.length} (${Date.now() - t1}ms)`);
 

@@ -251,6 +251,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
       tokensFromBundledDumps: lastServerStatus.tokensFromBundledDumps ?? false,
       definitions: lastServerStatus.definitions,
+      tokensWikiOnly: lastServerStatus.tokensWikiOnly,
       indexing: lastServerStatus.indexing,
       gameOk: cfg.gamePath !== null,
       modOk: cfg.modPath !== null,
