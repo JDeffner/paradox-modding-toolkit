@@ -316,6 +316,19 @@ export function readDescriptorName(dir: string): string | null {
 }
 
 /**
+ * The quoted strings inside a top-level `<key>={ "A" "B" }` block of a .mod
+ * text, in file order; empty when the block is missing.
+ */
+export function readDescriptorBlock(text: string, key: string): string[] {
+  // Comments first: a commented-out entry is not an entry.
+  const block = new RegExp(`(?:^|\\n)[ \\t]*${key}[ \\t]*=[ \\t]*\\{([^}]*)\\}`).exec(
+    text.replace(/#[^\n]*/g, "")
+  );
+  if (!block) return [];
+  return [...block[1].matchAll(/"([^"]*)"/g)].map((m) => m[1].trim()).filter((s) => s !== "");
+}
+
+/**
  * The mod names inside `<dir>/descriptor.mod`'s `dependencies={ "A" "B" }`
  * block, in file order; empty when the file or the block is missing. The
  * launcher matches these against the other mods' `name=`, not against their
@@ -328,10 +341,26 @@ export function readDescriptorDependencies(dir: string): string[] {
   } catch {
     return [];
   }
-  // Comments first: a commented-out dependency is not a dependency.
-  const block = /(?:^|\n)[ \t]*dependencies[ \t]*=[ \t]*\{([^}]*)\}/.exec(text.replace(/#[^\n]*/g, ""));
-  if (!block) return [];
-  return [...block[1].matchAll(/"([^"]*)"/g)].map((m) => m[1].trim()).filter((s) => s !== "");
+  return readDescriptorBlock(text, "dependencies");
+}
+
+/**
+ * `text` with the top-level `key="value"` entry replaced, or appended when the
+ * key is absent. Only scalar entries: a key whose value is a block is left
+ * alone and the entry is appended instead. Line endings and a leading BOM
+ * survive untouched; the appended line follows the file's dominant EOL.
+ */
+export function upsertDescriptorValue(text: string, key: string, value: string): string {
+  const entry = parseDescriptor(text).find((e) => e.key === key && e.value !== "");
+  if (entry) {
+    const lines = text.split(/(\r?\n)/); // keep separators at odd indices
+    const idx = entry.line * 2;
+    lines[idx] = lines[idx].replace(/=\s*("[^"]*"|\S+)([ \t]*(#.*)?)$/, `="${value}"$2`);
+    return lines.join("");
+  }
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const sep = text === "" || text.endsWith("\n") ? "" : eol;
+  return `${text}${sep}${key}="${value}"${eol}`;
 }
 
 /** "1.19.0.6" -> "1.19.*" (the wildcard form that survives hotfixes). */

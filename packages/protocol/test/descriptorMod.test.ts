@@ -3,7 +3,9 @@ import {
   DESCRIPTOR_FIELDS,
   LAUNCHER_TAGS,
   parseDescriptor,
+  readDescriptorBlock,
   scaffoldDescriptor,
+  upsertDescriptorValue,
   validateDescriptor,
   wildcardVersion,
 } from "../src/descriptorMod";
@@ -122,5 +124,44 @@ describe("helpers", () => {
     expect(validateDescriptor(text, { isDescriptorFile: true })).toEqual([]);
     expect(text).toContain('name="My Mod"');
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("readDescriptorBlock reads quoted entries, ignoring comments", () => {
+    expect(readDescriptorBlock(GOOD_DESCRIPTOR, "tags")).toEqual(["Total Conversion", "Gameplay"]);
+    expect(readDescriptorBlock('tags={\n\t"Fixes" # "NotATag"\n}\n', "tags")).toEqual(["Fixes"]);
+    expect(readDescriptorBlock(GOOD_DESCRIPTOR, "dependencies")).toEqual([]);
+  });
+});
+
+describe("upsertDescriptorValue", () => {
+  it("appends the entry when the key is absent", () => {
+    const out = upsertDescriptorValue(GOOD_DESCRIPTOR, "remote_file_id", "123456");
+    expect(out).toContain('remote_file_id="123456"\n');
+    expect(out.startsWith(GOOD_DESCRIPTOR)).toBe(true);
+  });
+
+  it("replaces an existing value in place", () => {
+    const out = upsertDescriptorValue(
+      'name="X"\nremote_file_id="1" # kept\nversion="2"\n',
+      "remote_file_id",
+      "42"
+    );
+    expect(out).toBe('name="X"\nremote_file_id="42" # kept\nversion="2"\n');
+  });
+
+  it("keeps CRLF line endings and a BOM", () => {
+    const out = upsertDescriptorValue('\uFEFFname="X"\r\n', "remote_file_id", "7");
+    expect(out).toBe('\uFEFFname="X"\r\nremote_file_id="7"\r\n');
+    const replaced = upsertDescriptorValue('\uFEFFremote_file_id="1"\r\nname="X"\r\n', "remote_file_id", "9");
+    expect(replaced).toBe('\uFEFFremote_file_id="9"\r\nname="X"\r\n');
+  });
+
+  it("handles a file without a trailing newline", () => {
+    expect(upsertDescriptorValue('name="X"', "remote_file_id", "5")).toBe('name="X"\nremote_file_id="5"\n');
+  });
+
+  it("does not touch block-valued keys of the same name", () => {
+    const out = upsertDescriptorValue('tags={\n\t"Gameplay"\n}\n', "tags", "zzz");
+    expect(out).toBe('tags={\n\t"Gameplay"\n}\ntags="zzz"\n');
   });
 });

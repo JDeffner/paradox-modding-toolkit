@@ -10,6 +10,12 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ### Added
 
+- `descriptorMod.ts`: `readDescriptorBlock(text, key)` (the quoted strings of
+  any top-level `key={ … }` block; `readDescriptorDependencies` now uses it)
+  and `upsertDescriptorValue(text, key, value)` (replace or append a scalar
+  entry, preserving BOM and line endings). Both for the extension's Steam
+  Workshop publishing, which writes `remote_file_id` back after first publish.
+
 - `kinds.ts`: one map from a concept (`trigger`, `saved_scope`, `data_type`, a
   GUI widget type) to its codicon and its `CompletionItemKind` name. Shared by
   the server's hover and completion and by the VS Code client's tree views, so
