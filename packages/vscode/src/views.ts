@@ -570,13 +570,15 @@ export function registerPxViews(
       const before = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
       const chosenKeys = new Set(chosen.map((p) => p.toLowerCase()));
       const parents = sanitizeStringList(pxCfg.get("parentMods"));
-      const unexcluded = parents.filter(
-        (p) => before.has(p.toLowerCase()) && !chosenKeys.has(p.toLowerCase())
+      // Paths compare case-insensitively throughout (Windows), so the drop set
+      // is keyed by the lowercased path, not by the string the user typed.
+      const unexcluded = new Set(
+        parents.map((p) => p.toLowerCase()).filter((k) => before.has(k) && !chosenKeys.has(k))
       );
-      if (unexcluded.length > 0) {
+      if (unexcluded.size > 0) {
         await pxCfg.update(
           "parentMods",
-          parents.filter((p) => !unexcluded.includes(p)),
+          parents.filter((p) => !unexcluded.has(p.toLowerCase())),
           vscode.ConfigurationTarget.Workspace
         );
       }
