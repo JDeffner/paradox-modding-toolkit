@@ -30,6 +30,12 @@ export interface ParadoxSettings {
   locLanguage: string;
   /** Show inferred scope after scope-changing block openers (off by default). */
   scopeInlayHints: boolean;
+  /**
+   * How much a hover shows. `standard` applies every cap in the design;
+   * `compact` drops prose and examples; `full` lifts the example cap and shows
+   * every distinct meaning.
+   */
+  hoverDetail?: "compact" | "standard" | "full";
   /** Our diagnostic codes to suppress everywhere. */
   diagnosticsIgnore: string[];
   /** Glob patterns (workspace-relative paths) whose diagnostics are suppressed. */
@@ -79,6 +85,14 @@ export interface ParadoxClientCapabilities {
    * one of these: send it in the initialize params, not here.
    */
   fileLinks?: boolean;
+  /**
+   * The client renders `$(codicon)` theme icons in hover markdown, i.e. it sets
+   * `supportThemeIcons` on the MarkdownString. Default false, and the default
+   * matters: a client without it prints the literal text `$(symbol-method)`,
+   * which is worse than the plain `■` it would otherwise get. Implies
+   * {@link ParadoxClientCapabilities.hoverHtml} is respected for colour.
+   */
+  hoverIcons?: boolean;
 }
 
 /** initializationOptions passed at LanguageClient start. All fields optional:
@@ -183,6 +197,10 @@ export interface StatusPayload {
    * (data/<gameId>/script_docs) rather than the user's own dump. */
   tokensFromBundledDumps?: boolean;
   definitions: number;
+  /** Tokens the bundled wiki added that script_docs did not have. The wiki is
+   * merged even when the user has their own dump, but its real contribution is
+   * usage examples; the extra NAMES are mostly deprecated API. */
+  tokensWikiOnly?: number;
   /** True while a (re)scan is running. */
   indexing: boolean;
 }

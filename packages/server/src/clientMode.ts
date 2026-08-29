@@ -21,6 +21,8 @@ export interface ClientCapabilities {
   snippetSupport: boolean;
   /** Client's hover renderer navigates `file:` links. */
   fileLinks: boolean;
+  /** Client renders `$(codicon)` in hover markdown (supportThemeIcons). */
+  hoverIcons: boolean;
 }
 
 /** The one standard LSP capability read here, structurally. */
@@ -50,6 +52,7 @@ export function resolveClientCapabilities(
       ownFileWatcher: init.client.ownFileWatcher === true,
       snippetSupport,
       fileLinks: init.client.fileLinks === true,
+      hoverIcons: init.client.hoverIcons === true,
     };
   }
   if (init.clientCommands === true) {
@@ -59,6 +62,7 @@ export function resolveClientCapabilities(
       ownFileWatcher: true,
       snippetSupport: true,
       fileLinks: true,
+      hoverIcons: true,
     };
   }
   return {
@@ -67,6 +71,7 @@ export function resolveClientCapabilities(
     ownFileWatcher: false,
     snippetSupport,
     fileLinks: false,
+    hoverIcons: false,
   };
 }
 
@@ -83,6 +88,11 @@ export function clientCapabilities(): ClientCapabilities {
 /** Whether hover markdown may carry the sanitized colored spans. */
 export function hoverHtml(): boolean {
   return caps.hoverHtml;
+}
+
+/** Whether hover badges may use `$(codicon)` glyphs instead of a `■` square. */
+export function hoverIcons(): boolean {
+  return caps.hoverIcons;
 }
 
 /** Whether the client registers `id`, so a `command:` link or command action reaches it. */

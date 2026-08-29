@@ -141,6 +141,7 @@ import { URI } from "vscode-uri";
 import { ServerData } from "./serverData";
 import { CompletionFeature } from "./features/completion";
 import { provideHover } from "./features/hover";
+import { setHoverDetail } from "./features/hoverRender";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
@@ -254,6 +255,7 @@ function defaultSettings(): ParadoxSettings {
     workspaceMods: [],
     locLanguage: "english",
     scopeInlayHints: false,
+    hoverDetail: "standard",
     diagnosticsIgnore: [],
     diagnosticsIgnorePatterns: [],
     diagnosticsVanilla: false,
@@ -266,6 +268,7 @@ let wikidocsDir = "";
 let freqsDir = "";
 let tokensFromScriptDocs = false;
 let tokensFromBundledDumps = false;
+let tokensWikiOnly = 0;
 let indexing = false;
 /** Bumped whenever paths change; in-flight scans abort when superseded. */
 let scanGeneration = 0;
@@ -514,6 +517,7 @@ function sendStatus(): void {
     tokensFromScriptDocs,
     tokensFromBundledDumps,
     definitions: total,
+    tokensWikiOnly,
     indexing,
   };
   void connection.sendNotification(statusNotification, payload);
@@ -636,9 +640,19 @@ function loadDocs(force: boolean): void {
   }
   const t1 = Date.now();
   const wikiTokens = loadWikiTokens(wikidocsDir);
-  const merged = mergeWikiTokens(scriptTokens, wikiTokens);
-  data.setTokens(merged);
-  log(`wiki docs: ${wikiTokens.length} tokens, merged total ${merged.length} (${Date.now() - t1}ms)`);
+  // With the user's OWN dump loaded, a name the dump does not have does not
+  // exist in their patch, so the wiki's extras are dropped rather than offered.
+  // The bundled snapshot does not get this treatment: it may be older than the
+  // user's game, so "not in the snapshot" is not evidence of anything.
+  const ownDump = tokensFromScriptDocs && !tokensFromBundledDumps;
+  const merged = mergeWikiTokens(scriptTokens, wikiTokens, { dropUnknownNames: ownDump });
+  tokensWikiOnly = merged.added;
+  data.setTokens(merged.tokens);
+  log(
+    `wiki docs: ${wikiTokens.length} tokens, ${merged.enriched} usage examples merged in, ` +
+      `${merged.added} added${merged.dropped > 0 ? `, ${merged.dropped} dropped as absent from your script_docs` : ""}, ` +
+      `total ${merged.tokens.length} (${Date.now() - t1}ms)`
+  );
 
   // on_actions.log sits next to the other script_docs dumps; same fallback.
   const onActionsDir =
@@ -1195,6 +1209,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   // Merge onto the defaults: bare clients may send partial settings (e.g.
   // only gameId), and every downstream consumer assumes the full shape.
   if (init.settings) settings = { ...defaultSettings(), ...init.settings };
+  setHoverDetail(settings.hoverDetail ?? "standard");
   setActiveProfile(resolveProfile(settings.gameId));
   deriveBundledDataDirs();
   if (!storageDir) {
@@ -1298,6 +1313,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
       JSON.stringify(settings.diagnosticsIgnorePatterns) ||
     newSettings.diagnosticsVanilla !== settings.diagnosticsVanilla;
   settings = newSettings;
+  setHoverDetail(settings.hoverDetail ?? "standard");
   completion.setSettings(settings);
   if (pathsChanged) {
     log("paths changed; rebuilding data...");

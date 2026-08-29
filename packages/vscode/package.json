@@ -664,6 +664,18 @@
         "title": "Editor",
         "order": 4,
         "properties": {
+          "px.hover.detail": {
+            "type": "string",
+            "enum": ["compact", "standard", "full"],
+            "enumDescriptions": [
+              "Head, facts and provenance only. No prose, no example, one meaning.",
+              "Everything, with caps: 3 meanings, 3 example lines, 2 doc paragraphs.",
+              "Example cap lifted, every distinct meaning, scope chain always shown."
+            ],
+            "default": "standard",
+            "order": 0,
+            "markdownDescription": "How much a hover shows. Longer examples and extra meanings stay reachable from the disclosure inside the hover, so `standard` hides nothing permanently."
+          },
           "px.scopeInlayHints": {
             "type": "boolean",
             "default": false,

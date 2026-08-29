@@ -7,6 +7,7 @@
  * (formerly Tools) is a webview — see webviews/dashboard/view.ts.
  */
 import * as vscode from "vscode";
+import { kindStyle } from "@px-lsp/protocol/kinds";
 import * as path from "path";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
@@ -163,12 +164,12 @@ class OverviewProvider extends BaseProvider {
         `${k.kind.replace(/_/g, " ")} (${k.count})`,
         vscode.TreeItemCollapsibleState.Collapsed
       );
-      node.iconPath = new vscode.ThemeIcon("symbol-class");
+      node.iconPath = new vscode.ThemeIcon(kindStyle(k.kind).codicon);
       node.children = k.defs.map((d) => {
         const child = new Node(d.name);
         child.description = path.basename(d.file);
         child.command = openCommand(d.file, d.line);
-        child.iconPath = new vscode.ThemeIcon("symbol-field");
+        child.iconPath = new vscode.ThemeIcon(kindStyle(k.kind).codicon);
         return child;
       });
       if (k.count > k.defs.length) {
@@ -406,12 +407,12 @@ class DependenciesProvider extends BaseProvider {
         `${g.kind.replace(/_/g, " ")} (${g.items.length})`,
         vscode.TreeItemCollapsibleState.Collapsed
       );
-      kindNode.iconPath = new vscode.ThemeIcon("symbol-class");
+      kindNode.iconPath = new vscode.ThemeIcon(kindStyle(g.kind).codicon);
       kindNode.children = g.items.map((it) => {
         const leaf = new Node(it.name);
         leaf.description = path.basename(it.file);
         leaf.command = openCommand(it.file, it.line);
-        leaf.iconPath = new vscode.ThemeIcon("symbol-field");
+        leaf.iconPath = new vscode.ThemeIcon(kindStyle(g.kind).codicon);
         return leaf;
       });
       return kindNode;

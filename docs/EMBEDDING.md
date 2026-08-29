@@ -212,6 +212,7 @@ interface ParadoxClientCapabilities {
   commands?: string[];      // the px.* command ids this client actually registers
   ownFileWatcher?: boolean; // client watches the mod tree and pushes paradox/modFileChanged
   fileLinks?: boolean;      // hover renderer navigates file: links
+  hoverIcons?: boolean;     // client sets supportThemeIcons, so hover badges may use $(codicon) glyphs
 }
 ```
 

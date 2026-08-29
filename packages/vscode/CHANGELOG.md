@@ -112,6 +112,93 @@
   a mod pulls it back out of `px.parentMods`. `docs/PERFORMANCE.md` explains
   the tiers.
 
+### Added
+
+- **Hovers have icons, and the icons mean something.** Kind badges are real
+  codicons instead of a coloured square, and the same glyph now appears in the
+  completion list and the tree for the same concept. Colour comes with the
+  kind, because VS Code paints a completion row from the `CompletionItemKind`
+  the server sends and an extension cannot override it, so the four groups are
+  the ones the editor already draws: purple asks a question (triggers), orange
+  makes it happen (effects, events, decisions, on_actions, traits), blue is
+  something you stored (variables, saved scopes, event targets, lists), grey is
+  syntax and everything else. This fixed a live defect:
+  `trigger` mapped to `CompletionItemKind.Function` and `effect` to `Method`,
+  which share one codepoint in the codicon font and take the same colour, so a
+  condition and an action, the one distinction in Paradox script that causes
+  silent bugs, were drawn identically in the suggest widget.
+- **Hovering a scripted trigger or effect shows what it is.** The card now
+  carries the definition's own source block, so you do not have to jump to the
+  file to see what a mod's `is_human` actually tests. Long bodies open in place
+  through a disclosure: only 11% of vanilla scripted triggers are three lines or
+  shorter, median 10, longest 232.
+- **Hovering a data type says how to obtain one.** The datafunction hover for
+  `Story` or `Character` already listed what the type gives you; it now also
+  lists what gives you the type, ranked by vanilla usage. `Story` has exactly
+  two producers, `Character` has 320.
+- **`px.hover.detail`** (`compact` | `standard` | `full`, default `standard`)
+  controls how much a hover shows. Nothing is hidden permanently: longer
+  examples stay one click away inside the hover.
+
+### Changed
+
+- **Hovers are quieter.** Seven chart colours become the three VS Code uses for
+  its own symbols plus plain default, which is what 17 of the 38 mapped kinds
+  now render as, so most badges emit no colour markup at all. Scopes, the value
+  shape and the traits line merge into one muted facts line. A single-card hover
+  writes no footer block: its provenance and reference links ride the scope line
+  that has to exist anyway, which is worth three lines on the most common hover
+  there is.
+- GUI widget types and GUI properties had never been added to the badge colour
+  switch, so they fell through to the "definition kinds read green" default and
+  a widget type read the same green as a scripted trigger. They now have their
+  own entries, as do datafunction data types, promotes and functions, GUI
+  templates and enum values, and text format tags. GUI completions read their
+  kind from the same map, so a widget type is one picture in the hover and one
+  in the suggest widget.
+- A texture path shows the picture-frame glyph (`file-media`) in the hover and
+  the tree. Its completion row keeps the plain file glyph: no
+  `CompletionItemKind` draws `file-media`, and only those 25 values reach the
+  suggest widget.
+- An `on_action` shows the interface glyph, in the orange of the group it
+  belongs to. Its completion row is blue, because the row's colour belongs to
+  the kind and `Interface` is blue.
+
+### Fixed
+
+- **Completion no longer offers effects the game removed.** The bundled wiki
+  lists were merged into the engine tokens even when your own `script_docs`
+  dump was loaded, and that added names your patch does not have. Measured on a
+  real install: of 2,336 wiki tokens, 2,262 were already in the dump and 74 were
+  not, and the ones sampled from that 74 (`every_activity_invited`,
+  `every_participant`, `accept_invitation_for_character`) appear in **zero**
+  vanilla files. They are pre-Tours-and-Tournaments activity API. The bundled
+  `Effects_list.md` warns about this itself. With your own dump loaded those 74
+  are now dropped, since `script_docs` is what the engine actually registered.
+  The wiki's real contribution is untouched: all 127 usage examples for tokens
+  the dump already had still merge in. Nothing changes when you have no dump of
+  your own, because then the bundled snapshot may be older than your game and
+  "absent" proves nothing.
+- **A `var:` hover showed the same variable twice**: once as a typed card
+  listing "set in file:line", then again as the indexed-definition card whose
+  provenance links were the same sites. One card now, the definition card,
+  which also carries the owning mod, the site count and the references link;
+  the value type moves onto its head. The standalone card remains only for a
+  variable the index has never seen set.
+- **The status bar tooltip listed each load twice and kept saying "…" after it
+  finished.** "harvesting engine tokens…" and "engine tokens: 4,624" were the
+  same fact on two lines, and the phase row kept its ellipsis once done, so a
+  finished load still read as ongoing. Each phase now reports into its own
+  value row: `○ harvesting engine tokens…` while it runs, then
+  `✓ engine tokens: 4,624 (your script_docs, plus the wiki)`. Loading rows come
+  first, configuration after, counts are thousands-separated, and the token
+  source says what to do about it when it is the bundled fallback.
+
+- A datafunction promote was drawn as a blue variable when global and a grey
+  wrench when it was a member, decided by nothing but which branch of the
+  completion builder produced it. Both are blue now: blue is a thing you have,
+  purple is a call you make.
+
 ## 0.3.3 (beta) - tiger download fix
 
 ### Fixed

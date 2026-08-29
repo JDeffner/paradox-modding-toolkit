@@ -70,6 +70,7 @@ interface ParadoxClientCapabilities {
   commands?: string[];      // the px.* command ids this client registers (see "Client command ids")
   ownFileWatcher?: boolean; // client watches the mod tree itself and pushes paradox/modFileChanged
   fileLinks?: boolean;      // client's hover renderer navigates file: links (since @px-lsp/protocol 0.1.1)
+  hoverIcons?: boolean;     // client sets supportThemeIcons, so hover badges may use $(codicon) glyphs
 }
 
 interface ParadoxSettings {
@@ -81,6 +82,7 @@ interface ParadoxSettings {
   workspaceMods?: string[];    // mods being EDITED (reference indexing + diagnostics)
   locLanguage: string;         // "english", ...
   scopeInlayHints: boolean;
+  hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
   diagnosticsIgnore: string[];         // diagnostic codes to suppress
   diagnosticsIgnorePatterns: string[]; // workspace-relative globs to suppress
   diagnosticsVanilla: boolean;         // false (default) = never diagnose game files
@@ -490,6 +492,11 @@ tokens and structural diagnostics all work over plain LSP.
 The `client` capabilities switch the remaining surface automatically, one
 capability at a time. A client declaring nothing (every field off) gets:
 
+- **`hoverIcons` off** — hover kind badges use a `■` square instead of a
+  `$(codicon)` glyph. The default matters: a client that does not render theme
+  icons prints the literal text `$(symbol-method)`, which is worse than the
+  square. The `<details>` disclosure that caps long examples is also omitted,
+  since it needs `hoverHtml`;
 - **`hoverHtml` off** — hover markdown is plain: no sanitized HTML spans. The
   span *content* is always self-sufficient plain text ("■ trigger", a scope
   name), so the cards read the same either way;

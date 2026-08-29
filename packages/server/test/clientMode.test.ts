@@ -40,6 +40,7 @@ describe("capability resolution", () => {
     ownFileWatcher: false,
     snippetSupport: false,
     fileLinks: false,
+    hoverIcons: false,
   };
   /** What a client declares in the STANDARD LSP initialize params. */
   const withSnippets = { textDocument: { completion: { completionItem: { snippetSupport: true } } } };
@@ -51,6 +52,7 @@ describe("capability resolution", () => {
       ownFileWatcher: true,
       snippetSupport: true,
       fileLinks: true,
+      hoverIcons: true,
     });
   });
 
@@ -87,6 +89,10 @@ describe("capability resolution", () => {
     expect(resolveClientCapabilities({ client: { ownFileWatcher: true } })).toEqual({
       ...allOff,
       ownFileWatcher: true,
+    });
+    expect(resolveClientCapabilities({ client: { hoverIcons: true } })).toEqual({
+      ...allOff,
+      hoverIcons: true,
     });
     expect(resolveClientCapabilities({ client: {} })).toEqual(allOff);
   });
