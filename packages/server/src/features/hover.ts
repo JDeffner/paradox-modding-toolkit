@@ -98,34 +98,36 @@ export function provideHover(
   const current = currentScopes(data, document, position, rootScopes, entry);
 
   // `scope:x` / `var:x` reference under the cursor → saved-scope card (§B3).
+  // For a `var:` hover the value type is worked out here but rendered on the
+  // indexed-definition card further down, so one variable produces one card.
+  let varTypeTail: string | undefined;
+  let varPrefixKinds: string[] | undefined;
   const prefix = scopePrefixBefore(lineText, range);
   if (prefix === "scope") {
     const card = savedScopeCard(data, document, word, rootScopes, entry);
     if (card) cards.push(card);
   } else if (prefix === "var" || prefix === "local_var" || prefix === "global_var") {
-    // Typed variable card: value type from the mod-wide set-site analysis, plus
-    // set-site links (namespace-correct: var/local_var/global_var are distinct).
+    // The variable's value type, from the mod-wide set-site analysis
+    // (namespace-correct: var/local_var/global_var are distinct).
     const varInfo = variableTypes(data, data.rootScopesForFile);
     const typed = varInfo.types.get(`${prefix}:${word}`);
     const itemTyped = varInfo.listItemTypes.get(`${prefix}:${word}`);
-    const headTail = typed
+    varTypeTail = typed
       ? `→ ${[...typed].map(scopeType).join(" | ")}`
       : itemTyped
         ? `→ list of ${[...itemTyped].map(scopeType).join(" | ")}`
         : itemTyped === null
           ? `→ list`
           : `· ${prefix.replace(/_/g, " ")}`;
-    const setDefs = data.index
-      .lookup(word)
-      .filter((d) => VAR_PREFIX_KINDS[prefix].includes(d.kind))
-      .slice(0, 3);
-    const doc =
-      setDefs.length > 0
-        ? setDefs
-            .map((d) => `set in [${path.basename(d.file)}:${d.line + 1}](${URI.file(d.file)}#L${d.line + 1})`)
-            .join("  \n")
-        : undefined;
-    cards.push({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail, doc });
+    // The set sites used to be listed here as "set in file:line" AND again on
+    // the indexed-definition card below, as its provenance links, so a hovered
+    // `var:` showed the same variable twice. The definition card wins: it also
+    // carries the owning mod, the site count and the references link. This card
+    // is the fallback for a variable the index has never seen set.
+    varPrefixKinds = VAR_PREFIX_KINDS[prefix];
+    if (!data.index.lookup(word).some((d) => varPrefixKinds!.includes(d.kind))) {
+      cards.push({ kind: "saved_scope", badgeLabel: "variable", name: word, headTail: varTypeTail });
+    }
   }
 
   // When the word is the VALUE of a schema ref field (`theme = faith`,
@@ -158,7 +160,19 @@ export function provideHover(
     if (keyPos && (cards.length > 0 || defs.some((d) => !VALUE_IDENTITY_KINDS.has(d.kind)))) {
       shownDefs = defs.filter((d) => !VALUE_IDENTITY_KINDS.has(d.kind));
     }
-    cards.push(...definitionCards(data, shownDefs, at));
+    // A `var:` hover only wants the variable, not every same-named symbol.
+    if (varPrefixKinds) shownDefs = shownDefs.filter((d) => varPrefixKinds!.includes(d.kind));
+    const defCards = definitionCards(data, shownDefs, at);
+    // The value type belongs on the definition card, which is the one card the
+    // reader gets. Prepend rather than replace: the card's own tail names the
+    // owning mod and the site count.
+    if (varTypeTail && defCards.length > 0) {
+      defCards[0] = {
+        ...defCards[0],
+        headTail: defCards[0].headTail ? `${varTypeTail} ${defCards[0].headTail}` : varTypeTail,
+      };
+    }
+    cards.push(...defCards);
   }
 
   // Fallback cards, only when nothing else matched, so a real token/def with

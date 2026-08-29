@@ -41,6 +41,21 @@
 
 ### Fixed
 
+- **A `var:` hover showed the same variable twice**: once as a typed card
+  listing "set in file:line", then again as the indexed-definition card whose
+  provenance links were the same sites. One card now, the definition card,
+  which also carries the owning mod, the site count and the references link;
+  the value type moves onto its head. The standalone card remains only for a
+  variable the index has never seen set.
+- **The status bar tooltip listed each load twice and kept saying "…" after it
+  finished.** "harvesting engine tokens…" and "engine tokens: 4,624" were the
+  same fact on two lines, and the phase row kept its ellipsis once done, so a
+  finished load still read as ongoing. Each phase now reports into its own
+  value row: `○ harvesting engine tokens…` while it runs, then
+  `✓ engine tokens: 4,624 (your script_docs, plus the wiki)`. Loading rows come
+  first, configuration after, counts are thousands-separated, and the token
+  source says what to do about it when it is the bundled fallback.
+
 - A datafunction promote was drawn as a blue variable when global and a grey
   wrench when it was a member, decided by nothing but which branch of the
   completion builder produced it. Both are blue now: blue is a thing you have,
