@@ -322,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
    *
    * The client merges this over process.env, so nothing inherited is lost.
    */
-  const serverEnv = { UV_THREADPOOL_SIZE: "16" };
+  const serverEnv = { UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE ?? "16" };
   const serverOptions: ServerOptions = {
     run: {
       module: serverModule,
