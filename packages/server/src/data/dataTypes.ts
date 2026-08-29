@@ -305,12 +305,17 @@ const producerIndex = new WeakMap<DataTypesData, ProducerIndex>();
 function buildProducerIndex(data: DataTypesData): ProducerIndex {
   const byType = new Map<string, string[]>();
   const lower = new Map<string, string>();
+  // Bucket by lowercased return type: the dump spells the same type both ways
+  // (a declared `Story` whose returns read `story`), and `producersOf` resolves
+  // through the declared spelling, so case variants must land in ONE bucket.
   const add = (ret: string | null, qualified: string) => {
     if (!ret) return;
-    let names = byType.get(ret);
+    const key = ret.toLowerCase();
+    const canonical = data.typeNamesLower.get(key) ?? lower.get(key) ?? ret;
+    let names = byType.get(canonical);
     if (!names) {
-      byType.set(ret, (names = []));
-      lower.set(ret.toLowerCase(), ret);
+      byType.set(canonical, (names = []));
+      lower.set(key, canonical);
     }
     names.push(qualified);
   };

@@ -480,14 +480,22 @@ const MAX_PRODUCERS = 6;
  * The cap matters because the spread is extreme: `Story` has two producers and
  * `Character` has 320. A bare count would answer neither; six ranked names plus
  * the remainder answers both.
+ *
+ * A member producer is ranked by the QUALIFIED pair count (`Scope` -> `Story`),
+ * not by the bare member name: the bare name also counts `Story` as a chain
+ * start and as a member of other owners, which is a different thing. The bare
+ * count is the fallback only where vanilla never wrote that pair.
  */
 function producerLines(data: DataTypesData, usage: DataFnUsage, type: string): string[] {
   const all = producersOf(data, type);
   if (all.length === 0) return [];
-  const ranked = [...all].sort((a, b) => {
-    const rank = (q: string) => usageCount(usage, q.slice(q.indexOf(".") + 1));
-    return rank(b) - rank(a) || a.localeCompare(b);
-  });
+  const rank = (q: string) => {
+    const dot = q.indexOf(".");
+    if (dot < 0) return usageCount(usage, q);
+    const pair = usage.pairs.get(q.slice(0, dot))?.get(q.slice(dot + 1));
+    return pair ?? usageCount(usage, q.slice(dot + 1));
+  };
+  const ranked = [...all].sort((a, b) => rank(b) - rank(a) || a.localeCompare(b));
   const shown = ranked
     .slice(0, MAX_PRODUCERS)
     .map((n) => `\`${n}\``)

@@ -685,7 +685,6 @@ describe("datatype-name completion and hover in cast literals", () => {
   });
 });
 
-
 describe("producersOf: the inverse of the member list", () => {
   const dump = [
     "Scope",
@@ -738,6 +737,47 @@ describe("producersOf: the inverse of the member list", () => {
     const data = parseDataTypesDump(dump);
     expect(producersOf(data, "story")).toEqual(["Scope.Story", "SituationItem.GetStoryCycle"]);
     expect(producersOf(data, "NotAType")).toEqual([]);
+  });
+
+  it("merges case variants of a return type into one producer bucket", () => {
+    // The dump declares `Story` as a Type but spells some returns `story`.
+    const mixed = [
+      "Story",
+      "Definition type: Type",
+      "",
+      "-----------------------",
+      "",
+      "Scope.Story",
+      "Definition type: Promote",
+      "Return type: story",
+      "",
+      "-----------------------",
+      "",
+      "SituationItem.GetStoryCycle",
+      "Definition type: Function",
+      "Return type: Story",
+      "",
+    ].join("\n");
+    const data = parseDataTypesDump(mixed);
+    expect(producersOf(data, "Story")).toEqual(["Scope.Story", "SituationItem.GetStoryCycle"]);
+  });
+
+  it("ranks member producers by the qualified pair, not the bare member name", () => {
+    const data = parseDataTypesDump(dump);
+    const usage = emptyUsage();
+    // `Story` as a bare member name is written 11 times, but only once after
+    // `Scope`; `GetStoryCycle` is written 5 times, all after `SituationItem`.
+    const lines = [
+      ...Array<string>(5).fill('text = "[SituationItem.GetStoryCycle]"'),
+      'text = "[Scope.Story]"',
+      ...Array<string>(10).fill('text = "[Character.Story]"'),
+    ];
+    lines.forEach((l, i) => harvestLine(usage, l, "gui/test.gui", i + 1));
+
+    const line = 'text = "[Story.GetName]"';
+    const hover = provideDataFnHover(data, usage, line, line.indexOf("Story") + 1)!;
+    const produced = hover.markdown.split("\n").find((l) => l.startsWith("Produced by:"))!;
+    expect(produced.indexOf("SituationItem.GetStoryCycle")).toBeLessThan(produced.indexOf("Scope.Story"));
   });
 
   it("hovering a data type says how to obtain one", () => {
