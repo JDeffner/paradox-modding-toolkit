@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Publish to the Steam Workshop from the editor.** `Paradox: Publish Mod to
+  Steam Workshop` creates or updates the focused mod's Workshop item through
+  the running Steam client's own UGC API - no Paradox launcher, no
+  credentials, live upload progress. New items start **private**; the
+  descriptor's name and tags become the item's title and tags, `thumbnail.png`
+  (or the descriptor's `picture=`) becomes the preview image, and the
+  changenote is prefilled from the mod's last git commit. On first publish the
+  Workshop id is written back where the game's tooling expects it:
+  `remote_file_id` in `descriptor.mod` (CK3), `<configDir>/workshop.json` for
+  `.metadata` games. `Paradox: Open Steam Workshop Page` jumps to the item;
+  both live in the Project panel's new Share group. The native Steamworks
+  binding runs in a separate child process, so Steam trouble can never take
+  the extension down. Steam shows you in-game for the seconds an upload takes;
+  that is how the API authorizes without credentials.
+
 - **Server 0.2.0: block templates in completion, capability-honest output
   for embedders.** Engine tokens with a qualifying `script_docs` `usage:`
   example (679 in CK3, 265 in Vic3) and block-opening schema keys (~700 in

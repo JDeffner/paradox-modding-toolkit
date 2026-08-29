@@ -78,6 +78,10 @@ bottom says exactly where they stop.
   interactions and on_action hooks that are correct by construction.
 - **Live debugging**: **Launch Game (debug mode)** plus a **Toggle
   error.log Watcher** that surfaces in-game script errors as editor squiggles.
+- **Steam Workshop publishing**: **Publish Mod to Steam Workshop** uploads
+  through your running Steam client, no Paradox launcher and no password. New
+  items start private, the changenote is prefilled from your last commit, and
+  the Workshop id lands in `descriptor.mod` where the game expects it.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **GUI editor** (**Open GUI Editor**, Ctrl+Alt+P): a pixel-accurate rendering
