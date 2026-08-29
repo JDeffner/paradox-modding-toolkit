@@ -10,6 +10,25 @@ import { planExcludes, SEARCH_EXCLUDES, WATCHER_EXCLUDES } from "./editorExclude
 
 type Obj = Record<string, unknown> | undefined;
 
+/**
+ * Remove exactly `added` from an exclude setting's CURRENT workspace value.
+ * Undoing by writing back a snapshot would discard whatever the user changed
+ * while the toast was open; this touches only the keys the command wrote.
+ * An emptied object is written as undefined so the key leaves settings.json.
+ */
+async function dropAdded(
+  cfg: vscode.WorkspaceConfiguration,
+  key: string,
+  added: string[],
+  target: vscode.ConfigurationTarget
+): Promise<void> {
+  if (added.length === 0) return;
+  const current = cfg.inspect<Record<string, unknown>>(key)?.workspaceValue;
+  if (!current) return;
+  const rest = Object.fromEntries(Object.entries(current).filter(([k]) => !added.includes(k)));
+  await cfg.update(key, Object.keys(rest).length > 0 ? rest : undefined, target);
+}
+
 export async function reduceEditorLoadCommand(): Promise<void> {
   const files = vscode.workspace.getConfiguration("files");
   const search = vscode.workspace.getConfiguration("search");
@@ -28,7 +47,16 @@ export async function reduceEditorLoadCommand(): Promise<void> {
 
   const target = vscode.ConfigurationTarget.Workspace;
   if (watcherPlan.value !== null) await files.update("watcherExclude", watcherPlan.value, target);
-  if (searchPlan.value !== null) await search.update("exclude", searchPlan.value, target);
+  if (searchPlan.value !== null) {
+    try {
+      await search.update("exclude", searchPlan.value, target);
+    } catch (e) {
+      // Half-applied is worse than not applied: the toast below would promise
+      // a search win the user did not get. Put the watcher back, then fail.
+      if (watcherPlan.value !== null) await files.update("watcherExclude", beforeWatcher, target);
+      throw e;
+    }
+  }
 
   const n = watcherPlan.added.length + searchPlan.added.length;
   const choice = await vscode.window.showInformationMessage(
@@ -40,8 +68,11 @@ export async function reduceEditorLoadCommand(): Promise<void> {
     "Open Settings"
   );
   if (choice === "Undo") {
-    if (watcherPlan.value !== null) await files.update("watcherExclude", beforeWatcher, target);
-    if (searchPlan.value !== null) await search.update("exclude", beforeSearch, target);
+    // The toast has no timeout, so settings can have moved on while it sat
+    // open. Undo means "drop what this command added", not "restore the
+    // snapshot": re-read, and keep every entry we did not write.
+    await dropAdded(vscode.workspace.getConfiguration("files"), "watcherExclude", watcherPlan.added, target);
+    await dropAdded(vscode.workspace.getConfiguration("search"), "exclude", searchPlan.added, target);
   } else if (choice === "Open Settings") {
     void vscode.commands.executeCommand("workbench.action.openSettings", "files.watcherExclude");
   }
