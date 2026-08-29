@@ -106,9 +106,50 @@ let documentSerial = 0;
 
 export function createBrowserLanguageService(options: BrowserServiceOptions): BrowserLanguageService {
   assertVersion(options.tokens, "tokens");
-  if (options.docs) assertVersion(options.docs, "docs");
 
-  setActiveProfile(resolveProfile(options.gameId ?? options.tokens.gameId));
+  // A schema/profile for one game over token tables baked for another produces
+  // answers that look right and are not, so it is refused rather than resolved.
+  if (options.gameId !== undefined && options.gameId !== options.tokens.gameId) {
+    throw new Error(
+      `px-lsp browser: gameId "${options.gameId}" does not match tokens baked for "${options.tokens.gameId}". ` +
+        `Pass the token payload for "${options.gameId}", or drop the gameId option.`
+    );
+  }
+
+  /**
+   * `BakedDocs.prose` is aligned with `BakedTokens.tokens` BY INDEX, so prose
+   * from another game does not fail to match — it attaches the wrong text to
+   * every token. The version check cannot see that; the gameId can.
+   */
+  function assertDocsGame(payload: BakedDocs): void {
+    if (payload.gameId !== options.tokens.gameId) {
+      throw new Error(
+        `px-lsp browser docs: baked for "${payload.gameId}", tokens baked for "${options.tokens.gameId}". ` +
+          `The prose is index-aligned with the token table, so a mismatch mislabels every token.`
+      );
+    }
+  }
+
+  if (options.docs) {
+    assertVersion(options.docs, "docs");
+    assertDocsGame(options.docs);
+  }
+
+  /**
+   * The profile is process-wide (games/active.ts) and feature code reads it at
+   * call time, so a second service created in the same realm would otherwise
+   * switch the first one's game underneath it. Each service captures its own
+   * profile here and re-asserts it at the entry of every public operation that
+   * reaches feature code, which is enough as long as none of them yields in the
+   * middle (they are all synchronous).
+   */
+  const profile = resolveProfile(options.gameId ?? options.tokens.gameId);
+  setActiveProfile(profile);
+  function enter<T>(op: () => T): T {
+    setActiveProfile(profile);
+    return op();
+  }
+
   const modRoot = options.modRoot ?? "/mod";
 
   const data = new ServerData();
@@ -152,6 +193,7 @@ export function createBrowserLanguageService(options: BrowserServiceOptions): Br
   }
 
   function openDocument(relPath: string, text: string): BrowserDocument {
+    setActiveProfile(profile);
     const fsPath = absolute(relPath);
     // The parse cache is keyed by uri + version, so every edit must bump the
     // version or the second keystroke reads the first keystroke's parse.
@@ -197,31 +239,27 @@ export function createBrowserLanguageService(options: BrowserServiceOptions): Br
       },
 
       diagnostics(): Diagnostic[] {
-        const { result, lineIndex } = getParse(doc);
-        // Structural and folder-trap checks only. The index-backed
-        // unknown-reference pass server.ts runs next needs a workspace scan,
-        // and running it without one would report false unknowns.
-        return computeScriptDiagnostics(result, lineIndex, ctx);
+        return enter(() => {
+          const { result, lineIndex } = getParse(doc);
+          // Structural and folder-trap checks only. The index-backed
+          // unknown-reference pass server.ts runs next needs a workspace scan,
+          // and running it without one would report false unknowns.
+          return computeScriptDiagnostics(result, lineIndex, ctx);
+        });
       },
 
       completions(offset: number): CompletionItem[] {
-        return completion.provide(doc, offset, rootScopes, entry).items;
+        return enter(() => completion.provide(doc, offset, rootScopes, entry).items);
       },
 
       hover(offset: number): Hover | null {
-        return provideHover(
-          data,
-          doc,
-          doc.positionAt(offset),
-          rootScopes,
-          entry,
-          getSchema,
-          documentDefinitions
+        return enter(() =>
+          provideHover(data, doc, doc.positionAt(offset), rootScopes, entry, getSchema, documentDefinitions)
         );
       },
 
       scopeAt(offset: number): ScopeAtResult {
-        return computeScopeAt(data, doc, doc.positionAt(offset), rootScopes, entry);
+        return enter(() => computeScopeAt(data, doc, doc.positionAt(offset), rootScopes, entry));
       },
 
       dispose(): void {
@@ -234,6 +272,8 @@ export function createBrowserLanguageService(options: BrowserServiceOptions): Br
     capabilities,
     attachDocs(next: BakedDocs): void {
       assertVersion(next, "docs");
+      assertDocsGame(next);
+      setActiveProfile(profile);
       docs = next;
       applyTokens();
       capabilities.hoverDocs = true;

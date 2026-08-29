@@ -53,12 +53,17 @@ export function coerceFreqs(parsed: unknown): FreqData {
   const out = emptyFreqData();
   if (!parsed || typeof parsed !== "object") return out;
   const p = parsed as Partial<FreqData>;
-  if (!p.contexts || !p.tokens) return out;
-  for (const c of FREQ_CONTEXTS) {
-    const table = (p.contexts as Record<string, unknown>)[c];
-    if (table && typeof table === "object") out.contexts[c] = table as Record<string, number>;
+  // Per field, not all-or-nothing: a payload with usable contexts and a broken
+  // `tokens` keeps its contexts instead of degrading both to empty.
+  if (p.contexts !== null && typeof p.contexts === "object") {
+    for (const c of FREQ_CONTEXTS) {
+      const table = (p.contexts as Record<string, unknown>)[c];
+      if (table && typeof table === "object") out.contexts[c] = table as Record<string, number>;
+    }
   }
-  if (typeof p.tokens === "object") out.tokens = p.tokens;
+  // `typeof null === "object"`, so the null check is not redundant: a null here
+  // would replace the empty table and completion throws on `freqs.tokens[name]`.
+  if (p.tokens !== null && typeof p.tokens === "object") out.tokens = p.tokens;
   if (p.meta) out.meta = p.meta;
   return out;
 }

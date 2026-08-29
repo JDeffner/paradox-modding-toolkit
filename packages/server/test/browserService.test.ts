@@ -12,7 +12,7 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { DiagnosticSeverity } from "vscode-languageserver/node";
+import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { createBrowserLanguageService } from "../src/browser";
 import { BROWSER_DATA_VERSION, type BakedDocs, type BakedToken, type BakedTokens } from "../src/browser/data";
 import { loadTokenDataFromLogs, parseOnActionsLog } from "../src/data/docsParser";
@@ -189,5 +189,60 @@ describe("browser language service", () => {
     expect(() =>
       createBrowserLanguageService({ tokens: { ...tokens, version: BROWSER_DATA_VERSION + 1 } })
     ).toThrow(/bake:browser/);
+  });
+
+  it("refuses a gameId that disagrees with the token payload", () => {
+    // Otherwise the vic3 schema and profile would answer over CK3 token
+    // tables: every answer plausible, none of them right.
+    expect(() => createBrowserLanguageService({ gameId: "vic3", tokens })).toThrow(/does not match/);
+    expect(() => createBrowserLanguageService({ gameId: "ck3", tokens })).not.toThrow();
+  });
+
+  it("refuses docs baked for another game, at construction and at attachDocs", () => {
+    // The prose is aligned with the token table BY INDEX, so a foreign payload
+    // does not fail to match — it silently attaches the wrong text everywhere.
+    const foreign: BakedDocs = { ...docs, gameId: "vic3" };
+    expect(() => createBrowserLanguageService({ tokens, docs: foreign })).toThrow(/index-aligned/);
+    expect(() => service(false).attachDocs(foreign)).toThrow(/index-aligned/);
+  });
+
+  it("keeps its own game when a second service for another game exists", () => {
+    // The profile is process-wide and feature code reads it at call time, so
+    // creating the vic3 service used to switch the ck3 service's game under it.
+    const ck3 = createBrowserLanguageService({ tokens, docs, freqs });
+    const ck3Doc = ck3.openDocument("events/tutorial.txt", "a = {\n");
+
+    const vic3 = createBrowserLanguageService({
+      tokens: {
+        version: BROWSER_DATA_VERSION,
+        gameId: "vic3",
+        source: "test",
+        tokens: [],
+        templates: [],
+        onActionScopes: {},
+      },
+    });
+    const vic3Doc = vic3.openDocument("events/x.txt", "a = {\n");
+
+    const message = (ds: Diagnostic[]) => ds.map((d) => JSON.stringify(d.message)).join(" ");
+    expect(message(vic3Doc.diagnostics())).toContain("Vic3");
+    // The one that matters: the older service, asked after the newer one exists.
+    expect(message(ck3Doc.diagnostics())).toContain("CK3");
+    expect(message(ck3Doc.diagnostics())).not.toContain("Vic3");
+    // And completion still reaches the CK3 tables the service was built with.
+    expect(
+      ck3
+        .openDocument("events/tutorial.txt", EVENT)
+        .completions(EVENT.indexOf("add_gold") + 5)
+        .map((i) => i.label)
+    ).toContain("add_gold");
+  });
+
+  it("survives a freqs payload whose tables are null", () => {
+    // `typeof null === "object"`, so a null table used to land in FreqData and
+    // completion threw on the first `freqs.tokens[name]` lookup.
+    const svc = createBrowserLanguageService({ tokens, docs, freqs: { contexts: null, tokens: null } });
+    const doc = svc.openDocument("events/tutorial.txt", EVENT);
+    expect(doc.completions(EVENT.indexOf("add_gold = 100") + 5).map((i) => i.label)).toContain("add_gold");
   });
 });
