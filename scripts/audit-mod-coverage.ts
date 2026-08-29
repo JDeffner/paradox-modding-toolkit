@@ -168,7 +168,7 @@ async function main(): Promise<void> {
       mergeWikiTokens(
         logTokens.tokens,
         loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))
-      )
+      ).tokens
     );
   }
   console.log(

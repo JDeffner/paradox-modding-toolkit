@@ -216,7 +216,7 @@ async function main(): Promise<void> {
       mergeWikiTokens(
         logTokens.tokens,
         loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))
-      )
+      ).tokens
     );
   }
   console.log(`env ready in ${((Date.now() - t0) / 1000).toFixed(1)}s: ${env.data.tokens.length} tokens`);

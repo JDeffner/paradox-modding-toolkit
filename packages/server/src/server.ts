@@ -583,10 +583,19 @@ function loadDocs(force: boolean): void {
   }
   const t1 = Date.now();
   const wikiTokens = loadWikiTokens(wikidocsDir);
-  const merged = mergeWikiTokens(scriptTokens, wikiTokens);
-  tokensWikiOnly = merged.length - scriptTokens.length;
-  data.setTokens(merged);
-  log(`wiki docs: ${wikiTokens.length} tokens, merged total ${merged.length} (${Date.now() - t1}ms)`);
+  // With the user's OWN dump loaded, a name the dump does not have does not
+  // exist in their patch, so the wiki's extras are dropped rather than offered.
+  // The bundled snapshot does not get this treatment: it may be older than the
+  // user's game, so "not in the snapshot" is not evidence of anything.
+  const ownDump = tokensFromScriptDocs && !tokensFromBundledDumps;
+  const merged = mergeWikiTokens(scriptTokens, wikiTokens, { dropUnknownNames: ownDump });
+  tokensWikiOnly = merged.added;
+  data.setTokens(merged.tokens);
+  log(
+    `wiki docs: ${wikiTokens.length} tokens, ${merged.enriched} usage examples merged in, ` +
+      `${merged.added} added${merged.dropped > 0 ? `, ${merged.dropped} dropped as absent from your script_docs` : ""}, ` +
+      `total ${merged.tokens.length} (${Date.now() - t1}ms)`
+  );
 
   // on_actions.log sits next to the other script_docs dumps; same fallback.
   const onActionsDir =

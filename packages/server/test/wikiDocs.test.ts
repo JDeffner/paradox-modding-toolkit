@@ -92,26 +92,69 @@ describe("mergeWikiTokens", () => {
   ];
 
   it("keeps script_docs authoritative but adds wiki examples", () => {
-    const merged = mergeWikiTokens(scriptDocs, wiki);
+    const merged = mergeWikiTokens(scriptDocs, wiki).tokens;
     const addGold = merged.find((t) => t.name === "add_gold" && t.kind === "effect")!;
     expect(addGold.doc).toBe("authoritative doc");
     expect(addGold.usage).toContain("add_gold = X");
   });
 
   it("fills empty docs and adds wiki-only tokens with a provenance note", () => {
-    const merged = mergeWikiTokens(scriptDocs, wiki);
+    const merged = mergeWikiTokens(scriptDocs, wiki).tokens;
     expect(merged.find((t) => t.name === "empty_doc")!.doc).toBe("wiki fills this");
     const wikiOnly = merged.find((t) => t.name === "wiki_only_effect")!;
     expect(wikiOnly.traits).toContain("CK3 wiki");
   });
 
   it("treats kind as part of identity", () => {
-    const merged = mergeWikiTokens(scriptDocs, wiki);
+    const merged = mergeWikiTokens(scriptDocs, wiki).tokens;
     expect(merged.filter((t) => t.name === "add_gold")).toHaveLength(2);
   });
 
   it("with no script_docs at all, wiki provides the full baseline", () => {
-    const merged = mergeWikiTokens([], wiki);
+    const merged = mergeWikiTokens([], wiki).tokens;
     expect(merged).toHaveLength(4);
+  });
+});
+
+describe("mergeWikiTokens with the user's own dump (dropUnknownNames)", () => {
+  const scriptDocs: TokenData[] = [
+    { name: "add_gold", kind: "effect", doc: "authoritative", scopes: ["character"] },
+    { name: "is_ai", kind: "trigger", doc: "authoritative", scopes: ["character"] },
+  ];
+  const wiki: TokenData[] = [
+    // Already in the dump: contributes only its usage example.
+    { name: "add_gold", kind: "effect", doc: "wiki", scopes: [], usage: "add_gold = X" },
+    // Not in the dump. script_docs is what the engine registered, so this
+    // effect does not exist in the user's patch. The real case that motivated
+    // this: every_activity_invited and friends, absent from a current dump AND
+    // from every vanilla file, left over from before the activity rework.
+    { name: "every_activity_invited", kind: "effect", doc: "removed API", scopes: [] },
+  ];
+
+  it("keeps the usage example but drops the name the dump does not have", () => {
+    const merged = mergeWikiTokens(scriptDocs, wiki, { dropUnknownNames: true });
+    expect(merged.tokens.map((t) => t.name)).toEqual(["add_gold", "is_ai"]);
+    expect(merged.tokens.find((t) => t.name === "add_gold")!.usage).toBe("add_gold = X");
+    expect(merged.dropped).toBe(1);
+    expect(merged.added).toBe(0);
+    expect(merged.enriched).toBe(1);
+  });
+
+  it("adds the same token when the flag is off, which is the bundled-snapshot case", () => {
+    const merged = mergeWikiTokens(scriptDocs, wiki);
+    expect(merged.tokens.map((t) => t.name)).toContain("every_activity_invited");
+    expect(merged.added).toBe(1);
+    expect(merged.dropped).toBe(0);
+  });
+
+  it("never drops a kind the dump does not cover at all", () => {
+    // If script_docs stopped dumping a whole category, every wiki token of that
+    // kind would look "removed". Absence of the KIND is not evidence about its
+    // members, so those are still added.
+    const onlyEffects: TokenData[] = [{ name: "add_gold", kind: "effect", doc: "", scopes: [] }];
+    const wikiTriggers: TokenData[] = [{ name: "is_ai", kind: "trigger", doc: "", scopes: [] }];
+    const merged = mergeWikiTokens(onlyEffects, wikiTriggers, { dropUnknownNames: true });
+    expect(merged.tokens.map((t) => t.name)).toContain("is_ai");
+    expect(merged.dropped).toBe(0);
   });
 });

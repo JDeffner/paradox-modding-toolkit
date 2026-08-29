@@ -41,6 +41,19 @@
 
 ### Fixed
 
+- **Completion no longer offers effects the game removed.** The bundled wiki
+  lists were merged into the engine tokens even when your own `script_docs`
+  dump was loaded, and that added names your patch does not have. Measured on a
+  real install: of 2,336 wiki tokens, 2,262 were already in the dump and 74 were
+  not, and the ones sampled from that 74 (`every_activity_invited`,
+  `every_participant`, `accept_invitation_for_character`) appear in **zero**
+  vanilla files. They are pre-Tours-and-Tournaments activity API. The bundled
+  `Effects_list.md` warns about this itself. With your own dump loaded those 74
+  are now dropped, since `script_docs` is what the engine actually registered.
+  The wiki's real contribution is untouched: all 127 usage examples for tokens
+  the dump already had still merge in. Nothing changes when you have no dump of
+  your own, because then the bundled snapshot may be older than your game and
+  "absent" proves nothing.
 - **A `var:` hover showed the same variable twice**: once as a typed card
   listing "set in file:line", then again as the indexed-definition card whose
   provenance links were the same sites. One card now, the definition card,

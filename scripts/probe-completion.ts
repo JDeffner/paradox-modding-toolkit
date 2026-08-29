@@ -24,7 +24,7 @@ function main(): void {
       mergeWikiTokens(
         logTokens.tokens,
         loadWikiTokens(path.join(__dirname, "..", "packages", "server", "data", "ck3", "wikidocs"))
-      )
+      ).tokens
     );
   }
   env.data.onActionScopes = parseOnActionsLog(logsPath);
