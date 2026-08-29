@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { extractDefinitions } from "../src/index/extract";
 import { CK3_SCHEMA, REF_FIELDS, PREFIX_REFS } from "../src/games/ck3/schema";
+import { coerceFreqs } from "../src/schema/freqs";
 import type { SchemaEntry } from "../src/schema/types";
 import type { Definition } from "@px-lsp/protocol/types";
 
@@ -186,5 +187,18 @@ describe("REF_FIELDS / PREFIX_REFS sanity", () => {
     for (const kinds of Object.values(PREFIX_REFS)) {
       expect(kinds.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("coerceFreqs", () => {
+  it("never lets a null table through, and keeps the tables that are usable", () => {
+    // `typeof null === "object"`: a null tokens table reaching FreqData makes
+    // completion throw on `freqs.tokens[name]`.
+    const out = coerceFreqs({ contexts: { effect_block: { add_gold: 7 } }, tokens: null });
+    expect(out.tokens).toEqual({});
+    expect(out.contexts.effect_block).toEqual({ add_gold: 7 });
+    expect(coerceFreqs({ contexts: null, tokens: { add_gold: 7 } }).contexts.effect_block).toEqual({});
+    expect(coerceFreqs({ contexts: null, tokens: { add_gold: 7 } }).tokens).toEqual({ add_gold: 7 });
+    expect(coerceFreqs(null).tokens).toEqual({});
   });
 });
