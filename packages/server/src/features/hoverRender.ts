@@ -91,7 +91,7 @@ export type HoverDetail = "compact" | "standard" | "full";
 
 /**
  * Caps per detail level. The two example caps are separate because the two
- * distributions are nothing alike, measured against a real CK3 install:
+ * distributions are nothing alike, measured against a real install:
  *
  *  - engine `usage:` blocks: two thirds are 3 lines or shorter, and no block is
  *    exactly 4 lines, so 3 and 4 truncate the identical 22 tokens.

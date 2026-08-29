@@ -660,7 +660,11 @@
         "properties": {
           "px.hover.detail": {
             "type": "string",
-            "enum": ["compact", "standard", "full"],
+            "enum": [
+              "compact",
+              "standard",
+              "full"
+            ],
             "enumDescriptions": [
               "Head, facts and provenance only. No prose, no example, one meaning.",
               "Everything, with caps: 3 meanings, 3 example lines, 2 doc paragraphs.",

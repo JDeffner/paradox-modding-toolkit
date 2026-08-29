@@ -12,10 +12,7 @@ const NL = String.fromCharCode(10);
 const made: string[] = [];
 
 function write(lines: string[]): string {
-  const file = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), "px-body-")),
-    "00_scripted_triggers.txt"
-  );
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "px-body-")), "00_scripted_triggers.txt");
   fs.writeFileSync(file, lines.join(NL));
   made.push(path.dirname(file));
   return file;
@@ -36,9 +33,7 @@ describe("definitionBody", () => {
       "",
       "other = { always = yes }",
     ]);
-    expect(definitionBody(file, 1)).toBe(
-      ["is_human = {", "  NOT = { has_trait = beast }", "}"].join(NL)
-    );
+    expect(definitionBody(file, 1)).toBe(["is_human = {", "  NOT = { has_trait = beast }", "}"].join(NL));
   });
 
   it("handles a block that opens and closes on one line", () => {
@@ -54,7 +49,7 @@ describe("definitionBody", () => {
   it("does not count braces inside comments or quoted strings", () => {
     const file = write([
       "tricky = {",
-      "  desc = \"a } brace in a string {\"",
+      '  desc = "a } brace in a string {"',
       "  # a } brace in a comment",
       "  value = 1",
       "}",

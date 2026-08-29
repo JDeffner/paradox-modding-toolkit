@@ -344,7 +344,7 @@ describe("a `var:` hover shows one card, not two", () => {
 
   function hoverOnVar(data: ServerData): string {
     const text = "my.1 = {\n\timmediate = {\n\t\tset_variable = { name = delve_room value = 2 }\n\t}\n}";
-    const line = '\t\tif = { limit = { var:delve_room = 2 } }';
+    const line = "\t\tif = { limit = { var:delve_room = 2 } }";
     const full = text + "\n" + line;
     const doc = TextDocument.create(uri(), "paradox", 1, full);
     const lineNo = full.split("\n").length - 1;
