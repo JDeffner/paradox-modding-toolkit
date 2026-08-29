@@ -405,7 +405,7 @@ export const VIC3_SCHEMA: SchemaEntry[] = [
   { path: "common/game_rules", kind: "game_rule_category", requiredLoc: ["rule_$"] },
 
   // --- Military ---
-  // Plain top-level-key folders, each re-checked against the install for 0.4.0
+  // Plain top-level-key folders, each re-checked against the install for 0.3.4
   // because the mod corpus edits them (they were skipped in 0.3.0 as
   // low-traffic). No requiredLoc claimed: the hit rates were never measured.
   { path: "common/combat_unit_types", kind: "combat_unit_type" },

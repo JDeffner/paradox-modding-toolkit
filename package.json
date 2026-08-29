@@ -1,6 +1,6 @@
 {
   "name": "px-lsp",
-  "version": "0.4.0",
+  "version": "0.3.4",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {

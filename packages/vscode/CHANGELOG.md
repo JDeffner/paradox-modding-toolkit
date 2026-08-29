@@ -12,7 +12,7 @@
   Details in `packages/server/CHANGELOG.md` and
   `packages/protocol/CHANGELOG.md` (0.1.1).
 
-## 0.4.0 (beta) - the large-workspace round
+## 0.3.4 (beta, pre-release) - the large-workspace round
 
 ### Fixed
 
