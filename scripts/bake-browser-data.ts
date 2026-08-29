@@ -12,13 +12,14 @@
  * Output: packages/server/dist/browser-data/<gameId>/{tokens,docs,freqs}.json
  *
  * Run:
- *   pnpm --filter @px-lsp/server run bake:browser [-- --game <id>]
+ *   pnpm run bake:browser                  every game that ships script_docs
+ *   pnpm run bake:browser -- --game vic3   just that one
  */
 import * as fs from "fs";
 import * as path from "path";
 import type { TokenData } from "../packages/protocol/src/types";
 import { setActiveProfile } from "../packages/server/src/games/active";
-import { resolveProfile } from "../packages/server/src/games/registry";
+import { resolveProfile, allProfiles } from "../packages/server/src/games/registry";
 import { loadTokenDataFromLogs, parseOnActionsLog } from "../packages/server/src/data/docsParser";
 import { loadWikiTokens, mergeWikiTokens } from "../packages/server/src/data/wikiDocs";
 import {
@@ -29,79 +30,95 @@ import {
 } from "../packages/server/src/browser/data";
 import { parseGameArg } from "./devPaths";
 
-const { gameId } = parseGameArg(process.argv.slice(2));
-setActiveProfile(resolveProfile(gameId));
-
 const SERVER = path.resolve(__dirname, "..", "packages", "server");
-const DATA = path.join(SERVER, "data", gameId);
-const OUT = path.join(SERVER, "dist", "browser-data", gameId);
+const kb = (n: number): string => (n / 1024).toFixed(0).padStart(5) + " KB";
 
-if (!fs.existsSync(DATA)) {
-  console.error(`no bundled data for game "${gameId}" at ${DATA}`);
+function bake(gameId: string): boolean {
+  // The parsers read the ACTIVE profile for their token vocabulary, so this has
+  // to move with the game rather than being set once at startup.
+  setActiveProfile(resolveProfile(gameId));
+
+  const data = path.join(SERVER, "data", gameId);
+  const scriptDocs = path.join(data, "script_docs");
+  if (!fs.existsSync(scriptDocs)) return false;
+
+  const loaded = loadTokenDataFromLogs(scriptDocs);
+  if (loaded.missing.length > 0) {
+    console.warn(`  ${gameId}: missing logs, baked without them: ${loaded.missing.join(", ")}`);
+  }
+
+  // Same merge order as server.ts: script_docs first, the wiki mirror filling
+  // the gaps. Baking the merged result means the browser never does either.
+  const wiki = loadWikiTokens(path.join(data, "wikidocs"));
+  const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki);
+
+  const hot: BakedToken[] = [];
+  const prose: Array<[string, string]> = [];
+  for (const t of tokens) {
+    const entry: BakedToken = { name: t.name, kind: t.kind, scopes: t.scopes };
+    if (t.traits) entry.traits = t.traits;
+    hot.push(entry);
+    prose.push([t.doc ?? "", t.usage ?? ""]);
+  }
+
+  const onActionScopes: Record<string, string> = {};
+  for (const [name, scope] of parseOnActionsLog(scriptDocs)) onActionScopes[name] = scope;
+
+  const bakedTokens: BakedTokens = {
+    version: BROWSER_DATA_VERSION,
+    gameId,
+    source: `bundled script_docs + wikidocs (${new Date().toISOString().slice(0, 10)})`,
+    tokens: hot,
+    templates: loaded.templates,
+    onActionScopes,
+  };
+  const bakedDocs: BakedDocs = { version: BROWSER_DATA_VERSION, gameId, prose };
+
+  const out = path.join(SERVER, "dist", "browser-data", gameId);
+  fs.mkdirSync(out, { recursive: true });
+  const write = (name: string, value: unknown): number => {
+    const json = JSON.stringify(value);
+    fs.writeFileSync(path.join(out, name), json, "utf8");
+    return Buffer.byteLength(json);
+  };
+
+  const tokensSize = write("tokens.json", bakedTokens);
+  const docsSize = write("docs.json", bakedDocs);
+
+  // freqs.json is copied rather than transformed: coerceFreqs validates it on
+  // the way in, so the browser sees the same shape node does.
+  let freqsSize = 0;
+  const freqsSrc = path.join(data, "freqs.json");
+  if (fs.existsSync(freqsSrc)) {
+    const raw = fs.readFileSync(freqsSrc, "utf8");
+    fs.writeFileSync(path.join(out, "freqs.json"), raw, "utf8");
+    freqsSize = Buffer.byteLength(raw);
+  } else {
+    console.warn(`  ${gameId}: no freqs.json, completion ranking falls back to empty tables`);
+  }
+
+  console.log(`${gameId}: ${tokens.length} tokens, ${loaded.templates.length} templates`);
+  console.log(`  tokens.json ${kb(tokensSize)}   (name/kind/scopes/traits)`);
+  console.log(`  docs.json   ${kb(docsSize)}   (doc + usage prose, fetch on first hover)`);
+  console.log(`  freqs.json  ${kb(freqsSize)}   (completion ranking)`);
+  return true;
+}
+
+const argv = process.argv.slice(2);
+const explicit = argv.some((a) => a === "--game" || a.startsWith("--game="));
+const games = explicit ? [parseGameArg(argv).gameId] : allProfiles().map((p) => p.id);
+
+let baked = 0;
+for (const gameId of games) {
+  if (bake(gameId)) baked += 1;
+  else if (explicit) {
+    console.error(`no script_docs bundled for game "${gameId}"`);
+    process.exit(1);
+  }
+}
+
+if (baked === 0) {
+  console.error("no game bundles script_docs; nothing to bake");
   process.exit(1);
 }
-
-const scriptDocs = path.join(DATA, "script_docs");
-const loaded = loadTokenDataFromLogs(scriptDocs);
-if (loaded.missing.length > 0) {
-  console.warn(`missing logs (baked without them): ${loaded.missing.join(", ")}`);
-}
-
-// Same merge order as server.ts: script_docs first, the wiki mirror filling the
-// gaps. Baking the merged result means the browser never has to do either.
-const wiki = loadWikiTokens(path.join(DATA, "wikidocs"));
-const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki);
-
-const hot: BakedToken[] = [];
-const prose: Array<[string, string]> = [];
-for (const t of tokens) {
-  const entry: BakedToken = { name: t.name, kind: t.kind, scopes: t.scopes };
-  if (t.traits) entry.traits = t.traits;
-  hot.push(entry);
-  prose.push([t.doc ?? "", t.usage ?? ""]);
-}
-
-const onActionScopes: Record<string, string> = {};
-for (const [name, scope] of parseOnActionsLog(scriptDocs)) onActionScopes[name] = scope;
-
-const bakedTokens: BakedTokens = {
-  version: BROWSER_DATA_VERSION,
-  gameId,
-  source: `bundled script_docs + wikidocs (${new Date().toISOString().slice(0, 10)})`,
-  tokens: hot,
-  templates: loaded.templates,
-  onActionScopes,
-};
-
-const bakedDocs: BakedDocs = { version: BROWSER_DATA_VERSION, gameId, prose };
-
-fs.mkdirSync(OUT, { recursive: true });
-const write = (name: string, value: unknown): number => {
-  const json = JSON.stringify(value);
-  fs.writeFileSync(path.join(OUT, name), json, "utf8");
-  return Buffer.byteLength(json);
-};
-
-const sizes = {
-  tokens: write("tokens.json", bakedTokens),
-  docs: write("docs.json", bakedDocs),
-  freqs: 0,
-};
-
-// freqs.json is copied rather than transformed: coerceFreqs validates it on the
-// way in, and the browser has no reason to see a different shape than node does.
-const freqsSrc = path.join(DATA, "freqs.json");
-if (fs.existsSync(freqsSrc)) {
-  const raw = fs.readFileSync(freqsSrc, "utf8");
-  fs.writeFileSync(path.join(OUT, "freqs.json"), raw, "utf8");
-  sizes.freqs = Buffer.byteLength(raw);
-} else {
-  console.warn(`no freqs.json for ${gameId}; completion ranking falls back to empty tables`);
-}
-
-const kb = (n: number): string => (n / 1024).toFixed(0).padStart(5) + " KB";
-console.log(`baked ${gameId}: ${tokens.length} tokens, ${loaded.templates.length} templates`);
-console.log(`  tokens.json ${kb(sizes.tokens)}   (name/kind/scopes/traits)`);
-console.log(`  docs.json   ${kb(sizes.docs)}   (doc + usage prose, fetch on first hover)`);
-console.log(`  freqs.json  ${kb(sizes.freqs)}   (completion ranking)`);
-console.log(`  -> ${OUT}`);
+console.log(`-> ${path.join(SERVER, "dist", "browser-data")}`);

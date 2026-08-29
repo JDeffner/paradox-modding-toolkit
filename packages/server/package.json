@@ -45,10 +45,10 @@
   "scripts": {
     "compile": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --banner:js=\"#!/usr/bin/env node\"",
     "watch": "esbuild src/server.ts --bundle --outfile=dist/server.js --format=cjs --platform=node --target=node18 --watch",
-    "prepack": "pnpm run compile && pnpm run bake:browser:all && pnpm run compile:browser && pnpm run types:browser",
+    "prepack": "pnpm run compile && pnpm run bake:browser && pnpm run compile:browser && pnpm run types:browser",
     "compile:browser": "esbuild src/browser/index.ts --bundle --outfile=dist/browser.js --format=esm --platform=browser --target=es2022 --minify --alias:fs=./src/browser/shims/fs.ts --alias:path=./src/browser/shims/path.ts --alias:os=./src/browser/shims/os.ts --alias:vscode-languageserver/node=vscode-languageserver-types",
     "types:browser": "tsc -p tsconfig.browser.json",
-    "bake:browser:all": "pnpm --dir ../.. run bake:browser -- --game ck3"
+    "bake:browser": "pnpm --dir ../.. run bake:browser"
   },
   "dependencies": {
     "@px-lsp/protocol": "workspace:*",

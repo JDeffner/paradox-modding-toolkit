@@ -467,7 +467,8 @@ service.attachDocs(await (await fetch("/px/docs.json")).json());
 Hover works before that call; it just has names and scopes instead of prose.
 `capabilities.hoverDocs` says which state you are in.
 
-Regenerate the payloads with `pnpm run bake:browser -- --game <id>`. They carry
+Regenerate the payloads with `pnpm run bake:browser`, which bakes every game
+that ships `script_docs` (add `-- --game <id>` for one). They carry
 a version that `createBrowserLanguageService` checks, so a payload baked by a
 different server version fails loudly at startup instead of producing subtly
 wrong answers.
