@@ -27,13 +27,16 @@
  * alone, and only `color`, `background-color` and `border-radius`.
  */
 
-import { FAMILY_COLOR, kindStyle, type KindFamily } from "@px-lsp/protocol/kinds";
+import { kindStyle } from "@px-lsp/protocol/kinds";
 import { hoverHtml, hoverIcons } from "../clientMode";
 
+/** The colour a stored value reads in: the same token a `Variable` row takes. */
+const STORED = "var(--vscode-symbolIcon-variableForeground)";
+
 /** A sanitized colored span. Content is plain text so it survives stripping. */
-function span(family: KindFamily, text: string): string {
-  if (family === "default" || !hoverHtml()) return text;
-  return `<span style="color:${FAMILY_COLOR[family]};">${text}</span>`;
+function span(color: string | null, text: string): string {
+  if (color === null || !hoverHtml()) return text;
+  return `<span style="color:${color};">${text}</span>`;
 }
 
 /** Human label for a kind badge ("scripted trigger", "trigger", "saved scope"). */
@@ -50,7 +53,7 @@ function kindLabel(kind: string): string {
 export function kindBadge(kind: string, label = kindLabel(kind)): string {
   const style = kindStyle(kind);
   const mark = hoverIcons() ? `$(${style.codicon})` : "■";
-  return span(style.family, `${mark} ${label}`);
+  return span(style.color, `${mark} ${label}`);
 }
 
 /**
@@ -59,14 +62,14 @@ export function kindBadge(kind: string, label = kindLabel(kind)): string {
  */
 export function scopePill(scope: string, current: ReadonlySet<string> | null): string {
   const matches = current !== null && current.has(scope.toLowerCase());
-  if (matches) return span("data", scope);
+  if (matches) return span(STORED, scope);
   if (!hoverHtml()) return scope;
   return `<span style="color:var(--vscode-descriptionForeground);">${scope}</span>`;
 }
 
 /** Blue scope-type span for the "→ character" tail on badges/pills. */
 export function scopeType(type: string): string {
-  return span("data", type);
+  return span(STORED, type);
 }
 
 /**
@@ -171,9 +174,7 @@ export function fencedBlock(body: string, head: number, disclosed: number): stri
   const hidden = rest.length - inside.length;
   const summary = `${rest.length.toLocaleString("en-US")} more line${rest.length === 1 ? "" : "s"}`;
   const body2 = hidden > 0 ? [...inside, `… and ${hidden.toLocaleString("en-US")} further`] : inside;
-  return [shown, "", `<details><summary>${summary}</summary>`, "", fence(body2), "", "</details>"].join(
-    "\n"
-  );
+  return [shown, "", `<details><summary>${summary}</summary>`, "", fence(body2), "", "</details>"].join("\n");
 }
 
 function fence(lines: string[]): string {
@@ -208,9 +209,7 @@ export interface CardInput {
 /** Build one card's markdown. */
 export function renderCard(card: CardInput): string {
   const badge = kindBadge(card.kind, card.badgeLabel);
-  const head = card.headTail
-    ? `${badge} **${card.name}** ${card.headTail}`
-    : `${badge} **${card.name}**`;
+  const head = card.headTail ? `${badge} **${card.name}** ${card.headTail}` : `${badge} **${card.name}**`;
   const parts: string[] = [head];
   if (card.doc) parts.push(card.doc);
   if (card.example) parts.push(card.example);

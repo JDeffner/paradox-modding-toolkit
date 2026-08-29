@@ -5,19 +5,13 @@
  * property usage counts) plus the definition index's gui_type entries
  * (mod + vanilla `template X { }` / `type x = base { }` declarations).
  */
-import {
-  CompletionItemKind,
-  MarkupKind,
-  type CompletionItem,
-  type Hover,
-  type Position,
-} from "vscode-languageserver/node";
+import { MarkupKind, type CompletionItem, type Hover, type Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { activeProfile } from "../games/active";
 import type { ServerData } from "../serverData";
 import { blockStackFromParse } from "../context";
 import { getParse } from "../parseCache";
-import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
+import { finalize, itemKind, MAX_ITEMS, type CompletionResult } from "./completion";
 import { provideDataFnCompletion, provideDataFnHover } from "./datafunction";
 import { guiDefSources, type GuiPaths } from "./guiNavigation";
 import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
@@ -101,7 +95,7 @@ function provideEnumCompletion(linePrefix: string): CompletionResult | null {
     if (used.has(v)) return;
     items.push({
       label: v,
-      kind: CompletionItemKind.EnumMember,
+      kind: itemKind("gui_enum_value"),
       detail: `${key} value${combinable ? " · combine with |" : ""}`,
       sortText: TIER_PROP + rank2(i) + v,
     });
@@ -143,7 +137,7 @@ export function provideGuiCompletion(
       for (const d of data.index.entries((def) => def.kind === "gui_type")) {
         items.push({
           label: d.name,
-          kind: CompletionItemKind.Class,
+          kind: itemKind("gui_type"),
           detail: `gui template/type (${d.source})`,
           sortText: TIER_PROP + (d.source === "mod" ? "0" : "1") + d.name,
           data: { t: "def", k: "gui_type", n: d.name },
@@ -179,7 +173,7 @@ export function provideGuiCompletion(
     const alsoType = key in guiSchema().types;
     items.push({
       label: key,
-      kind: alsoType ? CompletionItemKind.Class : CompletionItemKind.Property,
+      kind: itemKind(alsoType ? "gui_type" : "gui_property"),
       detail: typeInfo
         ? `${alsoType ? "child widget" : "property"} of ${enclosing} · ${count}× in vanilla`
         : `gui ${alsoType ? "widget" : "property"} · ${count}× in vanilla`,
@@ -193,7 +187,7 @@ export function provideGuiCompletion(
     if (seen.has(name)) return;
     items.push({
       label: name,
-      kind: CompletionItemKind.Class,
+      kind: itemKind("gui_type"),
       detail: `widget type · ${info.count}× in vanilla`,
       sortText: TIER_TYPE + rank2(Math.min(99, i)) + name,
     });

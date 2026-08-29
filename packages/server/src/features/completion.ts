@@ -90,7 +90,7 @@ export interface CompletionResult {
  * font and take the same colour, so a condition and an action were drawn
  * identically in the suggest widget.
  */
-function itemKind(kind: string): CompletionItemKind {
+export function itemKind(kind: string): CompletionItemKind {
   const name = kindStyle(kind).completionKind as keyof typeof CompletionItemKind;
   return CompletionItemKind[name] ?? CompletionItemKind.Reference;
 }

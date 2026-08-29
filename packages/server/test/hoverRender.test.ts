@@ -43,20 +43,20 @@ describe("kind badges: one glyph per concept, three tiers", () => {
   it("draws a codicon when the client renders theme icons", () => {
     tier("vscode");
     expect(kindBadge("trigger")).toBe(
-      '<span style="color:var(--vscode-symbolIcon-functionForeground);">$(symbol-method) trigger</span>'
+      '<span style="color:var(--vscode-symbolIcon-methodForeground);">$(symbol-method) trigger</span>'
     );
     expect(kindBadge("effect")).toBe(
-      '<span style="color:var(--vscode-symbolIcon-classForeground);">$(symbol-event) effect</span>'
+      '<span style="color:var(--vscode-symbolIcon-eventForeground);">$(symbol-event) effect</span>'
     );
     expect(kindBadge("saved_scope")).toBe(
-      '<span style="color:var(--vscode-symbolIcon-variableForeground);">$(symbol-variable) saved scope</span>'
+      '<span style="color:var(--vscode-symbolIcon-fieldForeground);">$(symbol-field) saved scope</span>'
     );
   });
 
   it("falls back to a square when the client renders HTML but not icons", () => {
     tier("html");
     expect(kindBadge("trigger")).toBe(
-      '<span style="color:var(--vscode-symbolIcon-functionForeground);">■ trigger</span>'
+      '<span style="color:var(--vscode-symbolIcon-methodForeground);">■ trigger</span>'
     );
   });
 
@@ -66,11 +66,11 @@ describe("kind badges: one glyph per concept, three tiers", () => {
     expect(kindBadge("structure_key", "character interaction key")).toBe("■ character interaction key");
   });
 
-  it("emits no span at all for the default colour family", () => {
+  it("emits no span at all for a kind VS Code does not tint", () => {
     tier("vscode");
-    // 12 of the mapped kinds are deliberately uncoloured; they should cost no markup.
-    expect(kindBadge("define")).toBe("$(symbol-constant) define");
-    expect(kindBadge("loc_key")).toBe("$(symbol-key) loc key");
+    // Most of the map is grey, and grey is the editor foreground: no markup.
+    expect(kindBadge("define")).toBe("$(symbol-unit) define");
+    expect(kindBadge("loc_key")).toBe("$(symbol-text) loc key");
   });
 
   it("badge content stays legible once the tag is stripped", () => {
@@ -85,8 +85,8 @@ describe("the kind map", () => {
     // codepoint in the codicon font, so the two opposite concepts in Paradox
     // script were drawn identically.
     expect(kindStyle("trigger").codicon).not.toBe(kindStyle("effect").codicon);
-    expect(kindStyle("trigger").family).toBe("condition");
-    expect(kindStyle("effect").family).toBe("action");
+    expect(kindStyle("trigger").color).toBe("var(--vscode-symbolIcon-methodForeground)");
+    expect(kindStyle("effect").color).toBe("var(--vscode-symbolIcon-eventForeground)");
   });
 
   it("gives the engine and mod versions of one concept the same glyph", () => {
@@ -102,9 +102,48 @@ describe("the kind map", () => {
     }
   });
 
+  it("paints the badge with the completion kind's own colour token", () => {
+    // The suggest widget colours a row from the CompletionItemKind we send, and
+    // an extension cannot override it, so the badge takes the same token and the
+    // two surfaces agree by construction. `on_action` is the one exception.
+    const tinted: Record<string, string> = {
+      Method: "method",
+      Class: "class",
+      Event: "event",
+      Value: "enumerator",
+      Variable: "variable",
+      Field: "field",
+      Interface: "interface",
+      EnumMember: "enumeratorMember",
+    };
+    for (const k of mappedKinds()) {
+      if (k === "on_action") continue;
+      const style = kindStyle(k);
+      const cls = tinted[style.completionKind];
+      expect(style.color).toBe(cls ? `var(--vscode-symbolIcon-${cls}Foreground)` : null);
+    }
+  });
+
+  it("keeps the two deliberate exceptions", () => {
+    // on_action: the interface glyph, in the orange of the group it belongs to.
+    // The completion row is blue anyway, because VS Code owns that colour.
+    expect(kindStyle("on_action")).toEqual({
+      codicon: "symbol-interface",
+      completionKind: "Interface",
+      color: "var(--vscode-symbolIcon-classForeground)",
+    });
+    // texture: no completion kind draws `file-media`, so the row takes the
+    // plain file glyph while the hover and the tree get the picture frame.
+    expect(kindStyle("texture")).toEqual({
+      codicon: "file-media",
+      completionKind: "File",
+      color: null,
+    });
+  });
+
   it("falls through to a neutral style for a kind it does not name", () => {
     expect(kindStyle("something_new").codicon).toBe("go-to-file");
-    expect(kindStyle("something_new").family).toBe("default");
+    expect(kindStyle("something_new").color).toBeNull();
   });
 });
 

@@ -6,7 +6,13 @@
 
 - **Hovers have icons, and the icons mean something.** Kind badges are real
   codicons instead of a coloured square, and the same glyph now appears in the
-  completion list and the tree for the same concept. This fixed a live defect:
+  completion list and the tree for the same concept. Colour comes with the
+  kind, because VS Code paints a completion row from the `CompletionItemKind`
+  the server sends and an extension cannot override it, so the four groups are
+  the ones the editor already draws: purple asks a question (triggers), orange
+  makes it happen (effects, events, decisions, on_actions, traits), blue is
+  something you stored (variables, saved scopes, event targets, lists), grey is
+  syntax and everything else. This fixed a live defect:
   `trigger` mapped to `CompletionItemKind.Function` and `effect` to `Method`,
   which share one codepoint in the codicon font and take the same colour, so a
   condition and an action, the one distinction in Paradox script that causes
@@ -27,7 +33,7 @@
 ### Changed
 
 - **Hovers are quieter.** Seven chart colours become the three VS Code uses for
-  its own symbols plus plain default, which is what 12 of the 23 script kinds
+  its own symbols plus plain default, which is what 17 of the 38 mapped kinds
   now render as, so most badges emit no colour markup at all. Scopes, the value
   shape and the traits line merge into one muted facts line. A single-card hover
   writes no footer block: its provenance and reference links ride the scope line
@@ -37,7 +43,16 @@
   switch, so they fell through to the "definition kinds read green" default and
   a widget type read the same green as a scripted trigger. They now have their
   own entries, as do datafunction data types, promotes and functions, GUI
-  templates and enum values, and text format tags.
+  templates and enum values, and text format tags. GUI completions read their
+  kind from the same map, so a widget type is one picture in the hover and one
+  in the suggest widget.
+- A texture path shows the picture-frame glyph (`file-media`) in the hover and
+  the tree. Its completion row keeps the plain file glyph: no
+  `CompletionItemKind` draws `file-media`, and only those 25 values reach the
+  suggest widget.
+- An `on_action` shows the interface glyph, in the orange of the group it
+  belongs to. Its completion row is blue, because the row's colour belongs to
+  the kind and `Interface` is blue.
 
 ### Fixed
 
