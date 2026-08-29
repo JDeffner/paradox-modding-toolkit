@@ -22,6 +22,7 @@ import {
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
 import { readModName } from "@px-lsp/protocol/modName";
+import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
 
 /**
@@ -555,11 +556,48 @@ export function registerPxViews(
         placeHolder: "Checked mods are skipped entirely: no completion, navigation, diagnostics or views",
       });
       if (!picked) return;
-      await vscode.workspace.getConfiguration("px").update(
-        "excludedMods",
-        picked.map((i) => i.root),
-        vscode.ConfigurationTarget.Workspace
+      const chosen = picked.map((i) => i.root);
+      const pxCfg = vscode.workspace.getConfiguration("px");
+      await pxCfg.update("excludedMods", chosen, vscode.ConfigurationTarget.Workspace);
+
+      // Excluding is all-or-nothing; the cheaper middle ground is indexing a
+      // mod like a dependency parent (definitions for completion/hover/
+      // navigation, no reference index — the expensive half; vanilla-copy
+      // packs like the Unofficial Patch are exactly this case). That is just
+      // px.parentMods, so offer to move newly excluded mods there, and pull
+      // un-excluded mods back out (a parentMods entry for a fully indexed
+      // workspace mod is dead weight).
+      const before = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
+      const chosenKeys = new Set(chosen.map((p) => p.toLowerCase()));
+      const parents = sanitizeStringList(pxCfg.get("parentMods"));
+      const unexcluded = parents.filter(
+        (p) => before.has(p.toLowerCase()) && !chosenKeys.has(p.toLowerCase())
       );
+      if (unexcluded.length > 0) {
+        await pxCfg.update(
+          "parentMods",
+          parents.filter((p) => !unexcluded.includes(p)),
+          vscode.ConfigurationTarget.Workspace
+        );
+      }
+      const newly = chosen.filter((r) => !before.has(r.toLowerCase()));
+      if (newly.length > 0) {
+        const parentKeys = new Set(parents.map((p) => p.toLowerCase()));
+        const movable = newly.filter((r) => !parentKeys.has(r.toLowerCase()));
+        if (movable.length > 0) {
+          const keep = await vscode.window.showInformationMessage(
+            `Paradox Modding Toolkit: excluded ${newly.length} mod(s) from indexing. Keep them as ` +
+              "read-only context instead? They are then indexed like dependency mods: completion, " +
+              "hover and go-to-definition still see their content, at a fraction of the memory " +
+              "(no reference index, diagnostics or views).",
+            "Keep as Read-Only Context"
+          );
+          if (keep === "Keep as Read-Only Context") {
+            const latest = sanitizeStringList(pxCfg.get("parentMods"));
+            await pxCfg.update("parentMods", [...latest, ...movable], vscode.ConfigurationTarget.Workspace);
+          }
+        }
+      }
     })
   );
 

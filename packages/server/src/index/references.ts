@@ -18,6 +18,7 @@ import {
   VARIABLE_LIST_SET_KINDS,
   VARIABLE_READ_KINDS,
   VAR_PREFIX_KINDS,
+  variableReadKinds,
 } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
 import { isLocProperty } from "@px-lsp/protocol/locProperties";
@@ -30,6 +31,7 @@ import {
   walkStatements,
   type AssignmentNode,
   type BlockNode,
+  type RootNode,
   type ScalarNode,
   type Statement,
 } from "../parser";
@@ -52,6 +54,16 @@ const VAR_PREFIXES = new Set(Object.keys(VAR_PREFIX_KINDS));
 /** What a key-position call (`my_effect = yes`) may refer to. */
 const CALL_KINDS = ["scripted_effect", "scripted_trigger", "scripted_modifier"];
 
+/**
+ * Shared `kinds` arrays for the sites that used to build one per reference
+ * (perf round 3). Nothing mutates a reference's `kinds` — the only reader is
+ * `ReferenceIndex.byKind` — so one array per distinct kind set is enough, and
+ * at 7.5M references on a game + 5 mods workspace the per-reference array
+ * header and backing store were worth hundreds of megabytes.
+ */
+const SAVED_SCOPE_KINDS = ["saved_scope"];
+const LOC_KEY_KINDS = ["loc_key"];
+
 export interface ExtractedRefs {
   references: Reference[];
   /** save_scope_as / set_variable sites, indexed as definitions. */
@@ -71,7 +83,25 @@ export function extractReferences(
   isEngineToken?: (name: string) => boolean
 ): ExtractedRefs {
   const { root } = parseScript(content);
-  const lines = new LineIndex(content);
+  return extractReferencesParsed(root, new LineIndex(content), file, source, schema, isEngineToken);
+}
+
+/**
+ * The body of `extractReferences` over a CST the caller already has.
+ *
+ * The mod scan reads and parses each script file once and feeds that parse to
+ * both extractors (see `extractDefinitionsParsed`). `extractReferences` above
+ * is the same function with the parse in front and stays the entry point for
+ * the incremental rescan and for callers holding only text.
+ */
+export function extractReferencesParsed(
+  root: RootNode,
+  lines: LineIndex,
+  file: string,
+  source: DefSource,
+  schema: SchemaData,
+  isEngineToken?: (name: string) => boolean
+): ExtractedRefs {
   const references: Reference[] = [];
   const implicitDefs: Definition[] = [];
   const namespaces: string[] = [];
@@ -107,7 +137,7 @@ export function extractReferences(
     if (VAR_PREFIXES.has(prefix)) {
       pushRef(name, VAR_PREFIX_KINDS[prefix], offset);
     } else if (prefix === "scope") {
-      pushRef(name, ["saved_scope"], offset);
+      pushRef(name, SAVED_SCOPE_KINDS, offset);
     } else {
       const kinds = schema.prefixRefs[prefix];
       if (kinds) pushRef(name, kinds, offset);
@@ -153,7 +183,7 @@ export function extractReferences(
         if (dot >= 0) name = name.slice(0, dot);
         const offset = stmt.key.range.start + prefix.length + 1;
         if (VAR_PREFIXES.has(prefix)) pushRef(name, VAR_PREFIX_KINDS[prefix], offset);
-        else if (prefix === "scope") pushRef(name, ["saved_scope"], offset);
+        else if (prefix === "scope") pushRef(name, SAVED_SCOPE_KINDS, offset);
       }
     }
 
@@ -172,17 +202,18 @@ export function extractReferences(
     // "type:value" = script-value math save (always a value scope).
     if (key !== null && SAVE_SCOPE_KEYS.has(key) && value?.kind === "scalar" && !value.quoted) {
       if (NAME_OK.test(value.text)) {
+        // `value` and `container` go IN the literal (perf round 3): assigning
+        // an optional field after the object is built moves it into a
+        // PropertyArray, measured at 40 B against 16 B for two in-object slots.
         const def: Definition = {
           name: value.text,
           kind: "saved_scope",
           file,
           line: lines.positionAt(value.range.start).line,
           source,
+          value: key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`,
+          container: topLevelName(ancestors),
         };
-        def.value =
-          key === "save_temporary_value_as" ? "type:value" : `chain:${enclosingKeyChain(ancestors)}`;
-        const container = topLevelName(ancestors);
-        if (container !== undefined) def.container = container;
         implicitDefs.push(def);
       }
       return;
@@ -325,7 +356,7 @@ export function extractReferences(
       ) {
         // List reads accept only lists; scalar reads accept both (has_variable
         // is true for a list variable).
-        const kinds = readKind.endsWith("_list") ? [readKind] : [readKind, `${readKind}_list`];
+        const kinds = variableReadKinds(readKind);
         pushRef(nameScalar.text, kinds, nameScalar.range.start);
       }
       return;
@@ -384,7 +415,7 @@ export function extractReferences(
       }
       // Loc-key-valued properties (both `desc = key` and `desc = "key"`).
       if (key !== null && isLocProperty(key) && NAME_OK.test(value.text)) {
-        pushRef(value.text, ["loc_key"], value.range.start + (value.quoted ? 1 : 0));
+        pushRef(value.text, LOC_KEY_KINDS, value.range.start + (value.quoted ? 1 : 0));
       }
     } else if (value?.kind === "block" && key !== null) {
       const field = schema.refFields.get(key);
@@ -430,6 +461,16 @@ export class ReferenceIndex {
   private byFile = new Map<string, Reference[]>();
   /** Per-name count of non-call references (the §C2 ranking signal). */
   private rankCounts = new Map<string, number>();
+  /**
+   * Call sites carrying a key chain, per file — the ONLY references the scope
+   * aggregation (buildCallSiteScopes) reads (perf round 2).
+   *
+   * It runs on every index change, i.e. every save, and used to iterate the
+   * whole reference index to find them: measured on game + AGOT, 4,124,139
+   * references of which 175,373 (4%) are chained call sites, so 96% of the
+   * walk was `continue`. Same shape as DefinitionIndex.trackedNames (§B2).
+   */
+  private chainedCallsByFile = new Map<string, Reference[]>();
   revision = 0;
 
   addAll(refs: Reference[]): void {
@@ -442,8 +483,25 @@ export class ReferenceIndex {
       let flist = this.byFile.get(fkey);
       if (!flist) this.byFile.set(fkey, (flist = []));
       flist.push(ref);
+      if (ref.call && ref.chain !== undefined) {
+        let clist = this.chainedCallsByFile.get(fkey);
+        if (!clist) this.chainedCallsByFile.set(fkey, (clist = []));
+        clist.push(ref);
+      }
     }
     if (refs.length > 0) this.revision++;
+  }
+
+  /** Every chained call site, the input buildCallSiteScopes actually wants. */
+  *chainedCalls(): IterableIterator<Reference> {
+    for (const list of this.chainedCallsByFile.values()) yield* list;
+  }
+
+  /** Trim every bucket to its exact length. See DefinitionIndex.compact. */
+  compact(): void {
+    for (const [name, list] of this.byName) this.byName.set(name, list.slice());
+    for (const [file, list] of this.byFile) this.byFile.set(file, list.slice());
+    for (const [file, list] of this.chainedCallsByFile) this.chainedCallsByFile.set(file, list.slice());
   }
 
   /**
@@ -460,6 +518,7 @@ export class ReferenceIndex {
     const refs = this.byFile.get(fkey);
     if (!refs) return;
     this.byFile.delete(fkey);
+    this.chainedCallsByFile.delete(fkey);
     const dropped = new Map<string, Set<Reference>>();
     for (const ref of refs) {
       let set = dropped.get(ref.name);
@@ -524,6 +583,7 @@ export class ReferenceIndex {
     this.byName.clear();
     this.byFile.clear();
     this.rankCounts.clear();
+    this.chainedCallsByFile.clear();
     this.revision++;
   }
 }

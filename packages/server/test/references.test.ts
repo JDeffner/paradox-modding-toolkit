@@ -102,6 +102,45 @@ describe("extractReferences", () => {
   });
 });
 
+describe("ReferenceIndex.chainedCalls (perf round 2)", () => {
+  const callFile = "C:\\mod\\common\\scripted_effects\\calls.txt";
+  const withCalls = () =>
+    extractReferences(
+      "my_event.1 = {\n\timmediate = {\n\t\tmy_effect = yes\n\t\ttrigger_event = ns.1\n\t}\n}\n",
+      callFile,
+      "mod",
+      schema
+    ).references;
+
+  it("yields the chained call sites and nothing else", () => {
+    const idx = new ReferenceIndex();
+    const all = withCalls();
+    idx.addAll(all);
+    const chained = [...idx.chainedCalls()];
+    expect(chained.length).toBeGreaterThan(0);
+    // Exactly the refs the old full-index walk would have kept.
+    expect(chained).toEqual(all.filter((r) => r.call && r.chain !== undefined));
+    expect(chained.every((r) => r.call === true && r.chain !== undefined)).toBe(true);
+    // trigger_event is a value reference, never a call site.
+    expect(chained.find((r) => r.name === "ns.1")).toBeUndefined();
+  });
+
+  it("removeFile drops them, so a deleted call site cannot keep typing scopes", () => {
+    const idx = new ReferenceIndex();
+    idx.addAll(withCalls());
+    expect([...idx.chainedCalls()].length).toBeGreaterThan(0);
+    idx.removeFile(callFile);
+    expect([...idx.chainedCalls()]).toHaveLength(0);
+  });
+
+  it("clear() drops them too", () => {
+    const idx = new ReferenceIndex();
+    idx.addAll(withCalls());
+    idx.clear();
+    expect([...idx.chainedCalls()]).toHaveLength(0);
+  });
+});
+
 describe("ReferenceIndex", () => {
   it("removeFile drops that file's references only", () => {
     const idx = new ReferenceIndex();

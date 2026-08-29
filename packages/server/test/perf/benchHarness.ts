@@ -214,6 +214,9 @@ export async function runRecipe(recipe: Recipe, opts: RunOptions = {}): Promise<
     // --expose-gc makes the trace's heap number post-GC; the heap ceiling is
     // the one the real client passes.
     execArgv: ["--expose-gc", `--max-old-space-size=${serverHeapMb(os.totalmem())}`],
+    // As does the read concurrency: without this the scan gets libuv's default
+    // pool of 4 and the bench measures a server the extension never runs.
+    env: { ...process.env, UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || "16" },
   });
 
   const logs: string[] = [];
