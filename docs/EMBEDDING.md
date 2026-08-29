@@ -241,7 +241,7 @@ The full set an embedder should consider, and what each one buys:
 | `snippetSupport` (standard LSP) | expands `${1:…}` tabstops in completion inserts | completion inserts are plain-text skeletons: same block shape, no tabstops, never a literal `${` |
 | `client.hoverHtml` | renders the sanitized `<span style="color:var(--vscode-*)">` hover markup | hover cards are plain markdown; the span content is self-sufficient text, so nothing is lost but color |
 | `client.commands` | registers some/all `px.*` commands | command-link affordances degrade per id: the localization quick fix becomes a plain `WorkspaceEdit`, the hover reference-count line is dropped |
-| `client.fileLinks` | navigates `file:` links from hover markdown | provenance and set-site lines render as plain `file.txt:12` labels instead of dead links |
+| `client.fileLinks` | navigates `file:` links from hover markdown | every hover location line (provenance, set sites, define/gui/format sources, datafunction examples, texture paths) renders as plain text instead of a dead link |
 | `client.ownFileWatcher` | watches the mod tree and pushes `paradox/modFileChanged` | the server registers its own `didChangeWatchedFiles` watcher (needs dynamic registration) |
 
 The concrete per-capability behavior (what the hover looks like without

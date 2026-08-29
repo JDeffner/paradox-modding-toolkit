@@ -15,6 +15,7 @@ import { resolveClientCapabilities, setClientCapabilities } from "../src/clientM
 import { colorSwatch, kindBadge, scopePill } from "../src/features/hoverRender";
 import { provideCodeActions, type LocEditContext } from "../src/features/codeActions";
 import { provideHover } from "../src/features/hover";
+import { provideGuiHover } from "../src/features/guiLanguage";
 import { ServerData } from "../src/serverData";
 import type { Diagnostic } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
@@ -165,6 +166,34 @@ describe("hover degradation for bare clients", () => {
     const md = effectHover();
     expect(md).toContain("](file:");
     expect(md).not.toMatch(/reference/);
+  });
+
+  /** Hover over `using = <template>`, whose card is built by guiLanguage.ts, not hover.ts. */
+  function guiTemplateHover(): string {
+    const data = new ServerData();
+    const file = path.join(path.sep === "\\" ? "C:\\mod" : "/mod", "gui", "my_templates.gui");
+    data.index.addAll([{ name: "MyModTemplate", kind: "gui_type", file, line: 3, source: "mod" }]);
+    const doc = TextDocument.create(
+      "file:///mod/gui/caps.gui",
+      "paradox-gui",
+      1,
+      "widget = {\n\tusing = MyModTemplate\n}"
+    );
+    const hover = provideGuiHover(data, doc, { line: 1, character: 10 });
+    expect(hover).not.toBeNull();
+    return (hover!.contents as { value: string }).value;
+  }
+
+  // Every hover renderer shares one gate, so a card hover.ts never touches
+  // degrades the same way (Sourcery on #23: gui/datafunction links were raw).
+  it("gui hovers route their definition link through the same gate", () => {
+    asClient({ clientCommands: true });
+    expect(guiTemplateHover()).toContain("](file:");
+
+    asClient({ clientCommands: false });
+    const bare = guiTemplateHover();
+    expect(bare).not.toContain("](file:");
+    expect(bare).toContain("my_templates.gui:4"); // the same location, minus the link
   });
 });
 

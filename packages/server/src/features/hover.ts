@@ -10,11 +10,10 @@
 import { MarkupKind, type Hover, type Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
-import { URI } from "vscode-uri";
 import type { SchemaEntry } from "../schema/types";
 import type { TokenData } from "@px-lsp/protocol/types";
 import { clientCommands } from "@px-lsp/protocol/protocol";
-import { canRunCommand, fileLinks } from "../clientMode";
+import { canRunCommand } from "../clientMode";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { scopePrefixBefore, wordRangeAt } from "../wordAt";
@@ -31,6 +30,7 @@ import { KEYWORD_DOCS, scopeWordDoc } from "../data/keywordDocs";
 import { matchTemplatedModifier, templatedModifierDoc } from "../data/modifierTemplates";
 import type { Scope } from "../scopes/model";
 import {
+  fileLink,
   renderCard,
   renderDocBody,
   renderHover,
@@ -119,7 +119,8 @@ export function provideHover(
       setDefs.length > 0
         ? setDefs
             .map(
-              (d) => `set in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, `L${d.line + 1}`)}`
+              (d) =>
+                `set in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, { fragment: `L${d.line + 1}` })}`
             )
             .join("  \n")
         : undefined;
@@ -430,18 +431,9 @@ function definitionCard(
 
 /** `file.txt:line` provenance, as a markdown link when a file URI is feasible. */
 function provenance(def: { file: string; line: number }): string {
-  return fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, String(def.line + 1));
-}
-
-/**
- * The single chokepoint for every `file:` link a hover card emits. Plain text
- * when no absolute path is available (fail-soft, e.g. synthetic defs) OR when
- * the client did not declare `fileLinks`: the same label, minus a link its
- * hover renderer would not navigate.
- */
-function fileLink(file: string, label: string, fragment: string): string {
-  if (!fileLinks() || !file || !path.isAbsolute(file)) return label;
-  return `[${label}](${URI.file(file).with({ fragment }).toString()})`;
+  return fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
+    fragment: String(def.line + 1),
+  });
 }
 
 /**
@@ -492,7 +484,8 @@ function savedScopeCard(
       doc.push(
         sites
           .map(
-            (d) => `saved in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, `L${d.line + 1}`)}`
+            (d) =>
+              `saved in ${fileLink(d.file, `${path.basename(d.file)}:${d.line + 1}`, { fragment: `L${d.line + 1}` })}`
           )
           .join("  \n")
       );
@@ -725,7 +718,7 @@ function defineSourceLink(e: DefineEntry): string {
   const norm = e.file.replace(/\\/g, "/");
   const i = norm.toLowerCase().lastIndexOf("/common/defines/");
   const rel = i >= 0 ? `${norm.slice(i + 1)}:${e.line + 1}` : `${path.basename(e.file)}:${e.line + 1}`;
-  return `${e.layer} · ${fileLink(e.file, rel, String(e.line + 1))}`;
+  return `${e.layer} · ${fileLink(e.file, rel, { fragment: String(e.line + 1) })}`;
 }
 
 /** root/ROOT/this/prev(prev…)/from(from…) — scope navigation keywords. */

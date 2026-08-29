@@ -502,10 +502,12 @@ capability at a time. A client declaring nothing (every field off) gets:
   entirely. A count the user cannot click answers no question, so the card
   ends with the provenance instead (changed in server 0.2.0: it used to
   render the count as plain text);
-- **`fileLinks` off** — every `file:` link a hover would carry (provenance,
-  variable and saved-scope set sites, define sources) renders as the same
-  `file.txt:12` label without the link, so a renderer that cannot navigate
-  `file:` targets never shows a dead link (since server 0.2.0);
+- **`fileLinks` off** — every `file:` link any hover would carry (provenance,
+  variable and saved-scope set sites, define sources, gui template/type
+  definitions, `#format` sources, `[ ... ]` datafunction examples) renders as
+  the same `file.txt:12` label without the link, so a renderer that cannot
+  navigate `file:` targets never shows a dead link. A texture hover's "open
+  file" becomes the resolved path as text (since server 0.2.0);
 - **standard `snippetSupport` off** — no completion item carries `${…}` or
   `insertTextFormat: Snippet`. Inserts that would be snippets (parameter
   skeletons for scripted effects, `key = { }` for schema keys that open a
