@@ -424,9 +424,9 @@ describe("usage-aware hover", () => {
 
   it("links examples into the game folder when a root is known", () => {
     const line = 'x = "[HouseAspiration.Self]"';
-    // "F:\game" collapses to "F:game" in a JS string — a separator-less path
-    // that only passed because the link builder just needs a non-empty root.
-    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "F:/game")!;
+    // The root must be absolute on BOTH platforms — fileLink() degrades a
+    // non-absolute path to plain text, and "F:/game" is relative on POSIX.
+    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "/game")!;
     expect(hover.markdown).toContain("file://");
   });
 });
