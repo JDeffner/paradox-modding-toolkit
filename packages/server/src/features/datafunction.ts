@@ -13,7 +13,13 @@
  */
 import { CompletionItemKind, type CompletionItem, type SignatureHelp } from "vscode-languageserver/node";
 import { describeDataFn } from "../data/dataFnDocs";
-import { membersOf, resolveChainType, type DataTypeMember, type DataTypesData } from "../data/dataTypes";
+import {
+  membersOf,
+  producersOf,
+  resolveChainType,
+  type DataTypeMember,
+  type DataTypesData,
+} from "../data/dataTypes";
 import type { DataFnUsage } from "../data/dataFnUsage";
 import type { DefinitionIndex } from "../index/indexer";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
@@ -463,6 +469,33 @@ function provenance(member: DataTypeMember | null): string {
   return "deduced from vanilla usage";
 }
 
+/** Producers listed by name in a hover before the tail becomes a count. */
+const MAX_PRODUCERS = 6;
+
+/**
+ * "Produced by" line for a data type: the inverse of the member list, i.e. how
+ * you obtain one of these in the first place. Ranked by vanilla usage, so the
+ * names people actually write come first, then capped with a `+N more` tail.
+ *
+ * The cap matters because the spread is extreme: `Story` has two producers and
+ * `Character` has 320. A bare count would answer neither; six ranked names plus
+ * the remainder answers both.
+ */
+function producerLines(data: DataTypesData, usage: DataFnUsage, type: string): string[] {
+  const all = producersOf(data, type);
+  if (all.length === 0) return [];
+  const ranked = [...all].sort((a, b) => {
+    const rank = (q: string) => usageCount(usage, q.slice(q.indexOf(".") + 1));
+    return rank(b) - rank(a) || a.localeCompare(b);
+  });
+  const shown = ranked
+    .slice(0, MAX_PRODUCERS)
+    .map((n) => `\`${n}\``)
+    .join(" ");
+  const rest = all.length - MAX_PRODUCERS;
+  return ["", `Produced by: ${shown}${rest > 0 ? ` +${rest.toLocaleString("en-US")} more` : ""}`];
+}
+
 /** Top-8 `.member` names observed after `name` in vanilla, as one hover line. */
 function topMemberLines(usage: DataFnUsage, name: string, label: string): string[] {
   const pairs = usage.pairs.get(name);
@@ -546,6 +579,7 @@ export function provideDataFnHover(
     const typeMembers = membersOf(data, segment);
     if (typeMembers) {
       lines.push(`\`${segment}\` — data type (${typeMembers.size} known members)`);
+      lines.push(...producerLines(data, usage, segment));
       lines.push(...topMemberLines(usage, segment, "Common members"));
       lines.push(...exampleLines(usage, segment, gameRoot));
     } else {

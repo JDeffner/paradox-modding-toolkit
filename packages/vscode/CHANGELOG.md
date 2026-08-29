@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Hovering a data type now says how to obtain one.** The hover for a
+  datafunction type (`Story`, `Character`) already listed what the type gives
+  you; it now also lists what gives you the type, ranked by vanilla usage:
+  `Produced by: GetPlayer WarOverviewWindow.GetPlayer … +314 more`. The spread
+  is what makes it useful: `Story` has exactly two producers, so the answer
+  fits on the line, while `Character` has 320 and the six most-used ones plus
+  a count still beats nothing. Suggested by a user who wanted to know what
+  can and cannot be used in a GUI expression.
+
 ## 0.3.3 (beta) - tiger download fix
 
 ### Fixed
