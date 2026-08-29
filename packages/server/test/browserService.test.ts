@@ -29,7 +29,7 @@ beforeAll(() => {
   // rather than reading dist/ means the suite does not depend on a build step.
   const logs = path.join(DATA, "script_docs");
   const loaded = loadTokenDataFromLogs(logs);
-  const merged = mergeWikiTokens(loaded.tokens, loadWikiTokens(path.join(DATA, "wikidocs")));
+  const merged = mergeWikiTokens(loaded.tokens, loadWikiTokens(path.join(DATA, "wikidocs"))).tokens;
   const hot: BakedToken[] = [];
   const prose: Array<[string, string]> = [];
   for (const t of merged) {

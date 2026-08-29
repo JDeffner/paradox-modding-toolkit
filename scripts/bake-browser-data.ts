@@ -50,7 +50,7 @@ function bake(gameId: string): boolean {
   // Same merge order as server.ts: script_docs first, the wiki mirror filling
   // the gaps. Baking the merged result means the browser never does either.
   const wiki = loadWikiTokens(path.join(data, "wikidocs"));
-  const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki);
+  const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki).tokens;
 
   const hot: BakedToken[] = [];
   const prose: Array<[string, string]> = [];
