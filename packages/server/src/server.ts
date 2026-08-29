@@ -1084,7 +1084,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   // Client capabilities (PROTOCOL.md §Initialization): rich hover markup,
   // command links and command actions are emitted only where the client
   // declared it implements them.
-  const clientCaps = resolveClientCapabilities(init);
+  const clientCaps = resolveClientCapabilities(init, params.capabilities);
   setClientCapabilities(clientCaps);
   clientOwnFileWatcher = clientCaps.ownFileWatcher;
   clientWatchedFilesDynamic =

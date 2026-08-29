@@ -68,6 +68,17 @@ export interface ParadoxClientCapabilities {
    * registers one whenever the client supports dynamic registration.
    */
   ownFileWatcher?: boolean;
+  /**
+   * The client's hover renderer navigates `file:` links, so provenance lines
+   * ("where is this defined") may be markdown links. Default false: the same
+   * `file.txt:12` label is rendered as plain text, which reads correctly in a
+   * client that would otherwise show a dead link.
+   *
+   * Note that `textDocument.completion.completionItem.snippetSupport` — the
+   * other axis an embedder should declare — is a STANDARD LSP capability, not
+   * one of these: send it in the initialize params, not here.
+   */
+  fileLinks?: boolean;
 }
 
 /** initializationOptions passed at LanguageClient start. All fields optional:
@@ -81,9 +92,9 @@ export interface ParadoxInitOptions {
   /**
    * @deprecated Send {@link ParadoxInitOptions.client} instead. `true` is an
    * alias for `{ hoverHtml: true, commands: <every id in clientCommands>,
-   * ownFileWatcher: true }` (what the VSCode extension declared before the
-   * capabilities object existed); false/absent means all-off. Ignored when
-   * `client` is present.
+   * ownFileWatcher: true, fileLinks: true }` plus snippet support (what the
+   * VSCode extension declared before the capabilities object existed);
+   * false/absent means all-off. Ignored when `client` is present.
    */
   clientCommands?: boolean;
   /**

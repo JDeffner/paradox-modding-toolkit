@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Server 0.2.0: block templates in completion, capability-honest output
+  for embedders.** Engine tokens with a qualifying `script_docs` `usage:`
+  example (679 in CK3, 265 in Vic3) and block-opening schema keys (~700 in
+  CK3) now complete as filled-in block snippets, in VS Code and everywhere
+  else. For bare LSP clients the server stops sending what they cannot use:
+  `${…}` snippets are gated on the standard `snippetSupport` capability, and
+  hovers drop unclickable reference counts and unnavigable `file:` links.
+  Details in `packages/server/CHANGELOG.md` and
+  `packages/protocol/CHANGELOG.md` (0.1.1).
+
 ## 0.3.3 (beta) - tiger download fix
 
 ### Fixed

@@ -17,7 +17,7 @@ import { membersOf, resolveChainType, type DataTypeMember, type DataTypesData } 
 import type { DataFnUsage } from "../data/dataFnUsage";
 import type { DefinitionIndex } from "../index/indexer";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { URI } from "vscode-uri";
+import { fileLink } from "./hoverRender";
 import * as path from "path";
 
 /**
@@ -439,9 +439,7 @@ function exampleLines(usage: DataFnUsage, name: string, gameRoot: string | null)
   for (const ex of examples) {
     const site = `${ex.file}:${ex.line}`;
     const link = gameRoot
-      ? `[${site}](${URI.file(path.join(gameRoot, ex.file))
-          .with({ fragment: String(ex.line) })
-          .toString()})`
+      ? fileLink(path.join(gameRoot, ex.file), site, { fragment: String(ex.line) })
       : site;
     lines.push(`- \`${ex.text}\` — ${link}`);
   }

@@ -69,6 +69,8 @@ import { inferenceContextFor, variableTypes } from "../scopes/varTypes";
 import type { Scope } from "../scopes/model";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion } from "./assetPaths";
+import { snippetSupport } from "../clientMode";
+import { blockTemplateFor } from "./blockSnippets";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */
 export const MAX_ITEMS = 1000;
@@ -135,7 +137,7 @@ const STRUCTURE_VALUE_HINT: Record<string, string> = {
   block: "{ … }",
 };
 
-function structureItem(spec: KeySpec, kind: string, rank: number): CompletionItem {
+function structureItem(spec: KeySpec, kind: string, rank: number, allowSnippet: boolean): CompletionItem {
   const item: CompletionItem = { label: spec.key, kind: CompletionItemKind.Keyword };
   const hint = spec.values
     ? spec.values.startsWith("enum:")
@@ -146,7 +148,27 @@ function structureItem(spec: KeySpec, kind: string, rank: number): CompletionIte
   if (spec.doc) item.documentation = spec.doc;
   // Structure tier: F is the dense freq-rank within the block; S fixed to SRC_MOD.
   item.sortText = TIER_STRUCTURE + rankBucket(rank) + SRC_MOD + spec.key;
+  // A key the schema says opens a block inserts the block: zero inference, the
+  // KeySpec already carries the fact.
+  if (allowSnippet && spec.values === "block") {
+    setInsert(item, `${spec.key} = {\n\t$0\n}`, `${spec.key} = {\n\t\n}`);
+  }
   return item;
+}
+
+/**
+ * Install a completion item's insert text in the form the client declared:
+ * the `${…}` snippet where snippetSupport was announced, the plain skeleton
+ * otherwise. `${` must never reach a client that did not declare snippets — it
+ * would be inserted literally.
+ */
+function setInsert(item: CompletionItem, snippet: string, plain: string): void {
+  if (snippetSupport()) {
+    item.insertText = snippet;
+    item.insertTextFormat = InsertTextFormat.Snippet;
+  } else {
+    item.insertText = plain;
+  }
 }
 
 function tokenItem(t: TokenData): CompletionItem {
@@ -358,12 +380,20 @@ export class CompletionFeature {
 
     const typedWord = WORD_AT_END.exec(linePrefix)?.[0] ?? "";
 
+    // Completing a name that already has `= …` after the cursor must not
+    // insert a second block, so templates only apply on a bare line tail.
+    const lineSuffix = document.getText({
+      start: pos,
+      end: { line: pos.line + 1, character: 0 },
+    });
+    const allowSnippet = !lineSuffix.includes("=");
+
     // Inside a list-form ref block (`on_actions = { | }`) → the target kinds.
     const listRef = this.listRefItems(result, offset, entry);
     if (listRef !== null) return finalize(listRef, typedWord, limit);
 
     // Structure keys of the current block (§B2), ranked above everything else.
-    const structureItems = entry?.kind ? this.structureItems(result, offset, entry.kind) : [];
+    const structureItems = entry?.kind ? this.structureItems(result, offset, entry.kind, allowSnippet) : [];
 
     let { context } = detectContextFromParse(result, offset);
     // A script_value definition body IS a value block (its name is the only
@@ -400,14 +430,6 @@ export class CompletionFeature {
     );
     const current = inference.scopes && inference.scopes.size > 0 ? inference.scopes : null;
 
-    // Completing a name that already has `= …` after the cursor must not
-    // insert a second block, so snippets only apply on a bare line tail.
-    const lineSuffix = document.getText({
-      start: pos,
-      end: { line: pos.line + 1, character: 0 },
-    });
-    const allowSnippet = !lineSuffix.includes("=");
-
     // Filter with the client's own match predicate BEFORE ranking: with a typed
     // word most of the 10-20k base items drop here, keeping the per-keystroke
     // work (object spreads + sort) on the small matched set.
@@ -431,32 +453,40 @@ export class CompletionFeature {
         continue;
       }
       // No scope context: everything is neutral-tier, still frequency-ranked.
+      let out: CompletionItem;
       if (!current) {
-        ranked.push({ ...item, sortText: TIER_NEUTRAL + f + s + item.label });
-        continue;
-      }
-      const scopeAware = token.kind === "trigger" || token.kind === "effect";
-      const supported =
-        token.kind === "trigger" || token.kind === "effect"
-          ? this.data.scopeModel.inputScopesOf(token.kind, token.name)
-          : token.kind === "event_target"
-            ? (this.data.scopeModel.links.get(token.name)?.inputs ?? null)
-            : null;
-      if (supported === null) {
-        // A scope-agnostic trigger/effect (no declared input scopes) is valid in
-        // any scope — tier VALID so hot universals (save_scope_as, custom_tooltip,
-        // if…) aren't stranded behind scoped effects (§C2 intent). Other kinds with
-        // unknown scope (modifiers) stay neutral.
-        ranked.push({ ...item, sortText: (scopeAware ? TIER_VALID : TIER_NEUTRAL) + f + s + item.label });
-      } else if (intersects(supported, current)) {
-        ranked.push({ ...item, sortText: TIER_VALID + f + s + item.label });
+        out = { ...item, sortText: TIER_NEUTRAL + f + s + item.label };
       } else {
-        ranked.push({
-          ...item,
-          sortText: TIER_OTHER + f + s + item.label,
-          detail: `${item.detail ?? ""} — other scope`,
-        });
+        const scopeAware = token.kind === "trigger" || token.kind === "effect";
+        const supported =
+          token.kind === "trigger" || token.kind === "effect"
+            ? this.data.scopeModel.inputScopesOf(token.kind, token.name)
+            : token.kind === "event_target"
+              ? (this.data.scopeModel.links.get(token.name)?.inputs ?? null)
+              : null;
+        if (supported === null) {
+          // A scope-agnostic trigger/effect (no declared input scopes) is valid in
+          // any scope — tier VALID so hot universals (save_scope_as, custom_tooltip,
+          // if…) aren't stranded behind scoped effects (§C2 intent). Other kinds with
+          // unknown scope (modifiers) stay neutral.
+          out = { ...item, sortText: (scopeAware ? TIER_VALID : TIER_NEUTRAL) + f + s + item.label };
+        } else if (intersects(supported, current)) {
+          out = { ...item, sortText: TIER_VALID + f + s + item.label };
+        } else {
+          out = {
+            ...item,
+            sortText: TIER_OTHER + f + s + item.label,
+            detail: `${item.detail ?? ""} — other scope`,
+          };
+        }
       }
+      // An engine token whose dumped `usage:` example qualifies completes as the
+      // block that example shows (blockSnippets.ts); most tokens have none.
+      if (allowSnippet) {
+        const tmpl = blockTemplateFor(token);
+        if (tmpl) setInsert(out, tmpl.snippet, tmpl.plain);
+      }
+      ranked.push(out);
     }
     const structured =
       structureItems.length > 0
@@ -476,14 +506,13 @@ export class CompletionFeature {
     const def = this.data.index.lookup(data.n).find((d) => d.kind === data.k);
     if (!def) return;
     if (def.params && def.params.length > 0) {
-      const body = def.params.map((p, i) => `\t${p} = \${${i + 1}:${p}}`).join("\n");
-      item.insertText = `${data.n} = {\n${body}\n}`;
-      item.insertTextFormat = InsertTextFormat.Snippet;
+      const snippet = def.params.map((p, i) => `\t${p} = \${${i + 1}:${p}}`).join("\n");
+      const plain = def.params.map((p) => `\t${p} = ${p}`).join("\n");
+      setInsert(item, `${data.n} = {\n${snippet}\n}`, `${data.n} = {\n${plain}\n}`);
       item.detail = `${item.detail} · params: ${def.params.join(", ")}`;
     } else if (data.k !== "scripted_modifier") {
       // Bare scripted modifiers are referenced by name, not assigned yes/no.
-      item.insertText = `${data.n} = \${1|yes,no|}`;
-      item.insertTextFormat = InsertTextFormat.Snippet;
+      setInsert(item, `${data.n} = \${1|yes,no|}`, `${data.n} = yes`);
     }
   }
 
@@ -519,7 +548,12 @@ export class CompletionFeature {
    * F is a dense freq-rank over the block's keys: sort by KeySpec.freq desc (keys
    * without freq fall to the tail, alphabetically) and assign 0-based ranks.
    */
-  private structureItems(result: ParseResult, offset: number, kind: string): CompletionItem[] {
+  private structureItems(
+    result: ParseResult,
+    offset: number,
+    kind: string,
+    allowSnippet: boolean
+  ): CompletionItem[] {
     const ctx = structureContextAt(result, offset, kind, this.getSchema().structures);
     if (!ctx) return [];
     // Curated keys keep their deliberate list order AHEAD of harvested ones:
@@ -536,7 +570,7 @@ export class CompletionFeature {
         if (fa !== fb) return fb - fa;
         return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
       });
-    return [...curated, ...harvested].map((spec, i) => structureItem(spec, ctx.kind, i));
+    return [...curated, ...harvested].map((spec, i) => structureItem(spec, ctx.kind, i, allowSnippet));
   }
 
   /**

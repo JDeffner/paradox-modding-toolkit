@@ -316,10 +316,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const initOptions: ParadoxInitOptions = {
     storageDir,
     // This client registers every px.* command, renders the sanitized hover
-    // HTML, and runs its own tuned file watcher (pushing paradox/modFileChanged).
-    // Clients declaring less get plain markdown, WorkspaceEdits instead of
+    // HTML, navigates `file:` links in hover markdown, and runs its own tuned
+    // file watcher (pushing paradox/modFileChanged). Clients declaring less get
+    // plain markdown, plain provenance labels, WorkspaceEdits instead of
     // command actions, and a server-side watcher.
-    client: { hoverHtml: true, commands: allClientCommandIds, ownFileWatcher: true },
+    client: { hoverHtml: true, commands: allClientCommandIds, ownFileWatcher: true, fileLinks: true },
     settings: toSettings(cfg),
   };
   // Server deaths were invisible: the client restarts silently up to five

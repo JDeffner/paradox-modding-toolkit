@@ -23,11 +23,10 @@ import { guiDefSources, type GuiPaths } from "./guiNavigation";
 import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
-import { renderCard, renderHover } from "./hoverRender";
+import { fileLink, renderCard, renderHover } from "./hoverRender";
 import { assetDirContext, provideAssetDirCompletion } from "./assetPaths";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import * as path from "path";
-import { URI } from "vscode-uri";
 
 interface GuiTypeInfo {
   count: number;
@@ -318,9 +317,9 @@ export function provideGuiHover(
       const footer: string[] = [];
       if (def.file !== undefined && def.line !== undefined) {
         footer.push(
-          `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
-            .with({ fragment: String(def.line + 1) })
-            .toString()})`
+          fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
+            fragment: String(def.line + 1),
+          })
         );
       }
       cards.push(
@@ -340,9 +339,9 @@ export function provideGuiHover(
   if (!resolvedCard) {
     for (const def of data.index.lookup(word)) {
       if (def.kind !== "gui_type") continue;
-      const link = `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
-        .with({ fragment: String(def.line + 1) })
-        .toString()})`;
+      const link = fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
+        fragment: String(def.line + 1),
+      });
       cards.push(
         renderCard({
           kind: "gui_type",

@@ -13,7 +13,9 @@
 /** `--vscode-charts-*` / semantic color slot per kind family (§D2). */
 type ChartColor = "purple" | "red" | "yellow" | "green" | "orange" | "blue" | "foreground";
 
-import { hoverHtml } from "../clientMode";
+import * as path from "path";
+import { URI } from "vscode-uri";
+import { fileLinks, hoverHtml } from "../clientMode";
 
 function colorVar(c: ChartColor): string {
   return c === "foreground" ? "var(--vscode-charts-foreground)" : `var(--vscode-charts-${c})`;
@@ -88,6 +90,25 @@ export function colorSwatch(rgb: [number, number, number]): string {
   if (!hoverHtml()) return "■";
   const to255 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
   return `<span style="color:rgb(${to255(rgb[0])}, ${to255(rgb[1])}, ${to255(rgb[2])});">■</span>`;
+}
+
+/**
+ * The single chokepoint for every `file:` link ANY hover card emits — script
+ * cards, gui template/type cards, `[ ... ]` datafunction examples, `#format`
+ * sources, texture previews. Plain text when no absolute path is available
+ * (fail-soft, e.g. synthetic defs) OR when the client did not declare
+ * `fileLinks`: `plain` (the label by default), minus a link its hover renderer
+ * would not navigate. `fragment` is the 1-based line the link jumps to.
+ */
+export function fileLink(
+  file: string,
+  label: string,
+  opts: { fragment?: string; plain?: string } = {}
+): string {
+  const plain = opts.plain ?? label;
+  if (!fileLinks() || !file || !path.isAbsolute(file)) return plain;
+  const uri = opts.fragment === undefined ? URI.file(file) : URI.file(file).with({ fragment: opts.fragment });
+  return `[${label}](${uri.toString()})`;
 }
 
 // ---------------------------------------------------------------------------
