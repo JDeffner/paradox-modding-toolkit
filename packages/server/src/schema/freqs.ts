@@ -44,26 +44,32 @@ export function emptyFreqData(): FreqData {
 }
 
 /**
+ * Validate a parsed freqs.json into `FreqData`. Fail-soft: anything unexpected
+ * (null, wrong shape, missing tables) degrades to empty tables so completion
+ * still works. Shared with the browser build, which supplies the parsed JSON
+ * directly because it has no filesystem to read it from.
+ */
+export function coerceFreqs(parsed: unknown): FreqData {
+  const out = emptyFreqData();
+  if (!parsed || typeof parsed !== "object") return out;
+  const p = parsed as Partial<FreqData>;
+  if (!p.contexts || !p.tokens) return out;
+  for (const c of FREQ_CONTEXTS) {
+    const table = (p.contexts as Record<string, unknown>)[c];
+    if (table && typeof table === "object") out.contexts[c] = table as Record<string, number>;
+  }
+  if (typeof p.tokens === "object") out.tokens = p.tokens;
+  if (p.meta) out.meta = p.meta;
+  return out;
+}
+
+/**
  * Load the bundled freqs.json from `dir`. Fail-soft: any error (missing file,
  * bad JSON, wrong shape) returns empty tables so completion still works.
  */
 export function loadFreqs(dir: string): FreqData {
   try {
-    const raw = fs.readFileSync(path.join(dir, "freqs.json"), "utf8");
-    const parsed = JSON.parse(raw) as Partial<FreqData>;
-    if (!parsed || typeof parsed !== "object" || !parsed.contexts || !parsed.tokens) {
-      return emptyFreqData();
-    }
-    const out = emptyFreqData();
-    for (const c of FREQ_CONTEXTS) {
-      const table = (parsed.contexts as Record<string, unknown>)[c];
-      if (table && typeof table === "object") {
-        out.contexts[c] = table as Record<string, number>;
-      }
-    }
-    if (parsed.tokens && typeof parsed.tokens === "object") out.tokens = parsed.tokens;
-    if (parsed.meta) out.meta = parsed.meta;
-    return out;
+    return coerceFreqs(JSON.parse(fs.readFileSync(path.join(dir, "freqs.json"), "utf8")));
   } catch {
     return emptyFreqData();
   }

@@ -247,6 +247,31 @@ The dashes are deliberate, not stubs: the server declares the capability
 globally (LSP has no per-language-id capability negotiation) and returns an
 empty result for the language ids where the feature has no meaning.
 
+## In a browser
+
+`@px-lsp/server/browser` is a second entry point: the same parser, schema and
+token tables as a plain library, for hosts that cannot spawn a process at all.
+
+```ts
+import { createBrowserLanguageService } from "@px-lsp/server/browser";
+
+const service = createBrowserLanguageService({
+  tokens: await (await fetch("/px/tokens.json")).json(),
+});
+const doc = service.openDocument("events/tutorial.txt", text);
+doc.diagnostics();
+doc.completions(offset);
+```
+
+The token tables ship as prebaked JSON under
+`@px-lsp/server/browser-data/<gameId>/`, split so a page can answer completions
+and diagnostics from 225 KB brotli and fetch the hover prose later.
+
+It has one file: the one you opened. There is no workspace index, so
+references to definitions in other files do not resolve and the
+unknown-reference diagnostics are omitted rather than guessed. The service
+reports this on `capabilities`. `docs/EMBEDDING.md` has the full contract.
+
 ## Per-game support
 
 | | CK3 | Victoria 3 | EU5 |
