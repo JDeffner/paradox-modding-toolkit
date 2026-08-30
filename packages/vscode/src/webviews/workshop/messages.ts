@@ -88,7 +88,13 @@ export type HostToApp =
       error: string | null;
     }
   | { type: "uploadState"; busy: boolean; message?: string }
-  | { type: "toast"; message: string; variant?: "default" | "destructive" };
+  | {
+      type: "toast";
+      message: string;
+      variant?: "default" | "destructive";
+      /** Stay until dismissed (real failures the user must be able to re-read). */
+      sticky?: boolean;
+    };
 
 export type AppToHost =
   | { type: "ready" }

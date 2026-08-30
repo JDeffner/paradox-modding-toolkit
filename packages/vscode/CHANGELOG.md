@@ -41,6 +41,15 @@
   button re-inserts the resolved entry, and the git-subject suggestion stays
   as the fallback.
 
+- **Upload failures can actually be read.** Error toasts in the Workshop
+  panel now stay until clicked away, a failed upload also raises a
+  persistent VS Code notification and lands in the output channel, and
+  Steam's bare error phrases carry advice ("limit exceeded" now says the
+  description is over Steam's 8000-character cap; "access denied" points at
+  the logged-in account not owning the item, and so on). An oversized
+  preview image is announced when the upload keeps the current one, instead
+  of being dropped in silence.
+
 - **The changenote box explains itself.** A source dropdown under it shows
   where the text came from - "From changelog: 1.2.md", "From last git
   commit", or "Manual" once you type - and switches between them; the

@@ -458,10 +458,12 @@ export class WorkshopPanel {
         message: `Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`,
       });
     } catch (e) {
+      this.options.log(`workshop: pulling the listing failed: ${e instanceof Error ? e.message : String(e)}`);
       this.post({
         type: "toast",
         message: `Pulling the listing failed - ${friendlyError(e, meta)}`,
         variant: "destructive",
+        sticky: true,
       });
     } finally {
       this.post({ type: "uploadState", busy: false });
@@ -487,6 +489,7 @@ export class WorkshopPanel {
       if (done.action !== "query") throw new Error("unexpected bridge reply");
       this.post({ type: "live", item: done.item, translations: done.translations, error: null });
     } catch (e) {
+      log(`workshop: live query failed: ${e instanceof Error ? e.message : String(e)}`);
       this.post({ type: "live", item: null, translations: {}, error: friendlyError(e, meta) });
     }
   }
@@ -522,10 +525,12 @@ export class WorkshopPanel {
       this.options.log(`workshop: linked ${root} to existing item ${picked.itemId}`);
       await this.postInfo();
     } catch (e) {
+      this.options.log(`workshop: listing own items failed: ${e instanceof Error ? e.message : String(e)}`);
       this.post({
         type: "toast",
         message: `Listing your Workshop items failed - ${friendlyError(e, meta)}`,
         variant: "destructive",
+        sticky: true,
       });
     }
   }
@@ -580,7 +585,17 @@ export class WorkshopPanel {
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;
-          if (preview && fs.statSync(preview).size < PREVIEW_MAX_BYTES) main.previewPath = preview;
+          if (preview && fs.statSync(preview).size < PREVIEW_MAX_BYTES) {
+            main.previewPath = preview;
+          } else if (preview) {
+            log(`workshop: preview ${preview} is >= 1 MB, upload keeps the current image`);
+            this.post({
+              type: "toast",
+              message:
+                "The preview image is 1 MB or larger; Steam rejects it, so this upload keeps " +
+                "the item's current preview.",
+            });
+          }
         }
         if (message.content) {
           this.post({ type: "uploadState", busy: true, message: "preparing files…" });
@@ -628,11 +643,12 @@ export class WorkshopPanel {
       this.post({ type: "toast", message: "Upload done." });
       await this.postInfo();
     } catch (e) {
-      this.post({
-        type: "toast",
-        message: `Workshop upload failed - ${friendlyError(e, meta)}`,
-        variant: "destructive",
-      });
+      // A failed upload must be re-readable: sticky in the panel, persistent
+      // as a VS Code notification, and on record in the output channel.
+      const friendly = `Workshop upload failed - ${friendlyError(e, meta)}`;
+      log(`workshop: upload of ${root} failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.post({ type: "toast", message: friendly, variant: "destructive", sticky: true });
+      void vscode.window.showErrorMessage(`Paradox Modding Toolkit: ${friendly}`);
     } finally {
       fs.rmSync(staging, { recursive: true, force: true });
       this.uploading = false;

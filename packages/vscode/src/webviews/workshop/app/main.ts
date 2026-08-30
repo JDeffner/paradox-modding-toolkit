@@ -607,7 +607,7 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
       $("liveState").textContent = m.message ?? (busy ? "uploading…" : "");
       return;
     case "toast":
-      toast(m.message, m.variant);
+      toast(m.message, m.variant, m.sticky ? 0 : undefined);
       return;
   }
 });
