@@ -10,6 +10,10 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ### Added
 
+- `upsertDescriptorBlock` in `descriptorMod`: replace or append a top-level
+  `key={...}` block (tags editing in the Workshop panel), preserving the
+  file's EOL style and everything around the block.
+
 - `workshopMeta.ts`: reader/writer for the mod's local Workshop record
   (`<configDir>/workshop.json`: published id, description, per-language
   translations; merge-preserving round trips), plus the Steam API language

@@ -363,6 +363,30 @@ export function upsertDescriptorValue(text: string, key: string, value: string):
   return `${text}${sep}${key}="${value}"${eol}`;
 }
 
+/**
+ * `text` with the top-level `key={...}` block replaced by one holding exactly
+ * `values` (quoted, tab-indented, the file's EOL), or appended when absent.
+ * Descriptor blocks are flat, so the block ends at the first `}`-only line.
+ */
+export function upsertDescriptorBlock(text: string, key: string, values: string[]): string {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const q = (v: string) => `"${v.replace(/"/g, "'")}"`;
+  const block = [`${key}={`, ...values.map((v) => `\t${q(v)}`), `}`].join(eol);
+  const lines = text.split(/\r?\n/);
+  const open = lines.findIndex((l) => new RegExp(`^\\s*${key}\\s*=\\s*\\{`).test(l));
+  if (open >= 0) {
+    let close = open;
+    // A one-line block (`tags={ "x" }`) closes on its own line.
+    if (!/\}\s*(#.*)?$/.test(lines[open])) {
+      while (close < lines.length - 1 && !/^\s*\}\s*(#.*)?$/.test(lines[close])) close++;
+    }
+    lines.splice(open, close - open + 1, block);
+    return lines.join(eol);
+  }
+  const sep = text === "" || text.endsWith("\n") ? "" : eol;
+  return `${text}${sep}${block}${eol}`;
+}
+
 /** "1.19.0.6" -> "1.19.*" (the wildcard form that survives hotfixes). */
 export function wildcardVersion(raw: string): string | null {
   const m = /^(\d+)\.(\d+)/.exec(raw.trim());

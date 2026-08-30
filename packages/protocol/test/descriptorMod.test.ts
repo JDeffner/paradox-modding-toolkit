@@ -5,6 +5,7 @@ import {
   parseDescriptor,
   readDescriptorBlock,
   scaffoldDescriptor,
+  upsertDescriptorBlock,
   upsertDescriptorValue,
   validateDescriptor,
   wildcardVersion,
@@ -163,5 +164,30 @@ describe("upsertDescriptorValue", () => {
   it("does not touch block-valued keys of the same name", () => {
     const out = upsertDescriptorValue('tags={\n\t"Gameplay"\n}\n', "tags", "zzz");
     expect(out).toBe('tags={\n\t"Gameplay"\n}\ntags="zzz"\n');
+  });
+});
+
+describe("upsertDescriptorBlock", () => {
+  it("replaces an existing multi-line block in place", () => {
+    const out = upsertDescriptorBlock(GOOD_DESCRIPTOR, "tags", ["Fixes", "Gameplay"]);
+    expect(out).toContain('tags={\n\t"Fixes"\n\t"Gameplay"\n}\n');
+    expect(out).not.toContain("Total Conversion");
+    // Everything around the block survives.
+    expect(out).toContain('replace_path="history/characters"');
+    expect(out.startsWith('version="0.4.38"')).toBe(true);
+  });
+
+  it("appends the block when the key is absent", () => {
+    const out = upsertDescriptorBlock('name="X"\n', "tags", ["Gameplay"]);
+    expect(out).toBe('name="X"\ntags={\n\t"Gameplay"\n}\n');
+  });
+
+  it("replaces a one-line block and keeps CRLF endings", () => {
+    const out = upsertDescriptorBlock('tags={ "A" }\r\nname="X"\r\n', "tags", ["B"]);
+    expect(out).toBe('tags={\r\n\t"B"\r\n}\r\nname="X"\r\n');
+  });
+
+  it("writes an empty block for no tags", () => {
+    expect(upsertDescriptorBlock("", "tags", [])).toBe("tags={\n}\n");
   });
 });
