@@ -200,6 +200,9 @@
       }
     ],
     "configurationDefaults": {
+      "[bbcode]": {
+        "editor.wordBasedSuggestions": "off"
+      },
       "[paradox]": {
         "editor.wordBasedSuggestions": "off"
       },
@@ -468,6 +471,12 @@
         "category": "Paradox",
         "title": "Join the Discord",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "px.openBBCodePreview",
+        "category": "Paradox",
+        "title": "Open BBCode Preview",
+        "icon": "$(open-preview)"
       },
       {
         "command": "px.customizeSidebar",
@@ -996,6 +1005,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode"
+        },
+        {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
         }
@@ -1052,6 +1065,11 @@
         }
       ],
       "editor/title": [
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode",
+          "group": "navigation"
+        },
         {
           "command": "px.showGuiTree",
           "when": "resourceExtname == .gui && px.isCk3Workspace",

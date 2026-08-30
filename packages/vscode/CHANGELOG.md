@@ -41,6 +41,23 @@
   button re-inserts the resolved entry, and the git-subject suggestion stays
   as the fallback.
 
+- **Panel polish from the first field round**: the download button's tooltip
+  wraps instead of spanning the screen; "Mod version" and "Game version" say
+  what they are, the game version sits flush right, and lowering either one
+  asks first (a downgrade is usually a typo). Tags are added from the
+  launcher's tag list (custom stays possible); a subtle mark on the thumbnail
+  states the recommended format (square, 512x512+, under 1 MB); translations
+  start collapsed. The Files row grew a settings shortcut to
+  `px.workshop.dir` / `px.workshop.changelog`, the description and every
+  translation have an "open file" button (plus a Reload that re-reads the
+  local files), and editing item fields no longer re-queries Steam - one
+  query per mod, plus the refresh button.
+
+- **`.bbcode` editing got real**: tag completion with snippets (`[`, and
+  closers after `[/`), word-suggestion noise off, and **Open BBCode
+  Preview** - a live side-by-side rendering of the file, exactly like the
+  markdown preview, sharing the Workshop panel's renderer.
+
 - **Uploading confirms first.** The Upload button opens a dialog that
   re-offers the three parts (mod files, details, translations) - so dropping
   the mod files while keeping a description fix is one uncheck away - shows

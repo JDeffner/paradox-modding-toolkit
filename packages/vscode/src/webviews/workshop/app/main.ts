@@ -6,7 +6,7 @@
  * folder exists); nothing reaches Steam until Upload confirms. Built from the
  * shared px-ui classes; talks to the host only through messages.ts.
  */
-import type { ItemDetails, WorkshopVisibility } from "../../../steam/jobs";
+import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
 import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
@@ -43,6 +43,10 @@ let pickedVisibility: WorkshopVisibility | null = null;
 let draftDescription = "";
 let draftTranslations: Record<string, TranslationDraft> = {};
 const collapsed = new Set<string>();
+/** The mod the current drafts belong to, and its languages already seen
+ * (languages arriving from disk start collapsed; UI-added ones stay open). */
+let lastInfoActive: string | null = null;
+const knownLangs = new Set<string>();
 /** Edit vs preview, for the description and per translation language. */
 let descMode: "edit" | "preview" = "edit";
 const langMode = new Map<string, "edit" | "preview">();
@@ -213,7 +217,7 @@ function renderTags(current: string[]): void {
   addBtn.dataset.size = "sm";
   addBtn.append(iconEl("plus"), document.createTextNode(" tag"));
   addBtn.setAttribute("data-tip", "Add a Workshop tag (writes the descriptor)");
-  addBtn.addEventListener("click", () => {
+  const customInput = (): void => {
     const input = document.createElement("input");
     input.className = "px-input";
     input.dataset.size = "sm";
@@ -231,6 +235,29 @@ function renderTags(current: string[]): void {
       else if (e.key === "Escape") renderTags(current);
     });
     input.addEventListener("blur", commit);
+  };
+  addBtn.addEventListener("click", () => {
+    const known = (info?.knownTags ?? []).filter((t) => !current.includes(t));
+    if (!known.length) {
+      customInput();
+      return;
+    }
+    const CUSTOM = "\u0000custom";
+    menu(
+      addBtn,
+      [
+        ...known.map<MenuItem>((t) => ({ value: t, label: t })),
+        { value: CUSTOM, label: "Custom tag…", hint: "type your own" },
+      ],
+      {
+        search: true,
+        width: 220,
+        onPick: (v) => {
+          if (v === CUSTOM) customInput();
+          else send({ type: "setTags", tags: [...current, v] });
+        },
+      }
+    );
   });
   add.append(addBtn);
   box.append(add);
@@ -264,7 +291,18 @@ function renderFilesRow(): void {
     hint.setAttribute("data-tip", info.workshopDir);
   }
   badge.setAttribute("data-tip-wrap", "");
-  box.append(badge, hint);
+  const gear = document.createElement("button");
+  gear.className = "px-btn";
+  gear.dataset.variant = "ghost";
+  gear.dataset.size = "icon-xs";
+  gear.setAttribute(
+    "data-tip",
+    "Open the settings behind this: px.workshop.dir (where the listing files live, relative to the mod) and px.workshop.changelog (where changenotes come from)."
+  );
+  gear.setAttribute("data-tip-wrap", "");
+  gear.append(iconEl("settings"));
+  gear.addEventListener("click", () => send({ type: "openWorkshopSettings" }));
+  box.append(badge, hint, gear);
 }
 
 function renderStats(): void {
@@ -299,7 +337,12 @@ function renderStats(): void {
 
 function renderDescriptionHints(): void {
   $<HTMLButtonElement>("pullDesc").disabled = !live;
+  renderDescFileButtons();
   renderDescMode();
+}
+
+function renderDescFileButtons(): void {
+  $("openDescFile").style.display = info?.filesPresent ? "" : "none";
 }
 
 function renderDescMode(): void {
@@ -341,11 +384,24 @@ function translationRow(lang: string): HTMLElement {
     });
     seg.append(b);
   }
+  let open: HTMLButtonElement | null = null;
+  if (info?.filesPresent) {
+    open = document.createElement("button");
+    open.className = "px-btn";
+    open.dataset.variant = "ghost";
+    open.dataset.size = "icon-xs";
+    open.setAttribute("data-tip", `Open ${lang}/description.bbcode in the editor`);
+    open.append(iconEl("pencil"));
+    open.addEventListener("click", (e) => {
+      e.stopPropagation();
+      send({ type: "openListingFile", lang });
+    });
+  }
   const remove = document.createElement("button");
   remove.className = "px-btn";
   remove.dataset.variant = "ghost";
   remove.dataset.size = "icon-xs";
-  remove.setAttribute("data-tip", "Remove this language (its drafts are deleted from workshop.json)");
+  remove.setAttribute("data-tip", "Remove this language (its local draft files are deleted)");
   remove.append(iconEl("trash"));
   remove.addEventListener(
     "click",
@@ -369,7 +425,7 @@ function translationRow(lang: string): HTMLElement {
         renderPublish();
       })()
   );
-  head.append(caret, name, state, seg, remove);
+  head.append(caret, name, state, seg, ...(open ? [open] : []), remove);
   head.addEventListener("click", () => {
     if (collapsed.has(lang)) collapsed.delete(lang);
     else collapsed.add(lang);
@@ -479,18 +535,39 @@ function renderPublish(): void {
 // ---------------------------------------------------------------------------
 
 function applyInfo(next: WorkshopModInfo | null): void {
+  const switched = active !== lastInfoActive;
+  lastInfoActive = active;
   info = next;
-  live = null;
-  liveTranslations = {};
-  liveError = null;
-  pickedVisibility = null;
-  draftDescription = next?.description ?? "";
-  draftTranslations = structuredClone(next?.translations ?? {});
-  $<HTMLTextAreaElement>("desc").value = draftDescription;
-  $<HTMLTextAreaElement>("note").value = next?.changelogNote?.text ?? next?.changeNoteSuggestion ?? "";
+  if (switched) {
+    live = null;
+    liveTranslations = {};
+    liveError = null;
+    pickedVisibility = null;
+    collapsed.clear();
+    knownLangs.clear();
+    langMode.clear();
+  }
+  // A pending autosave means the disk is behind the editor: keep the drafts.
+  const pendingEdits = !switched && saveTimer !== undefined;
+  if (!pendingEdits) {
+    draftDescription = next?.description ?? "";
+    draftTranslations = structuredClone(next?.translations ?? {});
+    $<HTMLTextAreaElement>("desc").value = draftDescription;
+  }
+  for (const lang of Object.keys(draftTranslations)) {
+    if (!knownLangs.has(lang)) {
+      knownLangs.add(lang);
+      collapsed.add(lang);
+    }
+  }
+  if (switched) {
+    $<HTMLTextAreaElement>("note").value = next?.changelogNote?.text ?? next?.changeNoteSuggestion ?? "";
+  }
   renderNoteSource();
   renderAll();
-  if (next?.publishedId) {
+  // One Steam query per mod (plus the manual refresh button) - metadata
+  // edits and draft saves must not spam Steam with re-queries.
+  if (next?.publishedId && !live && !fetching) {
     fetching = true;
     renderToolbar();
     send({ type: "refresh", languages: languagesOfInterest() });
@@ -619,6 +696,7 @@ $("addLang").addEventListener("click", () => {
     search: true,
     onPick: (api) => {
       if (!draftTranslations[api]) draftTranslations[api] = {};
+      knownLangs.add(api);
       collapsed.delete(api);
       queueSave();
       renderTranslations();
@@ -828,22 +906,50 @@ const commitField = (id: string, field: "title" | "version" | "supportedVersion"
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
   });
-  input.addEventListener("change", () => {
-    const current =
-      field === "title" ? info?.name : field === "version" ? info?.version : info?.supportedVersion;
-    const v = input.value.trim();
-    if (v === "" || v === (current ?? "")) {
-      input.value = current ?? "";
-      return;
-    }
-    send({ type: "setField", field, value: v });
-  });
+  input.addEventListener(
+    "change",
+    () =>
+      void (async () => {
+        const current =
+          field === "title" ? info?.name : field === "version" ? info?.version : info?.supportedVersion;
+        const v = input.value.trim();
+        if (v === "" || v === (current ?? "")) {
+          input.value = current ?? "";
+          return;
+        }
+        // Going backwards is almost always a typo - say so before writing.
+        if (field !== "title" && current && !versionAtLeast(v, current)) {
+          const go = await confirmDialog({
+            title: field === "version" ? "Lower the mod version?" : "Lower the game version?",
+            description:
+              `"${v}" is lower than the current "${current}". ` +
+              (field === "version"
+                ? "Subscribers never see a downgrade as an update, and the changelog lookup follows this value."
+                : "The launcher will flag the mod as out of date for players on newer game versions."),
+            confirmLabel: "Set anyway",
+            destructive: true,
+          });
+          if (!go) {
+            input.value = current;
+            return;
+          }
+        }
+        send({ type: "setField", field, value: v });
+      })()
+  );
 };
 commitField("title", "title");
 commitField("version", "version");
 commitField("supported", "supportedVersion");
 
 $("changePreview").addEventListener("click", () => send({ type: "pickPreview" }));
+$("openDescFile").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
+$("reloadLocal").addEventListener("click", () => {
+  // Drop the pending autosave so the reload cannot be overwritten mid-flight.
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  send({ type: "reload" });
+});
 $("previewEmpty").style.cursor = "pointer";
 $("previewEmpty").setAttribute("data-tip", "Pick an image to use as the Workshop preview");
 $("previewEmpty").addEventListener("click", () => send({ type: "pickPreview" }));

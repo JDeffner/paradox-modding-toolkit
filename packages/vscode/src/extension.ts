@@ -62,6 +62,7 @@ import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
+import { registerBBCodeSupport } from "./bbcodeSupport";
 import { WorkshopPanel } from "./webviews/workshop/panel";
 import * as fs from "fs";
 import {
@@ -949,6 +950,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Steam Workshop publishing (px.publishToWorkshop / px.openWorkshopPage).
   registerWorkshop(context, { cfg: () => cfg, focusRoot: () => views.focusRoot(), log });
+  registerBBCodeSupport(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.openWorkshopManager", () => {

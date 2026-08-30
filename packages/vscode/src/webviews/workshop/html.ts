@@ -4,6 +4,7 @@
  * fields, the translation rows and the statistics at runtime.
  */
 import uiCss from "../shared/ui.css";
+import { BBPREV_CSS } from "./bbcodeCss";
 import { icon } from "../shared/icons";
 
 export interface WorkshopHtmlOptions {
@@ -59,6 +60,13 @@ ${uiCss}
     color: var(--px-muted-fg); font-size: var(--px-text-xs);
   }
   #previewName { max-width: 168px; }
+  #previewInfo {
+    position: absolute; top: 4px; left: 4px; z-index: 1; display: flex;
+    padding: 2px; border-radius: var(--px-radius-md); color: var(--px-muted-fg);
+    opacity: 0.55; transition: opacity var(--px-ease); cursor: help;
+  }
+  #previewInfo:hover, #previewInfo:focus-visible { opacity: 1; background: var(--px-muted); }
+  #previewInfo .px-icon { width: 13px; height: 13px; }
   #fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .field-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: center; }
   .field-row > .px-label { text-align: right; }
@@ -113,33 +121,7 @@ ${uiCss}
   .tag-chip button:hover { opacity: 1; }
   .tag-chip button .px-icon { width: 11px; height: 11px; }
   #tagAdd input { width: 130px; }
-  /* Rendered BBCode, styled after the Workshop page. */
-  .bbprev {
-    border: 1px solid var(--px-border); border-radius: var(--px-radius-md); padding: 12px 14px;
-    min-height: 170px; overflow-wrap: anywhere; background: var(--px-muted);
-    font-size: var(--px-text-sm); line-height: 1.55;
-  }
-  .bbprev .bb-h1 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
-  .bbprev .bb-h2 { font-size: 15px; font-weight: 600; margin: 8px 0 4px; }
-  .bbprev .bb-h3 { font-size: 13px; font-weight: 600; margin: 6px 0 2px; }
-  .bbprev .bb-h1:first-child, .bbprev .bb-h2:first-child, .bbprev .bb-h3:first-child { margin-top: 0; }
-  .bbprev .bb-u { text-decoration: underline; }
-  .bbprev a.bb-url { color: var(--vscode-textLink-foreground, #4daafc); text-decoration: none; }
-  .bbprev a.bb-url:hover { text-decoration: underline; }
-  .bbprev .bb-hr { border: none; border-top: 1px solid var(--px-border); margin: 8px 0; }
-  .bbprev .bb-list { margin: 4px 0; padding-left: 22px; }
-  .bbprev .bb-quote { border-left: 3px solid var(--px-border); margin: 6px 0; padding: 4px 10px; color: var(--px-muted-fg); }
-  .bbprev .bb-quote-author { font-size: var(--px-text-xs); font-weight: 600; margin-bottom: 2px; }
-  .bbprev .bb-code {
-    background: var(--px-bg); border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
-    padding: 8px 10px; margin: 6px 0; font-family: var(--px-font-mono); font-size: var(--px-text-xs);
-    overflow-x: auto; white-space: pre;
-  }
-  .bbprev .bb-img { max-width: 100%; border-radius: var(--px-radius-md); }
-  .bbprev .bb-spoiler { background: var(--px-fg); color: var(--px-fg); border-radius: 2px; }
-  .bbprev .bb-spoiler:hover { background: transparent; color: inherit; }
-  .bbprev .bb-table { border-collapse: collapse; margin: 6px 0; }
-  .bbprev .bb-table th, .bbprev .bb-table td { border: 1px solid var(--px-border); padding: 3px 8px; text-align: left; }
+${BBPREV_CSS}
   .lang .bbprev { min-height: 90px; }
   /* Upload confirmation modal rows. */
   .modal-rows { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; text-align: left; }
@@ -156,7 +138,7 @@ ${uiCss}
   <div id="toolbar">
     <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:420px;min-width:220px" data-tip="Mod this panel manages">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Fetch the item's live state from Steam">${icon("rotate")}</button>
-    <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder, as files: description.bbcode, a folder with title.txt + description.bbcode per translated language, and item.json. OVERWRITES those files and replaces the local drafts - local text that never went to Steam is lost. A confirmation spells out the exact folder first.">${icon("download")}</button>
+    <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder as files (description, translations, item.json). Overwrites those files and the local drafts - a confirmation lists the details first." data-tip-wrap>${icon("download")}</button>
     <span id="liveState" class="px-muted px-xs"></span>
     <span class="px-grow"></span>
     <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
@@ -174,7 +156,8 @@ ${uiCss}
     <div class="section" id="itemSection">
       <div class="px-panel-title">Item</div>
       <div id="itemGrid">
-        <div id="previewBox">
+        <div id="previewBox" style="position:relative">
+          <span id="previewInfo" tabindex="0" data-tip="Recommended: a square image (the Workshop shows it 1:1), 512x512 or larger, PNG or JPG. Steam rejects files of 1 MB or more." data-tip-wrap>${icon("alert")}</span>
           <img id="preview" alt="Preview image" hidden />
           <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
           <span id="previewName" class="px-muted px-xs px-truncate"></span>
@@ -186,11 +169,12 @@ ${uiCss}
             <input id="title" class="px-input" spellcheck="false" data-tip="The item's title = the descriptor's name. Editing here writes the descriptor; translated titles live below." />
           </div>
           <div class="field-row">
-            <span class="px-label">Version</span>
-            <div class="px-row" style="gap:8px;align-items:center;flex-wrap:wrap">
-              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version (the next update's), from the descriptor. The changelog lookup uses it to find the matching changenote." />
-              <span class="px-label">Supported game</span>
-              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with (supported_version). A wildcard like 1.16.* survives hotfixes." />
+            <span class="px-label">Mod version</span>
+            <div class="px-row" style="gap:8px;align-items:center">
+              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version (the next update's), from the descriptor. The changelog lookup uses it to find the matching changenote." data-tip-wrap />
+              <span class="px-grow"></span>
+              <span class="px-label">Game version</span>
+              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with (supported_version). A wildcard like 1.16.* survives hotfixes." data-tip-wrap />
             </div>
           </div>
           <div class="field-row">
@@ -235,6 +219,8 @@ ${uiCss}
       <div class="hintline">
         <span>Saved locally to the mod's workshop.json as you type; goes to Steam on Upload.</span>
         <span class="px-grow"></span>
+        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor (syntax highlighting and its own preview included)">${icon("pencil")} Open file</button>
+        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Discard the panel's unsaved edits and re-read the description and every translation from the local files (workshop folder, else workshop.json)" data-tip-wrap>${icon("rotate")} Reload</button>
         <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
       </div>
     </div>

@@ -19,7 +19,7 @@ import {
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
-import { upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
+import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { LANGUAGE_UPDATE_MIN_VERSION, type SubmitSpec } from "../../steam/jobs";
 import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
@@ -162,6 +162,7 @@ export class WorkshopPanel {
       descriptorMissing: info === null,
       name: info?.name ?? null,
       tags: info?.tags ?? [],
+      knownTags: meta.descriptor === "mod" ? [...LAUNCHER_TAGS] : [],
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
@@ -258,7 +259,41 @@ export class WorkshopPanel {
       case "pullListing":
         await this.pullListing();
         return;
+      case "openListingFile":
+        await this.openListingFile(message.lang);
+        return;
+      case "reload":
+        await this.postInfo();
+        return;
+      case "openWorkshopSettings":
+        await vscode.commands.executeCommand("workbench.action.openSettings", "px.workshop");
+        return;
     }
+  }
+
+  /** Open (creating if needed) a listing file of the workshop folder. */
+  private async openListingFile(lang: string | null): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const dir = workshopDirFor(root);
+    if (!hasListingFiles(dir)) {
+      this.post({
+        type: "toast",
+        message: `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const file = lang ? path.join(dir, lang, "description.bbcode") : path.join(dir, "description.bbcode");
+    if (!fs.existsSync(file)) {
+      // Seed a missing file with the draft the store holds, so nothing is lost.
+      const info = readPublishInfo(root, meta, dir);
+      const seed = (lang ? info?.translations[lang]?.description : info?.description) ?? "";
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, seed, "utf8");
+    }
+    await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
   }
 
   /** Write one descriptor/metadata scalar; empty input leaves the file alone. */

@@ -36,6 +36,8 @@ export interface WorkshopModInfo {
   /** The descriptor's name - the item's default-language title. */
   name: string | null;
   tags: string[];
+  /** The launcher's tag vocabulary, for the add-tag dropdown (may be empty). */
+  knownTags: string[];
   publishedId: string | null;
   /** Local copy of the default-language description (workshop.json). */
   description: string;
@@ -111,5 +113,11 @@ export type AppToHost =
   | { type: "setTags"; tags: string[] }
   /** Pick a new preview image (host opens the file dialog). */
   | { type: "pickPreview" }
+  /** Open a listing file in the editor (null = the default description). */
+  | { type: "openListingFile"; lang: string | null }
+  /** Re-read everything from disk (the app already dropped its pending save). */
+  | { type: "reload" }
+  /** Open the settings UI filtered to px.workshop. */
+  | { type: "openWorkshopSettings" }
   /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
   | { type: "pullListing" };
