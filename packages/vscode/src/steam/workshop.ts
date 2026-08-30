@@ -7,11 +7,16 @@
  * the upload - and a native failure cannot crash the extension host.
  *
  * New items are created PRIVATE (Steam's default): nothing goes public until
- * the user flips visibility on the Workshop page, which is also where the
- * description is written. The published id is persisted where each game's
- * tooling expects it: `remote_file_id` in descriptor.mod for launcher-`.mod`
- * games, `<configDir>/workshop.json` for `.metadata` games (their metadata.json
- * has no field for it).
+ * the user flips visibility, on the Workshop page or in the Workshop panel.
+ * The published id is persisted where each game's tooling expects it:
+ * `remote_file_id` in descriptor.mod for launcher-`.mod` games,
+ * `<configDir>/workshop.json` for `.metadata` games (their metadata.json has
+ * no field for it). Description and per-language translations live in
+ * `<configDir>/workshop.json` for every game (steam/workshopStore docs:
+ * @px-lsp/protocol/workshopMeta) and ride along on every upload.
+ *
+ * This module is the quick path (px.publishToWorkshop); the Workshop panel
+ * (webviews/workshop/) is the full editor and reuses everything exported here.
  */
 import * as vscode from "vscode";
 import * as cp from "child_process";
@@ -23,29 +28,39 @@ import { metaFor } from "../meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseDescriptor, readDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { readMetadata } from "@px-lsp/protocol/descriptorMetadata";
+import {
+  readWorkshopMeta,
+  upsertWorkshopMeta,
+  type WorkshopTranslation,
+} from "@px-lsp/protocol/workshopMeta";
+import {
+  LANGUAGE_UPDATE_MIN_VERSION,
+  versionAtLeast,
+  type BridgeDone,
+  type BridgeEvent,
+  type BridgeJob,
+  type SubmitSpec,
+} from "./jobs";
 
-const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
+export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
 /** Steam rejects preview images of 1 MB or more (k_cchFilenameMax aside). */
-const PREVIEW_MAX_BYTES = 1024 * 1024;
+export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
-interface PublishInfo {
+export interface PublishInfo {
   name: string | null;
   tags: string[];
   /** Workshop item id (decimal string), or null when never published. */
   publishedId: string | null;
-  /** First-publish description; later edits happen on the Workshop page. */
+  /** The local copy of the item's description (workshop.json, else the metadata short_description). */
   description: string | null;
+  /** The local per-language translations (workshop.json), keyed by Steam API language code. */
+  translations: Record<string, WorkshopTranslation>;
   previewPath: string | null;
-}
-
-interface BridgeResult {
-  itemId: string;
-  needsToAcceptAgreement: boolean;
 }
 
 const unquote = (v: string): string => v.replace(/^"([^]*)"$/, "$1").trim();
 
-function findPreview(root: string, preferred: string | null): string | null {
+export function findPreview(root: string, preferred: string | null): string | null {
   const candidates = [preferred, "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg"].filter(
     (f): f is string => !!f
   );
@@ -56,12 +71,10 @@ function findPreview(root: string, preferred: string | null): string | null {
   return null;
 }
 
-function workshopStateFile(root: string, meta: GameMeta): string {
-  return path.join(root, meta.configDirName, "workshop.json");
-}
-
-/** What the mod's descriptor tells us about publishing it. Null = no descriptor. */
-function readPublishInfo(root: string, meta: GameMeta): PublishInfo | null {
+/** What the mod's descriptor and workshop.json tell us about publishing it. Null = no descriptor. */
+export function readPublishInfo(root: string, meta: GameMeta): PublishInfo | null {
+  const store = readWorkshopMeta(root, meta.configDirName);
+  const translations = store?.translations ?? {};
   if (meta.descriptor === "mod") {
     let text: string;
     try {
@@ -79,31 +92,26 @@ function readPublishInfo(root: string, meta: GameMeta): PublishInfo | null {
       name: value("name"),
       tags: readDescriptorBlock(text, "tags"),
       publishedId: remote && /^\d+$/.test(remote) ? remote : null,
-      description: null,
+      description: store?.description ?? null,
+      translations,
       previewPath: findPreview(root, value("picture")),
     };
   }
   const md = readMetadata(root);
   if (!md) return null;
-  let publishedId: string | null = null;
-  try {
-    const state = JSON.parse(fs.readFileSync(workshopStateFile(root, meta), "utf8")) as {
-      publishedFileId?: string;
-    };
-    if (state.publishedFileId && /^\d+$/.test(state.publishedFileId)) publishedId = state.publishedFileId;
-  } catch {
-    // Never published (or unreadable state): treated as a first publish.
-  }
+  const storedId = store?.publishedFileId;
   return {
     name: typeof md.name === "string" && md.name.trim() !== "" ? md.name : null,
     tags: Array.isArray(md.tags) ? md.tags.filter((t): t is string => typeof t === "string") : [],
-    publishedId,
-    description: typeof md.short_description === "string" ? md.short_description : null,
+    publishedId: storedId && /^\d+$/.test(storedId) ? storedId : null,
+    description:
+      store?.description ?? (typeof md.short_description === "string" ? md.short_description : null),
+    translations,
     previewPath: findPreview(root, null),
   };
 }
 
-function persistPublishedId(root: string, meta: GameMeta, itemId: string): void {
+export function persistPublishedId(root: string, meta: GameMeta, itemId: string): void {
   if (meta.descriptor === "mod") {
     const file = path.join(root, "descriptor.mod");
     fs.writeFileSync(
@@ -113,9 +121,7 @@ function persistPublishedId(root: string, meta: GameMeta, itemId: string): void 
     );
     return;
   }
-  const file = workshopStateFile(root, meta);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ publishedFileId: itemId }, null, 2) + "\n", "utf8");
+  upsertWorkshopMeta(root, meta.configDirName, { publishedFileId: itemId });
 }
 
 /**
@@ -123,7 +129,7 @@ function persistPublishedId(root: string, meta: GameMeta, itemId: string): void 
  * (`.git`, `.vscode`, the toolkit's own config dir) at every level - except
  * `.metadata`, which IS the descriptor for the newer games.
  */
-function stageContent(root: string, staging: string): void {
+export function stageContent(root: string, staging: string): void {
   fs.rmSync(staging, { recursive: true, force: true });
   fs.cpSync(root, staging, {
     recursive: true,
@@ -134,8 +140,13 @@ function stageContent(root: string, staging: string): void {
   });
 }
 
+/** The staging folder an upload of `root` copies into. */
+export function stagingDir(root: string): string {
+  return path.join(os.tmpdir(), "px-toolkit-workshop", path.basename(root));
+}
+
 /** Subject of the mod's last git commit, as a changenote suggestion. */
-function lastCommitSubject(root: string): Promise<string> {
+export function lastCommitSubject(root: string): Promise<string> {
   return new Promise((resolve) => {
     cp.execFile("git", ["log", "-1", "--format=%s"], { cwd: root, windowsHide: true }, (err, stdout) =>
       resolve(err ? "" : stdout.trim())
@@ -143,26 +154,42 @@ function lastCommitSubject(root: string): Promise<string> {
   });
 }
 
-interface BridgeJob {
-  appId: number;
-  action: "create" | "update";
-  itemId?: string;
-  update?: {
-    title?: string;
-    description?: string;
-    changeNote?: string;
-    previewPath?: string;
-    contentPath: string;
-    tags?: string[];
-  };
+/**
+ * Whether the bundled steamworks.js can set per-language title/description
+ * (jobs.ts LANGUAGE_UPDATE_MIN_VERSION; the bridge enforces the same gate).
+ */
+export function supportsTranslationUpload(context: vscode.ExtensionContext): boolean {
+  try {
+    const pkg = context.asAbsolutePath(path.join("dist", "steamworks", "package.json"));
+    const version = (JSON.parse(fs.readFileSync(pkg, "utf8")) as { version?: string }).version ?? "0.0.0";
+    return versionAtLeast(version, LANGUAGE_UPDATE_MIN_VERSION);
+  } catch {
+    return false;
+  }
 }
 
-function runBridge(
+/**
+ * The translation submits of an upload: one per language that has any text.
+ * No changenote on them - one upload should read as one change on the item's
+ * Change Notes tab, not one entry per language.
+ */
+export function translationSubmits(translations: Record<string, WorkshopTranslation>): SubmitSpec[] {
+  return Object.entries(translations)
+    .filter(([, t]) => (t.title ?? "").trim() !== "" || (t.description ?? "").trim() !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([language, t]) => ({
+      language,
+      title: (t.title ?? "").trim() !== "" ? t.title : undefined,
+      description: (t.description ?? "").trim() !== "" ? t.description : undefined,
+    }));
+}
+
+export function runBridge(
   context: vscode.ExtensionContext,
   job: BridgeJob,
   log: (msg: string) => void,
-  onProgress?: (status: string, uploaded: number, total: number) => void
-): Promise<BridgeResult> {
+  onProgress?: (status: string, uploaded: number, total: number, submit: number, submits: number) => void
+): Promise<BridgeDone> {
   const bridge = context.asAbsolutePath(path.join("dist", "steamBridge.js"));
   const steamworksDir = context.asAbsolutePath(path.join("dist", "steamworks"));
   return new Promise((resolve, reject) => {
@@ -171,7 +198,7 @@ function runBridge(
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
-    let result: BridgeResult | null = null;
+    let result: BridgeDone | null = null;
     let errorMessage: string | null = null;
     let buffer = "";
     let stderr = "";
@@ -183,13 +210,13 @@ function runBridge(
         buffer = buffer.slice(nl + 1);
         if (!line) continue;
         try {
-          const event = JSON.parse(line) as Record<string, unknown>;
+          const event = JSON.parse(line) as BridgeEvent;
           if (event.type === "progress" && onProgress) {
-            onProgress(String(event.status), Number(event.uploaded), Number(event.total));
+            onProgress(event.status, event.uploaded, event.total, event.submit, event.submits);
           } else if (event.type === "done") {
-            result = { itemId: String(event.itemId), needsToAcceptAgreement: !!event.needsToAcceptAgreement };
+            result = event.result;
           } else if (event.type === "error") {
-            errorMessage = String(event.message);
+            errorMessage = event.message;
           }
         } catch {
           log(`steam bridge: unparseable line: ${line}`);
@@ -207,11 +234,11 @@ function runBridge(
   });
 }
 
-function workshopUrl(itemId: string): string {
+export function workshopUrl(itemId: string): string {
   return `https://steamcommunity.com/sharedfiles/filedetails/?id=${itemId}`;
 }
 
-function friendlyError(e: unknown, meta: GameMeta): string {
+export function friendlyError(e: unknown, meta: GameMeta): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("Steam init failed")) {
     return (
@@ -220,6 +247,19 @@ function friendlyError(e: unknown, meta: GameMeta): string {
     );
   }
   return msg;
+}
+
+/** Warn about (and drop) a preview image Steam would reject. */
+function usablePreview(previewPath: string | null): string | undefined {
+  if (!previewPath) return undefined;
+  if (fs.statSync(previewPath).size >= PREVIEW_MAX_BYTES) {
+    void vscode.window.showWarningMessage(
+      `Paradox Modding Toolkit: ${path.basename(previewPath)} is 1 MB or larger; ` +
+        "Steam rejects such preview images, so this upload keeps the current one."
+    );
+    return undefined;
+  }
+  return previewPath;
 }
 
 async function publishCommand(
@@ -262,7 +302,7 @@ async function publishCommand(
         modal: true,
         detail:
           "The item is created PRIVATE: only you can see it until you change its visibility " +
-          "on its Workshop page. Steam must be running and logged in.",
+          "in the Workshop panel or on its Workshop page. Steam must be running and logged in.",
       },
       "Publish"
     );
@@ -282,16 +322,11 @@ async function publishCommand(
     changeNote = note;
   }
 
-  let previewPath = info.previewPath ?? undefined;
-  if (previewPath && fs.statSync(previewPath).size >= PREVIEW_MAX_BYTES) {
-    void vscode.window.showWarningMessage(
-      `Paradox Modding Toolkit: ${path.basename(previewPath)} is 1 MB or larger; ` +
-        "Steam rejects such preview images, so this upload keeps the current one."
-    );
-    previewPath = undefined;
-  }
-
-  const staging = path.join(os.tmpdir(), "px-toolkit-workshop", path.basename(root));
+  // Translations ride along when the bundled binding can set them; on an older
+  // binding they are skipped (never silently mis-uploaded - the bridge would
+  // refuse them too) and the panel says what version is needed.
+  const translations = supportsTranslationUpload(context) ? translationSubmits(info.translations) : [];
+  const staging = stagingDir(root);
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -304,7 +339,8 @@ async function publishCommand(
       try {
         if (!itemId) {
           progress.report({ message: "creating the Workshop item…" });
-          const created = await runBridge(context, { appId: meta.steamAppId, action: "create" }, log);
+          const created = await runBridge(context, { action: "create", appId: meta.steamAppId }, log);
+          if (created.action !== "create") throw new Error("unexpected bridge reply");
           itemId = created.itemId;
           needsAgreement = created.needsToAcceptAgreement;
           // Persist BEFORE uploading: a failed upload must not orphan the item,
@@ -316,29 +352,33 @@ async function publishCommand(
         progress.report({ message: "preparing files…" });
         stageContent(root, staging);
 
+        const submits: SubmitSpec[] = [
+          {
+            title: info.name ?? undefined,
+            description: info.description ?? undefined,
+            changeNote,
+            previewPath: usablePreview(info.previewPath),
+            contentPath: staging,
+            tags: info.tags.length ? info.tags : undefined,
+          },
+          ...translations,
+        ];
         const done = await runBridge(
           context,
-          {
-            appId: meta.steamAppId,
-            action: "update",
-            itemId,
-            update: {
-              title: info.name ?? undefined,
-              description: isNew ? (info.description ?? undefined) : undefined,
-              changeNote,
-              previewPath,
-              contentPath: staging,
-              tags: info.tags.length ? info.tags : undefined,
-            },
-          },
+          { action: "publish", appId: meta.steamAppId, itemId, submits },
           log,
-          (status, uploaded, total) => {
+          (status, uploaded, total, submit, count) => {
             const pct = total > 0 ? ` (${Math.round((uploaded / total) * 100)}%)` : "";
-            progress.report({ message: `${status.toLowerCase()}${pct}` });
+            const step = count > 1 ? (submit > 1 ? ` - translations ${submit - 1}/${count - 1}` : "") : "";
+            progress.report({ message: `${status.toLowerCase()}${pct}${step}` });
           }
         );
+        if (done.action !== "publish") throw new Error("unexpected bridge reply");
         needsAgreement = needsAgreement || done.needsToAcceptAgreement;
-        log(`workshop: uploaded ${root} to item ${itemId}`);
+        log(
+          `workshop: uploaded ${root} to item ${itemId}` +
+            (translations.length ? ` (+${translations.length} translation(s))` : "")
+        );
       } catch (e) {
         void vscode.window.showErrorMessage(
           `Paradox Modding Toolkit: Workshop upload failed - ${friendlyError(e, meta)}`
@@ -363,7 +403,7 @@ async function publishCommand(
         .showInformationMessage(
           isNew
             ? `Paradox Modding Toolkit: "${info.name}" is on the Workshop as a private item. ` +
-                "Add a description and set its visibility on the Workshop page."
+                "Add a description and set its visibility in the Workshop panel."
             : `Paradox Modding Toolkit: "${info.name}" updated on the Workshop.`,
           "Open Workshop Page"
         )
