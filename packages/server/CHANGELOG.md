@@ -6,7 +6,9 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.3.0
+
+Ships with toolkit 0.4.0.
 
 ### Added
 

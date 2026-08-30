@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
 - **The Workshop listing as files.** The panel now reads and writes the
   listing from a `workshop` folder next to the mod's content folder (the
