@@ -19,8 +19,12 @@ import {
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
+import { upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
+import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { LANGUAGE_UPDATE_MIN_VERSION, type SubmitSpec } from "../../steam/jobs";
+import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
 import {
+  changelogNoteFor,
   findPreview,
   friendlyError,
   lastCommitSubject,
@@ -33,6 +37,7 @@ import {
   stagingDir,
   supportsTranslationUpload,
   translationSubmits,
+  workshopDirFor,
   workshopUrl,
 } from "../../steam/workshop";
 import { tabIcon } from "../tabIcons";
@@ -137,11 +142,17 @@ export class WorkshopPanel {
 
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
-    const info = readPublishInfo(root, meta);
+    const workshopDir = workshopDirFor(root);
+    const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
+    let previewStamp = 0;
     try {
-      previewTooLarge = !!previewPath && fs.statSync(previewPath).size >= PREVIEW_MAX_BYTES;
+      if (previewPath) {
+        const stat = fs.statSync(previewPath);
+        previewTooLarge = stat.size >= PREVIEW_MAX_BYTES;
+        previewStamp = Math.floor(stat.mtimeMs);
+      }
     } catch {
       /* unreadable preview = none */
     }
@@ -154,12 +165,18 @@ export class WorkshopPanel {
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
+      // The mtime query defeats the webview's image cache after a swap.
       previewUri: previewPath
-        ? this.panel.webview.asWebviewUri(vscode.Uri.file(previewPath)).toString()
+        ? `${this.panel.webview.asWebviewUri(vscode.Uri.file(previewPath)).toString()}?v=${previewStamp}`
         : null,
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
+      changelogNote: changelogNoteFor(root, info?.version ?? null),
+      version: info?.version ?? null,
+      supportedVersion: info?.supportedVersion ?? null,
+      workshopDir,
+      filesPresent: hasListingFiles(workshopDir),
       languageUploadOk: supportsTranslationUpload(this.context),
       requiredSteamworksVersion: LANGUAGE_UPDATE_MIN_VERSION,
       steamLanguages: [...STEAM_LANGUAGES],
@@ -196,6 +213,15 @@ export class WorkshopPanel {
         return;
       case "saveLocal": {
         if (!root) return;
+        const dir = workshopDirFor(root);
+        if (hasListingFiles(dir)) {
+          // The folder is the canonical store; workshop.json keeps only ids.
+          writeListingFiles(dir, {
+            description: message.description,
+            translations: message.translations as Record<string, WorkshopTranslation>,
+          });
+          return;
+        }
         upsertWorkshopMeta(root, meta.configDirName, {
           description: message.description,
           translations: message.translations as Record<string, WorkshopTranslation>,
@@ -220,7 +246,184 @@ export class WorkshopPanel {
         await vscode.commands.executeCommand("px.createDescriptor");
         await this.postInfo();
         return;
+      case "setField":
+        await this.setField(message.field, message.value);
+        return;
+      case "setTags":
+        await this.setTags(message.tags);
+        return;
+      case "pickPreview":
+        await this.pickPreview();
+        return;
+      case "pullListing":
+        await this.pullListing();
+        return;
     }
+  }
+
+  /** Write one descriptor/metadata scalar; empty input leaves the file alone. */
+  private async setField(field: "title" | "version" | "supportedVersion", value: string): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    const v = value.trim();
+    if (!root || v === "") {
+      await this.postInfo();
+      return;
+    }
+    try {
+      if (meta.descriptor === "mod") {
+        const file = path.join(root, "descriptor.mod");
+        const key = field === "title" ? "name" : field === "version" ? "version" : "supported_version";
+        fs.writeFileSync(file, upsertDescriptorValue(fs.readFileSync(file, "utf8"), key, v), "utf8");
+      } else {
+        const file = path.join(root, METADATA_REL_PATH);
+        const md = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+        const key = field === "title" ? "name" : field === "version" ? "version" : "supported_game_version";
+        md[key] = v;
+        fs.writeFileSync(file, JSON.stringify(md, null, 2) + "\n", "utf8");
+      }
+      // Keep item.json's title in step with the descriptor once files track it.
+      const dir = workshopDirFor(root);
+      if (field === "title" && hasListingFiles(dir) && readItemJson(dir)) {
+        upsertItemJson(dir, { title: v });
+      }
+    } catch (e) {
+      this.post({
+        type: "toast",
+        message: `Writing the descriptor failed - ${e instanceof Error ? e.message : String(e)}`,
+        variant: "destructive",
+      });
+    }
+    await this.postInfo();
+  }
+
+  private async setTags(tags: string[]): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const clean = tags.map((t) => t.trim()).filter((t, i, all) => t !== "" && all.indexOf(t) === i);
+    try {
+      if (meta.descriptor === "mod") {
+        const file = path.join(root, "descriptor.mod");
+        fs.writeFileSync(file, upsertDescriptorBlock(fs.readFileSync(file, "utf8"), "tags", clean), "utf8");
+      } else {
+        const file = path.join(root, METADATA_REL_PATH);
+        const md = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+        md.tags = clean;
+        fs.writeFileSync(file, JSON.stringify(md, null, 2) + "\n", "utf8");
+      }
+    } catch (e) {
+      this.post({
+        type: "toast",
+        message: `Writing the tags failed - ${e instanceof Error ? e.message : String(e)}`,
+        variant: "destructive",
+      });
+    }
+    await this.postInfo();
+  }
+
+  /** File dialog -> copy into the mod as thumbnail.<ext> (the name findPreview knows). */
+  private async pickPreview(): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectMany: false,
+      filters: { Images: ["png", "jpg", "jpeg"] },
+      title: "Pick the Workshop preview image",
+    });
+    const src = picked?.[0]?.fsPath;
+    if (!src) return;
+    try {
+      const ext = path.extname(src).toLowerCase() || ".png";
+      const dest = path.join(root, `thumbnail${ext}`);
+      if (path.resolve(src).toLowerCase() !== path.resolve(dest).toLowerCase()) {
+        fs.copyFileSync(src, dest);
+      }
+      if (meta.descriptor === "mod") {
+        const file = path.join(root, "descriptor.mod");
+        fs.writeFileSync(
+          file,
+          upsertDescriptorValue(fs.readFileSync(file, "utf8"), "picture", path.basename(dest)),
+          "utf8"
+        );
+      }
+      if (fs.statSync(dest).size >= PREVIEW_MAX_BYTES) {
+        this.post({
+          type: "toast",
+          message: "The image is 1 MB or larger; Steam rejects it, uploads keep the current preview.",
+          variant: "destructive",
+        });
+      }
+    } catch (e) {
+      this.post({
+        type: "toast",
+        message: `Setting the preview failed - ${e instanceof Error ? e.message : String(e)}`,
+        variant: "destructive",
+      });
+    }
+    await this.postInfo();
+  }
+
+  /**
+   * Download the live listing into the workshop folder: description.bbcode,
+   * one `<lang>/` folder per language whose text differs from the default
+   * (Steam serves the default as fallback for everything else), and item.json.
+   * The app confirms first - this REPLACES the folder's listing files.
+   */
+  private async pullListing(): Promise<void> {
+    const { meta, log } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const itemId = readPublishInfo(root, meta)?.publishedId;
+    if (!itemId) {
+      this.post({
+        type: "toast",
+        message: "The mod has no Workshop item to pull from.",
+        variant: "destructive",
+      });
+      return;
+    }
+    this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
+    try {
+      const languages = STEAM_LANGUAGES.map((l) => l.api);
+      const done = await runBridge(
+        this.context,
+        { action: "query", appId: meta.steamAppId, itemId, languages },
+        log
+      );
+      if (done.action !== "query" || !done.item) throw new Error("Steam returned no item details");
+      const item = done.item;
+      const translations: Record<string, WorkshopTranslation> = {};
+      for (const [lang, t] of Object.entries(done.translations)) {
+        const title = t.title !== item.title ? t.title : "";
+        const description = t.description !== item.description ? t.description : "";
+        if (title === "" && description === "") continue;
+        translations[lang] = {
+          ...(title !== "" ? { title } : {}),
+          ...(description !== "" ? { description } : {}),
+        };
+      }
+      const dir = workshopDirFor(root);
+      writeListingFiles(dir, { description: item.description, translations });
+      upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
+      const n = Object.keys(translations).length;
+      log(`workshop: pulled listing of item ${itemId} into ${dir} (${n} translation(s))`);
+      this.post({
+        type: "toast",
+        message: `Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`,
+      });
+    } catch (e) {
+      this.post({
+        type: "toast",
+        message: `Pulling the listing failed - ${friendlyError(e, meta)}`,
+        variant: "destructive",
+      });
+    } finally {
+      this.post({ type: "uploadState", busy: false });
+    }
+    await this.postInfo();
   }
 
   private async queryLive(languages: string[]): Promise<void> {
@@ -306,21 +509,8 @@ export class WorkshopPanel {
       return;
     }
 
+    // The app's upload modal already confirmed (incl. the new-item case).
     let itemId = info.publishedId;
-    if (!itemId) {
-      const go = await vscode.window.showInformationMessage(
-        `Publish "${info.name ?? path.basename(root)}" to the Steam Workshop as a new ${meta.name} item?`,
-        {
-          modal: true,
-          detail:
-            "The item is created PRIVATE: only you can see it until you change its visibility. " +
-            "Steam must be running and logged in.",
-        },
-        "Publish"
-      );
-      if (go !== "Publish") return;
-    }
-
     this.uploading = true;
     this.post({ type: "uploadState", busy: true, message: "starting…" });
     const staging = stagingDir(root);
@@ -351,7 +541,7 @@ export class WorkshopPanel {
         }
         if (message.content) {
           this.post({ type: "uploadState", busy: true, message: "preparing files…" });
-          stageContent(root, staging);
+          stageContent(root, staging, [workshopDirFor(root)]);
           main.contentPath = staging;
         }
         if (message.changeNote.trim()) main.changeNote = message.changeNote.trim();

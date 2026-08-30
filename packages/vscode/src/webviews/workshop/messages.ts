@@ -47,6 +47,15 @@ export interface WorkshopModInfo {
   /** Steam rejects preview images of 1 MB or more; uploads then keep the current one. */
   previewTooLarge: boolean;
   changeNoteSuggestion: string;
+  /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
+  changelogNote: { text: string; source: string } | null;
+  /** The mod's own version (the next update's) and the supported game version. */
+  version: string | null;
+  supportedVersion: string | null;
+  /** Resolved px.workshop.dir - where the listing lives as files. */
+  workshopDir: string;
+  /** True when that folder exists: it is then the canonical listing store. */
+  filesPresent: boolean;
   /** False when the bundled steamworks.js cannot set per-language text yet. */
   languageUploadOk: boolean;
   requiredSteamworksVersion: string;
@@ -96,4 +105,11 @@ export type AppToHost =
     }
   | { type: "openPage" }
   | { type: "linkExisting" }
-  | { type: "createDescriptor" };
+  | { type: "createDescriptor" }
+  /** Write a descriptor/metadata scalar (title = name, versions). */
+  | { type: "setField"; field: "title" | "version" | "supportedVersion"; value: string }
+  | { type: "setTags"; tags: string[] }
+  /** Pick a new preview image (host opens the file dialog). */
+  | { type: "pickPreview" }
+  /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
+  | { type: "pullListing" };

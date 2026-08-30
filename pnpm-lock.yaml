@@ -95,7 +95,7 @@ importers:
   packages/vscode:
     dependencies:
       steamworks.js:
-        specifier: npm:@jdeffner/steamworks.js@^0.5.0
+        specifier: npm:@jdeffner/steamworks.js@>=0.5.0 <0.7.0
         version: '@jdeffner/steamworks.js@0.5.0'
       vscode-languageclient:
         specifier: ^10.1.0

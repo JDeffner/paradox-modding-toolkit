@@ -2,11 +2,12 @@
  * The Workshop panel app: the focused mod's Workshop item on one page - what
  * the descriptor and workshop.json say (editable drafts), what Steam says
  * live (fetched through the host), and an Upload that submits the checked
- * parts. Drafts autosave to the mod's workshop.json; nothing reaches Steam
- * until Upload. Built from the shared px-ui classes; talks to the host only
- * through messages.ts.
+ * parts. Drafts autosave to the workshop folder (or workshop.json while no
+ * folder exists); nothing reaches Steam until Upload confirms. Built from the
+ * shared px-ui classes; talks to the host only through messages.ts.
  */
 import type { ItemDetails, WorkshopVisibility } from "../../../steam/jobs";
+import { bbcodeToHtml } from "../bbcode";
 import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
 import type {
@@ -38,10 +39,13 @@ let busy = false;
 
 /** The visibility the user picked, or null = whatever the item has. */
 let pickedVisibility: WorkshopVisibility | null = null;
-/** Local drafts under edit (mirrors of workshop.json, saved debounced). */
+/** Local drafts under edit (workshop folder / workshop.json, saved debounced). */
 let draftDescription = "";
 let draftTranslations: Record<string, TranslationDraft> = {};
 const collapsed = new Set<string>();
+/** Edit vs preview, for the description and per translation language. */
+let descMode: "edit" | "preview" = "edit";
+const langMode = new Map<string, "edit" | "preview">();
 
 const VISIBILITY_LABELS: Record<number, string> = {
   0: "Public",
@@ -111,6 +115,7 @@ function renderToolbar(): void {
   $<HTMLButtonElement>("openPage").disabled = !info?.publishedId;
   $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing;
   $<HTMLButtonElement>("refresh").disabled = fetching || !info?.publishedId;
+  $<HTMLButtonElement>("pull").disabled = busy || fetching || !info?.publishedId;
   $("busy").classList.toggle("on", busy || fetching);
 }
 
@@ -120,8 +125,14 @@ function renderItem(): void {
   if (!info || info.descriptorMissing) return;
 
   const title = $<HTMLInputElement>("title");
-  title.value = live?.title && !info.name ? live.title : (info.name ?? "");
+  if (document.activeElement !== title) {
+    title.value = live?.title && !info.name ? live.title : (info.name ?? "");
+  }
   if (!info.name) title.placeholder = "descriptor has no name=";
+  const version = $<HTMLInputElement>("version");
+  if (document.activeElement !== version) version.value = info.version ?? "";
+  const supported = $<HTMLInputElement>("supported");
+  if (document.activeElement !== supported) supported.value = info.supportedVersion ?? "";
 
   const previewUrl = info.previewUri ?? live?.previewUrl ?? null;
   const img = $<HTMLImageElement>("preview");
@@ -143,21 +154,8 @@ function renderItem(): void {
     vis === null ? (info.publishedId ? "…" : "Private (new items start private)") : VISIBILITY_LABELS[vis];
   visBtn.disabled = !info.publishedId && vis === null;
 
-  const tags = $("tags");
-  tags.replaceChildren();
-  for (const t of info.tags) {
-    const b = document.createElement("span");
-    b.className = "px-badge";
-    b.dataset.variant = "secondary";
-    b.textContent = t;
-    tags.append(b);
-  }
-  if (!info.tags.length) {
-    const s = document.createElement("span");
-    s.className = "px-muted px-xs";
-    s.textContent = "none - set tags={} in the descriptor";
-    tags.append(s);
-  }
+  renderTags(info.tags);
+  renderFilesRow();
 
   const idBox = $("itemIdBox");
   idBox.replaceChildren();
@@ -189,6 +187,84 @@ function renderItem(): void {
   } else {
     meta.textContent = "";
   }
+}
+
+/** Editable tag chips + an inline add box; every change writes the descriptor. */
+function renderTags(current: string[]): void {
+  const box = $("tags");
+  box.replaceChildren();
+  for (const t of current) {
+    const chip = document.createElement("span");
+    chip.className = "px-badge tag-chip";
+    chip.dataset.variant = "secondary";
+    chip.append(document.createTextNode(t));
+    const x = document.createElement("button");
+    x.setAttribute("data-tip", "Remove this tag (writes the descriptor)");
+    x.append(iconEl("x"));
+    x.addEventListener("click", () => send({ type: "setTags", tags: current.filter((v) => v !== t) }));
+    chip.append(x);
+    box.append(chip);
+  }
+  const add = document.createElement("span");
+  add.id = "tagAdd";
+  const addBtn = document.createElement("button");
+  addBtn.className = "px-btn";
+  addBtn.dataset.variant = "ghost";
+  addBtn.dataset.size = "sm";
+  addBtn.append(iconEl("plus"), document.createTextNode(" tag"));
+  addBtn.setAttribute("data-tip", "Add a Workshop tag (writes the descriptor)");
+  addBtn.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.className = "px-input";
+    input.dataset.size = "sm";
+    input.placeholder = "New tag…";
+    input.spellcheck = false;
+    add.replaceChildren(input);
+    input.focus();
+    const commit = (): void => {
+      const v = input.value.trim();
+      if (v) send({ type: "setTags", tags: [...current, v] });
+      else renderTags(current);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") commit();
+      else if (e.key === "Escape") renderTags(current);
+    });
+    input.addEventListener("blur", commit);
+  });
+  add.append(addBtn);
+  box.append(add);
+}
+
+/** Where the listing lives: the workshop folder (as files) or workshop.json. */
+function renderFilesRow(): void {
+  const box = $("filesBox");
+  box.replaceChildren();
+  if (!info) return;
+  const badge = document.createElement("span");
+  badge.className = "px-badge";
+  badge.dataset.variant = "outline";
+  const hint = document.createElement("span");
+  hint.className = "px-muted px-xs px-truncate";
+  if (info.filesPresent) {
+    badge.textContent = "workshop folder";
+    badge.setAttribute(
+      "data-tip",
+      "The description and translations are stored as files here (description.bbcode, <language>/title.txt + description.bbcode, item.json), so the listing diffs and versions like code. Location: px.workshop.dir, resolved against the mod folder."
+    );
+    hint.textContent = info.workshopDir;
+    hint.setAttribute("data-tip", info.workshopDir);
+  } else {
+    badge.textContent = "workshop.json";
+    badge.setAttribute(
+      "data-tip",
+      "Drafts save to <configDir>/workshop.json inside the mod. To track the listing as diffable files instead, create the workshop folder (px.workshop.dir, default ../workshop next to the mod) or use the toolbar's download button - it sets the folder up from what is on Steam."
+    );
+    hint.textContent = `no folder at ${info.workshopDir}`;
+    hint.setAttribute("data-tip", info.workshopDir);
+  }
+  badge.setAttribute("data-tip-wrap", "");
+  box.append(badge, hint);
 }
 
 function renderStats(): void {
@@ -223,6 +299,17 @@ function renderStats(): void {
 
 function renderDescriptionHints(): void {
   $<HTMLButtonElement>("pullDesc").disabled = !live;
+  renderDescMode();
+}
+
+function renderDescMode(): void {
+  const preview = descMode === "preview";
+  $("desc").hidden = preview;
+  $("descPreview").hidden = !preview;
+  if (preview) $("descPreview").innerHTML = bbcodeToHtml(draftDescription);
+  $("descMode")
+    .querySelectorAll("button")
+    .forEach((b) => b.classList.toggle("on", b.dataset.mode === descMode));
 }
 
 function translationRow(lang: string): HTMLElement {
@@ -241,6 +328,19 @@ function translationRow(lang: string): HTMLElement {
   state.className = "state px-grow";
   const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
   state.textContent = hasText ? "" : "empty - will not upload";
+  const seg = document.createElement("div");
+  seg.className = "seg";
+  seg.addEventListener("click", (e) => e.stopPropagation());
+  for (const mode of ["edit", "preview"] as const) {
+    const b = document.createElement("button");
+    b.textContent = mode === "edit" ? "Edit" : "Preview";
+    b.classList.toggle("on", (langMode.get(lang) ?? "edit") === mode);
+    b.addEventListener("click", () => {
+      langMode.set(lang, mode);
+      renderTranslations();
+    });
+    seg.append(b);
+  }
   const remove = document.createElement("button");
   remove.className = "px-btn";
   remove.dataset.variant = "ghost";
@@ -269,7 +369,7 @@ function translationRow(lang: string): HTMLElement {
         renderPublish();
       })()
   );
-  head.append(caret, name, state, remove);
+  head.append(caret, name, state, seg, remove);
   head.addEventListener("click", () => {
     if (collapsed.has(lang)) collapsed.delete(lang);
     else collapsed.add(lang);
@@ -298,7 +398,15 @@ function translationRow(lang: string): HTMLElement {
     queueSave();
     renderPublish();
   });
-  body.append(title, desc);
+  if ((langMode.get(lang) ?? "edit") === "preview") {
+    const prev = document.createElement("div");
+    prev.className = "bbprev";
+    prev.innerHTML = bbcodeToHtml(draft.description ?? "");
+    desc.hidden = true;
+    body.append(title, desc, prev);
+  } else {
+    body.append(title, desc);
+  }
 
   const liveT = liveTranslations[lang];
   if (liveT) {
@@ -379,7 +487,8 @@ function applyInfo(next: WorkshopModInfo | null): void {
   draftDescription = next?.description ?? "";
   draftTranslations = structuredClone(next?.translations ?? {});
   $<HTMLTextAreaElement>("desc").value = draftDescription;
-  $<HTMLInputElement>("note").value = next?.changeNoteSuggestion ?? "";
+  $<HTMLTextAreaElement>("note").value = next?.changelogNote?.text ?? next?.changeNoteSuggestion ?? "";
+  renderNoteSource();
   renderAll();
   if (next?.publishedId) {
     fetching = true;
@@ -432,6 +541,7 @@ $("mod").addEventListener("click", () => {
     mods.map<MenuItem>((m) => ({ value: m.path, label: m.label, description: m.path })),
     {
       value: active ?? undefined,
+      width: 380,
       onPick: (path) => {
         if (path === active) return;
         flushSave();
@@ -517,24 +627,225 @@ $("addLang").addEventListener("click", () => {
   });
 });
 
-$("upload").addEventListener("click", () => {
-  if (!info || busy) return;
-  const content = $<HTMLInputElement>("incContent").checked;
-  const details = $<HTMLInputElement>("incDetails").checked;
-  const languages = $<HTMLInputElement>("incLangs").checked ? uploadableLanguages() : [];
-  if (!content && !details && !languages.length) {
-    toast("Nothing to upload - check at least one part under Publish.", "destructive");
-    return;
-  }
-  flushSave();
-  send({
-    type: "upload",
-    content,
-    details,
-    languages,
-    changeNote: $<HTMLInputElement>("note").value,
-    visibility: details ? pickedVisibility : null,
+$("upload").addEventListener(
+  "click",
+  () =>
+    void (async () => {
+      if (!info || busy) return;
+      const picked = await uploadModal();
+      if (!picked) return;
+      // Mirror the modal's last word back into the Publish switches.
+      $<HTMLInputElement>("incContent").checked = picked.content;
+      $<HTMLInputElement>("incDetails").checked = picked.details;
+      $<HTMLInputElement>("incLangs").checked = picked.languages.length > 0;
+      flushSave();
+      send({
+        type: "upload",
+        content: picked.content,
+        details: picked.details,
+        languages: picked.languages,
+        changeNote: $<HTMLTextAreaElement>("note").value,
+        visibility: picked.details ? pickedVisibility : null,
+      });
+    })()
+);
+
+interface UploadChoice {
+  content: boolean;
+  details: boolean;
+  languages: string[];
+}
+
+/**
+ * The last word before anything reaches Steam: re-offers the three parts (so
+ * "actually, only the details" is one uncheck away), shows what rides along,
+ * and says plainly that a Workshop update cannot be rolled back.
+ */
+async function uploadModal(): Promise<UploadChoice | null> {
+  if (!info) return null;
+  const isNew = !info.publishedId;
+  const langs = uploadableLanguages();
+  const supported = info.languageUploadOk;
+
+  const wrap = document.createElement("div");
+  wrap.className = "modal-rows";
+  const row = (id: string, checked: boolean, disabled: boolean, label: string, sub: string) => {
+    const r = document.createElement("div");
+    r.className = "pub-row";
+    const sw = document.createElement("label");
+    sw.className = "px-switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.id = `modal-${id}`;
+    input.checked = checked && !disabled;
+    input.disabled = disabled;
+    const knob = document.createElement("span");
+    sw.append(input, knob);
+    const text = document.createElement("span");
+    text.className = "lbl";
+    text.append(document.createTextNode(label));
+    const subEl = document.createElement("span");
+    subEl.className = "sub";
+    subEl.textContent = ` - ${sub}`;
+    text.append(subEl);
+    r.append(sw, text);
+    wrap.append(r);
+    return input;
+  };
+  const content = row(
+    "content",
+    $<HTMLInputElement>("incContent").checked,
+    false,
+    "Mod files",
+    "every file of the mod, replacing what subscribers have"
+  );
+  const details = row(
+    "details",
+    $<HTMLInputElement>("incDetails").checked,
+    false,
+    "Details",
+    "title, description, visibility, tags, preview image"
+  );
+  const translations = row(
+    "translations",
+    $<HTMLInputElement>("incLangs").checked && langs.length > 0 && supported,
+    langs.length === 0 || !supported,
+    "Translations",
+    langs.length ? langs.map(langLabel).join(", ") : "none drafted"
+  );
+
+  const note = $<HTMLTextAreaElement>("note").value.trim();
+  const lines = document.createElement("div");
+  lines.className = "modal-line";
+  const vis = pickedVisibility ?? live?.visibility ?? null;
+  lines.textContent =
+    (isNew ? "Creates a NEW item, PRIVATE until you change its visibility. " : "") +
+    (vis !== null && details.checked ? `Visibility: ${VISIBILITY_LABELS[vis]}. ` : "") +
+    (note
+      ? `Changenote: "${note.split("\n")[0].slice(0, 80)}${note.length > 80 ? "…" : ""}"`
+      : "No changenote.");
+  wrap.append(lines);
+
+  const warn = document.createElement("div");
+  warn.className = "modal-note";
+  warn.textContent =
+    "An update reaches subscribers within minutes and there is no rollback: Steam keeps no previous " +
+    "version, and the toolkit cannot recover anything an upload overwrote or broke. Check the parts " +
+    "above carefully before you continue.";
+  wrap.append(warn);
+
+  const go = await confirmDialog({
+    title: isNew
+      ? `Publish "${info.name ?? "this mod"}" to the Steam Workshop?`
+      : `Upload to the Steam Workshop?`,
+    content: wrap,
+    confirmLabel: "Upload",
+    destructive: !isNew,
+    wide: true,
   });
+  if (!go) return null;
+  const choice: UploadChoice = {
+    content: content.checked,
+    details: details.checked,
+    languages: translations.checked ? langs : [],
+  };
+  if (!choice.content && !choice.details && !choice.languages.length) {
+    toast("Nothing was checked - upload skipped.", "destructive");
+    return null;
+  }
+  return choice;
+}
+
+// ---------------------------------------------------------------------------
+// Description modes, changenote, listing download
+// ---------------------------------------------------------------------------
+
+$("descMode")
+  .querySelectorAll("button")
+  .forEach((b) =>
+    b.addEventListener("click", () => {
+      descMode = b.dataset.mode === "preview" ? "preview" : "edit";
+      renderDescMode();
+    })
+  );
+
+function renderNoteSource(): void {
+  const src = $("noteSource");
+  const from = info?.changelogNote;
+  src.textContent = from ? `from ${from.source}` : "";
+  src.setAttribute(
+    "data-tip",
+    from
+      ? "The changenote was prefilled from this changelog file (px.workshop.changelog). Edit it freely - only the text in the box uploads."
+      : ""
+  );
+  const btn = $<HTMLButtonElement>("noteFromLog");
+  btn.disabled = !from;
+  btn.setAttribute(
+    "data-tip",
+    from
+      ? `Replace the changenote with the entry from ${from.source}` +
+          (info?.version ? ` (version ${info.version})` : "")
+      : "No changelog entry found. The lookup reads px.workshop.changelog (default: the changelog folder inside the workshop folder), matching a file or headline to the descriptor version" +
+          (info?.version ? ` (${info.version}).` : " - the descriptor has no version.")
+  );
+}
+
+$("noteFromLog").addEventListener("click", () => {
+  const from = info?.changelogNote;
+  if (!from) return;
+  $<HTMLTextAreaElement>("note").value = from.text;
+  renderNoteSource();
 });
+
+$("pull").addEventListener(
+  "click",
+  () =>
+    void (async () => {
+      if (!info?.publishedId || busy || fetching) return;
+      const go = await confirmDialog({
+        title: "Download the listing from Steam into files?",
+        description:
+          "The live description and every translated language are written into the workshop folder, which becomes the canonical store for the listing:",
+        details: [
+          `Folder: ${info.workshopDir} (px.workshop.dir)`,
+          "description.bbcode - the default-language description",
+          "<language>/title.txt and <language>/description.bbcode per translated language",
+          "item.json - title and publishedfileid",
+          "THIS OVERWRITES those files and replaces the local drafts. Local text that was never uploaded to Steam is lost - commit or copy it first if it matters.",
+        ],
+        confirmLabel: "Download & overwrite",
+        destructive: true,
+        wide: true,
+      });
+      if (!go) return;
+      send({ type: "pullListing" });
+    })()
+);
+
+const commitField = (id: string, field: "title" | "version" | "supportedVersion"): void => {
+  const input = $<HTMLInputElement>(id);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+  });
+  input.addEventListener("change", () => {
+    const current =
+      field === "title" ? info?.name : field === "version" ? info?.version : info?.supportedVersion;
+    const v = input.value.trim();
+    if (v === "" || v === (current ?? "")) {
+      input.value = current ?? "";
+      return;
+    }
+    send({ type: "setField", field, value: v });
+  });
+};
+commitField("title", "title");
+commitField("version", "version");
+commitField("supported", "supportedVersion");
+
+$("changePreview").addEventListener("click", () => send({ type: "pickPreview" }));
+$("previewEmpty").style.cursor = "pointer";
+$("previewEmpty").setAttribute("data-tip", "Pick an image to use as the Workshop preview");
+$("previewEmpty").addEventListener("click", () => send({ type: "pickPreview" }));
 
 send({ type: "ready" });

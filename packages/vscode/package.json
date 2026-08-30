@@ -26,6 +26,17 @@
   "contributes": {
     "languages": [
       {
+        "id": "bbcode",
+        "aliases": [
+          "BBCode (Steam Workshop)",
+          "BBCode"
+        ],
+        "extensions": [
+          ".bbcode"
+        ],
+        "configuration": "./bbcode-language-configuration.json"
+      },
+      {
         "id": "paradox",
         "aliases": [
           "Paradox Script"
@@ -138,6 +149,11 @@
       }
     ],
     "grammars": [
+      {
+        "language": "bbcode",
+        "scopeName": "text.bbcode",
+        "path": "./syntaxes/bbcode.tmLanguage.json"
+      },
       {
         "language": "paradox",
         "scopeName": "source.paradox",
@@ -725,6 +741,18 @@
             "order": 3,
             "markdownDescription": "Command ids to hide from the Tools section of the sidebar Project panel, e.g. `px.imageGuidelines`. A group whose rows are all hidden disappears with them.\n\nEasiest via `Paradox: Customize Project Panel Rows`, which shows a checklist of every row."
           },
+          "px.workshop.dir": {
+            "type": "string",
+            "default": "../workshop",
+            "order": 4,
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). The default matches the `<project>/mod` + `<project>/workshop` layout: the listing sits NEXT to the mod folder, versioned but never uploaded.\n\nWhile the folder exists it is the canonical store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`. Without it, drafts stay in the mod's `workshop.json`."
+          },
+          "px.workshop.changelog": {
+            "type": "string",
+            "default": "changelog",
+            "order": 5,
+            "markdownDescription": "Where the Workshop panel looks for changenotes, resolved against the workshop folder (`px.workshop.dir`; absolute paths work too).\n\n- **A folder** (the default `changelog`): the file named after the descriptor's version is used - `1.2.md`, `v1.2.bbcode`, `1.2.txt`.\n- **A single file with headlines**: the section under the headline containing the version is used (`## 1.2.0` in Markdown, `[h2]1.2.0[/h2]` in BBCode).\n- **A single file without headlines**: the whole file.\n\nMarkdown is converted to Steam BBCode on the way."
+          },
           "px.trace.server": {
             "type": "string",
             "enum": [
@@ -1154,7 +1182,7 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "steamworks.js": "npm:@jdeffner/steamworks.js@^0.5.0",
+    "steamworks.js": "npm:@jdeffner/steamworks.js@>=0.5.0 <0.7.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

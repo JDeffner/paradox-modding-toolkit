@@ -82,9 +82,13 @@ bottom says exactly where they stop.
   through your running Steam client, no Paradox launcher and no password. New
   items start private, the changenote is prefilled from your last commit, and
   the Workshop id lands in `descriptor.mod` where the game expects it. The
-  **Steam Workshop Panel** manages the item itself: description (BBCode),
-  visibility, translated titles and descriptions per Steam language, live
-  statistics, and selective uploads (details without re-uploading content).
+  **Steam Workshop Panel** manages the item itself: description (BBCode, with
+  a rendered preview and `.bbcode` syntax highlighting), visibility, tags,
+  preview image, versions, translated titles and descriptions per Steam
+  language, live statistics, and confirmed selective uploads (details without
+  re-uploading content). The whole listing can live as diffable files in a
+  `workshop` folder next to the mod, one download button away, with
+  changenotes read from your changelog by version.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **GUI editor** (**Open GUI Editor**, Ctrl+Alt+P): a pixel-accurate rendering

@@ -242,9 +242,15 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
 export interface ConfirmOptions {
   title: string;
   description?: string;
+  /** Bullet lines under the description (what exactly will happen). */
+  details?: string[];
+  /** Arbitrary content between the text and the actions (checkboxes, previews). */
+  content?: HTMLElement;
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  /** Wider dialog for content-carrying modals. */
+  wide?: boolean;
 }
 
 /** A modal yes/no; resolves true on confirm. (window.confirm is unavailable in a webview.) */
@@ -259,12 +265,27 @@ export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
     title.className = "px-dialog-title";
     title.textContent = o.title;
     dialog.append(title);
+    if (o.wide) dialog.style.maxWidth = "460px";
     if (o.description) {
       const d = document.createElement("div");
       d.className = "px-dialog-description";
       d.textContent = o.description;
       dialog.append(d);
     }
+    if (o.details?.length) {
+      const ul = document.createElement("ul");
+      ul.className = "px-dialog-description";
+      ul.style.margin = "0";
+      ul.style.paddingLeft = "18px";
+      for (const line of o.details) {
+        const li = document.createElement("li");
+        li.textContent = line;
+        li.style.marginTop = "2px";
+        ul.append(li);
+      }
+      dialog.append(ul);
+    }
+    if (o.content) dialog.append(o.content);
     const actions = document.createElement("div");
     actions.className = "px-dialog-actions";
     const cancel = document.createElement("button");

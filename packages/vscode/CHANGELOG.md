@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- **The Workshop listing as files.** The panel now reads and writes the
+  listing from a `workshop` folder next to the mod's content folder (the
+  `<project>/mod` + `<project>/workshop` layout; `px.workshop.dir` moves it,
+  relative to the mod or absolute): `description.bbcode`, one
+  `<language>/title.txt` + `description.bbcode` pair per translation, and
+  `item.json` - the same layout the shared Workshop CI expects, so the
+  listing diffs and versions like code. While the folder exists it is the
+  canonical store; without it drafts stay in `workshop.json` as before. A new
+  toolbar button downloads the live listing from Steam into those files (every
+  translated language detected in one query); its tooltip and its
+  confirmation dialog both spell out exactly which files are overwritten and
+  that unuploaded local text is lost. The upload never ships the folder, even
+  when it sits inside the mod.
+
+- **Descriptions preview like the Workshop page.** An Edit | Preview toggle
+  on the description (and on every translation) renders the draft's BBCode -
+  headings, lists, links, quotes, code, tables, spoilers, images - styled
+  after the Workshop. Everything is escaped and only http(s) links render, so
+  the preview is safe against whatever the text holds.
+
+- **BBCode is a language now.** `.bbcode` files get syntax highlighting
+  (tags, parameters, headings, bold/italic/underline/strike content, code and
+  noparse blocks, bare links) plus bracket matching and auto-closing - the
+  listing files edit like source.
+
+- **The whole listing is editable in the panel.** The title, the mod's
+  version and the supported game version write straight into the descriptor
+  (or metadata.json); tags are chips with add/remove; the preview image has a
+  Change button that copies the picked file into the mod as
+  `thumbnail.<ext>`. Translated titles were already editable per language.
+
+- **Changenotes come from the changelog.** The changenote box prefers the
+  entry that matches the descriptor's version: a `1.2.md`/`v1.2.bbcode` file
+  in the workshop folder's `changelog` directory, or the `## 1.2` section of
+  one big changelog file (`px.workshop.changelog` points anywhere else, a
+  folder or a single file). Markdown converts to Steam BBCode on the way; a
+  button re-inserts the resolved entry, and the git-subject suggestion stays
+  as the fallback.
+
+- **Uploading confirms first.** The Upload button opens a dialog that
+  re-offers the three parts (mod files, details, translations) - so dropping
+  the mod files while keeping a description fix is one uncheck away - shows
+  the changenote and visibility that ride along, and says plainly that a
+  Workshop update reaches subscribers in minutes, has no rollback, and
+  nothing overwritten can be recovered. The wider mod dropdown in the toolbar
+  no longer squeezes long mod names into two cramped lines.
+
 - **A way to reach the people behind the toolkit.** A quiet "Join the
   Discord" link sits at the bottom of the Project panel, and
   `Paradox: Join the Discord` does the same from the command palette. The

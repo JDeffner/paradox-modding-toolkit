@@ -98,15 +98,65 @@ ${uiCss}
   .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .pub-row .lbl { min-width: 0; }
   .pub-row .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #note { width: 100%; }
+  #note { width: 100%; min-height: 56px; resize: vertical; }
   .section > .px-panel-title { padding: 0; }
+  /* Edit | Preview segmented toggle (description and translations). */
+  .seg { display: flex; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); overflow: hidden; }
+  .seg button {
+    border: none; background: none; color: var(--px-muted-fg); font: inherit;
+    font-size: var(--px-text-xs); padding: 2px 9px; cursor: pointer;
+  }
+  .seg button.on { background: var(--px-muted); color: var(--px-fg); }
+  /* Editable tag chips. */
+  .tag-chip { display: inline-flex; align-items: center; gap: 3px; }
+  .tag-chip button { border: none; background: none; color: inherit; cursor: pointer; padding: 0; display: flex; opacity: 0.7; }
+  .tag-chip button:hover { opacity: 1; }
+  .tag-chip button .px-icon { width: 11px; height: 11px; }
+  #tagAdd input { width: 130px; }
+  /* Rendered BBCode, styled after the Workshop page. */
+  .bbprev {
+    border: 1px solid var(--px-border); border-radius: var(--px-radius-md); padding: 12px 14px;
+    min-height: 170px; overflow-wrap: anywhere; background: var(--px-muted);
+    font-size: var(--px-text-sm); line-height: 1.55;
+  }
+  .bbprev .bb-h1 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
+  .bbprev .bb-h2 { font-size: 15px; font-weight: 600; margin: 8px 0 4px; }
+  .bbprev .bb-h3 { font-size: 13px; font-weight: 600; margin: 6px 0 2px; }
+  .bbprev .bb-h1:first-child, .bbprev .bb-h2:first-child, .bbprev .bb-h3:first-child { margin-top: 0; }
+  .bbprev .bb-u { text-decoration: underline; }
+  .bbprev a.bb-url { color: var(--vscode-textLink-foreground, #4daafc); text-decoration: none; }
+  .bbprev a.bb-url:hover { text-decoration: underline; }
+  .bbprev .bb-hr { border: none; border-top: 1px solid var(--px-border); margin: 8px 0; }
+  .bbprev .bb-list { margin: 4px 0; padding-left: 22px; }
+  .bbprev .bb-quote { border-left: 3px solid var(--px-border); margin: 6px 0; padding: 4px 10px; color: var(--px-muted-fg); }
+  .bbprev .bb-quote-author { font-size: var(--px-text-xs); font-weight: 600; margin-bottom: 2px; }
+  .bbprev .bb-code {
+    background: var(--px-bg); border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
+    padding: 8px 10px; margin: 6px 0; font-family: var(--px-font-mono); font-size: var(--px-text-xs);
+    overflow-x: auto; white-space: pre;
+  }
+  .bbprev .bb-img { max-width: 100%; border-radius: var(--px-radius-md); }
+  .bbprev .bb-spoiler { background: var(--px-fg); color: var(--px-fg); border-radius: 2px; }
+  .bbprev .bb-spoiler:hover { background: transparent; color: inherit; }
+  .bbprev .bb-table { border-collapse: collapse; margin: 6px 0; }
+  .bbprev .bb-table th, .bbprev .bb-table td { border: 1px solid var(--px-border); padding: 3px 8px; text-align: left; }
+  .lang .bbprev { min-height: 90px; }
+  /* Upload confirmation modal rows. */
+  .modal-rows { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; text-align: left; }
+  .modal-rows .pub-row { min-height: 24px; }
+  .modal-note {
+    border-left: 3px solid var(--px-destructive); padding: 6px 10px; margin-top: 6px;
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left;
+  }
+  .modal-line { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left; }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:320px;min-width:160px" data-tip="Mod this panel manages">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+    <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:420px;min-width:220px" data-tip="Mod this panel manages">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Fetch the item's live state from Steam">${icon("rotate")}</button>
+    <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder, as files: description.bbcode, a folder with title.txt + description.bbcode per translated language, and item.json. OVERWRITES those files and replaces the local drafts - local text that never went to Steam is lost. A confirmation spells out the exact folder first.">${icon("download")}</button>
     <span id="liveState" class="px-muted px-xs"></span>
     <span class="px-grow"></span>
     <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
@@ -128,11 +178,20 @@ ${uiCss}
           <img id="preview" alt="Preview image" hidden />
           <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
           <span id="previewName" class="px-muted px-xs px-truncate"></span>
+          <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image. It is copied into the mod as thumbnail.<ext> (Steam wants under 1 MB).">${icon("image")} Change…</button>
         </div>
         <div id="fields">
           <div class="field-row">
             <span class="px-label">Title</span>
-            <input id="title" class="px-input" readonly data-tip="The descriptor's name= is the item's title. Edit it in the descriptor; translated titles live below." />
+            <input id="title" class="px-input" spellcheck="false" data-tip="The item's title = the descriptor's name. Editing here writes the descriptor; translated titles live below." />
+          </div>
+          <div class="field-row">
+            <span class="px-label">Version</span>
+            <div class="px-row" style="gap:8px;align-items:center;flex-wrap:wrap">
+              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version (the next update's), from the descriptor. The changelog lookup uses it to find the matching changenote." />
+              <span class="px-label">Supported game</span>
+              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with (supported_version). A wildcard like 1.16.* survives hotfixes." />
+            </div>
           </div>
           <div class="field-row">
             <span class="px-label">Visibility</span>
@@ -140,7 +199,11 @@ ${uiCss}
           </div>
           <div class="field-row">
             <span class="px-label">Tags</span>
-            <div id="tags"></div>
+            <div id="tags" style="align-items:center"></div>
+          </div>
+          <div class="field-row">
+            <span class="px-label">Files</span>
+            <div id="filesBox" class="px-row" style="gap:6px;align-items:center;min-width:0"></div>
           </div>
           <div class="field-row">
             <span class="px-label">Item</span>
@@ -160,8 +223,15 @@ ${uiCss}
     </div>
 
     <div class="section">
-      <div class="px-panel-title">Description</div>
+      <div class="px-panel-title">Description
+        <span class="px-grow"></span>
+        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly the way the Workshop page will.">
+          <button data-mode="edit" class="on">Edit</button>
+          <button data-mode="preview">Preview</button>
+        </div>
+      </div>
       <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
+      <div id="descPreview" class="bbprev" hidden></div>
       <div class="hintline">
         <span>Saved locally to the mod's workshop.json as you type; goes to Steam on Upload.</span>
         <span class="px-grow"></span>
@@ -194,9 +264,16 @@ ${uiCss}
           <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
           <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
         </div>
-        <div class="field-row" style="grid-template-columns: 92px minmax(0,1fr)">
-          <span class="px-label">Changenote</span>
-          <input id="note" class="px-input" spellcheck="false" placeholder="Shown on the item's Change Notes tab" />
+        <div class="field-row" style="grid-template-columns: 92px minmax(0,1fr); align-items:start">
+          <span class="px-label" style="margin-top:6px">Changenote</span>
+          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <textarea id="note" class="px-textarea" spellcheck="false" placeholder="Shown on the item's Change Notes tab"></textarea>
+            <div class="hintline">
+              <span id="noteSource"></span>
+              <span class="px-grow"></span>
+              <button id="noteFromLog" class="px-btn" data-variant="ghost" data-size="sm">${icon("fileText")} Insert from changelog</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

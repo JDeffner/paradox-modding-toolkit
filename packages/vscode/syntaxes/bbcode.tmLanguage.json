@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "BBCode (Steam Workshop)",
+  "scopeName": "text.bbcode",
+  "patterns": [
+    { "include": "#noparse" },
+    { "include": "#code" },
+    { "include": "#heading" },
+    { "include": "#bold" },
+    { "include": "#italic" },
+    { "include": "#underline" },
+    { "include": "#strike" },
+    { "include": "#tag" },
+    { "include": "#url" }
+  ],
+  "repository": {
+    "noparse": {
+      "begin": "(?i)(\\[noparse\\])",
+      "end": "(?i)(\\[/noparse\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "string.unquoted.noparse.bbcode"
+    },
+    "code": {
+      "begin": "(?i)(\\[code\\])",
+      "end": "(?i)(\\[/code\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.raw.block.bbcode"
+    },
+    "heading": {
+      "begin": "(?i)(\\[h[1-6]\\])",
+      "end": "(?i)(\\[/h[1-6]\\])|$",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.heading.bbcode"
+    },
+    "bold": {
+      "begin": "(?i)(\\[b\\])",
+      "end": "(?i)(\\[/b\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.bold.bbcode",
+      "patterns": [{ "include": "#tag" }, { "include": "#url" }]
+    },
+    "italic": {
+      "begin": "(?i)(\\[i\\])",
+      "end": "(?i)(\\[/i\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.italic.bbcode",
+      "patterns": [{ "include": "#tag" }, { "include": "#url" }]
+    },
+    "underline": {
+      "begin": "(?i)(\\[u\\])",
+      "end": "(?i)(\\[/u\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.underline.bbcode",
+      "patterns": [{ "include": "#tag" }, { "include": "#url" }]
+    },
+    "strike": {
+      "begin": "(?i)(\\[(?:strike|s)\\])",
+      "end": "(?i)(\\[/(?:strike|s)\\])",
+      "beginCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "endCaptures": { "1": { "name": "keyword.control.bbcode" } },
+      "contentName": "markup.deleted.bbcode",
+      "patterns": [{ "include": "#tag" }, { "include": "#url" }]
+    },
+    "tag": {
+      "match": "(?i)(\\[/?)(\\*|hr|url|img|list|olist|quote|spoiler|table|tr|th|td|previewyoutube|b|i|u|s|strike|h[1-6]|code|noparse)(?:(=)([^\\]]*))?(\\])",
+      "captures": {
+        "1": { "name": "punctuation.definition.tag.begin.bbcode" },
+        "2": { "name": "entity.name.tag.bbcode" },
+        "3": { "name": "punctuation.separator.key-value.bbcode" },
+        "4": { "name": "string.unquoted.parameter.bbcode" },
+        "5": { "name": "punctuation.definition.tag.end.bbcode" }
+      }
+    },
+    "url": {
+      "match": "https?://[^\\s\\[\\]]+",
+      "name": "markup.underline.link.bbcode"
+    }
+  }
+}

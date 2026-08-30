@@ -11,9 +11,9 @@
  * The published id is persisted where each game's tooling expects it:
  * `remote_file_id` in descriptor.mod for launcher-`.mod` games,
  * `<configDir>/workshop.json` for `.metadata` games (their metadata.json has
- * no field for it). Description and per-language translations live in
- * `<configDir>/workshop.json` for every game (steam/workshopStore docs:
- * @px-lsp/protocol/workshopMeta) and ride along on every upload.
+ * no field for it). Description and per-language translations live in the
+ * workshop folder as files when it exists (steam/workshopFiles.ts), else in
+ * `<configDir>/workshop.json`, and ride along on every upload.
  *
  * This module is the quick path (px.publishToWorkshop); the Workshop panel
  * (webviews/workshop/) is the full editor and reuses everything exported here.
@@ -34,6 +34,13 @@ import {
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
 import {
+  hasListingFiles,
+  readListingFiles,
+  resolveChangeNote,
+  resolveWorkshopDir,
+  type ChangeNote,
+} from "./workshopFiles";
+import {
   LANGUAGE_UPDATE_MIN_VERSION,
   versionAtLeast,
   type BridgeDone,
@@ -46,6 +53,18 @@ export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/works
 /** Steam rejects preview images of 1 MB or more (k_cchFilenameMax aside). */
 export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
+/** Resolved px.workshop.dir for `root`: where the listing lives as files. */
+export function workshopDirFor(root: string): string {
+  const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.dir");
+  return resolveWorkshopDir(root, setting);
+}
+
+/** The changenote resolved from px.workshop.changelog, or null. */
+export function changelogNoteFor(root: string, version: string | null): ChangeNote | null {
+  const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.changelog");
+  return resolveChangeNote(workshopDirFor(root), setting, version);
+}
+
 export interface PublishInfo {
   name: string | null;
   tags: string[];
@@ -56,6 +75,10 @@ export interface PublishInfo {
   /** The local per-language translations (workshop.json), keyed by Steam API language code. */
   translations: Record<string, WorkshopTranslation>;
   previewPath: string | null;
+  /** The mod's own version (descriptor version= / metadata version). */
+  version: string | null;
+  /** The game version the mod says it works with. */
+  supportedVersion: string | null;
 }
 
 const unquote = (v: string): string => v.replace(/^"([^]*)"$/, "$1").trim();
@@ -71,10 +94,24 @@ export function findPreview(root: string, preferred: string | null): string | nu
   return null;
 }
 
-/** What the mod's descriptor and workshop.json tell us about publishing it. Null = no descriptor. */
-export function readPublishInfo(root: string, meta: GameMeta): PublishInfo | null {
+/**
+ * What the mod's descriptor, workshop.json and the workshop folder tell us
+ * about publishing it. Null = no descriptor. When the workshop folder exists
+ * its files win over workshop.json, field by field (`workshopDir` defaults to
+ * the px.workshop.dir resolution; pass a value to skip re-reading settings).
+ */
+export function readPublishInfo(
+  root: string,
+  meta: GameMeta,
+  workshopDir: string = workshopDirFor(root)
+): PublishInfo | null {
   const store = readWorkshopMeta(root, meta.configDirName);
-  const translations = store?.translations ?? {};
+  const files = hasListingFiles(workshopDir) ? readListingFiles(workshopDir) : null;
+  const translations: Record<string, WorkshopTranslation> = { ...(store?.translations ?? {}) };
+  for (const [lang, t] of Object.entries(files?.translations ?? {})) {
+    translations[lang] = { ...translations[lang], ...t };
+  }
+  const description = files?.description ?? store?.description ?? null;
   if (meta.descriptor === "mod") {
     let text: string;
     try {
@@ -92,9 +129,11 @@ export function readPublishInfo(root: string, meta: GameMeta): PublishInfo | nul
       name: value("name"),
       tags: readDescriptorBlock(text, "tags"),
       publishedId: remote && /^\d+$/.test(remote) ? remote : null,
-      description: store?.description ?? null,
+      description,
       translations,
       previewPath: findPreview(root, value("picture")),
+      version: value("version"),
+      supportedVersion: value("supported_version"),
     };
   }
   const md = readMetadata(root);
@@ -104,10 +143,11 @@ export function readPublishInfo(root: string, meta: GameMeta): PublishInfo | nul
     name: typeof md.name === "string" && md.name.trim() !== "" ? md.name : null,
     tags: Array.isArray(md.tags) ? md.tags.filter((t): t is string => typeof t === "string") : [],
     publishedId: storedId && /^\d+$/.test(storedId) ? storedId : null,
-    description:
-      store?.description ?? (typeof md.short_description === "string" ? md.short_description : null),
+    description: description ?? (typeof md.short_description === "string" ? md.short_description : null),
     translations,
     previewPath: findPreview(root, null),
+    version: typeof md.version === "string" ? md.version : null,
+    supportedVersion: typeof md.supported_game_version === "string" ? md.supported_game_version : null,
   };
 }
 
@@ -129,11 +169,13 @@ export function persistPublishedId(root: string, meta: GameMeta, itemId: string)
  * (`.git`, `.vscode`, the toolkit's own config dir) at every level - except
  * `.metadata`, which IS the descriptor for the newer games.
  */
-export function stageContent(root: string, staging: string): void {
+export function stageContent(root: string, staging: string, exclude: string[] = []): void {
   fs.rmSync(staging, { recursive: true, force: true });
+  const skip = exclude.map((p) => path.resolve(p).toLowerCase());
   fs.cpSync(root, staging, {
     recursive: true,
     filter: (src) => {
+      if (skip.includes(path.resolve(src).toLowerCase())) return false;
       const base = path.basename(src);
       return !base.startsWith(".") || base === ".metadata" || src === root;
     },
@@ -350,7 +392,7 @@ async function publishCommand(
         }
 
         progress.report({ message: "preparing files…" });
-        stageContent(root, staging);
+        stageContent(root, staging, [workshopDirFor(root)]);
 
         const submits: SubmitSpec[] = [
           {
