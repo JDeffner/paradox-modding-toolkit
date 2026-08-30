@@ -34,6 +34,7 @@ import {
   upsertWorkshopMeta,
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
+import { bundledSteamworksVersion, supportsLanguageUpdate } from "./languageProbe";
 import {
   hasListingFiles,
   readListingFiles,
@@ -41,14 +42,7 @@ import {
   resolveWorkshopDir,
   type ChangeNote,
 } from "./workshopFiles";
-import {
-  LANGUAGE_UPDATE_MIN_VERSION,
-  versionAtLeast,
-  type BridgeDone,
-  type BridgeEvent,
-  type BridgeJob,
-  type SubmitSpec,
-} from "./jobs";
+import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
 
 export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
 /** Steam rejects preview images of 1 MB or more (k_cchFilenameMax aside). */
@@ -198,17 +192,17 @@ export function lastCommitSubject(root: string): Promise<string> {
 }
 
 /**
- * Whether the bundled steamworks.js can set per-language title/description
- * (jobs.ts LANGUAGE_UPDATE_MIN_VERSION; the bridge enforces the same gate).
+ * Whether the bundled steamworks.js can set per-language title/description.
+ * Capability-probed, not version-compared (languageProbe.ts explains why);
+ * the bridge enforces the same gate before anything uploads.
  */
 export function supportsTranslationUpload(context: vscode.ExtensionContext): boolean {
-  try {
-    const pkg = context.asAbsolutePath(path.join("dist", "steamworks", "package.json"));
-    const version = (JSON.parse(fs.readFileSync(pkg, "utf8")) as { version?: string }).version ?? "0.0.0";
-    return versionAtLeast(version, LANGUAGE_UPDATE_MIN_VERSION);
-  } catch {
-    return false;
-  }
+  return supportsLanguageUpdate(context.asAbsolutePath(path.join("dist", "steamworks")));
+}
+
+/** The bundled steamworks.js version, for the panel's gate message. */
+export function bundledSteamworks(context: vscode.ExtensionContext): string {
+  return bundledSteamworksVersion(context.asAbsolutePath(path.join("dist", "steamworks")));
 }
 
 /**

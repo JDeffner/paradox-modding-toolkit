@@ -23,7 +23,9 @@ import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { LANGUAGE_UPDATE_MIN_VERSION, type SubmitSpec } from "../../steam/jobs";
 import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
+import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import {
+  bundledSteamworks,
   changelogNoteFor,
   findPreview,
   friendlyError,
@@ -174,12 +176,18 @@ export class WorkshopPanel {
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
       changelogNote: changelogNoteFor(root, info?.version ?? null),
+      changelogPath: path.resolve(
+        workshopDir,
+        (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
+          DEFAULT_CHANGELOG
+      ),
       version: info?.version ?? null,
       supportedVersion: info?.supportedVersion ?? null,
       workshopDir,
       filesPresent: hasListingFiles(workshopDir),
       languageUploadOk: supportsTranslationUpload(this.context),
       requiredSteamworksVersion: LANGUAGE_UPDATE_MIN_VERSION,
+      steamworksVersion: bundledSteamworks(this.context),
       steamLanguages: [...STEAM_LANGUAGES],
       suggestedLanguages: suggestedLanguages(root, this.options.meta),
     };

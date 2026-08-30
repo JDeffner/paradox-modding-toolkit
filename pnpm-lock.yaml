@@ -95,8 +95,8 @@ importers:
   packages/vscode:
     dependencies:
       steamworks.js:
-        specifier: npm:@jdeffner/steamworks.js@>=0.5.0 <0.7.0
-        version: '@jdeffner/steamworks.js@0.5.0'
+        specifier: npm:@jdeffner/steamworks.js@^0.6.0
+        version: '@jdeffner/steamworks.js@0.6.0'
       vscode-languageclient:
         specifier: ^10.1.0
         version: 10.1.0
@@ -451,8 +451,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@jdeffner/steamworks.js@0.5.0':
-    resolution: {integrity: sha512-9dExF5tDz0iIwDJIZh6ZdktDmCYMBrGEIfVv79SESuWKATzomZQh0rqrbs9fCa2wxnC2PdN2eL93ShyUD4i6Aw==}
+  '@jdeffner/steamworks.js@0.6.0':
+    resolution: {integrity: sha512-d1yugvAKpZMMzSmVDRtL++KkJvAZnJdfbizskH54ZDqtdKzt4r4AeBwzjIEzfPkuQ+6xEvYaihYhv1phsYQtXg==}
     engines: {node: '>= 14'}
 
   '@jridgewell/sourcemap-codec@1.5.5':
@@ -679,6 +679,9 @@ packages:
 
   '@types/node@26.1.1':
     resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+
+  '@types/node@26.4.0':
+    resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
 
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
@@ -2639,9 +2642,9 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@jdeffner/steamworks.js@0.5.0':
+  '@jdeffner/steamworks.js@0.6.0':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.4.0
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -2858,6 +2861,10 @@ snapshots:
   '@types/json-schema@7.0.15': {}
 
   '@types/node@26.1.1':
+    dependencies:
+      undici-types: 8.3.0
+
+  '@types/node@26.4.0':
     dependencies:
       undici-types: 8.3.0
 

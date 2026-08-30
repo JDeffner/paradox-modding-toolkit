@@ -12,12 +12,10 @@
  * bridge runs, Steam shows the user as in-game (the API initializes under the
  * game's app id) - unavoidable and harmless, it ends with the process.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { supportsLanguageUpdate } from "./languageProbe";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
 import {
-  LANGUAGE_UPDATE_MIN_VERSION,
-  versionAtLeast,
   type BridgeDone,
   type BridgeEvent,
   type BridgeJob,
@@ -170,24 +168,15 @@ async function main(): Promise<void> {
   const job = JSON.parse(await readStdin()) as BridgeJob;
 
   if (job.action === "publish") {
-    // The gate must hold BEFORE anything uploads: an older native layer drops
-    // the unknown `language` field, and the translation would overwrite the
-    // default-language title and description instead.
-    if (job.submits.some((s) => s.language)) {
-      let version = "0.0.0";
-      try {
-        version = (
-          JSON.parse(readFileSync(join(steamworksDir, "package.json"), "utf8")) as { version: string }
-        ).version;
-      } catch {
-        /* unreadable = too old */
-      }
-      if (!versionAtLeast(version, LANGUAGE_UPDATE_MIN_VERSION)) {
-        fail(
-          `translation uploads need steamworks.js ${LANGUAGE_UPDATE_MIN_VERSION} or newer ` +
-            `(bundled: ${version}); this build would overwrite the default-language text instead`
-        );
-      }
+    // The gate must hold BEFORE anything uploads: a native layer without
+    // UgcUpdate.language drops the unknown field, and the translation would
+    // overwrite the default-language title and description instead. Probed
+    // against the build's own client.d.ts, not its version (languageProbe.ts).
+    if (job.submits.some((s) => s.language) && !supportsLanguageUpdate(steamworksDir)) {
+      fail(
+        "translation uploads need a steamworks.js build whose UgcUpdate carries `language` " +
+          "(SetItemUpdateLanguage); this build would overwrite the default-language text instead"
+      );
     }
     // The native layer PANICS (kills the process) on a missing path instead of
     // reporting through the error callback - verified against steamworks.js

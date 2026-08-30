@@ -41,6 +41,23 @@
   button re-inserts the resolved entry, and the git-subject suggestion stays
   as the fallback.
 
+- **The changenote box explains itself.** A source dropdown under it shows
+  where the text came from - "From changelog: 1.2.md", "From last git
+  commit", or "Manual" once you type - and switches between them; the
+  changelog entry that could not be found says which path and version it
+  looked for. A ? beside the box documents the whole system (folder of
+  per-version files or one big file cut at the version headline,
+  `px.workshop.changelog`, Markdown-to-BBCode).
+
+- **The translation-upload gate probes the binding's real capability.**
+  steamworks.js 0.6.0 (now bundled) added per-language *queries* - the "on
+  Steam" hints under each translation now show genuinely translated text -
+  but not per-language *updates*, and the old version-number gate would have
+  waved it through, letting a translation overwrite the default-language
+  text. The gate (extension and bridge both) now reads the bundled build's
+  own type declarations for `UgcUpdate.language` and unlocks only when the
+  capability is really there.
+
 - **Panel polish from the first field round**: the download button's tooltip
   wraps instead of spanning the screen; "Mod version" and "Game version" say
   what they are, the game version sits flush right, and lowering either one
@@ -87,9 +104,9 @@
   - **draft translations** of the item's title and description per Steam
     language (the mod's own localization folders are suggested first) and
     upload them all in one go - one Steam submit per language, no changenote
-    spam. Uploading translations needs the newer steamworks.js binding
-    (0.6.0); with an older one bundled the drafts still save and the panel
-    says what is missing;
+    spam. Uploading translations needs a steamworks.js build with
+    per-language updates; until one is bundled the drafts still save and the
+    panel says exactly what is missing;
   - **upload selectively**: mod files, details and translations are separate
     toggles, so a description fix does not re-upload gigabytes of content;
   - **link an existing Workshop item**: pick from your published items (for

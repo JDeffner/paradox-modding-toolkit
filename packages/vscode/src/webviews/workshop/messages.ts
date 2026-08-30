@@ -51,6 +51,8 @@ export interface WorkshopModInfo {
   changeNoteSuggestion: string;
   /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
   changelogNote: { text: string; source: string } | null;
+  /** Where the changelog lookup pointed (resolved px.workshop.changelog). */
+  changelogPath: string;
   /** The mod's own version (the next update's) and the supported game version. */
   version: string | null;
   supportedVersion: string | null;
@@ -61,6 +63,8 @@ export interface WorkshopModInfo {
   /** False when the bundled steamworks.js cannot set per-language text yet. */
   languageUploadOk: boolean;
   requiredSteamworksVersion: string;
+  /** The bundled steamworks.js version, for the gate message. */
+  steamworksVersion: string;
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];

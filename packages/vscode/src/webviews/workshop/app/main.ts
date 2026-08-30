@@ -47,6 +47,8 @@ const collapsed = new Set<string>();
  * (languages arriving from disk start collapsed; UI-added ones stay open). */
 let lastInfoActive: string | null = null;
 const knownLangs = new Set<string>();
+/** Where the changenote box was filled from; typing makes it "manual". */
+let noteSource: "changelog" | "commit" | "manual" = "manual";
 /** Edit vs preview, for the description and per translation language. */
 let descMode: "edit" | "preview" = "edit";
 const langMode = new Map<string, "edit" | "preview">();
@@ -503,8 +505,9 @@ function renderTranslations(): void {
   gate.classList.toggle("on", !!info && !supported);
   if (info && !supported) {
     $("langGateText").textContent =
-      `Uploading translations needs steamworks.js ${info.requiredSteamworksVersion} or newer bundled ` +
-      "with the extension. Drafts still save locally; they upload once the extension ships the newer binding.";
+      "Uploading translations needs a steamworks.js build with per-language updates " +
+      `(UgcUpdate.language / SetItemUpdateLanguage). The bundled ${info.steamworksVersion} does not ` +
+      "carry it yet - drafts still save locally and upload once a build with it ships.";
   }
   const box = $("translations");
   box.replaceChildren();
@@ -561,6 +564,7 @@ function applyInfo(next: WorkshopModInfo | null): void {
     }
   }
   if (switched) {
+    noteSource = next?.changelogNote ? "changelog" : next?.changeNoteSuggestion ? "commit" : "manual";
     $<HTMLTextAreaElement>("note").value = next?.changelogNote?.text ?? next?.changeNoteSuggestion ?? "";
   }
   renderNoteSource();
@@ -848,32 +852,84 @@ $("descMode")
   );
 
 function renderNoteSource(): void {
-  const src = $("noteSource");
+  const btn = $<HTMLButtonElement>("noteSourceBtn");
+  const label = btn.querySelector("span.px-truncate")!;
   const from = info?.changelogNote;
-  src.textContent = from ? `from ${from.source}` : "";
-  src.setAttribute(
-    "data-tip",
-    from
-      ? "The changenote was prefilled from this changelog file (px.workshop.changelog). Edit it freely - only the text in the box uploads."
-      : ""
-  );
-  const btn = $<HTMLButtonElement>("noteFromLog");
-  btn.disabled = !from;
-  btn.setAttribute(
-    "data-tip",
-    from
-      ? `Replace the changenote with the entry from ${from.source}` +
-          (info?.version ? ` (version ${info.version})` : "")
-      : "No changelog entry found. The lookup reads px.workshop.changelog (default: the changelog folder inside the workshop folder), matching a file or headline to the descriptor version" +
-          (info?.version ? ` (${info.version}).` : " - the descriptor has no version.")
-  );
+  if (noteSource === "changelog" && from) {
+    label.textContent = `From changelog: ${from.source}`;
+    btn.setAttribute(
+      "data-tip",
+      `The box was filled from this changelog entry${info?.version ? ` (version ${info.version})` : ""}. Edit freely - only the text in the box uploads.`
+    );
+  } else if (noteSource === "commit") {
+    label.textContent = "From last git commit";
+    btn.setAttribute("data-tip", "The box was filled with the mod's last commit subject. Edit freely.");
+  } else {
+    label.textContent = "Manual changenote";
+    btn.setAttribute("data-tip", "Written by hand (or edited). Click to fill from a source instead.");
+  }
+  btn.setAttribute("data-tip-wrap", "");
 }
 
-$("noteFromLog").addEventListener("click", () => {
-  const from = info?.changelogNote;
-  if (!from) return;
-  $<HTMLTextAreaElement>("note").value = from.text;
-  renderNoteSource();
+$<HTMLTextAreaElement>("note").addEventListener("input", () => {
+  if (noteSource !== "manual") {
+    noteSource = "manual";
+    renderNoteSource();
+  }
+});
+
+$("noteSourceBtn").addEventListener("click", () => {
+  if (!info) return;
+  const from = info.changelogNote;
+  const commit = info.changeNoteSuggestion;
+  const items: MenuItem[] = [
+    from
+      ? {
+          value: "changelog",
+          label: "Changelog entry",
+          hint: from.source,
+          description: info.version
+            ? `The entry matching version ${info.version}; Markdown already converted to BBCode.`
+            : "The resolved changelog entry.",
+        }
+      : {
+          value: "changelog-missing",
+          label: "Changelog entry",
+          hint: "none found",
+          description: `Looked at ${info.changelogPath}${info.version ? ` for version ${info.version}` : " (the descriptor has no version)"}. Folder: a ${info.version ?? "<version>"}.md/.bbcode/.txt file. Single file: a headline containing the version.`,
+        },
+    {
+      value: "commit",
+      label: "Last git commit",
+      hint: commit ? commit.split("\n")[0].slice(0, 40) : "no commits",
+      description: "The mod's most recent commit subject.",
+    },
+    { value: "manual", label: "Empty", description: "Clear the box and write your own." },
+  ];
+  menu($("noteSourceBtn"), items, {
+    value: noteSource,
+    width: 320,
+    onPick: (v) => {
+      const note = $<HTMLTextAreaElement>("note");
+      if (v === "changelog" && info?.changelogNote) {
+        noteSource = "changelog";
+        note.value = info.changelogNote.text;
+      } else if (v === "changelog-missing") {
+        toast(
+          `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button next to the box explains the layout; px.workshop.changelog moves the location.`,
+          "destructive"
+        );
+        return;
+      } else if (v === "commit") {
+        noteSource = "commit";
+        note.value = info?.changeNoteSuggestion ?? "";
+      } else {
+        noteSource = "manual";
+        note.value = "";
+      }
+      renderNoteSource();
+    },
+  });
 });
 
 $("pull").addEventListener(

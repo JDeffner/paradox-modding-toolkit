@@ -255,9 +255,9 @@ ${BBPREV_CSS}
           <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
             <textarea id="note" class="px-textarea" spellcheck="false" placeholder="Shown on the item's Change Notes tab"></textarea>
             <div class="hintline">
-              <span id="noteSource"></span>
+              <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
               <span class="px-grow"></span>
-              <button id="noteFromLog" class="px-btn" data-variant="ghost" data-size="sm">${icon("fileText")} Insert from changelog</button>
+              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Where changenotes come from: type one here, or keep them in your changelog and let the panel pick the entry for the current mod version. px.workshop.changelog points at a FOLDER (default: 'changelog' inside the workshop folder) with one file per version - 1.2.md, v1.2.bbcode, 1.2.txt - or at ONE FILE, where the section under the headline containing the version is used (## 1.2 or [h2]1.2[/h2]). Markdown converts to Steam BBCode. The dropdown on the left picks the source; whatever ends up in this box is what uploads." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
             </div>
           </div>
         </div>
