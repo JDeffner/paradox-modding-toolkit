@@ -102,7 +102,11 @@ const completionProvider: vscode.CompletionItemProvider = {
   },
 };
 
-/** The singleton preview panel, markdown-preview style: follows edits live. */
+/**
+ * The singleton preview panel, markdown-preview style: follows edits live.
+ * `sideBySide` false opens it in the ACTIVE column (the md "Open Preview"
+ * that visually replaces the source); true opens Beside, keeping focus.
+ */
 class BBCodePreview {
   private static instance: BBCodePreview | undefined;
   private panel: vscode.WebviewPanel;
@@ -110,22 +114,35 @@ class BBCodePreview {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
-  static show(context: vscode.ExtensionContext, editor: vscode.TextEditor): void {
+  static show(context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean): void {
     const existing = BBCodePreview.instance;
     if (existing) {
       existing.retarget(editor.document);
-      existing.panel.reveal(vscode.ViewColumn.Beside, true);
+      existing.panel.reveal(sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, sideBySide);
       return;
     }
-    BBCodePreview.instance = new BBCodePreview(context, editor);
+    BBCodePreview.instance = new BBCodePreview(context, editor, sideBySide);
   }
 
-  private constructor(_context: vscode.ExtensionContext, editor: vscode.TextEditor) {
+  /** The preview's source, back in a text editor (the title-bar button). */
+  static showSource(): void {
+    const p = BBCodePreview.instance;
+    if (!p) return;
+    void vscode.window.showTextDocument(p.uri, {
+      viewColumn: p.panel.viewColumn ?? vscode.ViewColumn.Active,
+      preview: false,
+    });
+  }
+
+  private constructor(_context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean) {
     this.uri = editor.document.uri;
     this.panel = vscode.window.createWebviewPanel(
       "px.bbcodePreview",
       previewTitle(editor.document),
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      {
+        viewColumn: sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
+        preserveFocus: sideBySide,
+      },
       { enableScripts: true, retainContextWhenHidden: true }
     );
     this.panel.iconPath = tabIcon("workshop");
@@ -205,18 +222,20 @@ window.addEventListener("message", (ev) => {
 </html>`;
 }
 
+function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): void {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== "bbcode") {
+    void vscode.window.showInformationMessage("Paradox Modding Toolkit: open a .bbcode file to preview it.");
+    return;
+  }
+  BBCodePreview.show(context, editor, sideBySide);
+}
+
 export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider("bbcode", completionProvider, "[", "/"),
-    vscode.commands.registerCommand("px.openBBCodePreview", () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== "bbcode") {
-        void vscode.window.showInformationMessage(
-          "Paradox Modding Toolkit: open a .bbcode file to preview it."
-        );
-        return;
-      }
-      BBCodePreview.show(context, editor);
-    })
+    vscode.commands.registerCommand("px.openBBCodePreview", () => openPreview(context, false)),
+    vscode.commands.registerCommand("px.openBBCodePreviewSide", () => openPreview(context, true)),
+    vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource())
   );
 }

@@ -34,7 +34,11 @@
         "extensions": [
           ".bbcode"
         ],
-        "configuration": "./bbcode-language-configuration.json"
+        "configuration": "./bbcode-language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/bbcode-light.svg",
+          "dark": "./media/fileicons/bbcode-dark.svg"
+        }
       },
       {
         "id": "paradox",
@@ -477,6 +481,18 @@
         "category": "Paradox",
         "title": "Open BBCode Preview",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "px.openBBCodePreviewSide",
+        "category": "Paradox",
+        "title": "Open BBCode Preview to the Side",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "px.openBBCodeSource",
+        "category": "Paradox",
+        "title": "Show BBCode Source",
+        "icon": "$(go-to-file)"
       },
       {
         "command": "px.customizeSidebar",
@@ -1009,6 +1025,14 @@
           "when": "editorLangId == bbcode"
         },
         {
+          "command": "px.openBBCodePreviewSide",
+          "when": "editorLangId == bbcode"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeWebviewPanelId == px.bbcodePreview"
+        },
+        {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
         }
@@ -1066,8 +1090,13 @@
       ],
       "editor/title": [
         {
-          "command": "px.openBBCodePreview",
+          "command": "px.openBBCodePreviewSide",
           "when": "editorLangId == bbcode",
+          "group": "navigation"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeWebviewPanelId == px.bbcodePreview",
           "group": "navigation"
         },
         {
@@ -1133,6 +1162,16 @@
       }
     ],
     "keybindings": [
+      {
+        "command": "px.openBBCodePreview",
+        "key": "ctrl+shift+v",
+        "when": "editorTextFocus && editorLangId == bbcode"
+      },
+      {
+        "command": "px.openBBCodePreviewSide",
+        "key": "ctrl+k v",
+        "when": "editorTextFocus && editorLangId == bbcode"
+      },
       {
         "command": "px.editLocalization",
         "key": "ctrl+alt+t",

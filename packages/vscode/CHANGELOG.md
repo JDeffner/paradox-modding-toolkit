@@ -54,9 +54,11 @@
   query per mod, plus the refresh button.
 
 - **`.bbcode` editing got real**: tag completion with snippets (`[`, and
-  closers after `[/`), word-suggestion noise off, and **Open BBCode
-  Preview** - a live side-by-side rendering of the file, exactly like the
-  markdown preview, sharing the Workshop panel's renderer.
+  closers after `[/`), word-suggestion noise off, a `[BB]` file icon, and a
+  live preview exactly like markdown's - **Open BBCode Preview**
+  (Ctrl+Shift+V) renders in place, the editor-title button opens it to the
+  side (Ctrl+K V), and the preview's own title button jumps back to the
+  source. All of it shares the Workshop panel's renderer.
 
 - **Uploading confirms first.** The Upload button opens a dialog that
   re-offers the three parts (mod files, details, translations) - so dropping
