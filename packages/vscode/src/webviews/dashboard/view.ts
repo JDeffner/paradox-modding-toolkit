@@ -354,6 +354,11 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
+  /* Community link: last thing in the panel, quiet enough to ignore. */
+  #footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--px-border); }
+  #discord { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
+  #discord:hover { color: var(--px-fg); }
+  #discord .px-icon { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -398,6 +403,13 @@ ${uiCss}
     "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
   )}
   <div class="section-body" id="body-tools"></div>
+</div>
+<div id="footer">
+  <div class="px-item" id="discord" role="button" tabindex="0"
+       data-tip="Open the invite to the toolkit's Discord in your browser: release notes, bug reports, and help with the games this extension covers."
+       data-tip-wrap>
+    ${icon("messageSquare")}<span class="px-item-label">Join the Discord</span>
+  </div>
 </div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -511,6 +523,14 @@ function renderGame() {
   gameRow.appendChild(el("span", "px-item-label game-name", state.gameName));
   gameRow.appendChild(badge(state.gameAuto ? "auto-detected" : "set manually"));
 }
+
+// ---- community link ----
+const discordRow = document.getElementById("discord");
+const openDiscord = () => vscode.postMessage({ type: "run", command: "px.openDiscord" });
+discordRow.addEventListener("click", openDiscord);
+discordRow.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDiscord(); }
+});
 
 // ---- mods ----
 function radio(on, tipText, onClick) {

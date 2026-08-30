@@ -261,6 +261,9 @@ tell me what breaks and what is missing:
   contribution.
 - **Fork it and take inspiration.** If a piece of this is useful in your own
   tooling, use it. It is GPL-3.0-or-later, so keep distributed derivatives open.
+- **[Join the Discord](https://discord.gg/ESstwqycug)** for release notes,
+  quick questions and modding help. The extension links to it from the bottom
+  of the Project panel and from `Paradox: Join the Discord`.
 
 ### Dev quickstart
 

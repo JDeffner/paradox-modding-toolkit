@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A way to reach the people behind the toolkit.** A quiet "Join the
+  Discord" link sits at the bottom of the Project panel, and
+  `Paradox: Join the Discord` does the same from the command palette. The
+  server carries release notes, bug reports and modding help.
+
 - **A Steam Workshop panel** (`Paradox: Open Steam Workshop Panel`, also in
   the Project panel's Share group): the mod's Workshop item on one page,
   through the running Steam client. It shows the live item next to what the

@@ -180,6 +180,8 @@ Concrete examples from real mods are the most useful thing you can send.
   community-editable, so adding a folder kind is a good first contribution.
 - **Fork it and take what is useful.** It is GPL-3.0-or-later, so keep
   distributed derivatives open.
+- **[Discord](https://discord.gg/ESstwqycug)** for release notes, quick
+  questions and modding help.
 
 ## License
 

@@ -606,6 +606,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the built-in command. The `@ext:` query filters the Shortcuts UI to this
     // extension; if a VS Code build ever shows an empty list, "px." is the
     // fallback query.
+    // The toolkit's community server: the Project panel footer and the palette
+    // both land here. Permanent invite, so it never needs a refresh.
+    vscode.commands.registerCommand("px.openDiscord", () =>
+      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/ESstwqycug"))
+    ),
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
     ),

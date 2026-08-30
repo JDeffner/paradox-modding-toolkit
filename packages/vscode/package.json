@@ -448,6 +448,12 @@
         "icon": "$(record-keys)"
       },
       {
+        "command": "px.openDiscord",
+        "category": "Paradox",
+        "title": "Join the Discord",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "px.customizeSidebar",
         "category": "Paradox",
         "title": "Customize Project Panel Rows",
@@ -955,6 +961,10 @@
         },
         {
           "command": "px.openKeybindings",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openDiscord",
           "when": "px.isCk3Workspace"
         },
         {
