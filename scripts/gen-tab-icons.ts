@@ -18,6 +18,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   "event-graph": "waypoints",
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
+  workshop: "cloudUpload",
 };
 
 const COLORS = { dark: "#A78BFA", light: "#6D4FC2" };

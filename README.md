@@ -95,7 +95,9 @@ game recolors it, and saves it back as script.*
   PNG export, image-to-DDS conversion, and measured size guidelines.
 - **Steam Workshop publishing.** Create or update your mod's Workshop item
   through the running Steam client, no Paradox launcher involved. New items
-  start private and the id is written back into `descriptor.mod`.
+  start private and the id is written back into `descriptor.mod`. A Workshop
+  panel edits the item's description, visibility and per-language translated
+  title/description, shows its statistics, and uploads each part selectively.
 - **Large workspaces are the design case.** A game install plus five Workshop
   mods, all indexed, opens in 61 s cold where it used to take 143, and one
   command stops VS Code itself crawling the game's textures and audio.

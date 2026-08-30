@@ -62,6 +62,7 @@ import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
+import { WorkshopPanel } from "./webviews/workshop/panel";
 import * as fs from "fs";
 import {
   allClientCommandIds,
@@ -943,6 +944,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Steam Workshop publishing (px.publishToWorkshop / px.openWorkshopPage).
   registerWorkshop(context, { cfg: () => cfg, focusRoot: () => views.focusRoot(), log });
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("px.openWorkshopManager", () => {
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: readModName(p), path: p }));
+      if (!mods.length) {
+        void vscode.window.showWarningMessage(
+          "Paradox Modding Toolkit: open a mod folder as a workspace folder first."
+        );
+        return;
+      }
+      WorkshopPanel.show(context, {
+        meta: metaFor(cfg.gameId),
+        mods,
+        active: views.focusRoot() ?? cfg.modPath,
+        log,
+      });
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),

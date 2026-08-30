@@ -81,7 +81,10 @@ bottom says exactly where they stop.
 - **Steam Workshop publishing**: **Publish Mod to Steam Workshop** uploads
   through your running Steam client, no Paradox launcher and no password. New
   items start private, the changenote is prefilled from your last commit, and
-  the Workshop id lands in `descriptor.mod` where the game expects it.
+  the Workshop id lands in `descriptor.mod` where the game expects it. The
+  **Steam Workshop Panel** manages the item itself: description (BBCode),
+  visibility, translated titles and descriptions per Steam language, live
+  statistics, and selective uploads (details without re-uploading content).
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **GUI editor** (**Open GUI Editor**, Ctrl+Alt+P): a pixel-accurate rendering

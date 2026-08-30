@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **A Steam Workshop panel** (`Paradox: Open Steam Workshop Panel`, also in
+  the Project panel's Share group): the mod's Workshop item on one page,
+  through the running Steam client. It shows the live item next to what the
+  mod says - title from the descriptor, preview image, tags, created/updated
+  dates - plus the item's statistics (subscribers, favorites, page visits,
+  votes, comments). From the panel you can:
+  - **edit the description** in Steam's BBCode, saved locally to
+    `<configDir>/workshop.json` as you type and uploaded on demand, with
+    "Fetch from Steam" to pull the live text down;
+  - **set the visibility** (private, friends only, unlisted, public) without
+    visiting the Workshop page;
+  - **draft translations** of the item's title and description per Steam
+    language (the mod's own localization folders are suggested first) and
+    upload them all in one go - one Steam submit per language, no changenote
+    spam. Uploading translations needs the newer steamworks.js binding
+    (0.6.0); with an older one bundled the drafts still save and the panel
+    says what is missing;
+  - **upload selectively**: mod files, details and translations are separate
+    toggles, so a description fix does not re-upload gigabytes of content;
+  - **link an existing Workshop item**: pick from your published items (for
+    mods first uploaded through the launcher) and the id lands in
+    `remote_file_id` / `workshop.json` without a new item being created.
+  The quick command grew too: `Publish Mod to Steam Workshop` now also sends
+  the local description and any drafted translations along with the content.
+
 - **Publish to the Steam Workshop from the editor.** `Paradox: Publish Mod to
   Steam Workshop` creates or updates the focused mod's Workshop item through
   the running Steam client's own UGC API - no Paradox launcher, no

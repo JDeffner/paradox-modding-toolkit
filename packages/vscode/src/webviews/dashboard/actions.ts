@@ -199,6 +199,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       label: "Share",
       items: [
         {
+          label: "Steam Workshop Panel",
+          command: "px.openWorkshopManager",
+          icon: "cloudUpload",
+          tip: "Manage the mod's Workshop item in one place: description, visibility, translations, statistics, uploads.",
+        },
+        {
           label: "Publish to Steam Workshop",
           command: "px.publishToWorkshop",
           icon: "arrowUp",

@@ -403,6 +403,12 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "px.openWorkshopManager",
+        "category": "Paradox",
+        "title": "Open Steam Workshop Panel",
+        "icon": "$(cloud)"
+      },
+      {
         "command": "px.translateNext",
         "category": "Paradox Localization",
         "title": "Translate Missing Keys (one by one)"
@@ -928,6 +934,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openWorkshopManager",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.translateNext",
           "when": "px.isCk3Workspace"
         },
@@ -1122,7 +1132,7 @@
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamworks.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",
