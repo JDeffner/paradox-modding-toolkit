@@ -95,8 +95,8 @@ importers:
   packages/vscode:
     dependencies:
       steamworks.js:
-        specifier: 0.4.0
-        version: 0.4.0
+        specifier: npm:@jdeffner/steamworks.js@^0.5.0
+        version: '@jdeffner/steamworks.js@0.5.0'
       vscode-languageclient:
         specifier: ^10.1.0
         version: 10.1.0
@@ -450,6 +450,10 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
+
+  '@jdeffner/steamworks.js@0.5.0':
+    resolution: {integrity: sha512-9dExF5tDz0iIwDJIZh6ZdktDmCYMBrGEIfVv79SESuWKATzomZQh0rqrbs9fCa2wxnC2PdN2eL93ShyUD4i6Aw==}
+    engines: {node: '>= 14'}
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -1974,10 +1978,6 @@ packages:
     resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
     engines: {node: '>=18'}
 
-  steamworks.js@0.4.0:
-    resolution: {integrity: sha512-O5TTRs7ucCRql4IA/kYUIQYeghTsXqf3rAm81sC22RDId264LQYqQjuaMEUSqL60I5LdULiGu0W2/A+ZDcKBKA==}
-    engines: {node: '>= 14'}
-
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
@@ -2638,6 +2638,10 @@ snapshots:
   '@humanwhocodes/module-importer@1.0.1': {}
 
   '@humanwhocodes/retry@0.4.3': {}
+
+  '@jdeffner/steamworks.js@0.5.0':
+    dependencies:
+      '@types/node': 26.1.1
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -4316,10 +4320,6 @@ snapshots:
   std-env@4.2.0: {}
 
   stdin-discarder@0.2.2: {}
-
-  steamworks.js@0.4.0:
-    dependencies:
-      '@types/node': 26.1.1
 
   string-width@4.2.3:
     dependencies:
