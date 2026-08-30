@@ -10,6 +10,13 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ### Added
 
+- `workshopMeta.ts`: reader/writer for the mod's local Workshop record
+  (`<configDir>/workshop.json`: published id, description, per-language
+  translations; merge-preserving round trips), plus the Steam API language
+  table (`STEAM_LANGUAGES`) and the Paradox-loc-to-Steam language mapping
+  (`steamLanguageForLoc`). The store behind the extension's Workshop panel
+  and translation uploads.
+
 - `descriptorMod.ts`: `readDescriptorBlock(text, key)` (the quoted strings of
   any top-level `key={ … }` block; `readDescriptorDependencies` now uses it)
   and `upsertDescriptorValue(text, key, value)` (replace or append a scalar
