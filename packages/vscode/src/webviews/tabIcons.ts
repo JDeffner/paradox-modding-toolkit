@@ -10,7 +10,7 @@
 import * as vscode from "vscode";
 
 export type TabIconName =
-  "gui-editor" | "flag-builder" | "event-graph" | "gui-tree" | "event-sim" | "workshop";
+  "gui-editor" | "flag-builder" | "event-graph" | "gui-tree" | "event-sim" | "workshop" | "bbcode-preview";
 
 let extensionUri: vscode.Uri | undefined;
 

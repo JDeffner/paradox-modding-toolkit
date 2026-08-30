@@ -145,7 +145,7 @@ class BBCodePreview {
       },
       { enableScripts: true, retainContextWhenHidden: true }
     );
-    this.panel.iconPath = tabIcon("workshop");
+    this.panel.iconPath = tabIcon("bbcode-preview");
     this.panel.webview.html = shellHtml();
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((e) => {

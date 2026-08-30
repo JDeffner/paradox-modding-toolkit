@@ -202,13 +202,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Steam Workshop Panel",
           command: "px.openWorkshopManager",
           icon: "cloudUpload",
-          tip: "Manage the mod's Workshop item in one place: description, visibility, translations, statistics, uploads.",
-        },
-        {
-          label: "Publish to Steam Workshop",
-          command: "px.publishToWorkshop",
-          icon: "arrowUp",
-          tip: "Upload the focused mod to the Steam Workshop through the running Steam client - no launcher needed. New items start private.",
+          tip: "The mod's Workshop item in one place: description, visibility, translations, statistics - and the only place uploads happen.",
         },
         {
           label: "Open Workshop Page",

@@ -54,11 +54,11 @@
   query per mod, plus the refresh button.
 
 - **`.bbcode` editing got real**: tag completion with snippets (`[`, and
-  closers after `[/`), word-suggestion noise off, a `[BB]` file icon, and a
-  live preview exactly like markdown's - **Open BBCode Preview**
-  (Ctrl+Shift+V) renders in place, the editor-title button opens it to the
-  side (Ctrl+K V), and the preview's own title button jumps back to the
-  source. All of it shares the Workshop panel's renderer.
+  closers after `[/`), word-suggestion noise off, a blue `BB` file icon, and
+  a live preview exactly like markdown's - two editor-title buttons open it
+  to the side (Ctrl+K V) or in place (Ctrl+Shift+V), the preview tab carries
+  its own eye icon, and its title button jumps back to the source. All of it
+  shares the Workshop panel's renderer.
 
 - **Uploading confirms first.** The Upload button opens a dialog that
   re-offers the three parts (mod files, details, translations) - so dropping
@@ -95,19 +95,19 @@
   - **link an existing Workshop item**: pick from your published items (for
     mods first uploaded through the launcher) and the id lands in
     `remote_file_id` / `workshop.json` without a new item being created.
-  The quick command grew too: `Publish Mod to Steam Workshop` now also sends
-  the local description and any drafted translations along with the content.
+  The panel is the ONLY place uploads happen - every publish goes through
+  its confirmation, so nothing reaches Steam from a stray button press.
 
-- **Publish to the Steam Workshop from the editor.** `Paradox: Publish Mod to
-  Steam Workshop` creates or updates the focused mod's Workshop item through
-  the running Steam client's own UGC API - no Paradox launcher, no
-  credentials, live upload progress. New items start **private**; the
-  descriptor's name and tags become the item's title and tags, `thumbnail.png`
-  (or the descriptor's `picture=`) becomes the preview image, and the
-  changenote is prefilled from the mod's last git commit. On first publish the
-  Workshop id is written back where the game's tooling expects it:
-  `remote_file_id` in `descriptor.mod` (CK3), `<configDir>/workshop.json` for
-  `.metadata` games. `Paradox: Open Steam Workshop Page` jumps to the item;
+- **Publish to the Steam Workshop from the editor.** The panel's Upload
+  creates or updates the focused mod's Workshop item through the running
+  Steam client's own UGC API - no Paradox launcher, no credentials, live
+  upload progress. New items start **private**; the descriptor's name and
+  tags become the item's title and tags, `thumbnail.png` (or the
+  descriptor's `picture=`) becomes the preview image, and the changenote is
+  prefilled from the changelog or the mod's last git commit. On first
+  publish the Workshop id is written back where the game's tooling expects
+  it: `remote_file_id` in `descriptor.mod` (CK3), `<configDir>/workshop.json`
+  for `.metadata` games. `Paradox: Open Steam Workshop Page` jumps to the item;
   both live in the Project panel's new Share group. The native Steamworks
   binding runs in a separate child process, so Steam trouble can never take
   the extension down. Steam shows you in-game for the seconds an upload takes;

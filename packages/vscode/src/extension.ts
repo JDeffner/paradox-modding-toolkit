@@ -948,7 +948,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- workflow accelerators ---------------------------------------------------
 
-  // Steam Workshop publishing (px.publishToWorkshop / px.openWorkshopPage).
+  // Steam Workshop (px.openWorkshopPage; publishing lives in the panel).
   registerWorkshop(context, { cfg: () => cfg, focusRoot: () => views.focusRoot(), log });
   registerBBCodeSupport(context);
 

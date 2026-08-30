@@ -15,8 +15,9 @@
  * workshop folder as files when it exists (steam/workshopFiles.ts), else in
  * `<configDir>/workshop.json`, and ride along on every upload.
  *
- * This module is the quick path (px.publishToWorkshop); the Workshop panel
- * (webviews/workshop/) is the full editor and reuses everything exported here.
+ * Publishing happens in the Workshop panel (webviews/workshop/), the single
+ * place uploads are reviewed and confirmed; this module carries the shared
+ * plumbing plus px.openWorkshopPage.
  */
 import * as vscode from "vscode";
 import * as cp from "child_process";
@@ -291,180 +292,12 @@ export function friendlyError(e: unknown, meta: GameMeta): string {
   return msg;
 }
 
-/** Warn about (and drop) a preview image Steam would reject. */
-function usablePreview(previewPath: string | null): string | undefined {
-  if (!previewPath) return undefined;
-  if (fs.statSync(previewPath).size >= PREVIEW_MAX_BYTES) {
-    void vscode.window.showWarningMessage(
-      `Paradox Modding Toolkit: ${path.basename(previewPath)} is 1 MB or larger; ` +
-        "Steam rejects such preview images, so this upload keeps the current one."
-    );
-    return undefined;
-  }
-  return previewPath;
-}
-
-async function publishCommand(
-  context: vscode.ExtensionContext,
-  cfg: PxConfig,
-  root: string | null,
-  log: (msg: string) => void
-): Promise<void> {
-  const meta = metaFor(cfg.gameId);
-  if (!root) {
-    void vscode.window.showWarningMessage(
-      "Paradox Modding Toolkit: open a mod folder as a workspace folder first."
-    );
-    return;
-  }
-  const info = readPublishInfo(root, meta);
-  if (!info) {
-    void vscode.window
-      .showErrorMessage(
-        `Paradox Modding Toolkit: the mod has no descriptor - the Workshop upload needs one (${root}).`,
-        "Create Descriptor"
-      )
-      .then((choice) => {
-        if (choice) void vscode.commands.executeCommand("px.createDescriptor");
-      });
-    return;
-  }
-  if (!info.name) {
-    void vscode.window.showErrorMessage(
-      "Paradox Modding Toolkit: the mod's descriptor has no name= - the Workshop needs a title."
-    );
-    return;
-  }
-
-  const isNew = !info.publishedId;
-  if (isNew) {
-    const go = await vscode.window.showInformationMessage(
-      `Publish "${info.name}" to the Steam Workshop as a new ${meta.name} item?`,
-      {
-        modal: true,
-        detail:
-          "The item is created PRIVATE: only you can see it until you change its visibility " +
-          "in the Workshop panel or on its Workshop page. Steam must be running and logged in.",
-      },
-      "Publish"
-    );
-    if (go !== "Publish") return;
-  }
-
-  let changeNote = "Initial upload.";
-  if (!isNew) {
-    const suggestion = await lastCommitSubject(root);
-    const note = await vscode.window.showInputBox({
-      title: `Update "${info.name}" on the Steam Workshop`,
-      prompt: "Changenote, shown on the item's Change Notes tab. Enter to upload.",
-      value: suggestion,
-      ignoreFocusOut: true,
-    });
-    if (note === undefined) return;
-    changeNote = note;
-  }
-
-  // Translations ride along when the bundled binding can set them; on an older
-  // binding they are skipped (never silently mis-uploaded - the bridge would
-  // refuse them too) and the panel says what version is needed.
-  const translations = supportsTranslationUpload(context) ? translationSubmits(info.translations) : [];
-  const staging = stagingDir(root);
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `Steam Workshop: "${info.name}"`,
-      cancellable: false, // Steam has no way to abort a running SubmitItemUpdate.
-    },
-    async (progress) => {
-      let itemId = info.publishedId;
-      let needsAgreement = false;
-      try {
-        if (!itemId) {
-          progress.report({ message: "creating the Workshop item…" });
-          const created = await runBridge(context, { action: "create", appId: meta.steamAppId }, log);
-          if (created.action !== "create") throw new Error("unexpected bridge reply");
-          itemId = created.itemId;
-          needsAgreement = created.needsToAcceptAgreement;
-          // Persist BEFORE uploading: a failed upload must not orphan the item,
-          // and for .mod games the uploaded descriptor then carries the id.
-          persistPublishedId(root, meta, itemId);
-          log(`workshop: created item ${itemId} for ${root}`);
-        }
-
-        progress.report({ message: "preparing files…" });
-        stageContent(root, staging, [workshopDirFor(root)]);
-
-        const submits: SubmitSpec[] = [
-          {
-            title: info.name ?? undefined,
-            description: info.description ?? undefined,
-            changeNote,
-            previewPath: usablePreview(info.previewPath),
-            contentPath: staging,
-            tags: info.tags.length ? info.tags : undefined,
-          },
-          ...translations,
-        ];
-        const done = await runBridge(
-          context,
-          { action: "publish", appId: meta.steamAppId, itemId, submits },
-          log,
-          (status, uploaded, total, submit, count) => {
-            const pct = total > 0 ? ` (${Math.round((uploaded / total) * 100)}%)` : "";
-            const step = count > 1 ? (submit > 1 ? ` - translations ${submit - 1}/${count - 1}` : "") : "";
-            progress.report({ message: `${status.toLowerCase()}${pct}${step}` });
-          }
-        );
-        if (done.action !== "publish") throw new Error("unexpected bridge reply");
-        needsAgreement = needsAgreement || done.needsToAcceptAgreement;
-        log(
-          `workshop: uploaded ${root} to item ${itemId}` +
-            (translations.length ? ` (+${translations.length} translation(s))` : "")
-        );
-      } catch (e) {
-        void vscode.window.showErrorMessage(
-          `Paradox Modding Toolkit: Workshop upload failed - ${friendlyError(e, meta)}`
-        );
-        return;
-      } finally {
-        fs.rmSync(staging, { recursive: true, force: true });
-      }
-
-      if (needsAgreement) {
-        void vscode.window
-          .showWarningMessage(
-            "Steam says you have not accepted the Workshop legal agreement yet; the item stays " +
-              "hidden until you do.",
-            "Open Agreement"
-          )
-          .then((choice) => {
-            if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
-          });
-      }
-      void vscode.window
-        .showInformationMessage(
-          isNew
-            ? `Paradox Modding Toolkit: "${info.name}" is on the Workshop as a private item. ` +
-                "Add a description and set its visibility in the Workshop panel."
-            : `Paradox Modding Toolkit: "${info.name}" updated on the Workshop.`,
-          "Open Workshop Page"
-        )
-        .then((choice) => {
-          if (choice && itemId) void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(itemId)));
-        });
-    }
-  );
-}
-
 export function registerWorkshop(
   context: vscode.ExtensionContext,
   deps: { cfg: () => PxConfig; focusRoot: () => string | null; log: (msg: string) => void }
 ): void {
   const activeRoot = () => deps.focusRoot() ?? deps.cfg().modPath;
   context.subscriptions.push(
-    vscode.commands.registerCommand("px.publishToWorkshop", () =>
-      publishCommand(context, deps.cfg(), activeRoot(), deps.log)
-    ),
     vscode.commands.registerCommand("px.openWorkshopPage", () => {
       const cfg = deps.cfg();
       const meta = metaFor(cfg.gameId);
@@ -473,11 +306,11 @@ export function registerWorkshop(
       if (!info?.publishedId) {
         void vscode.window
           .showInformationMessage(
-            "Paradox Modding Toolkit: this mod has no Workshop item yet - publish it first.",
-            "Publish to Workshop"
+            "Paradox Modding Toolkit: this mod has no Workshop item yet - publish it from the Workshop panel first.",
+            "Open Workshop Panel"
           )
           .then((choice) => {
-            if (choice) void vscode.commands.executeCommand("px.publishToWorkshop");
+            if (choice) void vscode.commands.executeCommand("px.openWorkshopManager");
           });
         return;
       }

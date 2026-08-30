@@ -414,12 +414,6 @@
         "title": "Launch Game (debug mode)"
       },
       {
-        "command": "px.publishToWorkshop",
-        "category": "Paradox",
-        "title": "Publish Mod to Steam Workshop",
-        "icon": "$(cloud-upload)"
-      },
-      {
         "command": "px.openWorkshopPage",
         "category": "Paradox",
         "title": "Open Steam Workshop Page",
@@ -480,7 +474,7 @@
         "command": "px.openBBCodePreview",
         "category": "Paradox",
         "title": "Open BBCode Preview",
-        "icon": "$(open-preview)"
+        "icon": "$(eye)"
       },
       {
         "command": "px.openBBCodePreviewSide",
@@ -985,10 +979,6 @@
           "when": "px.isCk3Workspace"
         },
         {
-          "command": "px.publishToWorkshop",
-          "when": "px.isCk3Workspace"
-        },
-        {
           "command": "px.openWorkshopPage",
           "when": "px.isCk3Workspace"
         },
@@ -1092,7 +1082,12 @@
         {
           "command": "px.openBBCodePreviewSide",
           "when": "editorLangId == bbcode",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode",
+          "group": "navigation@2"
         },
         {
           "command": "px.openBBCodeSource",

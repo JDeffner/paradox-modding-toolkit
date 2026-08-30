@@ -78,10 +78,10 @@ bottom says exactly where they stop.
   interactions and on_action hooks that are correct by construction.
 - **Live debugging**: **Launch Game (debug mode)** plus a **Toggle
   error.log Watcher** that surfaces in-game script errors as editor squiggles.
-- **Steam Workshop publishing**: **Publish Mod to Steam Workshop** uploads
-  through your running Steam client, no Paradox launcher and no password. New
-  items start private, the changenote is prefilled from your last commit, and
-  the Workshop id lands in `descriptor.mod` where the game expects it. The
+- **Steam Workshop publishing**: upload through your running Steam client,
+  no Paradox launcher and no password. New items start private, the
+  changenote is prefilled from your changelog or last commit, and the
+  Workshop id lands in `descriptor.mod` where the game expects it. The
   **Steam Workshop Panel** manages the item itself: description (BBCode, with
   a rendered preview and `.bbcode` syntax highlighting), visibility, tags,
   preview image, versions, translated titles and descriptions per Steam
