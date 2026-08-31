@@ -48,18 +48,10 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "plus",
           tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
         },
-        {
-          label: "Move Mod…",
-          command: "px.moveMod",
-          icon: "arrowRight",
-          tip:
-            "Move a mod between the game's mod folder and your mod projects folder, in either direction. " +
-            "The launcher link is updated so the mod keeps loading.",
-        },
       ],
     },
     {
-      label: "Review",
+      label: "View",
       items: [
         {
           label: "Event Graph",
@@ -79,11 +71,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "flaskConical",
           tip: "Static walkthrough of what happens when the event at the cursor fires, with step-into links along the chain.",
         },
-      ],
-    },
-    {
-      label: "Design",
-      items: [
         {
           label: "GUI Widget Tree",
           command: "px.showGuiTree",

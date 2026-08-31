@@ -23,15 +23,8 @@
   listing files sit next to the mod instead of inside the upload. The game
   still finds the mod through a link in its own mod folder - a `<name>.mod`
   path file for the `.mod`-descriptor games, a folder link for the metadata
-  games. "Paradox: Move Mod" moves an existing mod from the game's mod
-  folder into that layout, or back out of it, and keeps the launcher link
-  correct in both directions. The project folder is named after the mod's
-  display name (like New Mod), a Windows lock on the source (an open Explorer
-  window, watchers, the running launcher) no longer aborts the move - it
-  copies past the lock and says what to delete by hand if the original could
-  not be removed - and a leftover empty folder from an earlier failed move no
-  longer blocks the retry. Setup & Health Check now recommends picking a
-  projects folder, and the mod walkthrough page mentions the layout.
+  games. Setup & Health Check now recommends picking a projects folder, and
+  the mod walkthrough page mentions the layout.
 
 - **The Project panel shows the paths in use.** A Paths section (at the
   bottom of the panel) lists the effective game folder, script_docs logs, mod
@@ -54,7 +47,7 @@
   would land inside the game's Documents mod folder: every mod living there
   resolves the default `px.workshop.dir` to the same `mod/workshop`, so
   listings would overwrite each other. The dialog recommends the mod projects
-  layout (Move Mod) or pointing `px.workshop.dir` elsewhere.
+  layout or pointing `px.workshop.dir` elsewhere.
 
 - **Extension Settings in the Project panel menu.** The panel's overflow menu
   opens the extension's settings as a normal editor tab with the Workspace

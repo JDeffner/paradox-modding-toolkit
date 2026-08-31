@@ -144,7 +144,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
       `• mod projects folder: not set. Recommended: keep each mod in its own project folder ` +
         `(px.modProjectsDir) with the content in <project>/mod — git and Steam Workshop listing files ` +
         `stay outside the upload, and the launcher loads the mod via a link. ` +
-        `"Paradox: New Mod" and "Paradox: Move Mod" set this up.`
+        `"Paradox: New Mod" sets this up.`
     );
   }
 

@@ -1,8 +1,6 @@
 /**
- * `Paradox: New Mod` and `Paradox: Move Mod` — create a mod (recommended: the
- * mod projects layout, see ./core.ts) and move existing mods between the
- * game's mod folder and the projects folder, keeping the launcher link
- * correct in both directions.
+ * `Paradox: New Mod` — create a mod, recommended into the mod projects layout
+ * (see ./core.ts), with the launcher link that makes the game find it.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -10,24 +8,12 @@ import * as path from "path";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { scaffoldDescriptor, wildcardVersion } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH, scaffoldMetadata } from "@px-lsp/protocol/descriptorMetadata";
-import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../config";
 import { gameDocsSubdir } from "../config";
 import { detectGameVersion } from "../descriptorMod";
 import { GAME_METAS } from "../gameDetect";
 import { metaFor } from "../meta";
-import {
-  PROJECT_CONTENT_DIR,
-  claimDest,
-  findLinksFor,
-  findPointerFor,
-  listGameFolderMods,
-  moveDir,
-  pointerModText,
-  projectContentRoot,
-  projectFolderName,
-  slugify,
-} from "./core";
+import { PROJECT_CONTENT_DIR, pointerModText, projectFolderName, slugify } from "./core";
 
 const PREFIX = "Paradox Modding Toolkit";
 
@@ -240,159 +226,5 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
     await offerToOpen(projectDir);
   } catch (err) {
     void vscode.window.showErrorMessage(`${PREFIX}: failed to create the mod: ${String(err)}`);
-  }
-}
-
-export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
-  const meta = await pickGame(cfg);
-  if (!meta) return;
-  const gameModDir = gameDocsSubdir(meta, "mod");
-  const projectsDir = modProjectsDirSetting();
-
-  type MoveItem = vscode.QuickPickItem & {
-    direction?: "toProjects" | "toGame";
-    src?: string;
-    projectDir?: string;
-  };
-  const items: MoveItem[] = [];
-  const gameMods = gameModDir ? listGameFolderMods(gameModDir) : [];
-  if (gameMods.length > 0) {
-    items.push({
-      label: "In the game's mod folder — moves to the projects folder",
-      kind: vscode.QuickPickItemKind.Separator,
-    });
-    for (const dir of gameMods) {
-      items.push({ label: readModName(dir), description: dir, direction: "toProjects", src: dir });
-    }
-  }
-  if (projectsDir) {
-    const projectRows: MoveItem[] = [];
-    try {
-      for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const projectDir = path.join(projectsDir, entry.name);
-        const content = projectContentRoot(projectDir);
-        if (!content) continue;
-        projectRows.push({
-          label: readModName(content),
-          description: projectDir,
-          direction: "toGame",
-          src: content,
-          projectDir,
-        });
-      }
-    } catch {
-      // Unreadable projects folder: contributes nothing.
-    }
-    if (projectRows.length > 0) {
-      items.push({
-        label: "In the projects folder — moves into the game's mod folder",
-        kind: vscode.QuickPickItemKind.Separator,
-      });
-      items.push(...projectRows);
-    }
-  }
-  if (!items.some((i) => i.direction)) {
-    void vscode.window.showInformationMessage(
-      `${PREFIX}: nothing to move — no local mods in ${gameModDir ?? "the game's mod folder"}` +
-        `${projectsDir ? ` and no mod projects in ${projectsDir}` : " (and no mod projects folder is set)"}.`
-    );
-    return;
-  }
-
-  const pick = await vscode.window.showQuickPick(items, {
-    title: "Move Mod",
-    placeHolder: "Pick a mod; it moves to the other location and the launcher link is updated",
-  });
-  if (!pick?.direction || !pick.src || !gameModDir) return;
-
-  try {
-    if (pick.direction === "toProjects") {
-      const projects = await ensureModProjectsDir();
-      if (!projects) return;
-      const src = pick.src;
-      // The launcher-facing name stays the folder's (sluggy) one; the project
-      // folder gets the mod's display name, like New Mod does.
-      const linkName = path.basename(src);
-      const projectDir = path.join(projects, projectFolderName(readModName(src)));
-      if (!claimDest(projectDir)) {
-        void vscode.window.showErrorMessage(`${PREFIX}: ${projectDir} already exists.`);
-        return;
-      }
-      const contentDir = path.join(projectDir, PROJECT_CONTENT_DIR);
-      // Resolve the launcher link BEFORE the move: it points at the old place.
-      const pointer = meta.descriptor === "mod" ? findPointerFor(gameModDir, src) : null;
-      const moveWarning = moveDir(src, contentDir);
-      let linkNote: string;
-      if (meta.descriptor === "mod") {
-        if (pointer) {
-          const text = fs.readFileSync(pointer, "utf8");
-          fs.writeFileSync(pointer, pointerModText(text, contentDir), "utf8");
-          linkNote = `launcher link updated: ${pointer}`;
-        } else {
-          let descriptor: string;
-          try {
-            descriptor = fs.readFileSync(path.join(contentDir, "descriptor.mod"), "utf8");
-          } catch {
-            descriptor = scaffoldDescriptor(readModName(contentDir), "1.*");
-          }
-          const link = createLauncherLink(meta, gameModDir, linkName, contentDir, descriptor);
-          linkNote = `launcher link created: ${link}`;
-        }
-      } else {
-        const link = createLauncherLink(meta, gameModDir, linkName, contentDir, "");
-        linkNote = `launcher link created: ${link}`;
-      }
-      log(`moved ${src} -> ${contentDir}; ${linkNote}${moveWarning ? `; WARNING: ${moveWarning}` : ""}`);
-      const done = `${PREFIX}: moved to ${contentDir} (${linkNote}).`;
-      if (moveWarning) {
-        void vscode.window.showWarningMessage(`${done} BUT ${moveWarning}.`);
-      } else {
-        void vscode.window.showInformationMessage(
-          `${done} Workshop listing files and git now live in ${projectDir}, outside the upload.`
-        );
-      }
-      return;
-    }
-
-    // toGame: the projects layout back into the game's own mod folder.
-    const content = pick.src;
-    const projectDir = pick.projectDir ?? content;
-    // Reuse the established launcher name (pointer/link basename) so the mod
-    // keeps its identity; the links themselves go away.
-    const pointer = meta.descriptor === "mod" ? findPointerFor(gameModDir, content) : null;
-    const links = meta.descriptor === "metadata" ? findLinksFor(gameModDir, content) : [];
-    const destName = pointer
-      ? path.basename(pointer, path.extname(pointer))
-      : links.length > 0
-        ? path.basename(links[0])
-        : slugify(readModName(content));
-    for (const link of links) fs.rmSync(link);
-    const dest = path.join(gameModDir, destName);
-    if (!claimDest(dest)) {
-      void vscode.window.showErrorMessage(`${PREFIX}: ${dest} already exists.`);
-      return;
-    }
-    const moveWarning = moveDir(content, dest);
-    if (pointer) fs.rmSync(pointer);
-    let leftovers: string[] = [];
-    if (projectDir !== content && fs.existsSync(projectDir)) {
-      leftovers = fs.readdirSync(projectDir);
-      if (leftovers.length === 0) fs.rmdirSync(projectDir);
-    }
-    log(
-      `moved ${content} -> ${dest}${pointer ? `; removed ${pointer}` : ""}${moveWarning ? `; WARNING: ${moveWarning}` : ""}`
-    );
-    const tail =
-      leftovers.length > 0
-        ? ` ${projectDir} still holds ${leftovers.join(", ")} — left in place (git history and Workshop files do not belong in the upload).`
-        : "";
-    if (moveWarning) {
-      void vscode.window.showWarningMessage(`${PREFIX}: moved to ${dest}, BUT ${moveWarning}.${tail}`);
-    } else {
-      void vscode.window.showInformationMessage(`${PREFIX}: moved to ${dest}.${tail}`);
-    }
-  } catch (err) {
-    void vscode.window.showErrorMessage(`${PREFIX}: move failed: ${String(err)}`);
   }
 }

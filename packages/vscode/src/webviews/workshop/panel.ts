@@ -312,8 +312,8 @@ export class WorkshopPanel {
         detail:
           `It would land at ${dir}, in the folder where every installed mod lives. ` +
           `Any other mod in that folder resolves its default workshop location to the same place, ` +
-          `so listings can overwrite each other. Recommended: move the mod to a project folder ` +
-          `("Move Mod") or point px.workshop.dir somewhere outside the game's mod folder.`,
+          `so listings can overwrite each other. Recommended: keep the mod in its own project folder ` +
+          `with the listing next to it, or point px.workshop.dir somewhere outside the game's mod folder.`,
       },
       "Create Anyway"
     );

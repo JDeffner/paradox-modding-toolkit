@@ -21,7 +21,7 @@ describe("visibleActionGroups", () => {
   it("drops a group whose rows are all hidden", () => {
     const groups = visibleActionGroups(ck3Meta, 0, ["px.openInfoDocs"]);
     expect(groups.map((g) => g.label)).not.toContain("Reference");
-    expect(groups.map((g) => g.label)).toContain("Review");
+    expect(groups.map((g) => g.label)).toContain("View");
   });
 
   it("ignores ids that match no row", () => {
@@ -31,7 +31,7 @@ describe("visibleActionGroups", () => {
   });
 
   it("keeps working for a game without a tiger", () => {
-    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod", "px.moveMod"]);
+    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod"]);
     const ids = commands(groups);
     expect(ids).toContain("px.launchGame");
     expect(ids).not.toContain("px.newContent");

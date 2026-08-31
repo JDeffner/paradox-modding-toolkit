@@ -441,11 +441,6 @@
         "title": "New Mod (project folder + launcher link)"
       },
       {
-        "command": "px.moveMod",
-        "category": "Paradox",
-        "title": "Move Mod (projects folder / game mod folder)"
-      },
-      {
         "command": "px.convertToDds",
         "category": "Paradox",
         "title": "Convert Image to DDS",
@@ -662,7 +657,7 @@
             "default": "",
             "order": 2,
             "scope": "machine-overridable",
-            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use; `Paradox: Move Mod` moves an existing mod into (or out of) the layout."
+            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use."
           },
           "px.parentMods": {
             "type": "array",

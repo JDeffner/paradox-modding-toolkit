@@ -11,4 +11,4 @@ The extension then:
 
 If your mod lives somewhere else, set `px.modPath` instead.
 
-Starting fresh? **Paradox: New Mod** creates the mod for you — recommended into a mod projects folder, where the mod's content lives in `<project>/mod` and git or Steam Workshop files stay next to it, outside the upload. The game finds the mod through a link in its own mod folder. **Paradox: Move Mod** moves an existing mod into (or out of) that layout.
+Starting fresh? **Paradox: New Mod** creates the mod for you — recommended into a mod projects folder, where the mod's content lives in `<project>/mod` and git or Steam Workshop files stay next to it, outside the upload. The game finds the mod through a link in its own mod folder.

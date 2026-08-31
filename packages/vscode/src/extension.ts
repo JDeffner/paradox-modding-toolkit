@@ -60,7 +60,7 @@ import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
-import { createModCommand, moveModCommand } from "./modProjects/command";
+import { createModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
 import { registerBBCodeSupport } from "./bbcodeSupport";
@@ -990,8 +990,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.newContent", () =>
       newContentCommand(cfgForActive(), notifyModFileChanged)
     ),
-    vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log)),
-    vscode.commands.registerCommand("px.moveMod", () => moveModCommand(cfg, log))
+    vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log))
   );
 
   // ---- onboarding ---------------------------------------------------------------
