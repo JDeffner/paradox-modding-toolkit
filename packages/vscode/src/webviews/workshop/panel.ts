@@ -142,6 +142,23 @@ export class WorkshopPanel {
     if (!this.disposed) void this.panel.webview.postMessage(message);
   }
 
+  // All user feedback goes through VS Code notifications plus the output
+  // channel - never a transient in-panel surface. The message survives
+  // closing the panel, and errors leave a trace to re-read.
+  private notify(message: string, level: "info" | "warn" | "error" = "info"): void {
+    this.options.log(`workshop: ${message}`);
+    const full = `Paradox Modding Toolkit: ${message}`;
+    if (level === "error") void vscode.window.showErrorMessage(full);
+    else if (level === "warn") void vscode.window.showWarningMessage(full);
+    else void vscode.window.showInformationMessage(full);
+  }
+
+  /** notify() for a caught error: the friendly text out, the raw one logged. */
+  private notifyError(friendly: string, e: unknown): void {
+    this.options.log(`workshop: ${friendly} [raw: ${e instanceof Error ? e.message : String(e)}]`);
+    void vscode.window.showErrorMessage(`Paradox Modding Toolkit: ${friendly}`);
+  }
+
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
     const workshopDir = workshopDirFor(root);
@@ -276,6 +293,9 @@ export class WorkshopPanel {
       case "openWorkshopSettings":
         await vscode.commands.executeCommand("workbench.action.openSettings", "px.workshop");
         return;
+      case "notify":
+        this.notify(message.message, message.warn ? "warn" : "info");
+        return;
     }
   }
 
@@ -286,11 +306,10 @@ export class WorkshopPanel {
     if (!root) return;
     const dir = workshopDirFor(root);
     if (!hasListingFiles(dir)) {
-      this.post({
-        type: "toast",
-        message: `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
-        variant: "destructive",
-      });
+      this.notify(
+        `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
+        "warn"
+      );
       return;
     }
     const file = lang ? path.join(dir, lang, "description.bbcode") : path.join(dir, "description.bbcode");
@@ -331,11 +350,7 @@ export class WorkshopPanel {
         upsertItemJson(dir, { title: v });
       }
     } catch (e) {
-      this.post({
-        type: "toast",
-        message: `Writing the descriptor failed - ${e instanceof Error ? e.message : String(e)}`,
-        variant: "destructive",
-      });
+      this.notifyError(`Writing the descriptor failed - ${e instanceof Error ? e.message : String(e)}`, e);
     }
     await this.postInfo();
   }
@@ -356,11 +371,7 @@ export class WorkshopPanel {
         fs.writeFileSync(file, JSON.stringify(md, null, 2) + "\n", "utf8");
       }
     } catch (e) {
-      this.post({
-        type: "toast",
-        message: `Writing the tags failed - ${e instanceof Error ? e.message : String(e)}`,
-        variant: "destructive",
-      });
+      this.notifyError(`Writing the tags failed - ${e instanceof Error ? e.message : String(e)}`, e);
     }
     await this.postInfo();
   }
@@ -393,18 +404,13 @@ export class WorkshopPanel {
         );
       }
       if (fs.statSync(dest).size >= PREVIEW_MAX_BYTES) {
-        this.post({
-          type: "toast",
-          message: "The image is 1 MB or larger; Steam rejects it, uploads keep the current preview.",
-          variant: "destructive",
-        });
+        this.notify(
+          "The image is 1 MB or larger; Steam rejects it, uploads keep the current preview.",
+          "warn"
+        );
       }
     } catch (e) {
-      this.post({
-        type: "toast",
-        message: `Setting the preview failed - ${e instanceof Error ? e.message : String(e)}`,
-        variant: "destructive",
-      });
+      this.notifyError(`Setting the preview failed - ${e instanceof Error ? e.message : String(e)}`, e);
     }
     await this.postInfo();
   }
@@ -421,11 +427,7 @@ export class WorkshopPanel {
     if (!root) return;
     const itemId = readPublishInfo(root, meta)?.publishedId;
     if (!itemId) {
-      this.post({
-        type: "toast",
-        message: "The mod has no Workshop item to pull from.",
-        variant: "destructive",
-      });
+      this.notify("The mod has no Workshop item to pull from.", "warn");
       return;
     }
     this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
@@ -452,19 +454,9 @@ export class WorkshopPanel {
       writeListingFiles(dir, { description: item.description, translations });
       upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
       const n = Object.keys(translations).length;
-      log(`workshop: pulled listing of item ${itemId} into ${dir} (${n} translation(s))`);
-      this.post({
-        type: "toast",
-        message: `Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`,
-      });
+      this.notify(`Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`);
     } catch (e) {
-      this.options.log(`workshop: pulling the listing failed: ${e instanceof Error ? e.message : String(e)}`);
-      this.post({
-        type: "toast",
-        message: `Pulling the listing failed - ${friendlyError(e, meta)}`,
-        variant: "destructive",
-        sticky: true,
-      });
+      this.notifyError(`Pulling the listing failed - ${friendlyError(e, meta)}`, e);
     } finally {
       this.post({ type: "uploadState", busy: false });
     }
@@ -502,10 +494,7 @@ export class WorkshopPanel {
       const done = await runBridge(this.context, { action: "list", appId: meta.steamAppId }, log);
       if (done.action !== "list") throw new Error("unexpected bridge reply");
       if (!done.items.length) {
-        this.post({
-          type: "toast",
-          message: `You have no published ${meta.name} Workshop items to link.`,
-        });
+        this.notify(`You have no published ${meta.name} Workshop items to link.`);
         return;
       }
       const picked = await vscode.window.showQuickPick(
@@ -525,13 +514,7 @@ export class WorkshopPanel {
       this.options.log(`workshop: linked ${root} to existing item ${picked.itemId}`);
       await this.postInfo();
     } catch (e) {
-      this.options.log(`workshop: listing own items failed: ${e instanceof Error ? e.message : String(e)}`);
-      this.post({
-        type: "toast",
-        message: `Listing your Workshop items failed - ${friendlyError(e, meta)}`,
-        variant: "destructive",
-        sticky: true,
-      });
+      this.notifyError(`Listing your Workshop items failed - ${friendlyError(e, meta)}`, e);
     }
   }
 
@@ -541,19 +524,11 @@ export class WorkshopPanel {
     if (!root || this.uploading) return;
     const info = readPublishInfo(root, meta);
     if (!info) {
-      this.post({
-        type: "toast",
-        message: "The mod has no descriptor; nothing can upload.",
-        variant: "destructive",
-      });
+      this.notify("The mod has no descriptor; nothing can upload.", "error");
       return;
     }
     if (message.details && !info.name) {
-      this.post({
-        type: "toast",
-        message: "The descriptor has no name= - the Workshop needs a title.",
-        variant: "destructive",
-      });
+      this.notify("The descriptor has no name= - the Workshop needs a title.", "error");
       return;
     }
 
@@ -588,13 +563,11 @@ export class WorkshopPanel {
           if (preview && fs.statSync(preview).size < PREVIEW_MAX_BYTES) {
             main.previewPath = preview;
           } else if (preview) {
-            log(`workshop: preview ${preview} is >= 1 MB, upload keeps the current image`);
-            this.post({
-              type: "toast",
-              message:
-                "The preview image is 1 MB or larger; Steam rejects it, so this upload keeps " +
+            this.notify(
+              "The preview image is 1 MB or larger; Steam rejects it, so this upload keeps " +
                 "the item's current preview.",
-            });
+              "warn"
+            );
           }
         }
         if (message.content) {
@@ -611,7 +584,7 @@ export class WorkshopPanel {
         )
       );
       if (!submits.length) {
-        this.post({ type: "toast", message: "Nothing to upload.", variant: "destructive" });
+        this.notify("Nothing to upload.", "warn");
         return;
       }
 
@@ -640,15 +613,10 @@ export class WorkshopPanel {
             if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
           });
       }
-      this.post({ type: "toast", message: "Upload done." });
+      this.notify("Upload done.");
       await this.postInfo();
     } catch (e) {
-      // A failed upload must be re-readable: sticky in the panel, persistent
-      // as a VS Code notification, and on record in the output channel.
-      const friendly = `Workshop upload failed - ${friendlyError(e, meta)}`;
-      log(`workshop: upload of ${root} failed: ${e instanceof Error ? e.message : String(e)}`);
-      this.post({ type: "toast", message: friendly, variant: "destructive", sticky: true });
-      void vscode.window.showErrorMessage(`Paradox Modding Toolkit: ${friendly}`);
+      this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);
     } finally {
       fs.rmSync(staging, { recursive: true, force: true });
       this.uploading = false;

@@ -83,7 +83,6 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
 
 let toaster: HTMLElement | null = null;
 
-/** Show a toast; `ms = 0` keeps it until the user clicks it away. */
 export function toast(message: string, variant: "default" | "destructive" = "default", ms = 2600): void {
   if (!toaster) {
     toaster = document.createElement("div");
@@ -94,19 +93,11 @@ export function toast(message: string, variant: "default" | "destructive" = "def
   el.className = "px-toast";
   el.dataset.variant = variant;
   el.textContent = message;
-  const leave = (): void => {
+  toaster.append(el);
+  setTimeout(() => {
     el.setAttribute("data-leaving", "");
     el.addEventListener("animationend", () => el.remove(), { once: true });
-  };
-  if (ms > 0) {
-    setTimeout(leave, ms);
-  } else {
-    // Sticky (errors worth reading twice): a dismiss affordance, no timer.
-    el.style.cursor = "pointer";
-    el.title = "Dismiss";
-    el.addEventListener("click", leave, { once: true });
-  }
-  toaster.append(el);
+  }, ms);
 }
 
 // ---------------------------------------------------------------------------

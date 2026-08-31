@@ -9,7 +9,7 @@
 import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
 import { iconEl } from "../../shared/icons";
-import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmDialog, menu, type MenuItem } from "../../shared/overlay";
 import type {
   AppToHost,
   HostToApp,
@@ -606,9 +606,6 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
       renderToolbar();
       $("liveState").textContent = m.message ?? (busy ? "uploading…" : "");
       return;
-    case "toast":
-      toast(m.message, m.variant, m.sticky ? 0 : undefined);
-      return;
   }
 });
 
@@ -832,7 +829,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
     languages: translations.checked ? langs : [],
   };
   if (!choice.content && !choice.details && !choice.languages.length) {
-    toast("Nothing was checked - upload skipped.", "destructive");
+    send({ type: "notify", message: "Nothing was checked - upload skipped.", warn: true });
     return null;
   }
   return choice;
@@ -915,10 +912,11 @@ $("noteSourceBtn").addEventListener("click", () => {
         noteSource = "changelog";
         note.value = info.changelogNote.text;
       } else if (v === "changelog-missing") {
-        toast(
-          `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button next to the box explains the layout; px.workshop.changelog moves the location.`,
-          "destructive"
-        );
+        send({
+          type: "notify",
+          message: `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button next to the changenote box explains the layout; px.workshop.changelog moves the location.`,
+          warn: true,
+        });
         return;
       } else if (v === "commit") {
         noteSource = "commit";

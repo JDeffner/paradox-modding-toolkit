@@ -87,14 +87,7 @@ export type HostToApp =
       /** Steam unreachable or the query failed; disk data stays usable. */
       error: string | null;
     }
-  | { type: "uploadState"; busy: boolean; message?: string }
-  | {
-      type: "toast";
-      message: string;
-      variant?: "default" | "destructive";
-      /** Stay until dismissed (real failures the user must be able to re-read). */
-      sticky?: boolean;
-    };
+  | { type: "uploadState"; busy: boolean; message?: string };
 
 export type AppToHost =
   | { type: "ready" }
@@ -129,5 +122,7 @@ export type AppToHost =
   | { type: "reload" }
   /** Open the settings UI filtered to px.workshop. */
   | { type: "openWorkshopSettings" }
+  /** Surface a message as a VS Code notification (the app has no UI for it). */
+  | { type: "notify"; message: string; warn?: boolean }
   /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
   | { type: "pullListing" };
