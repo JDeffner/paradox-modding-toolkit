@@ -6,6 +6,12 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- New `calendar.ts` helper module (era mapping for custom-calendar mods:
+  script date -> display form and back) and an optional
+  `ParadoxSettings.calendar` field carrying the `px.calendar` setting.
+
 ## 0.1.0
 
 First npm release. The wire contract (custom `paradox/*` requests and

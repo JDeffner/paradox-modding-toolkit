@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { sanitizeStringList } from "@px-lsp/protocol/suppression";
+import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { findGameFolder } from "./steamDetect";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
@@ -36,6 +37,8 @@ export interface PxConfig {
   excludedMods: string[];
   locLanguage: string;
   scopeInlayHints: boolean;
+  /** `px.calendar`: custom era calendar for date display, or undefined. */
+  calendar: CalendarSetting | undefined;
   tigerRunOn: "save" | "manual";
   enableForWorkspace: boolean;
   /** Diagnostic codes (ours + tiger keys) to suppress everywhere. */
@@ -278,6 +281,7 @@ export function readConfig(): PxConfig {
     excludedMods,
     locLanguage: (cfg.get<string>("locLanguage") ?? "english").trim().toLowerCase() || "english",
     scopeInlayHints: cfg.get<boolean>("scopeInlayHints") ?? false,
+    calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,
     enableForWorkspace,
     diagnosticsIgnore: sanitizeStringList(cfg.get("diagnostics.ignore")),

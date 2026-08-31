@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Custom calendar display (`px.calendar`).** Total-conversion mods (AGoT,
+  LotR, Hegemonia...) keep script dates on the engine's year axis but show
+  their own eras in game. Declare the mapping once in the workspace settings
+  (`{ "epoch": 4000, "after": "AD", "before": "BC" }`, optional custom
+  `months` with their own names and day counts) and the toolkit shows the
+  in-game form everywhere: inlay hints after every date in script files
+  (`3000.1.1` reads `1000 BC`), a hover card with the full converted date,
+  and a `Paradox: Insert Date` command that takes the date as displayed
+  ("1000 BC March 15") and inserts the script date the game logic needs
+  (`3000.3.15`), with a live preview before anything is committed. Display
+  only: no existing date is ever rewritten.
+
 ## 0.3.3 (beta) - tiger download fix
 
 ### Fixed

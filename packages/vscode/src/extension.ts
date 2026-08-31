@@ -45,6 +45,7 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
+import { insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { readModName } from "@px-lsp/protocol/modName";
@@ -142,6 +143,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     workspaceMods: c.workspaceMods,
     locLanguage: c.locLanguage,
     scopeInlayHints: c.scopeInlayHints,
+    calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
     diagnosticsVanilla: c.diagnosticsVanilla,
@@ -528,6 +530,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
+    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
     vscode.commands.registerCommand("px.createTranslation", () =>
       createTranslationCommand(cfgForActive(), log)
     ),
