@@ -28,9 +28,18 @@
   correct in both directions. Setup & Health Check now recommends picking a
   projects folder, and the mod walkthrough page mentions the layout.
 
+- **The Project panel shows the paths in use.** A Paths section lists the
+  effective game folder, script_docs logs, mod folder, mod projects folder
+  and tiger binary, each with its origin (set, detected, downloaded, not
+  found) - the answer the settings UI cannot give, since an auto-detected
+  value just looks like an empty setting there. Clicking a row opens that
+  setting.
+
 - **Extension Settings in the Project panel menu.** The panel's overflow menu
-  opens the extension's settings, listed above Customize Project Panel Rows
-  (also `Paradox: Extension Settings` in the palette).
+  opens the extension's settings as a normal editor tab with the Workspace
+  scope selected (the px paths and toggles are per-project taste), listed
+  above Customize Project Panel Rows. Also `Paradox: Extension Settings` in
+  the palette.
 
 - **Descriptions preview like the Workshop page.** An Edit | Preview toggle
   on the description (and on every translation) renders the draft's BBCode -

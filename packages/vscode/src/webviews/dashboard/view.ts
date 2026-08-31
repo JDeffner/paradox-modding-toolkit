@@ -10,8 +10,8 @@ import { icon, ICON_NAMES } from "../shared/icons";
 import { visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
 
-/** The three collapsible sections, in render order. */
-type SectionId = "mods" | "toggles" | "tools";
+/** The collapsible sections, in render order. */
+type SectionId = "paths" | "mods" | "toggles" | "tools";
 
 /** workspaceState key holding the per-section collapse flags (absent = expanded). */
 const COLLAPSED_KEY = "px.dashboardCollapsed";
@@ -26,6 +26,7 @@ type InboundMessage =
   | { type: "watcher" }
   | { type: "baseline" }
   | { type: "gameSettings" }
+  | { type: "openSetting"; setting: string }
   | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
@@ -39,10 +40,22 @@ interface ModState {
   missing: boolean;
 }
 
+/** One row of the Paths section: an effective folder/binary the extension uses. */
+interface PathRow {
+  label: string;
+  /** The effective value, or null when nothing is configured or detected. */
+  value: string | null;
+  /** Where the value came from, shown as a badge ("set", "detected", ...). */
+  source: string;
+  /** The px.* setting the row opens. */
+  setting: string;
+}
+
 interface DashboardState {
   /** Active game (full name) and whether it came from auto-detection. */
   gameName: string;
   gameAuto: boolean;
+  paths: PathRow[];
   mods: ModState[];
   /** Raw pin, or null = follow the active editor. */
   pinnedRoot: string | null;
@@ -125,6 +138,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
     return {
       gameName: meta.name,
       gameAuto: (vscode.workspace.getConfiguration("px").get<string>("gameId") ?? "auto") === "auto",
+      paths: collectPaths(cfg, meta.tiger !== undefined),
       mods,
       pinnedRoot: this.deps.focus.pinnedRoot(),
       focusRoot: this.deps.focus.current(),
@@ -142,6 +156,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
   private collapsedState(): Record<SectionId, boolean> {
     const stored = this.deps.workspaceState.get<Partial<Record<SectionId, boolean>>>(COLLAPSED_KEY);
     return {
+      paths: stored?.paths === true,
       mods: stored?.mods === true,
       toggles: stored?.toggles === true,
       tools: stored?.tools === true,
@@ -186,6 +201,14 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "gameSettings":
         await vscode.commands.executeCommand("workbench.action.openSettings", "px.gameId");
         return;
+      case "openSetting":
+        // The key comes from webview script; accept only our own settings.
+        if (msg.setting.startsWith("px.")) {
+          await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+            query: msg.setting,
+          });
+        }
+        return;
       case "baseline":
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
         this.refresh();
@@ -199,6 +222,38 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         return;
     }
   }
+}
+
+/**
+ * The Paths rows: what the extension is ACTUALLY using, with its origin. The
+ * settings UI cannot show auto-detected values (an empty setting just looks
+ * empty), so this is where "which game/logs/mod folder am I on?" gets its
+ * answer. "set" = the px.* setting; "detected" = auto-detection (Steam,
+ * Documents, the workspace); "downloaded" = the tiger copy we manage.
+ */
+function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
+  const raw = vscode.workspace.getConfiguration("px");
+  const isSet = (key: string) => (raw.get<string>(key) ?? "").trim() !== "";
+  const row = (label: string, setting: string, value: string | null, detectedAs = "detected"): PathRow => ({
+    label,
+    setting,
+    value,
+    source: value === null ? "not found" : isSet(setting.replace(/^px\./, "")) ? "set" : detectedAs,
+  });
+  const projectsDir = (raw.get<string>("modProjectsDir") ?? "").trim() || null;
+  const rows = [
+    row("Game", "px.gamePath", cfg.gamePath),
+    row("script_docs logs", "px.logsPath", cfg.logsPath),
+    row("Mod", "px.modPath", cfg.modPath),
+    {
+      label: "Mod projects",
+      setting: "px.modProjectsDir",
+      value: projectsDir,
+      source: projectsDir ? "set" : "not set",
+    },
+  ];
+  if (hasTiger) rows.push(row("Tiger", "px.tigerPath", cfg.tigerPath, "downloaded"));
+  return rows;
 }
 
 /**
@@ -339,6 +394,16 @@ ${uiCss}
   .toggle-row > .px-switch { flex: 0 0 auto; }
   /* Tooltips open below, flush left: a centered one overflows a narrow sidebar. */
   [data-tip]:not([data-tip-side])::after { left: 0; transform: none; }
+  /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
+     is the part that tells paths apart). */
+  .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
+  .path-row .path-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .path-row .path-value {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    direction: rtl; text-align: left;
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); font-family: var(--vscode-editor-font-family, monospace);
+  }
+  .path-row .path-value.none { direction: ltr; font-family: inherit; font-style: italic; }
   .mod-row.excluded .px-item-label, .mod-row.missing .px-item-label { color: var(--px-muted-fg); }
   .mod-row.missing .px-item-label { text-decoration: line-through; }
   .empty { padding: 4px 8px; color: var(--px-muted-fg); font-size: var(--px-text-sm); }
@@ -363,6 +428,14 @@ ${uiCss}
 </head>
 <body>
 <div class="px-item" id="game" role="button" tabindex="0" data-tip-wrap></div>
+<div class="section" id="section-paths">
+  ${sectionHead(
+    "paths",
+    "Paths",
+    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to change its setting."
+  )}
+  <div class="section-body px-list" id="body-paths"></div>
+</div>
 <div class="section" id="section-mods">
   ${sectionHead(
     "mods",
@@ -509,6 +582,32 @@ function renderActions() {
   }
 }
 
+// ---- paths (effective values, host-computed) ----
+function renderPaths() {
+  const box = document.getElementById("body-paths");
+  box.textContent = "";
+  for (const p of state.paths) {
+    const row = el("div", "px-item path-row");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.setAttribute("data-tip", (p.value ? p.value + " — " : "") + "Click to change (" + p.setting + ").");
+    row.setAttribute("data-tip-wrap", "");
+    const head = el("div", "path-head");
+    head.appendChild(el("span", "px-item-label", p.label));
+    head.appendChild(el("span", "px-grow"));
+    head.appendChild(badge(p.source));
+    row.appendChild(head);
+    // RTL truncation flips leading punctuation; the value is plain text either way.
+    row.appendChild(el("div", "path-value" + (p.value ? "" : " none"), p.value ?? "none"));
+    const open = () => vscode.postMessage({ type: "openSetting", setting: p.setting });
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+    box.appendChild(row);
+  }
+}
+
 // ---- game header ----
 const gameRow = document.getElementById("game");
 gameRow.setAttribute("data-tip",
@@ -612,6 +711,7 @@ function renderMods() {
 
 function render() {
   renderGame();
+  renderPaths();
   renderMods();
   renderActions();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);

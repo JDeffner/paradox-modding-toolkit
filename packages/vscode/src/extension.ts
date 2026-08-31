@@ -616,8 +616,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
     ),
+    // Workspace scope: the settings that matter here (paths, focus, excludes)
+    // are per-project taste, and the User tab is one click away in the editor.
     vscode.commands.registerCommand("px.openSettings", () =>
-      vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jdeffner.px-toolkit")
+      vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+        query: "@ext:jdeffner.px-toolkit",
+      })
     ),
     // Checked = visible, so the setting stores the INVERSE of the picks. The
     // catalog is the panel's own row list for the active game, which is why it
