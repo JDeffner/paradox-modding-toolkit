@@ -40,7 +40,7 @@ import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext }
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
-import { actionGroups } from "./webviews/dashboard/actions";
+import { actionGroups, referenceItems } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
@@ -630,14 +630,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.customizeSidebar", async () => {
       type Item = vscode.QuickPickItem & { command: string };
       const hidden = new Set(hiddenRows());
-      const items: Item[] = actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
-        g.items.map((it) => ({
-          label: `${g.label}: ${it.label}`,
+      const items: Item[] = [
+        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
+          g.items.map((it) => ({
+            label: `${g.label}: ${it.label}`,
+            description: it.command,
+            picked: !hidden.has(it.command),
+            command: it.command,
+          }))
+        ),
+        ...referenceItems(metaFor(cfg.gameId)).map((it) => ({
+          label: `Reference: ${it.label}`,
           description: it.command,
           picked: !hidden.has(it.command),
           command: it.command,
-        }))
-      );
+        })),
+      ];
       const picked = await vscode.window.showQuickPick(items, {
         canPickMany: true,
         title: "Customize the Project panel rows",

@@ -7,7 +7,7 @@ import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import uiCss from "../shared/ui.css";
 import { icon, ICON_NAMES } from "../shared/icons";
-import { visibleActionGroups, type ActionGroup } from "./actions";
+import { visibleActionGroups, visibleReferenceItems, type ActionGroup, type ActionItem } from "./actions";
 import { makeNonce } from "../nonce";
 
 /** A collapsible section: the static ones ("mods", "toggles", "paths") plus
@@ -71,6 +71,8 @@ interface DashboardState {
   scopeInlayHints: boolean;
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
+  /** Reference links, rendered as single footer buttons below the Discord row. */
+  reference: ActionItem[];
   /** Persisted per-section collapse flags; every section defaults to expanded. */
   collapsed: Record<SectionId, boolean>;
 }
@@ -150,6 +152,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
       actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
+      reference: visibleReferenceItems(meta, hiddenRows()),
       collapsed: this.collapsedState(),
     };
   }
@@ -425,11 +428,11 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
-  /* Community link: last thing in the panel, quiet enough to ignore. */
+  /* Footer: community link + reference buttons, quiet enough to ignore. */
   #footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--px-border); }
-  #discord { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
-  #discord:hover { color: var(--px-fg); }
-  #discord .px-icon { width: 14px; height: 14px; }
+  #footer .px-item { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
+  #footer .px-item:hover { color: var(--px-fg); }
+  #footer .px-icon { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -482,6 +485,7 @@ ${uiCss}
        data-tip-wrap>
     ${icon("messageSquare")}<span class="px-item-label">Join the Discord</span>
   </div>
+  <div id="footer-reference"></div>
 </div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -605,6 +609,16 @@ function renderActions() {
       body.appendChild(row);
     }
     anchor.parentNode.insertBefore(section, anchor);
+  }
+}
+
+// ---- footer reference buttons (below the Discord row) ----
+function renderReference() {
+  const box = document.getElementById("footer-reference");
+  box.textContent = "";
+  for (const it of state.reference) {
+    box.appendChild(actionRow(it.icon, it.label, it.tip,
+      () => vscode.postMessage({ type: "run", command: it.command })));
   }
 }
 
@@ -741,6 +755,7 @@ function render() {
   renderPaths();
   renderMods();
   renderActions();
+  renderReference();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
   document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
   setSwitch("baseline", state.tigerBaseline, false);

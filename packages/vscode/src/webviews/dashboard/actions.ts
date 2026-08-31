@@ -99,12 +99,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "image",
           tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
         },
-        {
-          label: "Image Guidelines",
-          command: "px.imageGuidelines",
-          icon: "bookOpen",
-          tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
-        },
       ],
     },
     {
@@ -122,26 +116,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "copy",
           tip: "Create a standalone mod that translates another mod, including an AI translation prompt.",
         },
-      ],
-    },
-    {
-      label: "Reference",
-      items: [
-        // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
-        // files of the folder plus a search on the game's modding wiki.
-        hasFormatDocs(meta.id)
-          ? {
-              label: "Format Docs",
-              command: "px.openInfoDocs",
-              icon: "bookOpen" as const,
-              tip: "The game's own _*.info format documentation for the file you are editing.",
-            }
-          : {
-              label: "Vanilla Examples & Wiki",
-              command: "px.openInfoDocs",
-              icon: "bookOpen" as const,
-              tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
-            },
       ],
     },
     {
@@ -216,6 +190,42 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
   ];
+}
+
+/**
+ * Reference links: not a tool section but quiet single buttons in the panel
+ * footer, below "Join the Discord". Hidden the same way as the rows above
+ * (`px.sidebar.hidden`, keyed by command id).
+ */
+export function referenceItems(meta: GameMeta): ActionItem[] {
+  return [
+    // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
+    // files of the folder plus a search on the game's modding wiki.
+    hasFormatDocs(meta.id)
+      ? {
+          label: "Format Docs",
+          command: "px.openInfoDocs",
+          icon: "bookOpen" as const,
+          tip: "The game's own _*.info format documentation for the file you are editing.",
+        }
+      : {
+          label: "Vanilla Examples & Wiki",
+          command: "px.openInfoDocs",
+          icon: "bookOpen" as const,
+          tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
+        },
+    {
+      label: "Image Guidelines",
+      command: "px.imageGuidelines",
+      icon: "bookOpen",
+      tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
+    },
+  ];
+}
+
+export function visibleReferenceItems(meta: GameMeta, hidden: readonly string[]): ActionItem[] {
+  const skip = new Set(hidden);
+  return referenceItems(meta).filter((it) => !skip.has(it.command));
 }
 
 /**
