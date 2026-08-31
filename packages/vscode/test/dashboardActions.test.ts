@@ -19,9 +19,9 @@ describe("visibleActionGroups", () => {
   });
 
   it("drops a group whose rows are all hidden", () => {
-    const groups = visibleActionGroups(ck3Meta, 0, ["px.modReport"]);
-    expect(groups.map((g) => g.label)).not.toContain("Inspect");
-    expect(groups.map((g) => g.label)).toContain("Open");
+    const groups = visibleActionGroups(ck3Meta, 0, ["px.openInfoDocs"]);
+    expect(groups.map((g) => g.label)).not.toContain("Reference");
+    expect(groups.map((g) => g.label)).toContain("Review");
   });
 
   it("ignores ids that match no row", () => {

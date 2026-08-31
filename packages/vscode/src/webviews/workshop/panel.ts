@@ -40,6 +40,7 @@ import {
   workshopDirFor,
   workshopUrl,
 } from "../../steam/workshop";
+import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { workshopHtml } from "./html";
 import type { AppToHost, HostToApp, ModChoice, WorkshopModInfo } from "./messages";
@@ -294,6 +295,31 @@ export class WorkshopPanel {
     }
   }
 
+  /**
+   * Modal warning before CREATING a workshop folder inside the game's
+   * Documents mod folder. Every installed mod lives there, and the default
+   * `px.workshop.dir` (`../workshop`) of any mod in that folder resolves to
+   * the same `<mod folder>/workshop` for all of them, so listings would
+   * overwrite each other. Returns true when creating is fine (or confirmed).
+   */
+  private async confirmWorkshopDirPlacement(dir: string): Promise<boolean> {
+    const gameModDir = gameDocsSubdir(this.options.meta, "mod");
+    if (!gameModDir || !isInsideDir(gameModDir, dir)) return true;
+    const choice = await vscode.window.showWarningMessage(
+      "Create the workshop folder inside the game's mod folder?",
+      {
+        modal: true,
+        detail:
+          `It would land at ${dir}, in the folder where every installed mod lives. ` +
+          `Any other mod in that folder resolves its default workshop location to the same place, ` +
+          `so listings can overwrite each other. Recommended: move the mod to a project folder ` +
+          `("Move Mod") or point px.workshop.dir somewhere outside the game's mod folder.`,
+      },
+      "Create Anyway"
+    );
+    return choice === "Create Anyway";
+  }
+
   /** Open (creating if needed) a listing file of the workshop folder. */
   private async openListingFile(lang: string | null): Promise<void> {
     const { meta } = this.options;
@@ -425,6 +451,8 @@ export class WorkshopPanel {
       this.notify("The mod has no Workshop item to pull from.", "warn");
       return;
     }
+    const dir = workshopDirFor(root);
+    if (!hasListingFiles(dir) && !(await this.confirmWorkshopDirPlacement(dir))) return;
     this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
     try {
       const languages = STEAM_LANGUAGES.map((l) => l.api);
@@ -445,7 +473,6 @@ export class WorkshopPanel {
           ...(description !== "" ? { description } : {}),
         };
       }
-      const dir = workshopDirFor(root);
       writeListingFiles(dir, { description: item.description, translations });
       upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
       const n = Object.keys(translations).length;
@@ -645,6 +672,13 @@ function suggestedLanguages(root: string, meta: GameMeta): string[] {
     }
   }
   return [...langs].sort();
+}
+
+/** True when `child` is `parent` or lives under it (case-insensitive: the
+ * paths are Windows-born on the platform where this matters). */
+function isInsideDir(parent: string, child: string): boolean {
+  const rel = path.relative(path.resolve(parent).toLowerCase(), path.resolve(child).toLowerCase());
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
 function makeNonce(): string {

@@ -28,12 +28,28 @@
   correct in both directions. Setup & Health Check now recommends picking a
   projects folder, and the mod walkthrough page mentions the layout.
 
-- **The Project panel shows the paths in use.** A Paths section lists the
-  effective game folder, script_docs logs, mod folder, mod projects folder
-  and tiger binary, each with its origin (set, detected, downloaded, not
-  found) - the answer the settings UI cannot give, since an auto-detected
-  value just looks like an empty setting there. Clicking a row opens that
-  setting.
+- **The Project panel shows the paths in use.** A Paths section (at the
+  bottom of the panel) lists the effective game folder, script_docs logs, mod
+  folder, mod projects folder and tiger binary, each with its origin (set,
+  detected, downloaded, not found) - the answer the settings UI cannot give,
+  since an auto-detected value just looks like an empty setting there.
+  Clicking a row opens the folder (or the tiger binary's folder) in the OS
+  file explorer; the gear on the row opens the extension settings.
+
+- **The Project panel reorganized.** Section order is now Workspace Mods,
+  Tools, Toggles, Paths. The Tools rows regrouped by what you are doing:
+  Create, Review (Event Graph, Mod Report, Simulate Event - the report now
+  sits next to the graph), Design (GUI tools, Flag Builder and the image
+  rows), Localization, Reference, Test & Troubleshoot, Share. Every settings
+  entry point in the panel (the game header, the path gears) opens the same
+  Workspace-scoped extension settings view as the overflow menu.
+
+- **Warning before a workshop folder lands among the game's mods.** Creating
+  the listing folder (the panel's download button) now warns first when it
+  would land inside the game's Documents mod folder: every mod living there
+  resolves the default `px.workshop.dir` to the same `mod/workshop`, so
+  listings would overwrite each other. The dialog recommends the mod projects
+  layout (Move Mod) or pointing `px.workshop.dir` elsewhere.
 
 - **Extension Settings in the Project panel menu.** The panel's overflow menu
   opens the extension's settings as a normal editor tab with the Workspace

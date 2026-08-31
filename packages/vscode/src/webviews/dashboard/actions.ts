@@ -32,60 +32,6 @@ export interface ActionGroup {
 export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
   return [
     {
-      label: "Open",
-      items: [
-        {
-          label: "Event Graph",
-          command: "px.showEventGraph",
-          icon: "waypoints",
-          tip: "Interactive graph of what fires what: events, on_actions and decisions of the focused mod.",
-        },
-        {
-          label: "GUI Widget Tree",
-          command: "px.showGuiTree",
-          icon: "listTree",
-          tip: "The widget tree of the .gui file you are editing, with the templates and types each widget comes from.",
-        },
-        {
-          label: "GUI Editor",
-          command: "px.openGuiEditor",
-          icon: "layoutTemplate",
-          tip: "Pixel-accurate rendering of the .gui window you are editing, with click-to-select, drag, resize and property edits.",
-        },
-        ...(meta.flagBuilder
-          ? [
-              {
-                label: "Flag Builder",
-                command: "px.openFlagBuilder",
-                icon: "flag" as const,
-                tip: "Compose a coat of arms from the game's patterns and emblems, preview it, and write it into the mod.",
-              },
-            ]
-          : []),
-        // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
-        // files of the folder plus a search on the game's modding wiki.
-        hasFormatDocs(meta.id)
-          ? {
-              label: "Format Docs",
-              command: "px.openInfoDocs",
-              icon: "bookOpen" as const,
-              tip: "The game's own _*.info format documentation for the file you are editing.",
-            }
-          : {
-              label: "Vanilla Examples & Wiki",
-              command: "px.openInfoDocs",
-              icon: "bookOpen" as const,
-              tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
-            },
-        {
-          label: "Simulate Event",
-          command: "px.simulateEvent",
-          icon: "flaskConical",
-          tip: "Static walkthrough of what happens when the event at the cursor fires, with step-into links along the chain.",
-        },
-      ],
-    },
-    {
       label: "Create",
       items: [
         {
@@ -113,6 +59,68 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
     {
+      label: "Review",
+      items: [
+        {
+          label: "Event Graph",
+          command: "px.showEventGraph",
+          icon: "waypoints",
+          tip: "Interactive graph of what fires what: events, on_actions and decisions of the focused mod.",
+        },
+        {
+          label: "Mod Report",
+          command: "px.modReport",
+          icon: "fileText",
+          tip: "Summary of the focused mod: content counts, localization coverage, problems.",
+        },
+        {
+          label: "Simulate Event",
+          command: "px.simulateEvent",
+          icon: "flaskConical",
+          tip: "Static walkthrough of what happens when the event at the cursor fires, with step-into links along the chain.",
+        },
+      ],
+    },
+    {
+      label: "Design",
+      items: [
+        {
+          label: "GUI Widget Tree",
+          command: "px.showGuiTree",
+          icon: "listTree",
+          tip: "The widget tree of the .gui file you are editing, with the templates and types each widget comes from.",
+        },
+        {
+          label: "GUI Editor",
+          command: "px.openGuiEditor",
+          icon: "layoutTemplate",
+          tip: "Pixel-accurate rendering of the .gui window you are editing, with click-to-select, drag, resize and property edits.",
+        },
+        ...(meta.flagBuilder
+          ? [
+              {
+                label: "Flag Builder",
+                command: "px.openFlagBuilder",
+                icon: "flag" as const,
+                tip: "Compose a coat of arms from the game's patterns and emblems, preview it, and write it into the mod.",
+              },
+            ]
+          : []),
+        {
+          label: "Convert Image to DDS",
+          command: "px.convertToDds",
+          icon: "image",
+          tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
+        },
+        {
+          label: "Image Guidelines",
+          command: "px.imageGuidelines",
+          icon: "bookOpen",
+          tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
+        },
+      ],
+    },
+    {
       label: "Localization",
       items: [
         {
@@ -130,31 +138,23 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
     {
-      label: "Images",
+      label: "Reference",
       items: [
-        {
-          label: "Convert Image to DDS",
-          command: "px.convertToDds",
-          icon: "image",
-          tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
-        },
-        {
-          label: "Image Guidelines",
-          command: "px.imageGuidelines",
-          icon: "bookOpen",
-          tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
-        },
-      ],
-    },
-    {
-      label: "Inspect",
-      items: [
-        {
-          label: "Mod Report",
-          command: "px.modReport",
-          icon: "fileText",
-          tip: "Summary of the focused mod: content counts, localization coverage, problems.",
-        },
+        // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
+        // files of the folder plus a search on the game's modding wiki.
+        hasFormatDocs(meta.id)
+          ? {
+              label: "Format Docs",
+              command: "px.openInfoDocs",
+              icon: "bookOpen" as const,
+              tip: "The game's own _*.info format documentation for the file you are editing.",
+            }
+          : {
+              label: "Vanilla Examples & Wiki",
+              command: "px.openInfoDocs",
+              icon: "bookOpen" as const,
+              tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
+            },
       ],
     },
     {

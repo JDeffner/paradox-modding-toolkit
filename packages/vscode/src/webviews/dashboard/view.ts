@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
@@ -25,8 +26,8 @@ type InboundMessage =
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
   | { type: "watcher" }
   | { type: "baseline" }
-  | { type: "gameSettings" }
-  | { type: "openSetting"; setting: string }
+  | { type: "openSettings" }
+  | { type: "revealPath"; setting: string }
   | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
@@ -198,17 +199,34 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.deps.errorLog.toggle();
         this.refresh();
         return;
-      case "gameSettings":
-        await vscode.commands.executeCommand("workbench.action.openSettings", "px.gameId");
+      case "openSettings":
+        // The same Workspace-scoped @ext view the overflow menu opens.
+        await vscode.commands.executeCommand("px.openSettings");
         return;
-      case "openSetting":
-        // The key comes from webview script; accept only our own settings.
-        if (msg.setting.startsWith("px.")) {
-          await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
-            query: msg.setting,
-          });
+      case "revealPath": {
+        // The key comes from webview script; resolve it host-side against the
+        // effective rows, never trust it as a path.
+        const cfg = this.deps.getCfg();
+        const row = collectPaths(cfg, metaFor(cfg.gameId).tiger !== undefined).find(
+          (p) => p.setting === msg.setting
+        );
+        if (!row) return;
+        if (row.value !== null) {
+          try {
+            if (fs.statSync(row.value).isDirectory()) {
+              // Opens the folder itself in the OS file explorer.
+              await vscode.env.openExternal(vscode.Uri.file(row.value));
+            } else {
+              await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(row.value));
+            }
+            return;
+          } catch {
+            /* stale path: fall through to the settings */
+          }
         }
+        await vscode.commands.executeCommand("px.openSettings");
         return;
+      }
       case "baseline":
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
         this.refresh();
@@ -428,14 +446,6 @@ ${uiCss}
 </head>
 <body>
 <div class="px-item" id="game" role="button" tabindex="0" data-tip-wrap></div>
-<div class="section" id="section-paths">
-  ${sectionHead(
-    "paths",
-    "Paths",
-    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to change its setting."
-  )}
-  <div class="section-body px-list" id="body-paths"></div>
-</div>
 <div class="section" id="section-mods">
   ${sectionHead(
     "mods",
@@ -443,6 +453,14 @@ ${uiCss}
     "Every mod detected in this workspace. Indexed mods are treated as yours: completion, navigation, diagnostics and the localization tools work across all of them. The filled dot marks the mod the sidebar views describe."
   )}
   <div class="section-body px-list" id="body-mods"></div>
+</div>
+<div class="section" id="section-tools">
+  ${sectionHead(
+    "tools",
+    "Tools",
+    "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
+  )}
+  <div class="section-body" id="body-tools"></div>
 </div>
 <div class="section" id="section-toggles">
   ${sectionHead("toggles", "Toggles")}
@@ -469,13 +487,13 @@ ${uiCss}
     )}
   </div>
 </div>
-<div class="section" id="section-tools">
+<div class="section" id="section-paths">
   ${sectionHead(
-    "tools",
-    "Tools",
-    "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
+    "paths",
+    "Paths",
+    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to open it in your file explorer; the gear changes the setting."
   )}
-  <div class="section-body" id="body-tools"></div>
+  <div class="section-body px-list" id="body-paths"></div>
 </div>
 <div id="footer">
   <div class="px-item" id="discord" role="button" tabindex="0"
@@ -590,16 +608,30 @@ function renderPaths() {
     const row = el("div", "px-item path-row");
     row.setAttribute("role", "button");
     row.tabIndex = 0;
-    row.setAttribute("data-tip", (p.value ? p.value + " — " : "") + "Click to change (" + p.setting + ").");
+    row.setAttribute("data-tip", p.value
+      ? p.value + " — Click to open in your file explorer."
+      : "Not available. Click to open the extension settings (" + p.setting + ").");
     row.setAttribute("data-tip-wrap", "");
     const head = el("div", "path-head");
     head.appendChild(el("span", "px-item-label", p.label));
     head.appendChild(el("span", "px-grow"));
     head.appendChild(badge(p.source));
+    const gear = el("button", "px-btn");
+    gear.setAttribute("data-variant", "ghost");
+    gear.setAttribute("data-size", "icon-xs");
+    gear.setAttribute("data-tip", "Change the setting (" + p.setting + ").");
+    gear.setAttribute("data-tip-side", "left");
+    gear.setAttribute("aria-label", "Change " + p.setting);
+    gear.appendChild(iconEl("settings"));
+    gear.addEventListener("click", (e) => {
+      e.stopPropagation();
+      vscode.postMessage({ type: "openSettings" });
+    });
+    head.appendChild(gear);
     row.appendChild(head);
     // RTL truncation flips leading punctuation; the value is plain text either way.
     row.appendChild(el("div", "path-value" + (p.value ? "" : " none"), p.value ?? "none"));
-    const open = () => vscode.postMessage({ type: "openSetting", setting: p.setting });
+    const open = () => vscode.postMessage({ type: "revealPath", setting: p.setting });
     row.addEventListener("click", open);
     row.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
@@ -612,7 +644,7 @@ function renderPaths() {
 const gameRow = document.getElementById("game");
 gameRow.setAttribute("data-tip",
   "The game this workspace mods. Click to change it (px.gameId) if the detection guessed wrong.");
-const openGameSettings = () => vscode.postMessage({ type: "gameSettings" });
+const openGameSettings = () => vscode.postMessage({ type: "openSettings" });
 gameRow.addEventListener("click", openGameSettings);
 gameRow.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openGameSettings(); }
