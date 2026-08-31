@@ -374,7 +374,7 @@ computed rect.
 ## Cross-game measurements
 
 The rules above are the DEFAULT profile's, measured on its live install.
-The Vic3 probe of 2026-08-09 (`vic3-expectations.md`) re-measured the core
+The Vic3 probe of 2026-08-09 (`vic3/expectations.md`) re-measured the core
 model: everything held pixel-exact EXCEPT the empty-sized-container rule
 (game-tagged above), text metrics (per-game font: Vic3's advance re-rounds
 per size, `round(0.9*fs)` for M, line box exactly `1.3*fs`, default

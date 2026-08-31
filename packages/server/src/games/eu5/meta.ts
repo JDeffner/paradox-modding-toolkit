@@ -27,7 +27,7 @@ export const eu5Meta: GameMeta = {
   // uiFont and guiTextMetrics deliberately absent: neither the font file nor
   // any text box has been measured, so the GUI editor refuses to open for this
   // game until the calibration pack returns
-  // (docs/gui-designer/calibration/eu5-package/).
+  // (docs/gui-designer/eu5/package/).
   // All EU5 content sits under one of three load-stage folders at the mod
   // root; gameplay script lives under in_game/. Schema paths carry the
   // prefix; this list drives mod detection.

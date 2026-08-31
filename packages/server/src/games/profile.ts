@@ -105,7 +105,7 @@ export interface GameMeta {
    * layout engine's text measurer and the editor canvas. Absent = the game is
    * NOT calibrated: the engine assumes the default table
    * (gui/measuredMetrics.ts) and the GUI editor refuses to open. Measured via
-   * docs/gui-designer/calibration/probes/.
+   * docs/gui-designer/probes/.
    */
   guiTextMetrics?: GuiTextMetrics;
   /**

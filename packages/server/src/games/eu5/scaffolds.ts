@@ -7,7 +7,7 @@
  * in_game/common/scripted_effects, in_game/common/scripted_triggers).
  *
  * Events, on_action hooks and database content wait for the calibration pack
- * (docs/gui-designer/calibration/eu5-package/): a template whose keys we cannot
+ * (docs/gui-designer/eu5/package/): a template whose keys we cannot
  * check would create exactly the silent failure this command exists to prevent.
  *
  * The `in_game/` stage prefix is NOT written here; the writer adds

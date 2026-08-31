@@ -52,7 +52,7 @@ const EU5_REF_FIELDS: RefField[] = [
  * `template X { … }` extraction is engine behaviour, the same in every Jomini
  * title, so it holds without a live install. Only the flat root is claimed;
  * whether EU5 also loads `<stage>/gui` is one of the open questions in the
- * calibration package (docs/gui-designer/calibration/eu5-package/).
+ * calibration package (docs/gui-designer/eu5/package/).
  */
 const EU5_HAND_ENTRIES: SchemaEntry[] = [
   { path: "gui", kind: "gui_type", ext: ".gui", extraction: "gui-type" },

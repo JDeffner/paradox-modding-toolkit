@@ -475,7 +475,7 @@ export interface GuiTree {
 /**
  * Request: rendered GUI layout for a .gui document;
  * {@link GuiLayoutParams} -> {@link GuiLayoutResult}. Rectangles come from
- * the measured layout engine (docs/gui-designer/calibration/spec.md), with
+ * the measured layout engine (docs/gui-designer/spec.md), with
  * templates/types resolved against the vanilla + mod gui tree.
  */
 export const guiLayoutRequest = "paradox/guiLayout";

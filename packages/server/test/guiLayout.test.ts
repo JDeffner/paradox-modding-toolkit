@@ -1,6 +1,6 @@
 /**
  * Golden fixtures for the PdxGui layout engine, derived from the in-game
- * calibration campaign (docs/gui-designer/calibration/). Each case cites its
+ * calibration campaign (docs/gui-designer/). Each case cites its
  * batch: expected values are either the exact fractional model (asserted
  * tightly) or the measured on-screen pixels (asserted within the +-1px
  * raster tolerance documented in spec.md).

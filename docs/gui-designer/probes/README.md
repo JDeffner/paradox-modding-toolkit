@@ -42,6 +42,6 @@ the generator script lives in the session scratchpad as
    boxes), write the game's expectations file, then move the deltas into the
    layout engine behind the GameProfile seam.
 
-Packages: `../eu5-package/` (self-contained, for an external runner),
-`../vic3-probe.md` (run checklist; the mod is installed straight into the
+Packages: `../eu5/package/` (self-contained, for an external runner),
+`../vic3/probe.md` (run checklist; the mod is installed straight into the
 local Vic3 mods folder).

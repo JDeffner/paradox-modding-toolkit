@@ -1,11 +1,11 @@
 # Vic3 probe run checklist (Joel)
 
 **STATUS: RUN 2026-08-09, results analyzed and calibrated — see
-`vic3-expectations.md`.** The checklist below is kept for re-runs.
+`expectations.md`.** The checklist below is kept for re-runs.
 
 The probe mod is ALREADY INSTALLED at
 `D:\Documents\Paradox Interactive\Victoria 3\mod\px-layout-probe`
-(same five windows as the EU5 package; canonical sources in `probes/`).
+(same five windows as the EU5 package; canonical sources in `../probes/`).
 `GUI.CreateWidget` / `GUI.ClearWidgets` are confirmed present in the Vic3
 binary. Expected session time: ~15 minutes.
 
@@ -24,8 +24,8 @@ binary. Expected session time: ~15 minutes.
    size-on-container warnings).
 6. Hand me the five PNGs (named `px_probe_a.png` … `px_probe_e.png`) + the
    error.log + the resolution/UI-scale note. I take it from there:
-   `analyze.ps1` extraction, a `vic3-expectations.md` with
-   measured-vs-predicted (predictions live in `probes/engine-predictions.txt`),
+   `../analyze.ps1` extraction, a `expectations.md` with
+   measured-vs-predicted (predictions live in `../probes/engine-predictions.txt`),
    and the deltas go into the layout engine behind the GameProfile text seam.
 
 What the probes will most likely catch on Vic3 (worth eyeballing in-game):

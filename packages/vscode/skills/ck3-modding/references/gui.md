@@ -8,15 +8,13 @@ Companion material (paths relative to the px-toolkit repo this skill ships in,
 `packages/vscode/skills/ck3-modding/` → repo root is `../../../../`; standalone copies of the skill: find the repo at
 github.com/JDeffner/paradox-modding-toolkit):
 - **Measured layout spec (pixel-exact, the authority for layout math)**:
-  `docs/gui-designer/calibration/spec.md` — every rule carries in-game measurement provenance;
-  the per-batch evidence (screenshots, predictions vs measured) sits in the same folder.
-  Condensed version: "Layout semantics" below.
-- Screenshot gallery of policy combinations:
-  `docs/guides/ck3-ui-modding.md`, images in `docs/guides/images/`.
+  `docs/gui-designer/spec.md` — every rule carries in-game measurement provenance;
+  the per-batch evidence (screenshots, predictions vs measured) sits in
+  `docs/gui-designer/ck3/`. Condensed version: "Layout semantics" below.
 - To measure something new: copy a calibration batch's `test_gui.gui` pattern (flat-color
   markers via tinted white.dds, ruler bars) over `game/gui/debug/test_gui.gui`, spawn
   `gui.CreateWidget gui/debug/test_gui.gui test_window`, and run the analyzer
-  `docs/gui-designer/calibration/analyze.ps1` on a PNG screenshot.
+  `docs/gui-designer/analyze.ps1` on a PNG screenshot.
 
 **Fallback if those `docs/` files aren't installed alongside this skill** (the skill can be
 deployed without the repo): the "Layout semantics" section below carries the load-bearing rules,
@@ -180,7 +178,7 @@ Vanilla registers every base type in `gui/preload/defaults.gui` (`types Default 
 
 A 4-batch in-game calibration campaign measured the exact layout rules (screenshot analysis,
 flat-color markers). Full spec with per-rule provenance:
-`docs/gui-designer/calibration/spec.md` in the px-toolkit repo — read it when a layout
+`docs/gui-designer/spec.md` in the px-toolkit repo — read it when a layout
 question needs numbers. The load-bearing facts:
 
 - **Anchors**: `widgetanchor` implicitly DEFAULTS to the `parentanchor` value (not top-left):
@@ -221,18 +219,17 @@ Five policies per axis (`layoutpolicy_horizontal`, `layoutpolicy_vertical`):
 Boxes center themselves and their children — **never `parentanchor` inside a box**; push content
 aside with an `expand = {}` spacer instead.
 
-How each combination actually renders — Read these screenshots from the repo's
-`docs/guides/images/` (black background = the hbox):
+How each combination actually renders, verified in-game:
 
-| Setup | In-game result | Image |
-|---|---|---|
-| bare hbox + 2 buttons | box hugs children tightly, centered | `simple_hbox_wide.jpg` |
-| `expanding` on the hbox | box fills parent width, children spread out centered | `expanded_hbox.jpg` |
-| + `expand = {}` after children | children pushed to the left, spacer eats the rest | `ordered_hbox.jpg` |
-| `expanding` on the children too | children stretch to equal widths — instant tab bar | `tabs_hbox_2.jpg` |
-| `expanding` both axes, box + children | everything fills all space | `big_hbox.png` |
-| `expanding` vs `growing` sibling | expanding takes the extra space, growing keeps its floor | `growing_hbox_2.png` |
-| `preferred`/`shrinking` under pressure | both compress below natural size | `shrinking_hbox_2.png` |
+| Setup | In-game result |
+|---|---|
+| bare hbox + 2 buttons | box hugs children tightly, centered |
+| `expanding` on the hbox | box fills parent width, children spread out centered |
+| + `expand = {}` after children | children pushed to the left, spacer eats the rest |
+| `expanding` on the children too | children stretch to equal widths — instant tab bar |
+| `expanding` both axes, box + children | everything fills all space |
+| `expanding` vs `growing` sibling | expanding takes the extra space, growing keeps its floor |
+| `preferred`/`shrinking` under pressure | both compress below natural size |
 
 **Text stretches layouts.** Long German/Russian strings are the classic breakage: set `max_width`
 on textboxes and test with the built-in `LOREM_IPSUM_TITLE` / `LOREM_IPSUM_DESCRIPTION` loc keys.
@@ -375,6 +372,6 @@ Key evidence files: vanilla `gui/scripted_widgets/_scripted_widgets.info`, `gui/
 `common/scripted_guis/ep2_activities.txt`;
 PoD `gui/scripted_widgets/POD_scripted_widgets.txt`, `gui/POD_windows/POD_hud_resource_bars.gui`,
 `gui/POD_shared/POD_types_resource_bars.gui`, `common/scripted_guis/POD_progressbar_guis.txt`;
-measured layout rules: the repo's `docs/gui-designer/calibration/`
+measured layout rules: the repo's `docs/gui-designer/`
 (spec.md + 4 batches of screenshot evidence, mirrored as golden fixtures in the extension's
 `test/guiLayout.test.ts`).

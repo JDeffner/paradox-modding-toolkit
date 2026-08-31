@@ -27,7 +27,7 @@ export const vic3Meta: GameMeta = {
   // carry the text boxes.
   //
   // Measured in-game 2026-08-09 (px_probe_d/e, 1920x1080 @ 100% GUI scaling;
-  // docs/gui-designer/calibration/vic3-expectations.md). The measured law:
+  // docs/gui-designer/vic3/expectations.md). The measured law:
   // advance(M) = round(0.9 * fontsize), i.e. 14 @15, 15 @17 (the default
   // size), 27 @30, and line box = 1.3 * fontsize exactly (the game ceils the
   // box: 20 @15, 39 @30, 23 @17). A base-30 table + roundPerSize reproduces

@@ -3,13 +3,16 @@ dist/
 *.vsix
 .vscode-test/
 .claude/
-# Local-only design history and working notes. Tracked exceptions:
-# diagnostics (README + diagnostic codes link to it), gui-designer (the
-# published layout-calibration evidence), guides (referenced by the skill).
+# docs/ is local-only by default: working notes and design history never land
+# in git (plans belong in PR descriptions). Tracked exceptions:
 docs/*
+# Per-code diagnostic explanations (README + diagnostic codes link to it).
 !docs/diagnostics/
+# The layout-calibration evidence + GUI editor ledgers (see its README.md).
 !docs/gui-designer/
-!docs/guides/
+# Per-release notes: release.yml reads docs/release/<version>.md as the
+# GitHub Release body and the Discord announcement.
+!docs/release/
 # The wire contract external clients code against — public, versioned.
 !docs/PROTOCOL.md
 # The guide for applications embedding the server; public, linked from the
@@ -18,12 +21,13 @@ docs/*
 # What a workspace costs and how to configure a big one; public, linked from
 # the extension README and the CHANGELOG.
 !docs/PERFORMANCE.md
-# Per-release notes: release.yml reads docs/release-notes-<version>.md as the
-# GitHub Release body and the Discord announcement.
-!docs/release-notes-*.md
 # Features hidden from users until they are fleshed out; code comments point
 # at it, so it travels with the repo.
 !docs/deferred-features.md
+# The release runbook (AGENTS.md points at it).
+!docs/RELEASING.md
+# How the per-language file icons are generated and verified.
+!docs/file-icons.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).
