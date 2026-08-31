@@ -31,5 +31,6 @@ const koffiSource = dirname(createRequire(join(source, "package.json")).resolve(
 const koffiTarget = join(target, "node_modules", "koffi");
 cpSync(koffiSource, koffiTarget, { recursive: true, dereference: true });
 for (const dir of readdirSync(join(koffiTarget, "build", "koffi"))) {
-  if (!KOFFI_PLATFORMS.has(dir)) rmSync(join(koffiTarget, "build", "koffi", dir), { recursive: true, force: true });
+  if (!KOFFI_PLATFORMS.has(dir))
+    rmSync(join(koffiTarget, "build", "koffi", dir), { recursive: true, force: true });
 }

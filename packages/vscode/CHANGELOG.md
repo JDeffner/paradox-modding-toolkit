@@ -151,6 +151,21 @@
   Details in `packages/server/CHANGELOG.md` and
   `packages/protocol/CHANGELOG.md` (0.1.1).
 
+- **Security: third-party mod content can no longer point file operations
+  outside the mod.** A downloaded mod's files used to be able to steer paths
+  with `../` or absolute segments; every such spot now refuses anything that
+  escapes its root: the descriptor's `picture=` (which the Workshop upload
+  ships as the preview image) must be a bare file name, GUI/event-graph
+  texture references resolve strictly inside the mod/game roots (and
+  non-image files are never read at all), the tiger download refuses release
+  tags and asset names that are not plain file names, event-graph saves only
+  write inside the mod or workspace, the Flag Builder validates the webview's
+  file and texture-kind fields like it already validated typed names, and
+  schema overlay paths that climb out of the mod are ignored (server 0.3.0).
+  CI/release workflows now pin third-party actions to commit SHAs, and a
+  `brace-expansion` DoS advisory (GHSA in the vsce toolchain) is patched in
+  the lockfile.
+
 ## 0.3.4 (beta, pre-release) - the large-workspace round
 
 ### Fixed

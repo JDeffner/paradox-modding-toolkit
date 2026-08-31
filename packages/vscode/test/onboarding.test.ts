@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseLibraryFoldersVdf } from "../src/steamDetect";
 import {
   checkedDownloadUrl,
+  isSafeStorageSegment,
   pickTigerAsset,
   preferPlainBinary,
   redirectStep,
@@ -113,6 +114,25 @@ describe("checkedDownloadUrl", () => {
     expect(checkedDownloadUrl("/other/a.zip", from)?.href).toBe("https://github.com/other/a.zip");
     // A relative target cannot leave the host, but an absolute one ignores the base.
     expect(checkedDownloadUrl("https://evil.test/a.zip", from)).toBeNull();
+  });
+});
+
+describe("isSafeStorageSegment", () => {
+  it("accepts real tiger tags and asset names", () => {
+    expect(isSafeStorageSegment("v1.19.0")).toBe(true);
+    expect(isSafeStorageSegment("ck3-tiger-windows-v1.19.0.zip")).toBe(true);
+    expect(isSafeStorageSegment("vic3-tiger-linux-v1.19.0.tar.gz")).toBe(true);
+  });
+
+  it("refuses anything that could name a path outside the version dir", () => {
+    expect(isSafeStorageSegment("..")).toBe(false);
+    expect(isSafeStorageSegment("../../evil")).toBe(false);
+    expect(isSafeStorageSegment("a/b.zip")).toBe(false);
+    expect(isSafeStorageSegment("a\\b.zip")).toBe(false);
+    expect(isSafeStorageSegment(".hidden")).toBe(false);
+    expect(isSafeStorageSegment("")).toBe(false);
+    // pickTigerAsset's `.*` would let this through; the segment check must not.
+    expect(isSafeStorageSegment("ck3-tiger-windows-..\\..\\x.zip")).toBe(false);
   });
 });
 

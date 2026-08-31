@@ -14,6 +14,7 @@ import type { GraphState, PendingEdit } from "./history";
 import type { AppToHost, HostToApp, UiState } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { isUnder } from "../../config";
 
 const UI_KEY = "px.eventGraph.ui";
 
@@ -251,6 +252,12 @@ export class EventGraphPanel {
     if (!this.actions) return { applied: [], error: "this graph is read-only" };
     const applied: number[] = [];
     for (const { edit, index } of writeOrder(edits)) {
+      // The batch is text from a webview: an edit may only touch a file of the
+      // mod (or another workspace folder), wherever its path points.
+      const target = edit.file ?? null;
+      if (target !== null && !this.editableFile(target)) {
+        return { applied, error: `${describe(edit)} refused: ${target} is not a file of this mod` };
+      }
       try {
         if (edit.kind === "editLoc") {
           await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
@@ -268,6 +275,13 @@ export class EventGraphPanel {
     }
     this.session = { ...this.session, pending: [] };
     return { applied };
+  }
+
+  /** True when `file` sits under the mod root or a workspace folder — the only
+   * places a graph edit may write. */
+  private editableFile(file: string): boolean {
+    if (isUnder(this.actions?.textureRoots().modPath ?? null, file)) return true;
+    return (vscode.workspace.workspaceFolders ?? []).some((f) => isUnder(f.uri.fsPath, file));
   }
 
   /**

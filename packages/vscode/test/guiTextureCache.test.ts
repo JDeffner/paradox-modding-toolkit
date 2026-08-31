@@ -55,6 +55,21 @@ describe("resolving a texture", () => {
     expect(pngSize(png)).toEqual({ w: 64, h: 64 });
   });
 
+  it("refuses a texture path that escapes the roots: the path is mod content", () => {
+    const game = path.join(root, "game");
+    fs.mkdirSync(game, { recursive: true });
+    // A real image OUTSIDE the game root, reachable only by traversal.
+    writeDds(root, "loot/secret.dds", 16);
+    const cache = cacheIn("storage", { gamePath: game });
+
+    expect(cache.resolve("../loot/secret.dds")).toBeNull();
+    expect(cache.resolve(path.join(root, "loot/secret.dds"))).toBeNull();
+    expect(cache.resolve("a/../../loot/secret.dds")).toBeNull();
+    // A path that stays inside the root may still use a redundant segment.
+    writeDds(game, "gfx/window.dds", 16);
+    expect(cache.resolve("gfx/extra/../window.dds")).not.toBeNull();
+  });
+
   it("the mod's copy wins over the game's, like the engine's own override", () => {
     const game = path.join(root, "game");
     const mod = path.join(root, "mod");

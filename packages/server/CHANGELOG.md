@@ -10,6 +10,12 @@ changes. Before the split it moved inside the extension's version (up to
 
 Ships with toolkit 0.4.0.
 
+### Security
+
+- Schema overlay entries (`<configDir>/schema.json`) with a `path` that could
+  climb out of the mod root (absolute, `..` segments, backslashes) are ignored
+  with a log line instead of steering the indexer's directory walk.
+
 ### Added
 
 - `producersOf(data, typeName)` in `data/dataTypes.ts`: the reverse of

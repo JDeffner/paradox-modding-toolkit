@@ -80,6 +80,17 @@ export function loadSchema(modPath: string | string[] | null, log?: (msg: string
       const overlay = JSON.parse(fs.readFileSync(overlayFile, "utf8")) as SchemaOverlay;
       for (const e of overlay.entries ?? []) {
         if (typeof e?.path !== "string" || typeof e?.kind !== "string") continue;
+        // The overlay is mod content and e.path steers the indexer's walk
+        // (scanRoot joins it under the root): a path that could climb out of
+        // the mod is dropped. classifyFile guards the symmetric case already.
+        if (
+          path.isAbsolute(e.path) ||
+          e.path.includes("\\") ||
+          e.path.split("/").some((s) => s === ".." || s === "")
+        ) {
+          log?.(`schema overlay entry ignored (unsafe path): ${e.path}`);
+          continue;
+        }
         // Overlay entries replace bundled ones with the same path.
         const i = entries.findIndex((x) => x.path === e.path);
         if (i >= 0) entries[i] = e;

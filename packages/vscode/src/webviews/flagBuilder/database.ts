@@ -118,7 +118,9 @@ export function locateTexture(
   file: string
 ): string | null {
   // No traversal: the app only ever asks for names the database listed, but a
-  // key is still text from a webview.
+  // key is still text from a webview — that covers the kind segment too (the
+  // caller's cast does not check it).
+  if (!KINDS.includes(kind)) return null;
   if (file.includes("/") || file.includes("\\") || file.includes("..")) return null;
   const dirs = stageDirs(roots, stages ?? [""]);
   for (let i = dirs.length - 1; i >= 0; i--) {

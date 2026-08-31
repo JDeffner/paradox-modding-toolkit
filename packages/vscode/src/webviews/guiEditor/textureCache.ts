@@ -135,11 +135,23 @@ export class GuiTextureCache {
     return path.join(this.dir, `${key}.png`);
   }
 
-  /** First root that has the file, with its content-identifying key. */
+  /**
+   * First root that has the file, with its content-identifying key.
+   *
+   * `rel` is read out of mod content (`texture =` scalars, event theme
+   * references) or a webview message, so a value that resolves outside the
+   * root — `..` segments, an absolute path — is refused rather than read:
+   * without this, a hostile mod file could point the decoder at any
+   * .png/.dds/.tga on the machine.
+   */
   private locate(rel: string, maxDim: number): { abs: string; key: string } | null {
+    if (path.isAbsolute(rel)) return null;
     for (const root of [this.roots.modPath, this.roots.gamePath]) {
       if (!root) continue;
-      const source = this.keyFor(path.join(root, rel), maxDim);
+      const abs = path.resolve(root, rel);
+      const inside = path.relative(root, abs);
+      if (inside === "" || inside.startsWith("..") || path.isAbsolute(inside)) continue;
+      const source = this.keyFor(abs, maxDim);
       if (source) return source;
     }
     return null;
@@ -160,6 +172,10 @@ export class GuiTextureCache {
   }
 
   private convert(abs: string, maxDim: number): Uint8Array | null {
+    // Extension gate BEFORE the read: a path that is not an image never has
+    // its bytes pulled into memory (readFileSync on a huge or special file is
+    // the expensive part, not the decode).
+    if (!/\.(png|dds|tga)$/i.test(abs)) return null;
     try {
       const bytes = fs.readFileSync(abs);
       if (/\.png$/i.test(abs)) return new Uint8Array(bytes);

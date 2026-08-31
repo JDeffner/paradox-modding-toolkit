@@ -79,7 +79,12 @@ export interface PublishInfo {
 const unquote = (v: string): string => v.replace(/^"([^]*)"$/, "$1").trim();
 
 export function findPreview(root: string, preferred: string | null): string | null {
-  const candidates = [preferred, "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg"].filter(
+  // `preferred` is the descriptor's raw picture= value, and the hit is what
+  // gets UPLOADED as the Workshop preview image. The launcher only accepts a
+  // bare file name in the mod root, so anything that could name a file outside
+  // it (separators, `..`, an absolute path) is dropped instead of joined.
+  const safe = preferred && preferred !== ".." && path.basename(preferred) === preferred ? preferred : null;
+  const candidates = [safe, "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg"].filter(
     (f): f is string => !!f
   );
   for (const f of candidates) {
