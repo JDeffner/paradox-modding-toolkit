@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   try {
     sw = createRequire(__filename)(steamwandDir) as Steamwand;
   } catch (e) {
-    fail(`cannot load the Steamwand module: ${errText(e)}`);
+    fail(`cannot load the steamwand module: ${errText(e)}`);
   }
 
   let steam: Steam;
