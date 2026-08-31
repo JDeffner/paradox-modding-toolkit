@@ -18,6 +18,7 @@ import { GAME_METAS } from "../gameDetect";
 import { metaFor } from "../meta";
 import {
   PROJECT_CONTENT_DIR,
+  claimDest,
   findLinksFor,
   findPointerFor,
   listGameFolderMods,
@@ -310,16 +311,18 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
       const projects = await ensureModProjectsDir();
       if (!projects) return;
       const src = pick.src;
-      const folderName = path.basename(src);
-      const projectDir = path.join(projects, folderName);
-      if (entryExists(projectDir)) {
+      // The launcher-facing name stays the folder's (sluggy) one; the project
+      // folder gets the mod's display name, like New Mod does.
+      const linkName = path.basename(src);
+      const projectDir = path.join(projects, projectFolderName(readModName(src)));
+      if (!claimDest(projectDir)) {
         void vscode.window.showErrorMessage(`${PREFIX}: ${projectDir} already exists.`);
         return;
       }
       const contentDir = path.join(projectDir, PROJECT_CONTENT_DIR);
       // Resolve the launcher link BEFORE the move: it points at the old place.
       const pointer = meta.descriptor === "mod" ? findPointerFor(gameModDir, src) : null;
-      moveDir(src, contentDir);
+      const moveWarning = moveDir(src, contentDir);
       let linkNote: string;
       if (meta.descriptor === "mod") {
         if (pointer) {
@@ -333,17 +336,22 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
           } catch {
             descriptor = scaffoldDescriptor(readModName(contentDir), "1.*");
           }
-          const link = createLauncherLink(meta, gameModDir, folderName, contentDir, descriptor);
+          const link = createLauncherLink(meta, gameModDir, linkName, contentDir, descriptor);
           linkNote = `launcher link created: ${link}`;
         }
       } else {
-        const link = createLauncherLink(meta, gameModDir, folderName, contentDir, "");
+        const link = createLauncherLink(meta, gameModDir, linkName, contentDir, "");
         linkNote = `launcher link created: ${link}`;
       }
-      log(`moved ${src} -> ${contentDir}; ${linkNote}`);
-      void vscode.window.showInformationMessage(
-        `${PREFIX}: moved to ${contentDir} (${linkNote}). Workshop listing files and git now live in ${projectDir}, outside the upload.`
-      );
+      log(`moved ${src} -> ${contentDir}; ${linkNote}${moveWarning ? `; WARNING: ${moveWarning}` : ""}`);
+      const done = `${PREFIX}: moved to ${contentDir} (${linkNote}).`;
+      if (moveWarning) {
+        void vscode.window.showWarningMessage(`${done} BUT ${moveWarning}.`);
+      } else {
+        void vscode.window.showInformationMessage(
+          `${done} Workshop listing files and git now live in ${projectDir}, outside the upload.`
+        );
+      }
       return;
     }
 
@@ -361,24 +369,29 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
         : slugify(readModName(content));
     for (const link of links) fs.rmSync(link);
     const dest = path.join(gameModDir, destName);
-    if (entryExists(dest)) {
+    if (!claimDest(dest)) {
       void vscode.window.showErrorMessage(`${PREFIX}: ${dest} already exists.`);
       return;
     }
-    moveDir(content, dest);
+    const moveWarning = moveDir(content, dest);
     if (pointer) fs.rmSync(pointer);
     let leftovers: string[] = [];
     if (projectDir !== content && fs.existsSync(projectDir)) {
       leftovers = fs.readdirSync(projectDir);
       if (leftovers.length === 0) fs.rmdirSync(projectDir);
     }
-    log(`moved ${content} -> ${dest}${pointer ? `; removed ${pointer}` : ""}`);
-    void vscode.window.showInformationMessage(
-      `${PREFIX}: moved to ${dest}.` +
-        (leftovers.length > 0
-          ? ` ${projectDir} still holds ${leftovers.join(", ")} — left in place (git history and Workshop files do not belong in the upload).`
-          : "")
+    log(
+      `moved ${content} -> ${dest}${pointer ? `; removed ${pointer}` : ""}${moveWarning ? `; WARNING: ${moveWarning}` : ""}`
     );
+    const tail =
+      leftovers.length > 0
+        ? ` ${projectDir} still holds ${leftovers.join(", ")} — left in place (git history and Workshop files do not belong in the upload).`
+        : "";
+    if (moveWarning) {
+      void vscode.window.showWarningMessage(`${PREFIX}: moved to ${dest}, BUT ${moveWarning}.${tail}`);
+    } else {
+      void vscode.window.showInformationMessage(`${PREFIX}: moved to ${dest}.${tail}`);
+    }
   } catch (err) {
     void vscode.window.showErrorMessage(`${PREFIX}: move failed: ${String(err)}`);
   }

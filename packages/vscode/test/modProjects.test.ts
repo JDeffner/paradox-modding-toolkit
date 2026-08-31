@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
+  claimDest,
   findPointerFor,
   launcherPath,
   listGameFolderMods,
@@ -94,8 +95,29 @@ describe("moveDir", () => {
     fs.mkdirSync(path.join(src, "events"), { recursive: true });
     fs.writeFileSync(path.join(src, "events", "a.txt"), "x");
     const dest = path.join(tmp, "projects", "Src", "mod");
-    moveDir(src, dest);
+    expect(moveDir(src, dest)).toBeNull();
     expect(fs.existsSync(src)).toBe(false);
     expect(fs.readFileSync(path.join(dest, "events", "a.txt"), "utf8")).toBe("x");
+  });
+});
+
+describe("claimDest", () => {
+  it("accepts an absent destination and removes a leftover empty folder", () => {
+    const empty = path.join(tmp, "leftover");
+    fs.mkdirSync(empty);
+    expect(claimDest(path.join(tmp, "absent"))).toBe(true);
+    expect(claimDest(empty)).toBe(true);
+    expect(fs.existsSync(empty)).toBe(false);
+  });
+
+  it("refuses a non-empty folder and a file", () => {
+    const full = path.join(tmp, "full");
+    fs.mkdirSync(full);
+    fs.writeFileSync(path.join(full, "keep.txt"), "x");
+    const file = path.join(tmp, "afile");
+    fs.writeFileSync(file, "x");
+    expect(claimDest(full)).toBe(false);
+    expect(claimDest(file)).toBe(false);
+    expect(fs.existsSync(path.join(full, "keep.txt"))).toBe(true);
   });
 });

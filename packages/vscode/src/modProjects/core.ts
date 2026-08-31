@@ -145,15 +145,52 @@ export function findLinksFor(gameModDir: string, contentDir: string): string[] {
   return out;
 }
 
-/** Move a directory; rename when possible, copy+delete across drives (the
- * Documents mod folder and a projects folder often live on different drives). */
-export function moveDir(src: string, dest: string): void {
+/**
+ * Move a directory; rename when possible, copy+delete otherwise. EXDEV is the
+ * different-drive case (the Documents mod folder and a projects folder often
+ * live on different drives); EBUSY/EPERM is a Windows lock on the source (an
+ * open Explorer window, file watchers, the running launcher) reported before
+ * the cross-device check - copying reads past those handles. Returns null on
+ * a clean move, or a warning when the copy is complete but the locked source
+ * could not be removed (it may already be partially emptied, so the fresh
+ * copy is the one that holds everything).
+ */
+export function moveDir(src: string, dest: string): string | null {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   try {
     fs.renameSync(src, dest);
+    return null;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
-    fs.cpSync(src, dest, { recursive: true });
-    fs.rmSync(src, { recursive: true, force: true });
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EXDEV" && code !== "EBUSY" && code !== "EPERM") throw err;
+    try {
+      fs.cpSync(src, dest, { recursive: true });
+    } catch (copyErr) {
+      // A partial copy is ours to clean; the source is untouched.
+      fs.rmSync(dest, { recursive: true, force: true });
+      throw copyErr;
+    }
+    try {
+      fs.rmSync(src, { recursive: true });
+      return null;
+    } catch {
+      return (
+        `the original at ${src} is locked by another program and could not be fully removed - ` +
+        `close whatever holds it open (an Explorer window, the launcher or game) and delete it yourself`
+      );
+    }
+  }
+}
+
+/** True when `dir` is free to move into: absent, or a leftover EMPTY folder
+ * (e.g. from a previously failed move), which is removed. An existing file or
+ * non-empty folder stays and returns false. */
+export function claimDest(dir: string): boolean {
+  if (!fs.existsSync(dir)) return true;
+  try {
+    fs.rmdirSync(dir); // only succeeds on an empty directory
+    return true;
+  } catch {
+    return false;
   }
 }
