@@ -34,7 +34,6 @@ import {
   upsertWorkshopMeta,
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
-import { bundledSteamworksVersion, supportsLanguageUpdate } from "./languageProbe";
 import { explainSteamError } from "./steamErrors";
 import {
   hasListingFiles,
@@ -193,20 +192,6 @@ export function lastCommitSubject(root: string): Promise<string> {
 }
 
 /**
- * Whether the bundled steamworks.js can set per-language title/description.
- * Capability-probed, not version-compared (languageProbe.ts explains why);
- * the bridge enforces the same gate before anything uploads.
- */
-export function supportsTranslationUpload(context: vscode.ExtensionContext): boolean {
-  return supportsLanguageUpdate(context.asAbsolutePath(path.join("dist", "steamworks")));
-}
-
-/** The bundled steamworks.js version, for the panel's gate message. */
-export function bundledSteamworks(context: vscode.ExtensionContext): string {
-  return bundledSteamworksVersion(context.asAbsolutePath(path.join("dist", "steamworks")));
-}
-
-/**
  * The translation submits of an upload: one per language that has any text.
  * No changenote on them - one upload should read as one change on the item's
  * Change Notes tab, not one entry per language.
@@ -229,7 +214,7 @@ export function runBridge(
   onProgress?: (status: string, uploaded: number, total: number, submit: number, submits: number) => void
 ): Promise<BridgeDone> {
   const bridge = context.asAbsolutePath(path.join("dist", "steamBridge.js"));
-  const steamworksDir = context.asAbsolutePath(path.join("dist", "steamworks"));
+  const steamworksDir = context.asAbsolutePath(path.join("dist", "steamwand"));
   return new Promise((resolve, reject) => {
     const child = cp.spawn(process.execPath, [bridge, steamworksDir], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },

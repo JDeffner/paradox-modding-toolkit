@@ -84,10 +84,6 @@ ${uiCss}
   #desc { min-height: 170px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
   .hintline { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .hintline .px-grow { flex: 1 1 auto; }
-  #langGate { display: none; align-items: center; gap: 6px; padding: 8px 10px;
-    border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
-    color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #langGate.on { display: flex; }
   #translations { display: flex; flex-direction: column; gap: 6px; }
   .lang { border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
   .lang > .head {
@@ -231,7 +227,6 @@ ${BBPREV_CSS}
         <button id="addLang" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add language</button>
       </div>
       <div class="hintline"><span>Title and description shown to Workshop visitors browsing Steam in that language. The default text above is what everyone else sees.</span></div>
-      <div id="langGate">${icon("alert")}<span id="langGateText"></span></div>
       <div id="translations"></div>
     </div>
 

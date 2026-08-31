@@ -82,13 +82,6 @@ export type BridgeDone =
     }
   | { action: "list"; items: { itemId: string; title: string; timeUpdated: number }[]; total: number };
 
-/**
- * The first @jdeffner/steamworks.js version whose UgcUpdate carries
- * `language` (SetItemUpdateLanguage). Older versions ignore unknown fields,
- * so the gate is a version compare, not a probe.
- */
-export const LANGUAGE_UPDATE_MIN_VERSION = "0.6.0";
-
 /** Dotted-number version compare: `a` >= `b`. Non-numeric parts compare as 0. */
 export function versionAtLeast(a: string, b: string): boolean {
   const pa = a.split(".").map((n) => parseInt(n, 10) || 0);

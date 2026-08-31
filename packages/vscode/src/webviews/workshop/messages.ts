@@ -60,11 +60,6 @@ export interface WorkshopModInfo {
   workshopDir: string;
   /** True when that folder exists: it is then the canonical listing store. */
   filesPresent: boolean;
-  /** False when the bundled steamworks.js cannot set per-language text yet. */
-  languageUploadOk: boolean;
-  requiredSteamworksVersion: string;
-  /** The bundled steamworks.js version, for the gate message. */
-  steamworksVersion: string;
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];

@@ -1220,7 +1220,7 @@
     ]
   },
   "scripts": {
-    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamworks.mjs",
+    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
     "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
@@ -1234,7 +1234,7 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "steamworks.js": "npm:@jdeffner/steamworks.js@^0.6.0",
+    "@jdeffner/steamwand": "file:../../../SteamWand.js",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

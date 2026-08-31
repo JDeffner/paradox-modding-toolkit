@@ -21,11 +21,10 @@ import {
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
-import { LANGUAGE_UPDATE_MIN_VERSION, type SubmitSpec } from "../../steam/jobs";
+import { type SubmitSpec } from "../../steam/jobs";
 import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import {
-  bundledSteamworks,
   changelogNoteFor,
   findPreview,
   friendlyError,
@@ -37,7 +36,6 @@ import {
   runBridge,
   stageContent,
   stagingDir,
-  supportsTranslationUpload,
   translationSubmits,
   workshopDirFor,
   workshopUrl,
@@ -202,9 +200,6 @@ export class WorkshopPanel {
       supportedVersion: info?.supportedVersion ?? null,
       workshopDir,
       filesPresent: hasListingFiles(workshopDir),
-      languageUploadOk: supportsTranslationUpload(this.context),
-      requiredSteamworksVersion: LANGUAGE_UPDATE_MIN_VERSION,
-      steamworksVersion: bundledSteamworks(this.context),
       steamLanguages: [...STEAM_LANGUAGES],
       suggestedLanguages: suggestedLanguages(root, this.options.meta),
     };

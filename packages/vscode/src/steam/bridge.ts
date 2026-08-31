@@ -1,9 +1,9 @@
 /**
  * Steam Workshop bridge: a standalone child process around the native
- * steamworks.js module, kept OUT of the extension host so a native crash or a
- * hung Steam client can never take the extension down. Spawned by workshop.ts
- * or the Workshop panel via ELECTRON_RUN_AS_NODE with argv[2] = path to the
- * copied steamworks.js package (dist/steamworks).
+ * @jdeffner/steamwand binding (koffi FFI), kept OUT of the extension host so
+ * a native crash or a hung Steam client can never take the extension down.
+ * Spawned by workshop.ts or the Workshop panel via ELECTRON_RUN_AS_NODE with
+ * argv[2] = path to the copied steamwand package (dist/steamwand).
  *
  * stdin/stdout contract and job/event types: steam/jobs.ts.
  *
@@ -11,10 +11,15 @@
  * user's running, logged-in Steam session is the authorization. While the
  * bridge runs, Steam shows the user as in-game (the API initializes under the
  * game's app id) - unavoidable and harmless, it ends with the process.
+ *
+ * Per-language updates (SetItemUpdateLanguage) are part of steamwand's
+ * generated binding: the symbol either resolves at load or throws. The old
+ * languageProbe capability gate is gone with the steamworks.js backend that
+ * needed it.
  */
-import { supportsLanguageUpdate } from "./languageProbe";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import type { Steam, WorkshopItem } from "@jdeffner/steamwand";
 import {
   type BridgeDone,
   type BridgeEvent,
@@ -24,53 +29,7 @@ import {
   type WorkshopVisibility,
 } from "./jobs";
 
-/** What steamworks.js getItem returns, the slice the bridge reads (client.d.ts WorkshopItem). */
-interface NativeItem {
-  publishedFileId: bigint;
-  title: string;
-  description: string;
-  visibility: number;
-  tags: string[];
-  previewUrl?: string;
-  timeCreated: number;
-  timeUpdated: number;
-  banned: boolean;
-  numUpvotes: number;
-  numDownvotes: number;
-  statistics: Record<string, bigint | undefined>;
-}
-
-/** The slice of steamworks.js the bridge uses (full types: its client.d.ts). */
-interface SteamworksModule {
-  init(appId: number): {
-    localplayer: { getSteamId(): { accountId: number } };
-    workshop: {
-      createItem(appId?: number): Promise<{ itemId: bigint; needsToAcceptAgreement: boolean }>;
-      updateItemWithCallback(
-        itemId: bigint,
-        updateDetails: SubmitSpec,
-        appId: number,
-        successCallback: (data: { itemId: bigint; needsToAcceptAgreement: boolean }) => void,
-        errorCallback: (err: unknown) => void,
-        progressCallback?: (data: { status: number; progress: bigint; total: bigint }) => void,
-        progressCallbackIntervalMs?: number
-      ): void;
-      getItem(
-        item: bigint,
-        queryConfig?: { language?: string; includeLongDescription?: boolean }
-      ): Promise<NativeItem | null>;
-      getUserItems(
-        page: number,
-        accountId: number,
-        listType: number,
-        itemType: number,
-        sortOrder: number,
-        appIds: { creator?: number; consumer?: number },
-        queryConfig?: { includeLongDescription?: boolean }
-      ): Promise<{ items: (NativeItem | null | undefined)[]; totalResults: number }>;
-    };
-  };
-}
+type Steamwand = typeof import("@jdeffner/steamwand");
 
 /** ISteamUGC EItemUpdateStatus, as user-facing phrases. */
 const UPDATE_STATUS: Record<number, string> = {
@@ -81,12 +40,6 @@ const UPDATE_STATUS: Record<number, string> = {
   4: "Uploading preview image",
   5: "Committing changes",
 };
-
-// getUserItems enum values (client.d.ts): UserListType.Published,
-// UGCType.Items, UserListOrder.LastUpdatedDesc.
-const LIST_PUBLISHED = 0;
-const TYPE_ITEMS = 0;
-const ORDER_LAST_UPDATED = 3;
 
 function emit(event: BridgeEvent): void {
   process.stdout.write(JSON.stringify(event) + "\n");
@@ -110,23 +63,23 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function toDetails(item: NativeItem): ItemDetails {
-  const stat = (key: string): number | null => {
-    const v = item.statistics?.[key];
+function toDetails(item: WorkshopItem): ItemDetails {
+  const stat = (key: keyof WorkshopItem["statistics"]): number | null => {
+    const v = item.statistics[key];
     return v === undefined ? null : Number(v);
   };
   return {
-    itemId: item.publishedFileId.toString(),
+    itemId: item.fileId.toString(),
     title: item.title,
     description: item.description,
     visibility: item.visibility as WorkshopVisibility,
-    tags: item.tags ?? [],
-    previewUrl: item.previewUrl ?? null,
+    tags: item.tags,
+    previewUrl: item.previewUrl,
     timeCreated: item.timeCreated,
     timeUpdated: item.timeUpdated,
     banned: item.banned,
-    numUpvotes: item.numUpvotes,
-    numDownvotes: item.numDownvotes,
+    numUpvotes: item.votesUp,
+    numDownvotes: item.votesDown,
     numSubscriptions: stat("numSubscriptions"),
     numFavorites: stat("numFavorites"),
     numUniqueWebsiteViews: stat("numUniqueWebsiteViews"),
@@ -135,52 +88,50 @@ function toDetails(item: NativeItem): ItemDetails {
 }
 
 function submitOnce(
-  client: ReturnType<SteamworksModule["init"]>,
+  steam: Steam,
   appId: number,
   itemId: bigint,
   spec: SubmitSpec,
   position: { submit: number; submits: number }
 ): Promise<{ needsToAcceptAgreement: boolean }> {
-  return new Promise((resolve, reject) => {
-    client.workshop.updateItemWithCallback(
+  return steam.workshop
+    .submitUpdate(
       itemId,
-      spec,
-      appId,
-      (data) => resolve({ needsToAcceptAgreement: data.needsToAcceptAgreement }),
-      (err) => reject(new Error(errText(err))),
-      (data) => {
-        emit({
-          type: "progress",
-          status: UPDATE_STATUS[data.status] ?? `Status ${data.status}`,
-          uploaded: Number(data.progress),
-          total: Number(data.total),
-          ...position,
-        });
+      {
+        title: spec.title,
+        description: spec.description,
+        changeNote: spec.changeNote,
+        contentPath: spec.contentPath,
+        previewPath: spec.previewPath,
+        tags: spec.tags,
+        visibility: spec.visibility,
+        language: spec.language,
       },
-      500
-    );
-  });
+      {
+        appId,
+        onProgress: (p) => {
+          emit({
+            type: "progress",
+            status: UPDATE_STATUS[p.status] ?? `Status ${p.status}`,
+            uploaded: Number(p.bytesProcessed),
+            total: Number(p.bytesTotal),
+            ...position,
+          });
+        },
+        progressIntervalMs: 500,
+      }
+    )
+    .then((r) => ({ needsToAcceptAgreement: r.legalAgreementRequired }));
 }
 
 async function main(): Promise<void> {
-  const steamworksDir = process.argv[2];
-  if (!steamworksDir) fail("missing steamworks module path argument");
+  const steamwandDir = process.argv[2];
+  if (!steamwandDir) fail("missing steamwand module path argument");
   const job = JSON.parse(await readStdin()) as BridgeJob;
 
   if (job.action === "publish") {
-    // The gate must hold BEFORE anything uploads: a native layer without
-    // UgcUpdate.language drops the unknown field, and the translation would
-    // overwrite the default-language title and description instead. Probed
-    // against the build's own client.d.ts, not its version (languageProbe.ts).
-    if (job.submits.some((s) => s.language) && !supportsLanguageUpdate(steamworksDir)) {
-      fail(
-        "translation uploads need a steamworks.js build whose UgcUpdate carries `language` " +
-          "(SetItemUpdateLanguage); this build would overwrite the default-language text instead"
-      );
-    }
-    // The native layer PANICS (kills the process) on a missing path instead of
-    // reporting through the error callback - verified against steamworks.js
-    // 0.4.0. Check here so a bad path stays a readable error.
+    // steamwand checks these too; checking here keeps the error message next
+    // to the job instead of mid-upload, and covers older builds.
     for (const s of job.submits) {
       if (s.contentPath && !existsSync(s.contentPath))
         fail(`content folder does not exist: ${s.contentPath}`);
@@ -189,29 +140,29 @@ async function main(): Promise<void> {
     if (job.submits.length === 0) fail("publish job carries no submits");
   }
 
-  let sw: SteamworksModule;
+  let sw: Steamwand;
   try {
-    sw = createRequire(__filename)(steamworksDir) as SteamworksModule;
+    sw = createRequire(__filename)(steamwandDir) as Steamwand;
   } catch (e) {
-    fail(`cannot load the Steamworks module: ${errText(e)}`);
+    fail(`cannot load the Steamwand module: ${errText(e)}`);
   }
 
-  let client: ReturnType<SteamworksModule["init"]>;
+  let steam: Steam;
   try {
-    client = sw.init(job.appId);
+    steam = sw.init({ appId: job.appId });
   } catch (e) {
-    // The native init error is cryptic; workshop.ts prepends the likely causes.
+    // Valve's own diagnostic text; workshop.ts prepends the likely causes.
     fail(`Steam init failed: ${errText(e)}`);
   }
 
   switch (job.action) {
     case "create": {
       try {
-        const created = await client.workshop.createItem(job.appId);
+        const created = await steam.workshop.createItem(job.appId);
         done({
           action: "create",
-          itemId: created.itemId.toString(),
-          needsToAcceptAgreement: created.needsToAcceptAgreement,
+          itemId: created.fileId.toString(),
+          needsToAcceptAgreement: created.legalAgreementRequired,
         });
       } catch (e) {
         fail(`creating the Workshop item failed: ${errText(e)}`);
@@ -223,7 +174,7 @@ async function main(): Promise<void> {
       let needsAgreement = false;
       for (let i = 0; i < job.submits.length; i++) {
         try {
-          const r = await submitOnce(client, job.appId, itemId, job.submits[i], {
+          const r = await submitOnce(steam, job.appId, itemId, job.submits[i], {
             submit: i + 1,
             submits: job.submits.length,
           });
@@ -238,12 +189,12 @@ async function main(): Promise<void> {
     }
     case "query": {
       try {
-        const item = await client.workshop.getItem(BigInt(job.itemId), { includeLongDescription: true });
+        const item = await steam.workshop.getItem(BigInt(job.itemId), { longDescription: true });
         const translations: Record<string, { title: string; description: string }> = {};
         for (const language of job.languages ?? []) {
-          const t = await client.workshop.getItem(BigInt(job.itemId), {
+          const t = await steam.workshop.getItem(BigInt(job.itemId), {
             language,
-            includeLongDescription: true,
+            longDescription: true,
           });
           if (t) translations[language] = { title: t.title, description: t.description };
         }
@@ -255,24 +206,14 @@ async function main(): Promise<void> {
     }
     case "list": {
       try {
-        const accountId = client.localplayer.getSteamId().accountId;
-        const page = await client.workshop.getUserItems(
-          1,
-          accountId,
-          LIST_PUBLISHED,
-          TYPE_ITEMS,
-          ORDER_LAST_UPDATED,
-          { creator: job.appId, consumer: job.appId }
-        );
+        const page = await steam.workshop.getUserItems(1, steam.accountId(), { appId: job.appId });
         done({
           action: "list",
-          items: (page.items ?? [])
-            .filter((it): it is NativeItem => !!it)
-            .map((it) => ({
-              itemId: it.publishedFileId.toString(),
-              title: it.title,
-              timeUpdated: it.timeUpdated,
-            })),
+          items: page.items.map((it) => ({
+            itemId: it.fileId.toString(),
+            title: it.title,
+            timeUpdated: it.timeUpdated,
+          })),
           total: page.totalResults,
         });
       } catch (e) {

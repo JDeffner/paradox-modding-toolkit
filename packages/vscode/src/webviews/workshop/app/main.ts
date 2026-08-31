@@ -500,15 +500,6 @@ function translationRow(lang: string): HTMLElement {
 }
 
 function renderTranslations(): void {
-  const gate = $("langGate");
-  const supported = info?.languageUploadOk ?? true;
-  gate.classList.toggle("on", !!info && !supported);
-  if (info && !supported) {
-    $("langGateText").textContent =
-      "Uploading translations needs a steamworks.js build with per-language updates " +
-      `(UgcUpdate.language / SetItemUpdateLanguage). The bundled ${info.steamworksVersion} does not ` +
-      "carry it yet - drafts still save locally and upload once a build with it ships.";
-  }
   const box = $("translations");
   box.replaceChildren();
   for (const lang of Object.keys(draftTranslations).sort((a, b) =>
@@ -526,11 +517,10 @@ function renderTranslations(): void {
 
 function renderPublish(): void {
   const langs = uploadableLanguages();
-  const supported = info?.languageUploadOk ?? false;
   $("langCount").textContent = langs.length ? `- ${langs.map(langLabel).join(", ")}` : "- none drafted yet";
   const incLangs = $<HTMLInputElement>("incLangs");
-  incLangs.disabled = !langs.length || !supported;
-  if (!langs.length || !supported) incLangs.checked = false;
+  incLangs.disabled = !langs.length;
+  if (!langs.length) incLangs.checked = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -744,7 +734,6 @@ async function uploadModal(): Promise<UploadChoice | null> {
   if (!info) return null;
   const isNew = !info.publishedId;
   const langs = uploadableLanguages();
-  const supported = info.languageUploadOk;
 
   const wrap = document.createElement("div");
   wrap.className = "modal-rows";
@@ -787,8 +776,8 @@ async function uploadModal(): Promise<UploadChoice | null> {
   );
   const translations = row(
     "translations",
-    $<HTMLInputElement>("incLangs").checked && langs.length > 0 && supported,
-    langs.length === 0 || !supported,
+    $<HTMLInputElement>("incLangs").checked && langs.length > 0,
+    langs.length === 0,
     "Translations",
     langs.length ? langs.map(langLabel).join(", ") : "none drafted"
   );
