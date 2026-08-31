@@ -1234,7 +1234,7 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "@jdeffner/steamwand": "file:../../../SteamWand.js",
+    "steamwand.js": "file:../../../SteamWand.js",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

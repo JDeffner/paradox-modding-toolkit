@@ -1,4 +1,4 @@
-// Copy the @jdeffner/steamwand package (koffi-based Steam Workshop binding)
+// Copy the steamwand.js package (koffi-based Steam Workshop binding)
 // into the vscode package's dist/ so the .vsix is self-contained: node_modules
 // never ships (vsce --no-dependencies) and the Steam redistributables cannot
 // be bundled by esbuild. dist/steamBridge.js loads it from dist/steamwand at
@@ -17,7 +17,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const vscode = join(root, "packages", "vscode");
 // Resolve through the vscode package so pnpm's symlinked layout is followed.
 const require = createRequire(join(vscode, "package.json"));
-const source = dirname(require.resolve("@jdeffner/steamwand/package.json"));
+const source = dirname(require.resolve("steamwand.js/package.json"));
 
 const target = join(vscode, "dist", "steamwand");
 rmSync(target, { recursive: true, force: true });

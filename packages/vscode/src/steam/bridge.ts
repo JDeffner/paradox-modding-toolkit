@@ -1,6 +1,6 @@
 /**
  * Steam Workshop bridge: a standalone child process around the native
- * @jdeffner/steamwand binding (koffi FFI), kept OUT of the extension host so
+ * steamwand.js binding (koffi FFI), kept OUT of the extension host so
  * a native crash or a hung Steam client can never take the extension down.
  * Spawned by workshop.ts or the Workshop panel via ELECTRON_RUN_AS_NODE with
  * argv[2] = path to the copied steamwand package (dist/steamwand).
@@ -19,7 +19,7 @@
  */
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import type { Steam, WorkshopItem } from "@jdeffner/steamwand";
+import type { Steam, WorkshopItem } from "steamwand.js";
 import {
   type BridgeDone,
   type BridgeEvent,
@@ -29,7 +29,7 @@ import {
   type WorkshopVisibility,
 } from "./jobs";
 
-type Steamwand = typeof import("@jdeffner/steamwand");
+type Steamwand = typeof import("steamwand.js");
 
 /** ISteamUGC EItemUpdateStatus, as user-facing phrases. */
 const UPDATE_STATUS: Record<number, string> = {
