@@ -31,7 +31,7 @@ describe("visibleActionGroups", () => {
   });
 
   it("keeps working for a game without a tiger", () => {
-    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent"]);
+    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod", "px.moveMod"]);
     const ids = commands(groups);
     expect(ids).toContain("px.launchGame");
     expect(ids).not.toContain("px.newContent");

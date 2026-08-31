@@ -89,10 +89,26 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       label: "Create",
       items: [
         {
+          label: "New Mod…",
+          command: "px.createMod",
+          icon: "package",
+          tip:
+            "Create a new mod with its descriptor. Recommended: a mod projects folder, where git and " +
+            "Workshop files live next to the mod instead of inside the upload; the launcher finds the mod via a link.",
+        },
+        {
           label: "New Content…",
           command: "px.newContent",
           icon: "plus",
           tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
+        },
+        {
+          label: "Move Mod…",
+          command: "px.moveMod",
+          icon: "arrowRight",
+          tip:
+            "Move a mod between the game's mod folder and your mod projects folder, in either direction. " +
+            "The launcher link is updated so the mod keeps loading.",
         },
       ],
     },

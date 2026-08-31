@@ -16,6 +16,18 @@
   that unuploaded local text is lost. The upload never ships the folder, even
   when it sits inside the mod.
 
+- **New Mod, and the mod projects layout.** "Paradox: New Mod" (also a
+  Project-panel row) creates a mod with its descriptor - recommended into a
+  mod projects folder (`px.modProjectsDir`, asked for on first use): the mod
+  content lives in `<project>/mod`, so git history, notes and the Workshop
+  listing files sit next to the mod instead of inside the upload. The game
+  still finds the mod through a link in its own mod folder - a `<name>.mod`
+  path file for the `.mod`-descriptor games, a folder link for the metadata
+  games. "Paradox: Move Mod" moves an existing mod from the game's mod
+  folder into that layout, or back out of it, and keeps the launcher link
+  correct in both directions. Setup & Health Check now recommends picking a
+  projects folder, and the mod walkthrough page mentions the layout.
+
 - **Descriptions preview like the Workshop page.** An Edit | Preview toggle
   on the description (and on every translation) renders the draft's BBCode -
   headings, lists, links, quotes, code, tables, spoilers, images - styled

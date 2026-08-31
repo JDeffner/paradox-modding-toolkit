@@ -436,6 +436,16 @@
         "title": "New Content (event, decision, …)"
       },
       {
+        "command": "px.createMod",
+        "category": "Paradox",
+        "title": "New Mod (project folder + launcher link)"
+      },
+      {
+        "command": "px.moveMod",
+        "category": "Paradox",
+        "title": "Move Mod (projects folder / game mod folder)"
+      },
+      {
         "command": "px.convertToDds",
         "category": "Paradox",
         "title": "Convert Image to DDS",
@@ -641,13 +651,20 @@
             "scope": "machine-overridable",
             "markdownDescription": "**Leave this empty** unless your mod folder is not part of the workspace. Every workspace folder that is a mod of the active game is detected and fully indexed automatically. Features follow the file you are editing, and the sidebar views follow it too (or a mod you pin via `Paradox: Pick Focus Mod`)."
           },
+          "px.modProjectsDir": {
+            "type": "string",
+            "default": "",
+            "order": 2,
+            "scope": "machine-overridable",
+            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use; `Paradox: Move Mod` moves an existing mod into (or out of) the layout."
+          },
           "px.parentMods": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "default": [],
-            "order": 2,
+            "order": 3,
             "scope": "machine-overridable",
             "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.ck3modding/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
           },
@@ -657,14 +674,14 @@
               "type": "string"
             },
             "default": [],
-            "order": 3,
+            "order": 4,
             "scope": "machine-overridable",
             "markdownDescription": "Workspace mod folders to skip entirely (absolute paths). Excluded mods are not indexed: no completion, hover, navigation, diagnostics or views. Useful when the workspace contains mods you are not currently working on.\n\nEasiest via the per-mod switches in the sidebar Project view, or `Paradox: Exclude Workspace Mods from Indexing`, which shows a checklist of the detected mods."
           },
           "px.locLanguage": {
             "type": "string",
             "default": "english",
-            "order": 4,
+            "order": 5,
             "markdownDescription": "Localization language to index and display (matches `l_<language>` yml files), e.g. `english`, `french`, `german`."
           }
         }
