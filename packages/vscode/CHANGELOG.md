@@ -28,6 +28,10 @@
   correct in both directions. Setup & Health Check now recommends picking a
   projects folder, and the mod walkthrough page mentions the layout.
 
+- **Extension Settings in the Project panel menu.** The panel's overflow menu
+  opens the extension's settings, listed above Customize Project Panel Rows
+  (also `Paradox: Extension Settings` in the palette).
+
 - **Descriptions preview like the Workshop page.** An Edit | Preview toggle
   on the description (and on every translation) renders the draft's BBCode -
   headings, lists, links, quotes, code, tables, spoilers, images - styled

@@ -616,6 +616,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
     ),
+    vscode.commands.registerCommand("px.openSettings", () =>
+      vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jdeffner.px-toolkit")
+    ),
     // Checked = visible, so the setting stores the INVERSE of the picks. The
     // catalog is the panel's own row list for the active game, which is why it
     // is built with the live problem count. Global scope: panel taste is

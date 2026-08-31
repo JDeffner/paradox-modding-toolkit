@@ -503,6 +503,12 @@
         "category": "Paradox",
         "title": "Customize Project Panel Rows",
         "icon": "$(list-selection)"
+      },
+      {
+        "command": "px.openSettings",
+        "category": "Paradox",
+        "title": "Extension Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "customEditors": [
@@ -1042,6 +1048,10 @@
         {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openSettings",
+          "when": "px.isCk3Workspace"
         }
       ],
       "view/title": [
@@ -1071,9 +1081,14 @@
           "group": "navigation@2"
         },
         {
+          "command": "px.openSettings",
+          "when": "view == px.tools",
+          "group": "1_configure@1"
+        },
+        {
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
-          "group": "1_configure"
+          "group": "1_configure@2"
         }
       ],
       "view/item/context": [
