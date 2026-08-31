@@ -641,7 +641,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const picked = await vscode.window.showQuickPick(items, {
         canPickMany: true,
         title: "Customize the Project panel rows",
-        placeHolder: "Checked rows show in the Tools section; unchecked ones are hidden",
+        placeHolder: "Checked rows show in the Project panel; unchecked ones are hidden",
       });
       if (!picked) return;
       const visible = new Set(picked.map((i) => i.command));

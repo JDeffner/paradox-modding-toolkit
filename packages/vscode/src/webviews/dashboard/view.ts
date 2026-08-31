@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
@@ -11,8 +10,9 @@ import { icon, ICON_NAMES } from "../shared/icons";
 import { visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
 
-/** The collapsible sections, in render order. */
-type SectionId = "paths" | "mods" | "toggles" | "tools";
+/** A collapsible section: the static ones ("mods", "toggles", "paths") plus
+ * one id per tool group, slugged from its label by the webview script. */
+type SectionId = string;
 
 /** workspaceState key holding the per-section collapse flags (absent = expanded). */
 const COLLAPSED_KEY = "px.dashboardCollapsed";
@@ -27,7 +27,7 @@ type InboundMessage =
   | { type: "watcher" }
   | { type: "baseline" }
   | { type: "openSettings" }
-  | { type: "revealPath"; setting: string }
+  | { type: "pickPath"; setting: string }
   | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
@@ -155,13 +155,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
   }
 
   private collapsedState(): Record<SectionId, boolean> {
-    const stored = this.deps.workspaceState.get<Partial<Record<SectionId, boolean>>>(COLLAPSED_KEY);
-    return {
-      paths: stored?.paths === true,
-      mods: stored?.mods === true,
-      toggles: stored?.toggles === true,
-      tools: stored?.tools === true,
-    };
+    return this.deps.workspaceState.get<Record<SectionId, boolean>>(COLLAPSED_KEY) ?? {};
   }
 
   private async onMessage(msg: InboundMessage): Promise<void> {
@@ -203,7 +197,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         // The same Workspace-scoped @ext view the overflow menu opens.
         await vscode.commands.executeCommand("px.openSettings");
         return;
-      case "revealPath": {
+      case "pickPath": {
         // The key comes from webview script; resolve it host-side against the
         // effective rows, never trust it as a path.
         const cfg = this.deps.getCfg();
@@ -211,20 +205,19 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
           (p) => p.setting === msg.setting
         );
         if (!row) return;
-        if (row.value !== null) {
-          try {
-            if (fs.statSync(row.value).isDirectory()) {
-              // Opens the folder itself in the OS file explorer.
-              await vscode.env.openExternal(vscode.Uri.file(row.value));
-            } else {
-              await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(row.value));
-            }
-            return;
-          } catch {
-            /* stale path: fall through to the settings */
-          }
-        }
-        await vscode.commands.executeCommand("px.openSettings");
+        const isFile = msg.setting === "px.tigerPath";
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: isFile,
+          canSelectFolders: !isFile,
+          canSelectMany: false,
+          defaultUri: row.value ? vscode.Uri.file(row.value) : undefined,
+          openLabel: isFile ? "Use this binary" : "Use this folder",
+          title: `${row.label} (${msg.setting})`,
+        });
+        const value = picked?.[0]?.fsPath;
+        if (!value) return;
+        await updateSetting(msg.setting.replace(/^px\./, ""), value);
+        this.refresh();
         return;
       }
       case "baseline":
@@ -275,8 +268,8 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
 }
 
 /**
- * `px.sidebar.hidden`: the command ids the user removed from the Tools
- * section. Read straight from the configuration (not from PxConfig): it is
+ * `px.sidebar.hidden`: the command ids the user removed from the panel's
+ * tool sections. Read straight from the configuration (not from PxConfig): it is
  * panel taste, and nothing outside this view and the Customize command cares.
  */
 export function hiddenRows(): string[] {
@@ -397,11 +390,6 @@ ${uiCss}
   .section.collapsed .caret { transform: rotate(-90deg); }
   .section.collapsed .section-body { display: none; }
   .section-body { padding-top: 0; }
-  .group-label {
-    margin: 6px 8px 1px; font-size: var(--px-text-xs); font-weight: 500; color: var(--px-muted-fg);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .group + .group { margin-top: 2px; }
   .px-item[role="button"]:focus-visible, #game:focus-visible, .toggle-row:focus-within:has(input:focus-visible) {
     box-shadow: 0 0 0 3px var(--px-ring-soft);
   }
@@ -454,14 +442,7 @@ ${uiCss}
   )}
   <div class="section-body px-list" id="body-mods"></div>
 </div>
-<div class="section" id="section-tools">
-  ${sectionHead(
-    "tools",
-    "Tools",
-    "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
-  )}
-  <div class="section-body" id="body-tools"></div>
-</div>
+<!-- One .section per tool group, rendered by script before #section-toggles. -->
 <div class="section" id="section-toggles">
   ${sectionHead("toggles", "Toggles")}
   <div class="section-body px-list" id="body-toggles">
@@ -491,7 +472,7 @@ ${uiCss}
   ${sectionHead(
     "paths",
     "Paths",
-    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to open it in your file explorer; the gear changes the setting."
+    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to browse for a new value."
   )}
   <div class="section-body px-list" id="body-paths"></div>
 </div>
@@ -577,14 +558,42 @@ function setSwitch(id, on, disabled, disabledTip) {
   row.setAttribute("data-tip", disabled && disabledTip ? disabledTip : row.getAttribute("data-tip-default"));
 }
 
-// ---- actions (game-aware, from state) ----
+// ---- actions (game-aware, from state): one top-level section per group ----
+function sectionSlug(label) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function buildSection(id, title) {
+  const section = el("div", "section tools-section");
+  section.id = "section-" + id;
+  const head = el("div", "px-panel-title");
+  const btn = el("button", "section-toggle");
+  btn.setAttribute("data-section", id);
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "body-" + id);
+  const caret = iconEl("chevronDown");
+  caret.classList.add("caret");
+  btn.appendChild(caret);
+  btn.appendChild(el("span", "px-truncate", title));
+  btn.addEventListener("click", () => {
+    const collapsed = !section.classList.contains("collapsed");
+    setCollapsed(id, collapsed);
+    vscode.postMessage({ type: "collapse", section: id, collapsed });
+  });
+  head.appendChild(btn);
+  head.appendChild(el("span", "px-grow"));
+  section.appendChild(head);
+  const body = el("div", "section-body px-list");
+  body.id = "body-" + id;
+  section.appendChild(body);
+  return section;
+}
 function renderActions() {
-  const box = document.getElementById("body-tools");
-  box.textContent = "";
+  for (const old of document.querySelectorAll(".tools-section")) old.remove();
+  const anchor = document.getElementById("section-toggles");
   for (const group of state.actions) {
-    const g = el("div", "group");
-    g.appendChild(el("div", "group-label", group.label));
-    const list = el("div", "px-list");
+    const id = sectionSlug(group.label);
+    const section = buildSection(id, group.label);
+    const body = section.querySelector(".section-body");
     for (const it of group.items) {
       const row = actionRow(it.icon, it.label, it.tip,
         () => vscode.postMessage({ type: "run", command: it.command }));
@@ -593,10 +602,9 @@ function renderActions() {
         b.setAttribute("data-variant", "secondary");
         row.appendChild(b);
       }
-      list.appendChild(row);
+      body.appendChild(row);
     }
-    g.appendChild(list);
-    box.appendChild(g);
+    anchor.parentNode.insertBefore(section, anchor);
   }
 }
 
@@ -608,30 +616,17 @@ function renderPaths() {
     const row = el("div", "px-item path-row");
     row.setAttribute("role", "button");
     row.tabIndex = 0;
-    row.setAttribute("data-tip", p.value
-      ? p.value + " — Click to open in your file explorer."
-      : "Not available. Click to open the extension settings (" + p.setting + ").");
+    row.setAttribute("data-tip",
+      (p.value ? p.value + " — " : "") + "Click to browse for a new value (" + p.setting + ").");
     row.setAttribute("data-tip-wrap", "");
     const head = el("div", "path-head");
     head.appendChild(el("span", "px-item-label", p.label));
     head.appendChild(el("span", "px-grow"));
     head.appendChild(badge(p.source));
-    const gear = el("button", "px-btn");
-    gear.setAttribute("data-variant", "ghost");
-    gear.setAttribute("data-size", "icon-xs");
-    gear.setAttribute("data-tip", "Change the setting (" + p.setting + ").");
-    gear.setAttribute("data-tip-side", "left");
-    gear.setAttribute("aria-label", "Change " + p.setting);
-    gear.appendChild(iconEl("settings"));
-    gear.addEventListener("click", (e) => {
-      e.stopPropagation();
-      vscode.postMessage({ type: "openSettings" });
-    });
-    head.appendChild(gear);
     row.appendChild(head);
     // RTL truncation flips leading punctuation; the value is plain text either way.
     row.appendChild(el("div", "path-value" + (p.value ? "" : " none"), p.value ?? "none"));
-    const open = () => vscode.postMessage({ type: "revealPath", setting: p.setting });
+    const open = () => vscode.postMessage({ type: "pickPath", setting: p.setting });
     row.addEventListener("click", open);
     row.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }

@@ -33,15 +33,15 @@
   folder, mod projects folder and tiger binary, each with its origin (set,
   detected, downloaded, not found) - the answer the settings UI cannot give,
   since an auto-detected value just looks like an empty setting there.
-  Clicking a row opens the folder (or the tiger binary's folder) in the OS
-  file explorer; the gear on the row opens the extension settings.
+  Clicking a row opens a file browser and writes the picked folder (or tiger
+  binary) straight into the setting.
 
-- **The Project panel reorganized.** Section order is now Workspace Mods,
-  Tools, Toggles, Paths. The Tools rows regrouped by what you are doing:
-  Create, Review (Event Graph, Mod Report, Simulate Event - the report now
-  sits next to the graph), Design (GUI tools, Flag Builder and the image
-  rows), Localization, Reference, Test & Troubleshoot, Share. Every settings
-  entry point in the panel (the game header, the path gears) opens the same
+- **The Project panel reorganized.** The Tools wrapper is gone; its groups
+  are top-level collapsible sections of their own, regrouped by what you are
+  doing: Create, Review (Event Graph, Mod Report, Simulate Event - the
+  report now sits next to the graph), Design (GUI tools, Flag Builder and
+  the image rows), Localization, Reference, Test & Troubleshoot, Share -
+  followed by Toggles and Paths. The game header opens the same
   Workspace-scoped extension settings view as the overflow menu.
 
 - **Warning before a workshop folder lands among the game's mods.** Creating
