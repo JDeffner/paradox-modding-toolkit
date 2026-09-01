@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- **One hover card design, with a wiki link on every card.** All hover types
+  (script tokens, keywords, scope words, datafunctions, GUI, localization
+  formats, textures) now render through one card anatomy with a shared
+  footer, and every card whose subject has an Examples Wiki article carries
+  an "Examples Wiki" link there. Keywords like `NOT` and scope words like
+  `root` got wiki articles of their own (sourced from the same doc table the
+  hovers read, with a Keywords filter chip), so their hovers link too. The
+  useless "Scope here: unknown" line is gone.
+
+- **The Examples Wiki navigates like a browser.** Back AND forward, sitting
+  right of the search box, with Alt+Left/Alt+Right and the mouse's own
+  back/forward side buttons. Navigating from a mid-history point truncates
+  the forward trail, exactly like a browser tab. Example-site rows also got
+  a short tooltip ("Click to open in side panel") instead of the full file
+  path, and the catalog rows are vertically centered.
+
+- **An Info group in the Project panel.** Join the Discord, Wiki and
+  Examples Wiki now live in their own group below Create (moved out of the
+  View group and the footer).
+
+- **Toolkit settings open in the main window.** On VS Code builds where the
+  new modal editor experiment is on, opening the toolkit settings from the
+  Project panel landed in a modal; it now moves itself to a normal editor
+  tab, keeping the settings filter.
+
+- **Tooltips stay readable.** Custom tooltips in every toolkit webview
+  (Project panel, wikis, event graph, GUI editor, Workshop and the rest) now
+  measure themselves and flip or shift to stay inside the panel instead of
+  running off the edge.
+
 - **Your variables joined the Examples Wiki.** Every variable and list the
   index knows (`set_variable`, `add_to_list`, the local and global forms) now
   has its own wiki article: inferred value type, where it is set and read,

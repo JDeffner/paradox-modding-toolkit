@@ -18,7 +18,10 @@ Ships with toolkit 0.4.0.
   usage block, literals, producers, members and example sites per entry).
 
 - Examples Wiki wire additions, all optional and additive: `ExampleWikiKind`
-  gains the seven variable/list kinds (`exampleWikiVariableKinds`);
+  gains the seven variable/list kinds (`exampleWikiVariableKinds`) and the
+  two vocabulary kinds `keyword`/`scope_word`
+  (`exampleWikiVocabularyKinds`); scope-producing token details gain
+  `fromScope` (triggers/effects/targets declared usable from that scope);
   `ExampleWikiSite` gains `context`/`contextStart`/`label` for inline
   snippets; `ExampleWikiDetail` gains `valueType`/`containers`/
   `containersTotal`; `clientCommands.showExamplesWiki` names the command a
