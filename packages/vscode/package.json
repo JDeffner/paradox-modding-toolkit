@@ -388,7 +388,14 @@
       {
         "command": "px.launchMapEditor",
         "category": "Paradox",
-        "title": "Launch Map Editor"
+        "title": "Launch Map Editor",
+        "icon": "$(map)"
+      },
+      {
+        "command": "px.launchWithOptions",
+        "category": "Paradox",
+        "title": "Launch with Options…",
+        "icon": "$(rocket)"
       },
       {
         "command": "px.translateNext",
@@ -892,6 +899,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.launchWithOptions",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.translateNext",
           "when": "px.isCk3Workspace"
         },
@@ -970,8 +981,18 @@
       "editor/title/run": [
         {
           "command": "px.launchGame",
-          "when": "px.isCk3Workspace && editorLangId =~ /^paradox/",
-          "group": "navigation"
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.launchMapEditor",
+          "when": "px.isCk3Workspace && px.hasMapEditor && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.launchWithOptions",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@3"
         }
       ],
       "editor/title": [

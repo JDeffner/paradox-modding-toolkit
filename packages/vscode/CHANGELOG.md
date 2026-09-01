@@ -4,14 +4,16 @@
 
 ### Added
 
-- **Run configurations for the game (issue #26).** The Run and Debug panel
-  gets a `paradox-game` type: press F5 (or the Run button on any script file)
-  to start the workspace's game via Steam. Presets per game - debug mode,
-  Map Editor, Continue Last Save, CK3's Skip to 1066 Lobby and Benchmark,
-  vanilla - and a launch.json schema with snippets (`-play=<title>`,
-  `-random_seed=<n>`, custom option sets) for your own configurations. Every
-  preset flag is verified in the game's own binary; the Project panel gains a
-  one-click Launch Map Editor row.
+- **Run configurations for the game (issue #26).** Launching now lives in
+  ONE place: the Run button on script and gui files, whose dropdown offers
+  Launch Game (debug mode), Launch Map Editor and Launch with Options (a
+  quick pick of every preset plus a free-form option box); the panel's
+  launch row is gone. Behind it sits a `paradox-game` run type: F5 starts
+  the workspace's game via Steam, the Run and Debug panel lists the per-game
+  presets - debug mode, Map Editor, Continue Last Save, CK3's Skip to 1066
+  Lobby and Benchmark, vanilla - and launch.json snippets (`-play=<title>`,
+  `-random_seed=<n>`, custom option sets) make your own sets permanent.
+  Every preset flag is verified in the game's own binary.
 
 ## 0.3.3 (beta) - tiger download fix
 

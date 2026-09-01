@@ -33,10 +33,18 @@ describe("visibleActionGroups", () => {
   it("keeps working for a game without a tiger", () => {
     const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent"]);
     const ids = commands(groups);
-    expect(ids).toContain("px.launchGame");
     expect(ids).not.toContain("px.newContent");
     expect(ids).not.toContain("px.tigerCreateBaseline");
     expect(groups.map((g) => g.label)).not.toContain("Create");
+    // No tiger and no problems leaves Test & Troubleshoot empty: dropped.
+    expect(groups.map((g) => g.label)).not.toContain("Test & Troubleshoot");
+  });
+
+  it("launching lives in the editor Run button, not as panel rows", () => {
+    const ids = commands(actionGroups(ck3Meta, 3));
+    expect(ids).not.toContain("px.launchGame");
+    expect(ids).not.toContain("px.launchMapEditor");
+    expect(ids).toContain("px.clearGameProblems");
   });
 
   it("shows the error.log clear row only while there are problems", () => {

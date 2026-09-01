@@ -47,8 +47,10 @@ function presetConfigurations(cfg: PxConfig): vscode.DebugConfiguration[] {
 /**
  * Register the type: presets for launch.json creation (Initial) and for the
  * Run dropdown without any launch.json (Dynamic), plus the launcher-only
- * resolver. `px.launchGame` (panel row, editor Run button) keeps its debug
- * default; `px.launchMapEditor` runs the game's `mapeditor` preset.
+ * resolver. Commands (all also in the editor-title Run dropdown, the ONE
+ * launching surface): `px.launchGame` = the debug default, `px.launchMapEditor`
+ * = the game's `mapeditor` preset, `px.launchWithOptions` = quick pick of
+ * every preset plus a free-form option box.
  */
 export function registerGameRun(
   context: vscode.ExtensionContext,
@@ -56,7 +58,17 @@ export function registerGameRun(
   errorLog: ErrorLogWatcher
 ): void {
   const provideDebugConfigurations = () => presetConfigurations(getCfg());
+  // Gates the Map Editor entry in the editor-title Run dropdown (menu when
+  // clauses cannot read the GameProfile).
+  const updateContext = () => {
+    const has = metaFor(getCfg().gameId).launchPresets?.some((p) => p.id === "mapeditor") ?? false;
+    void vscode.commands.executeCommand("setContext", "px.hasMapEditor", has);
+  };
+  updateContext();
   context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("px.gameId")) updateContext();
+    }),
     vscode.debug.registerDebugConfigurationProvider("paradox-game", { provideDebugConfigurations }),
     vscode.debug.registerDebugConfigurationProvider(
       "paradox-game",
@@ -81,6 +93,31 @@ export function registerGameRun(
         return;
       }
       void launchGame(cfg, errorLog, preset.args);
+    }),
+    vscode.commands.registerCommand("px.launchWithOptions", async () => {
+      const cfg = getCfg();
+      const meta = metaFor(cfg.gameId);
+      type Pick = vscode.QuickPickItem & { args: string[] | null };
+      const picks: Pick[] = [
+        ...runPresets(meta).map((p) => ({ label: p.name, description: p.args.join(" "), args: p.args })),
+        { label: "Custom options…", description: "type the options yourself", args: null },
+      ];
+      const pick = await vscode.window.showQuickPick(picks, {
+        title: `Launch ${meta.name}`,
+        placeHolder: "Launch options (a launch.json configuration makes a set permanent)",
+      });
+      if (!pick) return;
+      if (pick.args) {
+        void launchGame(cfg, errorLog, pick.args);
+        return;
+      }
+      const typed = await vscode.window.showInputBox({
+        title: `Launch ${meta.name} with custom options`,
+        value: DEBUG_ARGS.join(" "),
+        prompt: "Space-separated options; empty launches vanilla.",
+      });
+      if (typed === undefined) return;
+      void launchGame(cfg, errorLog, typed.trim().split(/\s+/).filter(Boolean));
     })
   );
 }
