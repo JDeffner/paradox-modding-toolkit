@@ -21,8 +21,7 @@
  *   neither                 `■ trigger`
  *
  * Every span's *content* is self-sufficient plain text, so a client that strips
- * the tag keeps the meaning. The only HTML emitted is that span plus the
- * `<details>` disclosure; both are on VS Code's markdown sanitizer allowlist.
+ * the tag keeps the meaning. That span is the ONLY HTML this module emits.
  * Do not introduce any other HTML: the sanitizer permits `style` on `<span>`
  * alone, and only `color`, `background-color` and `border-radius`.
  */
@@ -117,27 +116,24 @@ export type HoverDetail = "compact" | "standard" | "full";
  *  - engine `usage:` blocks: two thirds are 3 lines or shorter, and no block is
  *    exactly 4 lines, so 3 and 4 truncate the identical 22 tokens.
  *  - scripted definition bodies: only 11% are 3 lines or shorter, median 10,
- *    p90 32, longest 232. A 3-line cap here would truncate 89% of them, which
- *    is why the overflow goes into a `<details>` disclosure rather than being
- *    dropped.
+ *    p90 32, longest 232. A 3-line cap here truncates 89% of them, so `full`
+ *    raises the cap far enough to show a whole body instead.
  */
 export interface HoverCaps {
   /** Cards shown before "N more meanings". */
   cards: number;
   /** Fenced lines from an engine `usage:` block. */
   exampleLines: number;
-  /** Fenced lines from a definition body before the disclosure opens. */
+  /** Fenced lines from a definition body. */
   bodyLines: number;
-  /** Lines inside the disclosure; a hover cannot grow past the viewport. */
-  disclosedLines: number;
   /** Doc paragraphs. */
   docParagraphs: number;
 }
 
 export const CAPS: Record<HoverDetail, HoverCaps> = {
-  compact: { cards: 1, exampleLines: 0, bodyLines: 0, disclosedLines: 0, docParagraphs: 0 },
-  standard: { cards: 3, exampleLines: 3, bodyLines: 3, disclosedLines: 40, docParagraphs: 2 },
-  full: { cards: 6, exampleLines: Infinity, bodyLines: 24, disclosedLines: 200, docParagraphs: 4 },
+  compact: { cards: 1, exampleLines: 0, bodyLines: 0, docParagraphs: 0 },
+  standard: { cards: 3, exampleLines: 3, bodyLines: 3, docParagraphs: 2 },
+  full: { cards: 6, exampleLines: Infinity, bodyLines: 24, docParagraphs: 4 },
 };
 
 let detail: HoverDetail = "standard";
@@ -171,31 +167,23 @@ export function stripCommonIndent(body: string): string {
 }
 
 /**
- * A fenced block, capped. Overflow beyond `head` goes into a `<details>`
- * disclosure when the client renders HTML.
+ * A fenced block, capped at `head` lines. Overflow is truncated to a final `…`
+ * line plus a count of what is not shown, so the hover stays one screen tall
+ * and still says that more exists.
  *
- * `<details>`/`<summary>` are on VS Code's markdown sanitizer allowlist, and
- * the hover widget really does render the twisty, expand in place and stay
- * open, verified by hand in a live editor. That is in-place hover expansion
- * without the `editorHoverVerbosityLevel` proposed API, which cannot ship to
- * the Marketplace. The one measured limit: a hover cannot grow past the editor
- * viewport, so the disclosed body is capped too.
+ * A `<details>` disclosure used to hold the overflow. It rendered, but reading
+ * a body inside a hover that closes when the pointer leaves it never worked in
+ * practice; the whole-body reading surface is the examples browser instead.
  */
-export function fencedBlock(body: string, head: number, disclosed: number): string {
+export function fencedBlock(body: string, head: number): string {
   const text = stripCommonIndent(body.replace(/\s+$/, ""));
   const lines = text.split("\n");
   if (head <= 0) return "";
   if (lines.length <= head) return fence(lines);
 
+  const rest = lines.length - head;
   const shown = fence([...lines.slice(0, head), "…"]);
-  if (!hoverHtml() || disclosed <= 0) return shown;
-
-  const rest = lines.slice(head);
-  const inside = rest.slice(0, disclosed);
-  const hidden = rest.length - inside.length;
-  const summary = `${rest.length.toLocaleString("en-US")} more line${rest.length === 1 ? "" : "s"}`;
-  const body2 = hidden > 0 ? [...inside, `… and ${hidden.toLocaleString("en-US")} further`] : inside;
-  return [shown, "", `<details><summary>${summary}</summary>`, "", fence(body2), "", "</details>"].join("\n");
+  return `${shown}\n\n*${rest.toLocaleString("en-US")} more line${rest === 1 ? "" : "s"}*`;
 }
 
 function fence(lines: string[]): string {

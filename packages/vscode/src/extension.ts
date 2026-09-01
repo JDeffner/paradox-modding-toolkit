@@ -42,6 +42,7 @@ import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups, referenceItems } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
+import { ExampleWikiPanel } from "./webviews/exampleWiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
@@ -52,6 +53,7 @@ import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
+import { showDocPanel } from "./webviews/docPanel";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
 import { serverHeapMb } from "./serverHeap";
@@ -85,6 +87,11 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  exampleWikiRequest,
+  exampleWikiEntryRequest,
+  type ExampleWikiDetail,
+  type ExampleWikiEntryParams,
+  type ExampleWikiIndex,
   eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
@@ -581,9 +588,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       convertToDdsCommand(arg, multi)
     ),
     vscode.commands.registerCommand("px.imageGuidelines", () =>
-      vscode.commands.executeCommand(
-        "markdown.showPreview",
-        vscode.Uri.file(context.asAbsolutePath("media/image-guidelines.md"))
+      showDocPanel(
+        "px.imageGuidelines",
+        "Image Guidelines",
+        fs.readFileSync(context.asAbsolutePath("media/image-guidelines.md"), "utf8")
       )
     ),
     DdsPreviewProvider.register(context)
@@ -800,6 +808,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
       EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
+    }),
+    vscode.commands.registerCommand("px.showExamplesWiki", () => {
+      ExampleWikiPanel.show(context, {
+        fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
+        fetchEntry: (params: ExampleWikiEntryParams) =>
+          lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
+      });
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;

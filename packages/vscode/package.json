@@ -340,6 +340,12 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "px.showExamplesWiki",
+        "category": "Paradox",
+        "title": "Show Examples Wiki",
+        "icon": "$(book)"
+      },
+      {
         "command": "px.simulateEvent",
         "category": "Paradox",
         "title": "Simulate Event",
@@ -377,7 +383,8 @@
       {
         "command": "px.modReport",
         "category": "Paradox",
-        "title": "Show Mod Report"
+        "title": "Show Mod Report",
+        "icon": "$(checklist)"
       },
       {
         "command": "px.tigerCreateBaseline",
@@ -943,6 +950,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.showExamplesWiki",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.simulateEvent",
           "when": "px.isCk3Workspace"
         },
@@ -1064,6 +1075,11 @@
         },
         {
           "command": "px.showEventGraph",
+          "when": "view == px.overview",
+          "group": "navigation"
+        },
+        {
+          "command": "px.modReport",
           "when": "view == px.overview",
           "group": "navigation"
         },
@@ -1261,7 +1277,7 @@
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/exampleWiki/app/main.ts --bundle --outfile=dist/webview/exampleWiki.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",
@@ -1273,7 +1289,7 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "steamwand.js": "file:../../../SteamWand.js",
+    "steamwand.js": "^0.2.1",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

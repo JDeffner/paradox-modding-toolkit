@@ -23,6 +23,10 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   dependenciesRequest,
+  exampleWikiRequest,
+  exampleWikiEntryRequest,
+  type ExampleWikiDetail,
+  type ExampleWikiIndex,
   guiDependenciesRequest,
   guiLayoutRequest,
   guiSourceEditRequest,
@@ -558,6 +562,37 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(graph.suggestions?.ids).toContain("smoke.2");
     expect(graph.suggestions?.namespaces).toContain("smoke");
     expect(graph.suggestions?.namespaces).toContain("psmoke");
+  });
+
+  it("paradox/exampleWiki answers the searchable catalog", async () => {
+    const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+    expect(index.entries.length).toBeGreaterThan(50);
+    expect(index.entries.some((e) => e.kind === "trigger")).toBe(true);
+    expect(index.entries.some((e) => e.kind === "effect")).toBe(true);
+    // Rows are ordered by how often the game itself writes the name.
+    expect(index.entries[0].count).toBeGreaterThan(0);
+    expect(index.sources.join(" ")).toContain("Set the game folder");
+  });
+
+  it("paradox/exampleWikiEntry round-trips one catalog row and refuses an unknown name", async () => {
+    const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+    const row = index.entries.find((e) => e.kind === "effect");
+    expect(row).toBeDefined();
+    const detail = (await conn.sendRequest(exampleWikiEntryRequest, {
+      name: row!.name,
+      kind: row!.kind,
+    })) as ExampleWikiDetail;
+    expect(detail.name).toBe(row!.name);
+    expect(detail.kind).toBe("effect");
+    expect(detail.provenance).not.toBe("");
+    // No game folder in this run, so the sites are honestly empty and say why.
+    expect(detail.examples).toEqual([]);
+    expect(detail.examplesNote).toContain("game folder");
+    const missing = await conn.sendRequest(exampleWikiEntryRequest, {
+      name: "px_no_such_name_at_all",
+      kind: "effect",
+    });
+    expect(missing).toBeNull();
   });
 
   it("paradox/dependencies resolves a definition's dependents and dependencies", async () => {

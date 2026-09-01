@@ -1,6 +1,6 @@
 /**
  * Hover card layout. These pin the three-tier rendering contract (glyph, square,
- * plain), the single shared footer, the caps, and the `<details>` disclosure.
+ * plain), the single shared footer, the caps, and fenced-block truncation.
  *
  * The fixtures call `renderCard` directly, which is NOT what production does:
  * `hover.ts` builds a `CardInput` through `tokenCard`/`definitionCard` first,
@@ -199,34 +199,30 @@ describe("the shared footer", () => {
   });
 });
 
-describe("fenced blocks and the disclosure", () => {
+describe("fenced blocks", () => {
   const body = ["a = {", "  b = 1", "  c = 2", "  d = 3", "  e = 4", "}"].join(NL);
 
-  it("fences a short block whole, with no disclosure", () => {
-    const md = fencedBlock("x = yes", 3, 40);
+  it("fences a short block whole, with no truncation", () => {
+    const md = fencedBlock("x = yes", 3);
     expect(md).toBe(["```paradox", "x = yes", "```"].join(NL));
-    expect(md).not.toContain("<details>");
+    expect(md).not.toContain("…");
   });
 
-  it("caps the inline part and discloses the rest", () => {
+  it("truncates the overflow and says how much it dropped", () => {
     tier("vscode");
-    const md = fencedBlock(body, 3, 40);
+    const md = fencedBlock(body, 3);
     expect(md).toContain(["```paradox", "a = {", "  b = 1", "  c = 2", "…", "```"].join(NL));
-    expect(md).toContain("<details><summary>3 more lines</summary>");
-    expect(md).toContain("  e = 4");
+    expect(md).toContain("*3 more lines*");
+    expect(md).not.toContain("  e = 4");
   });
 
-  it("truncates inside the disclosure too, because a hover cannot outgrow the viewport", () => {
-    tier("vscode");
-    const md = fencedBlock(body, 1, 2);
-    expect(md).toContain("… and 3 further");
-  });
-
-  it("drops the disclosure entirely on a client that strips HTML", () => {
-    tier("bare");
-    const md = fencedBlock(body, 3, 40);
-    expect(md).not.toContain("<details>");
-    expect(md).toContain("…");
+  it("emits no HTML at all, on any client tier", () => {
+    for (const t of ["vscode", "bare"] as const) {
+      tier(t);
+      const md = fencedBlock(body, 3);
+      expect(md).not.toContain("<");
+      expect(md).toContain("…");
+    }
   });
 
   it("strips the indentation every line shares", () => {
@@ -238,7 +234,7 @@ describe("fenced blocks and the disclosure", () => {
   it("shows no example at all in compact mode", () => {
     setHoverDetail("compact");
     expect(CAPS.compact.exampleLines).toBe(0);
-    expect(fencedBlock(body, CAPS.compact.bodyLines, CAPS.compact.disclosedLines)).toBe("");
+    expect(fencedBlock(body, CAPS.compact.bodyLines)).toBe("");
   });
 });
 

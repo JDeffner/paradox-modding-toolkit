@@ -26,6 +26,12 @@
   games. Setup & Health Check now recommends picking a projects folder, and
   the mod walkthrough page mentions the layout.
 
+- **The Mod Report is a page, not a markdown preview.** It opens in its own
+  panel styled like the rest of the toolkit, from a new button in the Mod
+  Overview view's title bar (next to Show Event Graph) as well as the
+  command palette and the Project panel. The image guidelines
+  ("Paradox: Show Image Guidelines") open the same way.
+
 - **The Project panel shows the paths in use.** A Paths section (at the
   bottom of the panel) lists the effective game folder, script_docs logs, mod
   folder, mod projects folder, Workshop listing folder and tiger binary, each with its origin (set,

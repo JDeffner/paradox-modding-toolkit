@@ -32,25 +32,6 @@ export interface ActionGroup {
 export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
   return [
     {
-      label: "Create",
-      items: [
-        {
-          label: "New Mod…",
-          command: "px.createMod",
-          icon: "package",
-          tip:
-            "Create a new mod with its descriptor. Recommended: a mod projects folder, where git and " +
-            "Workshop files live next to the mod instead of inside the upload; the launcher finds the mod via a link.",
-        },
-        {
-          label: "New Content…",
-          command: "px.newContent",
-          icon: "plus",
-          tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
-        },
-      ],
-    },
-    {
       label: "View",
       items: [
         {
@@ -58,6 +39,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.showEventGraph",
           icon: "waypoints",
           tip: "Interactive graph of what fires what: events, on_actions and decisions of the focused mod.",
+        },
+        {
+          label: "Examples Wiki",
+          command: "px.showExamplesWiki",
+          icon: "bookOpen",
+          tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
         },
         {
           label: "Mod Report",
@@ -98,6 +85,42 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.convertToDds",
           icon: "image",
           tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
+        },
+      ],
+    },
+    {
+      label: "Share",
+      items: [
+        {
+          label: "Steam Workshop Panel",
+          command: "px.openWorkshopManager",
+          icon: "cloudUpload",
+          tip: "The mod's Workshop item in one place: description, visibility, translations, statistics - and the only place uploads happen.",
+        },
+        {
+          label: "Open Workshop Page",
+          command: "px.openWorkshopPage",
+          icon: "externalLink",
+          tip: "Open the mod's Steam Workshop page in the browser (description, visibility, comments).",
+        },
+      ],
+    },
+    {
+      label: "Create",
+      items: [
+        {
+          label: "New Mod…",
+          command: "px.createMod",
+          icon: "package",
+          tip:
+            "Create a new mod with its descriptor. Recommended: a mod projects folder, where git and " +
+            "Workshop files live next to the mod instead of inside the upload; the launcher finds the mod via a link.",
+        },
+        {
+          label: "New Content…",
+          command: "px.newContent",
+          icon: "plus",
+          tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
         },
       ],
     },
@@ -155,23 +178,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-      ],
-    },
-    {
-      label: "Share",
-      items: [
-        {
-          label: "Steam Workshop Panel",
-          command: "px.openWorkshopManager",
-          icon: "cloudUpload",
-          tip: "The mod's Workshop item in one place: description, visibility, translations, statistics - and the only place uploads happen.",
-        },
-        {
-          label: "Open Workshop Page",
-          command: "px.openWorkshopPage",
-          icon: "externalLink",
-          tip: "Open the mod's Steam Workshop page in the browser (description, visibility, comments).",
-        },
       ],
     },
   ];

@@ -18,6 +18,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   "event-graph": "waypoints",
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
+  "examples-wiki": "bookOpen",
   workshop: "cloudUpload",
   "bbcode-preview": "eye",
 };

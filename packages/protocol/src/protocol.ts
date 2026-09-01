@@ -444,6 +444,109 @@ export interface EventDetail {
   refs: EventRefInfo[];
 }
 
+/**
+ * Request: the searchable catalog behind the Examples Wiki;
+ * `null` -> {@link ExampleWikiIndex}.
+ *
+ * One compact row per name the server knows about, so a client can filter and
+ * rank the whole vocabulary without asking again. Everything expensive (the
+ * full documentation, the usage block, the vanilla sites) is left to
+ * {@link exampleWikiEntryRequest}.
+ */
+export const exampleWikiRequest = "paradox/exampleWiki";
+
+/**
+ * What an Examples Wiki row is. The first four are engine tokens from
+ * script_docs or the wiki tables; the last three are `[ ... ]` datafunctions:
+ * a global (`GetPlayer`), a member of a data type (`Character.GetName`), and
+ * a data type itself (`Character`).
+ */
+export type ExampleWikiKind =
+  "trigger" | "effect" | "event_target" | "modifier" | "datafn_global" | "datafn_member" | "data_type";
+
+export interface ExampleWikiEntry {
+  /** Display and lookup name; a member carries its owner (`Character.GetName`). */
+  name: string;
+  kind: ExampleWikiKind;
+  /** Owning data type of a member row; absent on every other kind. */
+  owner?: string;
+  /** First sentence of the documentation, capped; empty when undocumented. */
+  shortDoc: string;
+  /** Times vanilla uses the name. 0 means "not counted", not "never used". */
+  count: number;
+}
+
+export interface ExampleWikiIndex {
+  /** Every row, most-used first. */
+  entries: ExampleWikiEntry[];
+  /** Plain sentences naming where the rows came from, for an About line. */
+  sources: string[];
+  /** True when the rows do NOT come from the user's own script_docs dump, so
+   *  a client can suggest running `script_docs` in the game console. */
+  needsScriptDocs: boolean;
+}
+
+/**
+ * Request: everything the toolkit knows about ONE Examples Wiki row;
+ * {@link ExampleWikiEntryParams} -> {@link ExampleWikiDetail} | null.
+ *
+ * `null` means the name is not in the catalog. Vanilla example sites are
+ * searched on demand and come back as absolute paths, so a client can open
+ * the file at the line without resolving anything itself.
+ */
+export const exampleWikiEntryRequest = "paradox/exampleWikiEntry";
+export interface ExampleWikiEntryParams {
+  name: string;
+  kind: ExampleWikiKind;
+}
+
+/** One place in the game files that uses the name. */
+export interface ExampleWikiSite {
+  /** The line as written, trimmed and capped. */
+  text: string;
+  /** Absolute path. */
+  file: string;
+  /** 1-based line number. */
+  line: number;
+}
+
+export interface ExampleWikiDetail {
+  name: string;
+  kind: ExampleWikiKind;
+  owner?: string;
+  count: number;
+  /** Full documentation prose; empty when nothing documents the name. */
+  doc: string;
+  /** Scopes an engine token works in; empty when unknown. */
+  scopes: string[];
+  /** The token's remaining script_docs metadata lines, verbatim. */
+  traits?: string;
+  /** The `usage:` example block from script_docs or the wiki, verbatim. */
+  usage?: string;
+  /** Datafunction return type; absent when unknown. */
+  ret?: string;
+  /** Datafunction argument types, when the dump recorded them. */
+  args?: string[];
+  /** A datafunction is either read like a field or called with parentheses. */
+  callKind?: "promote" | "function";
+  /** Literal arguments vanilla passes, most used first. */
+  literals: string[];
+  /** Literals found before the list was capped. */
+  literalsTotal: number;
+  /** Members of a data type, or nothing on other kinds. */
+  members: string[];
+  membersTotal: number;
+  /** Datafunctions that return this data type. */
+  producers: string[];
+  producersTotal: number;
+  /** Vanilla uses, capped; empty when the search found none. */
+  examples: ExampleWikiSite[];
+  /** Why the example list looks the way it does, in one sentence. */
+  examplesNote?: string;
+  /** Where the facts above come from, in one sentence. */
+  provenance: string;
+}
+
 /** Request: GUI widget tree for a .gui document; {@link GuiTreeParams} -> {@link GuiTree}. */
 export const guiTreeRequest = "paradox/guiTree";
 export interface GuiTreeParams {

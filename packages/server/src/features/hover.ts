@@ -249,7 +249,7 @@ function tokenCard(token: TokenData, current: ReadonlySet<string> | null): CardI
 
   // Syntax example from a script_docs `usage:` block or the wiki, capped.
   const caps = hoverCaps();
-  if (token.usage) card.example = fencedBlock(token.usage, caps.exampleLines, caps.disclosedLines);
+  if (token.usage) card.example = fencedBlock(token.usage, caps.exampleLines);
 
   // One facts line: the scopes you call it from (matched against the cursor
   // scope), the shape its value takes, then whatever metadata is left.
@@ -460,14 +460,14 @@ function definitionCard(
 
   // The fenced slot: an explicit `@example` wins, otherwise the definition's
   // own source block, which is what "show me what this scripted trigger is"
-  // actually means. Capped inline and disclosed beyond that, because only 11%
-  // of vanilla scripted triggers are 3 lines or shorter.
+  // actually means. Capped, since only 11% of vanilla scripted triggers are 3
+  // lines or shorter; `full` detail raises the cap.
   const caps = hoverCaps();
   if (body.example) {
-    card.example = fencedBlock(body.example, caps.exampleLines, caps.disclosedLines);
+    card.example = fencedBlock(body.example, caps.exampleLines);
   } else if (caps.bodyLines > 0 && BODY_KINDS.has(def.kind)) {
     const src = definitionBody(def.file, def.line);
-    if (src) card.example = fencedBlock(src, caps.bodyLines, caps.disclosedLines);
+    if (src) card.example = fencedBlock(src, caps.bodyLines);
   }
 
   const links: string[] = [provenance(def)];

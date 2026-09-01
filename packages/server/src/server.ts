@@ -48,6 +48,9 @@ import {
   type ReloadDocsResult,
   eventBannerRequest,
   eventDetailRequest,
+  exampleWikiRequest,
+  exampleWikiEntryRequest,
+  type ExampleWikiEntryParams,
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
@@ -109,6 +112,12 @@ import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
 import { getLineText, isScriptLanguage } from "./documents";
 import { computeEventDetail } from "./overview/eventDetail";
+import {
+  buildExampleWikiIndex,
+  computeExampleWikiEntry,
+  SiteFinder,
+  type ExampleWikiSources,
+} from "./overview/exampleWiki";
 import { loadTokenData, parseOnActionsLog } from "./data/docsParser";
 import { loadDataTypes } from "./data/dataTypes";
 import { loadDataBindingMacros } from "./data/dataBindingMacros";
@@ -117,7 +126,7 @@ import { TextFormattingIndex } from "./data/textFormatting";
 import { provideFormatTagCompletion, provideFormatTagHover } from "./features/locFormatting";
 import { loadDataFnUsageAsync } from "./data/dataFnUsage";
 import { loadWikiTokens, mergeWikiTokens } from "./data/wikiDocs";
-import { loadFreqs } from "./schema/freqs";
+import { emptyFreqData, loadFreqs, type FreqData } from "./schema/freqs";
 import {
   DefinitionIndex,
   classifyFile,
@@ -300,6 +309,46 @@ function refreshLazyRefs(): void {
   }));
   if (settings.gamePath) roots.push({ root: settings.gamePath, source: "vanilla" });
   lazyRefs.setRoots(roots, isEngineToken);
+}
+
+/** Bundled frequency tables: completion ranks with them, the Examples Wiki
+ *  shows them as "how often the game itself writes this". */
+let freqs: FreqData = emptyFreqData();
+function applyFreqs(): void {
+  freqs = loadFreqs(freqsDir);
+  completion.setFreqs(freqs);
+}
+
+/** Example sites for the Examples Wiki, searched in the game's own files. */
+const exampleSites = new SiteFinder();
+
+function refreshExampleSites(): void {
+  // Profile-driven, not a hardcoded folder list: the schema names the script
+  // folders of the active game, and the kinds it marks uncompletable are the
+  // bulk ones (history) whose files no newcomer wants as an example.
+  const folders = [
+    ...new Set(
+      schema.entries.filter((e) => e.completable !== false && (e.ext ?? ".txt") === ".txt").map((e) => e.path)
+    ),
+  ];
+  exampleSites.setRoots(settings.gamePath, folders);
+}
+
+/** What the two Examples Wiki requests read. */
+function exampleWikiSources(): ExampleWikiSources {
+  return {
+    tokens: data.tokens,
+    dataTypes: data.dataTypes,
+    usage: data.dataFnUsage,
+    counts: freqs.tokens,
+    tokenSource: tokensFromScriptDocs
+      ? tokensFromBundledDumps
+        ? "the bundled script_docs snapshot. Run script_docs in the game console for the list your game version really has."
+        : "your own script_docs logs, so they match your game version."
+      : "the bundled wiki tables. Run script_docs in the game console for the full list your game version has.",
+    needsScriptDocs: !tokensFromScriptDocs || tokensFromBundledDumps,
+    gamePath: settings.gamePath,
+  };
 }
 
 /** Focus predicate for the mod-scoped overview requests: with a `modRoot`
@@ -960,6 +1009,7 @@ async function buildIndex(): Promise<void> {
   data.modNamespaces.clear();
   refreshModOrigin();
   refreshLazyRefs();
+  refreshExampleSites();
   harvestEngineData();
   rescanDigests.clear();
   indexing = true;
@@ -1275,7 +1325,7 @@ connection.onInitialized(() => {
     });
   }
   // Bundled frequency tables for completion ranking (§C3); fail-soft to empty.
-  completion.setFreqs(loadFreqs(freqsDir));
+  applyFreqs();
   completion.setSettings(settings);
   loadDocs(false);
   startIndexBuild("startup");
@@ -1297,7 +1347,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
     setActiveProfile(resolveProfile(newSettings.gameId));
     // Bundled wiki/freqs are per-game; re-derive and re-rank for the new one.
     deriveBundledDataDirs();
-    completion.setFreqs(loadFreqs(freqsDir));
+    applyFreqs();
   }
   const pathsChanged =
     gameChanged ||
@@ -1562,6 +1612,14 @@ connection.onRequest(guiWidgetEditRequest, (params: GuiWidgetEditParams) =>
 
 connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>
   params?.id ? computeEventDetail(data, schema, params.id) : null
+);
+
+// The Examples Wiki: one row per name the server knows (the search catalog),
+// and everything known about one of them (the reading pane).
+connection.onRequest(exampleWikiRequest, () => buildExampleWikiIndex(exampleWikiSources()));
+
+connection.onRequest(exampleWikiEntryRequest, (params: ExampleWikiEntryParams) =>
+  computeExampleWikiEntry(exampleWikiSources(), params, exampleSites)
 );
 
 connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {

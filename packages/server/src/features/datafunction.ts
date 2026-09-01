@@ -23,7 +23,7 @@ import {
 import type { DataFnUsage } from "../data/dataFnUsage";
 import type { DefinitionIndex } from "../index/indexer";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { fileLink } from "./hoverRender";
+import { fileLink, renderCard, renderHover, scopeType, type CardInput } from "./hoverRender";
 import * as path from "path";
 
 /**
@@ -467,6 +467,32 @@ function provenance(member: DataTypeMember | null): string {
   return "deduced from vanilla usage";
 }
 
+/**
+ * Badge kind for a data-function entry: a promote reads as a stored value (blue,
+ * like a saved scope), a function asks for something (purple), which is the same
+ * split every other hover surface draws.
+ */
+function badgeKind(kind: DataTypeMember["kind"]): string {
+  return kind === "promote" ? "promote" : "datafn";
+}
+
+/** Head tail for a member card: `( args )` as code, then the blue `→ Return`. */
+function headTailOf(member: DataTypeMember): string | undefined {
+  const parts: string[] = [];
+  if (member.args?.length) parts.push(`\`( ${member.args.join(", ")} )\``);
+  if (member.ret) parts.push(`→ ${scopeType(member.ret)}`);
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+/**
+ * The card's doc slot from the detail lines the branches collect. They already
+ * carry their own blank-line separators, so only the outer padding is trimmed.
+ */
+function detailDoc(lines: string[]): string | undefined {
+  const text = lines.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
+  return text.length > 0 ? text : undefined;
+}
+
 /** Producers listed by name in a hover before the tail becomes a count. */
 const MAX_PRODUCERS = 6;
 
@@ -529,14 +555,12 @@ function usageDetailLines(
   usage: DataFnUsage,
   name: string,
   desc: string | null | undefined,
-  gameRoot: string | null,
-  dumpHint: string | null = null
+  gameRoot: string | null
 ): string[] {
   const lines: string[] = [];
   if (desc) lines.push("", desc);
   lines.push(...literalLines(usage, name));
   lines.push(...exampleLines(usage, name, gameRoot));
-  if (dumpHint) lines.push("", dumpHint);
   return lines;
 }
 
@@ -544,6 +568,10 @@ function usageDetailLines(
  * Hover info for the chain segment at `character` when it sits inside a
  * [ ... ] expression and is known to any layer; null lets the caller fall
  * through to its normal hover.
+ *
+ * One card per hover, in the same shape every other hover surface uses
+ * (hoverRender.ts): badge + name + `→ Return` head, the description and the
+ * harvested detail lines in the doc slot, provenance in the muted facts line.
  */
 export function provideDataFnHover(
   data: DataTypesData,
@@ -580,33 +608,48 @@ export function provideDataFnHover(
 
   const lines: string[] = [];
   const uses = usageCount(usage, segment);
+  let card: CardInput;
 
   if (index === 0) {
     const typeMembers = membersOf(data, segment);
     if (typeMembers) {
-      lines.push(`\`${segment}\` — data type (${typeMembers.size} known members)`);
       lines.push(...producerLines(data, usage, segment));
       lines.push(...topMemberLines(usage, segment, "Common members"));
       lines.push(...exampleLines(usage, segment, gameRoot));
+      card = {
+        kind: "data_type",
+        name: segment,
+        headTail: `· ${typeMembers.size.toLocaleString("en-US")} known members`,
+        doc: detailDoc(lines),
+      };
     } else {
       const global = data.globals.get(segment);
       if (global) {
         lines.push(
-          `\`${segment}${global.args?.length ? `( ${global.args.join(", ")} )` : ""}\`${global.ret ? ` → \`${global.ret}\`` : ""}`
-        );
-        lines.push("", `global ${global.kind} — ${provenance(global)}`);
-        lines.push(
           ...usageDetailLines(usage, segment, global.desc ?? describeDataFn(segment, global), gameRoot)
         );
+        card = {
+          kind: badgeKind(global.kind),
+          badgeLabel: `global ${global.kind}`,
+          name: segment,
+          headTail: headTailOf(global),
+          doc: detailDoc(lines),
+          facts: provenance(global),
+        };
       } else if (uses > 0) {
-        lines.push(`\`${segment}\``);
-        lines.push("", `not in the data-type tables — ${provenance(null)}`);
         const desc = describeDataFn(segment, null);
         if (desc) lines.push("", desc);
         lines.push(...topMemberLines(usage, segment, "Members seen after it"));
         lines.push(...literalLines(usage, segment));
         lines.push(...exampleLines(usage, segment, gameRoot));
-        lines.push("", dumpHintFor(data));
+        card = {
+          kind: "datafn",
+          badgeLabel: "data function",
+          name: segment,
+          doc: detailDoc(lines),
+          facts: `not in the data-type tables — ${provenance(null)}`,
+          provenance: dumpHintFor(data),
+        };
       } else {
         return null;
       }
@@ -627,21 +670,18 @@ export function provideDataFnHover(
     }
     if (member && ownerType) {
       lines.push(
-        `\`${ownerType}.${segment}${member.args?.length ? `( ${member.args.join(", ")} )` : ""}\`${member.ret ? ` → \`${member.ret}\`` : ""}`
-      );
-      lines.push("", `${member.kind} on \`${ownerType}\` — ${provenance(member)}`);
-      lines.push(
         ...usageDetailLines(usage, segment, member.desc ?? describeDataFn(segment, member), gameRoot)
       );
+      card = {
+        kind: badgeKind(member.kind),
+        badgeLabel: `${member.kind} on ${ownerType}`,
+        name: `${ownerType}.${segment}`,
+        headTail: headTailOf(member),
+        doc: detailDoc(lines),
+        facts: provenance(member),
+      };
     } else if (byName.length > 0) {
       const hit = byName[0];
-      lines.push(
-        `\`${hit.owner}.${segment}${hit.member.args?.length ? `( ${hit.member.args.join(", ")} )` : ""}\`${hit.member.ret ? ` → \`${hit.member.ret}\`` : ""}`
-      );
-      lines.push(
-        "",
-        `${hit.member.kind} on \`${hit.owner}\` — ${provenance(hit.member)}, matched by name (the chain before it did not resolve to a type)`
-      );
       if (byName.length > 1) {
         lines.push(
           "",
@@ -654,17 +694,33 @@ export function provideDataFnHover(
       lines.push(
         ...usageDetailLines(usage, segment, hit.member.desc ?? describeDataFn(segment, hit.member), gameRoot)
       );
+      card = {
+        kind: badgeKind(hit.member.kind),
+        badgeLabel: `${hit.member.kind} on ${hit.owner}`,
+        name: `${hit.owner}.${segment}`,
+        headTail: headTailOf(hit.member),
+        doc: detailDoc(lines),
+        facts: `${provenance(hit.member)}, matched by name (the chain before it did not resolve to a type)`,
+      };
     } else if (uses > 0) {
-      lines.push(`\`${segment}\``);
-      lines.push("", `member — ${provenance(null)}`);
-      lines.push(
-        ...usageDetailLines(usage, segment, describeDataFn(segment, null), gameRoot, dumpHintFor(data))
-      );
+      lines.push(...usageDetailLines(usage, segment, describeDataFn(segment, null), gameRoot));
+      card = {
+        kind: "datafn",
+        badgeLabel: "member",
+        name: segment,
+        doc: detailDoc(lines),
+        facts: provenance(null),
+        provenance: dumpHintFor(data),
+      };
     } else {
       return null;
     }
   }
-  return { markdown: lines.join("\n"), start: segStart, end: segStart + segment.length };
+  return {
+    markdown: renderHover([renderCard(card)], null),
+    start: segStart,
+    end: segStart + segment.length,
+  };
 }
 
 // ---- signature help ----------------------------------------------------------------
