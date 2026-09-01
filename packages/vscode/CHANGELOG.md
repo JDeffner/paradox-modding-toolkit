@@ -9,6 +9,12 @@
   catalog. Hovering `var:x` (and friends) shows an "Examples Wiki" link next
   to the references count that opens the wiki right at that article.
 
+- **Scope browsing in the Examples Wiki.** An article that produces a scope
+  (the `faith` event target and friends) now lists every trigger, effect and
+  event target the game's own docs declare usable from that scope, ordered
+  by vanilla usage, as clickable chips. Community-requested: "what can I do
+  from faith?" is now one click from the faith article.
+
 - **The Examples Wiki reads like a wiki now.** Example sites show real code:
   a few surrounding lines inline, with the matched line highlighted, still
   one click from the actual file. Member, producer, return-type, owner and

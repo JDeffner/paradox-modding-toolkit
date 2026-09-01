@@ -34,6 +34,9 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 /** How many rows are drawn at once. Beyond this the list stops reading. */
 const PAGE = 300;
 
+/** A "usable from this scope" list this short opens with the article. */
+const FOLD_OPEN_MAX = 40;
+
 let entries: ExampleWikiEntry[] = [];
 let sources: string[] = [];
 let needsScriptDocs = false;
@@ -298,6 +301,37 @@ function chips(
   return box;
 }
 
+/** A section that holds its whole list, folded away until it is asked for: one
+ *  scope can carry hundreds of names, and they must not bury the article. */
+function foldSection(title: string, total: number): HTMLElement {
+  const sec = document.createElement("details");
+  sec.className = "sec fold";
+  const head = document.createElement("summary");
+  head.className = "px-panel-title";
+  head.textContent = `${title} (${total})`;
+  sec.append(head);
+  return sec;
+}
+
+/** One "usable from this scope" list, or nothing when the docs name none. */
+function fromScopeSection(
+  title: string,
+  names: string[],
+  total: number,
+  kind: ExampleWikiKind
+): HTMLElement | null {
+  if (names.length === 0) return null;
+  const sec = foldSection(title, total);
+  // A short list costs nothing to show; a scope with hundreds of names would
+  // push the rest of the article off the pane.
+  if (total <= FOLD_OPEN_MAX) sec.setAttribute("open", "");
+  const box = chips(names, { link: (n) => findArticle(n, kind) });
+  box.classList.add("scroll");
+  sec.append(box);
+  if (total > names.length) sec.append(noteLine(`The first ${names.length} of ${total} are shown.`));
+  return sec;
+}
+
 function noteLine(text: string): HTMLElement {
   const el = document.createElement("div");
   el.className = "note";
@@ -388,6 +422,19 @@ function renderDetail(detail: ExampleWikiDetail | null, name: string): void {
       })
     );
     body.append(sec);
+  }
+
+  for (const from of detail.fromScope ?? []) {
+    const lists = [
+      fromScopeSection(`Triggers in ${from.scope} scope`, from.triggers, from.triggersTotal, "trigger"),
+      fromScopeSection(`Effects in ${from.scope} scope`, from.effects, from.effectsTotal, "effect"),
+      fromScopeSection(`Targets from ${from.scope}`, from.targets, from.targetsTotal, "event_target"),
+    ].filter((sec): sec is HTMLElement => sec !== null);
+    if (lists.length === 0) continue;
+    body.append(
+      noteLine(`Once this puts you in a ${from.scope} scope, these are what the game's docs let you write.`),
+      ...lists
+    );
   }
 
   if (detail.usage) {

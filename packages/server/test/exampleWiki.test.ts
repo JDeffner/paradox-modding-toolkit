@@ -31,6 +31,20 @@ const TOKENS: TokenData[] = [
   { name: "liege", kind: "event_target", doc: "", scopes: ["character"], traits: "To scope: character" },
 ];
 
+/** A target that lands in the faith scope, the names the docs say work there,
+ *  and two that only work elsewhere. */
+const FAITH_TOKENS: TokenData[] = [
+  { name: "faith", kind: "event_target", doc: "", scopes: ["input: character", "output: faith"] },
+  { name: "has_doctrine", kind: "trigger", doc: "", scopes: ["faith"] },
+  { name: "faith_hostility_level", kind: "trigger", doc: "", scopes: ["faith"] },
+  { name: "is_alive", kind: "trigger", doc: "", scopes: ["character"] },
+  { name: "add_doctrine", kind: "effect", doc: "", scopes: ["faith"] },
+  { name: "add_gold", kind: "effect", doc: "", scopes: ["character"] },
+  { name: "religious_head", kind: "event_target", doc: "", scopes: ["input: faith", "output: character"] },
+  { name: "liege", kind: "event_target", doc: "", scopes: ["input: character", "output: character"] },
+];
+const FAITH_COUNTS: Record<string, number> = { has_doctrine: 80, faith_hostility_level: 12 };
+
 function dataTypes(): DataTypesData {
   const data = emptyDataTypes();
   data.globals.set("GetPlayer", { ret: "Character", args: null, kind: "promote", src: "dump" });
@@ -235,6 +249,33 @@ describe("example wiki entry", () => {
     expect(detail?.members).toEqual(["Custom", "GetName"]);
     expect(detail?.membersTotal).toBe(2);
     expect(detail?.producers).toEqual(["GetPlayer"]);
+  });
+
+  it("lists what the docs allow from a scope the token produces, most used first", async () => {
+    const detail = await computeExampleWikiEntry(
+      sources({ tokens: FAITH_TOKENS, counts: { ...FAITH_COUNTS } }),
+      { name: "faith", kind: "event_target" },
+      noSites()
+    );
+    expect(detail?.fromScope).toHaveLength(1);
+    const from = detail!.fromScope![0];
+    expect(from.scope).toBe("faith");
+    // Ordered by vanilla usage; the character-only names are not in the answer.
+    expect(from.triggers).toEqual(["has_doctrine", "faith_hostility_level"]);
+    expect(from.triggersTotal).toBe(2);
+    expect(from.effects).toEqual(["add_doctrine"]);
+    expect(from.effectsTotal).toBe(1);
+    expect(from.targets).toEqual(["religious_head"]);
+    expect(from.targetsTotal).toBe(1);
+  });
+
+  it("says nothing about scopes a token does not produce", async () => {
+    const detail = await computeExampleWikiEntry(
+      sources({ tokens: FAITH_TOKENS }),
+      { name: "has_doctrine", kind: "trigger" },
+      noSites()
+    );
+    expect(detail?.fromScope).toBeUndefined();
   });
 
   it("answers null for a name the catalog does not have", async () => {

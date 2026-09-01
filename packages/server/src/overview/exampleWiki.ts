@@ -20,6 +20,7 @@ import type {
   ExampleWikiDetail,
   ExampleWikiEntry,
   ExampleWikiEntryParams,
+  ExampleWikiFromScope,
   ExampleWikiIndex,
   ExampleWikiKind,
   ExampleWikiSite,
@@ -90,6 +91,8 @@ const LITERAL_CAP = 12;
 const MEMBER_CAP = 60;
 const PRODUCER_CAP = 20;
 const SITE_CAP = 6;
+/** Safety cap per "usable from this scope" list; the true total ships beside it. */
+const FROM_SCOPE_CAP = 2000;
 const SITE_TEXT_MAX = 160;
 const CONTAINER_CAP = 8;
 /** Lines kept on each side of a site's own line. */
@@ -339,10 +342,56 @@ async function tokenDetail(
   if (token.traits && token.traits.trim() !== "") detail.traits = token.traits;
   detail.usage = usageBlock(token);
   detail.provenance = src.tokenSource;
+  const fromScope = usableFromScopes(src, token.scopes);
+  if (fromScope.length > 0) detail.fromScope = fromScope;
   const found = await sites.find(name);
   detail.examples = found.sites;
   detail.examplesNote = found.note;
   return detail;
+}
+
+/**
+ * What can be written once this token has moved the scope somewhere else.
+ *
+ * The whole answer is the declared scopes of the other catalog rows, matched
+ * word for word: a trigger or effect names the scopes it works in, a target
+ * names its `input:`. A token that declares nothing is simply absent, which is
+ * the honest answer - the docs are the only source, and nothing here closes
+ * over a scope model or reads "no scopes" as "everywhere" (AD-5).
+ */
+function usableFromScopes(src: ExampleWikiSources, scopes: string[]): ExampleWikiFromScope[] {
+  const out: ExampleWikiFromScope[] = [];
+  for (const scope of scopes) {
+    if (!scope.startsWith("output: ")) continue;
+    const word = scope.slice("output: ".length).toLowerCase();
+    if (word === "" || out.some((e) => e.scope.toLowerCase() === word)) continue;
+    const triggers: string[] = [];
+    const effects: string[] = [];
+    const targets: string[] = [];
+    for (const token of src.tokens) {
+      if (token.kind === "trigger" || token.kind === "effect") {
+        if (!token.scopes.some((s) => s.toLowerCase() === word)) continue;
+        (token.kind === "trigger" ? triggers : effects).push(token.name);
+      } else if (token.kind === "event_target") {
+        if (token.scopes.some((s) => s.toLowerCase() === `input: ${word}`)) targets.push(token.name);
+      }
+    }
+    out.push({
+      scope: scope.slice("output: ".length),
+      triggers: byCount(src, triggers).slice(0, FROM_SCOPE_CAP),
+      triggersTotal: triggers.length,
+      effects: byCount(src, effects).slice(0, FROM_SCOPE_CAP),
+      effectsTotal: effects.length,
+      targets: byCount(src, targets).slice(0, FROM_SCOPE_CAP),
+      targetsTotal: targets.length,
+    });
+  }
+  return out;
+}
+
+/** Names ordered by how often the game's own files write them, most first. */
+function byCount(src: ExampleWikiSources, names: string[]): string[] {
+  return names.sort((a, b) => (src.counts[b] ?? 0) - (src.counts[a] ?? 0) || a.localeCompare(b));
 }
 
 function dataFnDetail(

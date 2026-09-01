@@ -589,8 +589,30 @@ export interface ExampleWikiDetail {
   examples: ExampleWikiSite[];
   /** Why the example list looks the way it does, in one sentence. */
   examplesNote?: string;
+  /**
+   * What can be written FROM each scope this token produces, one entry per
+   * `output: S` scope. Present only on a token that declares one; every list
+   * is derived from the declared scopes of the other catalog rows.
+   */
+  fromScope?: ExampleWikiFromScope[];
   /** Where the facts above come from, in one sentence. */
   provenance: string;
+}
+
+/** Names usable once a token has moved the scope to {@link scope}, most used
+ *  first. Each list is capped; the `*Total` is what was found before the cap. */
+export interface ExampleWikiFromScope {
+  /** The produced scope word, as the game's own docs write it ("faith"). */
+  scope: string;
+  /** Triggers whose declared scopes include this one. */
+  triggers: string[];
+  triggersTotal: number;
+  /** Effects whose declared scopes include this one. */
+  effects: string[];
+  effectsTotal: number;
+  /** Event targets that take this scope as input. */
+  targets: string[];
+  targetsTotal: number;
 }
 
 /** Request: GUI widget tree for a .gui document; {@link GuiTreeParams} -> {@link GuiTree}. */

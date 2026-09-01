@@ -150,7 +150,7 @@ instead.
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
 | `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
-| `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, and example sites as absolute paths with inline context; null when the name is not in the catalog |
+| `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -187,6 +187,19 @@ asked for, and come back as absolute paths with 1-based lines, so a client
 opens them without resolving anything. Every capped list carries its own total
 (`literalsTotal`, `membersTotal`, `producersTotal`, `containersTotal`), and an
 example list that is short for a reason carries `examplesNote` saying why.
+
+An engine token whose scopes declare one or more `output: <scope>` entries
+(event targets, mostly) also carries `fromScope`, one `ExampleWikiFromScope`
+per produced scope: `scope` (the produced scope word), plus `triggers`,
+`effects` and `targets` with a `triggersTotal` / `effectsTotal` /
+`targetsTotal` beside each. The lists answer "what can I write once I am
+here": every trigger and effect whose own declared scopes contain that word,
+and every event target that declares it as an `input:`. They are ordered by
+vanilla usage count, most used first, and capped at 2000 names each with the
+true count in the total. The matching is word for word against the game's own
+docs, so a token that declares no scopes is simply absent from every list and
+nothing is inferred from a scope model. The field is optional and absent when
+the token produces no scope, so a client that ignores it is unaffected.
 
 The seven variable `ExampleWikiKind`s (`variable`, `local_variable`,
 `global_variable`, `variable_list`, `local_variable_list`,

@@ -115,7 +115,14 @@ ${uiCss}
     margin: 0; padding: 8px 10px; overflow-x: auto; background: var(--px-muted);
     border-radius: var(--px-radius-md); font-family: var(--px-font-mono); font-size: var(--px-text-sm);
   }
+  /* The disclosure behaviour wants the default block flow, not the .sec column. */
+  #detailBody .fold { display: block; }
+  #detailBody .fold > summary { cursor: pointer; }
+  #detailBody .fold[open] > summary { margin-bottom: 6px; }
+  #detailBody .fold > .note { margin-top: 6px; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* A scope can carry hundreds of names: keep the list inside its own box. */
+  .chips.scroll { max-height: 240px; overflow-y: auto; }
   .px-badge[data-link] { cursor: pointer; }
   .px-badge[data-link]:hover { background: var(--px-muted-strong); }
   .site {
