@@ -883,6 +883,12 @@
             "default": false,
             "order": 5,
             "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Modding Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
+          },
+          "px.dev.webviewSource": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "markdownDescription": "**Toolkit development only.** Absolute path to a toolkit checkout's `packages/vscode/dist/webview` folder. When set, panels load their app bundles from there instead of the installed extension and reload themselves when a bundle is rebuilt (`pnpm run watch:webviews` in the checkout). Leave empty unless you are working on the toolkit itself."
           }
         }
       }

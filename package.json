@@ -13,6 +13,8 @@
     "compile": "pnpm --filter px-toolkit run compile",
     "package:test": "node scripts/package-test.mjs",
     "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
+    "watch:webviews": "node scripts/compile-webviews.mjs --watch",
+    "preview:webviews": "esbuild scripts/webview-preview.ts --bundle --platform=node --external:esbuild --loader:.css=text --outfile=dist/webview-preview.cjs --log-level=warning && node dist/webview-preview.cjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",

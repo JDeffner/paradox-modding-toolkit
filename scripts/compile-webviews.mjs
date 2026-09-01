@@ -14,7 +14,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { buildSync } from "esbuild";
+import { buildSync, context } from "esbuild";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const webviewsDir = join(root, "packages", "vscode", "src", "webviews");
@@ -24,6 +24,17 @@ export function discoverWebviewApps(dir = webviewsDir) {
     .filter((e) => e.isDirectory() && existsSync(join(dir, e.name, "app", "main.ts")))
     .map((e) => e.name)
     .sort();
+}
+
+function buildOptions(name) {
+  return {
+    entryPoints: [join(webviewsDir, name, "app", "main.ts")],
+    bundle: true,
+    outfile: join(root, "packages", "vscode", "dist", "webview", `${name}.js`),
+    format: "iife",
+    platform: "browser",
+    target: "es2020",
+  };
 }
 
 // Run only when invoked as a script: the packaging regression test imports
@@ -43,16 +54,29 @@ if (invokedDirectly) {
       });
       if (result.status) process.exit(result.status);
     }
+  } else if (process.argv.includes("--watch")) {
+    for (const name of apps) {
+      const ctx = await context({
+        ...buildOptions(name),
+        plugins: [
+          {
+            name: "log",
+            setup(build) {
+              build.onEnd((result) => {
+                const when = new Date().toLocaleTimeString();
+                if (result.errors.length) console.log(`[${when}] ${name}: ${result.errors.length} error(s)`);
+                else console.log(`[${when}] ${name} rebuilt`);
+              });
+            },
+          },
+        ],
+      });
+      await ctx.watch();
+    }
+    console.log(`watching ${apps.length} webview apps (${apps.join(", ")}); Ctrl+C stops`);
   } else {
     for (const name of apps) {
-      buildSync({
-        entryPoints: [join(webviewsDir, name, "app", "main.ts")],
-        bundle: true,
-        outfile: join(root, "packages", "vscode", "dist", "webview", `${name}.js`),
-        format: "iife",
-        platform: "browser",
-        target: "es2020",
-      });
+      buildSync(buildOptions(name));
     }
   }
 }

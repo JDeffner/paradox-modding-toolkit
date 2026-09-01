@@ -12,6 +12,7 @@ import { exampleWikiHtml } from "./html";
 import type { AppToHost, HostToApp } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource } from "../devReload";
 
 export interface ExampleWikiActions {
   fetchIndex(): Promise<ExampleWikiIndex>;
@@ -29,6 +30,7 @@ export class ExampleWikiPanel {
 
   private constructor(context: vscode.ExtensionContext, actions: ExampleWikiActions) {
     this.actions = actions;
+    const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       ExampleWikiPanel.viewType,
       "Examples Wiki",
@@ -36,24 +38,31 @@ export class ExampleWikiPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "webview")],
+        localResourceRoots: [source.root],
       }
     );
     this.panel.iconPath = tabIcon("examples-wiki");
-    const nonce = makeNonce();
-    this.panel.webview.html = exampleWikiHtml({
-      scriptSrc: this.panel.webview
-        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "exampleWiki.js"))
-        .toString(),
-      nonce,
-      csp: [
-        `default-src 'none'`,
-        `img-src ${this.panel.webview.cspSource} data:`,
-        `style-src 'unsafe-inline'`,
-        `script-src 'nonce-${nonce}'`,
-        `font-src ${this.panel.webview.cspSource}`,
-      ].join("; "),
-    });
+    const render = (): void => {
+      const nonce = makeNonce();
+      this.panel.webview.html = exampleWikiHtml({
+        scriptSrc: bundleUri(this.panel.webview, source, "exampleWiki"),
+        nonce,
+        csp: [
+          `default-src 'none'`,
+          `img-src ${this.panel.webview.cspSource} data:`,
+          `style-src 'unsafe-inline'`,
+          `script-src 'nonce-${nonce}'`,
+          `font-src ${this.panel.webview.cspSource}`,
+        ].join("; "),
+      });
+    };
+    render();
+    this.disposables.push(
+      watchBundle(source, "exampleWiki", () => {
+        render();
+        void this.loadIndex();
+      })
+    );
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
       undefined,

@@ -53,10 +53,14 @@ describe("the webview bundles are built by the compile chain", () => {
     expect(apps).toContain("guiEditor");
   });
 
-  it("each panel loads the bundle path its app is built to", () => {
+  it("each panel loads the bundle its app is built to", () => {
+    // Panels resolve the bundle through devReload's bundleUri(webview, source,
+    // name), so the guarded invariant is the helper call plus the exact name
+    // the build produces.
     for (const name of apps) {
       const panel = fs.readFileSync(path.join(WEBVIEWS_DIR, name, "panel.ts"), "utf8");
-      expect(panel, `${name}/panel.ts`).toContain(`"dist", "webview", "${name}.js"`);
+      expect(panel, `${name}/panel.ts`).toContain("bundleUri(");
+      expect(panel, `${name}/panel.ts`).toContain(`"${name}"`);
     }
   });
 });

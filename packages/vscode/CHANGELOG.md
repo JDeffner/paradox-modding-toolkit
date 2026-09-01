@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Toolkit development: webview live reload.** The new `px.dev.webviewSource`
+  setting (empty by default, off for everyone else) points an installed test
+  build at a toolkit checkout's webview bundles; panels then reload themselves
+  when `pnpm run watch:webviews` rebuilds one. The F5 dev host does the same
+  with no setting.
+
 ## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
 - **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel
