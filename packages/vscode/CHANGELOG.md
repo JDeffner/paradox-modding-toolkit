@@ -2,6 +2,24 @@
 
 ## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
+- **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel
+  row) opens a searchable browser over everything the toolkit knows from your
+  game: triggers, effects, event targets, modifiers, datafunctions and data
+  types, ranked by how often vanilla actually uses them. Type to filter, pick
+  a kind, and the reading pane shows the full description, the engine's own
+  usage block, observed arguments and clickable vanilla example sites that
+  open the real file. Hover hints explain the kind and scope words, so new
+  modders learn what a "promote" or "scope: character" means as they browse.
+
+- **`[ ... ]` datafunction hovers joined the card design.** `GetPlayer` and
+  friends now open with the same colored kind badge as script and GUI hovers
+  (blue for stored values, purple for functions, orange for data types), the
+  return type on the head line, and the description, observed arguments and
+  vanilla examples in the same card layout as everywhere else. Long example
+  bodies no longer fold out inside the hover: the accordion never read well in
+  a widget that closes when the pointer leaves, so hovers now say how many
+  more lines exist and the full text lives in the Examples Wiki.
+
 - **The Workshop listing as files.** The panel now reads and writes the
   listing from a `workshop` folder next to the mod's content folder (the
   `<project>/mod` + `<project>/workshop` layout; `px.workshop.dir` moves it,

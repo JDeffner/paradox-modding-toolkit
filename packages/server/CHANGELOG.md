@@ -48,6 +48,15 @@ Ships with toolkit 0.4.0.
 - `loadFreqs` now delegates its validation to a new exported `coerceFreqs`, so
   the browser build validates a parsed freqs.json exactly as the node path does
   instead of duplicating the shape checks.
+- `paradox/exampleWiki` + `paradox/exampleWikiEntry`: the catalog behind the
+  extension's Examples Wiki panel. The index ships every known trigger,
+  effect, event target, modifier, datafunction and data type with a short doc
+  and its vanilla usage count, most-used first; the detail request returns the
+  full doc, scopes, the engine `usage:` block, observed literal arguments,
+  producers and members, and vanilla example sites as absolute paths the
+  client can open. Logic in `overview/exampleWiki.ts`; example-site search is
+  bounded and memoized per name (45 ms for `add_gold`, 426 ms worst case over
+  772 files on a real install).
 
 ### Changed
 
@@ -60,11 +69,15 @@ Ships with toolkit 0.4.0.
   Badges render in three tiers by capability: codicon, `■` square, or plain
   text. `CardInput.traits` becomes `facts`; `CardInput.footer: string[]` becomes
   `provenance: string`, used only by multi-card hovers.
-- Long fenced blocks cap inline and disclose the rest with `<details>`, which is
-  on VS Code's markdown sanitizer allowlist and does expand in place in a real
-  hover. This is the workaround for `editorHoverVerbosityLevel` still being a
-  proposed API that cannot ship to the Marketplace. The disclosure is capped
-  too, because a hover cannot grow past the editor viewport.
+- Long fenced blocks cap inline and end with a "N more lines" tail. An earlier
+  draft disclosed the rest with `<details>`, which does render in a hover, but
+  reading a long body inside a widget that closes when the pointer leaves it
+  never worked in practice; the whole-body reading surface is the Examples
+  Wiki panel instead.
+- `[ ... ]` datafunction hovers build the same card model as every other hover
+  surface: kind badge (promote = blue stored value, function = purple, data
+  type = orange), the `→ ReturnType` tail on the head line, description and
+  harvested usage in the doc slot, provenance on the facts line.
 
 ### Removed
 

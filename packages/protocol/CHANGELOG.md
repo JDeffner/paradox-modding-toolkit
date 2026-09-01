@@ -12,6 +12,11 @@ Ships with toolkit 0.4.0.
 
 ### Added
 
+- `paradox/exampleWiki` and `paradox/exampleWikiEntry` requests: the search
+  index and the per-entry detail behind the extension's Examples Wiki panel
+  (name, kind, short doc and vanilla usage count per row; full doc, scopes,
+  usage block, literals, producers, members and example sites per entry).
+
 - `upsertDescriptorBlock` in `descriptorMod`: replace or append a top-level
   `key={...}` block (tags editing in the Workshop panel), preserving the
   file's EOL style and everything around the block.
