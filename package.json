@@ -1,6 +1,6 @@
 {
   "name": "px-lsp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {
@@ -17,7 +17,8 @@
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",
     "package": "pnpm --filter px-toolkit run package",
-    "testp": "pnpm --filter px-toolkit run testp"
+    "testp": "pnpm --filter px-toolkit run testp",
+    "bake:browser": "esbuild scripts/bake-browser-data.ts --bundle --platform=node --outfile=dist/bake-browser-data.cjs --log-level=warning && node dist/bake-browser-data.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

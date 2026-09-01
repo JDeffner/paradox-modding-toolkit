@@ -30,6 +30,12 @@ export interface ParadoxSettings {
   locLanguage: string;
   /** Show inferred scope after scope-changing block openers (off by default). */
   scopeInlayHints: boolean;
+  /**
+   * How much a hover shows. `standard` applies every cap in the design;
+   * `compact` drops prose and examples; `full` lifts the example cap and shows
+   * every distinct meaning.
+   */
+  hoverDetail?: "compact" | "standard" | "full";
   /** Custom era calendar (total-conversion mods): how script dates display in
    * game. Absent = no calendar features. Shape: calendar.ts `CalendarSetting`;
    * the server sanitizes it on intake, so clients may pass raw JSON. */
@@ -72,6 +78,25 @@ export interface ParadoxClientCapabilities {
    * registers one whenever the client supports dynamic registration.
    */
   ownFileWatcher?: boolean;
+  /**
+   * The client's hover renderer navigates `file:` links, so provenance lines
+   * ("where is this defined") may be markdown links. Default false: the same
+   * `file.txt:12` label is rendered as plain text, which reads correctly in a
+   * client that would otherwise show a dead link.
+   *
+   * Note that `textDocument.completion.completionItem.snippetSupport` — the
+   * other axis an embedder should declare — is a STANDARD LSP capability, not
+   * one of these: send it in the initialize params, not here.
+   */
+  fileLinks?: boolean;
+  /**
+   * The client renders `$(codicon)` theme icons in hover markdown, i.e. it sets
+   * `supportThemeIcons` on the MarkdownString. Default false, and the default
+   * matters: a client without it prints the literal text `$(symbol-method)`,
+   * which is worse than the plain `■` it would otherwise get. Implies
+   * {@link ParadoxClientCapabilities.hoverHtml} is respected for colour.
+   */
+  hoverIcons?: boolean;
 }
 
 /** initializationOptions passed at LanguageClient start. All fields optional:
@@ -85,9 +110,9 @@ export interface ParadoxInitOptions {
   /**
    * @deprecated Send {@link ParadoxInitOptions.client} instead. `true` is an
    * alias for `{ hoverHtml: true, commands: <every id in clientCommands>,
-   * ownFileWatcher: true }` (what the VSCode extension declared before the
-   * capabilities object existed); false/absent means all-off. Ignored when
-   * `client` is present.
+   * ownFileWatcher: true, fileLinks: true }` plus snippet support (what the
+   * VSCode extension declared before the capabilities object existed);
+   * false/absent means all-off. Ignored when `client` is present.
    */
   clientCommands?: boolean;
   /**
@@ -176,6 +201,10 @@ export interface StatusPayload {
    * (data/<gameId>/script_docs) rather than the user's own dump. */
   tokensFromBundledDumps?: boolean;
   definitions: number;
+  /** Tokens the bundled wiki added that script_docs did not have. The wiki is
+   * merged even when the user has their own dump, but its real contribution is
+   * usage examples; the extra NAMES are mostly deprecated API. */
+  tokensWikiOnly?: number;
   /** True while a (re)scan is running. */
   indexing: boolean;
 }

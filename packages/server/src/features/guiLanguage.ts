@@ -5,29 +5,22 @@
  * property usage counts) plus the definition index's gui_type entries
  * (mod + vanilla `template X { }` / `type x = base { }` declarations).
  */
-import {
-  CompletionItemKind,
-  MarkupKind,
-  type CompletionItem,
-  type Hover,
-  type Position,
-} from "vscode-languageserver/node";
+import { MarkupKind, type CompletionItem, type Hover, type Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { activeProfile } from "../games/active";
 import type { ServerData } from "../serverData";
 import { blockStackFromParse } from "../context";
 import { getParse } from "../parseCache";
-import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
+import { finalize, itemKind, MAX_ITEMS, type CompletionResult } from "./completion";
 import { provideDataFnCompletion, provideDataFnHover } from "./datafunction";
 import { guiDefSources, type GuiPaths } from "./guiNavigation";
 import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
-import { renderCard, renderHover } from "./hoverRender";
+import { fileLink, renderCard, renderHover } from "./hoverRender";
 import { assetDirContext, provideAssetDirCompletion } from "./assetPaths";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import * as path from "path";
-import { URI } from "vscode-uri";
 
 interface GuiTypeInfo {
   count: number;
@@ -101,7 +94,7 @@ function provideEnumCompletion(linePrefix: string): CompletionResult | null {
     if (used.has(v)) return;
     items.push({
       label: v,
-      kind: CompletionItemKind.EnumMember,
+      kind: itemKind("gui_enum_value"),
       detail: `${key} value${combinable ? " · combine with |" : ""}`,
       sortText: TIER_PROP + rank2(i) + v,
     });
@@ -143,7 +136,7 @@ export function provideGuiCompletion(
       for (const d of data.index.entries((def) => def.kind === "gui_type")) {
         items.push({
           label: d.name,
-          kind: CompletionItemKind.Class,
+          kind: itemKind("gui_type"),
           detail: `gui template/type (${d.source})`,
           sortText: TIER_PROP + (d.source === "mod" ? "0" : "1") + d.name,
           data: { t: "def", k: "gui_type", n: d.name },
@@ -179,7 +172,7 @@ export function provideGuiCompletion(
     const alsoType = key in guiSchema().types;
     items.push({
       label: key,
-      kind: alsoType ? CompletionItemKind.Class : CompletionItemKind.Property,
+      kind: itemKind(alsoType ? "gui_type" : "gui_property"),
       detail: typeInfo
         ? `${alsoType ? "child widget" : "property"} of ${enclosing} · ${count}× in vanilla`
         : `gui ${alsoType ? "widget" : "property"} · ${count}× in vanilla`,
@@ -193,7 +186,7 @@ export function provideGuiCompletion(
     if (seen.has(name)) return;
     items.push({
       label: name,
-      kind: CompletionItemKind.Class,
+      kind: itemKind("gui_type"),
       detail: `widget type · ${info.count}× in vanilla`,
       sortText: TIER_TYPE + rank2(Math.min(99, i)) + name,
     });
@@ -268,7 +261,7 @@ export function provideGuiHover(
       const combinable = enumCombinable().has(enumKey);
       cards.push(
         renderCard({
-          kind: "keyword",
+          kind: "gui_enum_value",
           badgeLabel: "gui enum value",
           name: lower,
           headTail: `of \`${enumKey}\``,
@@ -318,19 +311,19 @@ export function provideGuiHover(
       const footer: string[] = [];
       if (def.file !== undefined && def.line !== undefined) {
         footer.push(
-          `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
-            .with({ fragment: String(def.line + 1) })
-            .toString()})`
+          fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
+            fragment: String(def.line + 1),
+          })
         );
       }
       cards.push(
         renderCard({
-          kind: "gui_type",
+          kind: resolved.kind === "template" ? "gui_template" : "gui_type",
           badgeLabel: resolved.kind,
           name: resolved.kind === "template" ? word : resolved.name,
           headTail: resolved.kind === "type" ? `= ${(def as GuiTypeDef).base}` : undefined,
           doc: docParts.length > 0 ? docParts.join("\n\n") : undefined,
-          footer: footer.length > 0 ? footer : undefined,
+          provenance: footer.length > 0 ? footer.join(" · ") : undefined,
         })
       );
     }
@@ -340,16 +333,16 @@ export function provideGuiHover(
   if (!resolvedCard) {
     for (const def of data.index.lookup(word)) {
       if (def.kind !== "gui_type") continue;
-      const link = `[${path.basename(def.file)}:${def.line + 1}](${URI.file(def.file)
-        .with({ fragment: String(def.line + 1) })
-        .toString()})`;
+      const link = fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
+        fragment: String(def.line + 1),
+      });
       cards.push(
         renderCard({
           kind: "gui_type",
           badgeLabel: "template / type",
           name: def.name,
           headTail: `· ${data.originLabel(def)}`,
-          footer: [link],
+          provenance: link,
         })
       );
     }

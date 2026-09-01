@@ -14,7 +14,9 @@ import { allClientCommandIds, clientCommands, type ParadoxInitOptions } from "@p
 import { resolveClientCapabilities, setClientCapabilities } from "../src/clientMode";
 import { colorSwatch, kindBadge, scopePill } from "../src/features/hoverRender";
 import { provideCodeActions, type LocEditContext } from "../src/features/codeActions";
-import type { ServerData } from "../src/serverData";
+import { provideHover } from "../src/features/hover";
+import { provideGuiHover } from "../src/features/guiLanguage";
+import { ServerData } from "../src/serverData";
 import type { Diagnostic } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 
@@ -32,13 +34,41 @@ const fileUri = (p: string): string => URI.file(p).toString();
 afterEach(() => asClient({ clientCommands: true }));
 
 describe("capability resolution", () => {
-  const allOff = { hoverHtml: false, commands: new Set<string>(), ownFileWatcher: false };
+  const allOff = {
+    hoverHtml: false,
+    commands: new Set<string>(),
+    ownFileWatcher: false,
+    snippetSupport: false,
+    fileLinks: false,
+    hoverIcons: false,
+  };
+  /** What a client declares in the STANDARD LSP initialize params. */
+  const withSnippets = { textDocument: { completion: { completionItem: { snippetSupport: true } } } };
 
   it("deprecated clientCommands: true means every capability", () => {
     expect(resolveClientCapabilities({ clientCommands: true })).toEqual({
       hoverHtml: true,
       commands: new Set(allClientCommandIds),
       ownFileWatcher: true,
+      snippetSupport: true,
+      fileLinks: true,
+      hoverIcons: true,
+    });
+  });
+
+  it("snippetSupport comes from the LSP capabilities, not initializationOptions", () => {
+    expect(resolveClientCapabilities({}, withSnippets)).toEqual({ ...allOff, snippetSupport: true });
+    expect(resolveClientCapabilities({ client: {} }, withSnippets)).toEqual({
+      ...allOff,
+      snippetSupport: true,
+    });
+    expect(resolveClientCapabilities({ client: {} }, { textDocument: { completion: {} } })).toEqual(allOff);
+  });
+
+  it("fileLinks is its own axis on the capability object", () => {
+    expect(resolveClientCapabilities({ client: { fileLinks: true } })).toEqual({
+      ...allOff,
+      fileLinks: true,
     });
   });
 
@@ -59,6 +89,10 @@ describe("capability resolution", () => {
     expect(resolveClientCapabilities({ client: { ownFileWatcher: true } })).toEqual({
       ...allOff,
       ownFileWatcher: true,
+    });
+    expect(resolveClientCapabilities({ client: { hoverIcons: true } })).toEqual({
+      ...allOff,
+      hoverIcons: true,
     });
     expect(resolveClientCapabilities({ client: {} })).toEqual(allOff);
   });
@@ -97,6 +131,75 @@ describe("hover markup per client mode", () => {
     asClient({ client: { commands: allClientCommandIds } });
     expect(kindBadge("trigger")).toBe("■ trigger");
     expect(colorSwatch([1, 0, 0])).toBe("■");
+  });
+});
+
+describe("hover degradation for bare clients", () => {
+  /** Hover over the call site of an indexed scripted effect that has one reference. */
+  function effectHover(): string {
+    const data = new ServerData();
+    const file = path.join(path.sep === "\\" ? "C:\\mod" : "/mod", "common", "scripted_effects", "a.txt");
+    data.index.addAll([{ name: "my_effect", kind: "scripted_effect", file, line: 3, source: "mod" }]);
+    data.refIndex.addAll([
+      { name: "my_effect", kinds: ["scripted_effect"], file, line: 9, startChar: 1, endChar: 10 },
+    ]);
+    const text = "e = {\n\tmy_effect = yes\n}";
+    const doc = TextDocument.create("file:///mod/events/caps.txt", "paradox", 1, text);
+    const hover = provideHover(data, doc, { line: 1, character: 3 }, null);
+    expect(hover).not.toBeNull();
+    return (hover!.contents as { value: string }).value;
+  }
+
+  it("command-capable client: reference count links, provenance is a file link", () => {
+    asClient({ clientCommands: true });
+    const md = effectHover();
+    expect(md).toContain("1 reference");
+    expect(md).toContain("command:px.showReferences");
+    expect(md).toContain("](file:");
+  });
+
+  it("bare client: no reference line at all, provenance as a plain label", () => {
+    asClient({ clientCommands: false });
+    const md = effectHover();
+    // A count nobody can click answers no question (owner's call, 2026-08-26).
+    expect(md).not.toMatch(/reference/);
+    expect(md).not.toContain("](file:");
+    expect(md).toContain("a.txt:4"); // the same provenance, minus the link
+  });
+
+  it("fileLinks alone restores the provenance link without the reference count", () => {
+    asClient({ client: { fileLinks: true } });
+    const md = effectHover();
+    expect(md).toContain("](file:");
+    expect(md).not.toMatch(/reference/);
+  });
+
+  /** Hover over `using = <template>`, whose card is built by guiLanguage.ts, not hover.ts. */
+  function guiTemplateHover(): string {
+    const data = new ServerData();
+    const file = path.join(path.sep === "\\" ? "C:\\mod" : "/mod", "gui", "my_templates.gui");
+    data.index.addAll([{ name: "MyModTemplate", kind: "gui_type", file, line: 3, source: "mod" }]);
+    const doc = TextDocument.create(
+      "file:///mod/gui/caps.gui",
+      "paradox-gui",
+      1,
+      "widget = {\n\tusing = MyModTemplate\n}"
+    );
+    const hover = provideGuiHover(data, doc, { line: 1, character: 10 });
+    expect(hover).not.toBeNull();
+    return (hover!.contents as { value: string }).value;
+  }
+
+  // Every hover renderer shares one gate, so a card hover.ts never touches
+  // degrades the same way (Sourcery on #23: gui/datafunction links were raw).
+  it("gui hovers route their definition link through the same gate", () => {
+    asClient({ clientCommands: true });
+    expect(guiTemplateHover()).toContain("](file:");
+
+    asClient({ clientCommands: false });
+    const bare = guiTemplateHover();
+    expect(bare).not.toContain("](file:");
+    expect(bare).toContain("my_templates.gui:4"); // the same location, minus the link
   });
 });
 

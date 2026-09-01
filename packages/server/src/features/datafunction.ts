@@ -13,11 +13,17 @@
  */
 import { CompletionItemKind, type CompletionItem, type SignatureHelp } from "vscode-languageserver/node";
 import { describeDataFn } from "../data/dataFnDocs";
-import { membersOf, resolveChainType, type DataTypeMember, type DataTypesData } from "../data/dataTypes";
+import {
+  membersOf,
+  producersOf,
+  resolveChainType,
+  type DataTypeMember,
+  type DataTypesData,
+} from "../data/dataTypes";
 import type { DataFnUsage } from "../data/dataFnUsage";
 import type { DefinitionIndex } from "../index/indexer";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { URI } from "vscode-uri";
+import { fileLink } from "./hoverRender";
 import * as path from "path";
 
 /**
@@ -439,9 +445,7 @@ function exampleLines(usage: DataFnUsage, name: string, gameRoot: string | null)
   for (const ex of examples) {
     const site = `${ex.file}:${ex.line}`;
     const link = gameRoot
-      ? `[${site}](${URI.file(path.join(gameRoot, ex.file))
-          .with({ fragment: String(ex.line) })
-          .toString()})`
+      ? fileLink(path.join(gameRoot, ex.file), site, { fragment: String(ex.line) })
       : site;
     lines.push(`- \`${ex.text}\` — ${link}`);
   }
@@ -461,6 +465,41 @@ function literalLines(usage: DataFnUsage, name: string): string[] {
 function provenance(member: DataTypeMember | null): string {
   if (member?.src && SOURCE_LABEL[member.src]) return SOURCE_LABEL[member.src];
   return "deduced from vanilla usage";
+}
+
+/** Producers listed by name in a hover before the tail becomes a count. */
+const MAX_PRODUCERS = 6;
+
+/**
+ * "Produced by" line for a data type: the inverse of the member list, i.e. how
+ * you obtain one of these in the first place. Ranked by vanilla usage, so the
+ * names people actually write come first, then capped with a `+N more` tail.
+ *
+ * The cap matters because the spread is extreme: `Story` has two producers and
+ * `Character` has 320. A bare count would answer neither; six ranked names plus
+ * the remainder answers both.
+ *
+ * A member producer is ranked by the QUALIFIED pair count (`Scope` -> `Story`),
+ * not by the bare member name: the bare name also counts `Story` as a chain
+ * start and as a member of other owners, which is a different thing. The bare
+ * count is the fallback only where vanilla never wrote that pair.
+ */
+function producerLines(data: DataTypesData, usage: DataFnUsage, type: string): string[] {
+  const all = producersOf(data, type);
+  if (all.length === 0) return [];
+  const rank = (q: string) => {
+    const dot = q.indexOf(".");
+    if (dot < 0) return usageCount(usage, q);
+    const pair = usage.pairs.get(q.slice(0, dot))?.get(q.slice(dot + 1));
+    return pair ?? usageCount(usage, q.slice(dot + 1));
+  };
+  const ranked = [...all].sort((a, b) => rank(b) - rank(a) || a.localeCompare(b));
+  const shown = ranked
+    .slice(0, MAX_PRODUCERS)
+    .map((n) => `\`${n}\``)
+    .join(" ");
+  const rest = all.length - MAX_PRODUCERS;
+  return ["", `Produced by: ${shown}${rest > 0 ? ` +${rest.toLocaleString("en-US")} more` : ""}`];
 }
 
 /** Top-8 `.member` names observed after `name` in vanilla, as one hover line. */
@@ -546,6 +585,7 @@ export function provideDataFnHover(
     const typeMembers = membersOf(data, segment);
     if (typeMembers) {
       lines.push(`\`${segment}\` — data type (${typeMembers.size} known members)`);
+      lines.push(...producerLines(data, usage, segment));
       lines.push(...topMemberLines(usage, segment, "Common members"));
       lines.push(...exampleLines(usage, segment, gameRoot));
     } else {

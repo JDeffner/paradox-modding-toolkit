@@ -7,7 +7,7 @@
  */
 import type { Definition, DefSource } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
-import { LineIndex, parseLoc, parseScript, walkStatements, type Statement } from "../parser";
+import { LineIndex, parseLoc, parseScript, walkStatements, type RootNode, type Statement } from "../parser";
 import { docForDefinition } from "./docComments";
 import { shareDefinitionStrings } from "./intern";
 import { activeProfile } from "../games/active";
@@ -27,10 +27,31 @@ export function extractDefinitions(
 ): Definition[] {
   const extraction = entry.extraction ?? "top-level-key";
   if (extraction === "loc-key") return extractLocDefinitions(content, file, source);
-
-  const defs: Definition[] = [];
   const { root } = parseScript(content);
-  const lines = new LineIndex(content);
+  return extractDefinitionsParsed(content, root, new LineIndex(content), entry, file, source);
+}
+
+/**
+ * The body of `extractDefinitions` over a CST the caller already has.
+ *
+ * The mod scan reads and parses each script file ONCE and feeds the same parse
+ * to this and to `extractReferencesParsed`; parsing every mod file twice was
+ * the largest single cost of a cold index build. `extractDefinitions` above is
+ * the same function with the parse in front, and stays the entry point for the
+ * incremental rescan and for callers holding only text.
+ *
+ * Callers must pass the `content` the CST was parsed from: offsets index into it.
+ */
+export function extractDefinitionsParsed(
+  content: string,
+  root: RootNode,
+  lines: LineIndex,
+  entry: SchemaEntry,
+  file: string,
+  source: DefSource
+): Definition[] {
+  const extraction = entry.extraction ?? "top-level-key";
+  const defs: Definition[] = [];
   // Raw lines (split on \n; entries may keep a trailing \r) for encoding-safe
   // leading-comment capture (§E). Computed once per file, near-zero cost.
   const rawLines = content.split("\n");

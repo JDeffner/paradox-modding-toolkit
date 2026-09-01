@@ -65,23 +65,27 @@ function engineHover(token: TokenData, rendered = `${token.name} = yes`): string
 }
 
 describe("engine-token hover teaches usage", () => {
+  // The scopes, the value shape and the leftover metadata used to be three
+  // separate lines (a `Value:` paragraph, an italic traits line, and a
+  // `Supported scopes:` footer after a rule). They are now one muted facts
+  // line, so these assert on the facts line rather than on the old slots.
   it("effect: fences the syntax example and names the value datatype", () => {
     const md = engineHover(EFFECT);
     expect(md).toContain("Adds a hook on a character");
-    expect(md).toContain("Value: a block");
+    expect(md).toContain("a block");
     expect(md).toContain("```paradox\nadd_hook = { type = X, target = Y }\n```");
-    expect(md).toContain("Supported scopes:");
     expect(md).toContain("character");
   });
 
   it("boolean trigger: value shape reads yes/no (boolean)", () => {
     const md = engineHover(TRIGGER_BOOL);
-    expect(md).toContain("Value: `yes`/`no` (boolean)");
+    // On the facts line next to the scope, not in a paragraph of its own.
+    expect(md).toContain(" scope · `yes`/`no` (boolean)*");
   });
 
   it("comparison trigger: value shape names number/script value + operators", () => {
     const md = engineHover(TRIGGER_CMP);
-    expect(md).toContain("Value: a number or script value");
+    expect(md).toContain("a number or script value");
     expect(md).toContain("<=");
   });
 

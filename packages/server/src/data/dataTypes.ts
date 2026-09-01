@@ -277,3 +277,69 @@ export function resolveChainType(data: DataTypesData, segments: string[]): strin
   }
   return current;
 }
+
+// ---------------------------------------------------------------------------
+// Reverse index: which functions produce a given type
+// ---------------------------------------------------------------------------
+
+/**
+ * `Return type` -> the globals and members that yield it, so a hover on a data
+ * type can answer "how do I get one of these here". The forward direction
+ * (what does `Story` give me) is `membersOf`; this is the inverse, and it is
+ * the only way to see that `Story` has exactly two producers while `bool` has
+ * thousands.
+ *
+ * Built once per `DataTypesData` and cached against it, so reloading a
+ * `data_types.log` produces a fresh object and a fresh index without any
+ * explicit invalidation.
+ */
+interface ProducerIndex {
+  /** Canonical return-type name -> qualified producer names, sorted. */
+  byType: Map<string, string[]>;
+  /** Lowercased return-type name -> canonical casing. */
+  lower: Map<string, string>;
+}
+
+const producerIndex = new WeakMap<DataTypesData, ProducerIndex>();
+
+function buildProducerIndex(data: DataTypesData): ProducerIndex {
+  const byType = new Map<string, string[]>();
+  const lower = new Map<string, string>();
+  // Bucket by lowercased return type: the dump spells the same type both ways
+  // (a declared `Story` whose returns read `story`), and `producersOf` resolves
+  // through the declared spelling, so case variants must land in ONE bucket.
+  const add = (ret: string | null, qualified: string) => {
+    if (!ret) return;
+    const key = ret.toLowerCase();
+    const canonical = data.typeNamesLower.get(key) ?? lower.get(key) ?? ret;
+    let names = byType.get(canonical);
+    if (!names) {
+      byType.set(canonical, (names = []));
+      lower.set(key, canonical);
+    }
+    names.push(qualified);
+  };
+  for (const [name, member] of data.globals) add(member.ret, name);
+  for (const [type, members] of data.types) {
+    for (const [name, member] of members) add(member.ret, `${type}.${name}`);
+  }
+  for (const names of byType.values()) names.sort();
+  return { byType, lower };
+}
+
+/**
+ * Every global or member whose return type is `typeName`, as qualified names
+ * (`Scope.Story`, `GetPlayer`), sorted. Empty when nothing produces the type
+ * or the name is unknown. Callers do their own ranking and capping.
+ *
+ * Case-tolerant against both the declared type names and the return-type names
+ * seen in the dump: a type can be produced without ever being declared as a
+ * `Definition type: Type`, and the wiki tables spell some names differently.
+ */
+export function producersOf(data: DataTypesData, typeName: string): string[] {
+  let index = producerIndex.get(data);
+  if (!index) producerIndex.set(data, (index = buildProducerIndex(data)));
+  const key = typeName.toLowerCase();
+  const canonical = data.typeNamesLower.get(key) ?? index.lower.get(key) ?? typeName;
+  return index.byType.get(canonical) ?? [];
+}

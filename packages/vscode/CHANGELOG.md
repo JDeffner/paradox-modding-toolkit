@@ -32,6 +32,202 @@
   Lobby and Benchmark, vanilla - and launch.json snippets (`-play=<title>`,
   `-random_seed=<n>`, custom option sets) make your own sets permanent.
   Every preset flag is verified in the game's own binary.
+- **Server 0.2.0: block templates in completion, capability-honest output
+  for embedders.** Engine tokens with a qualifying `script_docs` `usage:`
+  example (679 in CK3, 265 in Vic3) and block-opening schema keys (~700 in
+  CK3) now complete as filled-in block snippets, in VS Code and everywhere
+  else. For bare LSP clients the server stops sending what they cannot use:
+  `${…}` snippets are gated on the standard `snippetSupport` capability, and
+  hovers drop unclickable reference counts and unnavigable `file:` links.
+  Details in `packages/server/CHANGELOG.md` and
+  `packages/protocol/CHANGELOG.md` (0.1.1).
+
+## 0.3.4 (beta, pre-release) - the large-workspace round
+
+### Fixed
+
+- **A large workspace opens in half the time and holds 229 MB less.** Measured
+  on a real field report: a `.code-workspace` with the CK3 install and 5
+  Workshop mods, all indexed, nothing excluded. 87,250 files, 29,641 of them
+  script, 1,304,861 definitions and 7,553,947 references.
+
+  The scan reads file batches with 16 reads in flight, but every read runs on
+  libuv's thread pool, which defaults to four. Four outstanding disk requests
+  is not enough to keep a drive busy, and a cold index build waits on latency
+  rather than bandwidth. The forked server now gets a pool of 16. With the
+  page cache evicted between runs, time to indexed went **142.9 s to 71.8 s**.
+  A warm build is a second or two slower, because those reads come from RAM
+  and the extra threads only add contention.
+
+  Memory came from three allocation fixes. V8 grows an empty array's backing
+  store to 16 slots on the first push, so every name in the definition and
+  reference indexes carried 16 slots even though most hold one; both indexes
+  are now compacted once when the scan finishes. The schema root-scope `Set`
+  was rebuilt per file instead of per schema entry. Five sites built a fresh
+  `kinds` array for every reference, and nothing ever mutates one. Post-GC
+  heap after the build went **1735 MB to 1506 MB**. That matters more than it
+  sounds: this workspace peaked at 4081 MB against the server's 4096 MB
+  ceiling, so it was running out of headroom, not out of speed.
+
+  The last of it was plain duplicated work. A mod's script files were read and
+  parsed twice, once for definitions over the schema folders and once for
+  references over the whole mod, because the two extractors each parsed the
+  file themselves. A mod is now walked once and each file parsed once, feeding
+  both. Together with the thread pool: **time to indexed 142.9 s to 61.5 s
+  cold, and 52.9 s to 44.5 s warm.**
+
+- **A window that has nothing to do with modding no longer indexes the game.**
+  The extension activates in every VS Code window, and the game path was
+  auto-detected from the Steam library whether or not the workspace held a
+  mod. A Rust or web project window therefore forked a server that read the
+  36.3 MB vanilla index cache and held 253 MB for it, to answer questions
+  nobody could ask: without a mod in the workspace, no file is ever given a
+  Paradox language id. Auto-detection now needs a workspace that holds a mod
+  or a game install. An explicit `px.gamePath` still works everywhere.
+
+- **The variable-type cache could answer from the previous index.** It was
+  keyed on the definition index's revision counter, but a rebuild installs a
+  fresh index whose counter restarts at zero. Once the new index counted back
+  up to the cached number, one stale map was served. Found while profiling
+  the heap, not from a report.
+
+- **Typing and saving no longer stall on a large workspace.** Profiling the
+  server on the game plus AGOT found that the first completion after any
+  index change cost 4.3 s, and that a save invalidates exactly the caches
+  involved — so every Ctrl+S made the next completion pay full price. Three
+  causes, all fixed: the scope aggregation resolved "which schema folder is
+  this file in" once per reference (4.1M times for 3,944 distinct answers,
+  each rebuilding the parent-mod list), it scanned the entire reference
+  index to find the 4% that are call sites, and the file scan read one file
+  at a time. Measured on game + AGOT: completion after a save 4180 ms →
+  606 ms, first completion after an index change 4314 ms → 800 ms, time to
+  indexed 32 s → 25 s warm and 82 s → 70 s cold. Semantic highlighting was
+  always 1 ms; it was queued behind the completion, which is why text sat
+  colourless. Numbers and method in `docs/PERFORMANCE.md`.
+
+- **Values no longer render colourless while the server catches up.** Bare
+  identifiers in value position (`has_trait = brave`, entries of
+  `traits = { … }`) had no TextMate scope, so they showed the theme's
+  default foreground until the language server's semantic tokens arrived —
+  on a big workspace or during the initial index build, that is the "text
+  stays white for a while before it gets colour coded" report. A catch-all
+  grammar rule now gives them a base string colour immediately, in all
+  games and .gui files; semantic tokens refine it as before once the index
+  answers.
+
+### Added
+
+- **`Paradox: Reduce VS Code Indexing Load`** for large workspaces (field
+  report: game install + 40 mods). The toolkit's own index already skips
+  binary files, but VS Code's built-in search and file watcher crawl every
+  workspace folder whole, and 62% of a game install is textures, meshes and
+  audio. The command writes workspace-scoped `search.exclude` and
+  `files.watcherExclude` patterns for binary EXTENSIONS (`.dds`, `.tga`,
+  `.mesh`, `.anim`, `.png`, `.bk2`, `.bank`, `.wav`, `.ttf`, `.otf`).
+  Measured on game + AGOT (69,912 files, 43,067 skipped): whole-workspace
+  Find in Files goes from 1.7 s warm (up to 106 s when the binaries are not
+  in the OS cache) to a stable 0.65 s. Patterns match extensions only, never
+  directories, so script under `gfx/`, `music/` or `dlc/` stays searchable
+  and still re-indexes on save; a test enforces that. Additive and undoable:
+  existing patterns survive, a pattern set to `false` stays `false`, and the
+  confirmation offers one-click Undo. Also a button on the big-workspace
+  warning. Numbers in `docs/PERFORMANCE.md`.
+
+- **The exclude picker offers "Keep as Read-Only Context".** Excluding a mod
+  removes it entirely; the new follow-up moves newly excluded mods into
+  `px.parentMods` instead, indexing them like dependency parents: completion,
+  hover and go-to-definition still see their content, without the reference
+  index (the expensive half). The right tier for vanilla-copy packs (an
+  unofficial patch) and framework mods you load but never edit. Un-excluding
+  a mod pulls it back out of `px.parentMods`. `docs/PERFORMANCE.md` explains
+  the tiers.
+
+### Added
+
+- **Hovers have icons, and the icons mean something.** Kind badges are real
+  codicons instead of a coloured square, and the same glyph now appears in the
+  completion list and the tree for the same concept. Colour comes with the
+  kind, because VS Code paints a completion row from the `CompletionItemKind`
+  the server sends and an extension cannot override it, so the four groups are
+  the ones the editor already draws: purple asks a question (triggers), orange
+  makes it happen (effects, events, decisions, on_actions, traits), blue is
+  something you stored (variables, saved scopes, event targets, lists), grey is
+  syntax and everything else. This fixed a live defect:
+  `trigger` mapped to `CompletionItemKind.Function` and `effect` to `Method`,
+  which share one codepoint in the codicon font and take the same colour, so a
+  condition and an action, the one distinction in Paradox script that causes
+  silent bugs, were drawn identically in the suggest widget.
+- **Hovering a scripted trigger or effect shows what it is.** The card now
+  carries the definition's own source block, so you do not have to jump to the
+  file to see what a mod's `is_human` actually tests. Long bodies open in place
+  through a disclosure: only 11% of vanilla scripted triggers are three lines or
+  shorter, median 10, longest 232.
+- **Hovering a data type says how to obtain one.** The datafunction hover for
+  `Story` or `Character` already listed what the type gives you; it now also
+  lists what gives you the type, ranked by vanilla usage. `Story` has exactly
+  two producers, `Character` has 320.
+- **`px.hover.detail`** (`compact` | `standard` | `full`, default `standard`)
+  controls how much a hover shows. Nothing is hidden permanently: longer
+  examples stay one click away inside the hover.
+
+### Changed
+
+- **Hovers are quieter.** Seven chart colours become the three VS Code uses for
+  its own symbols plus plain default, which is what 17 of the 38 mapped kinds
+  now render as, so most badges emit no colour markup at all. Scopes, the value
+  shape and the traits line merge into one muted facts line. A single-card hover
+  writes no footer block: its provenance and reference links ride the scope line
+  that has to exist anyway, which is worth three lines on the most common hover
+  there is.
+- GUI widget types and GUI properties had never been added to the badge colour
+  switch, so they fell through to the "definition kinds read green" default and
+  a widget type read the same green as a scripted trigger. They now have their
+  own entries, as do datafunction data types, promotes and functions, GUI
+  templates and enum values, and text format tags. GUI completions read their
+  kind from the same map, so a widget type is one picture in the hover and one
+  in the suggest widget.
+- A texture path shows the picture-frame glyph (`file-media`) in the hover and
+  the tree. Its completion row keeps the plain file glyph: no
+  `CompletionItemKind` draws `file-media`, and only those 25 values reach the
+  suggest widget.
+- An `on_action` shows the interface glyph, in the orange of the group it
+  belongs to. Its completion row is blue, because the row's colour belongs to
+  the kind and `Interface` is blue.
+
+### Fixed
+
+- **Completion no longer offers effects the game removed.** The bundled wiki
+  lists were merged into the engine tokens even when your own `script_docs`
+  dump was loaded, and that added names your patch does not have. Measured on a
+  real install: of 2,336 wiki tokens, 2,262 were already in the dump and 74 were
+  not, and the ones sampled from that 74 (`every_activity_invited`,
+  `every_participant`, `accept_invitation_for_character`) appear in **zero**
+  vanilla files. They are pre-Tours-and-Tournaments activity API. The bundled
+  `Effects_list.md` warns about this itself. With your own dump loaded those 74
+  are now dropped, since `script_docs` is what the engine actually registered.
+  The wiki's real contribution is untouched: all 127 usage examples for tokens
+  the dump already had still merge in. Nothing changes when you have no dump of
+  your own, because then the bundled snapshot may be older than your game and
+  "absent" proves nothing.
+- **A `var:` hover showed the same variable twice**: once as a typed card
+  listing "set in file:line", then again as the indexed-definition card whose
+  provenance links were the same sites. One card now, the definition card,
+  which also carries the owning mod, the site count and the references link;
+  the value type moves onto its head. The standalone card remains only for a
+  variable the index has never seen set.
+- **The status bar tooltip listed each load twice and kept saying "…" after it
+  finished.** "harvesting engine tokens…" and "engine tokens: 4,624" were the
+  same fact on two lines, and the phase row kept its ellipsis once done, so a
+  finished load still read as ongoing. Each phase now reports into its own
+  value row: `○ harvesting engine tokens…` while it runs, then
+  `✓ engine tokens: 4,624 (your script_docs, plus the wiki)`. Loading rows come
+  first, configuration after, counts are thousands-separated, and the token
+  source says what to do about it when it is the bundled fallback.
+
+- A datafunction promote was drawn as a blue variable when global and a grey
+  wrench when it was a member, decided by nothing but which branch of the
+  completion builder produced it. Both are blue now: blue is a thing you have,
+  purple is a call you make.
 
 ## 0.3.3 (beta) - tiger download fix
 

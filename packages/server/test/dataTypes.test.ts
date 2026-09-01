@@ -10,6 +10,7 @@ import {
   parseDataTypesDump,
   resolveChainType,
   membersOf,
+  producersOf,
 } from "../src/data/dataTypes";
 import {
   chainAtEnd,
@@ -424,9 +425,9 @@ describe("usage-aware hover", () => {
 
   it("links examples into the game folder when a root is known", () => {
     const line = 'x = "[HouseAspiration.Self]"';
-    // "F:\game" collapses to "F:game" in a JS string — a separator-less path
-    // that only passed because the link builder just needs a non-empty root.
-    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "F:/game")!;
+    // The root must be absolute on BOTH platforms — fileLink() degrades a
+    // non-absolute path to plain text, and "F:/game" is relative on POSIX.
+    const hover = provideDataFnHover(data, usage, line, line.indexOf("HouseAspiration") + 2, "/game")!;
     expect(hover.markdown).toContain("file://");
   });
 });
@@ -684,11 +685,151 @@ describe("datatype-name completion and hover in cast literals", () => {
   });
 });
 
+describe("producersOf: the inverse of the member list", () => {
+  const dump = [
+    "Scope",
+    "Definition type: Type",
+    "",
+    "-----------------------",
+    "",
+    "Scope.Story",
+    "Definition type: Promote",
+    "Return type: Story",
+    "",
+    "-----------------------",
+    "",
+    "SituationItem.GetStoryCycle",
+    "Definition type: Function",
+    "Return type: Story",
+    "",
+    "-----------------------",
+    "",
+    "GetPlayer",
+    "Definition type: Global promote",
+    "Return type: Character",
+    "",
+    "-----------------------",
+    "",
+    "Character.IsAlive",
+    "Definition type: Function",
+    "Return type: bool",
+    "",
+    "-----------------------",
+    "",
+    "Story",
+    "Definition type: Type",
+    "",
+    "-----------------------",
+    "",
+    "Story.GetName",
+    "Definition type: Function",
+    "Return type: CString",
+    "",
+  ].join("\n");
+
+  it("lists every global and member that returns the type, qualified and sorted", () => {
+    const data = parseDataTypesDump(dump);
+    expect(producersOf(data, "Story")).toEqual(["Scope.Story", "SituationItem.GetStoryCycle"]);
+    expect(producersOf(data, "Character")).toEqual(["GetPlayer"]);
+  });
+
+  it("is case-tolerant on the type name and empty for unknown or unproduced types", () => {
+    const data = parseDataTypesDump(dump);
+    expect(producersOf(data, "story")).toEqual(["Scope.Story", "SituationItem.GetStoryCycle"]);
+    expect(producersOf(data, "NotAType")).toEqual([]);
+  });
+
+  it("merges case variants of a return type into one producer bucket", () => {
+    // The dump declares `Story` as a Type but spells some returns `story`.
+    const mixed = [
+      "Story",
+      "Definition type: Type",
+      "",
+      "-----------------------",
+      "",
+      "Scope.Story",
+      "Definition type: Promote",
+      "Return type: story",
+      "",
+      "-----------------------",
+      "",
+      "SituationItem.GetStoryCycle",
+      "Definition type: Function",
+      "Return type: Story",
+      "",
+    ].join("\n");
+    const data = parseDataTypesDump(mixed);
+    expect(producersOf(data, "Story")).toEqual(["Scope.Story", "SituationItem.GetStoryCycle"]);
+  });
+
+  it("ranks member producers by the qualified pair, not the bare member name", () => {
+    const data = parseDataTypesDump(dump);
+    const usage = emptyUsage();
+    // `Story` as a bare member name is written 11 times, but only once after
+    // `Scope`; `GetStoryCycle` is written 5 times, all after `SituationItem`.
+    const lines = [
+      ...Array<string>(5).fill('text = "[SituationItem.GetStoryCycle]"'),
+      'text = "[Scope.Story]"',
+      ...Array<string>(10).fill('text = "[Character.Story]"'),
+    ];
+    lines.forEach((l, i) => harvestLine(usage, l, "gui/test.gui", i + 1));
+
+    const line = 'text = "[Story.GetName]"';
+    const hover = provideDataFnHover(data, usage, line, line.indexOf("Story") + 1)!;
+    const produced = hover.markdown.split("\n").find((l) => l.startsWith("Produced by:"))!;
+    expect(produced.indexOf("SituationItem.GetStoryCycle")).toBeLessThan(produced.indexOf("Scope.Story"));
+  });
+
+  it("hovering a data type says how to obtain one", () => {
+    const data = parseDataTypesDump(dump);
+    const line = 'text = "[Story.GetName]"';
+    const hover = provideDataFnHover(data, emptyUsage(), line, line.indexOf("Story") + 1)!;
+    expect(hover.markdown).toContain("Produced by:");
+    expect(hover.markdown).toContain("SituationItem.GetStoryCycle");
+  });
+
+  it("caps the list and says how many more there are", () => {
+    const many = [
+      "Widget",
+      "Definition type: Type",
+      "",
+      "-----------------------",
+      "",
+      "Widget.Get0",
+      "Definition type: Function",
+      "Return type: CString",
+      "",
+      "-----------------------",
+      "",
+    ];
+    for (let i = 0; i < 9; i++) {
+      many.push(
+        `Maker${i}.GetWidget`,
+        "Definition type: Function",
+        "Return type: Widget",
+        "",
+        "-----------------------",
+        ""
+      );
+    }
+    const data = parseDataTypesDump(many.join(String.fromCharCode(10)));
+    expect(producersOf(data, "Widget")).toHaveLength(9);
+
+    const line = 'text = "[Widget.Get0]"';
+    const hover = provideDataFnHover(data, emptyUsage(), line, line.indexOf("Widget") + 1)!;
+    expect(hover.markdown).toContain("Produced by:");
+    expect(hover.markdown).toContain("+3 more");
+  });
+});
+
 /**
  * Dump-dependent regression against the user's actual DumpDataTypes output.
  * Gated on the logs folder (devPaths.ts) so it runs on the maintainer's machine
  * and skips in CI, following the corpus-gated test pattern.
  */
+/** Mirrors MAX_PRODUCERS in datafunction.ts: above this the hover shows a count. */
+const MAX_PRODUCERS_IN_HOVER = 6;
+
 const LOGS = devPath("logsPath");
 const hasDump = LOGS !== null && fs.existsSync(path.join(LOGS, "data_types"));
 (hasDump ? describe : describe.skip)("real DumpDataTypes: user's expression resolves", () => {
@@ -698,6 +839,18 @@ const hasDump = LOGS !== null && fs.existsSync(path.join(LOGS, "data_types"));
     const result = provideDataFnCompletion(data, emptyUsage(), 'visible = "[GetPlayer.')!;
     expect(result.items.length).toBeGreaterThan(100);
     expect(result.items.map((i) => i.label)).toContain("MakeScope");
+  });
+
+  it("a narrow type lists its producers, a broad one degrades to a count", () => {
+    // The whole point of the feature: Story has a handful of producers and the
+    // names fit in a hover, bool has thousands and only the count is useful.
+    expect(producersOf(data, "Story").length).toBeLessThanOrEqual(MAX_PRODUCERS_IN_HOVER);
+    expect(producersOf(data, "bool").length).toBeGreaterThan(1000);
+
+    const line = 'text = "[Story.GetName]"';
+    const hover = provideDataFnHover(data, emptyUsage(), line, line.indexOf("Story") + 1)!;
+    expect(hover.markdown).toContain("Produced by:");
+    expect(hover.markdown).toContain("Scope.Story");
   });
 
   it("GetPlayer.MakeScope. offers Scope members including ScriptValue", () => {

@@ -37,6 +37,7 @@ export interface PxConfig {
   excludedMods: string[];
   locLanguage: string;
   scopeInlayHints: boolean;
+  hoverDetail: "compact" | "standard" | "full";
   /** `px.calendar`: custom era calendar for date display, or undefined. */
   calendar: CalendarSetting | undefined;
   tigerRunOn: "save" | "manual";
@@ -250,10 +251,21 @@ export function readConfig(): PxConfig {
   const primaryRoot = modPath ?? workspaceRoots[0] ?? null;
   const gameId = detectGameId((cfg.get<string>("gameId") ?? "auto").trim().toLowerCase(), primaryRoot);
   const activeMeta = GAME_METAS[gameId] ?? ck3Meta;
+  // Auto-detection only describes a workspace that IS a Paradox workspace
+  // (perf round 3). `onStartupFinished` activates this extension in every
+  // window, and a detected game path made the server index the whole vanilla
+  // tree in a Rust or web project too: measured 253 MB of heap and ~340 ms,
+  // per window, to serve nothing. Nothing there can ever ask for it either,
+  // because languageMode.ts assigns no paradox language id when
+  // isCk3Workspace is false. An EXPLICIT px.gamePath is still honored, so a
+  // deliberate game-data-only window keeps working.
+  const paradoxWorkspace =
+    (cfg.get<boolean>("enableForWorkspace") ?? true) &&
+    (workspaceGameDir !== null || (modPath !== null && looksLikeMod(modPath)) || workspaceRoots.length > 0);
   if (gameId !== ck3Meta.id) {
     // workspaceGameDir probes for a CK3-shaped install; never borrow it here.
-    gamePath = explicitGamePath ?? findGameFolder(activeMeta.name);
-  } else if (gamePath === null) {
+    gamePath = explicitGamePath ?? (paradoxWorkspace ? findGameFolder(activeMeta.name) : null);
+  } else if (gamePath === null && paradoxWorkspace) {
     // CK3 falls back to the same Steam detection the other games get; without
     // it, a mod-only workspace runs every game-data feature (GUI templates,
     // texture roots, vanilla index) with no vanilla at all.
@@ -281,6 +293,7 @@ export function readConfig(): PxConfig {
     excludedMods,
     locLanguage: (cfg.get<string>("locLanguage") ?? "english").trim().toLowerCase() || "english",
     scopeInlayHints: cfg.get<boolean>("scopeInlayHints") ?? false,
+    hoverDetail: cfg.get<"compact" | "standard" | "full">("hover.detail") ?? "standard",
     calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,
     enableForWorkspace,

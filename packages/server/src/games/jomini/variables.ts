@@ -123,12 +123,33 @@ const LIST_REF_KEYS = new Set(["is_in_list", "is_target_in_list", "remove_from_l
  * declared at `add_to_list`).
  */
 export function dynamicRefKinds(key: string): string[] | null {
-  if (FLAG_REF_KEY.test(key)) return ["flag"];
-  if (LIST_REF_KEYS.has(key)) return ["list"];
+  if (FLAG_REF_KEY.test(key)) return FLAG_KINDS;
+  if (LIST_REF_KEYS.has(key)) return LIST_KINDS;
   const varKind = VARIABLE_READ_KINDS[key];
-  if (varKind) {
-    // Scalar reads accept lists too (has_variable is true for a list variable).
-    return varKind.endsWith("_list") ? [varKind] : [varKind, `${varKind}_list`];
-  }
+  if (varKind) return variableReadKinds(varKind);
   return null;
+}
+
+const FLAG_KINDS: string[] = ["flag"];
+const LIST_KINDS: string[] = ["list"];
+const variableReadCache = new Map<string, string[]>();
+
+/**
+ * The shared kinds array for a variable read (perf round 3).
+ *
+ * A `Reference` holds its `kinds` for the index's lifetime and nothing ever
+ * mutates one (the only reader is `ReferenceIndex.byKind`), so one array per
+ * distinct kind is enough. Returning a fresh array here allocated one per
+ * REFERENCE instead: the game + 5 Workshop mods workspace holds 7,553,947 of
+ * them, and a one-element V8 array costs ~56 B of header and backing store on
+ * top of the pointer the reference already pays.
+ *
+ * Scalar reads accept lists too (has_variable is true for a list variable).
+ */
+export function variableReadKinds(varKind: string): string[] {
+  const hit = variableReadCache.get(varKind);
+  if (hit !== undefined) return hit;
+  const kinds = varKind.endsWith("_list") ? [varKind] : [varKind, `${varKind}_list`];
+  variableReadCache.set(varKind, kinds);
+  return kinds;
 }

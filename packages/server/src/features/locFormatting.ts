@@ -9,11 +9,10 @@
  */
 import { CompletionItemKind, MarkupKind, type CompletionItem } from "vscode-languageserver/node";
 import * as path from "path";
-import { URI } from "vscode-uri";
 import type { TextFormattingIndex, FormatEntry } from "../data/textFormatting";
 import { rgbCss } from "../data/textFormatting";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { colorSwatch, renderCard, type CardInput } from "./hoverRender";
+import { colorSwatch, fileLink, renderCard, type CardInput } from "./hoverRender";
 
 /** True when `prefix` ends inside an open loc value (odd count of unescaped `"`). */
 function insideLocValue(prefix: string): boolean {
@@ -114,14 +113,11 @@ export function provideFormatTagHover(
   if (rgb) doc.push(`Color: ${colorSwatch(rgb)} ${rgbCss(rgb)}`);
   if (entry.layer === "builtin") doc.push("Engine built-in format.");
   if (doc.length > 0) card.doc = doc.join("  \n");
-  if (entry.file) card.footer = [sourceLink(entry)];
+  if (entry.file) card.provenance = sourceLink(entry);
   return { markdown: renderCard(card), start: hit.start, end: hit.end };
 }
 
 function sourceLink(entry: FormatEntry): string {
   const rel = guiRelTail(entry.file);
-  const target = URI.file(entry.file)
-    .with({ fragment: String(entry.line + 1) })
-    .toString();
-  return `${entry.layer} · [${rel}](${target})`;
+  return `${entry.layer} · ${fileLink(entry.file, rel, { fragment: String(entry.line + 1) })}`;
 }

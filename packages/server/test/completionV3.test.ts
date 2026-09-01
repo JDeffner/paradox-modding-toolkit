@@ -4,13 +4,23 @@
  * cross-kind name collisions stay visible (the vanilla `brave` bug), and the
  * match predicate stays in lockstep with VS Code's fuzzyScore (test/vscodeFuzzy).
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { CompletionFeature, matchesTypedWord, MAX_ITEMS } from "../src/features/completion";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
+import type { ParadoxInitOptions } from "@px-lsp/protocol/protocol";
 import type { Definition, TokenData } from "@px-lsp/protocol/types";
+import { resolveClientCapabilities, setClientCapabilities } from "../src/clientMode";
 import { fuzzyScore, FuzzyScoreOptionsDefault } from "./vscodeFuzzy";
+
+/** Install the capabilities a client declaring `init` would get. */
+const asClient = (init: Partial<ParadoxInitOptions>): void =>
+  setClientCapabilities(resolveClientCapabilities(init));
+
+// The module default is all-on (the pure-render default); restore it so the
+// suites that do not care about capabilities keep seeing the rich output.
+afterEach(() => asClient({ clientCommands: true }));
 
 let uriCounter = 0;
 const uri = () => `file:///mod/events/v3-${uriCounter++}.txt`;
@@ -287,11 +297,87 @@ describe("completion — scripted param snippets", () => {
     expect(item.insertTextFormat).toBeUndefined();
   });
 
-  it("engine tokens never turn into snippets", () => {
+  it("an engine token without a usable usage example stays a bare word", () => {
     const env = makeEnv();
     const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\tadd_g|\n\t}\n}");
     const item = items.find((i) => i.label === "add_gold")!;
     expect(item.insertText).toBeUndefined();
+  });
+});
+
+describe("completion — engine block templates from usage examples", () => {
+  /** An effect block env carrying the two shapes the extractor must separate. */
+  function templateEnv() {
+    const schema = loadSchema(null);
+    const data = new ServerData();
+    data.setTokens([
+      { ...tok("if", "effect"), usage: "if = { limit = { <triggers> } <effects> }" },
+      // Pseudo-key weights: the extractor must refuse to guess a template.
+      { ...tok("random_list", "effect"), usage: "random_list = { X1 = { effect1 } X2 = { effect2 } ... }" },
+      tok("add_gold", "effect", ["character"]),
+    ]);
+    return { data, schema, completion: new CompletionFeature(data, () => schema) };
+  }
+
+  it("a token whose example qualifies completes as that block", () => {
+    const env = templateEnv();
+    const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\ti|\n\t}\n}");
+    const item = items.find((i) => i.label === "if")!;
+    expect(item.insertText).toBe("if = {\n\tlimit = {\n\t\t${1:triggers}\n\t}\n\t${2:effects}\n}");
+    expect(item.insertTextFormat).toBe(2);
+  });
+
+  it("a token whose example does not qualify stays a bare word", () => {
+    const env = templateEnv();
+    const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\trandom_l|\n\t}\n}");
+    const item = items.find((i) => i.label === "random_list")!;
+    expect(item.insertText).toBeUndefined();
+  });
+
+  it("no template when the line already continues with = after the cursor", () => {
+    const env = templateEnv();
+    const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\ti| = yes\n\t}\n}");
+    expect(items.find((i) => i.label === "if")!.insertText).toBeUndefined();
+  });
+});
+
+describe("completion — a client that did not declare snippetSupport", () => {
+  /** Every insert form the provider can emit, in one event body. */
+  function allItems() {
+    const env = makeEnv();
+    env.data.index.addAll([def("my_param_effect", "scripted_effect", { params: ["TARGET"] })]);
+    env.data.notifyIndexChanged();
+    const entry = env.schema.entries.find((e) => e.kind === "event") ?? null;
+    const text = "namespace = v3\n\nv3.1 = {\n\t\n}";
+    const doc = TextDocument.create(uri(), "paradox", 1, text);
+    return env.completion.provide(doc, text.indexOf("\n\t\n") + 2, new Set(["character"]), entry).items;
+  }
+
+  it("never emits `${` and never claims InsertTextFormat.Snippet", () => {
+    asClient({ client: {} });
+    const items = allItems();
+    expect(items.length).toBeGreaterThan(10);
+    for (const item of items) {
+      expect(item.insertTextFormat, item.label).toBeUndefined();
+      expect(item.insertText ?? "", item.label).not.toContain("${");
+    }
+  });
+
+  it("still gets a usable skeleton: block keys, param blocks and the yes form", () => {
+    asClient({ client: {} });
+    const items = allItems();
+    expect(items.find((i) => i.label === "immediate")!.insertText).toBe("immediate = {\n\t\n}");
+    expect(items.find((i) => i.label === "my_param_effect")!.insertText).toBe(
+      "my_param_effect = {\n\tTARGET = TARGET\n}"
+    );
+    expect(items.find((i) => i.label === "my_effect")!.insertText).toBe("my_effect = yes");
+  });
+
+  it("a snippet-capable client keeps the tabstop forms", () => {
+    asClient({ clientCommands: true });
+    const items = allItems();
+    expect(items.find((i) => i.label === "immediate")!.insertText).toBe("immediate = {\n\t$0\n}");
+    expect(items.find((i) => i.label === "immediate")!.insertTextFormat).toBe(2);
   });
 });
 

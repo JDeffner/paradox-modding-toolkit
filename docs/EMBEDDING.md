@@ -211,6 +211,8 @@ interface ParadoxClientCapabilities {
   hoverHtml?: boolean;      // renders the sanitized <span style="color:var(--vscode-*)"> hover markup
   commands?: string[];      // the px.* command ids this client actually registers
   ownFileWatcher?: boolean; // client watches the mod tree and pushes paradox/modFileChanged
+  fileLinks?: boolean;      // hover renderer navigates file: links
+  hoverIcons?: boolean;     // client sets supportThemeIcons, so hover badges may use $(codicon) glyphs
 }
 ```
 
@@ -224,8 +226,24 @@ arrives as a real `WorkspaceEdit` instead of a command it could not run.
 `clientCommands: boolean` is the **deprecated** predecessor and should not be
 used in new code. It conflated three unrelated questions behind one "is this VS
 Code" switch. It still works: `true` means
-`{ hoverHtml: true, commands: <every id>, ownFileWatcher: true }`, `false` or
-absent means all-off, and `client` wins when both are sent.
+`{ hoverHtml: true, commands: <every id>, ownFileWatcher: true, fileLinks:
+true }` plus snippet support, `false` or absent means all-off, and `client`
+wins when both are sent.
+
+One more capability matters here and is NOT part of this object, because
+standard LSP already carries it: snippet support. Declare
+`textDocument.completion.completionItem.snippetSupport: true` in the
+`initialize` capabilities if your editor expands `${1:…}` tabstops.
+
+The full set an embedder should consider, and what each one buys:
+
+| Declare | If your client | Without it |
+|---|---|---|
+| `snippetSupport` (standard LSP) | expands `${1:…}` tabstops in completion inserts | completion inserts are plain-text skeletons: same block shape, no tabstops, never a literal `${` |
+| `client.hoverHtml` | renders the sanitized `<span style="color:var(--vscode-*)">` hover markup | hover cards are plain markdown; the span content is self-sufficient text, so nothing is lost but color |
+| `client.commands` | registers some/all `px.*` commands | command-link affordances degrade per id: the localization quick fix becomes a plain `WorkspaceEdit`, the hover reference-count line is dropped |
+| `client.fileLinks` | navigates `file:` links from hover markdown | every hover location line (provenance, set sites, define/gui/format sources, datafunction examples, texture paths) renders as plain text instead of a dead link |
+| `client.ownFileWatcher` | watches the mod tree and pushes `paradox/modFileChanged` | the server registers its own `didChangeWatchedFiles` watcher (needs dynamic registration) |
 
 The concrete per-capability behavior (what the hover looks like without
 `hoverHtml`, which quick fix replaces which) is the "Degraded modes" section of
@@ -412,6 +430,114 @@ Rendering notes that will save you a redesign:
   completion and hover already offer, so a panel built on it cannot disagree
   with the popup.
 - **`null`** means the document is not an open script document. Render nothing.
+
+## In a browser, with no process at all
+
+Everything above assumes a host that can spawn a process. A web page cannot,
+and `@px-lsp/server/browser` is the answer to that: the same parser, schema,
+token tables and scope engine, assembled as a plain library against a single
+in-memory document. No child process, no JSON-RPC, no workspace scan, no
+filesystem.
+
+```ts
+import { createBrowserLanguageService } from "@px-lsp/server/browser";
+
+const tokens = await (await fetch("/px/tokens.json")).json();
+const freqs = await (await fetch("/px/freqs.json")).json();
+const service = createBrowserLanguageService({ tokens, freqs });
+
+const doc = service.openDocument("events/tutorial.txt", text);
+doc.diagnostics();
+doc.completions(offset);
+doc.hover(offset);
+doc.scopeAt(offset);
+
+doc.update(newText); // keep the handle; it holds the parse across edits
+```
+
+`openDocument` takes a **mod-relative** path. Nothing opens it, but the schema
+classifies a file by its folder, so `events/tutorial.txt` gets the event
+grammar and root scope while `common/scripted_effects/00_x.txt` gets that one.
+`doc.kind` reports which schema entry matched, or `null` when the folder is not
+one the schema knows, which is worth showing rather than silently defaulting.
+
+### The data is baked, not parsed at runtime
+
+On node the server parses `data/<gameId>/script_docs/*.log` at startup. That is
+1.1 MB of text a browser should not download or parse, so
+`scripts/bake-browser-data.ts` runs the same parsers at build time and splits
+the result by how often it is needed:
+
+| Artifact | Raw | Brotli | Needed for |
+|---|---|---|---|
+| `dist/browser.js` | 838 KB | 163 KB | everything (parser, schema, features) |
+| `browser-data/<gameId>/tokens.json` | 527 KB | 36 KB | completion, diagnostics, scope inference |
+| `browser-data/<gameId>/freqs.json` | 104 KB | 26 KB | completion ranking (optional) |
+| `browser-data/<gameId>/docs.json` | 608 KB | 72 KB | hover prose only |
+
+So a page is answering completions and diagnostics after 225 KB brotli, and
+`docs.json` can wait until the first hover:
+
+```ts
+service.attachDocs(await (await fetch("/px/docs.json")).json());
+```
+
+Hover works before that call; it just has names and scopes instead of prose.
+`capabilities.hoverDocs` says which state you are in.
+
+Regenerate the payloads with `pnpm run bake:browser`, which bakes every game
+that ships `script_docs` (add `-- --game <id>` for one). They carry
+a version that `createBrowserLanguageService` checks, so a payload baked by a
+different server version fails loudly at startup instead of producing subtly
+wrong answers.
+
+### What a browser build cannot know
+
+The service has exactly one file: the one you opened. `capabilities` states
+this field by field, and a host should surface it rather than imply the
+fidelity of the editor:
+
+- `workspaceIndex: false`. No vanilla scan and no other mod files, so a
+  reference to a trait, decision or scripted effect defined elsewhere does not
+  resolve. Definitions in the **open document** do, which is why hover on a
+  `scripted_effect` you just wrote above still works.
+- `referenceDiagnostics: false`. The unknown-reference checks need that index.
+  They are omitted rather than approximated, because a false "unknown trait" on
+  a trait that exists is worse than no check.
+- `guiAndAssets: false`. `.gui` layout, DDS decoding, `[ ... ]` datafunctions
+  and the tiger runner are node-only or need a game install.
+
+Diagnostics are therefore the structural and file-layout class only: unbalanced
+braces, encoding traps, and folder traps like `common/on_actions/` (plural,
+which CK3 silently ignores).
+
+### How the node builtins are handled
+
+The feature modules import `fs`, `path` and `os` on paths a browser never
+reaches (`loadSchema(null)` takes no filesystem path, and the token tables
+arrive as JSON). The browser bundle aliases all three to
+`src/browser/shims/`, plus `vscode-languageserver/node` to
+`vscode-languageserver-types`, which drops the JSON-RPC transport the library
+form has no use for.
+
+The `fs` shim is an empty filesystem: `existsSync` is false and the readers
+throw `ENOENT`, so anything that ever did slip onto a disk-backed path fails
+the way a missing file fails on node. The `path` shim is POSIX-only and is
+pinned against node's own `path.posix` in
+`packages/server/test/browserPath.test.ts`, because `classifyFile` picks a
+schema entry with `path.relative` and a shim that disagrees by one segment
+would produce a wrong diagnostic rather than a visible failure.
+
+Consumers do not need any of these aliases: `@px-lsp/server/browser` resolves
+to the prebuilt `dist/browser.js` with the shims already linked in.
+
+### What this is not
+
+It is not the VS Code editor in a page, and it is not an LSP server in a Web
+Worker. It is the language knowledge as a library. A worker-hosted LSP would
+wrap this module with `BrowserMessageReader`/`BrowserMessageWriter` and the
+transport alias above changed back to `vscode-languageserver/browser`; nothing
+in the service would need to move.
 
 ## What is deliberately absent
 

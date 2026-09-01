@@ -7,6 +7,7 @@
  * (formerly Tools) is a webview — see webviews/dashboard/view.ts.
  */
 import * as vscode from "vscode";
+import { kindStyle } from "@px-lsp/protocol/kinds";
 import * as path from "path";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
@@ -22,6 +23,7 @@ import {
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
 import { readModName } from "@px-lsp/protocol/modName";
+import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
 
 /**
@@ -162,12 +164,12 @@ class OverviewProvider extends BaseProvider {
         `${k.kind.replace(/_/g, " ")} (${k.count})`,
         vscode.TreeItemCollapsibleState.Collapsed
       );
-      node.iconPath = new vscode.ThemeIcon("symbol-class");
+      node.iconPath = new vscode.ThemeIcon(kindStyle(k.kind).codicon);
       node.children = k.defs.map((d) => {
         const child = new Node(d.name);
         child.description = path.basename(d.file);
         child.command = openCommand(d.file, d.line);
-        child.iconPath = new vscode.ThemeIcon("symbol-field");
+        child.iconPath = new vscode.ThemeIcon(kindStyle(k.kind).codicon);
         return child;
       });
       if (k.count > k.defs.length) {
@@ -405,12 +407,12 @@ class DependenciesProvider extends BaseProvider {
         `${g.kind.replace(/_/g, " ")} (${g.items.length})`,
         vscode.TreeItemCollapsibleState.Collapsed
       );
-      kindNode.iconPath = new vscode.ThemeIcon("symbol-class");
+      kindNode.iconPath = new vscode.ThemeIcon(kindStyle(g.kind).codicon);
       kindNode.children = g.items.map((it) => {
         const leaf = new Node(it.name);
         leaf.description = path.basename(it.file);
         leaf.command = openCommand(it.file, it.line);
-        leaf.iconPath = new vscode.ThemeIcon("symbol-field");
+        leaf.iconPath = new vscode.ThemeIcon(kindStyle(g.kind).codicon);
         return leaf;
       });
       return kindNode;
@@ -555,11 +557,50 @@ export function registerPxViews(
         placeHolder: "Checked mods are skipped entirely: no completion, navigation, diagnostics or views",
       });
       if (!picked) return;
-      await vscode.workspace.getConfiguration("px").update(
-        "excludedMods",
-        picked.map((i) => i.root),
-        vscode.ConfigurationTarget.Workspace
+      const chosen = picked.map((i) => i.root);
+      const pxCfg = vscode.workspace.getConfiguration("px");
+      await pxCfg.update("excludedMods", chosen, vscode.ConfigurationTarget.Workspace);
+
+      // Excluding is all-or-nothing; the cheaper middle ground is indexing a
+      // mod like a dependency parent (definitions for completion/hover/
+      // navigation, no reference index — the expensive half; vanilla-copy
+      // packs like the Unofficial Patch are exactly this case). That is just
+      // px.parentMods, so offer to move newly excluded mods there, and pull
+      // un-excluded mods back out (a parentMods entry for a fully indexed
+      // workspace mod is dead weight).
+      const before = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
+      const chosenKeys = new Set(chosen.map((p) => p.toLowerCase()));
+      const parents = sanitizeStringList(pxCfg.get("parentMods"));
+      // Paths compare case-insensitively throughout (Windows), so the drop set
+      // is keyed by the lowercased path, not by the string the user typed.
+      const unexcluded = new Set(
+        parents.map((p) => p.toLowerCase()).filter((k) => before.has(k) && !chosenKeys.has(k))
       );
+      if (unexcluded.size > 0) {
+        await pxCfg.update(
+          "parentMods",
+          parents.filter((p) => !unexcluded.has(p.toLowerCase())),
+          vscode.ConfigurationTarget.Workspace
+        );
+      }
+      const newly = chosen.filter((r) => !before.has(r.toLowerCase()));
+      if (newly.length > 0) {
+        const parentKeys = new Set(parents.map((p) => p.toLowerCase()));
+        const movable = newly.filter((r) => !parentKeys.has(r.toLowerCase()));
+        if (movable.length > 0) {
+          const keep = await vscode.window.showInformationMessage(
+            `Paradox Modding Toolkit: excluded ${newly.length} mod(s) from indexing. Keep them as ` +
+              "read-only context instead? They are then indexed like dependency mods: completion, " +
+              "hover and go-to-definition still see their content, at a fraction of the memory " +
+              "(no reference index, diagnostics or views).",
+            "Keep as Read-Only Context"
+          );
+          if (keep === "Keep as Read-Only Context") {
+            const latest = sanitizeStringList(pxCfg.get("parentMods"));
+            await pxCfg.update("parentMods", [...latest, ...movable], vscode.ConfigurationTarget.Workspace);
+          }
+        }
+      }
     })
   );
 

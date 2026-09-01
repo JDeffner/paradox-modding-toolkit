@@ -146,7 +146,7 @@ export function buildEvalEnv(opts: {
   const data = new ServerData();
   const wikiTokens = loadWikiTokens(opts.wikidocsDir);
   const scriptTokens = opts.scriptDocsDir ? loadTokenDataFromLogs(opts.scriptDocsDir).tokens : [];
-  data.setTokens(scriptTokens.length > 0 ? mergeWikiTokens(scriptTokens, wikiTokens) : wikiTokens);
+  data.setTokens(scriptTokens.length > 0 ? mergeWikiTokens(scriptTokens, wikiTokens).tokens : wikiTokens);
   const schema = loadSchema(opts.modPath);
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),

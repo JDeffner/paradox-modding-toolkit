@@ -161,27 +161,85 @@ export function loadWikiTokens(dir: string): TokenData[] {
   return tokens;
 }
 
-/**
- * Merge script_docs tokens (authoritative) with wiki tokens (fallback/enrichment):
- * wiki-only tokens are added with a provenance note; tokens present in both keep
- * the script_docs doc and scopes but gain the wiki's usage example.
- */
-export function mergeWikiTokens(scriptDocs: TokenData[], wiki: TokenData[]): TokenData[] {
-  const byKey = new Map<string, TokenData>();
-  for (const t of scriptDocs) byKey.set(`${t.kind}:${t.name}`, t);
+export interface WikiMergeOptions {
+  /**
+   * Drop wiki NAMES that the script_docs dump does not have, instead of adding
+   * them. Pass this ONLY for the user's own dump.
+   *
+   * `script_docs` is what the engine registered when the game ran, so a name it
+   * omits does not exist in that patch. The bundled wiki lists say as much
+   * themselves ("be aware that it is outdated. Some effects have been
+   * deprecated"). Measured against a real install: of 2,336 wiki tokens,
+   * 2,262 were already in the dump and 74 were not, and the ones sampled from
+   * that 74 (`every_activity_invited`, `every_participant`,
+   * `accept_invitation_for_character`) appear in zero vanilla files. They are
+   * pre-Tours-and-Tournaments activity API, and offering them in completion is
+   * how a modder writes an effect that silently does nothing.
+   *
+   * The wiki's real contribution survives either way: 127 usage examples for
+   * tokens the dump already had.
+   */
+  dropUnknownNames?: boolean;
+}
 
-  const merged = [...scriptDocs];
+export interface WikiMergeResult {
+  tokens: TokenData[];
+  /** Wiki-only names added (0 when `dropUnknownNames` suppressed them). */
+  added: number;
+  /** Wiki-only names dropped as absent from the authoritative dump. */
+  dropped: number;
+  /** Tokens that gained a usage example they did not have. */
+  enriched: number;
+}
+
+/**
+ * Merge script_docs tokens (authoritative) with wiki tokens (fallback and
+ * enrichment): tokens present in both keep the script_docs doc and scopes but
+ * gain the wiki's usage example, and wiki-only tokens are either added with a
+ * provenance note or dropped (see {@link WikiMergeOptions.dropUnknownNames}).
+ *
+ * NOTE: this MUTATES the `scriptDocs` tokens it is handed, which is how
+ * enrichment lands on them. Calling it twice on the same array therefore
+ * reports `enriched: 0` the second time, because the usage examples are already
+ * there. Production calls it once per load; a comparison harness must reload.
+ */
+export function mergeWikiTokens(
+  scriptDocs: TokenData[],
+  wiki: TokenData[],
+  options: WikiMergeOptions = {}
+): WikiMergeResult {
+  const byKey = new Map<string, TokenData>();
+  /** Kinds the dump actually covers, so a wiki file for a kind script_docs does
+   *  not dump is never mistaken for "these all stopped existing". */
+  const coveredKinds = new Set<string>();
+  for (const t of scriptDocs) {
+    byKey.set(`${t.kind}:${t.name}`, t);
+    coveredKinds.add(t.kind);
+  }
+
+  const tokens = [...scriptDocs];
   const wikiNote = activeProfile().wikiNote;
+  let added = 0;
+  let dropped = 0;
+  let enriched = 0;
   for (const w of wiki) {
     const existing = byKey.get(`${w.kind}:${w.name}`);
     if (!existing) {
+      if (options.dropUnknownNames && coveredKinds.has(w.kind)) {
+        dropped++;
+        continue;
+      }
       const note = w.traits ? `${w.traits}\n${wikiNote}` : wikiNote;
-      merged.push({ ...w, traits: note });
+      tokens.push({ ...w, traits: note });
+      added++;
       continue;
     }
     if (existing.doc === "" && w.doc !== "") existing.doc = w.doc;
     // script_docs is authoritative; the wiki fills a missing syntax example.
-    if (!existing.usage && w.usage) existing.usage = w.usage;
+    if (!existing.usage && w.usage) {
+      existing.usage = w.usage;
+      enriched++;
+    }
   }
-  return merged;
+  return { tokens, added, dropped, enriched };
 }

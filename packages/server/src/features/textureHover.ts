@@ -13,6 +13,7 @@ import { ddsFormatInfo, ddsToPngDataUri } from "../dds";
 import { getLineText } from "../documents";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetRoots, bareNameBaseDirs } from "./assetPaths";
+import { fileLink } from "./hoverRender";
 
 const DDS_PATH = /[A-Za-z0-9_\-./\\]+\.dds/gi;
 const CACHE_MAX = 100;
@@ -129,7 +130,9 @@ export function provideTextureHover(
     start: { line: position.line, character: hit.start },
     end: { line: position.line, character: hit.end },
   };
-  const fileLink = URI.file(resolved.fsPath).toString();
+  // A client without `fileLinks` gets the resolved path as text instead of a
+  // link its hover renderer would not navigate.
+  const open = fileLink(resolved.fsPath, "open file", { plain: `\`${resolved.fsPath}\`` });
   const preview = cachedPreview(resolved.fsPath);
   // The path is what's hovered, so the caption carries what the file itself
   // knows: dimensions, encoding, size on disk, and where it resolved.
@@ -137,7 +140,7 @@ export function provideTextureHover(
     ? `${preview.width}×${preview.height} · ${preview.format} · ${formatBytes(preview.fileBytes)} · ${resolved.label}`
     : `texture (${resolved.label})`;
   const body = preview?.uri
-    ? `![texture](${preview.uri})\n\n*${meta}* — [open file](${fileLink})`
-    : `*${meta}* — not previewable, [open file](${fileLink})`;
+    ? `![texture](${preview.uri})\n\n*${meta}* — ${open}`
+    : `*${meta}* — not previewable, ${open}`;
   return { contents: { kind: MarkupKind.Markdown, value: body }, range };
 }

@@ -329,3 +329,51 @@ describe("schema data shape (§B2/§B3)", () => {
     expect(schema.structures.source("character_interaction")).toBe("character_interactions");
   });
 });
+
+describe("a `var:` hover shows one card, not two", () => {
+  /** A variable set in three places, as the index would have recorded it. */
+  function dataWithVar(): ServerData {
+    const data = new ServerData();
+    data.index.addAll([
+      { name: "delve_room", kind: "variable", file: "D:/mod/a.txt", line: 404, source: "mod" },
+      { name: "delve_room", kind: "variable", file: "D:/mod/b.txt", line: 141, source: "mod" },
+      { name: "delve_room", kind: "variable", file: "D:/mod/b.txt", line: 149, source: "mod" },
+    ]);
+    return data;
+  }
+
+  function hoverOnVar(data: ServerData): string {
+    const text = "my.1 = {\n\timmediate = {\n\t\tset_variable = { name = delve_room value = 2 }\n\t}\n}";
+    const line = "\t\tif = { limit = { var:delve_room = 2 } }";
+    const full = text + "\n" + line;
+    const doc = TextDocument.create(uri(), "paradox", 1, full);
+    const lineNo = full.split("\n").length - 1;
+    const col = line.indexOf("delve_room");
+    const hover = provideHover(
+      data,
+      doc,
+      { line: lineNo, character: col + 1 },
+      new Set(["character"]),
+      eventEntry,
+      () => schema
+    );
+    expect(hover).not.toBeNull();
+    return (hover!.contents as { value: string }).value;
+  }
+
+  it("renders the set sites once, on the definition card", () => {
+    const md = hoverOnVar(dataWithVar());
+    // One card: exactly one badge, so no `---` rule between duplicates.
+    expect(md.split("**delve_room**")).toHaveLength(2);
+    expect(md).not.toContain("---");
+    // The set sites appear as provenance links, not also as "set in" prose.
+    expect(md).not.toContain("set in");
+    expect(md).toContain("a.txt:405");
+  });
+
+  it("still answers for a variable the index has never seen set", () => {
+    const md = hoverOnVar(new ServerData());
+    expect(md).toContain("**delve_room**");
+    expect(md).toContain("variable");
+  });
+});

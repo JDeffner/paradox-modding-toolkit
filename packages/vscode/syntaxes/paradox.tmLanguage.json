@@ -20,6 +20,7 @@
     { "include": "#control" },
     { "include": "#block-key" },
     { "include": "#loc-property" },
+    { "include": "#value-ref" },
     { "include": "#operator" },
     { "include": "#braces" }
   ],
@@ -122,6 +123,11 @@
       "comment": "Any other key on the left of = reads as a property; keeps key/value texture visible",
       "name": "variable.other.property.paradox",
       "match": "\\b[A-Za-z_][A-Za-z0-9_.\\-]*\\s*(?=\\??=)"
+    },
+    "value-ref": {
+      "comment": "Catch-all for bare identifiers in value position (trait = brave, list entries). Without a base scope they render default-foreground until the server's semantic tokens land — the 'text stays white for a while' reports. Same string colour family as asset-ref; semantic tokens refine it once the index answers.",
+      "name": "string.unquoted.value.paradox",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_.\\-]*\\b"
     },
     "operator": {
       "name": "keyword.operator.comparison.paradox",
