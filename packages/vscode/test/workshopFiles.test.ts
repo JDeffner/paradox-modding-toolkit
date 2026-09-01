@@ -30,16 +30,19 @@ afterEach(() => {
 });
 
 describe("workshop dir resolution", () => {
+  // path.resolve, so the roots are absolute on the platform running the test:
+  // users are on Windows, CI is Linux, and a drive letter is relative there.
+  const root = path.resolve(path.join("Projets", "My Mod", "mod"));
+
   it("defaults to the sibling workshop folder (mod/ + workshop/ layout)", () => {
-    const root = path.join("F:", "Projets", "My Mod", "mod");
-    expect(resolveWorkshopDir(root, undefined)).toBe(path.join("F:", "Projets", "My Mod", "workshop"));
-    expect(resolveWorkshopDir(root, "")).toBe(path.join("F:", "Projets", "My Mod", "workshop"));
+    const sibling = path.join(path.dirname(root), "workshop");
+    expect(resolveWorkshopDir(root, undefined)).toBe(sibling);
+    expect(resolveWorkshopDir(root, "")).toBe(sibling);
   });
 
   it("accepts relative and absolute overrides", () => {
-    const root = path.join("F:", "Projets", "My Mod", "mod");
     expect(resolveWorkshopDir(root, "listing")).toBe(path.join(root, "listing"));
-    const abs = path.join("D:", "somewhere", "else");
+    const abs = path.resolve(path.join("somewhere", "else"));
     expect(resolveWorkshopDir(root, abs)).toBe(abs);
   });
 });
