@@ -18,6 +18,13 @@ Ships with toolkit 0.4.0.
 
 ### Added
 
+- Every hover renders through one shared card assembly
+  (`renderHoverMarkdown`): gui, datafunction, localization-format, texture
+  and script hovers share the card anatomy and one footer line, and cards
+  whose subject has an Examples Wiki article emit a capability-gated link to
+  it. Keywords and scope words became wiki kinds, single-sourced from the
+  table the hover cards read. The "Scope here: unknown" line is dropped when
+  inference has nothing to say.
 - The Examples Wiki serves articles for the workspace's own variables and
   lists (kind, inferred value type, set/read sites with inline context,
   containers), rebuilt when the index changes; engine-token example sites

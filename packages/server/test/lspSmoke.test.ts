@@ -599,6 +599,23 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(missing).toBeNull();
   });
 
+  it("paradox/exampleWiki carries the script grammar the game documents nowhere", async () => {
+    const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+    // `not` never gets a row of its own: one keyword, one article.
+    expect(index.entries.some((e) => e.name === "NOT" && e.kind === "keyword")).toBe(true);
+    expect(index.entries.some((e) => e.name === "not" && e.kind === "keyword")).toBe(false);
+    expect(index.entries.some((e) => e.name === "prev" && e.kind === "scope_word")).toBe(true);
+    for (const kind of ["keyword", "scope_word"] as const) {
+      const name = kind === "keyword" ? "limit" : "prev";
+      const detail = (await conn.sendRequest(exampleWikiEntryRequest, { name, kind })) as ExampleWikiDetail;
+      expect(detail.name).toBe(name);
+      expect(detail.doc).not.toBe("");
+      // The article says out loud that the description is the toolkit's own.
+      expect(detail.provenance).toContain("Written by the toolkit");
+    }
+    expect(await conn.sendRequest(exampleWikiEntryRequest, { name: "add_gold", kind: "keyword" })).toBeNull();
+  });
+
   it("paradox/exampleWiki carries the mod's own variables, with inline context", async () => {
     const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
     const row = index.entries.find((e) => e.name === "smoke_toll" && e.kind === "variable");

@@ -97,6 +97,12 @@ describe("engine-token hover teaches usage", () => {
     expect(md).not.toContain("Supported scopes: <span");
   });
 
+  it("every engine token card links into its Examples Wiki article", () => {
+    for (const t of [EFFECT, TRIGGER_BOOL, TRIGGER_CMP, EVENT_TARGET]) {
+      expect(engineHover(t)).toContain(encodeURIComponent(JSON.stringify([{ name: t.name, kind: t.kind }])));
+    }
+  });
+
   it("engine cards never show a vanilla usage-count (× N) line", () => {
     for (const t of [EFFECT, TRIGGER_BOOL, TRIGGER_CMP, EVENT_TARGET]) {
       const md = engineHover(t);

@@ -135,6 +135,39 @@ describe("example wiki index", () => {
   });
 });
 
+describe("example wiki grammar vocabulary", () => {
+  it("carries one row per keyword and scope word, canonical spelling only", () => {
+    const index = buildExampleWikiIndex(sources({ counts: { limit: 4200 } }));
+    const rows = index.entries.filter((e) => e.kind === "keyword" || e.kind === "scope_word");
+    expect(rows.map((e) => `${e.kind}:${e.name}`)).toEqual(
+      expect.arrayContaining(["keyword:NOT", "keyword:limit", "scope_word:root", "scope_word:prev"])
+    );
+    // The lowercase logic words are aliases of one article, not rows of their own.
+    expect(rows.some((e) => e.name === "not")).toBe(false);
+    expect(rows.find((e) => e.name === "limit")?.count).toBe(4200);
+    expect(index.sources.join(" ")).toContain("keywords and scope words");
+  });
+
+  it("answers a keyword and a scope-word article, and says the description is ours", async () => {
+    const keyword = await computeExampleWikiEntry(sources(), { name: "NOT", kind: "keyword" }, noSites());
+    expect(keyword?.doc).toContain("True when the child trigger is false");
+    expect(keyword?.provenance).toContain("Written by the toolkit");
+    // Any casing reaches the one article, which keeps its canonical name.
+    expect(
+      (await computeExampleWikiEntry(sources(), { name: "not", kind: "keyword" }, noSites()))?.name
+    ).toBe("NOT");
+    const chained = await computeExampleWikiEntry(
+      sources(),
+      { name: "prevprev", kind: "scope_word" },
+      noSites()
+    );
+    expect(chained?.doc).toContain("2 scope-changes back");
+    expect(
+      await computeExampleWikiEntry(sources(), { name: "add_gold", kind: "keyword" }, noSites())
+    ).toBeNull();
+  });
+});
+
 describe("example wiki variables", () => {
   it("carries a row per mod variable and says where it came from", () => {
     const index = buildExampleWikiIndex(sources({ variables: variables("/mod") }));

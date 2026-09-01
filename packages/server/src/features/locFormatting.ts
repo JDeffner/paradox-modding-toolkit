@@ -12,7 +12,7 @@ import * as path from "path";
 import type { TextFormattingIndex, FormatEntry } from "../data/textFormatting";
 import { rgbCss } from "../data/textFormatting";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { colorSwatch, fileLink, renderCard, type CardInput } from "./hoverRender";
+import { colorSwatch, fileLink, renderHoverMarkdown, type CardInput } from "./hoverRender";
 
 /** True when `prefix` ends inside an open loc value (odd count of unescaped `"`). */
 function insideLocValue(prefix: string): boolean {
@@ -114,7 +114,9 @@ export function provideFormatTagHover(
   if (entry.layer === "builtin") doc.push("Engine built-in format.");
   if (doc.length > 0) card.doc = doc.join("  \n");
   if (entry.file) card.provenance = sourceLink(entry);
-  return { markdown: renderCard(card), start: hit.start, end: hit.end };
+  // A format tag has no Examples Wiki article: the catalog carries script and
+  // datafunction vocabulary, and this is neither.
+  return { markdown: renderHoverMarkdown([card]), start: hit.start, end: hit.end };
 }
 
 function sourceLink(entry: FormatEntry): string {

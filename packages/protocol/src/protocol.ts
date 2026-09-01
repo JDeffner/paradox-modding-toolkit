@@ -464,9 +464,11 @@ export const exampleWikiRequest = "paradox/exampleWiki";
  * What an Examples Wiki row is. The first four are engine tokens from
  * script_docs or the wiki tables; the next three are `[ ... ]` datafunctions:
  * a global (`GetPlayer`), a member of a data type (`Character.GetName`), and
- * a data type itself (`Character`). The last seven are the variable and list
+ * a data type itself (`Character`). The next seven are the variable and list
  * names the definition index found in the indexed script itself, one kind per
- * storage class ({@link exampleWikiVariableKinds}).
+ * storage class ({@link exampleWikiVariableKinds}). The last two are the script
+ * grammar the game documents nowhere ({@link exampleWikiVocabularyKinds}): the
+ * glue keywords (`limit`, `NOT`, `base`) and the scope words (`root`, `prev`).
  */
 export type ExampleWikiKind =
   | "trigger"
@@ -476,6 +478,8 @@ export type ExampleWikiKind =
   | "datafn_global"
   | "datafn_member"
   | "data_type"
+  | "keyword"
+  | "scope_word"
   | "variable"
   | "local_variable"
   | "global_variable"
@@ -494,6 +498,12 @@ export const exampleWikiVariableKinds: ExampleWikiKind[] = [
   "global_variable_list",
   "list",
 ];
+
+/**
+ * The {@link ExampleWikiKind}s whose rows are script grammar rather than a
+ * name from a dump or an index. One filter chip covers both.
+ */
+export const exampleWikiVocabularyKinds: ExampleWikiKind[] = ["keyword", "scope_word"];
 
 export interface ExampleWikiEntry {
   /** Display and lookup name; a member carries its owner (`Character.GetName`). */

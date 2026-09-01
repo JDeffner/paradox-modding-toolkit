@@ -8,6 +8,11 @@
  * the vanilla usage harvest - and the example sites are read out of the game
  * files at the moment they are asked for.
  *
+ * The one exception is the grammar vocabulary (keywords, scope words), which
+ * the game documents nowhere. Those rows read the SAME table the hover reads
+ * (data/keywordDocs.ts), so a hover and its article can never disagree, and
+ * their articles say in words that the description is the toolkit's own.
+ *
  * Two requests, because the shapes differ by three orders of magnitude: the
  * index is thousands of tiny rows a client filters locally, the detail is one
  * row with its prose, its usage block and its vanilla sites.
@@ -28,6 +33,7 @@ import type {
 import type { TokenData } from "@px-lsp/protocol/types";
 import { exampleWikiVariableKinds } from "@px-lsp/protocol/protocol";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { keywordArticle, keywordArticleNames, SCOPE_WORD_DOCS, scopeWordDoc } from "../data/keywordDocs";
 import { membersOf, producersOf, type DataTypeMember, type DataTypesData } from "../data/dataTypes";
 import type { DataFnUsage } from "../data/dataFnUsage";
 
@@ -148,6 +154,19 @@ export function buildExampleWikiIndex(src: ExampleWikiSources): ExampleWikiIndex
       count: variable.setsTotal + variable.readsTotal,
     });
   }
+  // Script grammar: the words the hover documents that no dump ever names.
+  // Same table the hover reads, so the two can never disagree.
+  for (const name of keywordArticleNames()) {
+    entries.push({
+      name,
+      kind: "keyword",
+      shortDoc: shortDoc(keywordArticle(name)?.doc ?? ""),
+      count: src.counts[name] ?? 0,
+    });
+  }
+  for (const [name, doc] of Object.entries(SCOPE_WORD_DOCS)) {
+    entries.push({ name, kind: "scope_word", shortDoc: shortDoc(doc), count: src.counts[name] ?? 0 });
+  }
   for (const [type, members] of src.dataTypes.types) {
     entries.push({
       name: type,
@@ -183,6 +202,9 @@ export function buildExampleWikiIndex(src: ExampleWikiSources): ExampleWikiIndex
       `The ${src.variables.size} variable and list names come from the indexed script itself, from the places that set them.`
     );
   }
+  sources.push(
+    "The keywords and scope words are described by the toolkit: the game documents its triggers and effects, never the grammar that holds them together."
+  );
   return { entries, sources, needsScriptDocs: src.needsScriptDocs };
 }
 
@@ -252,10 +274,41 @@ export async function computeExampleWikiEntry(
     return dataFnDetail(src, name, params.kind, lines);
   }
   if (VARIABLE_KINDS.has(params.kind)) return variableDetail(src, name, params.kind, lines);
+  if (params.kind === "keyword" || params.kind === "scope_word") {
+    return vocabularyDetail(src, name, params.kind, sites);
+  }
   return tokenDetail(src, name, params.kind, sites);
 }
 
 const VARIABLE_KINDS = new Set<ExampleWikiKind>(exampleWikiVariableKinds);
+
+/**
+ * One keyword or scope-word article: the description the hover shows, and the
+ * places the game's own files write the word.
+ *
+ * The description is the only thing here that is not read out of a file, and
+ * it is single-sourced with the hover (data/keywordDocs.ts) so the two cannot
+ * drift. The provenance line says so plainly.
+ */
+async function vocabularyDetail(
+  src: ExampleWikiSources,
+  name: string,
+  kind: "keyword" | "scope_word",
+  sites: SiteFinder
+): Promise<ExampleWikiDetail | null> {
+  const article = kind === "keyword" ? keywordArticle(name) : scopeWordDoc(name);
+  if (!article) return null;
+  const detail = emptyDetail(article.name, kind, src.counts[article.name] ?? 0);
+  detail.doc = article.doc;
+  detail.provenance =
+    kind === "keyword"
+      ? "Written by the toolkit. The game's script_docs dumps document triggers and effects, never the grammar around them, so this description ships with the extension. The examples below are read from the game's own files."
+      : "Written by the toolkit. A scope word is engine grammar, not a documented token, so this description ships with the extension. The examples below are read from the game's own files.";
+  const found = await sites.find(article.name);
+  detail.examples = found.sites;
+  detail.examplesNote = found.note;
+  return detail;
+}
 
 /**
  * One variable or list article: what the set sites say it holds, which

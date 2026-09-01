@@ -70,9 +70,30 @@ export const KEYWORD_DOCS: Record<string, string> = {
   step: "compare_modifier: granularity — the value is divided into steps of this size.",
 };
 
+/** Written either way in script; the uppercase spelling is the canonical one. */
+const LOGIC_WORDS = ["AND", "OR", "NOT", "NOR", "NAND"];
+
 /** Lowercase logic words double the uppercase forms. */
-for (const k of ["AND", "OR", "NOT", "NOR", "NAND"]) {
+for (const k of LOGIC_WORDS) {
   KEYWORD_DOCS[k.toLowerCase()] = KEYWORD_DOCS[k];
+}
+
+/**
+ * The Examples Wiki article for a keyword: the canonical spelling plus the doc
+ * the hover reads, so `not` and `NOT` open one article. null when the word is
+ * not glue vocabulary.
+ */
+export function keywordArticle(word: string): { name: string; doc: string } | null {
+  const canonical = LOGIC_WORDS.includes(word.toUpperCase()) ? word.toUpperCase() : word;
+  const doc = KEYWORD_DOCS[canonical];
+  return doc ? { name: canonical, doc } : null;
+}
+
+/** Every keyword with an article, canonical spelling only (no `not` beside `NOT`). */
+export function keywordArticleNames(): string[] {
+  return Object.keys(KEYWORD_DOCS).filter(
+    (k) => !(LOGIC_WORDS.includes(k.toUpperCase()) && k !== k.toUpperCase())
+  );
 }
 
 export const SCOPE_WORD_DOCS: Record<string, string> = {

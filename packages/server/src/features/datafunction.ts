@@ -23,7 +23,7 @@ import {
 import type { DataFnUsage } from "../data/dataFnUsage";
 import type { DefinitionIndex } from "../index/indexer";
 import { finalize, MAX_ITEMS, type CompletionResult } from "./completion";
-import { fileLink, renderCard, renderHover, scopeType, type CardInput } from "./hoverRender";
+import { fileLink, renderHoverMarkdown, scopeType, type CardInput } from "./hoverRender";
 import * as path from "path";
 
 /**
@@ -546,7 +546,7 @@ function topMemberLines(usage: DataFnUsage, name: string, label: string): string
  */
 function dumpHintFor(data: DataTypesData): string {
   return data.source === "data_types.log"
-    ? "*Not in your `DumpDataTypes` dump (which is loaded) — shown from vanilla usage instead.*"
+    ? "*Not in your `DumpDataTypes` dump (which is loaded), shown from vanilla usage instead.*"
     : "*Using the bundled wiki tables. Run `DumpDataTypes` in the game console to load the complete, version-exact definitions.*";
 }
 
@@ -571,7 +571,9 @@ function usageDetailLines(
  *
  * One card per hover, in the same shape every other hover surface uses
  * (hoverRender.ts): badge + name + `→ Return` head, the description and the
- * harvested detail lines in the doc slot, provenance in the muted facts line.
+ * harvested detail lines in the doc slot, provenance in the muted facts line,
+ * and the shared footer line carrying the Examples Wiki link. A name the
+ * tables do not resolve gets no wiki link, because it has no article.
  */
 export function provideDataFnHover(
   data: DataTypesData,
@@ -621,6 +623,7 @@ export function provideDataFnHover(
         name: segment,
         headTail: `· ${typeMembers.size.toLocaleString("en-US")} known members`,
         doc: detailDoc(lines),
+        wiki: { name: segment, kind: "data_type" },
       };
     } else {
       const global = data.globals.get(segment);
@@ -635,6 +638,7 @@ export function provideDataFnHover(
           headTail: headTailOf(global),
           doc: detailDoc(lines),
           facts: provenance(global),
+          wiki: { name: segment, kind: "datafn_global" },
         };
       } else if (uses > 0) {
         const desc = describeDataFn(segment, null);
@@ -679,6 +683,7 @@ export function provideDataFnHover(
         headTail: headTailOf(member),
         doc: detailDoc(lines),
         facts: provenance(member),
+        wiki: { name: `${ownerType}.${segment}`, kind: "datafn_member" },
       };
     } else if (byName.length > 0) {
       const hit = byName[0];
@@ -701,6 +706,7 @@ export function provideDataFnHover(
         headTail: headTailOf(hit.member),
         doc: detailDoc(lines),
         facts: `${provenance(hit.member)}, matched by name (the chain before it did not resolve to a type)`,
+        wiki: { name: `${hit.owner}.${segment}`, kind: "datafn_member" },
       };
     } else if (uses > 0) {
       lines.push(...usageDetailLines(usage, segment, describeDataFn(segment, null), gameRoot));
@@ -717,7 +723,7 @@ export function provideDataFnHover(
     }
   }
   return {
-    markdown: renderHover([renderCard(card)], null),
+    markdown: renderHoverMarkdown([card]),
     start: segStart,
     end: segStart + segment.length,
   };

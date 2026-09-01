@@ -15,6 +15,7 @@ import {
   kindBadge,
   renderCard,
   renderHover,
+  renderHoverMarkdown,
   scopeHereLine,
   scopePill,
   scopeType,
@@ -233,6 +234,56 @@ describe("the shared footer", () => {
     expect(md).toContain("*1 more meaning*");
     setHoverDetail("compact");
     expect(renderHover(["A", "B", "C"], null)).toContain("*2 more meanings*");
+  });
+});
+
+describe("the one assembly path every hover surface renders through", () => {
+  const trigger = { kind: "trigger", name: "is_ai", wiki: { name: "is_ai", kind: "trigger" } };
+
+  it("lifts a single card's provenance onto the footer, so no row costs three lines", () => {
+    tier("bare");
+    const md = renderHoverMarkdown(
+      [{ kind: "text_format", name: "#bold", provenance: "[a.gui:3](file:///a)" }],
+      null
+    );
+    expect(md.split(NL).filter((l) => l !== "")).toEqual(["■ text format **#bold**", "[a.gui:3](file:///a)"]);
+  });
+
+  it("keeps per-card provenance on a stack, where it belongs to one meaning", () => {
+    const md = renderHoverMarkdown([
+      { kind: "trigger", name: "category", provenance: "P1" },
+      { kind: "structure_key", name: "category", provenance: "P2" },
+    ]);
+    expect(md).toContain("P1");
+    expect(md).toContain("P2");
+    expect(md).toContain("---");
+  });
+
+  it("puts the Examples Wiki link last on the footer, after the scope and the links", () => {
+    const md = renderHoverMarkdown([trigger], scopeHereLine("character", null), ["1 reference"]);
+    const footer = md.split(NL).at(-1)!;
+    expect(footer.startsWith("Scope here: **character** · 1 reference · [Examples Wiki](")).toBe(true);
+    expect(footer).toContain(encodeURIComponent(JSON.stringify([{ name: "is_ai", kind: "trigger" }])));
+  });
+
+  it("takes the article from the first card that has one, and emits only one", () => {
+    const md = renderHoverMarkdown([
+      { kind: "structure_key", name: "category" },
+      trigger,
+      { kind: "effect", name: "category", wiki: { name: "category", kind: "effect" } },
+    ]);
+    expect(md.match(/Examples Wiki/g)).toHaveLength(1);
+    expect(md).toContain(encodeURIComponent(JSON.stringify([{ name: "is_ai", kind: "trigger" }])));
+  });
+
+  it("emits no wiki link for a client that does not register the command", () => {
+    tier("bare");
+    expect(renderHoverMarkdown([trigger], scopeHereLine("character", null))).not.toContain("Examples Wiki");
+  });
+
+  it("emits no footer at all when there is nothing to put on it", () => {
+    tier("bare");
+    expect(renderHoverMarkdown([{ kind: "keyword", name: "base" }])).toBe("■ keyword **base**");
   });
 });
 

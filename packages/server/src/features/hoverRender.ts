@@ -12,7 +12,9 @@
  * The hover then writes ONE footer line for the whole hover, never one per
  * card: the scope context with the action links on the end of it. A separate
  * action row would cost three lines (itself, a blank, and a rule above it) to
- * say what fits on a line that has to exist anyway.
+ * say what fits on a line that has to exist anyway. Every hover surface
+ * assembles through `renderHoverMarkdown`, which owns those footer rules, so
+ * a gui, datafunction or loc card reads like a script card.
  *
  * Rendering contract, three tiers, driven by client capabilities:
  *
@@ -29,7 +31,8 @@
 import * as path from "path";
 import { URI } from "vscode-uri";
 import { kindStyle } from "@px-lsp/protocol/kinds";
-import { fileLinks, hoverHtml, hoverIcons } from "../clientMode";
+import { clientCommands } from "@px-lsp/protocol/protocol";
+import { canRunCommand, fileLinks, hoverHtml, hoverIcons } from "../clientMode";
 
 /** The colour a stored value reads in: the same token a `Variable` row takes. */
 const STORED = "var(--vscode-symbolIcon-variableForeground)";
@@ -213,6 +216,15 @@ export interface CardInput {
    * footer line instead, which is two lines cheaper.
    */
   provenance?: string;
+  /**
+   * The Examples Wiki article this card's subject has, when it has one. Not a
+   * rendered slot: {@link renderHoverMarkdown} turns it into the one wiki link
+   * on the shared footer, so a card builder only has to say what the subject
+   * is. Leave it unset when no article exists — the catalog holds engine
+   * tokens, datafunctions, data types, mod variables and script grammar, and
+   * nothing else.
+   */
+  wiki?: { name: string; kind: string };
 }
 
 /** Build one card's markdown. */
@@ -258,6 +270,50 @@ export function hoverFooter(scope: string | null, actions: string[]): string | n
 /** "Scope here: **X** (chain)" — the scope half of the footer. */
 export function scopeHereLine(scopes: string, chain: string | null): string {
   return chain ? `Scope here: **${scopes}** (${chain})` : `Scope here: **${scopes}**`;
+}
+
+/**
+ * The Examples Wiki link for a card's subject: the article, the game's own
+ * examples, and everything the index knows about the name. Nothing on a client
+ * that does not register the command, like every other command link here.
+ */
+export function wikiLink(wiki: { name: string; kind: string }): string | null {
+  if (!canRunCommand(clientCommands.showExamplesWiki)) return null;
+  const arg = encodeURIComponent(JSON.stringify([wiki]));
+  return `[Examples Wiki](command:${clientCommands.showExamplesWiki}?${arg} "Read the article and the game's own examples")`;
+}
+
+/**
+ * A whole hover: the cards, the optional scope line, and the shared footer.
+ * The single chokepoint every hover surface renders through, so the footer
+ * rules hold everywhere rather than only in hover.ts:
+ *
+ *  - a single-card hover lifts its card provenance onto the footer (three
+ *    lines cheaper: the row, its blank, and the rule above it);
+ *  - the first card that names an Examples Wiki article contributes the one
+ *    wiki link, last on the footer.
+ *
+ * `links` are caller-owned footer links (a reference count, a save site) and
+ * come before the wiki link.
+ */
+export function renderHoverMarkdown(
+  cards: CardInput[],
+  scope: string | null = null,
+  links: string[] = []
+): string {
+  const shown = cards.slice(0, hoverCaps().cards);
+  const actions = [...links];
+  let body = cards;
+  if (cards.length === 1 && cards[0].provenance) {
+    actions.unshift(cards[0].provenance);
+    body = [{ ...cards[0], provenance: undefined }];
+  }
+  const wiki = shown.find((c) => c.wiki)?.wiki;
+  if (wiki) {
+    const link = wikiLink(wiki);
+    if (link) actions.push(link);
+  }
+  return renderHover(body.map(renderCard), hoverFooter(scope, actions));
 }
 
 // ---------------------------------------------------------------------------

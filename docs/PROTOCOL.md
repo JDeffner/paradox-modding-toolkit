@@ -149,7 +149,7 @@ instead.
 | `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
-| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
+| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, keyword, scope word, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
@@ -200,6 +200,16 @@ true count in the total. The matching is word for word against the game's own
 docs, so a token that declares no scopes is simply absent from every list and
 nothing is inferred from a scope model. The field is optional and absent when
 the token produces no scope, so a client that ignores it is unaffected.
+
+The two grammar `ExampleWikiKind`s (`keyword`, `scope_word`, exported as
+`exampleWikiVocabularyKinds`) are the script glue the game documents nowhere:
+`limit`, `NOT`, `base`, `days` and the scope words `root`, `this`, `prev`,
+`from` (chained forms included). They are the one part of the catalog whose
+prose is the toolkit's own rather than a dump's, they read the SAME table the
+hover card reads so the two cannot disagree, and every such article says so in
+its `provenance`. Their example sites are searched in the game files like an
+engine token's. A logic word has ONE article under its uppercase spelling, so
+`not` and `NOT` both resolve to `NOT`.
 
 The seven variable `ExampleWikiKind`s (`variable`, `local_variable`,
 `global_variable`, `variable_list`, `local_variable_list`,
@@ -564,8 +574,10 @@ capability at a time. A client declaring nothing (every field off) gets:
   entirely. A count the user cannot click answers no question, so the card
   ends with the provenance instead (changed in server 0.2.0: it used to
   render the count as plain text);
-- **`px.showExamplesWiki` not listed** — the "Examples Wiki" link on a
-  variable or list hover card is dropped, exactly like the reference count;
+- **`px.showExamplesWiki` not listed** — the "Examples Wiki" link the shared
+  hover footer carries (engine tokens, datafunctions and data types, keywords
+  and scope words, variables and lists) is dropped, exactly like the reference
+  count;
 - **`fileLinks` off** — every `file:` link any hover would carry (provenance,
   variable and saved-scope set sites, define sources, gui template/type
   definitions, `#format` sources, `[ ... ]` datafunction examples) renders as
