@@ -1,0 +1,257 @@
+/**
+ * The px-ui component gallery: every shared component with its variants,
+ * wired through the same modules the panels use (menu, popover, dialog,
+ * toast, scrub, sortable, color picker). shared/README.md says to show a new
+ * component here before using it in a page; this is that gallery.
+ *
+ * Markup AND wiring live in this browser bundle on purpose: the dev server
+ * watches it, so editing anything here (or in shared/) reloads the page. The
+ * server serves ui.css fresh from disk. Never shipped.
+ */
+import { confirmDialog, menu, popover, toast } from "../../packages/vscode/src/webviews/shared/overlay";
+import { scrubbable } from "../../packages/vscode/src/webviews/shared/scrub";
+import { sortable } from "../../packages/vscode/src/webviews/shared/sortable";
+import { colorPicker, paintSwatch, type Rgb } from "../../packages/vscode/src/webviews/shared/colorPicker";
+import { icon } from "../../packages/vscode/src/webviews/shared/icons";
+
+const PAGE_CSS = `
+  body { margin: 0; padding: 20px 24px 80px; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  .lede { color: var(--px-muted-fg); font-size: var(--px-text-sm); margin: 0 0 18px; }
+  main { display: flex; flex-direction: column; gap: 18px; max-width: 860px; }
+  section { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .token { display: flex; align-items: center; gap: 6px; font-size: var(--px-text-xs); }
+  #tokens { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+`;
+
+const section = (title: string, body: string): string =>
+  `<section><div class="px-panel-title">${title}</div>${body}</section>`;
+
+const listRow = (label: string, hint: string): string => `
+  <div class="px-item"><span>${label}</span><span class="hint">${hint}</span>
+    <span class="px-item-tools">
+      <button class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="Rename">${icon("pencil")}</button>
+      <button class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="Delete">${icon("trash")}</button>
+    </span>
+  </div>`;
+
+function markup(): string {
+  const buttons = `
+    <div class="row">
+      <button class="px-btn">Save</button>
+      <button class="px-btn" data-variant="outline">Outline</button>
+      <button class="px-btn" data-variant="secondary">Secondary</button>
+      <button class="px-btn" data-variant="ghost">Ghost</button>
+      <button class="px-btn" data-variant="destructive">Destructive</button>
+      <button class="px-btn" data-variant="link">Link</button>
+    </div>
+    <div class="row">
+      <button class="px-btn" data-size="sm">Small</button>
+      <button class="px-btn" data-size="xs" data-variant="outline">Extra small</button>
+      <button class="px-btn" data-size="icon" data-variant="outline" data-tip="An icon button always carries a tooltip">${icon("plus")}</button>
+      <button class="px-btn" data-size="icon-sm" data-variant="ghost" data-tip="Ghost, toolbar size">${icon("copy")}</button>
+      <button class="px-btn" disabled>Disabled</button>
+    </div>`;
+
+  const inputs = `
+    <div class="row">
+      <input class="px-input" placeholder="A text input" style="width:180px" />
+      <div class="px-input-group">${icon("search")}<input class="px-input" data-size="sm" placeholder="With an icon" /></div>
+      <label class="px-labeled"><span>x</span><input class="px-input" data-size="sm" type="number" step="1" value="120" id="scrub-x" style="width:80px" /></label>
+      <label class="px-labeled"><span>y</span><input class="px-input" data-size="sm" type="number" step="1" value="64" id="scrub-y" style="width:80px" /></label>
+      <span class="hint">numbers scrub: drag horizontally, click to type</span>
+    </div>`;
+
+  const pickers = `
+    <div class="row">
+      <button class="px-dropdown" id="demo-dropdown" style="width:200px;flex:0 0 auto"><span class="px-truncate" id="demo-dropdown-value">liege</span>${icon("chevronDown")}</button>
+      <span class="px-swatch" id="demo-swatch" data-tip="Click for the color picker" style="width:24px;height:24px;cursor:pointer"></span>
+      <span class="hint">the dropdown grows a filter box past 8 items</span>
+    </div>`;
+
+  const toggles = `
+    <div class="row">
+      <div class="px-toggle-group" id="demo-toggles">
+        <button class="px-toggle" data-size="sm" aria-pressed="true">Triggers</button>
+        <button class="px-toggle" data-size="sm" aria-pressed="false">Effects</button>
+        <button class="px-toggle" data-size="sm" aria-pressed="false">Targets</button>
+      </div>
+      <label class="px-switch" data-tip="A switch"><input type="checkbox" checked /><span></span></label>
+      <input class="px-slider" type="range" min="0" max="100" value="40" style="width:140px" />
+    </div>
+    <div class="row">
+      <div class="px-tabs" id="demo-tabs">
+        <button class="px-tab" aria-selected="true">Layout</button>
+        <button class="px-tab" aria-selected="false">Source</button>
+        <button class="px-tab" aria-selected="false">History</button>
+      </div>
+      <div class="px-tabs" data-variant="line" id="demo-tabs-line">
+        <button class="px-tab" aria-selected="true">Overview</button>
+        <button class="px-tab" aria-selected="false">Details</button>
+      </div>
+    </div>`;
+
+  const passive = `
+    <div class="row">
+      <span class="px-badge">badge</span>
+      <span class="px-badge" data-variant="secondary">secondary</span>
+      <span class="px-badge" data-variant="outline">outline</span>
+      <span class="px-badge" data-variant="destructive">destructive</span>
+      <span class="px-kbd">Ctrl</span><span class="px-kbd">Shift</span><span class="px-kbd">P</span>
+      <span data-tip="Tooltips ride on data-tip" data-tip-side="right" style="text-decoration:underline dotted;cursor:help">hover me</span>
+    </div>`;
+
+  const list = `
+    <div class="px-list" id="demo-list" style="max-width:360px">
+      ${listRow("crown_authority", "law")}
+      ${listRow("feudal_government", "government")}
+      ${listRow("stewardship_lifestyle", "lifestyle")}
+      ${listRow("obligatory_fourth_row", "drag me")}
+    </div>
+    <div class="hint">rows reorder by pointer drag (sortable)</div>`;
+
+  const overlays = `
+    <div class="row">
+      <button class="px-btn" data-variant="outline" id="demo-popover">Popover</button>
+      <button class="px-btn" data-variant="destructive" id="demo-confirm">Confirm dialog</button>
+      <button class="px-btn" data-variant="secondary" id="demo-toast">Toast</button>
+      <button class="px-btn" data-variant="secondary" id="demo-toast-err">Destructive toast</button>
+    </div>`;
+
+  const tokens = [
+    "bg",
+    "muted",
+    "muted-strong",
+    "popover",
+    "border",
+    "input",
+    "ring",
+    "muted-fg",
+    "primary",
+    "destructive",
+  ]
+    .map(
+      (name) =>
+        `<div class="token"><span class="px-swatch" style="background:var(--px-${name});width:22px;height:22px"></span><code>--px-${name}</code></div>`
+    )
+    .join("");
+
+  return `<main>
+    <h1>px-ui gallery</h1>
+    <p class="lede">Every shared component, from the same ui.css the panels inline.
+    Edit anything under <code>src/webviews/shared/</code> (or this gallery) and the page reloads.</p>
+    ${section("Buttons", buttons)}
+    ${section("Inputs", inputs)}
+    ${section("Dropdown and color", pickers)}
+    ${section("Toggles, switch, slider, tabs", toggles)}
+    ${section("Badges, kbd, tooltip", passive)}
+    ${section("List (sortable)", list)}
+    ${section("Overlays", overlays)}
+    ${section("Tokens", `<div id="tokens">${tokens}</div>`)}
+  </main>`;
+}
+
+const style = document.createElement("style");
+style.textContent = PAGE_CSS;
+document.head.appendChild(style);
+document.body.insertAdjacentHTML("afterbegin", markup());
+
+const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+// Numbers scrub.
+for (const id of ["scrub-x", "scrub-y"]) {
+  const input = byId<HTMLInputElement>(id);
+  scrubbable(input, { onChange: (value) => (input.value = String(value)) });
+}
+
+// Dropdown: enough items to grow the filter box.
+const SCOPES = [
+  "liege",
+  "top_liege",
+  "primary_heir",
+  "primary_spouse",
+  "capital_county",
+  "capital_province",
+  "culture",
+  "faith",
+  "dynasty",
+  "house",
+  "court_owner",
+  "employer",
+];
+const dropdown = byId<HTMLButtonElement>("demo-dropdown");
+const dropdownValue = byId<HTMLSpanElement>("demo-dropdown-value");
+dropdown.addEventListener("click", () => {
+  menu(
+    dropdown,
+    SCOPES.map((s) => ({ value: s, label: s, hint: "scope" })),
+    {
+      value: dropdownValue.textContent ?? undefined,
+      onPick: (value) => {
+        dropdownValue.textContent = value;
+      },
+    }
+  );
+});
+
+// Color swatch opens the picker.
+let rgb: Rgb = [122, 84, 214];
+const swatch = byId<HTMLSpanElement>("demo-swatch");
+paintSwatch(swatch, rgb);
+swatch.addEventListener("click", () => {
+  colorPicker(swatch, rgb, {
+    onChange: (next) => {
+      rgb = next;
+      paintSwatch(swatch, rgb);
+    },
+  });
+});
+
+// Toggle group (single-select) and tabs.
+const exclusive = (container: HTMLElement, selector: string, attr: string): void => {
+  container.addEventListener("click", (ev) => {
+    const target = (ev.target as HTMLElement).closest<HTMLElement>(selector);
+    if (!target) return;
+    for (const el of container.querySelectorAll<HTMLElement>(selector))
+      el.setAttribute(attr, String(el === target));
+  });
+};
+exclusive(byId("demo-toggles"), ".px-toggle", "aria-pressed");
+exclusive(byId("demo-tabs"), ".px-tab", "aria-selected");
+exclusive(byId("demo-tabs-line"), ".px-tab", "aria-selected");
+
+// Sortable list: move the row in the DOM, the way a panel would.
+const list = byId("demo-list");
+sortable(list, {
+  rows: () => Array.from(list.querySelectorAll<HTMLElement>(".px-item")),
+  onReorder: (from, to) => {
+    const rows = Array.from(list.querySelectorAll<HTMLElement>(".px-item"));
+    const moved = rows[from];
+    const anchor = rows[to];
+    if (from < to) anchor.after(moved);
+    else anchor.before(moved);
+  },
+});
+
+// Overlays.
+byId("demo-popover").addEventListener("click", () => {
+  const content = document.createElement("div");
+  content.style.cssText = "padding:10px 12px;max-width:240px;font-size:12px";
+  content.textContent = "A popover: closes on outside click or Escape, and the anchor toggles it.";
+  popover(byId("demo-popover"), content);
+});
+byId("demo-confirm").addEventListener("click", () => {
+  void confirmDialog({
+    title: "Delete 3 emblems?",
+    description: "They are removed from the coat of arms.",
+    details: ["emblem_lion_rampant", "emblem_cross_bold", "emblem_border_simple"],
+    confirmLabel: "Delete",
+    destructive: true,
+  }).then((ok) => toast(ok ? "Deleted." : "Kept.", ok ? "destructive" : "default"));
+});
+byId("demo-toast").addEventListener("click", () => toast("Saved to gui/window_character.gui"));
+byId("demo-toast-err").addEventListener("click", () =>
+  toast("The engine would drop that write.", "destructive")
+);
