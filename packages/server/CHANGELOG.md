@@ -8,6 +8,12 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Custom-calendar date display when `settings.calendar` is set: inlay hints
+  after date tokens in script files and a hover card with the in-game form.
+  The setting is sanitized on intake, so clients may pass raw JSON.
+- `GameMeta` gains an optional `calendarLoc` field: the game's verified
+  date-format and month-name loc keys, consumed by the extension's
+  Generate Calendar Localization command (set for CK3).
 - `GameMeta` gains an optional `launchPresets` field: game-specific launch
   option presets (flags verified in the game's binary), consumed by the
   extension's `paradox-game` run configurations (set for CK3 and Vic3).

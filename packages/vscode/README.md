@@ -74,6 +74,11 @@ bottom says exactly where they stop.
   sizes vanilla actually uses.
 - **Localization workflow**: inline loc as inlay hints, BOM-correct quick-fix
   editing, a coverage view, and scaffolds for whole translation mods.
+- **Custom calendars**: total-conversion mods declare their era system once
+  (`px.calendar`, with custom month names and lengths if the mod has them)
+  and every script date shows its in-game form: `3000.1.1` reads `1000 BC`
+  as an inlay hint and on hover, and **Insert Date** converts "1000 BC
+  March 15" into the `3000.3.15` the game logic needs.
 - **Content scaffolds**: **New Content** generates events, decisions,
   interactions and on_action hooks that are correct by construction.
 - **Live debugging**: **Launch Game (debug mode)** plus a **Toggle
