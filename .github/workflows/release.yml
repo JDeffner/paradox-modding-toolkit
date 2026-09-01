@@ -196,9 +196,21 @@ jobs:
           for dir in packages/protocol packages/server; do
             NAME=$(node -p "require('./$dir/package.json').name")
             VERSION=$(node -p "require('./$dir/package.json').version")
-            # `npm view` of a missing version can exit 0 with empty output on
-            # some npm majors, so test the output, not the exit code.
-            FOUND=$(npm view "$NAME@$VERSION" version 2>/dev/null || true)
+            # "Not published" must come from the registry saying 404, not from
+            # a failed lookup: a transient registry error must stop the step,
+            # not funnel into a doomed publish. `npm view` of a missing
+            # version can also exit 0 with empty output on some npm majors,
+            # so the exit code AND the output are both checked.
+            set +e
+            FOUND=$(npm view "$NAME@$VERSION" version 2>view.err)
+            CODE=$?
+            set -e
+            if [ "$CODE" -ne 0 ] && ! grep -q "E404" view.err; then
+              echo "::error::npm view $NAME@$VERSION failed with a non-404 registry error"
+              cat view.err
+              exit 1
+            fi
+            rm -f view.err
             if [ -n "$FOUND" ]; then
               echo "$NAME@$VERSION already on npm, skipping"
             else
