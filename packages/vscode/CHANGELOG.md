@@ -22,6 +22,16 @@
   on the mod's calendar. Key names verified against the game files and binary;
   CK3 for now. Deterministic filenames: rerun after changing `px.calendar` to
   regenerate in place.
+- **Run configurations for the game (issue #26).** Launching now lives in
+  ONE place: the Run button on script and gui files, whose dropdown offers
+  Launch Game (debug mode), Launch Map Editor and Launch with Options (a
+  quick pick of every preset plus a free-form option box); the panel's
+  launch row is gone. Behind it sits a `paradox-game` run type: F5 starts
+  the workspace's game via Steam, the Run and Debug panel lists the per-game
+  presets - debug mode, Map Editor, Continue Last Save, CK3's Skip to 1066
+  Lobby and Benchmark, vanilla - and launch.json snippets (`-play=<title>`,
+  `-random_seed=<n>`, custom option sets) make your own sets permanent.
+  Every preset flag is verified in the game's own binary.
 
 ## 0.3.3 (beta) - tiger download fix
 

@@ -54,7 +54,9 @@ import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
 import { generateTigerConfCommand } from "./tiger/conf";
-import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
+import { ErrorLogWatcher } from "./errorLog";
+import { launchGame, registerGameRun } from "./gameRun";
+import { DEBUG_ARGS } from "./gameRunPresets";
 import { serverHeapMb } from "./serverHeap";
 import { planWatchRoots } from "./watchRoots";
 import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
@@ -909,7 +911,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
     vscode.commands.registerCommand("px.clearGameProblems", () => errorLog.clear()),
-    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg, errorLog)),
+    vscode.commands.registerCommand("px.launchGame", () => launchGame(cfgForActive(), errorLog, DEBUG_ARGS)),
     vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),
@@ -917,6 +919,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       newContentCommand(cfgForActive(), notifyModFileChanged)
     )
   );
+  registerGameRun(context, cfgForActive, errorLog);
 
   // ---- onboarding ---------------------------------------------------------------
 

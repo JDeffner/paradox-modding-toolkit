@@ -14,6 +14,9 @@ changes. Before the split it moved inside the extension's version (up to
 - `GameMeta` gains an optional `calendarLoc` field: the game's verified
   date-format and month-name loc keys, consumed by the extension's
   Generate Calendar Localization command (set for CK3).
+- `GameMeta` gains an optional `launchPresets` field: game-specific launch
+  option presets (flags verified in the game's binary), consumed by the
+  extension's `paradox-game` run configurations (set for CK3 and Vic3).
 
 ## 0.1.0
 

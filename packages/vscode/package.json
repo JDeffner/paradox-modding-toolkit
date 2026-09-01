@@ -392,7 +392,20 @@
       {
         "command": "px.launchGame",
         "category": "Paradox",
-        "title": "Launch Game (debug mode)"
+        "title": "Launch Game (debug mode)",
+        "icon": "$(play)"
+      },
+      {
+        "command": "px.launchMapEditor",
+        "category": "Paradox",
+        "title": "Launch Map Editor",
+        "icon": "$(map)"
+      },
+      {
+        "command": "px.launchWithOptions",
+        "category": "Paradox",
+        "title": "Launch with Options…",
+        "icon": "$(rocket)"
       },
       {
         "command": "px.translateNext",
@@ -945,6 +958,14 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.launchMapEditor",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.launchWithOptions",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.translateNext",
           "when": "px.isCk3Workspace"
         },
@@ -1020,6 +1041,23 @@
           "group": "1_modification"
         }
       ],
+      "editor/title/run": [
+        {
+          "command": "px.launchGame",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.launchMapEditor",
+          "when": "px.isCk3Workspace && px.hasMapEditor && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.launchWithOptions",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5|gui))?$/",
+          "group": "navigation@3"
+        }
+      ],
       "editor/title": [
         {
           "command": "px.showGuiTree",
@@ -1055,6 +1093,103 @@
         }
       ]
     },
+    "debuggers": [
+      {
+        "type": "paradox-game",
+        "label": "Paradox Game (launch via Steam)",
+        "languages": [
+          "paradox",
+          "paradox-ck3",
+          "paradox-vic3",
+          "paradox-eu5",
+          "paradox-loc",
+          "paradox-gui"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": [
+                  "-debug_mode",
+                  "-develop"
+                ],
+                "markdownDescription": "Options passed to the game. Common ones: `-debug_mode` (debug tooltips + console), `-develop` (hot reload of saved files), `-mapeditor` (open the map editor), `-continuelastsave` (load the last save), `-skip` (CK3: straight to the 1066 lobby), `-play=e_hre` (CK3: skip the menu and play the holder of a title), `-random_seed=42` (fixed RNG seed, needs `-debug_mode`), `-benchmark` (automated performance run), `-nographics` (headless observer game). Empty array = vanilla launch."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "paradox-game",
+            "request": "launch",
+            "name": "Launch game (debug mode)",
+            "args": [
+              "-debug_mode",
+              "-develop"
+            ]
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Paradox: Launch game (debug mode)",
+            "description": "Start the game via Steam with debug tooltips and live script reload.",
+            "body": {
+              "type": "paradox-game",
+              "request": "launch",
+              "name": "Launch game (debug mode)",
+              "args": [
+                "-debug_mode",
+                "-develop"
+              ]
+            }
+          },
+          {
+            "label": "Paradox: Play as a title holder (CK3)",
+            "description": "Skip the menu and play the 1066 holder of a title (names show in debug tooltips).",
+            "body": {
+              "type": "paradox-game",
+              "request": "launch",
+              "name": "Play as ${1:e_hre}",
+              "args": [
+                "-debug_mode",
+                "-develop",
+                "-play=${1:e_hre}"
+              ]
+            }
+          },
+          {
+            "label": "Paradox: Launch with fixed RNG seed",
+            "description": "Reproducible runs: -random_seed only works together with -debug_mode.",
+            "body": {
+              "type": "paradox-game",
+              "request": "launch",
+              "name": "Launch with seed ${1:42}",
+              "args": [
+                "-debug_mode",
+                "-develop",
+                "-random_seed=${1:42}"
+              ]
+            }
+          },
+          {
+            "label": "Paradox: Launch game (custom options)",
+            "description": "Your own option set.",
+            "body": {
+              "type": "paradox-game",
+              "request": "launch",
+              "name": "${1:My launch}",
+              "args": [
+                "${2:-debug_mode}"
+              ]
+            }
+          }
+        ]
+      }
+    ],
     "snippets": [
       {
         "language": "paradox",

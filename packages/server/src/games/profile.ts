@@ -152,6 +152,13 @@ export interface GameMeta {
    */
   calendarLoc?: CalendarLocSpec;
   /**
+   * Game-specific launch presets offered as run configurations (and panel
+   * rows), beyond the family-wide `-debug_mode -develop` default and the
+   * vanilla no-options launch. Every flag must be verified in the game's own
+   * binary; absent = only the shared presets are offered.
+   */
+  launchPresets?: { id: string; label: string; args: string[] }[];
+  /**
    * Suffix for server-side cache filenames under storageDir ("" keeps the
    * pre-profile names so existing caches survive; non-empty for later games,
    * e.g. "-vic3", so games sharing one storageDir never collide).
