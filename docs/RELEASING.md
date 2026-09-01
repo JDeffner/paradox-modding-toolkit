@@ -239,8 +239,21 @@ extension.
 `@px-lsp/protocol` and `@px-lsp/server` are publishable. They version
 independently of the extension, starting at 0.1.0 (`packages/*/package.json`
 carry `files`, `publishConfig.access: public`, and the server's `px-lsp` bin;
-each package has its own `CHANGELOG.md`). Publish a package only when its
-version bumped since the last publish:
+each package has its own `CHANGELOG.md`).
+
+**CI publishes them automatically.** Every tag build (and every manual
+release.yml run with "publish" checked) ends with a version-guarded npm step:
+for each package it checks whether that exact version already exists on npm
+and publishes it only when it does not, protocol before server. Bumping a
+package version in a release is therefore all it takes; a release that did
+not touch a package publishes nothing for it. The step needs the `NPM_TOKEN`
+repo secret (granular npm automation token with publish rights on the
+`px-lsp` scope, Settings → Secrets and variables → Actions); when the secret
+is missing the step warns and skips so the rest of the release still ships.
+
+The manual procedure below stays as the fallback (first-time scope setup, or
+publishing outside a release). Publish a package only when its version bumped
+since the last publish:
 
 1. `npm login` (one-time), then re-check the scope is still ours/free:
    `npm org ls px-lsp`. On first publish, publishing a scoped package

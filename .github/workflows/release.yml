@@ -49,6 +49,9 @@ jobs:
           # runtime only; the shipped bundles still target node18.
           node-version: 22
           cache: pnpm
+          # Writes the ~/.npmrc that reads NODE_AUTH_TOKEN, for the npm
+          # publish step below. Harmless for builds that never publish.
+          registry-url: "https://registry.npmjs.org"
 
       - run: pnpm install --frozen-lockfile
 
@@ -171,3 +174,35 @@ jobs:
           FLAG=""
           if [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
           npx vsce publish $FLAG --no-dependencies --packagePath *.vsix
+
+      # npm publish for the LSP packages, version-guarded so a tag build is
+      # enough: @px-lsp/protocol and @px-lsp/server version independently of
+      # the extension and only bump when they changed, so "this exact version
+      # is not on npm yet" IS the publish signal. Protocol goes first because
+      # the server depends on it (pnpm rewrites the workspace:* range to the
+      # real version on pack). Needs the NPM_TOKEN repo secret (granular npm
+      # automation token with publish rights on the px-lsp scope); a missing
+      # secret warns and skips instead of failing a release that already
+      # shipped its GitHub artifacts.
+      - name: Publish npm packages (only versions not on npm yet)
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN secret missing, npm publish skipped"
+            exit 0
+          fi
+          for dir in packages/protocol packages/server; do
+            NAME=$(node -p "require('./$dir/package.json').name")
+            VERSION=$(node -p "require('./$dir/package.json').version")
+            # `npm view` of a missing version can exit 0 with empty output on
+            # some npm majors, so test the output, not the exit code.
+            FOUND=$(npm view "$NAME@$VERSION" version 2>/dev/null || true)
+            if [ -n "$FOUND" ]; then
+              echo "$NAME@$VERSION already on npm, skipping"
+            else
+              echo "Publishing $NAME@$VERSION"
+              (cd "$dir" && pnpm publish --no-git-checks --access public)
+            fi
+          done
