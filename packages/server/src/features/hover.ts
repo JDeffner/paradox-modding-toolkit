@@ -12,7 +12,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
 import type { SchemaEntry } from "../schema/types";
 import type { TokenData } from "@px-lsp/protocol/types";
-import { clientCommands } from "@px-lsp/protocol/protocol";
+import { clientCommands, exampleWikiVariableKinds } from "@px-lsp/protocol/protocol";
 import { canRunCommand } from "../clientMode";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
@@ -387,6 +387,22 @@ function referencesFooter(
     : label;
 }
 
+/**
+ * Definition kinds the Examples Wiki keeps an article for: the variable and
+ * list storage classes, whose names exist only because the indexed script
+ * wrote them. Every other kind's article is engine vocabulary.
+ */
+const WIKI_ARTICLE_KINDS = new Set<string>(exampleWikiVariableKinds);
+
+/** The "Examples Wiki" link for a variable or list, opening its article. Rides
+ * the footer beside "N references"; nothing on clients without the command. */
+function wikiFooter(name: string, kind: string): string | null {
+  if (!WIKI_ARTICLE_KINDS.has(kind)) return null;
+  if (!canRunCommand(clientCommands.showExamplesWiki)) return null;
+  const arg = encodeURIComponent(JSON.stringify([{ name, kind }]));
+  return `[Examples Wiki](command:${clientCommands.showExamplesWiki}?${arg} "Read every place this is set and read")`;
+}
+
 /** One card for N same-named, same-kind definitions: origin + site count up
  * front, the first few sites as links, the rest as a count. */
 function definitionGroupCard(
@@ -412,6 +428,8 @@ function definitionGroupCard(
     const refs = referencesFooter(data, def.name, at);
     if (refs) links.push(refs);
   }
+  const wiki = wikiFooter(def.name, def.kind);
+  if (wiki) links.push(wiki);
   card.provenance = links.join(" · ");
   return card;
 }
@@ -480,6 +498,8 @@ function definitionCard(
     const refs = referencesFooter(data, def.name, at);
     if (refs) links.push(refs);
   }
+  const wiki = wikiFooter(def.name, def.kind);
+  if (wiki) links.push(wiki);
   card.provenance = links.join(" · ");
   return card;
 }

@@ -149,8 +149,8 @@ instead.
 | `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
-| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, vanilla `count`) per trigger, effect, event target, modifier, datafunction and data type the server knows, most used first, plus the sentences naming where the rows came from |
-| `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, and vanilla example sites as absolute paths; null when the name is not in the catalog |
+| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
+| `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -180,13 +180,30 @@ keystroke; `paradox/exampleWikiEntry` answers ONE row with its prose, its usage
 block and its example sites. Nothing in either answer is hand written: the rows
 come from the user's `script_docs` dump (or the bundled snapshot / wiki tables
 behind it), the datafunction tables (`DumpDataTypes` output or the bundled
-tables), and the vanilla usage harvest, and each answer says which of those it
-came from in its `provenance` / `sources` text. Example sites are searched in
-the game files when the entry is asked for, and come back as absolute paths
-with 1-based lines, so a client opens them without resolving anything. Every
-capped list carries its own total (`literalsTotal`, `membersTotal`,
-`producersTotal`), and an example list that is short for a reason carries
-`examplesNote` saying why.
+tables), the vanilla usage harvest, and the definition and reference indexes,
+and each answer says which of those it came from in its `provenance` /
+`sources` text. Example sites are searched in the game files when the entry is
+asked for, and come back as absolute paths with 1-based lines, so a client
+opens them without resolving anything. Every capped list carries its own total
+(`literalsTotal`, `membersTotal`, `producersTotal`, `containersTotal`), and an
+example list that is short for a reason carries `examplesNote` saying why.
+
+The seven variable `ExampleWikiKind`s (`variable`, `local_variable`,
+`global_variable`, `variable_list`, `local_variable_list`,
+`global_variable_list`, `list`, exported as `exampleWikiVariableKinds`) are the
+rows that come from the indexed script rather than from the engine: names the
+user's own files created with `set_variable`, `add_to_variable_list`,
+`add_to_list` and their relatives. Their articles carry `valueType` (what the
+set sites resolve to, or the word "unknown" — a value set from a runtime scope
+is not guessed at), `containers` (the top-level definitions the set sites sit
+in) and example sites `label`ed `set` or `read`. The rows follow the index, so
+they change with a save.
+
+Every example site may carry `context`, the lines around it as written and
+dedented, with `contextStart` giving the 1-based line number of `context[0]`;
+`line` stays the site's own line, so a client can pick it out of the block.
+Both fields are optional and absent when the file could not be read, so a
+client that ignores them still has `text`.
 
 `paradox/eventGraph` answers `suggestions` alongside the graph: the mod-side
 `ids` (event / on_action / decision, sorted, capped at 2000) and the
@@ -500,6 +517,9 @@ Toolkit rebrand; clients registering the old ids get no fallback:
 - `px.openLocalizationSideBySide` (args: `[locKey]`)
 - `px.showReferences` (args: `[uri, line, character]`, via a
   `command:` markdown link in hover — requires the client to trust it)
+- `px.showExamplesWiki` (args: `[]` for the catalog, or
+  `[{ name, kind }]` for one article, via a `command:` markdown link on the
+  hover card of a variable or list — requires the client to trust it)
 
 ## Degraded modes (bare LSP clients)
 
@@ -531,6 +551,8 @@ capability at a time. A client declaring nothing (every field off) gets:
   entirely. A count the user cannot click answers no question, so the card
   ends with the provenance instead (changed in server 0.2.0: it used to
   render the count as plain text);
+- **`px.showExamplesWiki` not listed** — the "Examples Wiki" link on a
+  variable or list hover card is dropped, exactly like the reference count;
 - **`fileLinks` off** — every `file:` link any hover would carry (provenance,
   variable and saved-scope set sites, define sources, gui template/type
   definitions, `#format` sources, `[ ... ]` datafunction examples) renders as

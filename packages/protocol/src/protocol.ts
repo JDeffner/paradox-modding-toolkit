@@ -147,6 +147,7 @@ export const clientCommands = {
   editLocalization: "px.editLocalization",
   openLocalizationSideBySide: "px.openLocalizationSideBySide",
   showReferences: "px.showReferences",
+  showExamplesWiki: "px.showExamplesWiki",
 } as const;
 
 /** Every id in {@link clientCommands}: what a fully capable client registers. */
@@ -461,12 +462,38 @@ export const exampleWikiRequest = "paradox/exampleWiki";
 
 /**
  * What an Examples Wiki row is. The first four are engine tokens from
- * script_docs or the wiki tables; the last three are `[ ... ]` datafunctions:
+ * script_docs or the wiki tables; the next three are `[ ... ]` datafunctions:
  * a global (`GetPlayer`), a member of a data type (`Character.GetName`), and
- * a data type itself (`Character`).
+ * a data type itself (`Character`). The last seven are the variable and list
+ * names the definition index found in the indexed script itself, one kind per
+ * storage class ({@link exampleWikiVariableKinds}).
  */
 export type ExampleWikiKind =
-  "trigger" | "effect" | "event_target" | "modifier" | "datafn_global" | "datafn_member" | "data_type";
+  | "trigger"
+  | "effect"
+  | "event_target"
+  | "modifier"
+  | "datafn_global"
+  | "datafn_member"
+  | "data_type"
+  | "variable"
+  | "local_variable"
+  | "global_variable"
+  | "variable_list"
+  | "local_variable_list"
+  | "global_variable_list"
+  | "list";
+
+/** The {@link ExampleWikiKind}s whose rows come from the definition index. */
+export const exampleWikiVariableKinds: ExampleWikiKind[] = [
+  "variable",
+  "local_variable",
+  "global_variable",
+  "variable_list",
+  "local_variable_list",
+  "global_variable_list",
+  "list",
+];
 
 export interface ExampleWikiEntry {
   /** Display and lookup name; a member carries its owner (`Character.GetName`). */
@@ -504,7 +531,7 @@ export interface ExampleWikiEntryParams {
   kind: ExampleWikiKind;
 }
 
-/** One place in the game files that uses the name. */
+/** One place in the game or mod files that uses the name. */
 export interface ExampleWikiSite {
   /** The line as written, trimmed and capped. */
   text: string;
@@ -512,6 +539,15 @@ export interface ExampleWikiSite {
   file: string;
   /** 1-based line number. */
   line: number;
+  /**
+   * The lines around the site as written, dedented and capped, with the `line`
+   * line among them. Absent when the file could not be read.
+   */
+  context?: string[];
+  /** 1-based line number of `context[0]`; absent with `context`. */
+  contextStart?: number;
+  /** What the site does with the name ("set", "read"); absent when it only uses it. */
+  label?: string;
 }
 
 export interface ExampleWikiDetail {
@@ -543,6 +579,12 @@ export interface ExampleWikiDetail {
   /** Datafunctions that return this data type. */
   producers: string[];
   producersTotal: number;
+  /** What a variable holds, in words ("character", "list of title", "unknown"). */
+  valueType?: string;
+  /** Top-level definitions a variable is set inside, most sites first. */
+  containers?: string[];
+  /** Containers found before the list was capped. */
+  containersTotal?: number;
   /** Vanilla uses, capped; empty when the search found none. */
   examples: ExampleWikiSite[];
   /** Why the example list looks the way it does, in one sentence. */

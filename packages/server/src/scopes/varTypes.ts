@@ -21,14 +21,14 @@ import type { DefinitionIndex } from "../index/indexer";
 import { resolveKeyChainScopes, type InferenceContext } from "./inference";
 import type { Scope, ScopeModel } from "./model";
 
-const VAR_KIND_PREFIX: Record<string, string> = {
+export const VAR_KIND_PREFIX: Record<string, string> = {
   variable: "var",
   local_variable: "local_var",
   global_variable: "global_var",
 };
 
 /** Variable-list item types, keyed `var:x`-style by the LIST's storage class. */
-const LIST_KIND_PREFIX: Record<string, string> = {
+export const LIST_KIND_PREFIX: Record<string, string> = {
   variable_list: "var",
   local_variable_list: "local_var",
   global_variable_list: "global_var",

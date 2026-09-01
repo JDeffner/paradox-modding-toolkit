@@ -7,11 +7,22 @@
  * line an example sits on.
  */
 import * as vscode from "vscode";
-import type { ExampleWikiDetail, ExampleWikiEntryParams, ExampleWikiIndex } from "@px-lsp/protocol/protocol";
+import type {
+  ExampleWikiDetail,
+  ExampleWikiEntryParams,
+  ExampleWikiIndex,
+  ExampleWikiKind,
+} from "@px-lsp/protocol/protocol";
 import { exampleWikiHtml } from "./html";
 import type { AppToHost, HostToApp } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+
+/** One article, as a deep link names it. */
+export interface ExampleWikiTarget {
+  name: string;
+  kind: ExampleWikiKind;
+}
 
 export interface ExampleWikiActions {
   fetchIndex(): Promise<ExampleWikiIndex>;
@@ -27,8 +38,17 @@ export class ExampleWikiPanel {
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
-  private constructor(context: vscode.ExtensionContext, actions: ExampleWikiActions) {
+  /** A deep link that arrived before the app could receive it; posted once the
+   *  catalog is on its way, since a webview drops what it is sent too early. */
+  private pending: ExampleWikiTarget | undefined;
+
+  private constructor(
+    context: vscode.ExtensionContext,
+    actions: ExampleWikiActions,
+    target?: ExampleWikiTarget
+  ) {
     this.actions = actions;
+    this.pending = target;
     this.panel = vscode.window.createWebviewPanel(
       ExampleWikiPanel.viewType,
       "Examples Wiki",
@@ -63,13 +83,19 @@ export class ExampleWikiPanel {
     void this.loadIndex();
   }
 
-  static show(context: vscode.ExtensionContext, actions: ExampleWikiActions): void {
+  /** Open the wiki, on `target`'s article when a caller named one. */
+  static show(
+    context: vscode.ExtensionContext,
+    actions: ExampleWikiActions,
+    target?: ExampleWikiTarget
+  ): void {
     const existing = ExampleWikiPanel.instance;
     if (existing) {
       existing.panel.reveal(vscode.ViewColumn.Active);
+      if (target) existing.post({ type: "reveal", ...target });
       return;
     }
-    ExampleWikiPanel.instance = new ExampleWikiPanel(context, actions);
+    ExampleWikiPanel.instance = new ExampleWikiPanel(context, actions, target);
   }
 
   private dispose(): void {
@@ -90,6 +116,9 @@ export class ExampleWikiPanel {
     try {
       const index = await this.actions.fetchIndex();
       this.post({ type: "index", index });
+      const target = this.pending;
+      this.pending = undefined;
+      if (target) this.post({ type: "reveal", ...target });
     } catch (err) {
       this.post({ type: "error", message: message(err) });
     }

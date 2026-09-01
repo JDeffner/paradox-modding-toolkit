@@ -41,6 +41,11 @@ const CHIPS: Array<{ kind: string; label: string; tip: string }> = [
     tip: "The [ ... ] expressions in localization and gui files that read live values out of the running game.",
   },
   {
+    kind: "variable",
+    label: "Variables",
+    tip: "The variables, flags and lists your own script files create with set_variable, add_to_list and their relatives. Names the engine never heard of until your mod wrote them.",
+  },
+  {
     kind: "data_type",
     label: "Types",
     tip: "What a [ ... ] chain is holding at each step, like Character or Title. Every type has its own members you can ask for next.",
@@ -69,9 +74,16 @@ ${uiCss}
   #query { width: 260px; }
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
   #listPane {
-    flex: 0 0 42%; min-width: 260px; max-width: 560px; display: flex; flex-direction: column;
-    border-right: 1px solid var(--px-border); overflow-y: auto;
+    flex: 0 0 var(--list-width, 42%); min-width: 200px; display: flex; flex-direction: column;
+    overflow-y: auto;
   }
+  #divider {
+    flex: 0 0 5px; cursor: col-resize; background: var(--px-border);
+    background-clip: content-box; border-left: 2px solid transparent; border-right: 2px solid transparent;
+  }
+  #divider:hover, #divider[data-dragging] { background-color: var(--px-primary); }
+  /* While dragging, the pointer outruns the layout; keep it from selecting text. */
+  body[data-dragging] { user-select: none; cursor: col-resize; }
   #results { padding: 4px; }
   #results .px-item { align-items: baseline; gap: 6px; }
   #results .px-item[aria-selected="true"] { background: var(--px-muted-strong); }
@@ -104,16 +116,23 @@ ${uiCss}
     border-radius: var(--px-radius-md); font-family: var(--px-font-mono); font-size: var(--px-text-sm);
   }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .px-badge[data-link] { cursor: pointer; }
+  .px-badge[data-link]:hover { background: var(--px-muted-strong); }
   .site {
-    display: flex; align-items: baseline; gap: 8px; padding: 4px 8px; border-radius: var(--px-radius-md);
-    cursor: pointer; text-align: left; border: none; background: none; color: inherit; font: inherit; width: 100%;
+    display: flex; flex-direction: column; gap: 2px; padding: 4px 6px;
+    border-radius: var(--px-radius-md); cursor: pointer; text-align: left;
   }
   .site:hover { background: var(--px-muted); }
-  .site code {
-    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-family: var(--px-font-mono); font-size: var(--px-text-sm);
+  .site .head {
+    display: flex; align-items: baseline; gap: 6px;
+    color: var(--px-muted-fg); font-size: var(--px-text-xs);
   }
-  .site .where { flex: 0 0 auto; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .site .tag { text-transform: uppercase; letter-spacing: 0.04em; }
+  .site pre { background: var(--px-muted); padding: 6px 8px; }
+  .site:hover pre { background: var(--px-muted-strong); }
+  .site .cline { display: block; white-space: pre; }
+  .site .cline.hit { color: var(--px-fg); font-weight: 600; }
+  .site .cline:not(.hit) { color: var(--px-muted-fg); }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #placeholder {
     padding: 40px 18px; color: var(--px-muted-fg); display: flex; flex-direction: column; gap: 8px;
@@ -127,6 +146,7 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="toolbar">
+    <button id="back" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Back to the article you came from">${icon("chevronLeft")}</button>
     <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search triggers, effects, datafunctions…" data-tip="Type any part of a name. The most used names in the game come first." data-tip-wrap /></div>
     <div class="px-toggle-group" id="kinds">${chips}</div>
     <span class="px-grow"></span>
@@ -139,6 +159,7 @@ ${uiCss}
       <div id="more"></div>
       <div id="listNote"></div>
     </div>
+    <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
     <div id="detail">
       <div id="placeholder">
         <div>Pick a name on the left to read what it does, which scopes it works in, and where the game itself uses it.</div>
