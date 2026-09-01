@@ -14,6 +14,9 @@ export function installTips(): void {
   const GAP = 6; // anchor to tip
   const EDGE = 4; // tip to viewport edge
   const DELAY = 400; // the delay the CSS tips had
+  // Hard cap for EVERY tip, wrapping or not: ~2 lines of the short tips this UI
+  // keeps (about 45 characters per line at 11px). Anything longer belongs in
+  // the view's ? help dialog, not in a bubble running the width of the editor.
   const WRAP_MAX = 260;
 
   const tip = document.createElement("div");
@@ -53,10 +56,11 @@ export function installTips(): void {
     const text = el.getAttribute("data-tip") ?? "";
     tip.textContent = text;
     const avail = Math.max(80, window.innerWidth - 2 * EDGE);
+    const cap = Math.min(WRAP_MAX, avail);
     const multiline = text.indexOf("\n") >= 0;
     const wrap = multiline || el.hasAttribute("data-tip-wrap");
     tip.style.whiteSpace = multiline ? "pre-line" : wrap ? "normal" : "nowrap";
-    tip.style.maxWidth = wrap ? Math.min(WRAP_MAX, avail) + "px" : "none";
+    tip.style.maxWidth = wrap ? cap + "px" : "none";
     // Measure from the left edge. A wrapping tip is shrink-to-fit against the
     // room to ITS right, so measuring where the last tip stood reports a width
     // it will not keep once it moves.
@@ -64,10 +68,10 @@ export function installTips(): void {
     tip.style.top = "0px";
     tip.hidden = false;
     let box = tip.getBoundingClientRect();
-    // A one-line tip wider than the panel has to wrap: clipping is not an option.
-    if (box.width > avail) {
+    // A tip wider than the cap has to wrap, whatever it asked for.
+    if (box.width > cap) {
       tip.style.whiteSpace = multiline ? "pre-line" : "normal";
-      tip.style.maxWidth = avail + "px";
+      tip.style.maxWidth = cap + "px";
       box = tip.getBoundingClientRect();
     }
 

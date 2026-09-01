@@ -19,6 +19,7 @@ import type {
   WorkshopModInfo,
 } from "../messages";
 import { installTips } from "../../shared/tips";
+import { helpDialog } from "../../shared/help";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -151,9 +152,7 @@ function renderItem(): void {
   $("previewName").textContent = info.previewName ?? (previewUrl ? "current Workshop preview" : "");
   $("previewName").setAttribute(
     "data-tip",
-    info.previewTooLarge
-      ? "This image is 1 MB or larger; Steam rejects it, uploads keep the current one."
-      : ""
+    info.previewTooLarge ? "1 MB or larger: Steam rejects it, uploads keep the current one." : ""
   );
   if (info.previewTooLarge) $("previewName").textContent += " (too large!)";
 
@@ -182,7 +181,7 @@ function renderItem(): void {
     link.dataset.variant = "outline";
     link.dataset.size = "sm";
     link.append(iconEl("link"), document.createTextNode(" Link existing item…"));
-    link.setAttribute("data-tip", "Pick one of your published Workshop items to connect this mod to.");
+    link.setAttribute("data-tip", "Connect this mod to one of your published Workshop items.");
     link.addEventListener("click", () => send({ type: "linkExisting" }));
     idBox.append(s, link);
   }
@@ -282,16 +281,13 @@ function renderFilesRow(): void {
     badge.textContent = "workshop folder";
     badge.setAttribute(
       "data-tip",
-      "The description and translations are stored as files here (description.bbcode, <language>/title.txt + description.bbcode, item.json), so the listing diffs and versions like code. Location: px.workshop.dir, resolved against the mod folder."
+      "The listing is stored as files here, so it diffs and versions like code."
     );
     hint.textContent = info.workshopDir;
     hint.setAttribute("data-tip", info.workshopDir);
   } else {
     badge.textContent = "workshop.json";
-    badge.setAttribute(
-      "data-tip",
-      "Drafts save to <configDir>/workshop.json inside the mod. To track the listing as diffable files instead, create the workshop folder (px.workshop.dir, default ../workshop next to the mod) or use the toolbar's download button - it sets the folder up from what is on Steam."
-    );
+    badge.setAttribute("data-tip", "Drafts save to workshop.json inside the mod, not as listing files.");
     hint.textContent = `no folder at ${info.workshopDir}`;
     hint.setAttribute("data-tip", info.workshopDir);
   }
@@ -300,10 +296,7 @@ function renderFilesRow(): void {
   gear.className = "px-btn";
   gear.dataset.variant = "ghost";
   gear.dataset.size = "icon-xs";
-  gear.setAttribute(
-    "data-tip",
-    "Open the settings behind this: px.workshop.dir (where the listing files live, relative to the mod) and px.workshop.changelog (where changenotes come from)."
-  );
+  gear.setAttribute("data-tip", "Open the settings for the listing folder and the changelog.");
   gear.setAttribute("data-tip-wrap", "");
   gear.append(iconEl("settings"));
   gear.addEventListener("click", () => send({ type: "openWorkshopSettings" }));
@@ -478,10 +471,7 @@ function translationRow(lang: string): HTMLElement {
     const text = document.createElement("span");
     text.className = "text";
     text.textContent = `${liveT.title} - ${liveT.description.slice(0, 160) || "(no description)"}`;
-    text.setAttribute(
-      "data-tip",
-      "What Steam currently serves for this language (its default-language fallback when no translation exists yet)."
-    );
+    text.setAttribute("data-tip", "What Steam serves for this language right now.");
     const pull = document.createElement("button");
     pull.className = "px-btn";
     pull.dataset.variant = "ghost";
@@ -846,16 +836,13 @@ function renderNoteSource(): void {
   const from = info?.changelogNote;
   if (noteSource === "changelog" && from) {
     label.textContent = `From changelog: ${from.source}`;
-    btn.setAttribute(
-      "data-tip",
-      `The box was filled from this changelog entry${info?.version ? ` (version ${info.version})` : ""}. Edit freely - only the text in the box uploads.`
-    );
+    btn.setAttribute("data-tip", "The box was filled from this changelog entry. Edit freely.");
   } else if (noteSource === "commit") {
     label.textContent = "From last git commit";
-    btn.setAttribute("data-tip", "The box was filled with the mod's last commit subject. Edit freely.");
+    btn.setAttribute("data-tip", "The box was filled with the mod's last commit subject.");
   } else {
     label.textContent = "Manual changenote";
-    btn.setAttribute("data-tip", "Written by hand (or edited). Click to fill from a source instead.");
+    btn.setAttribute("data-tip", "Written by hand. Click to fill it from a source instead.");
   }
   btn.setAttribute("data-tip-wrap", "");
 }
@@ -906,7 +893,7 @@ $("noteSourceBtn").addEventListener("click", () => {
       } else if (v === "changelog-missing") {
         send({
           type: "notify",
-          message: `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button next to the changenote box explains the layout; px.workshop.changelog moves the location.`,
+          message: `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button in the toolbar explains the layout; px.workshop.changelog moves the location.`,
           warn: true,
         });
         return;
@@ -999,5 +986,118 @@ $("reloadLocal").addEventListener("click", () => {
 $("previewEmpty").style.cursor = "pointer";
 $("previewEmpty").setAttribute("data-tip", "Pick an image to use as the Workshop preview");
 $("previewEmpty").addEventListener("click", () => send({ type: "pickPreview" }));
+
+$("helpBtn").addEventListener("click", () =>
+  helpDialog({
+    title: "The Steam Workshop panel",
+    intro:
+      "Your mod's Workshop item on one page: what the descriptor and your local files say, what Steam serves right now, and an Upload that sends the parts you check. Everything you type is a local draft. Nothing reaches Steam until you confirm an upload.",
+    sections: [
+      {
+        title: "The item",
+        items: [
+          {
+            lead: "Title, mod version and game version",
+            text: "come from the mod's descriptor, and editing them here writes the descriptor back.",
+          },
+          {
+            lead: "Tags",
+            text: "are the Workshop tags of the item, also kept in the descriptor. Add one from the game's known tags or type your own.",
+          },
+          {
+            lead: "The preview image",
+            text: "is the thumbnail in the mod folder. Change picks a new one and copies it in. Steam wants a square image, 512x512 or larger, under 1 MB.",
+          },
+          {
+            lead: "Visibility",
+            text: "is sent with the details on the next upload. A brand new item is always created private.",
+          },
+          {
+            lead: "Not published yet?",
+            text: "Link existing item connects this mod to one of your own Workshop items instead of creating a second one.",
+          },
+          {
+            lead: "Statistics",
+            text: "appear once Steam answers: subscribers, favorites, page visits, votes and comments. The refresh button asks again.",
+          },
+        ],
+      },
+      {
+        title: "Where the listing lives",
+        intro: "Two stores, and the panel says at the Files row which one this mod uses.",
+        items: [
+          {
+            lead: "A workshop folder",
+            text: "keeps the listing as files: description.bbcode, one folder per language with title.txt and description.bbcode, and item.json. They diff and version like the rest of your code. The folder is px.workshop.dir, resolved against the mod folder.",
+          },
+          {
+            lead: "Without that folder,",
+            text: "drafts save to workshop.json inside the mod instead.",
+          },
+          {
+            lead: "The download button",
+            text: "in the toolbar writes the folder from what is on Steam. It overwrites those files and your local drafts, so anything never uploaded is lost. It asks first.",
+          },
+          {
+            lead: "Reload",
+            text: "throws away the panel's unsaved edits and reads the local files again.",
+          },
+        ],
+      },
+      {
+        title: "Description and translations",
+        items: [
+          {
+            lead: "The description is Steam BBCode",
+            text: "([h1], [b], [list], [url=…]). Preview renders it roughly the way the Workshop page will.",
+          },
+          {
+            lead: "It saves as you type,",
+            text: "locally. Fetch from Steam replaces the draft with what the item currently shows.",
+          },
+          {
+            lead: "A translation",
+            text: "is the title and description a visitor browsing Steam in that language sees. The default text is what everyone else sees.",
+          },
+          {
+            lead: "A language with no text",
+            text: "never uploads, and its row says so. Removing a language deletes its local draft, not the text already on Steam.",
+          },
+        ],
+      },
+      {
+        title: "Changenotes",
+        items: [
+          {
+            lead: "Whatever stands in the box",
+            text: "is what uploads. The dropdown below only fills it.",
+          },
+          {
+            lead: "From changelog",
+            text: "takes the entry that matches the mod version. px.workshop.changelog points either at a folder with one file per version (1.2.md, v1.2.bbcode, 1.2.txt) or at a single file, where the section under the headline containing the version is used. Markdown is converted to BBCode.",
+          },
+          { lead: "From last git commit", text: "fills the box with the mod's last commit subject." },
+        ],
+      },
+      {
+        title: "Uploading",
+        items: [
+          {
+            lead: "The three switches under Publish",
+            text: "decide what goes: the mod files, the details (title, description, visibility, tags, preview) and the translations.",
+          },
+          {
+            lead: "Upload asks first",
+            text: "and re-offers the same three switches, so you can drop a part at the last moment.",
+          },
+          {
+            lead: "There is no rollback.",
+            text: "An update reaches subscribers within minutes, Steam keeps no previous version, and the toolkit cannot recover what an upload overwrote.",
+          },
+        ],
+      },
+    ],
+  })
+);
 
 send({ type: "ready" });

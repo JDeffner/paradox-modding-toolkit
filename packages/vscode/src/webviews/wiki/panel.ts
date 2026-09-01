@@ -114,7 +114,7 @@ function launchers(meta: GameMeta): WikiLauncher[] {
       label: "Examples Wiki",
       command: "px.showExamplesWiki",
       icon: "bookOpen",
-      tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
+      tip: "Search every trigger, effect and datafunction, with real examples.",
     },
     // Only CK3 ships _*.info docs; elsewhere the same command opens the
     // vanilla files of the folder plus a search on the game's modding wiki.
@@ -123,13 +123,13 @@ function launchers(meta: GameMeta): WikiLauncher[] {
           label: "Format Docs",
           command: "px.openInfoDocs",
           icon: "fileText",
-          tip: "The game's own _*.info format documentation for the file you are editing.",
+          tip: "The game's own format docs for the file you are editing.",
         }
       : {
           label: "Vanilla Examples & Wiki",
           command: "px.openInfoDocs",
           icon: "fileText",
-          tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
+          tip: "The vanilla files of this folder, and the game's modding wiki.",
         },
   ];
 }

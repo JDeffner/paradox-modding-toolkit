@@ -25,7 +25,10 @@ export function wikiHtml({ scriptSrc, nonce, csp }: WikiHtmlOptions): string {
 <style>
 ${uiCss}
   body { overflow: hidden; }
-  #app { display: flex; height: 100%; }
+  #app { display: flex; height: 100%; position: relative; }
+  /* The ? floats at the top right of the reading pane: this page has no
+     toolbar to end. #page reserves the room so an article never runs under it. */
+  #helpBtn { position: absolute; top: 8px; right: 12px; z-index: 5; }
   #sidebar {
     flex: 0 0 258px; display: flex; flex-direction: column; min-height: 0;
     border-right: 1px solid var(--px-border); background: var(--px-sidebar);
@@ -40,7 +43,7 @@ ${uiCss}
   #nav .diag .px-item-label { font-family: var(--px-font-mono); font-size: var(--px-text-sm); }
   #navEmpty { padding: 12px 10px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #doc { flex: 1 1 auto; overflow-y: auto; min-width: 0; }
-  #page { max-width: 860px; padding: 18px 24px 48px; }
+  #page { max-width: 860px; padding: 18px 44px 48px 24px; }
   #page h1 { font-size: 1.7em; margin: 0 0 4px; }
   #page h2 { font-size: 1.25em; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--px-border); }
   #page h3 { font-size: 1.05em; margin: 18px 0 6px; }
@@ -70,6 +73,7 @@ ${uiCss}
     </div>
     <div id="nav"></div>
   </div>
+  <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works" data-tip-side="left" aria-label="How this view works">${icon("circleHelp")}</button>
   <div id="doc">
     <div id="placeholder">
       <div>Pick a page on the left. The wiki collects the reference knowledge the toolkit carries: what the game expects from your art, and what each diagnostic means.</div>

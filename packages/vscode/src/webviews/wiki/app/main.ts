@@ -10,6 +10,7 @@ import { renderMarkdown } from "../../markdown";
 import { iconEl, type IconName } from "../../shared/icons";
 import type { AppToHost, HostToApp, WikiArticle, WikiLauncher } from "../messages";
 import { installTips } from "../../shared/tips";
+import { helpDialog } from "../../shared/help";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -148,4 +149,59 @@ input.addEventListener("input", () => {
   query = input.value;
   renderNav();
 });
+
+$("helpBtn").addEventListener("click", () =>
+  helpDialog({
+    title: "The Wiki",
+    intro:
+      "The reference knowledge the toolkit carries, as pages you can read in the editor: what the game expects from your art, and what each of the toolkit's diagnostics means. The pages are the toolkit's own measured documentation, so they say what this version actually does.",
+    sections: [
+      {
+        title: "The pages",
+        items: [
+          {
+            lead: "Art & assets",
+            text: "holds the image guidelines: the sizes, formats and file names the game expects for previews, portraits, coats of arms and the rest.",
+          },
+          {
+            lead: "Diagnostics",
+            text: "has one page per problem code the toolkit reports. A page says what the code means, why the game fails on it, and how to fix it.",
+          },
+          {
+            lead: "The badge",
+            text: "on a diagnostics row is that code's severity, taken from the page itself.",
+          },
+        ],
+      },
+      {
+        title: "Finding a page",
+        items: [
+          {
+            lead: "The search box",
+            text: "reads the titles and the whole text of every page, so a word from the middle of an article finds it.",
+          },
+          {
+            lead: "It filters the rows above too,",
+            text: "so a search that matches nothing at all says so.",
+          },
+        ],
+      },
+      {
+        title: "Other views",
+        intro: "The rows above the pages open the toolkit's other reference surfaces.",
+        items: [
+          {
+            lead: "Examples Wiki",
+            text: "is the searchable list of every trigger, effect, target, modifier and datafunction, with real examples out of the game's files.",
+          },
+          {
+            lead: "The docs row",
+            text: "opens what the game itself documents for the file you are editing: the _*.info format docs where the game ships them, otherwise the vanilla files of that folder plus a search on the game's modding wiki.",
+          },
+        ],
+      },
+    ],
+  })
+);
+
 send({ type: "ready" });

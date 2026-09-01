@@ -4,6 +4,7 @@ import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
 import { tipScript } from "../shared/tips";
+import { helpScript, type HelpSpec } from "../shared/help";
 import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
@@ -166,6 +167,74 @@ export class GuiTreePanel {
   }
 }
 
+const HELP: HelpSpec = {
+  title: "GUI Tree",
+  intro:
+    "The widget hierarchy of the open .gui file, as an outline. It reads the file itself, so it shows what is written rather than what the layout engine makes of it, and it rebuilds every time you save.",
+  sections: [
+    {
+      title: "Reading a row",
+      items: [
+        {
+          lead: "The badge",
+          text: "is the widget type: window, flowcontainer, textbox and so on. The bold word after it is the widget's name.",
+        },
+        {
+          lead: "An outlined badge",
+          text: "is a declaration rather than a widget: a template, a types block, a type, or a blockoverride.",
+        },
+        {
+          lead: "type name : base",
+          text: "means the type derives from that base widget, so it starts with everything the base has.",
+        },
+        {
+          lead: "using X",
+          text: "at the end of a row names the templates the widget pulls in. Its own properties still win over theirs.",
+        },
+        {
+          lead: "N children",
+          text: "counts what is nested inside. The caret folds a branch; the toolbar expands or collapses them all.",
+        },
+      ],
+    },
+    {
+      title: "Jumping to the source",
+      items: [
+        {
+          lead: "Click a row",
+          text: "to reveal its line in the editor. The line flashes and the focus stays here, so the keys keep working.",
+        },
+        { lead: "Double-click", text: "does the same and puts the cursor in the editor." },
+        { lead: "Refresh", text: "rebuilds the tree. Saving the file rebuilds it as well." },
+        { lead: "Drag with the middle mouse button", text: "to scroll a wide tree." },
+      ],
+    },
+    {
+      title: "Filtering",
+      items: [
+        {
+          lead: "The box",
+          text: "matches the type, the name and the base of every row as you type.",
+          keys: ["/"],
+        },
+        {
+          lead: "The parents toggle",
+          text: "decides how matches are shown: flat as a plain result list, or in place with their ancestors kept for context.",
+          keys: ["h"],
+        },
+        {
+          lead: "With no filter, the same toggle",
+          text: "narrows the tree to the selected row's subtree. Clicks inside keep that focus; press it again on a deeper row to narrow further.",
+        },
+        {
+          lead: "Escape",
+          text: "leaves a narrowed subtree first, then clears the selection. In the filter box it clears the filter.",
+        },
+      ],
+    },
+  ],
+};
+
 function buildHtml(webview: vscode.Webview): string {
   const nonce = makeNonce();
   const csp = [
@@ -192,6 +261,7 @@ ${uiCss}
   }
   #toolbar .px-input-group { flex: 1 1 auto; min-width: 80px; }
   #toolbar .px-separator { height: 20px; align-self: center; }
+  #toolbar > #helpBtn { flex: 0 0 auto; }
   #tree { flex: 1 1 auto; overflow: auto; padding: 4px; }
   #status {
     flex: 0 0 auto; padding: 4px 10px; font-size: var(--px-text-xs); color: var(--px-muted-fg);
@@ -221,13 +291,19 @@ ${uiCss}
     <button id="expand" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Expand all">${icon("chevronsUpDown")}</button>
     <button id="collapse" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Collapse all">${icon("chevronsDownUp")}</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Rebuild the tree from the file" data-tip-side="left">${icon("rotate")}</button>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works" data-tip-side="left">${icon("circleHelp")}</button>
   </div>
   <div id="tree"></div>
   <div id="status">Loading…</div>
 </div>
 ${tipScript(nonce)}
+${helpScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
+
+// pxHelpDialog comes from helpScript(): the one dialog every webview uses.
+const HELP = ${JSON.stringify(HELP)};
+document.getElementById("helpBtn").addEventListener("click", () => pxHelpDialog(HELP));
 const ICON_CARET = ${JSON.stringify(icon("chevronRight", "px-icon caret"))};
 const treeEl = document.getElementById("tree");
 const statusEl = document.getElementById("status");
@@ -349,12 +425,12 @@ function applyFilter() {
   const active = q ? hideAncestors : !!focusRoot;
   ancestorsBtn.setAttribute("aria-pressed", String(active));
   ancestorsBtn.dataset.tip = q
-    ? "Show only the filter matches, without their ancestor rows (h)"
+    ? "Show the matches flat, without their ancestor rows (h)"
     : focusRoot
-      ? "Focused on this subtree. Click around inside it freely; h on a node re-focuses there, Esc zooms back out."
+      ? "Focused on this subtree. Esc zooms back out (h)"
       : selectedRow()
-        ? "Show only the selected node's subtree (h); clicks inside keep the focus"
-        : "Type a filter or select a node first (h)";
+        ? "Show only the selected row's subtree (h)"
+        : "Type a filter or select a row first (h)";
   treeEl.classList.toggle("noparents", !!q && hideAncestors);
   if (!q) {
     rows.forEach((r) => { r.classList.remove("hidden"); r.parentElement.classList.remove("hidden"); });

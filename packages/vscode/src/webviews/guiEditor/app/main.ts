@@ -1611,7 +1611,7 @@ function valueCell(row: InspectorRow, line: number): HTMLElement | null {
 function valueModeButton(): HTMLElement {
   const node = button(`Values: ${valueMode}`, () => setValueMode(nextValueMode(valueMode)), {
     size: "xs",
-    tip: "How much of each value to show: full, abbreviated (the whole value on hover), or names only. Remembered for next time.",
+    tip: "How much of each value to show. Remembered for next time.",
   });
   node.dataset.tipSide = "left";
   return node;
@@ -1745,7 +1745,7 @@ function textRowExtras(row: InspectorRow): HTMLElement[] {
       } else if (!segment.resolved) {
         const open = button("Set preview value\u2026", () => previewValuePopover(open, segment.source), {
           size: "xs",
-          tip: `[${segment.source}] is evaluated by the running game. Type what the preview should show for it.`,
+          tip: `[${segment.source}] is evaluated by the game. Type what the preview shows.`,
         });
         tools.appendChild(open);
       }
@@ -1961,7 +1961,7 @@ function renderAddProperty(item: SceneItem, rows: readonly InspectorRow[]): void
   const go = button("Add", commit, {
     variant: "outline",
     size: "sm",
-    tip: "Write this property into the widget's own body, through the same guards every edit passes.",
+    tip: "Write this property into the widget's own body.",
   });
   go.dataset.tipSide = "left";
   fields.appendChild(name);
@@ -2119,7 +2119,7 @@ function renderTools(item: SceneItem): void {
       {
         variant: "outline",
         size: "sm",
-        tip: `Store this widget's own ${local.length} properties under that name. Inherited rows are not saved: they are another file's bytes.`,
+        tip: `Store this widget's own ${local.length} properties under that name.`,
       }
     );
     save.dataset.tipSide = "left";
@@ -4755,7 +4755,7 @@ function browserActions(entry: GuiVocabularyEntry): HTMLElement {
       {
         variant: "outline",
         size: "sm",
-        tip: "Write `using` on the selected widget. Its own properties still win over the template's.",
+        tip: "Apply this template to the selected widget as `using`.",
       }
     );
     apply.disabled = !writable;
@@ -4765,7 +4765,7 @@ function browserActions(entry: GuiVocabularyEntry): HTMLElement {
   const insert = button("Insert here", () => insertType(entry), {
     variant: "outline",
     size: "sm",
-    tip: "Insert an instance next to the selected widget, through the same op a palette drop uses.",
+    tip: "Insert an instance next to the selected widget.",
   });
   insert.disabled = !writable;
   tools.appendChild(insert);
@@ -5490,7 +5490,7 @@ function syncChanges(): void {
     ? "Nothing to save: the file on disk already matches"
     : count > 0
       ? "Write the changes to the .gui file on disk (Ctrl+S)"
-      : "Write the document to disk (Ctrl+S). Its unsaved changes were made outside this panel";
+      : "Write the document to disk (Ctrl+S). These changes came from outside this panel";
 }
 
 function recordChange(label: string): void {
@@ -5574,26 +5574,24 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
   helpDialog({
     title: "GUI Editor",
     intro:
-      "Your .gui file laid out exactly as the game lays it out, and editable in place. The file stays the truth: every gesture becomes a real edit to the script, checked against the engine's own rules — an edit the engine would ignore or misread is refused, with the reason.",
+      "Your .gui file laid out exactly as the game lays it out, and editable in place. The file stays the truth: every gesture becomes a real edit to the script, checked against the engine's own rules. An edit the engine would ignore or misread is refused, with the reason.",
     sections: [
       {
         title: "Selecting",
         items: [
+          { lead: "Click", text: "a widget to select and inspect it." },
+          { lead: "Add to the selection", text: "with Shift, or draw a marquee on empty canvas." },
           {
-            lead: "Click",
-            text: "a widget to select and inspect it. Shift+click adds to the selection; dragging on empty canvas draws a marquee.",
+            lead: "Overlapping widgets",
+            text: "come one layer per Alt+click, outward from the top one.",
           },
           {
-            lead: "Overlapping widgets:",
-            text: "Alt+click steps outward through everything under the pointer, one layer per click.",
+            lead: "Ctrl+Shift+click",
+            text: "opens the line that declares the widget in the text editor.",
           },
           {
-            lead: "From the keyboard:",
-            text: "Tab and Shift+Tab walk siblings, Enter descends into the first child, Shift+Enter climbs back out.",
-          },
-          {
-            lead: "Jump to the source",
-            text: "of the selected line with Ctrl+Shift+click; the tree and layers panels select the same widgets by row.",
+            lead: "The tree and layers panels",
+            text: "select the same widgets by row, and the keyboard walks the hierarchy (below).",
           },
           { lead: "Esc", text: "clears the selection first, then leaves a focused subtree." },
         ],
@@ -5634,6 +5632,36 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
             lead: "Where a value comes from",
             text: "is written under it when it is inherited from a template or type rather than set on this line.",
           },
+          {
+            lead: "The Values button",
+            text: "in the inspector header cycles how much of each value is shown: full, abbreviated, or names only.",
+          },
+          {
+            lead: "A textbox's text",
+            text: "is editable from the inspector too: write a localization key the mod is missing, or set what a [datafunction] should show in the preview.",
+          },
+        ],
+      },
+      {
+        title: "Working on a selection",
+        intro: "The inspector's own tools act on the whole selection, each as one undo step.",
+        items: [
+          {
+            lead: "Align",
+            text: "matches the edges or the centres of two or more widgets; distribute gives three or more equal gaps.",
+          },
+          {
+            lead: "Wrap in",
+            text: "puts the selection inside a fresh container of the type you pick.",
+          },
+          {
+            lead: "Save as preset",
+            text: "stores the selected widget's own properties under a name. Inherited rows are not saved: they are another file's bytes.",
+          },
+          {
+            lead: "Apply a preset",
+            text: "from the Saved tab in devtools to write every property of it onto the selection.",
+          },
         ],
       },
       {
@@ -5673,7 +5701,7 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
           },
           {
             lead: "A fresh widget has no size",
-            text: "and draws nothing until you give it one — the toast reminds you.",
+            text: "and draws nothing until you give it one. The toast reminds you.",
           },
         ],
       },
@@ -5689,9 +5717,17 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
             text: "the selected container's children in draw order. Drag rows to reorder; the eye hides, the lock makes unclickable, solo dims everything else.",
           },
           {
-            lead: "Devtools:",
-            text: "why a widget is where it is (the placement trace), its textures frame by frame, conditional visibility, what script it reaches, the type and texture browsers, your saved components and presets, and a reference screenshot to calibrate against.",
+            lead: "Devtools",
+            text: "is the second panel on the right, one tab per question:",
           },
+          { lead: "Why", text: "traces where the selected widget's rectangle came from." },
+          { lead: "Texture", text: "shows the sheets it draws and the frame it takes from them." },
+          { lead: "Visible", text: "decides what the preview assumes for a conditional visible." },
+          { lead: "Uses", text: "lists the scripted_guis, events and loc keys the widget reaches." },
+          { lead: "Types", text: "browses the widget types and templates available in this file." },
+          { lead: "Art", text: "browses the .dds files under the mod's and the game's gfx trees." },
+          { lead: "Saved", text: "holds your own components and property presets." },
+          { lead: "Reference", text: "lays an in-game screenshot over the canvas to compare the two." },
         ],
       },
       {
@@ -5699,7 +5735,11 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
         items: [
           {
             lead: "Bottom left:",
-            text: "zoom buttons and percent, then the display toggles — outline every widget, snap, grid, the selected widget's constraints, and a flash on every widget a re-layout moved.",
+            text: "the zoom buttons and the percent, then five display toggles. Double-click the percent to fit.",
+          },
+          {
+            lead: "The toggles",
+            text: "outline every widget, snap a drag, add an 8 px grid, draw the selected widget's constraints, and flash the widgets a re-layout moved.",
           },
           {
             lead: "Resolved / Raw",
@@ -5707,7 +5747,19 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
           },
           {
             lead: "Heatmap",
-            text: "tints the scene by one property of the tree (sizes, depths, …) to spot outliers.",
+            text: "tints the scene by one property of the tree (sizes, depths and so on) to spot outliers.",
+          },
+          {
+            lead: "Refresh",
+            text: "lays the document out again, for when a file it depends on changed.",
+          },
+          {
+            lead: "The i at the bottom right",
+            text: "reports how big the template store is and how long the last layout took. It turns red when the store is short.",
+          },
+          {
+            lead: "The buttons at either end of the toolbar",
+            text: "hide the tree and the inspector.",
           },
         ],
       },
@@ -5722,6 +5774,10 @@ document.getElementById("helpBtn")!.addEventListener("click", () =>
           { keys: ["Tab"], does: "Next sibling (Shift+Tab previous)" },
           { keys: ["Enter"], does: "Into the first child (Shift+Enter to the parent)" },
           { keys: ["←", "↑", "→", "↓"], does: "Nudge by 1 px (Alt: one grid step)" },
+          { keys: ["Shift", "click"], does: "Add the widget to the selection" },
+          { keys: ["Alt", "click"], does: "Step outward through overlapping widgets" },
+          { keys: ["Alt", "drag"], does: "Duplicate in place and drag the copy" },
+          { keys: ["Ctrl", "Shift", "click"], does: "Open the widget's line in the text editor" },
           { keys: ["Ctrl", "C"], does: "Copy the selected blocks" },
           { keys: ["Ctrl", "V"], does: "Paste into the selection" },
           { keys: ["Ctrl", "D"], does: "Duplicate the selection" },

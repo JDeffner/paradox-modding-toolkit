@@ -1085,7 +1085,7 @@ function updateOrigin(): void {
   $("origin").textContent = opened ? `Opened from ${sourceLabel(opened.source)} · ${opened.file}` : "";
   const reset = $<HTMLButtonElement>("resetName");
   reset.hidden = !opened || opened.name === flag.name;
-  if (opened) reset.dataset.tip = `Reset the name to ${opened.name} (to override the opened flag)`;
+  if (opened) reset.dataset.tip = `Reset the name to ${opened.name}`;
 }
 
 function setFlag(next: CoaFlag): void {
@@ -1196,13 +1196,11 @@ function updateModPicker(): void {
   const b = $<HTMLButtonElement>("mod");
   const target = saveTarget();
   b.querySelector(".px-truncate")!.textContent = target ? target.label : "No mod in workspace";
-  b.dataset.tip = target
-    ? `Save writes into this mod: ${target.label}. Click to choose another.`
-    : "No mod in the workspace to save into";
+  b.dataset.tip = target ? `Save writes into ${target.label}. Click to change.` : "No mod to save into";
   b.disabled = mods.length === 0;
   $<HTMLButtonElement>("save").disabled = !target;
   $("save").dataset.tip = target
-    ? `Write the flag into ${target.label}/common/coat_of_arms/coat_of_arms/`
+    ? `Write the flag into ${target.label}`
     : "No mod in the workspace to save into";
 }
 
@@ -1421,7 +1419,7 @@ $("help").onclick = () =>
   helpDialog({
     title: "Flag Builder",
     intro:
-      "Builds a coat_of_arms definition — the game's own flag script — visually. What you see is rendered from the same textures the game uses, and Save writes real script into your mod.",
+      "Builds a coat_of_arms definition, the game's own flag script, visually. What you see is rendered from the same textures the game uses, and Save writes real script into your mod.",
     sections: [
       {
         title: "Starting a flag",
@@ -1433,7 +1431,11 @@ $("help").onclick = () =>
           },
           {
             lead: "Paste",
-            text: "reads a coat_of_arms definition straight from the clipboard — handy for a snippet from a wiki or another mod.",
+            text: "reads a coat_of_arms definition straight from the clipboard, which is how a snippet from a wiki or another mod gets in.",
+          },
+          {
+            lead: "The name box",
+            text: "holds the key the script is written under. Keeping the name of an opened flag is how you override it; changing it makes a new flag.",
           },
         ],
       },
@@ -1448,12 +1450,20 @@ $("help").onclick = () =>
             lead: "Change either",
             text: "by selecting the Pattern row in the panel: the browser shows every pattern, and the color rows recolor the flag.",
           },
+          {
+            lead: "A color row",
+            text: "takes a named game color, an rgb or hsv360 value, or a reference to another of the flag's colors. The pencil opens a picker.",
+          },
+          {
+            lead: "Paste a color",
+            text: "reads one from the clipboard as rgb { 255 0 0 }, 255 0 0 or #ff0000. The x drops the row.",
+          },
         ],
       },
       {
         title: "Layers",
         intro:
-          "A flag is the pattern plus layers drawn on top, in row order — later rows draw over earlier ones. Drag rows to reorder.",
+          "A flag is the pattern plus layers drawn on top, in row order: later rows draw over earlier ones. Drag rows to reorder, and the x on a row removes it.",
         items: [
           {
             lead: "Colored emblem:",
@@ -1479,7 +1489,7 @@ $("help").onclick = () =>
           },
           {
             lead: "By numbers:",
-            text: "each layer has instances — position as a fraction of the flag (0.5 0.5 is the center), scale as a fraction of its size, rotation in degrees. Drag any number sideways to scrub it.",
+            text: "each layer has instances. Position is a fraction of the flag (0.5 0.5 is the center), scale a fraction of its size, rotation in degrees. Drag any number sideways to scrub it.",
           },
           {
             lead: "Several instances",
@@ -1502,7 +1512,19 @@ $("help").onclick = () =>
             lead: "Copy",
             text: "puts the script on the clipboard instead, and Export PNG renders the preview to an image.",
           },
+          {
+            lead: "Saving under the name of a vanilla flag",
+            text: "overrides it. A name that no file uses adds a new flag.",
+          },
           { lead: "Undo and redo", text: "cover every step, including canvas drags." },
+          {
+            lead: "The i at the bottom right",
+            text: "counts what the game gave you: flags, patterns and emblems. It also says when the game folder was not found.",
+          },
+          {
+            lead: "The last toolbar button",
+            text: "hides the panel when you want the whole width for the flag.",
+          },
         ],
       },
       {
@@ -1563,10 +1585,11 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       db = m.db;
       mods = m.mods;
       const t = db.textures;
+      // Two lines at most: the counts, then the one warning worth a tooltip.
       $("info").dataset.tip =
         `${db.gameName}: ${db.flags.length} flags, ${t.patterns.length} patterns, ` +
         `${t.colored_emblems.length} colored and ${t.textured_emblems.length} textured emblems` +
-        (db.gameMissing ? ". Game folder not found: set px.gamePath." : ".");
+        (db.gameMissing ? "\nGame folder not found: set px.gamePath." : "");
       images.clear();
       thumbs.clear();
       clearRenderCaches();

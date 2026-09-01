@@ -134,11 +134,12 @@ ${BBPREV_CSS}
   <div id="toolbar">
     <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:420px;min-width:220px" data-tip="Mod this panel manages">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Fetch the item's live state from Steam">${icon("rotate")}</button>
-    <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder as files (description, translations, item.json). Overwrites those files and the local drafts - a confirmation lists the details first." data-tip-wrap>${icon("download")}</button>
+    <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder as files." data-tip-wrap>${icon("download")}</button>
     <span id="liveState" class="px-muted px-xs"></span>
     <span class="px-grow"></span>
     <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
     <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
   <div id="busy"><div></div></div>
   <div id="main"><div id="page">
@@ -153,24 +154,24 @@ ${BBPREV_CSS}
       <div class="px-panel-title">Item</div>
       <div id="itemGrid">
         <div id="previewBox" style="position:relative">
-          <span id="previewInfo" tabindex="0" data-tip="Recommended: a square image (the Workshop shows it 1:1), 512x512 or larger, PNG or JPG. Steam rejects files of 1 MB or more." data-tip-wrap>${icon("alert")}</span>
+          <span id="previewInfo" tabindex="0" data-tip="A square image, 512x512 or larger, PNG or JPG, under 1 MB." data-tip-wrap>${icon("alert")}</span>
           <img id="preview" alt="Preview image" hidden />
           <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
           <span id="previewName" class="px-muted px-xs px-truncate"></span>
-          <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image. It is copied into the mod as thumbnail.<ext> (Steam wants under 1 MB).">${icon("image")} Change…</button>
+          <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image, copied into the mod.">${icon("image")} Change…</button>
         </div>
         <div id="fields">
           <div class="field-row">
             <span class="px-label">Title</span>
-            <input id="title" class="px-input" spellcheck="false" data-tip="The item's title = the descriptor's name. Editing here writes the descriptor; translated titles live below." />
+            <input id="title" class="px-input" spellcheck="false" data-tip="The item's title, from the descriptor. Editing here writes it." />
           </div>
           <div class="field-row">
             <span class="px-label">Mod version</span>
             <div class="px-row" style="gap:8px;align-items:center">
-              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version (the next update's), from the descriptor. The changelog lookup uses it to find the matching changenote." data-tip-wrap />
+              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version, from the descriptor." data-tip-wrap />
               <span class="px-grow"></span>
               <span class="px-label">Game version</span>
-              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with (supported_version). A wildcard like 1.16.* survives hotfixes." data-tip-wrap />
+              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with." data-tip-wrap />
             </div>
           </div>
           <div class="field-row">
@@ -205,7 +206,7 @@ ${BBPREV_CSS}
     <div class="section">
       <div class="px-panel-title">Description
         <span class="px-grow"></span>
-        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly the way the Workshop page will.">
+        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly as the Workshop page will.">
           <button data-mode="edit" class="on">Edit</button>
           <button data-mode="preview">Preview</button>
         </div>
@@ -215,8 +216,8 @@ ${BBPREV_CSS}
       <div class="hintline">
         <span>Saved locally to the mod's workshop.json as you type; goes to Steam on Upload.</span>
         <span class="px-grow"></span>
-        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor (syntax highlighting and its own preview included)">${icon("pencil")} Open file</button>
-        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Discard the panel's unsaved edits and re-read the description and every translation from the local files (workshop folder, else workshop.json)" data-tip-wrap>${icon("rotate")} Reload</button>
+        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
+        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
         <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
       </div>
     </div>
@@ -252,7 +253,7 @@ ${BBPREV_CSS}
             <div class="hintline">
               <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
               <span class="px-grow"></span>
-              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Where changenotes come from: type one here, or keep them in your changelog and let the panel pick the entry for the current mod version. px.workshop.changelog points at a FOLDER (default: 'changelog' inside the workshop folder) with one file per version - 1.2.md, v1.2.bbcode, 1.2.txt - or at ONE FILE, where the section under the headline containing the version is used (## 1.2 or [h2]1.2[/h2]). Markdown converts to Steam BBCode. The dropdown on the left picks the source; whatever ends up in this box is what uploads." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
+              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
             </div>
           </div>
         </div>

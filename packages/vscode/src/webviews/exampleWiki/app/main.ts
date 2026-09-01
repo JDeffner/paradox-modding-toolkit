@@ -17,6 +17,7 @@ import { exampleWikiVariableKinds, exampleWikiVocabularyKinds } from "@px-lsp/pr
 import { kindStyle } from "@px-lsp/protocol/kinds";
 import { CODICON_PATHS } from "../codiconGlyphs";
 import { installTips } from "../../shared/tips";
+import { helpDialog } from "../../shared/help";
 import type { AppToHost, HostToApp } from "../messages";
 
 interface PanelState {
@@ -491,7 +492,7 @@ function renderDetail(detail: ExampleWikiDetail | null, name: string): void {
     const sec = section("Scopes");
     sec.append(
       chips(detail.scopes, {
-        tip: (s) => `Works where the scope is a ${s}. Scope means "what the block is about".`,
+        tip: (s) => `Works when the scope is a ${s}.`,
         link: (s) => findArticle(s),
       })
     );
@@ -732,9 +733,7 @@ function setShowCode(on: boolean, remember: boolean): void {
   codeToggle.setAttribute("aria-pressed", String(on));
   codeToggle.setAttribute(
     "data-tip",
-    on
-      ? "Hide the code around each example. Every example stays one clickable line."
-      : "Show the code around each example."
+    on ? "Hide the code around each example." : "Show the code around each example."
   );
   if (remember) vscode.setState({ ...vscode.getState(), showCode: on });
 }
@@ -745,6 +744,82 @@ codeToggle.addEventListener("click", () => {
 });
 $("back").addEventListener("click", goBack);
 $("forward").addEventListener("click", goForward);
+
+$("helpBtn").addEventListener("click", () =>
+  helpDialog({
+    title: "Examples Wiki",
+    intro:
+      "Every name this game's script knows, in one searchable list: what a name does, which scopes it works in, and the places the game's own files write it. Nothing here is hand written; it comes from your game files and your script_docs dumps.",
+    sections: [
+      {
+        title: "Finding a name",
+        items: [
+          {
+            lead: "Type any part of a name",
+            text: "in the search box. Names that start with what you typed come first, and the most used ones lead inside each half.",
+          },
+          {
+            lead: "The chips",
+            text: "narrow the list to one kind: triggers, effects, targets, modifiers, datafunctions, variables, keywords or data types. Hover a chip to read what that kind is.",
+          },
+          {
+            lead: "The count",
+            text: "on the right of a row says how many times the game's own files write that name. It is the best measure of how normal a name is.",
+          },
+          {
+            lead: "Reload",
+            text: "asks the language server for the list again, after a game patch or a fresh script_docs dump.",
+          },
+        ],
+      },
+      {
+        title: "Reading an article",
+        items: [
+          {
+            lead: "Click a row",
+            text: "to read the article: what it does, its signature, the scopes it works in, how it is written, and what your script can write once it puts you in a new scope.",
+          },
+          {
+            lead: "Every chip in an article",
+            text: "that names something with an article of its own opens it. Scopes, data types, members and producers all lead somewhere.",
+          },
+          {
+            lead: "Long lists fold away.",
+            text: "A scope can carry hundreds of names, so only short lists open with the article.",
+          },
+        ],
+      },
+      {
+        title: "Examples from the game",
+        items: [
+          {
+            lead: "Click an example",
+            text: "to open that file at that line in a side panel. The matched line is the highlighted one.",
+          },
+          {
+            lead: "Code",
+            text: "turns the lines around each example off and on. With it off, an example is one line plus the file it lives in.",
+          },
+        ],
+      },
+      {
+        title: "Moving around",
+        intro: "The reading pane keeps a history, the way a browser tab does.",
+        items: [
+          {
+            lead: "The divider",
+            text: "between the list and the article drags. The width is remembered.",
+          },
+          { lead: "The mouse side buttons", text: "go back and forward too." },
+        ],
+        shortcuts: [
+          { keys: ["Alt", "←"], does: "Back to the article you came from" },
+          { keys: ["Alt", "→"], does: "Forward again" },
+        ],
+      },
+    ],
+  })
+);
 
 // Alt+arrow is the browser's history key, and it works inside a text field
 // there too: an Alt combination types nothing.

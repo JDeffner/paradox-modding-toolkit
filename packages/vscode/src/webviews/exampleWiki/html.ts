@@ -14,46 +14,46 @@ export interface ExampleWikiHtmlOptions {
 
 /** One filter chip. The tips are the point: they teach the words. */
 const CHIPS: Array<{ kind: string; label: string; tip: string }> = [
-  { kind: "all", label: "All", tip: "Everything the toolkit knows about this game" },
+  { kind: "all", label: "All", tip: "Every name the toolkit knows for this game" },
   {
     kind: "trigger",
     label: "Triggers",
-    tip: "A question the game answers with yes or no. Triggers go inside trigger, limit and is_valid blocks.",
+    tip: "A question the game answers with yes or no.",
   },
   {
     kind: "effect",
     label: "Effects",
-    tip: "A change to the game world. Effects go inside immediate, option and on_action blocks.",
+    tip: "A change to the game world.",
   },
   {
     kind: "event_target",
     label: "Targets",
-    tip: "A step to another scope: from a character to that character's liege, culture or capital. Written as a block, or with a dot, like liege.capital_province.",
+    tip: "A step from one scope to another, like liege.capital_province.",
   },
   {
     kind: "modifier",
     label: "Modifiers",
-    tip: "A named number the game adds to something: opinion, monthly income, levy size. Modifiers go inside modifier blocks, not inside effects.",
+    tip: "A named number the game adds to something, like opinion.",
   },
   {
     kind: "datafn",
     label: "Datafunctions",
-    tip: "The [ ... ] expressions in localization and gui files that read live values out of the running game.",
+    tip: "The [ ... ] expressions localization and gui files read values with.",
   },
   {
     kind: "variable",
     label: "Variables",
-    tip: "The variables, flags and lists your own script files create with set_variable, add_to_list and their relatives. Names the engine never heard of until your mod wrote them.",
+    tip: "The variables, flags and lists your own script files create.",
   },
   {
     kind: "keyword",
     label: "Keywords",
-    tip: "The grammar around the triggers and effects: limit, NOT, base, days, and the scope words root, prev and from. The game documents none of them.",
+    tip: "The grammar words around triggers and effects, like limit and NOT.",
   },
   {
     kind: "data_type",
     label: "Types",
-    tip: "What a [ ... ] chain is holding at each step, like Character or Title. Every type has its own members you can ask for next.",
+    tip: "What a [ ... ] chain holds at a step, like Character or Title.",
   },
 ];
 
@@ -172,7 +172,7 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="toolbar">
-    <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search triggers, effects, datafunctions…" data-tip="Type any part of a name. The most used names in the game come first." data-tip-wrap /></div>
+    <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search triggers, effects, datafunctions…" data-tip="Type any part of a name. The most used names come first." data-tip-wrap /></div>
     <button id="back" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Back to the article you came from (Alt+Left)">${icon("chevronLeft")}</button>
     <button id="forward" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Forward to the article you came back from (Alt+Right)">${icon("chevronRight")}</button>
     <div class="px-toggle-group" id="kinds">${chips}</div>
@@ -180,6 +180,7 @@ ${uiCss}
     <span id="count" class="px-muted px-xs"></span>
     <button id="codeToggle" class="px-toggle" data-size="sm" aria-pressed="true" data-tip-wrap>${icon("eye", "px-icon on")}${icon("eyeOff", "px-icon off")}Code</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Load the list again from the language server">${icon("rotate")}</button>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works" data-tip-side="left">${icon("circleHelp")}</button>
   </div>
   <div id="main">
     <div id="listPane">

@@ -695,7 +695,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "With a card selected,",
-            text: "its whole chain lights up — everything leading to it in orange, everything it leads to in blue, however many hops away — and the rest dims. The Chain tool (C) hides the rest entirely.",
+            text: "its whole chain lights up and the rest dims: everything leading to it in orange, everything it leads to in blue, however many hops away. The Chain tool hides the rest entirely.",
           },
         ],
       },
@@ -726,7 +726,11 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "Chain",
-            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. The depth chip at the top left caps how many steps around the card stay visible (1–4 or the whole chain). Undo brings the whole graph back.",
+            text: "keeps only what leads to the selected card and what it leads to, following the arrows' direction, and hides the rest. Undo brings the whole graph back.",
+          },
+          {
+            lead: "The depth chip",
+            text: "appears at the top left once a chain is on. It caps how many steps around the card stay visible: one to four, or the whole chain.",
           },
           { lead: "All nodes", text: "loads everything the mod has, connected or not." },
           {
@@ -762,12 +766,25 @@ $("helpBtn").onclick = () =>
         ],
       },
       {
-        title: "Display options",
+        title: "The rest of the toolbar",
         items: [
           { lead: "Raw / Loc", text: "captions every card with its id or its localized title." },
           {
             lead: "The image button",
-            text: "draws each event's real background behind its card (its override_background, or its theme's). A background that cannot be resolved gets a hatched placeholder instead of a wrong picture.",
+            text: "draws each event's real background behind its card: its override_background, or its theme's. One that cannot be resolved gets a hatched placeholder instead of a wrong picture.",
+          },
+          {
+            lead: "Refresh",
+            text: "reloads the current graph from the index, for when you changed the files outside this view.",
+          },
+          { lead: "Export", text: "writes the graph as it stands to an SVG file." },
+          {
+            lead: "The i at the bottom right",
+            text: "reports how much is drawn and what the view is scoped to.",
+          },
+          {
+            lead: "The last button",
+            text: "hides the inspector when you want the whole width for the graph.",
           },
         ],
       },
@@ -777,6 +794,11 @@ $("helpBtn").onclick = () =>
           { keys: ["+", "−"], does: "Zoom in and out" },
           { keys: ["0"], does: "Fit the whole graph (F does the same)" },
           { keys: ["/"], does: "Focus the search box" },
+          { keys: ["S"], does: "Simulate the selected event" },
+          { keys: ["C"], does: "Chain: keep only the selected card's chain" },
+          { keys: ["A"], does: "Load every node of the mod" },
+          { keys: ["O"], does: "Open the selected card's source" },
+          { keys: ["N"], does: "New event" },
           { keys: ["Esc"], does: "Close the simulation, else clear the selection" },
           { keys: ["Ctrl", "Z"], does: "Undo (edits, moves, focus changes alike)" },
           { keys: ["Ctrl", "Shift", "Z"], does: "Redo" },
@@ -930,18 +952,18 @@ function setFocusLine(text: string, state: "" | "warn" | "error"): void {
 }
 
 function updateInfo(graph: EventGraph, params: EventGraphParams, cluster: string | null): void {
-  const lines = [`${graph.nodes.length} nodes · ${graph.edges.length} edges`];
-  if (graph.truncated) lines.push("Truncated: this view hides part of the graph.");
-  if (cluster)
-    lines.push(`Chain of ${cluster}: what leads to it and what it leads to. Undo brings the rest back.`);
-  lines.push(
-    params.root
-      ? `Focused on ${params.root}: what it fires, what fires it, and one hop further.`
+  // Two lines at most: what is drawn, and what the view is scoped to. The
+  // detail behind either one lives in the ? tutorial.
+  const count =
+    `${graph.nodes.length} nodes · ${graph.edges.length} edges` + (graph.truncated ? ", truncated" : "");
+  const scope = cluster
+    ? `Chain of ${cluster}. Undo brings the rest back.`
+    : params.root
+      ? `Focused on ${params.root} and one hop around it.`
       : params.namespace
-        ? `Every event of namespace ${params.namespace}, connected or not.`
-        : "Every event, on_action and decision of this mod."
-  );
-  infoEl.dataset.tip = lines.join("\n");
+        ? `Every event of namespace ${params.namespace}.`
+        : "Every event, on_action and decision of this mod.";
+  infoEl.dataset.tip = `${count}\n${scope}`;
 }
 
 // ---------------------------------------------------------------------------

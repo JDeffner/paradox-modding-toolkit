@@ -27,6 +27,15 @@
   Project panel landed in a modal; it now moves itself to a normal editor
   tab, keeping the settings filter.
 
+- **Short tooltips, and a "?" that explains everything.** Every webview
+  tooltip was rewritten to one short line (two at most, with a hard width
+  cap), and every webview now has a question-mark button at the top right
+  opening a structured help dialog: what the view is, its features in
+  scannable rows, and its keyboard shortcuts in a grid. The Project panel,
+  both wikis, the Workshop panel, Simulate Event and the GUI Widget Tree got
+  their first help dialogs; the event graph, GUI editor and flag builder
+  ones were restructured and caught up with their newer features.
+
 - **Tooltips stay readable.** Custom tooltips in every toolkit webview
   (Project panel, wikis, event graph, GUI editor, Workshop and the rest) now
   measure themselves and flip or shift to stay inside the panel instead of
