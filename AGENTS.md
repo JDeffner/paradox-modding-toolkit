@@ -125,7 +125,7 @@ axes and say which applied:
 | `packages/vscode/media/` | Icon, walkthrough pages, banner, `image-guidelines.md`. `media/` SHIPS in the vsix; `docs/` does NOT |
 | `packages/vscode/skills/ck3-modding/` | An agent skill for CK3 modding itself (not the extension). Machine-agnostic placeholders; excluded from the vsix |
 | `packages/vscode/syntaxes/` | TextMate grammars (`paradox`, per-game wrappers, `paradox-loc`, `paradox-info`, `paradox-mod`, `paradox-gui`) |
-| `docs/` | Tracked: `diagnostics/` (per-code explanations), `gui-designer/` (calibration evidence + editor ledgers, see its README), `release/` (per-release notes, read by release.yml), `PROTOCOL.md`, `EMBEDDING.md`, `PERFORMANCE.md`, `deferred-features.md`, `RELEASING.md` (the release runbook), `file-icons.md`. Everything else under `docs/` is gitignored — and should not exist: working notes do not belong in the repo (see "Work artifacts") |
+| `docs/` | Tracked: `diagnostics/` (per-code explanations), `gui-designer/` (calibration evidence + editor ledgers, see its README), `release/` (per-release notes, read by release.yml), `PROTOCOL.md`, `EMBEDDING.md`, `PERFORMANCE.md`, `deferred-features.md`, `RELEASING.md` (the release runbook), `file-icons.md`, `webviews.md` (the webview-panel pattern; CONTRIBUTING.md points contributors at it). Everything else under `docs/` is gitignored — and should not exist: working notes do not belong in the repo (see "Work artifacts") |
 
 Feature routing (most-touched files): completion ranking →
 `packages/server/src/features/completion.ts`; context detection →
