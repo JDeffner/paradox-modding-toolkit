@@ -7,8 +7,8 @@
  * this file only turns the lines it hands back into diagnostics, and drops the
  * collection whenever the tail reports the log was cleared or replaced.
  *
- * Plus `Paradox: Launch Game (debug mode)` via the Steam run URL of the active
- * game (meta.steamAppId).
+ * Launching the game itself lives in gameRun.ts (`paradox-game` run
+ * configurations), which offers this watcher after every launch.
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -239,20 +239,4 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.statusItem.dispose();
     this.stateEmitter.dispose();
   }
-}
-
-export async function launchGameDebugCommand(cfg: PxConfig, errorLog: ErrorLogWatcher): Promise<void> {
-  const meta = metaFor(cfg.gameId);
-  const url = `steam://run/${meta.steamAppId}//-debug_mode%20-develop/`;
-  await vscode.env.openExternal(vscode.Uri.parse(url));
-  // One click instead of a command name to retype; hidden once already watching.
-  const watch = errorLog.watching ? [] : ["Watch error.log"];
-  void vscode.window
-    .showInformationMessage(
-      `Paradox Modding Toolkit: launching ${meta.name} via Steam with -debug_mode -develop (scripts reload live).`,
-      ...watch
-    )
-    .then((choice) => {
-      if (choice) errorLog.toggle();
-    });
 }

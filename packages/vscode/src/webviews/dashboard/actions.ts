@@ -148,8 +148,22 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: `Launch ${meta.shortName} (debug mode)`,
           command: "px.launchGame",
           icon: "play",
-          tip: "Start the game via Steam with -debug_mode -develop, so scripts reload live.",
+          tip:
+            "Start the game via Steam with -debug_mode -develop, so scripts reload live. " +
+            "More presets (map editor, continue last save, custom options) live in the Run and Debug panel.",
         },
+        // Games with a verified -mapeditor flag get the one-click row (#26);
+        // the other presets live in the Run panel, not as more rows here.
+        ...(meta.launchPresets?.some((p) => p.id === "mapeditor")
+          ? ([
+              {
+                label: "Launch Map Editor",
+                command: "px.launchMapEditor",
+                icon: "map",
+                tip: "Start the game via Steam with -mapeditor, straight into the map editor.",
+              },
+            ] satisfies ActionItem[])
+          : []),
         // The watcher's Problems outlive the watch on purpose (you fix them
         // with the game closed), so this is how they go away once dealt with.
         ...(gameProblems > 0
