@@ -46,6 +46,11 @@ const CHIPS: Array<{ kind: string; label: string; tip: string }> = [
     tip: "The variables, flags and lists your own script files create with set_variable, add_to_list and their relatives. Names the engine never heard of until your mod wrote them.",
   },
   {
+    kind: "keyword",
+    label: "Keywords",
+    tip: "The grammar around the triggers and effects: limit, NOT, base, days, and the scope words root, prev and from. The game documents none of them.",
+  },
+  {
     kind: "data_type",
     label: "Types",
     tip: "What a [ ... ] chain is holding at each step, like Character or Title. Every type has its own members you can ask for next.",
@@ -85,12 +90,13 @@ ${uiCss}
   /* While dragging, the pointer outruns the layout; keep it from selecting text. */
   body[data-dragging] { user-select: none; cursor: col-resize; }
   #results { padding: 4px; }
-  #results .px-item { align-items: baseline; gap: 6px; }
+  /* The row holds four things of three text sizes; centred, they read as one
+     line instead of hanging off a shared baseline. */
+  #results .px-item { align-items: center; gap: 6px; }
   #results .px-item[aria-selected="true"] { background: var(--px-muted-strong); }
-  /* The kind's own codicon, coloured by the kind (app/main.ts). The row aligns
-     on the text baseline, so the glyph is centred against the row instead. */
+  /* The kind's own codicon, coloured by the kind (app/main.ts). */
   .kglyph {
-    flex: 0 0 auto; align-self: center; display: flex;
+    flex: 0 0 auto; display: flex;
     color: var(--px-muted-fg); cursor: help;
   }
   .kglyph > svg.px-icon { width: 14px; height: 14px; }
@@ -166,8 +172,9 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="toolbar">
-    <button id="back" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Back to the article you came from">${icon("chevronLeft")}</button>
     <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search triggers, effects, datafunctions…" data-tip="Type any part of a name. The most used names in the game come first." data-tip-wrap /></div>
+    <button id="back" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Back to the article you came from (Alt+Left)">${icon("chevronLeft")}</button>
+    <button id="forward" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Forward to the article you came back from (Alt+Right)">${icon("chevronRight")}</button>
     <div class="px-toggle-group" id="kinds">${chips}</div>
     <span class="px-grow"></span>
     <span id="count" class="px-muted px-xs"></span>

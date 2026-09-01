@@ -170,6 +170,9 @@ import {
   type GestureWrite,
   type ResizeHandle,
 } from "./gesture";
+import { clampToViewport, installTips } from "../../shared/tips";
+
+installTips();
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -1696,10 +1699,11 @@ function showTextTip(index: number | null, clientX: number, clientY: number): vo
   // Below and right of the pointer, kept inside the window; the stage owns the
   // pointer so the tooltip ignores it and never steals the hover.
   const box = textTipEl.getBoundingClientRect();
-  const left = Math.max(0, Math.min(clientX + 12, window.innerWidth - box.width - 4));
-  const top = clientY + 16 + box.height > window.innerHeight ? clientY - box.height - 8 : clientY + 16;
-  textTipEl.style.left = `${left}px`;
-  textTipEl.style.top = `${top}px`;
+  const below = clientY + 16;
+  const wanted = below + box.height > window.innerHeight - 4 ? clientY - box.height - 8 : below;
+  const at = clampToViewport(box, clientX + 12, wanted);
+  textTipEl.style.left = `${at.left}px`;
+  textTipEl.style.top = `${at.top}px`;
 }
 
 /**

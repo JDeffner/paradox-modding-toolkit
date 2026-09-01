@@ -42,11 +42,14 @@ import {
   type ElementRef,
 } from "./elements";
 import { middleEllipsis } from "./paths";
+import { installTips } from "../../shared/tips";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
 const send = (m: AppToHost): void => vscode.postMessage(m);
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+installTips();
 
 // ---------------------------------------------------------------------------
 // State

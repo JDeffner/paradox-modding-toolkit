@@ -13,9 +13,10 @@ import type {
   ExampleWikiKind,
   ExampleWikiSite,
 } from "@px-lsp/protocol/protocol";
-import { exampleWikiVariableKinds } from "@px-lsp/protocol/protocol";
+import { exampleWikiVariableKinds, exampleWikiVocabularyKinds } from "@px-lsp/protocol/protocol";
 import { kindStyle } from "@px-lsp/protocol/kinds";
 import { CODICON_PATHS } from "../codiconGlyphs";
+import { installTips } from "../../shared/tips";
 import type { AppToHost, HostToApp } from "../messages";
 
 interface PanelState {
@@ -33,6 +34,7 @@ declare function acquireVsCodeApi(): {
 const vscode = acquireVsCodeApi();
 const send = (m: AppToHost): void => vscode.postMessage(m);
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+installTips();
 
 /** How many rows are drawn at once. Beyond this the list stops reading. */
 const PAGE = 300;
@@ -62,10 +64,13 @@ let current: Target | null = null;
 /** The article on screen, kept so the code toggle can redraw it without asking
  *  the host again. Null while one is still loading. */
 let currentDetail: ExampleWikiDetail | null = null;
-/** Articles walked away from, newest last: what the back button pops. */
-const history: Target[] = [];
+/** The reading pane's history, as a browser keeps it: articles behind, articles
+ *  ahead, newest last. Session-local, like a tab. */
+const behind: Target[] = [];
+const ahead: Target[] = [];
 
 const VARIABLE_KINDS = new Set<ExampleWikiKind>(exampleWikiVariableKinds);
+const VOCABULARY_KINDS = new Set<ExampleWikiKind>(exampleWikiVocabularyKinds);
 
 /** The kind table's name for a wiki kind, so both share one glyph and colour. */
 function styleKind(kind: ExampleWikiKind): string {
@@ -113,6 +118,8 @@ const KIND_WORD: Record<ExampleWikiKind, string> = {
   datafn_global: "datafunction",
   datafn_member: "datafunction",
   data_type: "data type",
+  keyword: "keyword",
+  scope_word: "scope word",
   variable: "variable",
   local_variable: "local variable",
   global_variable: "global variable",
@@ -130,6 +137,8 @@ const KIND_TIP: Record<ExampleWikiKind, string> = {
   datafn_global: "Datafunction: a [ ... ] expression you can start a chain with.",
   datafn_member: "Datafunction: a [ ... ] step you can ask a value of its type for.",
   data_type: "Data type: what a [ ... ] chain holds at this step.",
+  keyword: "Keyword: the script grammar around the triggers and effects.",
+  scope_word: "Scope word: a name for a scope you are already standing in.",
   variable: "Variable: a value your script stores on a scope object.",
   local_variable: "Local variable: a value your script stores for the length of one effect.",
   global_variable: "Global variable: a value your script stores once for the whole game.",
@@ -145,6 +154,9 @@ function matchesFilter(entry: ExampleWikiEntry): boolean {
   // The chip is named after the commonest of the seven storage classes, so it
   // must not fall through to the exact-kind test below.
   if (filter === "variable") return VARIABLE_KINDS.has(entry.kind);
+  // One chip for the whole grammar vocabulary: a reader looking for `NOT` and
+  // one looking for `prev` are after the same thing.
+  if (filter === "keyword") return VOCABULARY_KINDS.has(entry.kind);
   return entry.kind === filter;
 }
 
@@ -178,16 +190,39 @@ function key(entry: Target): string {
 
 // ---------------------------------------------------------- navigation -----
 
-/** Open one article: from a list row, from a chip in another article, or from
- *  a deep link the host sent. `push` is false only when walking back. */
-function openEntry(target: Target, push = true): void {
-  if (push && current && key(current) !== key(target)) history.push(current);
+/** Put one article on screen. The history stacks are the caller's business. */
+function show(target: Target): void {
   current = target;
   selected = key(target);
   markSelectedRow();
   showLoadingDetail(target.name);
-  updateBack();
+  updateNav();
   send({ type: "select", name: target.name, kind: target.kind });
+}
+
+/** Open one article: from a list row, from a chip in another article, or from
+ *  a deep link the host sent. A new step from a mid-history point drops the
+ *  trail ahead, the way a browser does. */
+function openEntry(target: Target): void {
+  if (current && key(current) !== key(target)) {
+    behind.push(current);
+    ahead.length = 0;
+  }
+  show(target);
+}
+
+function goBack(): void {
+  const previous = behind.pop();
+  if (!previous) return;
+  if (current) ahead.push(current);
+  show(previous);
+}
+
+function goForward(): void {
+  const next = ahead.pop();
+  if (!next) return;
+  if (current) behind.push(current);
+  show(next);
 }
 
 function markSelectedRow(): void {
@@ -203,8 +238,9 @@ function markSelectedRow(): void {
   }
 }
 
-function updateBack(): void {
-  ($("back") as HTMLButtonElement).disabled = history.length === 0;
+function updateNav(): void {
+  $<HTMLButtonElement>("back").disabled = behind.length === 0;
+  $<HTMLButtonElement>("forward").disabled = ahead.length === 0;
 }
 
 /** The article for a name, if the catalog has one. `kind` narrows it when the
@@ -617,7 +653,7 @@ function siteBlock(site: ExampleWikiSite): HTMLElement {
     el.append(line, where);
   }
 
-  el.setAttribute("data-tip", `Open ${site.file} at line ${site.line}`);
+  el.setAttribute("data-tip", "Click to open in side panel");
   el.setAttribute("data-tip-wrap", "");
   const open = (): void => send({ type: "open", file: site.file, line: site.line });
   el.addEventListener("click", open);
@@ -707,10 +743,34 @@ codeToggle.addEventListener("click", () => {
   setShowCode(!showCode, true);
   if (current && currentDetail) renderDetail(currentDetail, current.name);
 });
-$("back").addEventListener("click", () => {
-  const previous = history.pop();
-  if (previous) openEntry(previous, false);
+$("back").addEventListener("click", goBack);
+$("forward").addEventListener("click", goForward);
+
+// Alt+arrow is the browser's history key, and it works inside a text field
+// there too: an Alt combination types nothing.
+document.addEventListener("keydown", (event: KeyboardEvent) => {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    goBack();
+  } else if (event.key === "ArrowRight") {
+    event.preventDefault();
+    goForward();
+  }
 });
+
+// The side buttons of a mouse: 3 is back, 4 is forward. The browser acts on
+// mousedown, so both events have to be claimed for the panel to keep them.
+for (const type of ["mousedown", "mouseup"] as const) {
+  document.addEventListener(type, (event: MouseEvent) => {
+    if (event.button !== 3 && event.button !== 4) return;
+    event.preventDefault();
+    if (type === "mouseup") {
+      if (event.button === 3) goBack();
+      else goForward();
+    }
+  });
+}
 
 function setFilter(kind: string): void {
   filter = kind;

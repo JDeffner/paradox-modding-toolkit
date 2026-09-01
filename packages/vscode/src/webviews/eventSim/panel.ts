@@ -5,6 +5,7 @@ import { tokenizeScriptLine } from "../eventGraph/tokenize";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tipScript } from "../shared/tips";
 import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
@@ -190,8 +191,8 @@ ${uiCss}
   .step { margin: 4px 0; }
   .step > .px-panel-title { padding-left: 4px; cursor: pointer; border-radius: var(--px-radius-md); transition: background-color var(--px-ease); }
   .step > .px-panel-title:hover { background: var(--px-muted); }
-  /* The caret is a button, and its tooltip is that button's ::after, so
-     rotating the button would turn the words on their side. Rotate the icon. */
+  /* The caret is a button: rotate the icon, not the button, or its background
+     and focus ring turn with it. */
   .step > .px-panel-title .caret > svg { transition: transform var(--px-ease); color: var(--px-muted-fg); }
   .step[data-collapsed] > .px-panel-title .caret > svg { transform: rotate(-90deg); }
   .step[data-collapsed] > .step-body { display: none; }
@@ -234,6 +235,7 @@ ${uiCss}
   </div>
   <div id="body"><div id="status">Loading…</div></div>
 </div>
+${tipScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 

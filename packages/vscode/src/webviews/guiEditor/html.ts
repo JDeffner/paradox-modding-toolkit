@@ -147,8 +147,6 @@ ${uiCss}
   #libraryOverlay[hidden] { display: none; }
   #libraryOverlay > #library { flex: 1 1 auto; min-height: 0; border-top: 0; }
   #info[data-warning] { color: var(--px-destructive); }
-  #info::after { white-space: pre-line; }
-  [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
 
   /* ---- side panels ---- */
   #side { --px-sidepanel-width: 280px; }

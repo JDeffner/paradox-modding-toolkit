@@ -3,6 +3,7 @@ import type { GuiTree } from "@px-lsp/protocol/protocol";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tipScript } from "../shared/tips";
 import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
@@ -224,6 +225,7 @@ ${uiCss}
   <div id="tree"></div>
   <div id="status">Loading…</div>
 </div>
+${tipScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const ICON_CARET = ${JSON.stringify(icon("chevronRight", "px-icon caret"))};

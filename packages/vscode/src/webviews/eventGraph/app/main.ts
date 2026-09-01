@@ -24,11 +24,14 @@ import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";
 import { describeEdit, editKind } from "./pendingView";
+import { installTips } from "../../shared/tips";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
 const send = (m: AppToHost): void => vscode.postMessage(m);
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+installTips();
 
 const svg = $<HTMLElement>("graph") as unknown as SVGSVGElement;
 const emptyEl = $("empty");

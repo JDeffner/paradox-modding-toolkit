@@ -9,11 +9,14 @@
 import { renderMarkdown } from "../../markdown";
 import { iconEl, type IconName } from "../../shared/icons";
 import type { AppToHost, HostToApp, WikiArticle, WikiLauncher } from "../messages";
+import { installTips } from "../../shared/tips";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
 const send = (m: AppToHost): void => vscode.postMessage(m);
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+installTips();
 
 /** The launcher rows sit above the articles, under this heading. */
 const LAUNCHER_SECTION = "Other views";

@@ -131,10 +131,10 @@ ${uiCss}
   #main { display: flex; flex: 1 1 auto; min-height: 0; }
   /* The rail is a fixed strip of icons, so it has no resizer: there is nothing
      to make wider. It still collapses, and its handle lives on the canvas. */
-  /* The rail's body must not clip: a tool's tooltip opens to the right of a
-     40px strip, so overflow: hidden on the body swallowed it. The z-index
-     puts the escaped tooltip over the canvas (a disabled tool's own opacity
-     makes it a stacking context, which would otherwise paint it underneath). */
+  /* The rail's body must not clip: it is a 40px strip and anything a tool
+     opens beside it would be swallowed by overflow: hidden. The z-index puts
+     what escapes over the canvas (a disabled tool's own opacity makes it a
+     stacking context, which would otherwise paint it underneath). */
   #rail { --px-sidepanel-width: 40px; z-index: 7; }
   #rail > .px-sidepanel-body { padding: 6px 4px; gap: 2px; align-items: center; overflow: visible; }
   .tool[aria-pressed="true"] { background: var(--px-muted); }
@@ -181,7 +181,6 @@ ${uiCss}
   #focusLine[data-state="warn"] { color: var(--eg-hit); }
   #focusLine[data-state="error"] { color: var(--px-destructive); }
   #info { position: absolute; right: 8px; bottom: 8px; }
-  [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
   #empty {
     position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
     text-align: center; padding: 24px; color: var(--px-muted-fg);
@@ -286,8 +285,8 @@ ${uiCss}
   #simBody h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; word-break: break-all; }
   .step { margin: 2px 0; }
   .step > .px-panel-title { padding-left: 2px; border-radius: var(--px-radius-sm); }
-  /* The caret here is a button, and its tooltip is that button's ::after, so
-     rotating the button turned the words on their side. Rotate the icon. */
+  /* The caret here is a button: rotate the icon, not the button, or its
+     background and focus ring turn with it. */
   .step > .px-panel-title .caret > svg { transition: transform var(--px-ease); }
   .step[data-collapsed] > .px-panel-title .caret > svg { transform: rotate(-90deg); }
   .step[data-collapsed] > .step-body { display: none; }
