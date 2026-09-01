@@ -108,10 +108,39 @@ build does not produce. You do not extend it; it finds your panel too.
   `id` must answer every id exactly once, or a gesture stays armed forever.
   The GUI editor README explains why this rule is load-bearing.
 
-## Trying it
+## The dev loops
 
-Press F5 (the tracked launch config builds everything and opens an Extension
-Development Host), open a mod folder in the new window, and run your command.
-`Developer: Reload Window` in that window picks up a rebuild. When the panel
-is worth showing someone, `pnpm run package:test` installs a real .vsix into
-your own VS Code.
+Three loops, from fastest to most complete. Pick by what you are iterating
+on.
+
+**Browser, for UI iteration.** `pnpm run preview:webviews` starts a dev
+server (default port 5317) with two pages, both auto-reloading on save and
+carrying a Dark/Light toggle that stands in for the VS Code theme:
+
+- `/gallery` renders every px-ui component from the live `ui.css`, wired
+  through the real shared modules (menu, dialog, toast, scrub, sortable,
+  color picker). Edit anything under `shared/` and the page reloads. This is
+  the gallery shared/README.md asks you to extend before shipping a new
+  component.
+- `/gui` boots the real GUI editor bundle over a stub host, with a real
+  layout of one file: `pnpm run preview:webviews -- path/to/file.gui`
+  (game and mod paths come from `dev-paths.json` or `--game`/`--mod`).
+  Nothing is written; edit gestures answer with an honest refusal.
+
+You get actual browser devtools, which webviews never give you. What this
+loop cannot exercise is the host: use the next one for anything that
+touches `panel.ts` behavior.
+
+**Live panels, for app work.** Run `pnpm run watch:webviews` and press F5.
+Panels in the Extension Development Host reload themselves when a bundle is
+rebuilt, and come back where you were: the app re-requests its state on boot
+and the host still has it (the same contract that survives close/reopen).
+The same loop works against an installed test vsix: set
+`px.dev.webviewSource` in your VS Code settings to the checkout's
+`packages/vscode/dist/webview` folder, and the installed extension loads and
+watches the checkout's bundles. Extension-host code itself (`panel.ts`,
+`extension.ts`) cannot hot-swap: rebuild and `Developer: Reload Window`.
+
+**The real artifact.** `pnpm run package:test` builds a .vsix and installs
+it into your own VS Code. Do this before calling a panel done; it is the
+only loop that runs exactly what ships.

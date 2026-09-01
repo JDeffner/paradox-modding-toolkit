@@ -43,6 +43,11 @@ loaded. Open a mod folder in that window to try your change;
 When you want to test the real packaged artifact, `pnpm run package:test`
 builds a .vsix and installs it into your own VS Code. Never commit a .vsix.
 
+Working on a webview panel? The dev loops section of
+[docs/webviews.md](docs/webviews.md) has two faster ones: a browser dev
+server with a component gallery (`pnpm run preview:webviews`) and live
+panel reload (`pnpm run watch:webviews`).
+
 ## Verify
 
 ```bash
