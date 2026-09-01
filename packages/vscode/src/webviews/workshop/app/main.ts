@@ -176,14 +176,7 @@ function renderItem(): void {
     const s = document.createElement("span");
     s.className = "px-muted px-xs";
     s.textContent = "not on the Workshop yet";
-    const link = document.createElement("button");
-    link.className = "px-btn";
-    link.dataset.variant = "outline";
-    link.dataset.size = "sm";
-    link.append(iconEl("link"), document.createTextNode(" Link existing item…"));
-    link.setAttribute("data-tip", "Connect this mod to one of your published Workshop items.");
-    link.addEventListener("click", () => send({ type: "linkExisting" }));
-    idBox.append(s, link);
+    idBox.append(s);
   }
 
   const meta = $("itemMeta");
@@ -1011,10 +1004,6 @@ $("helpBtn").addEventListener("click", () =>
           {
             lead: "Visibility",
             text: "is sent with the details on the next upload. A brand new item is always created private.",
-          },
-          {
-            lead: "Not published yet?",
-            text: "Link existing item connects this mod to one of your own Workshop items instead of creating a second one.",
           },
           {
             lead: "Statistics",

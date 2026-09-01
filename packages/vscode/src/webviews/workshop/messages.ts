@@ -104,7 +104,6 @@ export type AppToHost =
       visibility: WorkshopVisibility | null;
     }
   | { type: "openPage" }
-  | { type: "linkExisting" }
   | { type: "createDescriptor" }
   /** Write a descriptor/metadata scalar (title = name, versions). */
   | { type: "setField"; field: "title" | "version" | "supportedVersion"; value: string }

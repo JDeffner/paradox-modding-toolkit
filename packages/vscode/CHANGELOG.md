@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.6 (beta, pre-release) - Workshop safety fix
+
+- **"Link existing item" is gone from the Workshop panel.** The button let a
+  mod that was not on the Workshop yet be pointed at any of your published
+  items, and the next upload then overwrote that item's files and details.
+  One wrong pick in the list, or a pick made on the wrong mod, replaced a
+  published mod with content that was never meant for it, and a Workshop
+  update reaches subscribers in minutes with no rollback. An upload from the
+  panel now only ever creates a new item or updates the item the mod is
+  already tied to. Mods first published through the launcher are still
+  adoptable by hand, by writing the item id where the game's own tooling
+  keeps it: `remote_file_id` in `descriptor.mod` for CK3, `publishedFileId`
+  in `workshop.json` for the newer games.
+
 ## 0.4.0 (beta) - the Steam Workshop release
 
 Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
