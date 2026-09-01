@@ -1,6 +1,5 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { IconName } from "../shared/icons";
-import { hasFormatDocs } from "../../meta";
 
 export interface ActionItem {
   label: string;
@@ -45,6 +44,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.showExamplesWiki",
           icon: "bookOpen",
           tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
+        },
+        {
+          label: "Wiki",
+          command: "px.openWiki",
+          icon: "library",
+          tip: "The toolkit's reference pages in one searchable place: the image sizes and formats the game expects, and what every diagnostic means.",
         },
         {
           label: "Mod Report",
@@ -178,42 +183,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
   ];
-}
-
-/**
- * Reference links: not a tool section but quiet single buttons in the panel
- * footer, below "Join the Discord". Hidden the same way as the rows above
- * (`px.sidebar.hidden`, keyed by command id).
- */
-export function referenceItems(meta: GameMeta): ActionItem[] {
-  return [
-    // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
-    // files of the folder plus a search on the game's modding wiki.
-    hasFormatDocs(meta.id)
-      ? {
-          label: "Format Docs",
-          command: "px.openInfoDocs",
-          icon: "bookOpen" as const,
-          tip: "The game's own _*.info format documentation for the file you are editing.",
-        }
-      : {
-          label: "Vanilla Examples & Wiki",
-          command: "px.openInfoDocs",
-          icon: "bookOpen" as const,
-          tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
-        },
-    {
-      label: "Image Guidelines",
-      command: "px.imageGuidelines",
-      icon: "bookOpen",
-      tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
-    },
-  ];
-}
-
-export function visibleReferenceItems(meta: GameMeta, hidden: readonly string[]): ActionItem[] {
-  const skip = new Set(hidden);
-  return referenceItems(meta).filter((it) => !skip.has(it.command));
 }
 
 /**

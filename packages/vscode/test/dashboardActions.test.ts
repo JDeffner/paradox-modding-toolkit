@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
-import { actionGroups, visibleActionGroups, visibleReferenceItems } from "../src/webviews/dashboard/actions";
+import { actionGroups, visibleActionGroups } from "../src/webviews/dashboard/actions";
 
 /** Every command id the panel offers for a game, groups flattened. */
 function commands(groups: ReturnType<typeof actionGroups>): string[] {
@@ -29,15 +29,11 @@ describe("visibleActionGroups", () => {
     expect(groups.map((g) => g.label)).toContain("View");
   });
 
-  it("reference links live in the footer list, not the groups, and hide the same way", () => {
-    expect(commands(actionGroups(ck3Meta, 0))).not.toContain("px.openInfoDocs");
-    expect(visibleReferenceItems(ck3Meta, []).map((it) => it.command)).toEqual([
-      "px.openInfoDocs",
-      "px.imageGuidelines",
-    ]);
-    expect(visibleReferenceItems(ck3Meta, ["px.imageGuidelines"]).map((it) => it.command)).toEqual([
-      "px.openInfoDocs",
-    ]);
+  it("reference links moved into the Wiki hub, off the panel footer", () => {
+    const ids = commands(actionGroups(ck3Meta, 0));
+    expect(ids).not.toContain("px.openInfoDocs");
+    expect(ids).not.toContain("px.imageGuidelines");
+    expect(ids).toContain("px.openWiki");
   });
 
   it("ignores ids that match no row", () => {
