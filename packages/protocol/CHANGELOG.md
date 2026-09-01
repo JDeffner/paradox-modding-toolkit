@@ -8,7 +8,7 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## 0.2.0
 
-Ships with toolkit 0.4.0.
+Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.
 
 ### Added
 

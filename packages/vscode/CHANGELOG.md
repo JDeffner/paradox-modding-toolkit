@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (beta) - the Steam Workshop release
+
+Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
+release these notes belong to.
 
 - **One hover card design, with a wiki link on every card.** All hover types
   (script tokens, keywords, scope words, datafunctions, GUI, localization
@@ -97,8 +100,6 @@
   such a stray calendar, with a button that adopts it into the opened
   folder's settings. The setting's description spells out where it must
   live.
-
-## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
 - **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel
   row) opens a searchable browser over everything the toolkit knows from your
