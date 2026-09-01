@@ -1,0 +1,16 @@
+{
+  // F5: build everything, then open an Extension Development Host with the
+  // toolkit loaded from packages/vscode. Open a mod folder in that window to
+  // try your change; Developer: Reload Window picks up a rebuild.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"],
+      "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
+      "preLaunchTask": "compile"
+    }
+  ]
+}
