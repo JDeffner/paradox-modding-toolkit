@@ -8,6 +8,7 @@
  * packages/vscode/, game-name strings may not appear in source
  * (scripts/check-game-boundary.mjs).
  */
+import type { CalendarLocSpec } from "@px-lsp/protocol/calendarLoc";
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
@@ -143,6 +144,13 @@ export interface GameMeta {
   scriptDocs?: { format: "classic" | "markdown"; modifiers: "classic" | "masked-block" | "tag-line" };
   /** External deep-validation tool (the tiger family), when one exists. */
   tiger?: { binaryName: string; repoSlug: string; confName: string };
+  /**
+   * The loc keys the game formats dates through, for generating a
+   * `px.calendar` display calendar's game-side localization. Only for games
+   * whose keys were verified in the game files/binary; absent = the
+   * Generate Calendar Localization command is not offered.
+   */
+  calendarLoc?: CalendarLocSpec;
   /**
    * Suffix for server-side cache filenames under storageDir ("" keeps the
    * pre-profile names so existing caches survive; non-empty for later games,

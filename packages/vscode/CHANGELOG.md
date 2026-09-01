@@ -15,6 +15,13 @@
   ("1000 BC March 15") and inserts the script date the game logic needs
   (`3000.3.15`), with a live preview before anything is committed. Display
   only: no existing date is ever rewritten.
+- **`Paradox: Generate Calendar Localization`.** Writes the GAME side of the
+  `px.calendar` declaration into the mod: the era-math datafunction keys plus
+  the `localization/replace/` overrides of the engine's date-format keys (and,
+  with custom `months`, the `CW_DATE_*` month names), so in-game dates display
+  on the mod's calendar. Key names verified against the game files and binary;
+  CK3 for now. Deterministic filenames: rerun after changing `px.calendar` to
+  regenerate in place.
 
 ## 0.3.3 (beta) - tiger download fix
 

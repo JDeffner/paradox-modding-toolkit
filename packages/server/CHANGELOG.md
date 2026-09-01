@@ -11,6 +11,9 @@ changes. Before the split it moved inside the extension's version (up to
 - Custom-calendar date display when `settings.calendar` is set: inlay hints
   after date tokens in script files and a hover card with the in-game form.
   The setting is sanitized on intake, so clients may pass raw JSON.
+- `GameMeta` gains an optional `calendarLoc` field: the game's verified
+  date-format and month-name loc keys, consumed by the extension's
+  Generate Calendar Localization command (set for CK3).
 
 ## 0.1.0
 

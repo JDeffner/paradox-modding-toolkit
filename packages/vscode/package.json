@@ -252,6 +252,11 @@
         "title": "Insert Date (Display Calendar)"
       },
       {
+        "command": "px.generateCalendarLoc",
+        "category": "Paradox",
+        "title": "Generate Calendar Localization (Display Calendar)"
+      },
+      {
         "command": "px.createTranslation",
         "category": "Paradox Localization",
         "title": "Add Language (scaffold files)",
@@ -673,7 +678,7 @@
             "type": "object",
             "default": null,
             "order": 6,
-            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Set it in the mod's workspace settings and commit it.",
+            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Set it in the mod's workspace settings and commit it. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -842,6 +847,10 @@
         {
           "command": "px.insertDate",
           "when": "px.isCk3Workspace && editorTextFocus"
+        },
+        {
+          "command": "px.generateCalendarLoc",
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.createTranslation",

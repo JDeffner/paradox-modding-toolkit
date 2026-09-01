@@ -45,7 +45,7 @@ import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
-import { insertDateCommand } from "./calendarInsert";
+import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { readModName } from "@px-lsp/protocol/modName";
@@ -531,6 +531,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
     vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
+    vscode.commands.registerCommand("px.generateCalendarLoc", () =>
+      generateCalendarLocCommand(cfgForActive())
+    ),
     vscode.commands.registerCommand("px.createTranslation", () =>
       createTranslationCommand(cfgForActive(), log)
     ),

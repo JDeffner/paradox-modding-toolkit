@@ -11,6 +11,9 @@ version (up to 0.3.2); that history is in the extension changelog
 - New `calendar.ts` helper module (era mapping for custom-calendar mods:
   script date -> display form and back) and an optional
   `ParadoxSettings.calendar` field carrying the `px.calendar` setting.
+- New `calendarLoc.ts` helper module: generates the game-side localization
+  for a calendar (era-math datafunction keys plus date-format and month-name
+  overrides), with the per-game key names supplied by the caller.
 
 ## 0.1.0
 

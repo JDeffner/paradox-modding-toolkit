@@ -22,6 +22,32 @@ export const ck3Meta: GameMeta = {
   guiTextMetrics: GITAN_MEASURED_METRICS,
   scaffolds: CK3_SCAFFOLDS,
   tiger: { binaryName: "ck3-tiger", repoSlug: "amtep/tiger", confName: "ck3-tiger.conf" },
+  // Date-format keys verified in ck3.exe 1.19 (the gamedate.cpp string block);
+  // formats mirror game/localization/english/core_l_english.yml. Vanilla
+  // appends $ERA$/$ERA_BCE$ itself - dropped here, the {era} slot replaces it.
+  // Month keys from clausewitz/localization/cw_date_l_english.yml; May has no
+  // separate abbreviated key.
+  calendarLoc: {
+    dateFormats: {
+      GAME_DATE_STRING: "$DAY$ $MONTH$, {year} {era}",
+      GAME_DATE_STRING_SHORT: "$DAY$ $MONTH_SHORT$ {year} {era}",
+      GAME_DATE_STRING_LONG: "$DAY|O$ of $MONTH$, {year} {era}",
+    },
+    monthKeys: [
+      ["CW_DATE_January", "CW_DATE_Jan"],
+      ["CW_DATE_February", "CW_DATE_Feb"],
+      ["CW_DATE_March", "CW_DATE_Mar"],
+      ["CW_DATE_April", "CW_DATE_Apr"],
+      ["CW_DATE_May", "CW_DATE_May"],
+      ["CW_DATE_June", "CW_DATE_Jun"],
+      ["CW_DATE_July", "CW_DATE_Jul"],
+      ["CW_DATE_August", "CW_DATE_Aug"],
+      ["CW_DATE_September", "CW_DATE_Sep"],
+      ["CW_DATE_October", "CW_DATE_Oct"],
+      ["CW_DATE_November", "CW_DATE_Nov"],
+      ["CW_DATE_December", "CW_DATE_Dec"],
+    ],
+  },
   // "" keeps the pre-profile cache filenames (docsCache.json, vanillaIndex-*.json)
   // so existing users' caches survive the M2 restructure.
   cacheSuffix: "",
