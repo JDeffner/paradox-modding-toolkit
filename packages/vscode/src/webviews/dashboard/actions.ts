@@ -143,13 +143,10 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
     },
     {
       label: "Test & Troubleshoot",
+      // Launching lives in ONE place: the editor-title Run button on script
+      // and gui files (debug default, Map Editor, Launch with Options) plus
+      // the Run and Debug panel's paradox-game presets - not as rows here.
       items: [
-        {
-          label: `Launch ${meta.shortName} (debug mode)`,
-          command: "px.launchGame",
-          icon: "play",
-          tip: "Start the game via Steam with -debug_mode -develop, so scripts reload live.",
-        },
         // The watcher's Problems outlive the watch on purpose (you fix them
         // with the game closed), so this is how they go away once dealt with.
         ...(gameProblems > 0

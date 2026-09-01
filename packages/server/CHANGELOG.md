@@ -6,6 +6,12 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `GameMeta` gains an optional `launchPresets` field: game-specific launch
+  option presets (flags verified in the game's binary), consumed by the
+  extension's `paradox-game` run configurations (set for CK3 and Vic3).
+
 ## 0.1.0
 
 First npm release. The full language server (parser, index, scope engine,
