@@ -87,10 +87,13 @@ ${uiCss}
   #results { padding: 4px; }
   #results .px-item { align-items: baseline; gap: 6px; }
   #results .px-item[aria-selected="true"] { background: var(--px-muted-strong); }
-  .kdot {
-    flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--kind-color, var(--px-muted-fg)); cursor: help;
+  /* The kind's own codicon, coloured by the kind (app/main.ts). The row aligns
+     on the text baseline, so the glyph is centred against the row instead. */
+  .kglyph {
+    flex: 0 0 auto; align-self: center; display: flex;
+    color: var(--px-muted-fg); cursor: help;
   }
+  .kglyph > svg.px-icon { width: 14px; height: 14px; }
   .rname { flex: 0 0 auto; font-family: var(--px-font-mono); font-size: var(--px-text-sm); }
   .rname .owner { color: var(--px-muted-fg); }
   .rdoc {
@@ -140,6 +143,16 @@ ${uiCss}
   .site .cline { display: block; white-space: pre; }
   .site .cline.hit { color: var(--px-fg); font-weight: 600; }
   .site .cline:not(.hit) { color: var(--px-muted-fg); }
+  /* Code hidden: the matched line and where it lives, on one row. */
+  .site.compact { flex-direction: row; align-items: baseline; gap: 8px; }
+  .site.compact .cline {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--px-font-mono); font-size: var(--px-text-xs); font-weight: 400;
+  }
+  .site.compact .where { flex: 0 0 auto; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* One control, two pictures: the eye is the state, not the promise. */
+  #codeToggle[aria-pressed="true"] > svg.off,
+  #codeToggle[aria-pressed="false"] > svg.on { display: none; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #placeholder {
     padding: 40px 18px; color: var(--px-muted-fg); display: flex; flex-direction: column; gap: 8px;
@@ -158,6 +171,7 @@ ${uiCss}
     <div class="px-toggle-group" id="kinds">${chips}</div>
     <span class="px-grow"></span>
     <span id="count" class="px-muted px-xs"></span>
+    <button id="codeToggle" class="px-toggle" data-size="sm" aria-pressed="true" data-tip-wrap>${icon("eye", "px-icon on")}${icon("eyeOff", "px-icon off")}Code</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Load the list again from the language server">${icon("rotate")}</button>
   </div>
   <div id="main">

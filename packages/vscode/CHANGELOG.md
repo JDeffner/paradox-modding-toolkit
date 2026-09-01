@@ -9,6 +9,13 @@
   catalog. Hovering `var:x` (and friends) shows an "Examples Wiki" link next
   to the references count that opens the wiki right at that article.
 
+- **The Examples Wiki draws the real kind glyphs.** Catalog rows and article
+  badges show the same codicon pictures as hovers, completion and
+  breadcrumbs (generated from VS Code's own codicon set at build time), so
+  the newly split list icons are visible in the wiki too. A "Code" toggle at
+  the top right collapses example sites to one clickable line when you want
+  density over context; the choice persists, default is show.
+
 - **Scope browsing in the Examples Wiki.** An article that produces a scope
   (the `faith` event target and friends) now lists every trigger, effect and
   event target the game's own docs declare usable from that scope, ordered

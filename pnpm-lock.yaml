@@ -29,6 +29,9 @@ importers:
       '@types/vscode':
         specifier: ^1.90.0
         version: 1.125.0
+      '@vscode/codicons':
+        specifier: 0.0.46-24
+        version: 0.0.46-24
       '@vscode/test-electron':
         specifier: ^3.1.0
         version: 3.1.0
@@ -779,6 +782,9 @@ packages:
 
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
+
+  '@vscode/codicons@0.0.46-24':
+    resolution: {integrity: sha512-KIDWUYxG6eh+DHRg+3G4bS487T+g1ZkLfB4HylOBbCcHsvLdfLMRM/m92DS1Ljhi8nglLr9ucwwWhHTEAC+DpA==}
 
   '@vscode/test-electron@3.1.0':
     resolution: {integrity: sha512-CRqv5u+YYoseuNVJ6Tyo4k0sF0mx4qnKMihRB0PjsUF8Dc0WKtCXo6CNL6nWWm5esfFQsQA/pejMj4ZbpJVLTw==}
@@ -3007,6 +3013,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.10
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@vscode/codicons@0.0.46-24': {}
 
   '@vscode/test-electron@3.1.0':
     dependencies:

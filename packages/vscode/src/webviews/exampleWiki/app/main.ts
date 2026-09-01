@@ -3,9 +3,9 @@
  * does, and jump to the places the game itself uses it.
  *
  * The catalog arrives once and is filtered here, so typing costs no round
- * trip; only the reading pane asks the host for more. Colours follow the one
- * kind table the hover badge and the completion list use (protocol/kinds.ts),
- * so a trigger is the same colour everywhere in the product.
+ * trip; only the reading pane asks the host for more. Glyphs and colours follow
+ * the one kind table the hover badge and the completion list use
+ * (protocol/kinds.ts), so a trigger looks the same everywhere in the product.
  */
 import type {
   ExampleWikiDetail,
@@ -15,11 +15,14 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import { exampleWikiVariableKinds } from "@px-lsp/protocol/protocol";
 import { kindStyle } from "@px-lsp/protocol/kinds";
+import { CODICON_PATHS } from "../codiconGlyphs";
 import type { AppToHost, HostToApp } from "../messages";
 
 interface PanelState {
   /** List pane width as a percentage of the panel, kept across reopen. */
   listWidth?: number;
+  /** Whether an example shows the code around it. Absent means shown. */
+  showCode?: boolean;
 }
 
 declare function acquireVsCodeApi(): {
@@ -45,6 +48,8 @@ let filter = "all";
 let selected: string | null = null;
 let loading = true;
 let loadError: string | null = null;
+/** Whether an example carries the code around it, or collapses to one line. */
+let showCode = vscode.getState()?.showCode ?? true;
 /** name -> the kinds that name has an article for; the cross-link resolver. */
 let byName = new Map<string, ExampleWikiKind[]>();
 
@@ -54,15 +59,50 @@ interface Target {
   kind: ExampleWikiKind;
 }
 let current: Target | null = null;
+/** The article on screen, kept so the code toggle can redraw it without asking
+ *  the host again. Null while one is still loading. */
+let currentDetail: ExampleWikiDetail | null = null;
 /** Articles walked away from, newest last: what the back button pops. */
 const history: Target[] = [];
 
 const VARIABLE_KINDS = new Set<ExampleWikiKind>(exampleWikiVariableKinds);
 
-/** The kind table's name for a wiki kind, so both share one colour. */
+/** The kind table's name for a wiki kind, so both share one glyph and colour. */
 function styleKind(kind: ExampleWikiKind): string {
   if (kind === "datafn_global" || kind === "datafn_member") return "datafn";
   return kind;
+}
+
+/** One parsed svg per codicon, cloned per use: a list draws up to PAGE rows,
+ *  and re-parsing the markup for every one of them shows in scrolling. */
+const glyphTemplates = new Map<string, SVGSVGElement>();
+
+/** The picture the kind table gives this kind, in the editor's icon size. */
+function glyphNode(codicon: string): SVGSVGElement | null {
+  const paths = CODICON_PATHS[codicon];
+  if (!paths) return null;
+  let template = glyphTemplates.get(codicon);
+  if (!template) {
+    const holder = document.createElement("template");
+    holder.innerHTML = `<svg class="px-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">${paths}</svg>`;
+    template = holder.content.firstElementChild as SVGSVGElement;
+    glyphTemplates.set(codicon, template);
+  }
+  return template.cloneNode(true) as SVGSVGElement;
+}
+
+/** The kind's glyph in the kind's colour, wrapped so it can carry the tip:
+ *  `svg.px-icon` takes no pointer events, so the box has to be the target. */
+function kindMark(kind: ExampleWikiKind): HTMLElement {
+  const style = kindStyle(styleKind(kind));
+  const mark = document.createElement("span");
+  mark.className = "kglyph";
+  if (style.color) mark.style.color = style.color;
+  const glyph = glyphNode(style.codicon);
+  if (glyph) mark.append(glyph);
+  mark.setAttribute("data-tip", KIND_TIP[kind]);
+  mark.setAttribute("data-tip-wrap", "");
+  return mark;
 }
 
 const KIND_WORD: Record<ExampleWikiKind, string> = {
@@ -222,13 +262,7 @@ function row(entry: ExampleWikiEntry): HTMLElement {
   el.dataset.key = key(entry);
   if (key(entry) === selected) el.setAttribute("aria-selected", "true");
 
-  const dot = document.createElement("span");
-  dot.className = "kdot";
-  const color = kindStyle(styleKind(entry.kind)).color;
-  if (color) dot.style.setProperty("--kind-color", color);
-  dot.setAttribute("data-tip", KIND_TIP[entry.kind]);
-  dot.setAttribute("data-tip-wrap", "");
-  el.append(dot);
+  el.append(kindMark(entry.kind));
 
   const name = document.createElement("span");
   name.className = "rname";
@@ -340,6 +374,7 @@ function noteLine(text: string): HTMLElement {
 }
 
 function showLoadingDetail(name: string): void {
+  currentDetail = null;
   const body = $("detailBody");
   $("placeholder").hidden = true;
   body.hidden = false;
@@ -350,6 +385,7 @@ function showLoadingDetail(name: string): void {
 }
 
 function renderDetail(detail: ExampleWikiDetail | null, name: string): void {
+  currentDetail = detail;
   const body = $("detailBody");
   $("placeholder").hidden = true;
   body.hidden = false;
@@ -381,9 +417,11 @@ function renderDetail(detail: ExampleWikiDetail | null, name: string): void {
   badge.setAttribute("data-variant", "outline");
   badge.setAttribute("data-tip", KIND_TIP[detail.kind]);
   badge.setAttribute("data-tip-wrap", "");
-  const color = kindStyle(styleKind(detail.kind)).color;
-  if (color) badge.style.color = color;
-  badge.textContent = KIND_WORD[detail.kind];
+  const style = kindStyle(styleKind(detail.kind));
+  if (style.color) badge.style.color = style.color;
+  const glyph = glyphNode(style.codicon);
+  if (glyph) badge.append(glyph);
+  badge.append(KIND_WORD[detail.kind]);
   title.append(badge);
   body.append(title);
 
@@ -534,40 +572,51 @@ function renderDetail(detail: ExampleWikiDetail | null, name: string): void {
 }
 
 /** One example site: the lines around it, the matched line picked out, and the
- *  whole block a way into the file at that line. */
+ *  whole block a way into the file at that line. With the code toggle off it
+ *  keeps the matched line and the file it sits in, on one row. */
 function siteBlock(site: ExampleWikiSite): HTMLElement {
   const el = document.createElement("div");
   el.className = "site";
   el.setAttribute("role", "button");
   el.tabIndex = 0;
 
-  const head = document.createElement("div");
-  head.className = "head";
-  if (site.label) {
-    const tag = document.createElement("span");
-    tag.className = "tag";
-    tag.textContent = site.label;
-    head.append(tag);
-  }
   const where = document.createElement("span");
+  where.className = "where";
   where.textContent = `${fileName(site.file)}:${site.line}`;
-  head.append(where);
 
-  const pre = document.createElement("pre");
-  if (site.context && site.context.length > 0) {
-    const start = site.contextStart ?? site.line;
-    site.context.forEach((text, i) => {
-      const line = document.createElement("span");
-      line.className = start + i === site.line ? "cline hit" : "cline";
-      // An empty span collapses the line away; a space keeps the shape.
-      line.textContent = text === "" ? " " : text;
-      pre.append(line);
-    });
+  if (showCode) {
+    const head = document.createElement("div");
+    head.className = "head";
+    if (site.label) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = site.label;
+      head.append(tag);
+    }
+    head.append(where);
+
+    const pre = document.createElement("pre");
+    if (site.context && site.context.length > 0) {
+      const start = site.contextStart ?? site.line;
+      site.context.forEach((text, i) => {
+        const line = document.createElement("span");
+        line.className = start + i === site.line ? "cline hit" : "cline";
+        // An empty span collapses the line away; a space keeps the shape.
+        line.textContent = text === "" ? " " : text;
+        pre.append(line);
+      });
+    } else {
+      pre.textContent = site.text;
+    }
+    el.append(head, pre);
   } else {
-    pre.textContent = site.text;
+    el.classList.add("compact");
+    const line = document.createElement("span");
+    line.className = "cline hit";
+    line.textContent = site.text.trim();
+    el.append(line, where);
   }
 
-  el.append(head, pre);
   el.setAttribute("data-tip", `Open ${site.file} at line ${site.line}`);
   el.setAttribute("data-tip-wrap", "");
   const open = (): void => send({ type: "open", file: site.file, line: site.line });
@@ -640,6 +689,24 @@ input.addEventListener("input", () => {
   renderList();
 });
 $("refresh").addEventListener("click", () => send({ type: "refresh" }));
+
+const codeToggle = $<HTMLButtonElement>("codeToggle");
+function setShowCode(on: boolean, remember: boolean): void {
+  showCode = on;
+  codeToggle.setAttribute("aria-pressed", String(on));
+  codeToggle.setAttribute(
+    "data-tip",
+    on
+      ? "Hide the code around each example. Every example stays one clickable line."
+      : "Show the code around each example."
+  );
+  if (remember) vscode.setState({ ...vscode.getState(), showCode: on });
+}
+setShowCode(showCode, false);
+codeToggle.addEventListener("click", () => {
+  setShowCode(!showCode, true);
+  if (current && currentDetail) renderDetail(currentDetail, current.name);
+});
 $("back").addEventListener("click", () => {
   const previous = history.pop();
   if (previous) openEntry(previous, false);

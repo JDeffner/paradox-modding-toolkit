@@ -272,6 +272,7 @@ delete the .cjs). Per-game scripts take `--game <id>`, default `ck3`.
 | `import-cwt-types.ts <clone>` | `games/eu5/schema.generated.ts` | By-hand importer from a pinned cwtools-eu5-config clone; update the pinned commit in the file header AND `THIRD-PARTY-NOTICES.md` |
 | `audit-schema-coverage.ts [--game]` | stdout | Schema vs game folders; gaps should be 0 or documented |
 | `gen-brand.ts` / `gen-icons.ts` | `media/` brand + file icons | Geometry in `brandGeometry.ts`; regeneration guide in `docs/file-icons.md` |
+| `gen-codicon-glyphs.ts` | `webviews/exampleWiki/codiconGlyphs.ts` | Inlines the codicons `protocol/kinds.ts` names, so a webview draws the same picture as the hover badge without the editor's font |
 | `rank-eval.ts` / `fuzzy-diag.ts` | stdout | Completion-quality measurement; run before and after any ranking change |
 
 ## Conventions
