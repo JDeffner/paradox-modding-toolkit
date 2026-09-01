@@ -16,11 +16,11 @@ the in-tree reference clients. This document stays the per-method reference.
 version, independent of the extension since extension 0.3.3; first npm
 release 0.1.0). Treat any change here as an API change: additions are
 backward-compatible, renames/removals are called out in the package's
-`CHANGELOG.md`. Current as of `@px-lsp/protocol` 0.1.1, which carries the
+`CHANGELOG.md`. Current as of `@px-lsp/protocol` 0.2.0, which carries the
 full contract below including `serverInfo` in the `initialize` result, the
 `client` capability object superseding `clientCommands`, `client.fileLinks`,
-`paradox/scopeAt`, and `dataDir` (`paradox/*` has been the method prefix
-since extension 0.1.2).
+`paradox/scopeAt`, the `paradox/exampleWiki` pair, and `dataDir`
+(`paradox/*` has been the method prefix since extension 0.1.2).
 
 ## Transport and lifecycle
 

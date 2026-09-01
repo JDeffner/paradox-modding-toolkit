@@ -182,14 +182,15 @@
   per-version files or one big file cut at the version headline,
   `px.workshop.changelog`, Markdown-to-BBCode).
 
-- **The translation-upload gate probes the binding's real capability.**
-  steamworks.js 0.6.0 (now bundled) added per-language *queries* - the "on
-  Steam" hints under each translation now show genuinely translated text -
-  but not per-language *updates*, and the old version-number gate would have
-  waved it through, letting a translation overwrite the default-language
-  text. The gate (extension and bridge both) now reads the bundled build's
-  own type declarations for `UgcUpdate.language` and unlocks only when the
-  capability is really there.
+- **Translation uploads work for real: the bridge switched to
+  steamwand.js.** The native binding under the Steam child process is now
+  steamwand.js (koffi FFI) instead of steamworks.js. It carries both
+  per-language *queries* - the "on Steam" hints under each translation show
+  genuinely translated text - and per-language *updates*
+  (`SetItemUpdateLanguage`), so uploading a translation needs no capability
+  gate any more; the old gate that probed the bundled build's type
+  declarations is gone. A missing symbol fails the job loudly instead of
+  silently overwriting the default-language text.
 
 - **Panel polish from the first field round**: the download button's tooltip
   wraps instead of spanning the screen; "Mod version" and "Game version" say
@@ -237,9 +238,7 @@
   - **draft translations** of the item's title and description per Steam
     language (the mod's own localization folders are suggested first) and
     upload them all in one go - one Steam submit per language, no changenote
-    spam. Uploading translations needs a steamworks.js build with
-    per-language updates; until one is bundled the drafts still save and the
-    panel says exactly what is missing;
+    spam;
   - **upload selectively**: mod files, details and translations are separate
     toggles, so a description fix does not re-upload gigabytes of content;
   - **link an existing Workshop item**: pick from your published items (for
