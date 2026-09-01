@@ -1,6 +1,6 @@
 {
   "name": "px-lsp",
-  "version": "0.4.0",
+  "version": "0.3.5",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {
@@ -12,7 +12,9 @@
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
     "package:test": "node scripts/package-test.mjs",
-    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app && tsc -p packages/vscode/src/webviews/flagBuilder/app && tsc -p packages/vscode/src/webviews/eventGraph/app && tsc -p packages/vscode/src/webviews/workshop/app && tsc -p packages/vscode/src/webviews/exampleWiki/app",
+    "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
+    "watch:webviews": "node scripts/compile-webviews.mjs --watch",
+    "preview:webviews": "esbuild scripts/webview-preview.ts --bundle --platform=node --external:esbuild --loader:.css=text --outfile=dist/webview-preview.cjs --log-level=warning && node dist/webview-preview.cjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",
@@ -27,6 +29,7 @@
     "@types/jsdom": "^28.0.3",
     "@types/node": "^26.1.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.3.0",
     "adm-zip": "^0.6.0",

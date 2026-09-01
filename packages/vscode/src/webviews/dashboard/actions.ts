@@ -1,6 +1,5 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { IconName } from "../shared/icons";
-import { hasFormatDocs } from "../../meta";
 
 export interface ActionItem {
   label: string;
@@ -38,37 +37,31 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Event Graph",
           command: "px.showEventGraph",
           icon: "waypoints",
-          tip: "Interactive graph of what fires what: events, on_actions and decisions of the focused mod.",
-        },
-        {
-          label: "Examples Wiki",
-          command: "px.showExamplesWiki",
-          icon: "bookOpen",
-          tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
+          tip: "Graph of what fires what in the focused mod.",
         },
         {
           label: "Mod Report",
           command: "px.modReport",
           icon: "fileText",
-          tip: "Summary of the focused mod: content counts, localization coverage, problems.",
+          tip: "Content counts, localization coverage and problems.",
         },
         {
           label: "Simulate Event",
           command: "px.simulateEvent",
           icon: "flaskConical",
-          tip: "Static walkthrough of what happens when the event at the cursor fires, with step-into links along the chain.",
+          tip: "Walk through what the event at the cursor does.",
         },
         {
           label: "GUI Widget Tree",
           command: "px.showGuiTree",
           icon: "listTree",
-          tip: "The widget tree of the .gui file you are editing, with the templates and types each widget comes from.",
+          tip: "The widget tree of the .gui file you are editing.",
         },
         {
           label: "GUI Editor",
           command: "px.openGuiEditor",
           icon: "layoutTemplate",
-          tip: "Pixel-accurate rendering of the .gui window you are editing, with click-to-select, drag, resize and property edits.",
+          tip: "Render and edit the .gui window you are editing.",
         },
         ...(meta.flagBuilder
           ? [
@@ -76,7 +69,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 label: "Flag Builder",
                 command: "px.openFlagBuilder",
                 icon: "flag" as const,
-                tip: "Compose a coat of arms from the game's patterns and emblems, preview it, and write it into the mod.",
+                tip: "Compose a coat of arms and write it into the mod.",
               },
             ]
           : []),
@@ -84,7 +77,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Convert Image to DDS",
           command: "px.convertToDds",
           icon: "image",
-          tip: "Convert PNG, JPEG or WebP files to the DDS format the game reads. Also in the Explorer right-click menu.",
+          tip: "Convert PNG, JPEG or WebP files to DDS.",
         },
       ],
     },
@@ -95,13 +88,13 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Steam Workshop Panel",
           command: "px.openWorkshopManager",
           icon: "cloudUpload",
-          tip: "The mod's Workshop item in one place: description, visibility, translations, statistics - and the only place uploads happen.",
+          tip: "The mod's Workshop listing, and where uploads happen.",
         },
         {
           label: "Open Workshop Page",
           command: "px.openWorkshopPage",
           icon: "externalLink",
-          tip: "Open the mod's Steam Workshop page in the browser (description, visibility, comments).",
+          tip: "Open the mod's Workshop page in the browser.",
         },
       ],
     },
@@ -112,15 +105,36 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "New Mod…",
           command: "px.createMod",
           icon: "package",
-          tip:
-            "Create a new mod with its descriptor. Recommended: a mod projects folder, where git and " +
-            "Workshop files live next to the mod instead of inside the upload; the launcher finds the mod via a link.",
+          tip: "Create a new mod folder with its descriptor.",
         },
         {
           label: "New Content…",
           command: "px.newContent",
           icon: "plus",
-          tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
+          tip: "Scaffold an event, decision or trait into the right folder.",
+        },
+      ],
+    },
+    {
+      label: "Info",
+      items: [
+        {
+          label: "Join the Discord",
+          command: "px.openDiscord",
+          icon: "messageSquare",
+          tip: "Open the toolkit's Discord invite in your browser.",
+        },
+        {
+          label: "Wiki",
+          command: "px.openWiki",
+          icon: "library",
+          tip: "The toolkit's reference pages in one searchable place.",
+        },
+        {
+          label: "Examples Wiki",
+          command: "px.showExamplesWiki",
+          icon: "bookOpen",
+          tip: "Search every trigger, effect and datafunction the game has.",
         },
       ],
     },
@@ -141,7 +155,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 count: gameProblems,
                 command: "px.clearGameProblems",
                 icon: "circleX",
-                tip: "Remove the Problems that came from the game's error.log. They stay after you stop the watcher, so you can work through them with the game closed.",
+                tip: "Remove the Problems that came from the game's error.log.",
               },
             ] satisfies ActionItem[])
           : []),
@@ -153,67 +167,31 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 label: "Create Tiger Baseline",
                 command: "px.tigerCreateBaseline",
                 icon: "camera",
-                tip: "Snapshot today's tiger problems. With the 'new problems only' toggle on, only problems newer than the snapshot show.",
+                tip: "Snapshot today's tiger problems as the baseline.",
               },
               {
                 label: "Find Unused Definitions",
                 command: "px.tigerUnused",
                 icon: "search",
-                tip: "One tiger run that also reports definitions nothing references.",
+                tip: "Report definitions nothing in the mod references.",
               },
               {
                 label: `Generate ${meta.tiger.confName}`,
                 command: "px.tigerGenerateConf",
                 icon: "settings",
-                tip: "Write a tiger config for this mod, with its dependency mods declared as load_mod entries.",
+                tip: "Write a tiger config for this mod.",
               },
               {
                 label: `Update ${meta.tiger.binaryName}`,
                 command: "px.downloadTiger",
                 icon: "download",
-                tip: "Download the latest tiger release into the extension's storage (also how you update after a game patch).",
+                tip: "Download the latest tiger release.",
               },
             ] satisfies ActionItem[])
           : []),
       ],
     },
   ];
-}
-
-/**
- * Reference links: not a tool section but quiet single buttons in the panel
- * footer, below "Join the Discord". Hidden the same way as the rows above
- * (`px.sidebar.hidden`, keyed by command id).
- */
-export function referenceItems(meta: GameMeta): ActionItem[] {
-  return [
-    // Only CK3 ships _*.info docs; elsewhere the same row opens the vanilla
-    // files of the folder plus a search on the game's modding wiki.
-    hasFormatDocs(meta.id)
-      ? {
-          label: "Format Docs",
-          command: "px.openInfoDocs",
-          icon: "bookOpen" as const,
-          tip: "The game's own _*.info format documentation for the file you are editing.",
-        }
-      : {
-          label: "Vanilla Examples & Wiki",
-          command: "px.openInfoDocs",
-          icon: "bookOpen" as const,
-          tip: "The vanilla files of the folder you are editing, and a search on the game's modding wiki.",
-        },
-    {
-      label: "Image Guidelines",
-      command: "px.imageGuidelines",
-      icon: "bookOpen",
-      tip: "Reference for the sizes and formats the game expects (icons, portraits, flags, …).",
-    },
-  ];
-}
-
-export function visibleReferenceItems(meta: GameMeta, hidden: readonly string[]): ActionItem[] {
-  const skip = new Set(hidden);
-  return referenceItems(meta).filter((it) => !skip.has(it.command));
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   kindBadge,
   renderCard,
   renderHover,
+  renderHoverMarkdown,
   scopeHereLine,
   scopePill,
   scopeType,
@@ -102,6 +103,41 @@ describe("the kind map", () => {
     }
   });
 
+  it("resolves every mapped kind to the SymbolKind drawing its own picture", () => {
+    // VS Code draws SymbolKind member X with `symbol-<kebab X>`, so a non-null
+    // symbolKind must kebab back to the codicon, modulo the alias pairs.
+    const ALIAS: Record<string, string> = { "symbol-value": "symbol-enum", "symbol-text": "symbol-key" };
+    for (const k of mappedKinds()) {
+      const style = kindStyle(k);
+      if (style.symbolKind === null) continue;
+      const kebab = style.symbolKind.replace(/(?<!^)([A-Z])/g, "-$1").toLowerCase();
+      expect(ALIAS[style.codicon] ?? style.codicon).toBe(`symbol-${kebab}`);
+    }
+    // The pictures no SymbolKind draws stay null rather than guessing.
+    expect(kindStyle("texture").symbolKind).toBeNull();
+    expect(kindStyle("define").symbolKind).toBeNull();
+    // The breadcrumb mismatch this replaced: an event is a class, not a bolt.
+    expect(kindStyle("event").symbolKind).toBe("Class");
+  });
+
+  it("gives the four list kinds four pictures", () => {
+    // add_to_list dies with its effect block (array); the *_variable_list
+    // kinds are variable storage, split by storage class: object-attached
+    // (enum member), event-chain-local (plain list), game-global (globe).
+    const kinds = ["list", "variable_list", "local_variable_list", "global_variable_list"];
+    expect(kinds.map((k) => kindStyle(k).codicon)).toEqual([
+      "symbol-array",
+      "symbol-enum-member",
+      "list-unordered",
+      "globe",
+    ]);
+    // All four keep the blue enum-member row: no blue completion kind is free.
+    for (const k of kinds) {
+      expect(kindStyle(k).completionKind).toBe("EnumMember");
+      expect(kindStyle(k).color).toBe("var(--vscode-symbolIcon-enumeratorMemberForeground)");
+    }
+  });
+
   it("paints the badge with the completion kind's own colour token", () => {
     // The suggest widget colours a row from the CompletionItemKind we send, and
     // an extension cannot override it, so the badge takes the same token and the
@@ -130,6 +166,7 @@ describe("the kind map", () => {
     expect(kindStyle("on_action")).toEqual({
       codicon: "symbol-interface",
       completionKind: "Interface",
+      symbolKind: "Interface",
       color: "var(--vscode-symbolIcon-classForeground)",
     });
     // texture: no completion kind draws `file-media`, so the row takes the
@@ -137,6 +174,7 @@ describe("the kind map", () => {
     expect(kindStyle("texture")).toEqual({
       codicon: "file-media",
       completionKind: "File",
+      symbolKind: null,
       color: null,
     });
   });
@@ -196,6 +234,56 @@ describe("the shared footer", () => {
     expect(md).toContain("*1 more meaning*");
     setHoverDetail("compact");
     expect(renderHover(["A", "B", "C"], null)).toContain("*2 more meanings*");
+  });
+});
+
+describe("the one assembly path every hover surface renders through", () => {
+  const trigger = { kind: "trigger", name: "is_ai", wiki: { name: "is_ai", kind: "trigger" } };
+
+  it("lifts a single card's provenance onto the footer, so no row costs three lines", () => {
+    tier("bare");
+    const md = renderHoverMarkdown(
+      [{ kind: "text_format", name: "#bold", provenance: "[a.gui:3](file:///a)" }],
+      null
+    );
+    expect(md.split(NL).filter((l) => l !== "")).toEqual(["■ text format **#bold**", "[a.gui:3](file:///a)"]);
+  });
+
+  it("keeps per-card provenance on a stack, where it belongs to one meaning", () => {
+    const md = renderHoverMarkdown([
+      { kind: "trigger", name: "category", provenance: "P1" },
+      { kind: "structure_key", name: "category", provenance: "P2" },
+    ]);
+    expect(md).toContain("P1");
+    expect(md).toContain("P2");
+    expect(md).toContain("---");
+  });
+
+  it("puts the Examples Wiki link last on the footer, after the scope and the links", () => {
+    const md = renderHoverMarkdown([trigger], scopeHereLine("character", null), ["1 reference"]);
+    const footer = md.split(NL).at(-1)!;
+    expect(footer.startsWith("Scope here: **character** · 1 reference · [Examples Wiki](")).toBe(true);
+    expect(footer).toContain(encodeURIComponent(JSON.stringify([{ name: "is_ai", kind: "trigger" }])));
+  });
+
+  it("takes the article from the first card that has one, and emits only one", () => {
+    const md = renderHoverMarkdown([
+      { kind: "structure_key", name: "category" },
+      trigger,
+      { kind: "effect", name: "category", wiki: { name: "category", kind: "effect" } },
+    ]);
+    expect(md.match(/Examples Wiki/g)).toHaveLength(1);
+    expect(md).toContain(encodeURIComponent(JSON.stringify([{ name: "is_ai", kind: "trigger" }])));
+  });
+
+  it("emits no wiki link for a client that does not register the command", () => {
+    tier("bare");
+    expect(renderHoverMarkdown([trigger], scopeHereLine("character", null))).not.toContain("Examples Wiki");
+  });
+
+  it("emits no footer at all when there is nothing to put on it", () => {
+    tier("bare");
+    expect(renderHoverMarkdown([{ kind: "keyword", name: "base" }])).toBe("■ keyword **base**");
   });
 });
 

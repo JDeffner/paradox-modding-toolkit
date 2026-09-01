@@ -110,6 +110,25 @@ describe("hover fallback cards", () => {
     expect(md).toContain("restricts the enclosing");
   });
 
+  it("keyword and scope-word cards carry their Examples Wiki article", () => {
+    const md = hoverMd(new ServerData(), "my.1 = {\n\ttrigger = { NOT = { } }\n}", 1, 14)!;
+    // `not` and `NOT` are one article, so the link names the canonical spelling.
+    expect(md).toContain(encodeURIComponent(JSON.stringify([{ name: "NOT", kind: "keyword" }])));
+    const lower = hoverMd(new ServerData(), "my.1 = {\n\ttrigger = { not = { } }\n}", 1, 14)!;
+    expect(lower).toContain("**not**");
+    expect(lower).toContain(encodeURIComponent(JSON.stringify([{ name: "NOT", kind: "keyword" }])));
+    const scope = hoverMd(new ServerData(), "my.1 = {\n\tx = prevprev\n}", 1, 6)!;
+    expect(scope).toContain(encodeURIComponent(JSON.stringify([{ name: "prevprev", kind: "scope_word" }])));
+  });
+
+  it("says nothing about the scope when inference has nothing to say", () => {
+    const doc = TextDocument.create(uri(), "paradox", 1, "my.1 = {\n\ttrigger = { NOT = { } }\n}");
+    const hover = provideHover(new ServerData(), doc, { line: 1, character: 14 }, null);
+    const md = (hover!.contents as { value: string }).value;
+    expect(md).not.toContain("Scope here");
+    expect(md).not.toContain("unknown");
+  });
+
   it("scope words: ROOT (uppercase) and prevprev", () => {
     const md = hoverMd(new ServerData(), "my.1 = {\n\tleft_portrait = { character = ROOT }\n}", 1, 32);
     expect(md).toContain("scope");

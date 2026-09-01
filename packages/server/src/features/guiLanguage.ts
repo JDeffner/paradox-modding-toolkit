@@ -17,7 +17,7 @@ import { guiDefSources, type GuiPaths } from "./guiNavigation";
 import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
-import { fileLink, renderCard, renderHover } from "./hoverRender";
+import { fileLink, renderHoverMarkdown, type CardInput } from "./hoverRender";
 import { assetDirContext, provideAssetDirCompletion } from "./assetPaths";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import * as path from "path";
@@ -232,7 +232,7 @@ export function provideGuiHover(
   const { lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
 
-  const cards: string[] = [];
+  const cards: CardInput[] = [];
 
   const typeInfo = guiSchema().types[lower];
   if (typeInfo) {
@@ -241,15 +241,13 @@ export function provideGuiHover(
       .slice(0, 8)
       .map(([k]) => `\`${k}\``)
       .join(" ");
-    cards.push(
-      renderCard({
-        kind: "gui_type",
-        badgeLabel: "widget type",
-        name: lower,
-        headTail: `· ${typeInfo.count}× in vanilla gui`,
-        doc: top ? `Common properties: ${top}` : undefined,
-      })
-    );
+    cards.push({
+      kind: "gui_type",
+      badgeLabel: "widget type",
+      name: lower,
+      headTail: `· ${typeInfo.count}× in vanilla gui`,
+      doc: top ? `Common properties: ${top}` : undefined,
+    });
   }
 
   // Enum value token (`parentanchor = top|left`): the hovered word is a value
@@ -259,17 +257,15 @@ export function provideGuiHover(
     const values = guiSchema().enums?.[enumKey];
     if (values && values.includes(lower)) {
       const combinable = enumCombinable().has(enumKey);
-      cards.push(
-        renderCard({
-          kind: "gui_enum_value",
-          badgeLabel: "gui enum value",
-          name: lower,
-          headTail: `of \`${enumKey}\``,
-          doc:
-            `Allowed: ${values.map((v) => `\`${v}\``).join(" ")}` +
-            (combinable ? "\n\nCombine flags with `|` (e.g. `top|left`)." : "."),
-        })
-      );
+      cards.push({
+        kind: "gui_enum_value",
+        badgeLabel: "gui enum value",
+        name: lower,
+        headTail: `of \`${enumKey}\``,
+        doc:
+          `Allowed: ${values.map((v) => `\`${v}\``).join(" ")}` +
+          (combinable ? "\n\nCombine flags with `|` (e.g. `top|left`)." : "."),
+      });
     }
   }
 
@@ -277,15 +273,13 @@ export function provideGuiHover(
   const encInfo = enclosing ? guiSchema().types[enclosing] : null;
   const propCount = encInfo?.props[lower] ?? guiSchema().globalProps[lower];
   if (!typeInfo && propCount) {
-    cards.push(
-      renderCard({
-        kind: "gui_property",
-        badgeLabel: "gui property",
-        name: lower,
-        headTail: encInfo ? `on ${enclosing}` : undefined,
-        doc: `${propCount.toLocaleString("en-US")} uses in the vanilla gui tree.`,
-      })
-    );
+    cards.push({
+      kind: "gui_property",
+      badgeLabel: "gui property",
+      name: lower,
+      headTail: encInfo ? `on ${enclosing}` : undefined,
+      doc: `${propCount.toLocaleString("en-US")} uses in the vanilla gui tree.`,
+    });
   }
 
   // Template/type card from the cross-file store: base chain, overridable
@@ -316,16 +310,14 @@ export function provideGuiHover(
           })
         );
       }
-      cards.push(
-        renderCard({
-          kind: resolved.kind === "template" ? "gui_template" : "gui_type",
-          badgeLabel: resolved.kind,
-          name: resolved.kind === "template" ? word : resolved.name,
-          headTail: resolved.kind === "type" ? `= ${(def as GuiTypeDef).base}` : undefined,
-          doc: docParts.length > 0 ? docParts.join("\n\n") : undefined,
-          provenance: footer.length > 0 ? footer.join(" · ") : undefined,
-        })
-      );
+      cards.push({
+        kind: resolved.kind === "template" ? "gui_template" : "gui_type",
+        badgeLabel: resolved.kind,
+        name: resolved.kind === "template" ? word : resolved.name,
+        headTail: resolved.kind === "type" ? `= ${(def as GuiTypeDef).base}` : undefined,
+        doc: docParts.length > 0 ? docParts.join("\n\n") : undefined,
+        provenance: footer.length > 0 ? footer.join(" · ") : undefined,
+      });
     }
   }
 
@@ -336,21 +328,19 @@ export function provideGuiHover(
       const link = fileLink(def.file, `${path.basename(def.file)}:${def.line + 1}`, {
         fragment: String(def.line + 1),
       });
-      cards.push(
-        renderCard({
-          kind: "gui_type",
-          badgeLabel: "template / type",
-          name: def.name,
-          headTail: `· ${data.originLabel(def)}`,
-          provenance: link,
-        })
-      );
+      cards.push({
+        kind: "gui_type",
+        badgeLabel: "template / type",
+        name: def.name,
+        headTail: `· ${data.originLabel(def)}`,
+        provenance: link,
+      });
     }
   }
 
   if (cards.length === 0) return null;
   return {
-    contents: { kind: MarkupKind.Markdown, value: renderHover(cards, null) },
+    contents: { kind: MarkupKind.Markdown, value: renderHoverMarkdown(cards) },
     range: {
       start: { line: position.line, character: range.start },
       end: { line: position.line, character: range.end },

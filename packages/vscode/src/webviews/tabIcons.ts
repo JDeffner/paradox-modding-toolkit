@@ -17,7 +17,8 @@ export type TabIconName =
   | "event-sim"
   | "workshop"
   | "bbcode-preview"
-  | "examples-wiki";
+  | "examples-wiki"
+  | "wiki";
 
 let extensionUri: vscode.Uri | undefined;
 

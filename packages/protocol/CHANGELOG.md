@@ -8,7 +8,7 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## 0.2.0
 
-Ships with toolkit 0.4.0.
+Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.
 
 ### Added
 
@@ -16,6 +16,25 @@ Ships with toolkit 0.4.0.
   index and the per-entry detail behind the extension's Examples Wiki panel
   (name, kind, short doc and vanilla usage count per row; full doc, scopes,
   usage block, literals, producers, members and example sites per entry).
+
+- Examples Wiki wire additions, all optional and additive: `ExampleWikiKind`
+  gains the seven variable/list kinds (`exampleWikiVariableKinds`) and the
+  two vocabulary kinds `keyword`/`scope_word`
+  (`exampleWikiVocabularyKinds`); scope-producing token details gain
+  `fromScope` (triggers/effects/targets declared usable from that scope);
+  `ExampleWikiSite` gains `context`/`contextStart`/`label` for inline
+  snippets; `ExampleWikiDetail` gains `valueType`/`containers`/
+  `containersTotal`; `clientCommands.showExamplesWiki` names the command a
+  capable client runs to open the wiki at an article (hover deep links gate
+  on it).
+
+- `kinds.ts`: each kind style carries a `symbolKind` (the LSP `SymbolKind`
+  name drawing the same picture, or null when none does), so document and
+  workspace symbols resolve through the one kind map instead of a second
+  hand-kept table. The four list kinds also split into four pictures:
+  `list` = array, `variable_list` = enum member, `local_variable_list` =
+  plain list, `global_variable_list` = globe (completion rows keep the one
+  blue enum-member kind; the widget has no free blue kinds).
 
 - `upsertDescriptorBlock` in `descriptorMod`: replace or append a top-level
   `key={...}` block (tags editing in the Workshop panel), preserving the

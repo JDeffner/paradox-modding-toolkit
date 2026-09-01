@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.4.0",
+  "version": "0.3.5",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -354,6 +354,12 @@
         "category": "Paradox",
         "title": "Show Examples Wiki",
         "icon": "$(book)"
+      },
+      {
+        "command": "px.openWiki",
+        "category": "Paradox",
+        "title": "Open Wiki",
+        "icon": "$(library)"
       },
       {
         "command": "px.simulateEvent",
@@ -799,7 +805,8 @@
             "type": "object",
             "default": null,
             "order": 6,
-            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Set it in the mod's workspace settings and commit it. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
+            "scope": "window",
+            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped: set it in the settings of the folder you OPEN (or the `.code-workspace`) and commit it; a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -883,6 +890,12 @@
             "default": false,
             "order": 5,
             "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Modding Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
+          },
+          "px.dev.webviewSource": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "markdownDescription": "**Toolkit development only.** Absolute path to a toolkit checkout's `packages/vscode/dist/webview` folder. When set, panels load their app bundles from there instead of the installed extension and reload themselves when a bundle is rebuilt (`pnpm run watch:webviews` in the checkout). Leave empty unless you are working on the toolkit itself."
           }
         }
       }
@@ -1027,6 +1040,10 @@
         },
         {
           "command": "px.showExamplesWiki",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openWiki",
           "when": "px.isCk3Workspace"
         },
         {
@@ -1473,9 +1490,9 @@
     ]
   },
   "scripts": {
-    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs",
+    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs && node ../../scripts/copy-docs.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/exampleWiki/app/main.ts --bundle --outfile=dist/webview/exampleWiki.js --format=iife --platform=browser --target=es2020",
+    "compile:webview": "node ../../scripts/compile-webviews.mjs",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",

@@ -2,33 +2,13 @@
  * Fuzzy workspace symbols (Ctrl+T): jump to any indexed definition in the mod
  * or vanilla. Subsequence matching, mod content and better matches first.
  */
-import { SymbolKind, type WorkspaceSymbol } from "vscode-languageserver/node";
+import { type WorkspaceSymbol } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type { Definition } from "@px-lsp/protocol/types";
 import type { ServerData } from "../serverData";
+import { lspSymbolKind } from "./symbolKind";
 
 const MAX_RESULTS = 512;
-
-const KIND_MAP: Record<string, SymbolKind> = {
-  event: SymbolKind.Event,
-  on_action: SymbolKind.Event,
-  scripted_effect: SymbolKind.Function,
-  scripted_trigger: SymbolKind.Interface,
-  scripted_modifier: SymbolKind.Property,
-  script_value: SymbolKind.Constant,
-  loc_key: SymbolKind.String,
-  trait: SymbolKind.EnumMember,
-  landed_title: SymbolKind.Namespace,
-  character: SymbolKind.Object,
-  saved_scope: SymbolKind.Variable,
-  variable: SymbolKind.Variable,
-  local_variable: SymbolKind.Variable,
-  global_variable: SymbolKind.Variable,
-  variable_list: SymbolKind.Variable,
-  local_variable_list: SymbolKind.Variable,
-  global_variable_list: SymbolKind.Variable,
-  gui_type: SymbolKind.Class,
-};
 
 /** Case-insensitive subsequence match with a crude quality score (lower = better). */
 function fuzzyScore(query: string, candidate: string): number | null {
@@ -59,7 +39,7 @@ export function provideWorkspaceSymbols(data: ServerData, query: string): Worksp
   scored.sort((a, b) => a.score - b.score || a.def.name.localeCompare(b.def.name));
   return scored.slice(0, MAX_RESULTS).map(({ def }) => ({
     name: def.name,
-    kind: KIND_MAP[def.kind] ?? SymbolKind.Object,
+    kind: lspSymbolKind(def.kind),
     containerName: `${def.kind.replace(/_/g, " ")} (${def.source})`,
     location: {
       uri: URI.file(def.file).toString(),

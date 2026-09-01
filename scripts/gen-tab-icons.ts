@@ -19,6 +19,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
+  wiki: "library",
   workshop: "cloudUpload",
   "bbcode-preview": "eye",
 };

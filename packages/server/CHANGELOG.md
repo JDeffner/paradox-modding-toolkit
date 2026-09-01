@@ -8,7 +8,7 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## 0.3.0
 
-Ships with toolkit 0.4.0.
+Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.
 
 ### Security
 
@@ -18,6 +18,23 @@ Ships with toolkit 0.4.0.
 
 ### Added
 
+- Every hover renders through one shared card assembly
+  (`renderHoverMarkdown`): gui, datafunction, localization-format, texture
+  and script hovers share the card anatomy and one footer line, and cards
+  whose subject has an Examples Wiki article emit a capability-gated link to
+  it. Keywords and scope words became wiki kinds, single-sourced from the
+  table the hover cards read. The "Scope here: unknown" line is dropped when
+  inference has nothing to say.
+- The Examples Wiki serves articles for the workspace's own variables and
+  lists (kind, inferred value type, set/read sites with inline context,
+  containers), rebuilt when the index changes; engine-token example sites
+  carry surrounding lines for inline display. Variable hovers link to the
+  article via `clientCommands.showExamplesWiki` when the client declares it.
+- Document symbols (outline, breadcrumbs, sticky scroll) and workspace
+  symbols resolve their `SymbolKind` through the shared kind map
+  (`features/symbolKind.ts`), so a definition draws the same glyph in the
+  breadcrumb bar as in its hover badge; the hand-kept workspace-symbol kind
+  table is gone.
 - `producersOf(data, typeName)` in `data/dataTypes.ts`: the reverse of
   `membersOf`, listing every global and member whose return type is `typeName`.
   Built lazily per `DataTypesData` and cached against it, so a reloaded

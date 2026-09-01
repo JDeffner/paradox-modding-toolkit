@@ -1,9 +1,9 @@
 /**
- * One kind map, three surfaces.
+ * One kind map, four surfaces.
  *
  * Every place the product names a concept - the hover badge, the completion
- * list icon, the tree leaf - reads its glyph from here, so a trigger looks like
- * a trigger everywhere.
+ * list icon, the tree leaf, the breadcrumb/outline entry - reads its glyph from
+ * here, so a trigger looks like a trigger everywhere.
  *
  * The colour is not a second decision. VS Code paints a completion row from the
  * `symbolIcon.*Foreground` token of the `CompletionItemKind` we send, and we
@@ -16,7 +16,7 @@
  *   blue     you stored it          Variable, Field, Interface, EnumMember
  *   grey     syntax, everything else  all the rest
  *
- * Two facts shape the table and are easy to re-break:
+ * Three facts shape the table and are easy to re-break:
  *
  *  1. **Codicon aliases collapse.** `symbol-method`, `symbol-function` and
  *     `symbol-constructor` are one codepoint, so they are one picture. Same for
@@ -30,10 +30,19 @@
  *     22 distinct pictures after the collapse. A concept that appears in a
  *     completion list cannot use a glyph from outside that set in the list,
  *     even though the hover and the tree can draw all 461 codicons.
+ *  3. **Only `SymbolKind` reaches the outline.** Breadcrumbs, the outline,
+ *     sticky scroll and Ctrl+T take an LSP `SymbolKind`, and VS Code draws
+ *     member `X` with the codicon `symbol-<kebab X>`. `symbolKind` names the
+ *     member drawing the same picture as `codicon`, so the breadcrumb bar and
+ *     the hover badge cannot disagree; it is null for a picture no member
+ *     draws. The server resolves the name to the numeric enum.
  *
- * `codicon` and `completionKind` are separate fields for exactly that reason.
- * They name the same picture everywhere except `texture`, whose `file-media`
- * glyph no completion kind can produce.
+ * `codicon`, `completionKind` and `symbolKind` are separate fields for exactly
+ * that reason. They name the same picture everywhere except two entries:
+ * `texture`, whose `file-media` glyph no completion kind can produce, and
+ * `list`, whose array glyph no *free* completion kind can produce (the colour
+ * has to stay blue, and all four blue kinds are taken), so the suggest widget
+ * alone still draws it as an enum member.
  *
  * Uniqueness is promised *within a completion list*, not globally: script, gui
  * and datafunction completions never appear together, so they may share glyphs.
@@ -46,9 +55,41 @@ export interface KindStyle {
   codicon: string;
   /** `CompletionItemKind` member name; the server maps it to the enum. */
   completionKind: string;
+  /**
+   * `SymbolKind` member name drawing the same picture as `codicon`, or null
+   * when no member draws it. The server maps it to the enum.
+   */
+  symbolKind: string | null;
   /** Hover badge colour as a `--vscode-symbolIcon-*` var, or null for none. */
   color: string | null;
 }
+
+/**
+ * The `SymbolKind` member VS Code draws with each picture the table uses. VS
+ * Code renders member `X` as `symbol-<kebab X>`, so this is that rule read
+ * backwards, with the alias pairs resolved to the member owning the codepoint
+ * (`symbol-value` is `symbol-enum`, `symbol-text` is `symbol-key`). A codicon
+ * absent here has no `SymbolKind` at all: there are 26 members against 461
+ * codicons.
+ */
+const SYMBOL_KIND_BY_CODICON: Record<string, string> = {
+  "symbol-array": "Array",
+  "symbol-class": "Class",
+  "symbol-constant": "Constant",
+  "symbol-enum-member": "EnumMember",
+  "symbol-event": "Event",
+  "symbol-field": "Field",
+  "symbol-interface": "Interface",
+  "symbol-method": "Method",
+  "symbol-module": "Module",
+  "symbol-operator": "Operator",
+  "symbol-property": "Property",
+  "symbol-struct": "Struct",
+  "symbol-text": "Key",
+  "symbol-type-parameter": "TypeParameter",
+  "symbol-value": "Enum",
+  "symbol-variable": "Variable",
+};
 
 /**
  * The only completion kinds VS Code tints; the other 15 render in the plain
@@ -77,6 +118,7 @@ const TINT: Record<string, string> = {
 const c = (codicon: string, completionKind: string, colorFrom = completionKind): KindStyle => ({
   codicon,
   completionKind,
+  symbolKind: SYMBOL_KIND_BY_CODICON[codicon] ?? null,
   color: TINT[colorFrom] ? `var(--vscode-symbolIcon-${TINT[colorFrom]}Foreground)` : null,
 });
 
@@ -103,10 +145,24 @@ const SCRIPT: Record<string, KindStyle> = {
   promote: c("symbol-variable", "Variable"),
   saved_scope: c("symbol-field", "Field"),
   event_target: c("symbol-interface", "Interface"),
-  list: c("symbol-enum-member", "EnumMember"),
+  // The four list kinds each get their own picture. `add_to_list` builds a
+  // collection that lives for one effect block and is never saved, so it takes
+  // the array picture; the three `*_variable_list` kinds are entries in
+  // variable storage, split by storage class: the object-attached one keeps
+  // the enum-member picture, the event-chain-local one the plain list, the
+  // game-global one the globe.
+  // All four stay on `EnumMember`: the four blue completion kinds are already
+  // spoken for by variable, saved_scope and event_target, so the suggest widget
+  // draws every list as one blue enum-member row; the split shows in the hover
+  // badge and the tree. Of the four pictures only `symbol-enum-member` carries
+  // a `symbolIcon` colour rule, so the other three render tree leaves in the
+  // plain icon foreground while their badges stay blue (the map emits the
+  // colour); `list-unordered` and `globe` are pictures no SymbolKind draws, so
+  // those two fall back to Object in symbol lists.
+  list: c("symbol-array", "EnumMember"),
   variable_list: c("symbol-enum-member", "EnumMember"),
-  local_variable_list: c("symbol-enum-member", "EnumMember"),
-  global_variable_list: c("symbol-enum-member", "EnumMember"),
+  local_variable_list: c("list-unordered", "EnumMember"),
+  global_variable_list: c("globe", "EnumMember"),
 
   // grey: syntax and everything else.
   scope_word: c("symbol-constant", "Constant"),

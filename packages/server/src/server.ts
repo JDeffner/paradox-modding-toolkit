@@ -50,7 +50,9 @@ import {
   eventDetailRequest,
   exampleWikiRequest,
   exampleWikiEntryRequest,
+  exampleWikiVariableKinds,
   type ExampleWikiEntryParams,
+  type ExampleWikiKind,
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
@@ -117,7 +119,10 @@ import {
   computeExampleWikiEntry,
   SiteFinder,
   type ExampleWikiSources,
+  type WikiVariable,
+  type WikiVariableSite,
 } from "./overview/exampleWiki";
+import { LIST_KIND_PREFIX, VAR_KIND_PREFIX, variableTypes } from "./scopes/varTypes";
 import { loadTokenData, parseOnActionsLog } from "./data/docsParser";
 import { loadDataTypes } from "./data/dataTypes";
 import { loadDataBindingMacros } from "./data/dataBindingMacros";
@@ -336,6 +341,107 @@ function refreshExampleSites(): void {
   exampleSites.setRoots(settings.gamePath, folders);
 }
 
+/**
+ * Variables and lists for the Examples Wiki, gathered from the definition
+ * index, the reference index and the set-site type analysis.
+ *
+ * Rebuilt when either index moves, so an article follows a save; the catalog
+ * request and every article request share one build.
+ */
+let wikiVariableCache: { revision: string; map: Map<string, WikiVariable> } | null = null;
+
+/** Sites kept per article. A name read ten thousand times still shows six. */
+const WIKI_VARIABLE_SITE_CAP = 50;
+
+function wikiVariables(): Map<string, WikiVariable> {
+  const revision = `${data.index.revision}:${data.refIndex.revision}`;
+  if (wikiVariableCache && wikiVariableCache.revision === revision) return wikiVariableCache.map;
+  const map = buildWikiVariables();
+  wikiVariableCache = { revision, map };
+  return map;
+}
+
+function buildWikiVariables(): Map<string, WikiVariable> {
+  const kinds = new Set<string>(exampleWikiVariableKinds);
+  // Names first: one walk of the definition index. entries() yields ONE
+  // definition per name, so the sites come from lookupAll below.
+  const names = new Set<string>();
+  for (const def of data.index.entries((d) => kinds.has(d.kind))) names.add(def.name);
+  const map = new Map<string, WikiVariable>();
+  if (names.size === 0) return map;
+
+  const varInfo = variableTypes(data, data.rootScopesForFile);
+  const siteOf = (def: Definition): WikiVariableSite => {
+    const site: WikiVariableSite = { file: def.file, line: def.line };
+    if (def.container !== undefined) site.container = def.container;
+    return site;
+  };
+  for (const name of names) {
+    const byKind = new Map<string, Definition[]>();
+    for (const def of data.index.lookupAll(name)) {
+      if (!kinds.has(def.kind)) continue;
+      let group = byKind.get(def.kind);
+      if (!group) byKind.set(def.kind, (group = []));
+      group.push(def);
+    }
+    for (const [kind, defs] of byKind) {
+      // A list set-site is indexed under BOTH the list kind and the scalar kind
+      // (index/references.ts), so the scalar shadow of a list must not become
+      // an article of its own.
+      const listGroup = byKind.get(`${kind}_list`);
+      const sets = listGroup
+        ? defs.filter((d) => !listGroup.some((l) => l.file === d.file && l.line === d.line))
+        : defs;
+      if (sets.length === 0) continue;
+      map.set(`${kind}:${name}`, {
+        name,
+        kind: kind as ExampleWikiKind,
+        sets: sets.slice(0, WIKI_VARIABLE_SITE_CAP).map(siteOf),
+        setsTotal: sets.length,
+        reads: [],
+        readsTotal: 0,
+        types: wikiVariableTypes(varInfo, kind, name),
+        origins: [...new Set(sets.map((d) => data.originLabel(d)))],
+      });
+    }
+  }
+  // Read sites: one walk of the reference index, kept to the names that have
+  // an article. A scalar read accepts a list too, so one reference can belong
+  // to both the `variable` and the `variable_list` article.
+  for (const ref of data.refIndex.all()) {
+    if (!names.has(ref.name)) continue;
+    for (const kind of ref.kinds) {
+      const entry = map.get(`${kind}:${ref.name}`);
+      if (!entry) continue;
+      entry.readsTotal++;
+      if (entry.reads.length < WIKI_VARIABLE_SITE_CAP) entry.reads.push({ file: ref.file, line: ref.line });
+    }
+  }
+  return map;
+}
+
+/** The set-site types of one variable kind, in the namespace it lives in. */
+function wikiVariableTypes(
+  info: ReturnType<typeof variableTypes>,
+  kind: string,
+  name: string
+): string[] | null {
+  if (kind === "list") return scopeNames(info.adhocListItemTypes.get(name));
+  const varPrefix = VAR_KIND_PREFIX[kind];
+  if (varPrefix) return scopeNames(info.types.get(`${varPrefix}:${name}`));
+  const listPrefix = LIST_KIND_PREFIX[kind];
+  if (listPrefix) return scopeNames(info.listItemTypes.get(`${listPrefix}:${name}`));
+  return [];
+}
+
+/** `undefined` (nothing typed it) reads as "no evidence"; `null` (a runtime
+ *  anchor) stays unknown, which the article says out loud (AD-5). */
+function scopeNames(types: Set<string> | null | undefined): string[] | null {
+  if (types === undefined) return [];
+  if (types === null) return null;
+  return [...types];
+}
+
 /** What the two Examples Wiki requests read. */
 function exampleWikiSources(): ExampleWikiSources {
   return {
@@ -350,6 +456,7 @@ function exampleWikiSources(): ExampleWikiSources {
       : "the bundled wiki tables. Run script_docs in the game console for the full list your game version has.",
     needsScriptDocs: !tokensFromScriptDocs || tokensFromBundledDumps,
     gamePath: settings.gamePath,
+    variables: wikiVariables(),
   };
 }
 
@@ -1876,7 +1983,11 @@ connection.onWorkspaceSymbol((params) => {
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  return provideDocumentSymbols(doc);
+  // One schema lookup per request, not per symbol: this runs on every keystroke.
+  const defKind = isScriptLanguage(doc.languageId)
+    ? (schemaEntryForFile(URI.parse(doc.uri).fsPath)?.kind ?? null)
+    : null;
+  return provideDocumentSymbols(doc, defKind);
 });
 
 connection.onDocumentFormatting((params) => {

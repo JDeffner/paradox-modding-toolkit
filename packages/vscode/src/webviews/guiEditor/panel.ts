@@ -63,6 +63,7 @@ import {
 } from "./userData";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource, type WebviewSource } from "../devReload";
 
 export type FetchLayout = (
   uri: vscode.Uri,
@@ -192,6 +193,7 @@ export class GuiEditorPanel {
     this.textures = new GuiTextureCache(this.storageDir, roots);
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
+    const bundleSource = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       GuiEditorPanel.viewType,
       "GUI Editor",
@@ -200,18 +202,20 @@ export class GuiEditorPanel {
         enableScripts: true,
         retainContextWhenHidden: true,
         // Exactly two: the app bundle and the decoded textures.
-        localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
-          vscode.Uri.file(this.textures.cacheDir),
-        ],
+        localResourceRoots: [bundleSource.root, vscode.Uri.file(this.textures.cacheDir)],
       }
     );
     this.panel.iconPath = tabIcon("gui-editor");
-    this.panel.webview.html = buildHtml(
-      this.panel.webview,
-      vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "guiEditor.js"),
-      loadGameFont(roots.gamePath, meta.uiFont)
-    );
+    const render = (): void => {
+      this.panel.webview.html = buildHtml(
+        this.panel.webview,
+        bundleSource,
+        loadGameFont(roots.gamePath, meta.uiFont)
+      );
+    };
+    render();
+    // The rebooted app sends "ready", which the host answers with a layout.
+    this.disposables.push(watchBundle(bundleSource, "guiEditor", render));
 
     // onMessage awaits openTextDocument outside its own try, and the .gui can
     // stop being openable while the panel is up (a branch switch, a rename, a
@@ -1055,10 +1059,10 @@ function stagePrefix(meta: GameMeta): string[] {
   return stage ? [stage] : [];
 }
 
-function buildHtml(webview: vscode.Webview, script: vscode.Uri, fontDataUri: string | null): string {
+function buildHtml(webview: vscode.Webview, source: WebviewSource, fontDataUri: string | null): string {
   const nonce = makeNonce();
   return guiEditorHtml({
-    scriptSrc: webview.asWebviewUri(script).toString(),
+    scriptSrc: bundleUri(webview, source, "guiEditor"),
     nonce,
     csp: [
       `default-src 'none'`,

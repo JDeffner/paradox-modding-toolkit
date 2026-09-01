@@ -4,9 +4,8 @@
  * is to say it was reachable by the people who already knew it existed.
  *
  * The event set comes from the server's own document symbols (the outline it
- * already builds from the CST, where an event is `SymbolKind.Event`), never
- * from a client-side regex over the text — one definition of "this is an
- * event", and it is the indexer's.
+ * already builds from the CST), never from a client-side scan of the text —
+ * one definition of "this is a top-level declaration", and it is the parser's.
  *
  * The editor's global `editor.codeLens` toggle turns this off with every other
  * lens: VS Code stops calling registered providers, so there is nothing of our
@@ -14,6 +13,9 @@
  */
 import * as vscode from "vscode";
 import { PARADOX_SCRIPT_LANGS } from "./langIds";
+
+/** `namespace.NNN`, the indexer's event-id shape (server index/extract.ts). */
+const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
 
 class SimulateEventLensProvider implements vscode.CodeLensProvider {
   constructor(private readonly enabled: () => boolean) {}
@@ -33,7 +35,9 @@ class SimulateEventLensProvider implements vscode.CodeLensProvider {
     const lenses: vscode.CodeLens[] = [];
     for (const symbol of symbols) {
       // Top level only: an option or an immediate block is not a fireable event.
-      if (symbol.kind !== vscode.SymbolKind.Event) continue;
+      // The name shape, not the SymbolKind: outline glyphs come from the shared
+      // kind map (protocol/kinds.ts), which draws an event as a class.
+      if (!EVENT_ID.test(symbol.name)) continue;
       lenses.push(
         new vscode.CodeLens(symbol.selectionRange, {
           title: "$(play) Simulate",

@@ -174,6 +174,29 @@ describe("hover degradation for bare clients", () => {
     expect(md).not.toMatch(/reference/);
   });
 
+  /** Hover over `var:my_toll`, whose definition card carries the wiki link. */
+  function variableHover(): string {
+    const data = new ServerData();
+    const file = path.join(path.sep === "\\" ? "C:\\mod" : "/mod", "events", "toll.txt");
+    data.index.addAll([{ name: "my_toll", kind: "variable", file, line: 3, source: "mod", value: "5" }]);
+    const text = "e = {\n\tadd_gold = var:my_toll\n}";
+    const doc = TextDocument.create("file:///mod/events/spend.txt", "paradox", 1, text);
+    const hover = provideHover(data, doc, { line: 1, character: 17 }, null);
+    expect(hover).not.toBeNull();
+    return (hover!.contents as { value: string }).value;
+  }
+
+  it("a variable card links into the Examples Wiki, and only for clients with the command", () => {
+    asClient({ clientCommands: true });
+    const md = variableHover();
+    expect(md).toContain("command:px.showExamplesWiki");
+    // The article the link names, so the panel can select it straight away.
+    expect(md).toContain(encodeURIComponent(JSON.stringify([{ name: "my_toll", kind: "variable" }])));
+
+    asClient({ clientCommands: false });
+    expect(variableHover()).not.toContain("Examples Wiki");
+  });
+
   /** Hover over `using = <template>`, whose card is built by guiLanguage.ts, not hover.ts. */
   function guiTemplateHover(): string {
     const data = new ServerData();

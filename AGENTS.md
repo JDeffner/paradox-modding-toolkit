@@ -125,7 +125,7 @@ axes and say which applied:
 | `packages/vscode/media/` | Icon, walkthrough pages, banner, `image-guidelines.md`. `media/` SHIPS in the vsix; `docs/` does NOT |
 | `packages/vscode/skills/ck3-modding/` | An agent skill for CK3 modding itself (not the extension). Machine-agnostic placeholders; excluded from the vsix |
 | `packages/vscode/syntaxes/` | TextMate grammars (`paradox`, per-game wrappers, `paradox-loc`, `paradox-info`, `paradox-mod`, `paradox-gui`) |
-| `docs/` | Tracked: `diagnostics/` (per-code explanations), `gui-designer/` (calibration evidence + editor ledgers, see its README), `release/` (per-release notes, read by release.yml), `PROTOCOL.md`, `EMBEDDING.md`, `PERFORMANCE.md`, `deferred-features.md`, `RELEASING.md` (the release runbook), `file-icons.md`. Everything else under `docs/` is gitignored — and should not exist: working notes do not belong in the repo (see "Work artifacts") |
+| `docs/` | Tracked: `diagnostics/` (per-code explanations), `gui-designer/` (calibration evidence + editor ledgers, see its README), `release/` (per-release notes, read by release.yml), `PROTOCOL.md`, `EMBEDDING.md`, `PERFORMANCE.md`, `deferred-features.md`, `RELEASING.md` (the release runbook), `file-icons.md`, `webviews.md` (the webview-panel pattern; CONTRIBUTING.md points contributors at it). Everything else under `docs/` is gitignored — and should not exist: working notes do not belong in the repo (see "Work artifacts") |
 
 Feature routing (most-touched files): completion ranking →
 `packages/server/src/features/completion.ts`; context detection →
@@ -272,6 +272,7 @@ delete the .cjs). Per-game scripts take `--game <id>`, default `ck3`.
 | `import-cwt-types.ts <clone>` | `games/eu5/schema.generated.ts` | By-hand importer from a pinned cwtools-eu5-config clone; update the pinned commit in the file header AND `THIRD-PARTY-NOTICES.md` |
 | `audit-schema-coverage.ts [--game]` | stdout | Schema vs game folders; gaps should be 0 or documented |
 | `gen-brand.ts` / `gen-icons.ts` | `media/` brand + file icons | Geometry in `brandGeometry.ts`; regeneration guide in `docs/file-icons.md` |
+| `gen-codicon-glyphs.ts` | `webviews/exampleWiki/codiconGlyphs.ts` | Inlines the codicons `protocol/kinds.ts` names, so a webview draws the same picture as the hover badge without the editor's font |
 | `rank-eval.ts` / `fuzzy-diag.ts` | stdout | Completion-quality measurement; run before and after any ranking change |
 
 ## Conventions

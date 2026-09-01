@@ -9,6 +9,9 @@ export type HostToApp =
   | { type: "loading" }
   | { type: "index"; index: ExampleWikiIndex }
   | { type: "entry"; name: string; kind: ExampleWikiKind; detail: ExampleWikiDetail | null }
+  /** A deep link (px.showExamplesWiki with an argument): show this article,
+   *  clearing the search and the filter so its row is reachable. */
+  | { type: "reveal"; name: string; kind: ExampleWikiKind }
   | { type: "error"; message: string };
 
 export type AppToHost =

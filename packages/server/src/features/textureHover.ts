@@ -13,7 +13,7 @@ import { ddsFormatInfo, ddsToPngDataUri } from "../dds";
 import { getLineText } from "../documents";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetRoots, bareNameBaseDirs } from "./assetPaths";
-import { fileLink } from "./hoverRender";
+import { fileLink, renderHoverMarkdown, type CardInput } from "./hoverRender";
 
 const DDS_PATH = /[A-Za-z0-9_\-./\\]+\.dds/gi;
 const CACHE_MAX = 100;
@@ -134,13 +134,21 @@ export function provideTextureHover(
   // link its hover renderer would not navigate.
   const open = fileLink(resolved.fsPath, "open file", { plain: `\`${resolved.fsPath}\`` });
   const preview = cachedPreview(resolved.fsPath);
-  // The path is what's hovered, so the caption carries what the file itself
-  // knows: dimensions, encoding, size on disk, and where it resolved.
-  const meta = preview
-    ? `${preview.width}×${preview.height} · ${preview.format} · ${formatBytes(preview.fileBytes)} · ${resolved.label}`
-    : `texture (${resolved.label})`;
-  const body = preview?.uri
-    ? `![texture](${preview.uri})\n\n*${meta}* — ${open}`
-    : `*${meta}* — not previewable, ${open}`;
-  return { contents: { kind: MarkupKind.Markdown, value: body }, range };
+  // The same card every other hover draws: badge and name, the picture, then
+  // one facts line with what the file itself knows (dimensions, encoding, size
+  // on disk). The picture is the one slot in the design allowed to be tall.
+  const card: CardInput = {
+    kind: "texture",
+    badgeLabel: "texture",
+    name: path.basename(rel),
+    headTail: `· ${resolved.label}`,
+    provenance: open,
+  };
+  if (preview?.uri) card.doc = `![texture](${preview.uri})`;
+  card.facts = preview
+    ? `${preview.width}×${preview.height} · ${preview.format} · ${formatBytes(preview.fileBytes)}${
+        preview.uri ? "" : " · not previewable"
+      }`
+    : "not previewable";
+  return { contents: { kind: MarkupKind.Markdown, value: renderHoverMarkdown([card]) }, range };
 }

@@ -14,9 +14,9 @@ export const VISIBILITY = { public: 0, friendsOnly: 1, private: 2, unlisted: 3 }
 /**
  * One SubmitItemUpdate call. With `language` set, `title`/`description` land
  * as that language's translation instead of the default text - such a submit
- * carries no content. The bridge REFUSES `language` when the bundled
- * steamworks.js predates per-language updates, because an older native layer
- * would silently drop the field and overwrite the default-language text.
+ * carries no content. Per-language updates are part of steamwand's generated
+ * binding (see bridge.ts): the symbol resolves at load or the job fails,
+ * never silently overwriting the default-language text.
  */
 export interface SubmitSpec {
   title?: string;

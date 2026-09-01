@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { SymbolKind } from "vscode-languageserver/node";
 import { LineIndex, parseLoc, parseScript } from "../src/parser";
 import {
   computeLocDiagnostics,
@@ -7,6 +8,7 @@ import {
   type FileContext,
 } from "../src/features/diagnostics";
 import { provideDocumentSymbols } from "../src/features/symbols";
+import { lspSymbolKind } from "../src/features/symbolKind";
 import { provideFoldingRanges } from "../src/features/folding";
 import { isScriptLanguage } from "../src/documents";
 
@@ -125,6 +127,33 @@ describe("document symbols", () => {
     expect(event.detail).toBe("character_event");
     expect(event.children!.map((c) => c.name)).toEqual(["immediate", "option"]);
     expect(event.children![1].detail).toBe("my.1.a");
+  });
+
+  it("draws a top-level definition with the kind map's glyph, not an ad-hoc one", () => {
+    // The breadcrumb bar used to show an event as SymbolKind.Event (a bolt)
+    // while the hover badge and the suggest row drew it as a class.
+    const text = "my.1 = {\n\ttype = character_event\n\timmediate = {\n\t\tadd_gold = 5\n\t}\n}\n";
+    const event = provideDocumentSymbols(TextDocument.create(uri(), "paradox", 1, text), "event")[0];
+    expect(event.kind).toBe(lspSymbolKind("event"));
+    expect(event.kind).toBe(SymbolKind.Class);
+    // Nested plain blocks stay structural: they have no definition kind.
+    expect(event.children![0].kind).toBe(SymbolKind.Field);
+
+    // The folder decides, so the same text in common/scripted_effects is one.
+    const effectText = "my_effect = {\n\tadd_gold = 1\n\ttrigger = {\n\t\talways = yes\n\t}\n}\n";
+    const doc = TextDocument.create(uri(), "paradox", 1, effectText);
+    const effect = provideDocumentSymbols(doc, "scripted_effect")[0];
+    expect(effect.kind).toBe(lspSymbolKind("scripted_effect"));
+    expect(effect.kind).toBe(SymbolKind.Event);
+  });
+
+  it("falls back to the event-id shape when no folder kind is known", () => {
+    // A bare client, or a file outside every content root.
+    const text =
+      "my.1 = {\n\timmediate = {\n\t\tadd_gold = 5\n\t}\n}\nplain = {\n\tx = {\n\t\ty = 1\n\t}\n}\n";
+    const symbols = provideDocumentSymbols(TextDocument.create(uri(), "paradox", 1, text));
+    expect(symbols[0].kind).toBe(SymbolKind.Class);
+    expect(symbols[1].kind).toBe(SymbolKind.Function);
   });
 
   it("nests script blocks all the way down, so sticky scroll has every header", () => {

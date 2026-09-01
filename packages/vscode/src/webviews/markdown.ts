@@ -1,6 +1,6 @@
 /**
- * The markdown subset our own generated documents use: headings, tables,
- * bullet lists, paragraphs, `code`, **bold**, *italic*. Not a markdown
+ * The markdown subset our own documents use: headings, tables, bullet lists,
+ * fenced code blocks, paragraphs, `code`, **bold**, *italic*. Not a markdown
  * library, on purpose: the documents are ours, the subset is known, and the
  * vsix stays dependency-free.
  */
@@ -42,6 +42,20 @@ export function renderMarkdown(markdown: string): string {
       continue;
     }
 
+    // A fenced code block: kept verbatim, blank lines and all. The info
+    // string is dropped; the docs use plain fences.
+    if (line.startsWith("```")) {
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        code.push(lines[i]);
+        i++;
+      }
+      i++;
+      out.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+      continue;
+    }
+
     // A table: header row, a |---|---| separator, then body rows.
     if (line.startsWith("|")) {
       const head = cells(line);
@@ -71,7 +85,7 @@ export function renderMarkdown(markdown: string): string {
     }
 
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s)/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s|```)/.test(lines[i])) {
       para.push(lines[i]);
       i++;
     }

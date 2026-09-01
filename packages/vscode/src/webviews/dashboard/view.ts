@@ -8,8 +8,10 @@ import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import uiCss from "../shared/ui.css";
 import { icon, ICON_NAMES } from "../shared/icons";
-import { visibleActionGroups, visibleReferenceItems, type ActionGroup, type ActionItem } from "./actions";
+import { visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
+import { tipScript } from "../shared/tips";
+import { helpScript, type HelpSpec } from "../shared/help";
 
 /** A collapsible section: the static ones ("mods", "toggles", "paths") plus
  * one id per tool group, slugged from its label by the webview script. */
@@ -72,8 +74,6 @@ interface DashboardState {
   scopeInlayHints: boolean;
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
-  /** Reference links, rendered as single footer buttons below the Discord row. */
-  reference: ActionItem[];
   /** Persisted per-section collapse flags; every section defaults to expanded. */
   collapsed: Record<SectionId, boolean>;
 }
@@ -153,7 +153,6 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
       actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
-      reference: visibleReferenceItems(meta, hiddenRows()),
       collapsed: this.collapsedState(),
     };
   }
@@ -337,6 +336,104 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
+/**
+ * The ? button's tutorial. Every claim here is what the code above and the
+ * webview script below actually do; the tooltips only name their control, so
+ * this is where the depth lives.
+ */
+const HELP: HelpSpec = {
+  title: "The Project panel",
+  intro:
+    "One place for what this workspace looks like and what the toolkit is doing with it: the game and folders in use, the mods it indexes, the switches that change its behaviour, and a row for every tool.",
+  sections: [
+    {
+      title: "Game and paths",
+      items: [
+        {
+          lead: "The top row",
+          text: "names the game the workspace mods, with a badge saying whether it was detected or set by hand. Click it to open the toolkit's settings.",
+        },
+        {
+          lead: "Paths",
+          text: "lists the folders and binaries actually in use: the game, the script_docs logs, the mod, the mod projects folder, the Workshop listing folder, and tiger. The badge says where each value came from, so an auto-detected folder is visible even though its setting is empty.",
+        },
+        {
+          lead: "Click a path row",
+          text: "to browse for a new value. The pick is written to the matching px setting.",
+        },
+      ],
+    },
+    {
+      title: "Workspace Mods",
+      items: [
+        {
+          lead: "Every mod",
+          text: "with a descriptor in the workspace is listed. An indexed mod is treated as yours: completion, navigation, diagnostics and the localization tools work across all of them.",
+        },
+        {
+          lead: "The switch",
+          text: "on a row indexes that mod or skips it entirely. A skipped folder that later disappears stays in the list, struck through, so you can switch it back and forget it.",
+        },
+        {
+          lead: "The dot",
+          text: "picks the mod the other sidebar views describe (Mod Overview, Localization Coverage, Overrides). It appears once more than one mod is indexed. Follow active editor hands that choice to whichever file you are editing.",
+        },
+      ],
+    },
+    {
+      title: "Toggles",
+      items: [
+        {
+          lead: "Tiger: new problems only",
+          text: "hides every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot with the Create Tiger Baseline row.",
+        },
+        {
+          lead: "Watch game error.log",
+          text: "tails the running game's error.log and reports new entries as Problems on your files. They outlive the watch on purpose, so you can work through them with the game closed; the Clear Game Problems row removes them.",
+        },
+        {
+          lead: "Diagnose vanilla files",
+          text: "also checks files under the game folder. Off, only your mod files are checked.",
+        },
+        {
+          lead: "Scope inlay hints",
+          text: "shows the inferred scope after a scope-changing block opener. Best-effort inference, display only.",
+        },
+      ],
+    },
+    {
+      title: "Tool rows",
+      items: [
+        {
+          lead: "Every tool",
+          text: "the toolkit has is one row here, grouped by what it is for. The editor title buttons, the status bar and the keyboard chords stay the fast path; these rows are how you find a tool without knowing where its button hides.",
+        },
+        {
+          lead: "Rows you never use",
+          text: "go away with the command Paradox: Customize Project Panel Rows. A group whose rows are all hidden disappears with them.",
+        },
+        {
+          lead: "Some rows are conditional:",
+          text: "tiger rows only appear for a game that has a tiger, and Clear Game Problems only while there is something to clear.",
+        },
+      ],
+    },
+    {
+      title: "The sections",
+      items: [
+        {
+          lead: "Click a section title",
+          text: "to fold it away. The panel remembers each fold for this workspace.",
+        },
+        {
+          lead: "The ⓘ button",
+          text: "beside a section title says what that section is for.",
+        },
+      ],
+    },
+  ],
+};
+
 /** The ⓘ beside a section title: an icon button whose tooltip is the explanation. */
 function hintButton(tip: string): string {
   return `<button class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="${escapeAttr(
@@ -386,7 +483,10 @@ function buildHtml(): string {
 <style>
 ${uiCss}
   body { min-height: 100%; user-select: none; }
-  #game { margin: 4px 4px 0; }
+  /* The top strip: the game row plus the ? that explains the whole panel. The
+     button sits OUTSIDE the row, which is itself a click target. */
+  #top { display: flex; align-items: center; gap: 2px; margin: 4px 4px 0; }
+  #game { flex: 1 1 auto; min-width: 0; }
   #game .game-name { font-weight: 600; }
   .section + .section { border-top: 1px solid var(--px-border); }
   .section-toggle {
@@ -411,8 +511,6 @@ ${uiCss}
   .toggle-row:has(> .px-switch > input:disabled) { cursor: not-allowed; }
   .toggle-row:has(> .px-switch > input:disabled) > .px-switch { opacity: 0.5; }
   .toggle-row > .px-switch { flex: 0 0 auto; }
-  /* Tooltips open below, flush left: a centered one overflows a narrow sidebar. */
-  [data-tip]:not([data-tip-side])::after { left: 0; transform: none; }
   /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
      is the part that tells paths apart). */
   .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
@@ -438,20 +536,20 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
-  /* Footer: community link + reference buttons, quiet enough to ignore. */
-  #footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--px-border); }
-  #footer .px-item { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
-  #footer .px-item:hover { color: var(--px-fg); }
-  #footer .px-icon { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
-<div class="px-item" id="game" role="button" tabindex="0" data-tip-wrap></div>
+<div id="top">
+  <div class="px-item" id="game" role="button" tabindex="0" data-tip-wrap></div>
+  <button id="help" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon(
+    "circleHelp"
+  )}</button>
+</div>
 <div class="section" id="section-mods">
   ${sectionHead(
     "mods",
     "Workspace Mods",
-    "Every mod detected in this workspace. Indexed mods are treated as yours: completion, navigation, diagnostics and the localization tools work across all of them. The filled dot marks the mod the sidebar views describe."
+    "Every mod in this workspace. The dot marks the one the sidebar views describe."
   )}
   <div class="section-body px-list" id="body-mods"></div>
 </div>
@@ -462,46 +560,36 @@ ${uiCss}
     ${toggleRow(
       "baseline",
       "Tiger: new problems only",
-      "Hide every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot via the 'Create Baseline' command."
+      "Report only tiger problems newer than the saved baseline."
     )}
     ${toggleRow(
       "watcher",
       "Watch game error.log",
-      "Tail the game's error.log while it runs and surface new entries as Problems on your mod files. Launch the game in debug mode for live script reloads."
+      "Report new error.log entries of the running game as Problems."
     )}
-    ${toggleRow(
-      "vanilla",
-      "Diagnose vanilla files",
-      "Also diagnose files under the game folder. Off: only your mod files are checked."
-    )}
-    ${toggleRow(
-      "inlay",
-      "Scope inlay hints",
-      "Show the inferred scope (e.g. character) after scope-changing block openers like every_vassal = {. Best-effort inference, display only."
-    )}
+    ${toggleRow("vanilla", "Diagnose vanilla files", "Also diagnose files under the game folder.")}
+    ${toggleRow("inlay", "Scope inlay hints", "Show the inferred scope after a scope-changing opener.")}
   </div>
 </div>
 <div class="section" id="section-paths">
   ${sectionHead(
     "paths",
     "Paths",
-    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to browse for a new value."
+    "The folders and tools in use, set or auto-detected. Click a row to change one."
   )}
   <div class="section-body px-list" id="body-paths"></div>
 </div>
-<div id="footer">
-  <div class="px-item" id="discord" role="button" tabindex="0"
-       data-tip="Open the invite to the toolkit's Discord in your browser: release notes, bug reports, and help with the games this extension covers."
-       data-tip-wrap>
-    ${icon("messageSquare")}<span class="px-item-label">Join the Discord</span>
-  </div>
-  <div id="footer-reference"></div>
-</div>
+${tipScript(nonce)}
+${helpScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 // Compile-time constants from the host, safe as markup.
 const ICONS = ${JSON.stringify(icons)};
+const HELP = ${JSON.stringify(HELP)};
 let state = null;
+
+// pxHelpDialog comes from helpScript(): the one dialog every webview uses.
+document.getElementById("help").addEventListener("click", () => pxHelpDialog(HELP));
 
 function iconEl(name) {
   const t = document.createElement("template");
@@ -622,16 +710,6 @@ function renderActions() {
   }
 }
 
-// ---- footer reference buttons (below the Discord row) ----
-function renderReference() {
-  const box = document.getElementById("footer-reference");
-  box.textContent = "";
-  for (const it of state.reference) {
-    box.appendChild(actionRow(it.icon, it.label, it.tip,
-      () => vscode.postMessage({ type: "run", command: it.command })));
-  }
-}
-
 // ---- paths (effective values, host-computed) ----
 function renderPaths() {
   const box = document.getElementById("body-paths");
@@ -640,8 +718,7 @@ function renderPaths() {
     const row = el("div", "px-item path-row");
     row.setAttribute("role", "button");
     row.tabIndex = 0;
-    row.setAttribute("data-tip",
-      (p.value ? p.value + " — " : "") + "Click to browse for a new value (" + p.setting + ").");
+    row.setAttribute("data-tip", (p.value ? p.value + " " : "") + "(" + p.setting + ")");
     row.setAttribute("data-tip-wrap", "");
     const head = el("div", "path-head");
     head.appendChild(el("span", "px-item-label", p.label));
@@ -661,8 +738,7 @@ function renderPaths() {
 
 // ---- game header ----
 const gameRow = document.getElementById("game");
-gameRow.setAttribute("data-tip",
-  "The game this workspace mods. Click to change it (px.gameId) if the detection guessed wrong.");
+gameRow.setAttribute("data-tip", "The game this workspace mods. Click to change it.");
 const openGameSettings = () => vscode.postMessage({ type: "openSettings" });
 gameRow.addEventListener("click", openGameSettings);
 gameRow.addEventListener("keydown", (e) => {
@@ -673,14 +749,6 @@ function renderGame() {
   gameRow.appendChild(el("span", "px-item-label game-name", state.gameName));
   gameRow.appendChild(badge(state.gameAuto ? "auto-detected" : "set manually"));
 }
-
-// ---- community link ----
-const discordRow = document.getElementById("discord");
-const openDiscord = () => vscode.postMessage({ type: "run", command: "px.openDiscord" });
-discordRow.addEventListener("click", openDiscord);
-discordRow.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDiscord(); }
-});
 
 // ---- mods ----
 function radio(on, tipText, onClick) {
@@ -698,7 +766,7 @@ function renderMods() {
   if (!state.mods.length) {
     box.appendChild(el("div", "empty", "No mod descriptor found in this workspace."));
     box.appendChild(actionRow("plus", "Create descriptor.mod",
-      "Create the descriptor file that marks this folder as a mod, so the game (and this extension) can load it.",
+      "Create the file that marks this folder as a mod.",
       () => vscode.postMessage({ type: "run", command: "px.createDescriptor" })));
     return;
   }
@@ -709,7 +777,7 @@ function renderMods() {
   if (showFocusUi) {
     const row = el("div", "px-item follow-row");
     row.appendChild(radio(following,
-      "Let the sidebar views (Mod Overview, Localization Coverage, Overrides) follow whichever mod owns the file you are editing.",
+      "Let the sidebar views follow the file you are editing.",
       () => vscode.postMessage({ type: "focus", root: null })));
     row.appendChild(el("span", "px-item-label", "Follow active editor"));
     row.addEventListener("click", () => vscode.postMessage({ type: "focus", root: null }));
@@ -732,18 +800,14 @@ function renderMods() {
     row.appendChild(label);
 
     if (mod.missing) {
-      row.appendChild(badge("missing",
-        "This excluded folder no longer exists in the workspace. Switch on to forget it."));
+      row.appendChild(badge("missing", "The folder is gone. Switch on to forget it."));
     } else if (!mod.excluded && following && state.focusRoot === mod.root && showFocusUi) {
-      row.appendChild(badge("showing",
-        "The sidebar views currently show this mod (following the active editor)."));
+      row.appendChild(badge("showing", "The sidebar views show this mod."));
     }
 
     const sw = el("label", "px-switch");
     sw.setAttribute("data-tip",
-      mod.excluded
-        ? "Not indexed: no completion, navigation, diagnostics or views for this mod. Switch on to index it again."
-        : "Indexed. Switch off to skip this mod entirely (no completion, navigation, diagnostics or views).");
+      mod.excluded ? "Not indexed. Switch on to index this mod." : "Indexed. Switch off to skip this mod.");
     sw.setAttribute("data-tip-wrap", "");
     sw.setAttribute("data-tip-side", "left");
     const input = el("input");
@@ -765,7 +829,6 @@ function render() {
   renderPaths();
   renderMods();
   renderActions();
-  renderReference();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
   document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
   setSwitch("baseline", state.tigerBaseline, false);

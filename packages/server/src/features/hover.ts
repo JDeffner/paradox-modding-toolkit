@@ -12,7 +12,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
 import type { SchemaEntry } from "../schema/types";
 import type { TokenData } from "@px-lsp/protocol/types";
-import { clientCommands } from "@px-lsp/protocol/protocol";
+import { clientCommands, exampleWikiVariableKinds } from "@px-lsp/protocol/protocol";
 import { canRunCommand } from "../clientMode";
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
@@ -26,17 +26,15 @@ import { nodeAtOffset, walkStatements } from "../parser";
 import type { RefField } from "../schema/types";
 import { VAR_PREFIX_KINDS } from "../games/jomini/variables";
 import { activeProfile } from "../games/active";
-import { KEYWORD_DOCS, scopeWordDoc } from "../data/keywordDocs";
+import { keywordArticle, scopeWordDoc } from "../data/keywordDocs";
 import { matchTemplatedModifier, templatedModifierDoc } from "../data/modifierTemplates";
 import type { Scope } from "../scopes/model";
 import {
   fencedBlock,
   fileLink,
   hoverCaps,
-  hoverFooter,
-  renderCard,
   renderDocBody,
-  renderHover,
+  renderHoverMarkdown,
   scopeHereLine,
   scopePill,
   scopeType,
@@ -65,7 +63,7 @@ export function provideHover(
     const card = definesCard(data, defineHit.namespace, defineHit.name);
     if (card) {
       return {
-        contents: { kind: MarkupKind.Markdown, value: renderHover([renderCard(card)], null) },
+        contents: { kind: MarkupKind.Markdown, value: renderHoverMarkdown([card]) },
         range: {
           start: { line: position.line, character: defineHit.start },
           end: { line: position.line, character: defineHit.end },
@@ -196,30 +194,21 @@ export function provideHover(
   if (cards.length === 0) return null;
 
   // Scope context appears once, last. Suppressed for a `scope:` hover (its own
-  // card already carries the scope) to match the prior behavior.
+  // card already carries the scope), and suppressed when inference has nothing
+  // to say: "Scope here: unknown" is our own annotation reporting its own
+  // silence, so hiding the line hides no game fact (AD-5 governs diagnostics
+  // and completion items, not this).
   let scopeLine: string | null = null;
-  if (prefix !== "scope") {
-    const scopes = current && current.size > 0 ? [...current].join(" | ") : "unknown";
+  if (prefix !== "scope" && current && current.size > 0) {
     const inference = scopeInference(data, document, position, rootScopes, entry);
     const chain = inference.chain.length > 1 ? inference.chain.join(" · ") : null;
-    scopeLine = scopeHereLine(scopes, chain);
-  }
-
-  // A single-card hover has no separate footer block: its provenance and
-  // reference links ride the scope line, which has to exist anyway. That is
-  // worth three lines (the row, its blank, and the rule above it) on the most
-  // common hover there is. Multi-card hovers keep provenance per card, because
-  // there it belongs to one meaning rather than to the hover.
-  const actions: string[] = [];
-  if (cards.length === 1 && cards[0].provenance) {
-    actions.push(cards[0].provenance);
-    cards[0] = { ...cards[0], provenance: undefined };
+    scopeLine = scopeHereLine([...current].join(" | "), chain);
   }
 
   return {
     contents: {
       kind: MarkupKind.Markdown,
-      value: renderHover(cards.map(renderCard), hoverFooter(scopeLine, actions)),
+      value: renderHoverMarkdown(cards, scopeLine),
     },
     range: {
       start: { line: position.line, character: range.start },
@@ -235,7 +224,13 @@ export function provideHover(
  * never carry one and the user does not want it.
  */
 function tokenCard(token: TokenData, current: ReadonlySet<string> | null): CardInput {
-  const card: CardInput = { kind: token.kind, name: token.name };
+  // Every engine token is a wiki row: the catalog is built from this same
+  // token list, so the article is there by construction.
+  const card: CardInput = {
+    kind: token.kind,
+    name: token.name,
+    wiki: { name: token.name, kind: token.kind },
+  };
   const { input, output, plain } = partitionScopes(token.scopes);
 
   // Event targets return a scope: surface it as the `→ type` head tail — it is
@@ -298,7 +293,7 @@ function valueShape(token: TokenData): string | null {
     return null;
   }
   if (token.kind === "effect") {
-    if (token.usage && token.usage.includes("{")) return "a block — see the example below";
+    if (token.usage && token.usage.includes("{")) return "a block, see the example below";
     return null;
   }
   if (token.kind === "modifier") return "a number (the modifier's magnitude)";
@@ -387,6 +382,20 @@ function referencesFooter(
     : label;
 }
 
+/**
+ * Definition kinds the Examples Wiki keeps an article for: the variable and
+ * list storage classes, whose names exist only because the indexed script
+ * wrote them. Every other definition kind is a mod's own symbol, which the
+ * catalog does not carry; its engine concept, when it has one, gets its
+ * article from the engine-token card stacked beside it.
+ */
+const WIKI_ARTICLE_KINDS = new Set<string>(exampleWikiVariableKinds);
+
+/** The wiki article a definition card names, or nothing. */
+function definitionWiki(def: { name: string; kind: string }): CardInput["wiki"] {
+  return WIKI_ARTICLE_KINDS.has(def.kind) ? { name: def.name, kind: def.kind } : undefined;
+}
+
 /** One card for N same-named, same-kind definitions: origin + site count up
  * front, the first few sites as links, the rest as a count. */
 function definitionGroupCard(
@@ -405,6 +414,7 @@ function definitionGroupCard(
       origins.length === 1
         ? `· ${origins[0]} (${group.length} sites)`
         : `· ${group.length} sites in ${origins.join(", ")}`,
+    wiki: definitionWiki(def),
   };
   const links = group.slice(0, 3).map(provenance);
   if (group.length > 3) links.push(`+${group.length - 3} more`);
@@ -438,7 +448,12 @@ function definitionCard(
   at?: { uri: string; line: number; character: number },
   withRefs = true
 ): CardInput {
-  const card: CardInput = { kind: def.kind, badgeLabel: def.kind.replace(/_/g, " "), name: def.name };
+  const card: CardInput = {
+    kind: def.kind,
+    badgeLabel: def.kind.replace(/_/g, " "),
+    name: def.name,
+    wiki: definitionWiki(def),
+  };
   // Origin: the owning mod's descriptor name where known ("· My Mod"), the raw
   // source tag ("· vanilla") otherwise.
   const origin = data.originLabel(def);
@@ -780,14 +795,22 @@ function defineSourceLink(e: DefineEntry): string {
 function scopeWordCard(word: string): CardInput | null {
   const hit = scopeWordDoc(word);
   if (!hit) return null;
-  return { kind: "scope_word", badgeLabel: "scope", name: hit.name, doc: hit.doc };
+  return {
+    kind: "scope_word",
+    badgeLabel: "scope",
+    name: hit.name,
+    doc: hit.doc,
+    wiki: { name: hit.name, kind: "scope_word" },
+  };
 }
 
 /** Grammar/math glue vocabulary (limit, NOT, base, days…): curated docs. */
 function keywordCard(word: string): CardInput | null {
-  const doc = KEYWORD_DOCS[word];
-  if (!doc) return null;
-  return { kind: "keyword", name: word, doc };
+  const article = keywordArticle(word);
+  if (!article) return null;
+  // The name reads as written, the article is the canonical spelling: `not`
+  // and `NOT` are one keyword.
+  return { kind: "keyword", name: word, doc: article.doc, wiki: { name: article.name, kind: "keyword" } };
 }
 
 /**

@@ -5,6 +5,8 @@ import { tokenizeScriptLine } from "../eventGraph/tokenize";
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
 import { makeNonce } from "../nonce";
+import { tipScript } from "../shared/tips";
+import { helpScript, type HelpSpec } from "../shared/help";
 import { tabIcon } from "../tabIcons";
 
 /** Messages the webview sends to the host. */
@@ -148,6 +150,88 @@ export class EventSimPanel {
   }
 }
 
+const HELP: HelpSpec = {
+  title: "Event Simulator",
+  intro:
+    "A read-only walkthrough of one event: its blocks laid out in the order the game runs them, with the localized text resolved. Nothing is executed and nothing is guessed, so what you read is what the file says.",
+  sections: [
+    {
+      title: "The blocks, in firing order",
+      intro: "Each card is one block of the event. Click its header to open that line in the source.",
+      items: [
+        {
+          lead: "Trigger",
+          text: "comes first: what the event asks for before it may fire. An event without one says so instead of leaving it to inference.",
+        },
+        {
+          lead: "Immediate",
+          text: "runs the moment the event appears, before the player sees an option.",
+        },
+        {
+          lead: "After",
+          text: "runs once an option was picked, whichever one it was.",
+        },
+        {
+          lead: "A block the event has but left empty",
+          text: "is marked as empty, so an accident reads differently from a choice.",
+        },
+        {
+          lead: "The caret",
+          text: "folds a card. Long blocks are capped, and the card says how many lines it hid.",
+        },
+      ],
+    },
+    {
+      title: "The options",
+      items: [
+        {
+          lead: "Each option",
+          text: "is its own card, lettered in file order, captioned with the text the player reads.",
+        },
+        {
+          lead: "An option with no effects",
+          text: "says so: picking it only closes the event.",
+        },
+        {
+          lead: "An option name that the game builds at runtime",
+          text: "cannot be resolved here and is labelled as dynamic. A missing localization key is named instead of hidden.",
+        },
+      ],
+    },
+    {
+      title: "Leads to",
+      intro: "Under a block, every event or on_action that block can fire, with the line that fires it.",
+      items: [
+        {
+          lead: "Click an event",
+          text: "to walk into it. The trail at the top grows a step, and Back returns.",
+        },
+        {
+          lead: "Hold Ctrl or Cmd",
+          text: "while clicking to open that event's source instead of stepping into it.",
+        },
+        {
+          lead: "An on_action",
+          text: "opens its definition, and the events it names are listed under it. A chained on_action is not followed further.",
+        },
+        {
+          lead: "A target that is not indexed",
+          text: "says so: it is vanilla content or a name that no file declares.",
+        },
+      ],
+    },
+    {
+      title: "Around the walkthrough",
+      items: [
+        { lead: "Click any script line", text: "to open it in the editor beside this tab." },
+        { lead: "Open source", text: "at the top opens the event itself." },
+        { lead: "Reload", text: "rebuilds this walkthrough from the index after you edit the file." },
+        { lead: "Drag with the middle mouse button", text: "to scroll the walkthrough." },
+      ],
+    },
+  ],
+};
+
 function buildHtml(webview: vscode.Webview): string {
   const nonce = makeNonce();
   const csp = [
@@ -178,6 +262,7 @@ ${uiCss}
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #bar .px-separator { height: 20px; align-self: center; }
+  #bar > #helpBtn { flex: 0 0 auto; }
   #chain { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; }
   #chain > span { white-space: nowrap; }
   #chain > .crumb { color: var(--px-muted-fg); }
@@ -190,8 +275,8 @@ ${uiCss}
   .step { margin: 4px 0; }
   .step > .px-panel-title { padding-left: 4px; cursor: pointer; border-radius: var(--px-radius-md); transition: background-color var(--px-ease); }
   .step > .px-panel-title:hover { background: var(--px-muted); }
-  /* The caret is a button, and its tooltip is that button's ::after, so
-     rotating the button would turn the words on their side. Rotate the icon. */
+  /* The caret is a button: rotate the icon, not the button, or its background
+     and focus ring turn with it. */
   .step > .px-panel-title .caret > svg { transition: transform var(--px-ease); color: var(--px-muted-fg); }
   .step[data-collapsed] > .px-panel-title .caret > svg { transform: rotate(-90deg); }
   .step[data-collapsed] > .step-body { display: none; }
@@ -231,11 +316,18 @@ ${uiCss}
     <button id="reload" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Reload this event from the index">${icon("rotate")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <div id="chain"></div>
+    <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this walkthrough works" data-tip-side="left">${icon("circleHelp")}</button>
   </div>
   <div id="body"><div id="status">Loading…</div></div>
 </div>
+${tipScript(nonce)}
+${helpScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
+
+// pxHelpDialog comes from helpScript(): the one dialog every webview uses.
+const HELP = ${JSON.stringify(HELP)};
+document.getElementById("helpBtn").addEventListener("click", function () { pxHelpDialog(HELP); });
 
 // === Shipped arrangement: exact source of the unit-tested simulationSteps ===
 const simulationSteps = ${stepsSource};
@@ -343,8 +435,7 @@ function renderStep(detail, step) {
   head.appendChild(el("span", "t", step.title));
   head.appendChild(el("span", "s", step.subtitle));
   head.appendChild(el("span", "at", "line " + (step.line + 1)));
-  head.dataset.tip = "Open " + detail.file + " at line " + (step.line + 1);
-  head.dataset.tipWrap = "";
+  head.dataset.tip = "Open the source at line " + (step.line + 1);
   head.addEventListener("click", function () {
     vscode.postMessage({ type: "open", file: detail.file, line: step.line });
   });

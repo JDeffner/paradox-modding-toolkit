@@ -1,6 +1,111 @@
 # Changelog
 
-## 0.4.0 (beta, pre-release) - the Steam Workshop release
+## 0.4.0 (beta) - the Steam Workshop release
+
+Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
+release these notes belong to.
+
+- **One hover card design, with a wiki link on every card.** All hover types
+  (script tokens, keywords, scope words, datafunctions, GUI, localization
+  formats, textures) now render through one card anatomy with a shared
+  footer, and every card whose subject has an Examples Wiki article carries
+  an "Examples Wiki" link there. Keywords like `NOT` and scope words like
+  `root` got wiki articles of their own (sourced from the same doc table the
+  hovers read, with a Keywords filter chip), so their hovers link too. The
+  useless "Scope here: unknown" line is gone.
+
+- **The Examples Wiki navigates like a browser.** Back AND forward, sitting
+  right of the search box, with Alt+Left/Alt+Right and the mouse's own
+  back/forward side buttons. Navigating from a mid-history point truncates
+  the forward trail, exactly like a browser tab. Example-site rows also got
+  a short tooltip ("Click to open in side panel") instead of the full file
+  path, and the catalog rows are vertically centered.
+
+- **An Info group in the Project panel.** Join the Discord, Wiki and
+  Examples Wiki now live in their own group below Create (moved out of the
+  View group and the footer).
+
+- **Toolkit settings open in the main window.** On VS Code builds where the
+  new modal editor experiment is on, opening the toolkit settings from the
+  Project panel landed in a modal; it now moves itself to a normal editor
+  tab, keeping the settings filter.
+
+- **Short tooltips, and a "?" that explains everything.** Every webview
+  tooltip was rewritten to one short line (two at most, with a hard width
+  cap), and every webview now has a question-mark button at the top right
+  opening a structured help dialog: what the view is, its features in
+  scannable rows, and its keyboard shortcuts in a grid. The Project panel,
+  both wikis, the Workshop panel, Simulate Event and the GUI Widget Tree got
+  their first help dialogs; the event graph, GUI editor and flag builder
+  ones were restructured and caught up with their newer features.
+
+- **Tooltips stay readable.** Custom tooltips in every toolkit webview
+  (Project panel, wikis, event graph, GUI editor, Workshop and the rest) now
+  measure themselves and flip or shift to stay inside the panel instead of
+  running off the edge.
+
+- **Your variables joined the Examples Wiki.** Every variable and list the
+  index knows (`set_variable`, `add_to_list`, the local and global forms) now
+  has its own wiki article: inferred value type, where it is set and read,
+  and the containing definitions - with a Variables filter chip in the
+  catalog. Hovering `var:x` (and friends) shows an "Examples Wiki" link next
+  to the references count that opens the wiki right at that article.
+
+- **The Examples Wiki draws the real kind glyphs.** Catalog rows and article
+  badges show the same codicon pictures as hovers, completion and
+  breadcrumbs (generated from VS Code's own codicon set at build time), so
+  the newly split list icons are visible in the wiki too. A "Code" toggle at
+  the top right collapses example sites to one clickable line when you want
+  density over context; the choice persists, default is show.
+
+- **Scope browsing in the Examples Wiki.** An article that produces a scope
+  (the `faith` event target and friends) now lists every trigger, effect and
+  event target the game's own docs declare usable from that scope, ordered
+  by vanilla usage, as clickable chips. Community-requested: "what can I do
+  from faith?" is now one click from the faith article.
+
+- **The Examples Wiki reads like a wiki now.** Example sites show real code:
+  a few surrounding lines inline, with the matched line highlighted, still
+  one click from the actual file. Member, producer, return-type, owner and
+  scope chips navigate to their own articles, with a back button for the
+  trail. The divider between the list and the reading pane drags, and the
+  width you choose survives closing the panel.
+
+- **The Wiki.** A new "Wiki" row in the Project panel's View group opens a
+  hub for reference knowledge: the Image Guidelines as their own page, every
+  diagnostic code's explanation page, and launchers for the Examples Wiki and
+  the Format Docs - all searchable by title and body text. The Format Docs
+  and Image Guidelines footer buttons moved into it; the commands still exist
+  in the palette, and "Paradox: Image Guidelines" now opens the hub at that
+  page.
+
+- **Breadcrumbs draw the same glyphs as everything else.** The breadcrumb
+  bar, outline and Ctrl+T symbol search now take their icons from the same
+  kind map as hover badges and completion rows, so an event shows the class
+  glyph everywhere instead of a lightning bolt only in the breadcrumb. The
+  four list kinds also stopped sharing one icon: ad-hoc `add_to_list` lists
+  show an array, `variable_list` keeps the enum-member glyph,
+  `local_variable_list` a plain list and `global_variable_list` a globe.
+
+- **Workshop drafts stop landing inside the mod.** In the mod projects layout
+  (`<project>/mod`), saving the listing now creates and uses the
+  `<project>/workshop` folder from the first save, instead of writing
+  `workshop.json` into the mod's config folder until the workshop folder
+  happened to exist. (The file was never uploaded either way.)
+
+- **px.calendar declared in the wrong settings file now says so.** The
+  setting is window-scoped, so a calendar in a mod subfolder's own
+  `.vscode/settings.json` is ignored by VS Code and the date preview
+  silently stayed off. The toolkit now warns once per workspace when it finds
+  such a stray calendar, with a button that adopts it into the opened
+  folder's settings. The setting's description spells out where it must
+  live.
+
+- **Toolkit development: webview live reload.** The new `px.dev.webviewSource`
+  setting (empty by default, off for everyone else) points an installed test
+  build at a toolkit checkout's webview bundles; panels then reload themselves
+  when `pnpm run watch:webviews` rebuilds one. The F5 dev host does the same
+  with no setting.
 
 - **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel
   row) opens a searchable browser over everything the toolkit knows from your
@@ -123,14 +228,15 @@
   per-version files or one big file cut at the version headline,
   `px.workshop.changelog`, Markdown-to-BBCode).
 
-- **The translation-upload gate probes the binding's real capability.**
-  steamworks.js 0.6.0 (now bundled) added per-language *queries* - the "on
-  Steam" hints under each translation now show genuinely translated text -
-  but not per-language *updates*, and the old version-number gate would have
-  waved it through, letting a translation overwrite the default-language
-  text. The gate (extension and bridge both) now reads the bundled build's
-  own type declarations for `UgcUpdate.language` and unlocks only when the
-  capability is really there.
+- **Translation uploads work for real: the bridge switched to
+  steamwand.js.** The native binding under the Steam child process is now
+  steamwand.js (koffi FFI) instead of steamworks.js. It carries both
+  per-language *queries* - the "on Steam" hints under each translation show
+  genuinely translated text - and per-language *updates*
+  (`SetItemUpdateLanguage`), so uploading a translation needs no capability
+  gate any more; the old gate that probed the bundled build's type
+  declarations is gone. A missing symbol fails the job loudly instead of
+  silently overwriting the default-language text.
 
 - **Panel polish from the first field round**: the download button's tooltip
   wraps instead of spanning the screen; "Mod version" and "Game version" say
@@ -178,9 +284,7 @@
   - **draft translations** of the item's title and description per Steam
     language (the mod's own localization folders are suggested first) and
     upload them all in one go - one Steam submit per language, no changenote
-    spam. Uploading translations needs a steamworks.js build with
-    per-language updates; until one is bundled the drafts still save and the
-    panel says exactly what is missing;
+    spam;
   - **upload selectively**: mod files, details and translations are separate
     toggles, so a description fix does not re-upload gigabytes of content;
   - **link an existing Workshop item**: pick from your published items (for

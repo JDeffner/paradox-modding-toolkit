@@ -17,6 +17,7 @@ user's VS Code theme. No framework, no Tailwind.
 | `sortable.ts` | Pointer-drag reordering of `.px-item` rows (ghost + FLIP slide). |
 | `scrub.ts` | Press-and-drag on number inputs (pointer lock, Shift x10, Alt x0.1). |
 | `colorPicker.ts` | SV square + hue bar + hex, in a popover. |
+| `tips.ts` | `installTips()`: the one `data-tip` runtime. Call it once per page (an inlined-script page ships it with `tipScript(nonce)`). |
 
 ## Tokens
 
@@ -54,7 +55,8 @@ Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
   `aria-selected="true"`), `px-separator`.
 - `px-sidepanel` (see sidePanel.ts), `px-popover`, `px-menu`, `px-dialog`,
   `px-toast`, `px-swatch`, tooltips via `data-tip` (+ `data-tip-side`,
-  `data-tip-wrap`).
+  `data-tip-align`, `data-tip-wrap`). `data-tip-side` is a preference: the
+  runtime flips and shifts the tip to keep it inside the viewport.
 
 ## UX rules (the part that makes it feel like an editor, not a form)
 
@@ -96,4 +98,6 @@ Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
 Add the class to `ui.css` under the matching section with a short comment
 naming the shadcn component it mirrors, use shadcn's proportions and states
 (hover, focus-visible, disabled, aria-*), and show it in the gallery before
-using it in a page.
+using it in a page. The gallery is `/gallery` on `pnpm run preview:webviews`
+(scripts/webview-preview/galleryApp.ts); it reloads live as you edit this
+folder.

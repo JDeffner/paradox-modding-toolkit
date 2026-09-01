@@ -171,6 +171,9 @@ measured costs and the settings that shrink them.
 ## Contributing
 
 Concrete examples from real mods are the most useful thing you can send.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the F5 dev loop, tests and
+the PR flow; [docs/webviews.md](docs/webviews.md) shows how the visual tools
+are built and how to add one.
 
 - **[Issues](https://github.com/JDeffner/paradox-modding-toolkit/issues)** for
   bugs, false diagnostics and feature ideas. Wrong or missing folder mappings,
@@ -187,7 +190,8 @@ Concrete examples from real mods are the most useful thing you can send.
 
 GPL-3.0-or-later, see [LICENSE](LICENSE). Bundled third-party data keeps its own
 terms: the CK3 wiki token lists are CC BY-SA 3.0
-([ATTRIBUTION.md](packages/server/data/ck3/wikidocs/ATTRIBUTION.md)) and the EU5
-schema import is MIT
-([THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). No game assets are
+([ATTRIBUTION.md](packages/server/data/ck3/wikidocs/ATTRIBUTION.md)), the EU5
+schema import is MIT, and the icons the webviews draw are Lucide (ISC) and VS
+Code codicons (CC BY 4.0), all in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). No game assets are
 redistributed.

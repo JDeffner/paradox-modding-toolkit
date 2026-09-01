@@ -22,7 +22,13 @@ import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type SubmitSpec } from "../../steam/jobs";
-import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
+import {
+  hasListingFiles,
+  preferListingFiles,
+  readItemJson,
+  upsertItemJson,
+  writeListingFiles,
+} from "../../steam/workshopFiles";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import {
   changelogNoteFor,
@@ -42,6 +48,7 @@ import {
 } from "../../steam/workshop";
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { workshopHtml } from "./html";
 import type { AppToHost, HostToApp, ModChoice, WorkshopModInfo } from "./messages";
 
@@ -71,6 +78,7 @@ export class WorkshopPanel {
     this.options = options;
     this.active = options.active ?? options.mods[0]?.path ?? null;
 
+    const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       WorkshopPanel.viewType,
       "Steam Workshop",
@@ -79,27 +87,30 @@ export class WorkshopPanel {
         enableScripts: true,
         retainContextWhenHidden: true,
         localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
+          source.root,
           // The preview image lives inside the mod; every manageable mod is a root.
           ...options.mods.map((m) => vscode.Uri.file(m.path)),
         ],
       }
     );
     this.panel.iconPath = tabIcon("workshop");
-    const nonce = makeNonce();
-    this.panel.webview.html = workshopHtml({
-      scriptSrc: this.panel.webview
-        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "workshop.js"))
-        .toString(),
-      nonce,
-      csp: [
-        `default-src 'none'`,
-        // https: for the item's live preview URL, which Steam's CDN serves.
-        `img-src ${this.panel.webview.cspSource} https: data:`,
-        `style-src 'unsafe-inline'`,
-        `script-src 'nonce-${nonce}'`,
-      ].join("; "),
-    });
+    const render = (): void => {
+      const nonce = makeNonce();
+      this.panel.webview.html = workshopHtml({
+        scriptSrc: bundleUri(this.panel.webview, source, "workshop"),
+        nonce,
+        csp: [
+          `default-src 'none'`,
+          // https: for the item's live preview URL, which Steam's CDN serves.
+          `img-src ${this.panel.webview.cspSource} https: data:`,
+          `style-src 'unsafe-inline'`,
+          `script-src 'nonce-${nonce}'`,
+        ].join("; "),
+      });
+    };
+    render();
+    // The rebooted app sends "ready" and postInit answers it; nothing else.
+    this.disposables.push(watchBundle(source, "workshop", render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,
@@ -236,8 +247,10 @@ export class WorkshopPanel {
       case "saveLocal": {
         if (!root) return;
         const dir = workshopDirFor(root);
-        if (hasListingFiles(dir)) {
-          // The folder is the canonical store; workshop.json keeps only ids.
+        // Existing folder, or a mod-projects layout where the folder is the
+        // right default even before it exists: the folder is the canonical
+        // store; workshop.json keeps only ids.
+        if (preferListingFiles(root, dir)) {
           writeListingFiles(dir, {
             description: message.description,
             translations: message.translations as Record<string, WorkshopTranslation>,

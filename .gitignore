@@ -28,6 +28,9 @@ docs/*
 !docs/RELEASING.md
 # How the per-language file icons are generated and verified.
 !docs/file-icons.md
+# The webview panel pattern and the checklist for adding one (CONTRIBUTING.md
+# points at it).
+!docs/webviews.md
 # Machine-specific paths for scripts/tests (copy dev-paths.example.json).
 dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).

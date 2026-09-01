@@ -195,8 +195,10 @@ gated("asset paths against vanilla", () => {
     const hover = provideTextureHover(settings, doc, { line: 1, character: 12 }, "trait");
     expect(hover).not.toBeNull();
     const value = (hover!.contents as { value: string }).value;
-    // The caption carries dimensions + encoding + size, not the (redundant) path.
-    expect(value).toMatch(/\d+×\d+ · \S+ · [\d.]+ [KM]B · vanilla/);
+    // The card head names the file and where it resolved; the facts line under
+    // the picture carries dimensions + encoding + size, not the (redundant) path.
+    expect(value).toContain("**reveler.dds** · vanilla");
+    expect(value).toMatch(/\*\d+×\d+ · \S+ · [\d.]+ [KM]B\*/);
   });
 
   it("does not resolve a bare icon when the field is not a mapped bare-name field", () => {

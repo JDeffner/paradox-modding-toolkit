@@ -7,12 +7,14 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { TokenData } from "@px-lsp/protocol/types";
+import type { ExampleWikiSite } from "@px-lsp/protocol/protocol";
 import {
   buildExampleWikiIndex,
   collectSites,
   computeExampleWikiEntry,
   SiteFinder,
   type ExampleWikiSources,
+  type WikiVariable,
 } from "../src/overview/exampleWiki";
 import { emptyDataTypes, type DataTypesData } from "../src/data/dataTypes";
 import { emptyUsage, type DataFnUsage } from "../src/data/dataFnUsage";
@@ -28,6 +30,20 @@ const TOKENS: TokenData[] = [
   { name: "is_alive", kind: "trigger", doc: "Is the character alive?", scopes: ["character"] },
   { name: "liege", kind: "event_target", doc: "", scopes: ["character"], traits: "To scope: character" },
 ];
+
+/** A target that lands in the faith scope, the names the docs say work there,
+ *  and two that only work elsewhere. */
+const FAITH_TOKENS: TokenData[] = [
+  { name: "faith", kind: "event_target", doc: "", scopes: ["input: character", "output: faith"] },
+  { name: "has_doctrine", kind: "trigger", doc: "", scopes: ["faith"] },
+  { name: "faith_hostility_level", kind: "trigger", doc: "", scopes: ["faith"] },
+  { name: "is_alive", kind: "trigger", doc: "", scopes: ["character"] },
+  { name: "add_doctrine", kind: "effect", doc: "", scopes: ["faith"] },
+  { name: "add_gold", kind: "effect", doc: "", scopes: ["character"] },
+  { name: "religious_head", kind: "event_target", doc: "", scopes: ["input: faith", "output: character"] },
+  { name: "liege", kind: "event_target", doc: "", scopes: ["input: character", "output: character"] },
+];
+const FAITH_COUNTS: Record<string, number> = { has_doctrine: 80, faith_hostility_level: 12 };
 
 function dataTypes(): DataTypesData {
   const data = emptyDataTypes();
@@ -63,8 +79,31 @@ function sources(over: Partial<ExampleWikiSources> = {}): ExampleWikiSources {
     tokenSource: "your own script_docs logs.",
     needsScriptDocs: false,
     gamePath: null,
+    variables: new Map<string, WikiVariable>(),
     ...over,
   };
+}
+
+/** A mod variable with one set site and two reads, as server.ts gathers it. */
+function variables(dir: string): Map<string, WikiVariable> {
+  return new Map<string, WikiVariable>([
+    [
+      "variable:my_toll",
+      {
+        name: "my_toll",
+        kind: "variable",
+        sets: [{ file: path.join(dir, "effects.txt"), line: 2, container: "my_effect" }],
+        setsTotal: 1,
+        reads: [
+          { file: path.join(dir, "effects.txt"), line: 3 },
+          { file: path.join(dir, "effects.txt"), line: 4 },
+        ],
+        readsTotal: 9,
+        types: ["value"],
+        origins: ["My Mod"],
+      },
+    ],
+  ]);
 }
 
 /** A finder with no game root: every lookup answers "nothing searched". */
@@ -93,6 +132,108 @@ describe("example wiki index", () => {
     expect(index.entries.find((e) => e.name === "add_gold")?.shortDoc).toBe("Adds gold to the character.");
     expect(index.sources.join(" ")).toContain("script_docs");
     expect(index.sources.join(" ")).toContain("Set the game folder");
+  });
+});
+
+describe("example wiki grammar vocabulary", () => {
+  it("carries one row per keyword and scope word, canonical spelling only", () => {
+    const index = buildExampleWikiIndex(sources({ counts: { limit: 4200 } }));
+    const rows = index.entries.filter((e) => e.kind === "keyword" || e.kind === "scope_word");
+    expect(rows.map((e) => `${e.kind}:${e.name}`)).toEqual(
+      expect.arrayContaining(["keyword:NOT", "keyword:limit", "scope_word:root", "scope_word:prev"])
+    );
+    // The lowercase logic words are aliases of one article, not rows of their own.
+    expect(rows.some((e) => e.name === "not")).toBe(false);
+    expect(rows.find((e) => e.name === "limit")?.count).toBe(4200);
+    expect(index.sources.join(" ")).toContain("keywords and scope words");
+  });
+
+  it("answers a keyword and a scope-word article, and says the description is ours", async () => {
+    const keyword = await computeExampleWikiEntry(sources(), { name: "NOT", kind: "keyword" }, noSites());
+    expect(keyword?.doc).toContain("True when the child trigger is false");
+    expect(keyword?.provenance).toContain("Written by the toolkit");
+    // Any casing reaches the one article, which keeps its canonical name.
+    expect(
+      (await computeExampleWikiEntry(sources(), { name: "not", kind: "keyword" }, noSites()))?.name
+    ).toBe("NOT");
+    const chained = await computeExampleWikiEntry(
+      sources(),
+      { name: "prevprev", kind: "scope_word" },
+      noSites()
+    );
+    expect(chained?.doc).toContain("2 scope-changes back");
+    expect(
+      await computeExampleWikiEntry(sources(), { name: "add_gold", kind: "keyword" }, noSites())
+    ).toBeNull();
+  });
+});
+
+describe("example wiki variables", () => {
+  it("carries a row per mod variable and says where it came from", () => {
+    const index = buildExampleWikiIndex(sources({ variables: variables("/mod") }));
+    const row = index.entries.find((e) => e.name === "my_toll");
+    expect(row?.kind).toBe("variable");
+    expect(row?.shortDoc).toBe("Set in 1 place, read in 9 places.");
+    expect(row?.count).toBe(10);
+    expect(index.sources.join(" ")).toContain("variable and list names");
+  });
+
+  it("answers a variable article with its type, its container and its sites", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "px-wiki-var-"));
+    fs.writeFileSync(
+      path.join(dir, "effects.txt"),
+      [
+        "my_effect = {",
+        "\tif = {",
+        "\t\tset_variable = { name = my_toll value = 5 }",
+        "\t\thas_variable = my_toll",
+        "\t\tremove_variable = my_toll",
+        "\t}",
+        "}",
+      ].join("\n"),
+      "utf8"
+    );
+    const detail = await computeExampleWikiEntry(
+      sources({ variables: variables(dir) }),
+      { name: "my_toll", kind: "variable" },
+      noSites()
+    );
+    expect(detail?.valueType).toBe("value");
+    expect(detail?.containers).toEqual(["my_effect"]);
+    expect(detail?.provenance).toContain("My Mod");
+    expect(detail?.examples).toHaveLength(3);
+    expect(detail?.examples[0].label).toBe("set");
+    expect(detail?.examples[0].line).toBe(3);
+    expect(detail?.examples[0].text).toBe("set_variable = { name = my_toll value = 5 }");
+    expect(detail?.examples[1].label).toBe("read");
+    // Context: the lines around the site, dedented, with the site's own line
+    // findable through contextStart.
+    const site = detail!.examples[0];
+    expect(site.contextStart).toBe(1);
+    expect(site.context).toEqual([
+      "my_effect = {",
+      "\tif = {",
+      "\t\tset_variable = { name = my_toll value = 5 }",
+      "\t\thas_variable = my_toll",
+      "\t\tremove_variable = my_toll",
+      "\t}",
+    ]);
+    expect(detail?.examplesNote).toContain("of 10 places");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("says unknown rather than guessing a type it cannot resolve", async () => {
+    const vars = variables("/mod");
+    vars.get("variable:my_toll")!.types = null;
+    const detail = await computeExampleWikiEntry(
+      sources({ variables: vars }),
+      { name: "my_toll", kind: "variable" },
+      noSites()
+    );
+    expect(detail?.valueType).toBe("unknown");
+    expect(
+      await computeExampleWikiEntry(sources(), { name: "my_toll", kind: "variable" }, noSites())
+    ).toBeNull();
   });
 });
 
@@ -143,6 +284,33 @@ describe("example wiki entry", () => {
     expect(detail?.producers).toEqual(["GetPlayer"]);
   });
 
+  it("lists what the docs allow from a scope the token produces, most used first", async () => {
+    const detail = await computeExampleWikiEntry(
+      sources({ tokens: FAITH_TOKENS, counts: { ...FAITH_COUNTS } }),
+      { name: "faith", kind: "event_target" },
+      noSites()
+    );
+    expect(detail?.fromScope).toHaveLength(1);
+    const from = detail!.fromScope![0];
+    expect(from.scope).toBe("faith");
+    // Ordered by vanilla usage; the character-only names are not in the answer.
+    expect(from.triggers).toEqual(["has_doctrine", "faith_hostility_level"]);
+    expect(from.triggersTotal).toBe(2);
+    expect(from.effects).toEqual(["add_doctrine"]);
+    expect(from.effectsTotal).toBe(1);
+    expect(from.targets).toEqual(["religious_head"]);
+    expect(from.targetsTotal).toBe(1);
+  });
+
+  it("says nothing about scopes a token does not produce", async () => {
+    const detail = await computeExampleWikiEntry(
+      sources({ tokens: FAITH_TOKENS }),
+      { name: "has_doctrine", kind: "trigger" },
+      noSites()
+    );
+    expect(detail?.fromScope).toBeUndefined();
+  });
+
   it("answers null for a name the catalog does not have", async () => {
     expect(
       await computeExampleWikiEntry(sources(), { name: "no_such_thing", kind: "effect" }, noSites())
@@ -159,11 +327,20 @@ describe("collectSites", () => {
       ["my_thing = {", "\tadd_gold = 100", "\t# add_gold = 5", "\tadd_gold_no = yes", "}"].join("\n"),
       "utf8"
     );
-    const out: Array<{ text: string; file: string; line: number }> = [];
+    const out: ExampleWikiSite[] = [];
     collectSites(file, "add_gold", out);
     expect(out).toHaveLength(1);
     expect(out[0].text).toBe("add_gold = 100");
     expect(out[0].line).toBe(2);
+    // The block the line sits in, dedented so the pane can read it.
+    expect(out[0].contextStart).toBe(1);
+    expect(out[0].context).toEqual([
+      "my_thing = {",
+      "\tadd_gold = 100",
+      "\t# add_gold = 5",
+      "\tadd_gold_no = yes",
+      "}",
+    ]);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

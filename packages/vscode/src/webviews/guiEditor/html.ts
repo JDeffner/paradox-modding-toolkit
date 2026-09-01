@@ -147,8 +147,6 @@ ${uiCss}
   #libraryOverlay[hidden] { display: none; }
   #libraryOverlay > #library { flex: 1 1 auto; min-height: 0; border-top: 0; }
   #info[data-warning] { color: var(--px-destructive); }
-  #info::after { white-space: pre-line; }
-  [data-tip][data-tip-side="right"]::after { left: calc(100% + 6px); right: auto; top: 50%; transform: translateY(-50%); }
 
   /* ---- side panels ---- */
   #side { --px-sidepanel-width: 280px; }
@@ -359,18 +357,18 @@ ${uiCss}
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-toggle-group" id="modeGroup" hidden>
       <button id="modeEdit" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Edit: select, drag, resize and write to the file (V)" data-tip-wrap>${icon("mousePointer")}Edit</button>
-      <button id="modeInteract" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Interact: click buttons and scroll lists as in game. Variable-driven tabs and windows react; nothing is written (I)" data-tip-wrap>${icon("hand")}Interact</button>
+      <button id="modeInteract" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Interact: click buttons and scroll lists as in game (I)" data-tip-wrap>${icon("hand")}Interact</button>
     </div>
     <span class="px-grow"></span>
     <div class="px-toggle-group">
-      <button id="locResolved" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Show textboxes as the game would: localization keys as their text, [datafunctions] as what the preview can know" data-tip-wrap>Resolved</button>
+      <button id="locResolved" class="px-toggle" data-size="sm" aria-pressed="true" data-tip="Show textboxes as the game would render them" data-tip-wrap>Resolved</button>
       <button id="locRaw" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Show textboxes as the file has them: the text = value verbatim" data-tip-wrap>Raw</button>
       <button id="saveSource" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;max-width:260px" data-tip="Real values for [datafunctions] from a save game (plain text, not ironman)" data-tip-wrap hidden>${icon("fileText")}<span class="px-truncate">No save</span>${icon("chevronDown")}</button>
     </div>
     <select id="heatmap"></select>
     <button id="heatmapMenu" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Tint the scene by one property of the widget tree" data-tip-wrap>${icon("flame")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
-    <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="The element library: the widgets, templates and saved pieces you can add to the canvas, with previews (L)" data-tip-wrap>${icon("shapes")}Library</button>
+    <button id="libraryToggle" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Widgets, templates and saved pieces to add to the canvas (L)" data-tip-wrap>${icon("shapes")}Library</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this editor works: selecting, editing, saving, the library, shortcuts" data-tip-side="left" data-tip-wrap>${icon("circleHelp")}</button>
     <button id="toggleRight" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Hide the inspector" data-tip-side="left">${icon("panelRightClose")}</button>
@@ -392,7 +390,7 @@ ${uiCss}
         <button id="zoomOutBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom out (Ctrl+−)" data-tip-side="top">${icon("zoomOut")}</button>
         <button id="zoomInBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Zoom in (Ctrl++)" data-tip-side="top">${icon("zoomIn")}</button>
         <button id="zoomFitBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Fit the view (Ctrl+0)" data-tip-side="top">${icon("maximize")}</button>
-        <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Ctrl+0 fits the 1920x1080 viewport, Shift+F the selection" data-tip-side="top" data-tip-wrap>100%</span>
+        <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, middle mouse pans. Double-click to fit" data-tip-side="top" data-tip-wrap>100%</span>
         <div class="px-separator" data-orientation="vertical"></div>
         <div class="px-toggle-group">
           ${viewToggle("outlines", "squareDashed", "Outline every widget")}

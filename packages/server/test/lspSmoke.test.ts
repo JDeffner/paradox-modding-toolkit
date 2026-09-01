@@ -108,6 +108,10 @@ smoke.3 = {
 	type = character_event
 	trigger = {
 		smoke_can_pay_trigger = yes
+		has_variable = smoke_toll
+	}
+	immediate = {
+		set_variable = { name = smoke_toll value = 5 }
 	}
 }
 `;
@@ -593,6 +597,41 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       kind: "effect",
     });
     expect(missing).toBeNull();
+  });
+
+  it("paradox/exampleWiki carries the script grammar the game documents nowhere", async () => {
+    const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+    // `not` never gets a row of its own: one keyword, one article.
+    expect(index.entries.some((e) => e.name === "NOT" && e.kind === "keyword")).toBe(true);
+    expect(index.entries.some((e) => e.name === "not" && e.kind === "keyword")).toBe(false);
+    expect(index.entries.some((e) => e.name === "prev" && e.kind === "scope_word")).toBe(true);
+    for (const kind of ["keyword", "scope_word"] as const) {
+      const name = kind === "keyword" ? "limit" : "prev";
+      const detail = (await conn.sendRequest(exampleWikiEntryRequest, { name, kind })) as ExampleWikiDetail;
+      expect(detail.name).toBe(name);
+      expect(detail.doc).not.toBe("");
+      // The article says out loud that the description is the toolkit's own.
+      expect(detail.provenance).toContain("Written by the toolkit");
+    }
+    expect(await conn.sendRequest(exampleWikiEntryRequest, { name: "add_gold", kind: "keyword" })).toBeNull();
+  });
+
+  it("paradox/exampleWiki carries the mod's own variables, with inline context", async () => {
+    const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+    const row = index.entries.find((e) => e.name === "smoke_toll" && e.kind === "variable");
+    expect(row).toBeDefined();
+    const detail = (await conn.sendRequest(exampleWikiEntryRequest, {
+      name: "smoke_toll",
+      kind: "variable",
+    })) as ExampleWikiDetail;
+    // Set once in smoke.3's immediate, read once in its trigger.
+    expect(detail.valueType).toBe("value");
+    expect(detail.containers).toEqual(["smoke.3"]);
+    const set = detail.examples.find((e) => e.label === "set");
+    expect(set?.text).toBe("set_variable = { name = smoke_toll value = 5 }");
+    expect(set?.context?.length).toBeGreaterThan(1);
+    expect(set?.contextStart).toBeLessThanOrEqual(set!.line);
+    expect(detail.examples.some((e) => e.label === "read")).toBe(true);
   });
 
   it("paradox/dependencies resolves a definition's dependents and dependencies", async () => {
