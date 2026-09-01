@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+- **Your variables joined the Examples Wiki.** Every variable and list the
+  index knows (`set_variable`, `add_to_list`, the local and global forms) now
+  has its own wiki article: inferred value type, where it is set and read,
+  and the containing definitions - with a Variables filter chip in the
+  catalog. Hovering `var:x` (and friends) shows an "Examples Wiki" link next
+  to the references count that opens the wiki right at that article.
+
+- **The Examples Wiki reads like a wiki now.** Example sites show real code:
+  a few surrounding lines inline, with the matched line highlighted, still
+  one click from the actual file. Member, producer, return-type, owner and
+  scope chips navigate to their own articles, with a back button for the
+  trail. The divider between the list and the reading pane drags, and the
+  width you choose survives closing the panel.
+
+- **The Wiki.** A new "Wiki" row in the Project panel's View group opens a
+  hub for reference knowledge: the Image Guidelines as their own page, every
+  diagnostic code's explanation page, and launchers for the Examples Wiki and
+  the Format Docs - all searchable by title and body text. The Format Docs
+  and Image Guidelines footer buttons moved into it; the commands still exist
+  in the palette, and "Paradox: Image Guidelines" now opens the hub at that
+  page.
+
+- **Breadcrumbs draw the same glyphs as everything else.** The breadcrumb
+  bar, outline and Ctrl+T symbol search now take their icons from the same
+  kind map as hover badges and completion rows, so an event shows the class
+  glyph everywhere instead of a lightning bolt only in the breadcrumb. The
+  four list kinds also stopped sharing one icon: ad-hoc `add_to_list` lists
+  show an array, `variable_list` keeps the enum-member glyph,
+  `local_variable_list` a plain list and `global_variable_list` a globe.
+
+- **Workshop drafts stop landing inside the mod.** In the mod projects layout
+  (`<project>/mod`), saving the listing now creates and uses the
+  `<project>/workshop` folder from the first save, instead of writing
+  `workshop.json` into the mod's config folder until the workshop folder
+  happened to exist. (The file was never uploaded either way.)
+
+- **px.calendar declared in the wrong settings file now says so.** The
+  setting is window-scoped, so a calendar in a mod subfolder's own
+  `.vscode/settings.json` is ignored by VS Code and the date preview
+  silently stayed off. The toolkit now warns once per workspace when it finds
+  such a stray calendar, with a button that adopts it into the opened
+  folder's settings. The setting's description spells out where it must
+  live.
+
 ## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
 - **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel

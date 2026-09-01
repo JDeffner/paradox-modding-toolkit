@@ -18,6 +18,16 @@ Ships with toolkit 0.4.0.
 
 ### Added
 
+- The Examples Wiki serves articles for the workspace's own variables and
+  lists (kind, inferred value type, set/read sites with inline context,
+  containers), rebuilt when the index changes; engine-token example sites
+  carry surrounding lines for inline display. Variable hovers link to the
+  article via `clientCommands.showExamplesWiki` when the client declares it.
+- Document symbols (outline, breadcrumbs, sticky scroll) and workspace
+  symbols resolve their `SymbolKind` through the shared kind map
+  (`features/symbolKind.ts`), so a definition draws the same glyph in the
+  breadcrumb bar as in its hover badge; the hand-kept workspace-symbol kind
+  table is gone.
 - `producersOf(data, typeName)` in `data/dataTypes.ts`: the reverse of
   `membersOf`, listing every global and member whose return type is `typeName`.
   Built lazily per `DataTypesData` and cached against it, so a reloaded
