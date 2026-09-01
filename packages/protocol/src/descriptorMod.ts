@@ -349,18 +349,25 @@ export function readDescriptorDependencies(dir: string): string[] {
  * key is absent. Only scalar entries: a key whose value is a block is left
  * alone and the entry is appended instead. Line endings and a leading BOM
  * survive untouched; the appended line follows the file's dominant EOL.
+ * The value is made descriptor-safe like upsertDescriptorBlock's quoting:
+ * the format has no escape, so double quotes become apostrophes and line
+ * breaks collapse to one space.
  */
 export function upsertDescriptorValue(text: string, key: string, value: string): string {
+  const v = value.replace(/"/g, "'").replace(/\s*\r?\n\s*/g, " ");
   const entry = parseDescriptor(text).find((e) => e.key === key && e.value !== "");
   if (entry) {
     const lines = text.split(/(\r?\n)/); // keep separators at odd indices
     const idx = entry.line * 2;
-    lines[idx] = lines[idx].replace(/=\s*("[^"]*"|\S+)([ \t]*(#.*)?)$/, `="${value}"$2`);
+    lines[idx] = lines[idx].replace(
+      /=\s*("[^"]*"|\S+)([ \t]*(#.*)?)$/,
+      (_m, _old, tail: string) => `="${v}"${tail}`
+    );
     return lines.join("");
   }
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const sep = text === "" || text.endsWith("\n") ? "" : eol;
-  return `${text}${sep}${key}="${value}"${eol}`;
+  return `${text}${sep}${key}="${v}"${eol}`;
 }
 
 /**

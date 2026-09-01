@@ -325,6 +325,9 @@ export class WorkshopPanel {
     const { meta } = this.options;
     const root = this.active;
     if (!root) return;
+    // The webview (and workshop.json) name the language; only the fixed Steam
+    // table may become a path segment.
+    if (lang !== null && !STEAM_LANGUAGES.some((l) => l.api === lang)) return;
     const dir = workshopDirFor(root);
     if (!hasListingFiles(dir)) {
       this.notify(

@@ -161,6 +161,13 @@ describe("upsertDescriptorValue", () => {
     expect(upsertDescriptorValue('name="X"', "remote_file_id", "5")).toBe('name="X"\nremote_file_id="5"\n');
   });
 
+  it("makes the value descriptor-safe: quotes, newlines, replacement patterns", () => {
+    const quoted = upsertDescriptorValue('name="X"\n', "name", 'My "Great"\nMod');
+    expect(quoted).toBe("name=\"My 'Great' Mod\"\n");
+    // $& in a value must land literally, not echo the matched entry.
+    expect(upsertDescriptorValue('name="X"\n', "name", "a $& b")).toBe('name="a $& b"\n');
+  });
+
   it("does not touch block-valued keys of the same name", () => {
     const out = upsertDescriptorValue('tags={\n\t"Gameplay"\n}\n', "tags", "zzz");
     expect(out).toBe('tags={\n\t"Gameplay"\n}\ntags="zzz"\n');
