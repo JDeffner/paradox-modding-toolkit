@@ -655,8 +655,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the built-in command. The `@ext:` query filters the Shortcuts UI to this
     // extension; if a VS Code build ever shows an empty list, "px." is the
     // fallback query.
-    // The toolkit's community server: the Project panel footer and the palette
-    // both land here. Permanent invite, so it never needs a refresh.
+    // The toolkit's community server: the Project panel's Info group and the
+    // palette both land here. Permanent invite, so it never needs a refresh.
     vscode.commands.registerCommand("px.openDiscord", () =>
       vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/ESstwqycug"))
     ),
@@ -665,11 +665,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     // Workspace scope: the settings that matter here (paths, focus, excludes)
     // are per-project taste, and the User tab is one click away in the editor.
-    vscode.commands.registerCommand("px.openSettings", () =>
-      vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+    // Since VS Code 1.135 the settings editor opens as a modal overlay whenever
+    // workbench.editor.useModal is not "off" (default "some"); the preferences
+    // service decides that before any command argument is read, and the group id
+    // that would override it is stripped from the command's options. Merging the
+    // modal part back into the main window is the only command-level route to a
+    // normal tab, and the move carries the search query in the editor view state.
+    vscode.commands.registerCommand("px.openSettings", async () => {
+      await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
         query: "@ext:jdeffner.px-toolkit",
-      })
-    ),
+      });
+      // Undefined on builds before 1.135, where neither the setting nor the
+      // move command exists.
+      const useModal = vscode.workspace.getConfiguration("workbench.editor").get<string>("useModal");
+      if (useModal !== undefined && useModal !== "off")
+        await vscode.commands.executeCommand("workbench.action.moveModalEditorToMain");
+    }),
     // Checked = visible, so the setting stores the INVERSE of the picks. The
     // catalog is the panel's own row list for the active game, which is why it
     // is built with the live problem count. Global scope: panel taste is

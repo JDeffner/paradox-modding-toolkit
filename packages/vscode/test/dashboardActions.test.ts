@@ -36,6 +36,27 @@ describe("visibleActionGroups", () => {
     expect(ids).toContain("px.openWiki");
   });
 
+  it("groups the reference and community links under Info, below Create", () => {
+    const groups = actionGroups(ck3Meta, 0);
+    const info = groups.find((g) => g.label === "Info");
+    expect(info?.items.map((it) => it.command)).toEqual([
+      "px.openDiscord",
+      "px.openWiki",
+      "px.showExamplesWiki",
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Create", "Info", "Test & Troubleshoot"]);
+    // The wiki rows moved out of View, they are not listed twice.
+    const view = groups.find((g) => g.label === "View");
+    expect(view?.items.map((it) => it.command)).not.toContain("px.openWiki");
+    expect(view?.items.map((it) => it.command)).not.toContain("px.showExamplesWiki");
+  });
+
+  it("hides Info rows like any other row", () => {
+    const groups = visibleActionGroups(ck3Meta, 0, ["px.openDiscord", "px.openWiki"]);
+    const info = groups.find((g) => g.label === "Info");
+    expect(info?.items.map((it) => it.command)).toEqual(["px.showExamplesWiki"]);
+  });
+
   it("ignores ids that match no row", () => {
     const all = visibleActionGroups(ck3Meta, 0, []);
     const withJunk = visibleActionGroups(ck3Meta, 0, ["px.notARow", ""]);

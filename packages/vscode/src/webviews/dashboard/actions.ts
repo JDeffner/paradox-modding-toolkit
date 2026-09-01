@@ -40,18 +40,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           tip: "Interactive graph of what fires what: events, on_actions and decisions of the focused mod.",
         },
         {
-          label: "Examples Wiki",
-          command: "px.showExamplesWiki",
-          icon: "bookOpen",
-          tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
-        },
-        {
-          label: "Wiki",
-          command: "px.openWiki",
-          icon: "library",
-          tip: "The toolkit's reference pages in one searchable place: the image sizes and formats the game expects, and what every diagnostic means.",
-        },
-        {
           label: "Mod Report",
           command: "px.modReport",
           icon: "fileText",
@@ -126,6 +114,29 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.newContent",
           icon: "plus",
           tip: "Scaffold an event, decision, trait, … into the right folder, with localization keys.",
+        },
+      ],
+    },
+    {
+      label: "Info",
+      items: [
+        {
+          label: "Join the Discord",
+          command: "px.openDiscord",
+          icon: "messageSquare",
+          tip: "Open the invite to the toolkit's Discord in your browser: release notes, bug reports, and help with the games this extension covers.",
+        },
+        {
+          label: "Wiki",
+          command: "px.openWiki",
+          icon: "library",
+          tip: "The toolkit's reference pages in one searchable place: the image sizes and formats the game expects, and what every diagnostic means.",
+        },
+        {
+          label: "Examples Wiki",
+          command: "px.showExamplesWiki",
+          icon: "bookOpen",
+          tip: "Search every trigger, effect, event target, modifier and datafunction the toolkit knows, with what it does and where the game itself uses it.",
         },
       ],
     },

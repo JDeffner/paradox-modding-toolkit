@@ -10,6 +10,7 @@ import uiCss from "../shared/ui.css";
 import { icon, ICON_NAMES } from "../shared/icons";
 import { visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
+import { tipScript } from "../shared/tips";
 
 /** A collapsible section: the static ones ("mods", "toggles", "paths") plus
  * one id per tool group, slugged from its label by the webview script. */
@@ -408,8 +409,6 @@ ${uiCss}
   .toggle-row:has(> .px-switch > input:disabled) { cursor: not-allowed; }
   .toggle-row:has(> .px-switch > input:disabled) > .px-switch { opacity: 0.5; }
   .toggle-row > .px-switch { flex: 0 0 auto; }
-  /* Tooltips open below, flush left: a centered one overflows a narrow sidebar. */
-  [data-tip]:not([data-tip-side])::after { left: 0; transform: none; }
   /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
      is the part that tells paths apart). */
   .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
@@ -435,11 +434,6 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
-  /* Footer: the community link, quiet enough to ignore. */
-  #footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--px-border); }
-  #footer .px-item { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
-  #footer .px-item:hover { color: var(--px-fg); }
-  #footer .px-icon { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -486,13 +480,7 @@ ${uiCss}
   )}
   <div class="section-body px-list" id="body-paths"></div>
 </div>
-<div id="footer">
-  <div class="px-item" id="discord" role="button" tabindex="0"
-       data-tip="Open the invite to the toolkit's Discord in your browser: release notes, bug reports, and help with the games this extension covers."
-       data-tip-wrap>
-    ${icon("messageSquare")}<span class="px-item-label">Join the Discord</span>
-  </div>
-</div>
+${tipScript(nonce)}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 // Compile-time constants from the host, safe as markup.
@@ -659,14 +647,6 @@ function renderGame() {
   gameRow.appendChild(el("span", "px-item-label game-name", state.gameName));
   gameRow.appendChild(badge(state.gameAuto ? "auto-detected" : "set manually"));
 }
-
-// ---- community link ----
-const discordRow = document.getElementById("discord");
-const openDiscord = () => vscode.postMessage({ type: "run", command: "px.openDiscord" });
-discordRow.addEventListener("click", openDiscord);
-discordRow.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDiscord(); }
-});
 
 // ---- mods ----
 function radio(on, tipText, onClick) {
