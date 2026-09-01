@@ -50,6 +50,16 @@ export const vic3Meta: GameMeta = {
   // `tag:` blocks carrying Mask/Name/Description lines.
   scriptDocs: { format: "markdown", modifiers: "masked-block" },
   tiger: { binaryName: "vic3-tiger", repoSlug: "amtep/tiger", confName: "vic3-tiger.conf" },
+  // Flags verified as literals in victoria3.exe (2026-09-01). CK3's -skip /
+  // -play presets are not offered: their semantics are unverified here.
+  launchPresets: [
+    { id: "mapeditor", label: "Map Editor", args: ["-mapeditor"] },
+    {
+      id: "continue",
+      label: "Continue Last Save (debug mode)",
+      args: ["-debug_mode", "-develop", "-continuelastsave"],
+    },
+  ],
   cacheSuffix: "-vic3",
   flagBuilder: true,
 };

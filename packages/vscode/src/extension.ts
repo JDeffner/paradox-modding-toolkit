@@ -46,6 +46,7 @@ import { ExampleWikiPanel } from "./webviews/exampleWiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
+import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { readModName } from "@px-lsp/protocol/modName";
@@ -55,7 +56,9 @@ import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
 import { showDocPanel } from "./webviews/docPanel";
 import { generateTigerConfCommand } from "./tiger/conf";
-import { ErrorLogWatcher, launchGameDebugCommand } from "./errorLog";
+import { ErrorLogWatcher } from "./errorLog";
+import { launchGame, registerGameRun } from "./gameRun";
+import { DEBUG_ARGS } from "./gameRunPresets";
 import { serverHeapMb } from "./serverHeap";
 import { planWatchRoots } from "./watchRoots";
 import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
@@ -154,6 +157,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     workspaceMods: c.workspaceMods,
     locLanguage: c.locLanguage,
     scopeInlayHints: c.scopeInlayHints,
+    calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
     diagnosticsVanilla: c.diagnosticsVanilla,
@@ -578,6 +582,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
+    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
+    vscode.commands.registerCommand("px.generateCalendarLoc", () =>
+      generateCalendarLocCommand(cfgForActive())
+    ),
     vscode.commands.registerCommand("px.createTranslation", () =>
       createTranslationCommand(cfgForActive(), log)
     ),
@@ -1006,7 +1014,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
     vscode.commands.registerCommand("px.clearGameProblems", () => errorLog.clear()),
-    vscode.commands.registerCommand("px.launchGame", () => launchGameDebugCommand(cfg, errorLog)),
+    vscode.commands.registerCommand("px.launchGame", () => launchGame(cfgForActive(), errorLog, DEBUG_ARGS)),
     vscode.commands.registerCommand("px.translateNext", () =>
       translateNextCommand(lc, cfgForActive(), notifyModFileChanged)
     ),
@@ -1015,6 +1023,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log))
   );
+  registerGameRun(context, cfgForActive, errorLog);
 
   // ---- onboarding ---------------------------------------------------------------
 

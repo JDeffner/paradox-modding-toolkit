@@ -151,6 +151,8 @@ import { ServerData } from "./serverData";
 import { CompletionFeature } from "./features/completion";
 import { provideHover } from "./features/hover";
 import { setHoverDetail } from "./features/hoverRender";
+import { provideDateHover } from "./features/calendarDates";
+import { sanitizeCalendar } from "@px-lsp/protocol/calendar";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
@@ -1260,6 +1262,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   // only gameId), and every downstream consumer assumes the full shape.
   if (init.settings) settings = { ...defaultSettings(), ...init.settings };
   setHoverDetail(settings.hoverDetail ?? "standard");
+  settings.calendar = sanitizeCalendar(settings.calendar);
   setActiveProfile(resolveProfile(settings.gameId));
   deriveBundledDataDirs();
   if (!storageDir) {
@@ -1364,6 +1367,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
     newSettings.diagnosticsVanilla !== settings.diagnosticsVanilla;
   settings = newSettings;
   setHoverDetail(settings.hoverDetail ?? "standard");
+  settings.calendar = sanitizeCalendar(settings.calendar);
   completion.setSettings(settings);
   if (pathsChanged) {
     log("paths changed; rebuilding data...");
@@ -1734,6 +1738,8 @@ connection.onHover((params) =>
     if (!isScriptLanguage(doc.languageId)) return null;
     const fsPath = URI.parse(doc.uri).fsPath;
     const entry = schemaEntryForFile(fsPath);
+    const dateHover = provideDateHover(settings.calendar, doc, params.position);
+    if (dateHover) return dateHover;
     const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
     if (texture) return texture;
     return provideHover(
