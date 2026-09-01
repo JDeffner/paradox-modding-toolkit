@@ -30,12 +30,12 @@ import {
   friendlyError,
   lastCommitSubject,
   LEGAL_AGREEMENT_URL,
+  makeStagingDir,
   persistPublishedId,
   PREVIEW_MAX_BYTES,
   readPublishInfo,
   runBridge,
   stageContent,
-  stagingDir,
   translationSubmits,
   workshopDirFor,
   workshopUrl,
@@ -558,7 +558,7 @@ export class WorkshopPanel {
     let itemId = info.publishedId;
     this.uploading = true;
     this.post({ type: "uploadState", busy: true, message: "starting…" });
-    const staging = stagingDir(root);
+    let staging: string | null = null;
     try {
       let needsAgreement = false;
       if (!itemId) {
@@ -594,6 +594,7 @@ export class WorkshopPanel {
         }
         if (message.content) {
           this.post({ type: "uploadState", busy: true, message: "preparing files…" });
+          staging = makeStagingDir();
           stageContent(root, staging, [workshopDirFor(root)]);
           main.contentPath = staging;
         }
@@ -640,7 +641,7 @@ export class WorkshopPanel {
     } catch (e) {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);
     } finally {
-      fs.rmSync(staging, { recursive: true, force: true });
+      if (staging) fs.rmSync(staging, { recursive: true, force: true });
       this.uploading = false;
       this.post({ type: "uploadState", busy: false });
     }
