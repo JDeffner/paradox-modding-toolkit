@@ -691,11 +691,11 @@
               },
               "before": {
                 "type": "string",
-                "description": "Era label for script years before the epoch (e.g. BC). Omit for a single-era calendar."
+                "description": "Era label for script years before the epoch (e.g. BC). Omit for a single-era calendar. Must differ from the later era's label."
               },
               "months": {
                 "type": "array",
-                "description": "Custom month names and day counts, first month first. Omit for the standard 12 months.",
+                "description": "Custom month names and day counts, first month first. Omit for the standard 12 months. The names must be distinct.",
                 "items": {
                   "type": "object",
                   "properties": {

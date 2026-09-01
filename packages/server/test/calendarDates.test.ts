@@ -16,6 +16,8 @@ describe("dateTokensOnLine", () => {
   it("skips comments and quoted strings (version numbers are quoted)", () => {
     expect(dates('supported_version = "1.12.3"')).toEqual([]);
     expect(dates("birth = 3000.1.1 # was 2999.1.1")).toEqual(["3000.1.1"]);
+    // A `#` inside a quoted value does not start the comment tail.
+    expect(dates('name = "a # b" birth = 3000.1.1')).toEqual(["3000.1.1"]);
   });
 
   it("skips runs glued into longer tokens and non-dates", () => {

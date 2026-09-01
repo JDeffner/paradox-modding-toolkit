@@ -32,7 +32,14 @@ const DATE_TOKEN = /(?<![\w.])(\d{1,5})\.(\d{1,2})\.(\d{1,2})(?![\w.])/g;
  * triplets in script are dates).
  */
 export function dateTokensOnLine(cal: CalendarSetting, lineText: string): DateToken[] {
-  const hash = lineText.indexOf("#");
+  // A `#` inside a quoted string is text, not a comment marker: find the
+  // comment start with the quote state carried along.
+  let quoted = false;
+  let hash = -1;
+  for (let i = 0; i < lineText.length && hash < 0; i++) {
+    if (lineText[i] === '"') quoted = !quoted;
+    else if (lineText[i] === "#" && !quoted) hash = i;
+  }
   const code = hash >= 0 ? lineText.slice(0, hash) : lineText;
   const tokens: DateToken[] = [];
   DATE_TOKEN.lastIndex = 0;

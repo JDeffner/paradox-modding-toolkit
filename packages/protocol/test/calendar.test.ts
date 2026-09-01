@@ -113,6 +113,20 @@ describe("sanitizeCalendar", () => {
     expect(sanitizeCalendar({ epoch: 4000, after: "AD", months: [{ name: "X", days: 0 }] })).toBeUndefined();
   });
 
+  it("rejects labels and month names that cannot be told apart", () => {
+    expect(sanitizeCalendar({ epoch: 4000, after: "TA", before: "ta" })).toBeUndefined();
+    expect(
+      sanitizeCalendar({
+        epoch: 4000,
+        after: "TA",
+        months: [
+          { name: "Moon", days: 30 },
+          { name: " moon ", days: 30 },
+        ],
+      })
+    ).toBeUndefined();
+  });
+
   it("drops an empty months array back to the default calendar", () => {
     expect(sanitizeCalendar({ epoch: 4000, after: "AD", months: [] })).toEqual({
       epoch: 4000,

@@ -65,13 +65,20 @@ export function sanitizeCalendar(raw: unknown): CalendarSetting | undefined {
   if (typeof after !== "string" || after.trim() === "") return undefined;
   const cal: CalendarSetting = { epoch, after: after.trim() };
   if (typeof o.before === "string" && o.before.trim() !== "") cal.before = o.before.trim();
+  // Typed input picks the era by its label and the month by its name, so a
+  // collision would resolve silently to the wrong one: not a usable calendar.
+  if (cal.before && cal.before.toLowerCase() === cal.after.toLowerCase()) return undefined;
   if (Array.isArray(o.months) && o.months.length > 0) {
     const months: CalendarMonth[] = [];
+    const seen = new Set<string>();
     for (const m of o.months) {
       if (typeof m !== "object" || m === null) return undefined;
       const { name, days } = m as Record<string, unknown>;
       if (typeof name !== "string" || name.trim() === "") return undefined;
       if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 999) return undefined;
+      const key = name.trim().toLowerCase();
+      if (seen.has(key)) return undefined;
+      seen.add(key);
       months.push({ name: name.trim(), days });
     }
     cal.months = months;
