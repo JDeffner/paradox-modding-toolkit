@@ -83,6 +83,11 @@ interface ParadoxSettings {
   locLanguage: string;         // "english", ...
   scopeInlayHints: boolean;
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
+  calendar?: CalendarSetting;  // custom era calendar for date display (inlay hints + hover); absent = off
+                               //   { epoch: number; after: string; before?: string;
+                               //     months?: { name: string; days: number }[] }
+                               //   script year >= epoch displays as (year-epoch+1) <after>,
+                               //   year < epoch as (epoch-year) <before>; sanitized on intake
   diagnosticsIgnore: string[];         // diagnostic codes to suppress
   diagnosticsIgnorePatterns: string[]; // workspace-relative globs to suppress
   diagnosticsVanilla: boolean;         // false (default) = never diagnose game files

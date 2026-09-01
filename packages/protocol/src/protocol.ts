@@ -36,6 +36,10 @@ export interface ParadoxSettings {
    * every distinct meaning.
    */
   hoverDetail?: "compact" | "standard" | "full";
+  /** Custom era calendar (total-conversion mods): how script dates display in
+   * game. Absent = no calendar features. Shape: calendar.ts `CalendarSetting`;
+   * the server sanitizes it on intake, so clients may pass raw JSON. */
+  calendar?: import("./calendar").CalendarSetting;
   /** Our diagnostic codes to suppress everywhere. */
   diagnosticsIgnore: string[];
   /** Glob patterns (workspace-relative paths) whose diagnostics are suppressed. */
