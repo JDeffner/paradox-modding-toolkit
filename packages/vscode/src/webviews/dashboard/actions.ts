@@ -101,23 +101,8 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
         },
       ],
     },
-    {
-      label: "Localization",
-      items: [
-        {
-          label: "Translate Missing Keys",
-          command: "px.translateNext",
-          icon: "arrowRight",
-          tip: "Walk the missing localization keys one by one, side by side with the source language.",
-        },
-        {
-          label: "New Translation Mod",
-          command: "px.createTranslationMod",
-          icon: "copy",
-          tip: "Create a standalone mod that translates another mod, including an AI translation prompt.",
-        },
-      ],
-    },
+    // Translation launchers live on the Localization Coverage view's title
+    // bar, next to the numbers they act on - not as another panel group.
     {
       label: "Test & Troubleshoot",
       items: [

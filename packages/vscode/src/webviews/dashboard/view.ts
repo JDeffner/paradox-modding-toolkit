@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
+import { resolveWorkshopDir } from "../../steam/workshopFiles";
 import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
@@ -255,6 +256,9 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
     source: value === null ? "not found" : isSet(setting.replace(/^px\./, "")) ? "set" : detectedAs,
   });
   const projectsDir = (raw.get<string>("modProjectsDir") ?? "").trim() || null;
+  // The Workshop listing folder is per mod (px.workshop.dir resolves against
+  // the mod root, default ../workshop), so without a mod there is no value.
+  const workshopDir = cfg.modPath ? resolveWorkshopDir(cfg.modPath, raw.get<string>("workshop.dir")) : null;
   const rows = [
     row("Game", "px.gamePath", cfg.gamePath),
     row("script_docs logs", "px.logsPath", cfg.logsPath),
@@ -264,6 +268,12 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
       setting: "px.modProjectsDir",
       value: projectsDir,
       source: projectsDir ? "set" : "not set",
+    },
+    {
+      label: "Workshop listing",
+      setting: "px.workshop.dir",
+      value: workshopDir,
+      source: workshopDir === null ? "not found" : isSet("workshop.dir") ? "set" : "default",
     },
   ];
   if (hasTiger) rows.push(row("Tiger", "px.tigerPath", cfg.tigerPath, "downloaded"));

@@ -28,19 +28,19 @@
 
 - **The Project panel shows the paths in use.** A Paths section (at the
   bottom of the panel) lists the effective game folder, script_docs logs, mod
-  folder, mod projects folder and tiger binary, each with its origin (set,
+  folder, mod projects folder, Workshop listing folder and tiger binary, each with its origin (set,
   detected, downloaded, not found) - the answer the settings UI cannot give,
   since an auto-detected value just looks like an empty setting there.
   Clicking a row opens a file browser and writes the picked folder (or tiger
   binary) straight into the setting.
 
 - **The Project panel reorganized.** The Tools wrapper is gone; its groups
-  are top-level collapsible sections of their own, regrouped by what you are
-  doing: Create, Review (Event Graph, Mod Report, Simulate Event - the
-  report now sits next to the graph), Design (GUI tools, Flag Builder and
-  the image rows), Localization, Reference, Test & Troubleshoot, Share -
-  followed by Toggles and Paths. The game header opens the same
-  Workspace-scoped extension settings view as the overflow menu.
+  are top-level collapsible sections of their own: Create, View, Test &
+  Troubleshoot, Share - followed by Toggles and Paths. The reference links
+  became quiet footer buttons under Join the Discord, and the translation
+  launchers moved to the Localization Coverage view's title bar, next to the
+  numbers they act on. The game header opens the same Workspace-scoped
+  extension settings view as the overflow menu.
 
 - **Warning before a workshop folder lands among the game's mods.** Creating
   the listing folder (the panel's download button) now warns first when it

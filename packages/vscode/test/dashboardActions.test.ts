@@ -10,17 +10,22 @@ function commands(groups: ReturnType<typeof actionGroups>): string[] {
 
 describe("visibleActionGroups", () => {
   it("drops the hidden rows and keeps the rest", () => {
-    const groups = visibleActionGroups(ck3Meta, 0, ["px.showEventGraph", "px.translateNext"]);
+    const groups = visibleActionGroups(ck3Meta, 0, ["px.showEventGraph", "px.modReport"]);
     const ids = commands(groups);
     expect(ids).not.toContain("px.showEventGraph");
-    expect(ids).not.toContain("px.translateNext");
+    expect(ids).not.toContain("px.modReport");
     expect(ids).toContain("px.simulateEvent");
     expect(ids).toContain("px.convertToDds");
   });
 
+  it("translation launchers moved to the coverage view's title bar, off the panel", () => {
+    expect(commands(actionGroups(ck3Meta, 0))).not.toContain("px.translateNext");
+    expect(actionGroups(ck3Meta, 0).map((g) => g.label)).not.toContain("Localization");
+  });
+
   it("drops a group whose rows are all hidden", () => {
-    const groups = visibleActionGroups(ck3Meta, 0, ["px.translateNext", "px.createTranslationMod"]);
-    expect(groups.map((g) => g.label)).not.toContain("Localization");
+    const groups = visibleActionGroups(ck3Meta, 0, ["px.openWorkshopManager", "px.openWorkshopPage"]);
+    expect(groups.map((g) => g.label)).not.toContain("Share");
     expect(groups.map((g) => g.label)).toContain("View");
   });
 

@@ -278,7 +278,8 @@
       {
         "command": "px.createTranslationMod",
         "category": "Paradox Localization",
-        "title": "New Translation Mod (translate another mod)"
+        "title": "New Translation Mod (translate another mod)",
+        "icon": "$(copy)"
       },
       {
         "command": "px.pickFocusMod",
@@ -428,7 +429,8 @@
       {
         "command": "px.translateNext",
         "category": "Paradox Localization",
-        "title": "Translate Missing Keys (one by one)"
+        "title": "Translate Missing Keys (one by one)",
+        "icon": "$(arrow-right)"
       },
       {
         "command": "px.newContent",
@@ -1069,6 +1071,16 @@
           "command": "px.createTranslation",
           "when": "view == px.locCoverage",
           "group": "navigation"
+        },
+        {
+          "command": "px.translateNext",
+          "when": "view == px.locCoverage",
+          "group": "navigation"
+        },
+        {
+          "command": "px.createTranslationMod",
+          "when": "view == px.locCoverage",
+          "group": "1_actions"
         },
         {
           "command": "px.openKeybindings",
