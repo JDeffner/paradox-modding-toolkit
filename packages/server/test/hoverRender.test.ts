@@ -102,6 +102,41 @@ describe("the kind map", () => {
     }
   });
 
+  it("resolves every mapped kind to the SymbolKind drawing its own picture", () => {
+    // VS Code draws SymbolKind member X with `symbol-<kebab X>`, so a non-null
+    // symbolKind must kebab back to the codicon, modulo the alias pairs.
+    const ALIAS: Record<string, string> = { "symbol-value": "symbol-enum", "symbol-text": "symbol-key" };
+    for (const k of mappedKinds()) {
+      const style = kindStyle(k);
+      if (style.symbolKind === null) continue;
+      const kebab = style.symbolKind.replace(/(?<!^)([A-Z])/g, "-$1").toLowerCase();
+      expect(ALIAS[style.codicon] ?? style.codicon).toBe(`symbol-${kebab}`);
+    }
+    // The pictures no SymbolKind draws stay null rather than guessing.
+    expect(kindStyle("texture").symbolKind).toBeNull();
+    expect(kindStyle("define").symbolKind).toBeNull();
+    // The breadcrumb mismatch this replaced: an event is a class, not a bolt.
+    expect(kindStyle("event").symbolKind).toBe("Class");
+  });
+
+  it("gives the four list kinds four pictures", () => {
+    // add_to_list dies with its effect block (array); the *_variable_list
+    // kinds are variable storage, split by storage class: object-attached
+    // (enum member), event-chain-local (plain list), game-global (globe).
+    const kinds = ["list", "variable_list", "local_variable_list", "global_variable_list"];
+    expect(kinds.map((k) => kindStyle(k).codicon)).toEqual([
+      "symbol-array",
+      "symbol-enum-member",
+      "list-unordered",
+      "globe",
+    ]);
+    // All four keep the blue enum-member row: no blue completion kind is free.
+    for (const k of kinds) {
+      expect(kindStyle(k).completionKind).toBe("EnumMember");
+      expect(kindStyle(k).color).toBe("var(--vscode-symbolIcon-enumeratorMemberForeground)");
+    }
+  });
+
   it("paints the badge with the completion kind's own colour token", () => {
     // The suggest widget colours a row from the CompletionItemKind we send, and
     // an extension cannot override it, so the badge takes the same token and the
@@ -130,6 +165,7 @@ describe("the kind map", () => {
     expect(kindStyle("on_action")).toEqual({
       codicon: "symbol-interface",
       completionKind: "Interface",
+      symbolKind: "Interface",
       color: "var(--vscode-symbolIcon-classForeground)",
     });
     // texture: no completion kind draws `file-media`, so the row takes the
@@ -137,6 +173,7 @@ describe("the kind map", () => {
     expect(kindStyle("texture")).toEqual({
       codicon: "file-media",
       completionKind: "File",
+      symbolKind: null,
       color: null,
     });
   });

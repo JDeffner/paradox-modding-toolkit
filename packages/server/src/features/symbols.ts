@@ -10,6 +10,7 @@ import { EVENT_ID } from "../index/indexer";
 import { DECL_MARKERS, SLOT_KEYS } from "../gui/declMarkers";
 import { PROPERTY_BLOCKS } from "../gui/layoutEngine";
 import { getLocParse, getParse } from "../parseCache";
+import { lspSymbolKind } from "./symbolKind";
 
 function toLspRange(lines: LineIndex, range: Range): LspRange {
   return { start: lines.positionAt(range.start), end: lines.positionAt(range.end) };
@@ -31,10 +32,19 @@ function childScalar(statements: Statement[], key: string): string | null {
   return null;
 }
 
-export function provideDocumentSymbols(document: TextDocument): DocumentSymbol[] {
+/**
+ * `defKind` is the schema definition kind of the folder the document lives in
+ * ("event", "decision", "scripted_effect", ...), resolved ONCE by the caller:
+ * this runs on every keystroke, so the schema lookup must not be per symbol.
+ * Null when the file is outside every content root or the client sent no path.
+ */
+export function provideDocumentSymbols(
+  document: TextDocument,
+  defKind: string | null = null
+): DocumentSymbol[] {
   if (document.languageId === "paradox-loc") return locSymbols(document);
   if (document.languageId === "paradox-gui") return guiSymbols(document);
-  return scriptSymbols(document);
+  return scriptSymbols(document, defKind);
 }
 
 /**
@@ -156,9 +166,15 @@ function guiBlockSymbols(
  */
 const SCRIPT_SYMBOL_CAP = 12000;
 
-function scriptSymbols(document: TextDocument): DocumentSymbol[] {
+/** The map's picture for an event, for files whose folder we cannot resolve. */
+const EVENT_SYMBOL_KIND = lspSymbolKind("event");
+
+function scriptSymbols(document: TextDocument, defKind: string | null): DocumentSymbol[] {
   const { result, lineIndex } = getParse(document);
   const budget = { left: SCRIPT_SYMBOL_CAP };
+  // Top-level definitions take the kind map's glyph for what this folder holds,
+  // so a breadcrumb and a hover badge on the same name draw the same picture.
+  const fileKind = defKind ? lspSymbolKind(defKind) : null;
   const symbols: DocumentSymbol[] = [];
   for (const stmt of result.root.statements) {
     if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
@@ -170,7 +186,7 @@ function scriptSymbols(document: TextDocument): DocumentSymbol[] {
     symbols.push({
       name,
       detail: detail ? unquote(detail) : undefined,
-      kind: isEvent ? SymbolKind.Event : SymbolKind.Function,
+      kind: fileKind ?? (isEvent ? EVENT_SYMBOL_KIND : SymbolKind.Function),
       range: toLspRange(lineIndex, stmt.range),
       selectionRange: toLspRange(lineIndex, stmt.key.range),
       children: scriptChildSymbols(stmts, lineIndex, budget),
@@ -214,12 +230,15 @@ function scriptChildSymbols(
   return symbols;
 }
 
+const LOC_SYMBOL_KIND = lspSymbolKind("loc_key");
+
 function locSymbols(document: TextDocument): DocumentSymbol[] {
   const { result, lineIndex } = getLocParse(document);
   const entries: DocumentSymbol[] = result.entries.map((e) => ({
     name: e.key,
     detail: e.value.length > 60 ? e.value.slice(0, 59) + "…" : e.value,
-    kind: SymbolKind.String,
+    // The map's loc-key picture, the same one the hover badge draws.
+    kind: LOC_SYMBOL_KIND,
     range: toLspRange(lineIndex, { start: e.keyRange.start, end: e.valueRange.end + 1 }),
     selectionRange: toLspRange(lineIndex, e.keyRange),
   }));
