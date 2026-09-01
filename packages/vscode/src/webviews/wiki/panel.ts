@@ -17,6 +17,7 @@ import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiLauncher } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource } from "../devReload";
 
 /** The article the Image Guidelines command opens the hub at. */
 export const IMAGE_GUIDELINES_ARTICLE = "image-guidelines";
@@ -36,26 +37,30 @@ export class WikiPanel {
     this.context = context;
     this.meta = meta;
     this.select = select;
+    const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(WikiPanel.viewType, "Wiki", vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "webview")],
+      localResourceRoots: [source.root],
     });
     this.panel.iconPath = tabIcon("wiki");
-    const nonce = makeNonce();
-    this.panel.webview.html = wikiHtml({
-      scriptSrc: this.panel.webview
-        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "wiki.js"))
-        .toString(),
-      nonce,
-      csp: [
-        `default-src 'none'`,
-        `img-src ${this.panel.webview.cspSource} data:`,
-        `style-src 'unsafe-inline'`,
-        `script-src 'nonce-${nonce}'`,
-        `font-src ${this.panel.webview.cspSource}`,
-      ].join("; "),
-    });
+    const render = (): void => {
+      const nonce = makeNonce();
+      this.panel.webview.html = wikiHtml({
+        scriptSrc: bundleUri(this.panel.webview, source, "wiki"),
+        nonce,
+        csp: [
+          `default-src 'none'`,
+          `img-src ${this.panel.webview.cspSource} data:`,
+          `style-src 'unsafe-inline'`,
+          `script-src 'nonce-${nonce}'`,
+          `font-src ${this.panel.webview.cspSource}`,
+        ].join("; "),
+      });
+    };
+    render();
+    // The rebooted app sends "ready" and the content answer follows; nothing else.
+    this.disposables.push(watchBundle(source, "wiki", render));
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
       undefined,

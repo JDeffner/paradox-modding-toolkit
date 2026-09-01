@@ -12,7 +12,9 @@
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
     "package:test": "node scripts/package-test.mjs",
-    "typecheck": "tsc --noEmit && tsc -p packages/vscode/src/webviews/guiEditor/app && tsc -p packages/vscode/src/webviews/flagBuilder/app && tsc -p packages/vscode/src/webviews/eventGraph/app && tsc -p packages/vscode/src/webviews/workshop/app && tsc -p packages/vscode/src/webviews/exampleWiki/app && tsc -p packages/vscode/src/webviews/wiki/app",
+    "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
+    "watch:webviews": "node scripts/compile-webviews.mjs --watch",
+    "preview:webviews": "esbuild scripts/webview-preview.ts --bundle --platform=node --external:esbuild --loader:.css=text --outfile=dist/webview-preview.cjs --log-level=warning && node dist/webview-preview.cjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "vitest run",

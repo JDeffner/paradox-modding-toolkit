@@ -171,6 +171,9 @@ measured costs and the settings that shrink them.
 ## Contributing
 
 Concrete examples from real mods are the most useful thing you can send.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the F5 dev loop, tests and
+the PR flow; [docs/webviews.md](docs/webviews.md) shows how the visual tools
+are built and how to add one.
 
 - **[Issues](https://github.com/JDeffner/paradox-modding-toolkit/issues)** for
   bugs, false diagnostics and feature ideas. Wrong or missing folder mappings,

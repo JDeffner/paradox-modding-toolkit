@@ -9,6 +9,7 @@
  */
 import * as vscode from "vscode";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import * as fs from "fs";
 import * as path from "path";
 import type { GameMeta } from "@px-lsp/server/games/profile";
@@ -47,6 +48,7 @@ export class FlagBuilderPanel {
     this.textures = new GuiTextureCache(context.globalStorageUri.fsPath, { gamePath: null, modPath: null });
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
 
+    const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       FlagBuilderPanel.viewType,
       "Flag Builder",
@@ -54,26 +56,26 @@ export class FlagBuilderPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
-          vscode.Uri.file(this.textures.cacheDir),
-        ],
+        localResourceRoots: [source.root, vscode.Uri.file(this.textures.cacheDir)],
       }
     );
     this.panel.iconPath = tabIcon("flag-builder");
-    const nonce = makeNonce();
-    this.panel.webview.html = flagBuilderHtml({
-      scriptSrc: this.panel.webview
-        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "flagBuilder.js"))
-        .toString(),
-      nonce,
-      csp: [
-        `default-src 'none'`,
-        `img-src ${this.panel.webview.cspSource} data:`,
-        `style-src 'unsafe-inline'`,
-        `script-src 'nonce-${nonce}'`,
-      ].join("; "),
-    });
+    const render = (): void => {
+      const nonce = makeNonce();
+      this.panel.webview.html = flagBuilderHtml({
+        scriptSrc: bundleUri(this.panel.webview, source, "flagBuilder"),
+        nonce,
+        csp: [
+          `default-src 'none'`,
+          `img-src ${this.panel.webview.cspSource} data:`,
+          `style-src 'unsafe-inline'`,
+          `script-src 'nonce-${nonce}'`,
+        ].join("; "),
+      });
+    };
+    render();
+    // The rebooted app sends "ready" and postInit answers it; nothing else.
+    this.disposables.push(watchBundle(source, "flagBuilder", render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

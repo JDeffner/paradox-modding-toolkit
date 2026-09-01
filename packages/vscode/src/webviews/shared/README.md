@@ -98,4 +98,6 @@ Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
 Add the class to `ui.css` under the matching section with a short comment
 naming the shadcn component it mirrors, use shadcn's proportions and states
 (hover, focus-visible, disabled, aria-*), and show it in the gallery before
-using it in a page.
+using it in a page. The gallery is `/gallery` on `pnpm run preview:webviews`
+(scripts/webview-preview/galleryApp.ts); it reloads live as you edit this
+folder.

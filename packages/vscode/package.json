@@ -890,6 +890,12 @@
             "default": false,
             "order": 5,
             "markdownDescription": "Log how long the language server spends on each request, file rescan, index change and indexing phase to the *Paradox Modding Toolkit* output channel. Off by default; turn it on when reporting a slow save or slow completion, then paste the `perf …` lines into the report."
+          },
+          "px.dev.webviewSource": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "markdownDescription": "**Toolkit development only.** Absolute path to a toolkit checkout's `packages/vscode/dist/webview` folder. When set, panels load their app bundles from there instead of the installed extension and reload themselves when a bundle is rebuilt (`pnpm run watch:webviews` in the checkout). Leave empty unless you are working on the toolkit itself."
           }
         }
       }
@@ -1486,7 +1492,7 @@
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs && node ../../scripts/copy-docs.mjs",
     "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/exampleWiki/app/main.ts --bundle --outfile=dist/webview/exampleWiki.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/wiki/app/main.ts --bundle --outfile=dist/webview/wiki.js --format=iife --platform=browser --target=es2020",
+    "compile:webview": "node ../../scripts/compile-webviews.mjs",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",

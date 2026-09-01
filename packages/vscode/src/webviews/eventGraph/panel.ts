@@ -14,6 +14,7 @@ import type { GraphState, PendingEdit } from "./history";
 import type { AppToHost, HostToApp, UiState } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { bundleUri, watchBundle, webviewSource, type WebviewSource } from "../devReload";
 import { isUnder } from "../../config";
 
 const UI_KEY = "px.eventGraph.ui";
@@ -68,6 +69,7 @@ export class EventGraphPanel {
   /** The app's session as of its last message; empty until it sends one. */
   private session: GraphState = { focus: {}, positions: {}, pending: [] };
   private disposed = false;
+  private readonly source: WebviewSource;
 
   private constructor(
     context: vscode.ExtensionContext,
@@ -85,6 +87,7 @@ export class EventGraphPanel {
       actions?.textureRoots() ?? { gamePath: null, modPath: null }
     );
     fs.mkdirSync(this.textures.cacheDir, { recursive: true });
+    this.source = webviewSource(context);
 
     this.panel = vscode.window.createWebviewPanel(
       EventGraphPanel.viewType,
@@ -93,16 +96,23 @@ export class EventGraphPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
-          vscode.Uri.file(this.textures.cacheDir),
-        ],
+        localResourceRoots: [this.source.root, vscode.Uri.file(this.textures.cacheDir)],
       }
     );
 
     this.panel.iconPath = tabIcon("event-graph");
-    this.panel.webview.html = this.buildHtml(context, this.panel.webview);
+    this.panel.webview.html = this.buildHtml(this.panel.webview);
     this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY) });
+    // The app receives its graph by push, not request, so a dev reload
+    // replays the constructor's boot sequence.
+    this.disposables.push(
+      watchBundle(this.source, "eventGraph", () => {
+        this.panel.webview.html = this.buildHtml(this.panel.webview);
+        this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY) });
+        void this.load(this.lastParams);
+        void this.sendVocabulary();
+      })
+    );
 
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
@@ -375,12 +385,10 @@ export class EventGraphPanel {
     }
   }
 
-  private buildHtml(context: vscode.ExtensionContext, webview: vscode.Webview): string {
+  private buildHtml(webview: vscode.Webview): string {
     const nonce = makeNonce();
     return eventGraphHtml({
-      scriptSrc: webview
-        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "eventGraph.js"))
-        .toString(),
+      scriptSrc: bundleUri(webview, this.source, "eventGraph"),
       nonce,
       csp: [
         `default-src 'none'`,
