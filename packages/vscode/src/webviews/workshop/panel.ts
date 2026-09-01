@@ -274,9 +274,6 @@ export class WorkshopPanel {
         if (id) void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(id)));
         return;
       }
-      case "linkExisting":
-        await this.linkExisting();
-        return;
       case "createDescriptor":
         await vscode.commands.executeCommand("px.createDescriptor");
         await this.postInfo();
@@ -521,38 +518,6 @@ export class WorkshopPanel {
     } catch (e) {
       log(`workshop: live query failed: ${e instanceof Error ? e.message : String(e)}`);
       this.post({ type: "live", item: null, translations: {}, error: friendlyError(e, meta) });
-    }
-  }
-
-  private async linkExisting(): Promise<void> {
-    const { meta, log } = this.options;
-    const root = this.active;
-    if (!root) return;
-    try {
-      const done = await runBridge(this.context, { action: "list", appId: meta.steamAppId }, log);
-      if (done.action !== "list") throw new Error("unexpected bridge reply");
-      if (!done.items.length) {
-        this.notify(`You have no published ${meta.name} Workshop items to link.`);
-        return;
-      }
-      const picked = await vscode.window.showQuickPick(
-        done.items.map((it) => ({
-          label: it.title || `(untitled item)`,
-          description: `#${it.itemId}`,
-          detail: `last update ${new Date(it.timeUpdated * 1000).toLocaleDateString()}`,
-          itemId: it.itemId,
-        })),
-        {
-          title: `Link "${path.basename(root)}" to one of your Workshop items`,
-          placeHolder: "The next upload updates the linked item instead of creating a new one",
-        }
-      );
-      if (!picked) return;
-      persistPublishedId(root, meta, picked.itemId);
-      this.options.log(`workshop: linked ${root} to existing item ${picked.itemId}`);
-      await this.postInfo();
-    } catch (e) {
-      this.notifyError(`Listing your Workshop items failed - ${friendlyError(e, meta)}`, e);
     }
   }
 
