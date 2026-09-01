@@ -93,6 +93,11 @@ game recolors it, and saves it back as script.*
   editing, a coverage view, and scaffolding for entire translation mods.
 - **DDS tooling.** Inline texture previews on hover, a zoomable viewer with
   PNG export, image-to-DDS conversion, and measured size guidelines.
+- **Steam Workshop publishing.** Create or update your mod's Workshop item
+  through the running Steam client, no Paradox launcher involved. New items
+  start private and the id is written back into `descriptor.mod`. A Workshop
+  panel edits the item's description, visibility and per-language translated
+  title/description, shows its statistics, and uploads each part selectively.
 - **Large workspaces are the design case.** A game install plus five Workshop
   mods, all indexed, opens in 61 s cold where it used to take 143, and one
   command stops VS Code itself crawling the game's textures and audio.
@@ -175,6 +180,8 @@ Concrete examples from real mods are the most useful thing you can send.
   community-editable, so adding a folder kind is a good first contribution.
 - **Fork it and take what is useful.** It is GPL-3.0-or-later, so keep
   distributed derivatives open.
+- **[Discord](https://discord.gg/ESstwqycug)** for release notes, quick
+  questions and modding help.
 
 ## License
 

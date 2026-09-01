@@ -1,8 +1,208 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (beta, pre-release) - the Steam Workshop release
 
-### Added
+- **The Examples Wiki.** "Paradox: Show Examples Wiki" (also a Project-panel
+  row) opens a searchable browser over everything the toolkit knows from your
+  game: triggers, effects, event targets, modifiers, datafunctions and data
+  types, ranked by how often vanilla actually uses them. Type to filter, pick
+  a kind, and the reading pane shows the full description, the engine's own
+  usage block, observed arguments and clickable vanilla example sites that
+  open the real file. Hover hints explain the kind and scope words, so new
+  modders learn what a "promote" or "scope: character" means as they browse.
+
+- **`[ ... ]` datafunction hovers joined the card design.** `GetPlayer` and
+  friends now open with the same colored kind badge as script and GUI hovers
+  (blue for stored values, purple for functions, orange for data types), the
+  return type on the head line, and the description, observed arguments and
+  vanilla examples in the same card layout as everywhere else. Long example
+  bodies no longer fold out inside the hover: the accordion never read well in
+  a widget that closes when the pointer leaves, so hovers now say how many
+  more lines exist and the full text lives in the Examples Wiki.
+
+- **The Workshop listing as files.** The panel now reads and writes the
+  listing from a `workshop` folder next to the mod's content folder (the
+  `<project>/mod` + `<project>/workshop` layout; `px.workshop.dir` moves it,
+  relative to the mod or absolute): `description.bbcode`, one
+  `<language>/title.txt` + `description.bbcode` pair per translation, and
+  `item.json` - the same layout the shared Workshop CI expects, so the
+  listing diffs and versions like code. While the folder exists it is the
+  canonical store; without it drafts stay in `workshop.json` as before. A new
+  toolbar button downloads the live listing from Steam into those files (every
+  translated language detected in one query); its tooltip and its
+  confirmation dialog both spell out exactly which files are overwritten and
+  that unuploaded local text is lost. The upload never ships the folder, even
+  when it sits inside the mod.
+
+- **New Mod, and the mod projects layout.** "Paradox: New Mod" (also a
+  Project-panel row) creates a mod with its descriptor - recommended into a
+  mod projects folder (`px.modProjectsDir`, asked for on first use): the mod
+  content lives in `<project>/mod`, so git history, notes and the Workshop
+  listing files sit next to the mod instead of inside the upload. The game
+  still finds the mod through a link in its own mod folder - a `<name>.mod`
+  path file for the `.mod`-descriptor games, a folder link for the metadata
+  games. Setup & Health Check now recommends picking a projects folder, and
+  the mod walkthrough page mentions the layout.
+
+- **The Mod Report is a page, not a markdown preview.** It opens in its own
+  panel styled like the rest of the toolkit, from a new button in the Mod
+  Overview view's title bar (next to Show Event Graph) as well as the
+  command palette and the Project panel. The image guidelines
+  ("Paradox: Show Image Guidelines") open the same way.
+
+- **The Project panel shows the paths in use.** A Paths section (at the
+  bottom of the panel) lists the effective game folder, script_docs logs, mod
+  folder, mod projects folder, Workshop listing folder and tiger binary, each with its origin (set,
+  detected, downloaded, not found) - the answer the settings UI cannot give,
+  since an auto-detected value just looks like an empty setting there.
+  Clicking a row opens a file browser and writes the picked folder (or tiger
+  binary) straight into the setting.
+
+- **The Project panel reorganized.** The Tools wrapper is gone; its groups
+  are top-level collapsible sections of their own: Create, View, Test &
+  Troubleshoot, Share - followed by Toggles and Paths. The reference links
+  became quiet footer buttons under Join the Discord, and the translation
+  launchers moved to the Localization Coverage view's title bar, next to the
+  numbers they act on. The game header opens the same Workspace-scoped
+  extension settings view as the overflow menu.
+
+- **Warning before a workshop folder lands among the game's mods.** Creating
+  the listing folder (the panel's download button) now warns first when it
+  would land inside the game's Documents mod folder: every mod living there
+  resolves the default `px.workshop.dir` to the same `mod/workshop`, so
+  listings would overwrite each other. The dialog recommends the mod projects
+  layout or pointing `px.workshop.dir` elsewhere.
+
+- **Extension Settings in the Project panel menu.** The panel's overflow menu
+  opens the extension's settings as a normal editor tab with the Workspace
+  scope selected (the px paths and toggles are per-project taste), listed
+  above Customize Project Panel Rows. Also `Paradox: Extension Settings` in
+  the palette.
+
+- **Descriptions preview like the Workshop page.** An Edit | Preview toggle
+  on the description (and on every translation) renders the draft's BBCode -
+  headings, lists, links, quotes, code, tables, spoilers, images - styled
+  after the Workshop. Everything is escaped and only http(s) links render, so
+  the preview is safe against whatever the text holds.
+
+- **BBCode is a language now.** `.bbcode` files get syntax highlighting
+  (tags, parameters, headings, bold/italic/underline/strike content, code and
+  noparse blocks, bare links) plus bracket matching and auto-closing - the
+  listing files edit like source.
+
+- **The whole listing is editable in the panel.** The title, the mod's
+  version and the supported game version write straight into the descriptor
+  (or metadata.json); tags are chips with add/remove; the preview image has a
+  Change button that copies the picked file into the mod as
+  `thumbnail.<ext>`. Translated titles were already editable per language.
+
+- **Changenotes come from the changelog.** The changenote box prefers the
+  entry that matches the descriptor's version: a `1.2.md`/`v1.2.bbcode` file
+  in the workshop folder's `changelog` directory, or the `## 1.2` section of
+  one big changelog file (`px.workshop.changelog` points anywhere else, a
+  folder or a single file). Markdown converts to Steam BBCode on the way; a
+  button re-inserts the resolved entry, and the git-subject suggestion stays
+  as the fallback.
+
+- **Workshop feedback moved out of the panel.** Every result - upload done,
+  upload failed, listing pulled, preview skipped - arrives as a normal
+  VS Code notification and a line in the output channel, so it reaches you
+  even after you switch away from the Workshop tab, and errors stay
+  readable instead of fading like the old in-panel toasts (which are gone).
+  Steam's bare error phrases carry advice now: "limit exceeded" says the
+  description is over Steam's 8000-character cap, "access denied" points at
+  the logged-in account not owning the item, and so on. An oversized
+  preview image is announced when the upload keeps the current one, instead
+  of being dropped in silence.
+
+- **The changenote box explains itself.** A source dropdown under it shows
+  where the text came from - "From changelog: 1.2.md", "From last git
+  commit", or "Manual" once you type - and switches between them; the
+  changelog entry that could not be found says which path and version it
+  looked for. A ? beside the box documents the whole system (folder of
+  per-version files or one big file cut at the version headline,
+  `px.workshop.changelog`, Markdown-to-BBCode).
+
+- **The translation-upload gate probes the binding's real capability.**
+  steamworks.js 0.6.0 (now bundled) added per-language *queries* - the "on
+  Steam" hints under each translation now show genuinely translated text -
+  but not per-language *updates*, and the old version-number gate would have
+  waved it through, letting a translation overwrite the default-language
+  text. The gate (extension and bridge both) now reads the bundled build's
+  own type declarations for `UgcUpdate.language` and unlocks only when the
+  capability is really there.
+
+- **Panel polish from the first field round**: the download button's tooltip
+  wraps instead of spanning the screen; "Mod version" and "Game version" say
+  what they are, the game version sits flush right, and lowering either one
+  asks first (a downgrade is usually a typo). Tags are added from the
+  launcher's tag list (custom stays possible); a subtle mark on the thumbnail
+  states the recommended format (square, 512x512+, under 1 MB); translations
+  start collapsed. The Files row grew a settings shortcut to
+  `px.workshop.dir` / `px.workshop.changelog`, the description and every
+  translation have an "open file" button (plus a Reload that re-reads the
+  local files), and editing item fields no longer re-queries Steam - one
+  query per mod, plus the refresh button.
+
+- **`.bbcode` editing got real**: tag completion with snippets (`[`, and
+  closers after `[/`), word-suggestion noise off, a blue `BB` file icon, and
+  a live preview exactly like markdown's - two editor-title buttons open it
+  to the side (Ctrl+K V) or in place (Ctrl+Shift+V), the preview tab carries
+  its own eye icon, and its title button jumps back to the source. All of it
+  shares the Workshop panel's renderer.
+
+- **Uploading confirms first.** The Upload button opens a dialog that
+  re-offers the three parts (mod files, details, translations) - so dropping
+  the mod files while keeping a description fix is one uncheck away - shows
+  the changenote and visibility that ride along, and says plainly that a
+  Workshop update reaches subscribers in minutes, has no rollback, and
+  nothing overwritten can be recovered. The wider mod dropdown in the toolbar
+  no longer squeezes long mod names into two cramped lines.
+
+- **A way to reach the people behind the toolkit.** A quiet "Join the
+  Discord" link sits at the bottom of the Project panel, and
+  `Paradox: Join the Discord` does the same from the command palette. The
+  server carries release notes, bug reports and modding help.
+
+- **A Steam Workshop panel** (`Paradox: Open Steam Workshop Panel`, also in
+  the Project panel's Share group): the mod's Workshop item on one page,
+  through the running Steam client. It shows the live item next to what the
+  mod says - title from the descriptor, preview image, tags, created/updated
+  dates - plus the item's statistics (subscribers, favorites, page visits,
+  votes, comments). From the panel you can:
+  - **edit the description** in Steam's BBCode, saved locally to
+    `<configDir>/workshop.json` as you type and uploaded on demand, with
+    "Fetch from Steam" to pull the live text down;
+  - **set the visibility** (private, friends only, unlisted, public) without
+    visiting the Workshop page;
+  - **draft translations** of the item's title and description per Steam
+    language (the mod's own localization folders are suggested first) and
+    upload them all in one go - one Steam submit per language, no changenote
+    spam. Uploading translations needs a steamworks.js build with
+    per-language updates; until one is bundled the drafts still save and the
+    panel says exactly what is missing;
+  - **upload selectively**: mod files, details and translations are separate
+    toggles, so a description fix does not re-upload gigabytes of content;
+  - **link an existing Workshop item**: pick from your published items (for
+    mods first uploaded through the launcher) and the id lands in
+    `remote_file_id` / `workshop.json` without a new item being created.
+  The panel is the ONLY place uploads happen - every publish goes through
+  its confirmation, so nothing reaches Steam from a stray button press.
+
+- **Publish to the Steam Workshop from the editor.** The panel's Upload
+  creates or updates the focused mod's Workshop item through the running
+  Steam client's own UGC API - no Paradox launcher, no credentials, live
+  upload progress. New items start **private**; the descriptor's name and
+  tags become the item's title and tags, `thumbnail.png` (or the
+  descriptor's `picture=`) becomes the preview image, and the changenote is
+  prefilled from the changelog or the mod's last git commit. On first
+  publish the Workshop id is written back where the game's tooling expects
+  it: `remote_file_id` in `descriptor.mod` (CK3), `<configDir>/workshop.json`
+  for `.metadata` games. `Paradox: Open Steam Workshop Page` jumps to the item;
+  both live in the Project panel's new Share group. The native Steamworks
+  binding runs in a separate child process, so Steam trouble can never take
+  the extension down. Steam shows you in-game for the seconds an upload takes;
+  that is how the API authorizes without credentials.
 
 - **Custom calendar display (`px.calendar`).** Total-conversion mods (AGoT,
   LotR, Hegemonia...) keep script dates on the engine's year axis but show
@@ -41,6 +241,21 @@
   hovers drop unclickable reference counts and unnavigable `file:` links.
   Details in `packages/server/CHANGELOG.md` and
   `packages/protocol/CHANGELOG.md` (0.1.1).
+
+- **Security: third-party mod content can no longer point file operations
+  outside the mod.** A downloaded mod's files used to be able to steer paths
+  with `../` or absolute segments; every such spot now refuses anything that
+  escapes its root: the descriptor's `picture=` (which the Workshop upload
+  ships as the preview image) must be a bare file name, GUI/event-graph
+  texture references resolve strictly inside the mod/game roots (and
+  non-image files are never read at all), the tiger download refuses release
+  tags and asset names that are not plain file names, event-graph saves only
+  write inside the mod or workspace, the Flag Builder validates the webview's
+  file and texture-kind fields like it already validated typed names, and
+  schema overlay paths that climb out of the mod are ignored (server 0.3.0).
+  CI/release workflows now pin third-party actions to commit SHAs, and a
+  `brace-expansion` DoS advisory (GHSA in the vsce toolchain) is patched in
+  the lockfile.
 
 ## 0.3.4 (beta, pre-release) - the large-workspace round
 

@@ -2,16 +2,18 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
+import { resolveWorkshopDir } from "../../steam/workshopFiles";
 import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import uiCss from "../shared/ui.css";
 import { icon, ICON_NAMES } from "../shared/icons";
-import { visibleActionGroups, type ActionGroup } from "./actions";
+import { visibleActionGroups, visibleReferenceItems, type ActionGroup, type ActionItem } from "./actions";
 import { makeNonce } from "../nonce";
 
-/** The three collapsible sections, in render order. */
-type SectionId = "mods" | "toggles" | "tools";
+/** A collapsible section: the static ones ("mods", "toggles", "paths") plus
+ * one id per tool group, slugged from its label by the webview script. */
+type SectionId = string;
 
 /** workspaceState key holding the per-section collapse flags (absent = expanded). */
 const COLLAPSED_KEY = "px.dashboardCollapsed";
@@ -25,7 +27,8 @@ type InboundMessage =
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
   | { type: "watcher" }
   | { type: "baseline" }
-  | { type: "gameSettings" }
+  | { type: "openSettings" }
+  | { type: "pickPath"; setting: string }
   | { type: "collapse"; section: SectionId; collapsed: boolean };
 
 /** Messages the host sends to the webview. */
@@ -39,10 +42,22 @@ interface ModState {
   missing: boolean;
 }
 
+/** One row of the Paths section: an effective folder/binary the extension uses. */
+interface PathRow {
+  label: string;
+  /** The effective value, or null when nothing is configured or detected. */
+  value: string | null;
+  /** Where the value came from, shown as a badge ("set", "detected", ...). */
+  source: string;
+  /** The px.* setting the row opens. */
+  setting: string;
+}
+
 interface DashboardState {
   /** Active game (full name) and whether it came from auto-detection. */
   gameName: string;
   gameAuto: boolean;
+  paths: PathRow[];
   mods: ModState[];
   /** Raw pin, or null = follow the active editor. */
   pinnedRoot: string | null;
@@ -57,6 +72,8 @@ interface DashboardState {
   scopeInlayHints: boolean;
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
+  /** Reference links, rendered as single footer buttons below the Discord row. */
+  reference: ActionItem[];
   /** Persisted per-section collapse flags; every section defaults to expanded. */
   collapsed: Record<SectionId, boolean>;
 }
@@ -125,6 +142,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
     return {
       gameName: meta.name,
       gameAuto: (vscode.workspace.getConfiguration("px").get<string>("gameId") ?? "auto") === "auto",
+      paths: collectPaths(cfg, meta.tiger !== undefined),
       mods,
       pinnedRoot: this.deps.focus.pinnedRoot(),
       focusRoot: this.deps.focus.current(),
@@ -135,17 +153,13 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
       actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
+      reference: visibleReferenceItems(meta, hiddenRows()),
       collapsed: this.collapsedState(),
     };
   }
 
   private collapsedState(): Record<SectionId, boolean> {
-    const stored = this.deps.workspaceState.get<Partial<Record<SectionId, boolean>>>(COLLAPSED_KEY);
-    return {
-      mods: stored?.mods === true,
-      toggles: stored?.toggles === true,
-      tools: stored?.tools === true,
-    };
+    return this.deps.workspaceState.get<Record<SectionId, boolean>>(COLLAPSED_KEY) ?? {};
   }
 
   private async onMessage(msg: InboundMessage): Promise<void> {
@@ -183,9 +197,33 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.deps.errorLog.toggle();
         this.refresh();
         return;
-      case "gameSettings":
-        await vscode.commands.executeCommand("workbench.action.openSettings", "px.gameId");
+      case "openSettings":
+        // The same Workspace-scoped @ext view the overflow menu opens.
+        await vscode.commands.executeCommand("px.openSettings");
         return;
+      case "pickPath": {
+        // The key comes from webview script; resolve it host-side against the
+        // effective rows, never trust it as a path.
+        const cfg = this.deps.getCfg();
+        const row = collectPaths(cfg, metaFor(cfg.gameId).tiger !== undefined).find(
+          (p) => p.setting === msg.setting
+        );
+        if (!row) return;
+        const isFile = msg.setting === "px.tigerPath";
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: isFile,
+          canSelectFolders: !isFile,
+          canSelectMany: false,
+          defaultUri: row.value ? vscode.Uri.file(row.value) : undefined,
+          openLabel: isFile ? "Use this binary" : "Use this folder",
+          title: `${row.label} (${msg.setting})`,
+        });
+        const value = picked?.[0]?.fsPath;
+        if (!value) return;
+        await updateSetting(msg.setting.replace(/^px\./, ""), value);
+        this.refresh();
+        return;
+      }
       case "baseline":
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
         this.refresh();
@@ -202,8 +240,49 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
 }
 
 /**
- * `px.sidebar.hidden`: the command ids the user removed from the Tools
- * section. Read straight from the configuration (not from PxConfig): it is
+ * The Paths rows: what the extension is ACTUALLY using, with its origin. The
+ * settings UI cannot show auto-detected values (an empty setting just looks
+ * empty), so this is where "which game/logs/mod folder am I on?" gets its
+ * answer. "set" = the px.* setting; "detected" = auto-detection (Steam,
+ * Documents, the workspace); "downloaded" = the tiger copy we manage.
+ */
+function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
+  const raw = vscode.workspace.getConfiguration("px");
+  const isSet = (key: string) => (raw.get<string>(key) ?? "").trim() !== "";
+  const row = (label: string, setting: string, value: string | null, detectedAs = "detected"): PathRow => ({
+    label,
+    setting,
+    value,
+    source: value === null ? "not found" : isSet(setting.replace(/^px\./, "")) ? "set" : detectedAs,
+  });
+  const projectsDir = (raw.get<string>("modProjectsDir") ?? "").trim() || null;
+  // The Workshop listing folder is per mod (px.workshop.dir resolves against
+  // the mod root, default ../workshop), so without a mod there is no value.
+  const workshopDir = cfg.modPath ? resolveWorkshopDir(cfg.modPath, raw.get<string>("workshop.dir")) : null;
+  const rows = [
+    row("Game", "px.gamePath", cfg.gamePath),
+    row("script_docs logs", "px.logsPath", cfg.logsPath),
+    row("Mod", "px.modPath", cfg.modPath),
+    {
+      label: "Mod projects",
+      setting: "px.modProjectsDir",
+      value: projectsDir,
+      source: projectsDir ? "set" : "not set",
+    },
+    {
+      label: "Workshop listing",
+      setting: "px.workshop.dir",
+      value: workshopDir,
+      source: workshopDir === null ? "not found" : isSet("workshop.dir") ? "set" : "default",
+    },
+  ];
+  if (hasTiger) rows.push(row("Tiger", "px.tigerPath", cfg.tigerPath, "downloaded"));
+  return rows;
+}
+
+/**
+ * `px.sidebar.hidden`: the command ids the user removed from the panel's
+ * tool sections. Read straight from the configuration (not from PxConfig): it is
  * panel taste, and nothing outside this view and the Customize command cares.
  */
 export function hiddenRows(): string[] {
@@ -324,11 +403,6 @@ ${uiCss}
   .section.collapsed .caret { transform: rotate(-90deg); }
   .section.collapsed .section-body { display: none; }
   .section-body { padding-top: 0; }
-  .group-label {
-    margin: 6px 8px 1px; font-size: var(--px-text-xs); font-weight: 500; color: var(--px-muted-fg);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .group + .group { margin-top: 2px; }
   .px-item[role="button"]:focus-visible, #game:focus-visible, .toggle-row:focus-within:has(input:focus-visible) {
     box-shadow: 0 0 0 3px var(--px-ring-soft);
   }
@@ -339,6 +413,16 @@ ${uiCss}
   .toggle-row > .px-switch { flex: 0 0 auto; }
   /* Tooltips open below, flush left: a centered one overflows a narrow sidebar. */
   [data-tip]:not([data-tip-side])::after { left: 0; transform: none; }
+  /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
+     is the part that tells paths apart). */
+  .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
+  .path-row .path-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .path-row .path-value {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    direction: rtl; text-align: left;
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); font-family: var(--vscode-editor-font-family, monospace);
+  }
+  .path-row .path-value.none { direction: ltr; font-family: inherit; font-style: italic; }
   .mod-row.excluded .px-item-label, .mod-row.missing .px-item-label { color: var(--px-muted-fg); }
   .mod-row.missing .px-item-label { text-decoration: line-through; }
   .empty { padding: 4px 8px; color: var(--px-muted-fg); font-size: var(--px-text-sm); }
@@ -354,6 +438,11 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
+  /* Footer: community link + reference buttons, quiet enough to ignore. */
+  #footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--px-border); }
+  #footer .px-item { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
+  #footer .px-item:hover { color: var(--px-fg); }
+  #footer .px-icon { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -366,6 +455,7 @@ ${uiCss}
   )}
   <div class="section-body px-list" id="body-mods"></div>
 </div>
+<!-- One .section per tool group, rendered by script before #section-toggles. -->
 <div class="section" id="section-toggles">
   ${sectionHead("toggles", "Toggles")}
   <div class="section-body px-list" id="body-toggles">
@@ -391,13 +481,21 @@ ${uiCss}
     )}
   </div>
 </div>
-<div class="section" id="section-tools">
+<div class="section" id="section-paths">
   ${sectionHead(
-    "tools",
-    "Tools",
-    "Every tool the extension offers, in one place. Editor tabs, view titles, the status bar and the keyboard chords stay as the fast path while you work. Rows you never use: hide them with 'Customize Project Panel Rows'."
+    "paths",
+    "Paths",
+    "The folders and tools the extension is actually using, whether you set them or they were auto-detected (Steam, Documents, the workspace). Click a row to browse for a new value."
   )}
-  <div class="section-body" id="body-tools"></div>
+  <div class="section-body px-list" id="body-paths"></div>
+</div>
+<div id="footer">
+  <div class="px-item" id="discord" role="button" tabindex="0"
+       data-tip="Open the invite to the toolkit's Discord in your browser: release notes, bug reports, and help with the games this extension covers."
+       data-tip-wrap>
+    ${icon("messageSquare")}<span class="px-item-label">Join the Discord</span>
+  </div>
+  <div id="footer-reference"></div>
 </div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -474,14 +572,42 @@ function setSwitch(id, on, disabled, disabledTip) {
   row.setAttribute("data-tip", disabled && disabledTip ? disabledTip : row.getAttribute("data-tip-default"));
 }
 
-// ---- actions (game-aware, from state) ----
+// ---- actions (game-aware, from state): one top-level section per group ----
+function sectionSlug(label) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function buildSection(id, title) {
+  const section = el("div", "section tools-section");
+  section.id = "section-" + id;
+  const head = el("div", "px-panel-title");
+  const btn = el("button", "section-toggle");
+  btn.setAttribute("data-section", id);
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "body-" + id);
+  const caret = iconEl("chevronDown");
+  caret.classList.add("caret");
+  btn.appendChild(caret);
+  btn.appendChild(el("span", "px-truncate", title));
+  btn.addEventListener("click", () => {
+    const collapsed = !section.classList.contains("collapsed");
+    setCollapsed(id, collapsed);
+    vscode.postMessage({ type: "collapse", section: id, collapsed });
+  });
+  head.appendChild(btn);
+  head.appendChild(el("span", "px-grow"));
+  section.appendChild(head);
+  const body = el("div", "section-body px-list");
+  body.id = "body-" + id;
+  section.appendChild(body);
+  return section;
+}
 function renderActions() {
-  const box = document.getElementById("body-tools");
-  box.textContent = "";
+  for (const old of document.querySelectorAll(".tools-section")) old.remove();
+  const anchor = document.getElementById("section-toggles");
   for (const group of state.actions) {
-    const g = el("div", "group");
-    g.appendChild(el("div", "group-label", group.label));
-    const list = el("div", "px-list");
+    const id = sectionSlug(group.label);
+    const section = buildSection(id, group.label);
+    const body = section.querySelector(".section-body");
     for (const it of group.items) {
       const row = actionRow(it.icon, it.label, it.tip,
         () => vscode.postMessage({ type: "run", command: it.command }));
@@ -490,10 +616,46 @@ function renderActions() {
         b.setAttribute("data-variant", "secondary");
         row.appendChild(b);
       }
-      list.appendChild(row);
+      body.appendChild(row);
     }
-    g.appendChild(list);
-    box.appendChild(g);
+    anchor.parentNode.insertBefore(section, anchor);
+  }
+}
+
+// ---- footer reference buttons (below the Discord row) ----
+function renderReference() {
+  const box = document.getElementById("footer-reference");
+  box.textContent = "";
+  for (const it of state.reference) {
+    box.appendChild(actionRow(it.icon, it.label, it.tip,
+      () => vscode.postMessage({ type: "run", command: it.command })));
+  }
+}
+
+// ---- paths (effective values, host-computed) ----
+function renderPaths() {
+  const box = document.getElementById("body-paths");
+  box.textContent = "";
+  for (const p of state.paths) {
+    const row = el("div", "px-item path-row");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.setAttribute("data-tip",
+      (p.value ? p.value + " — " : "") + "Click to browse for a new value (" + p.setting + ").");
+    row.setAttribute("data-tip-wrap", "");
+    const head = el("div", "path-head");
+    head.appendChild(el("span", "px-item-label", p.label));
+    head.appendChild(el("span", "px-grow"));
+    head.appendChild(badge(p.source));
+    row.appendChild(head);
+    // RTL truncation flips leading punctuation; the value is plain text either way.
+    row.appendChild(el("div", "path-value" + (p.value ? "" : " none"), p.value ?? "none"));
+    const open = () => vscode.postMessage({ type: "pickPath", setting: p.setting });
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+    box.appendChild(row);
   }
 }
 
@@ -501,7 +663,7 @@ function renderActions() {
 const gameRow = document.getElementById("game");
 gameRow.setAttribute("data-tip",
   "The game this workspace mods. Click to change it (px.gameId) if the detection guessed wrong.");
-const openGameSettings = () => vscode.postMessage({ type: "gameSettings" });
+const openGameSettings = () => vscode.postMessage({ type: "openSettings" });
 gameRow.addEventListener("click", openGameSettings);
 gameRow.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openGameSettings(); }
@@ -511,6 +673,14 @@ function renderGame() {
   gameRow.appendChild(el("span", "px-item-label game-name", state.gameName));
   gameRow.appendChild(badge(state.gameAuto ? "auto-detected" : "set manually"));
 }
+
+// ---- community link ----
+const discordRow = document.getElementById("discord");
+const openDiscord = () => vscode.postMessage({ type: "run", command: "px.openDiscord" });
+discordRow.addEventListener("click", openDiscord);
+discordRow.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDiscord(); }
+});
 
 // ---- mods ----
 function radio(on, tipText, onClick) {
@@ -592,8 +762,10 @@ function renderMods() {
 
 function render() {
   renderGame();
+  renderPaths();
   renderMods();
   renderActions();
+  renderReference();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
   document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
   setSwitch("baseline", state.tigerBaseline, false);

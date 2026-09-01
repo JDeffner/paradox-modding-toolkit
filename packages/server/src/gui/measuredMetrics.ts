@@ -1,6 +1,6 @@
 /**
  * Text metrics measured in-game for Gitan-Regular (StandardGameFont) at
- * fontsize 15, probe batches 01-03 (docs/gui-designer/calibration/probes/).
+ * fontsize 15, probe batches 01-03 (docs/gui-designer/probes/).
  *
  * They serve twice: as the measured table of the profile whose font this is,
  * and as the layout engine's assumption for a game whose own probe has not run

@@ -12,8 +12,8 @@ fails if the two lists drift apart.
 Nothing here is copied, translated or adapted from another project's fixtures, from the
 Sage's Clausewitz Studio repository, or from Crusader Kings III's own `gui/` files. The
 behaviors under test were read from the CK3 engine's measured behavior (the calibration
-campaign in `docs/gui-designer/calibration/` and the in-game verifications recorded in
-`docs/gui-designer/calibration/spec.md`); the files that exercise them were written here,
+campaign in `docs/gui-designer/` and the in-game verifications recorded in
+`docs/gui-designer/spec.md`); the files that exercise them were written here,
 from scratch, shaped for the TypeScript harness rather than inherited from any other one.
 
 Widget names are prefixed `px_` and texture paths point at `gfx/px_fixtures/`, neither of

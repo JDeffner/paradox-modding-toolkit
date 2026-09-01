@@ -10,3 +10,5 @@ The extension then:
 - lets your definitions **shadow** vanilla ones with the same name, exactly like the game does
 
 If your mod lives somewhere else, set `px.modPath` instead.
+
+Starting fresh? **Paradox: New Mod** creates the mod for you — recommended into a mod projects folder, where the mod's content lives in `<project>/mod` and git or Steam Workshop files stay next to it, outside the upload. The game finds the mod through a link in its own mod folder.

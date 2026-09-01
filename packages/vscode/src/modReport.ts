@@ -1,7 +1,7 @@
 /**
- * `Paradox: Show Mod Report` — a one-page markdown dashboard: content inventory,
+ * `Paradox: Show Mod Report` — a one-page dashboard: content inventory,
  * diagnostics by severity/source, localization coverage, override map.
- * Rendered through VS Code's native markdown preview.
+ * Built as markdown, rendered in the toolkit's document panel.
  */
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
@@ -16,6 +16,7 @@ import {
   type OverrideInfo,
 } from "@px-lsp/protocol/protocol";
 import type { IndexStats } from "@px-lsp/protocol/types";
+import { showDocPanel } from "./webviews/docPanel";
 
 /** Diagnostics scoped to the reported mod: the rest of the report describes
  * modRoot, so window-wide counts (other mods, other extensions) would lie
@@ -95,8 +96,5 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
   lines.push(`## Index`, "");
   lines.push(`Total indexed (all sources): ${stats.total} definitions in ${stats.files} files.`, "");
 
-  // Preview only: showing the raw markdown too would leave a dirty untitled
-  // tab behind that prompts to save on close.
-  const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: lines.join("\n") });
-  await vscode.commands.executeCommand("markdown.showPreview", doc.uri);
+  showDocPanel("px.modReport", "Mod Report", lines.join("\n"));
 }

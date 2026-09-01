@@ -135,6 +135,19 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     report.push(`• parent mods indexed read-only: ${depParents.map(modLabel).join(", ")}`);
   }
 
+  // Mod projects folder: the recommended layout (content in <project>/mod, git
+  // and Workshop listing files next to it, a launcher link in the game's mod
+  // folder). Advice, not a blocker.
+  // A "✓" here would inflate the ready count, so the set case stays silent.
+  if ((config.get<string>("modProjectsDir") ?? "").trim() === "") {
+    report.push(
+      `• mod projects folder: not set. Recommended: keep each mod in its own project folder ` +
+        `(px.modProjectsDir) with the content in <project>/mod — git and Steam Workshop listing files ` +
+        `stay outside the upload, and the launcher loads the mod via a link. ` +
+        `"Paradox: New Mod" sets this up.`
+    );
+  }
+
   // 3. Logs / script_docs. A game with bundled data (wiki tables or a bundled
   // dump snapshot) is ready without the user's own dump — the dump is the
   // optional exact-version upgrade. Without bundled data the how-to moves to

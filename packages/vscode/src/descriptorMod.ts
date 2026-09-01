@@ -39,7 +39,7 @@ function descriptorRelPath(gameId: string): string[] {
 }
 
 /** Game version from <install>/launcher/launcher-settings.json, e.g. "1.19.0.6". */
-function detectGameVersion(gamePath: string | null): string | null {
+export function detectGameVersion(gamePath: string | null): string | null {
   if (!gamePath) return null;
   const root = path.basename(gamePath).toLowerCase() === "game" ? path.dirname(gamePath) : gamePath;
   try {

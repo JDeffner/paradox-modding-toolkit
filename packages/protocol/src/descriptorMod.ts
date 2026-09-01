@@ -316,6 +316,19 @@ export function readDescriptorName(dir: string): string | null {
 }
 
 /**
+ * The quoted strings inside a top-level `<key>={ "A" "B" }` block of a .mod
+ * text, in file order; empty when the block is missing.
+ */
+export function readDescriptorBlock(text: string, key: string): string[] {
+  // Comments first: a commented-out entry is not an entry.
+  const block = new RegExp(`(?:^|\\n)[ \\t]*${key}[ \\t]*=[ \\t]*\\{([^}]*)\\}`).exec(
+    text.replace(/#[^\n]*/g, "")
+  );
+  if (!block) return [];
+  return [...block[1].matchAll(/"([^"]*)"/g)].map((m) => m[1].trim()).filter((s) => s !== "");
+}
+
+/**
  * The mod names inside `<dir>/descriptor.mod`'s `dependencies={ "A" "B" }`
  * block, in file order; empty when the file or the block is missing. The
  * launcher matches these against the other mods' `name=`, not against their
@@ -328,10 +341,57 @@ export function readDescriptorDependencies(dir: string): string[] {
   } catch {
     return [];
   }
-  // Comments first: a commented-out dependency is not a dependency.
-  const block = /(?:^|\n)[ \t]*dependencies[ \t]*=[ \t]*\{([^}]*)\}/.exec(text.replace(/#[^\n]*/g, ""));
-  if (!block) return [];
-  return [...block[1].matchAll(/"([^"]*)"/g)].map((m) => m[1].trim()).filter((s) => s !== "");
+  return readDescriptorBlock(text, "dependencies");
+}
+
+/**
+ * `text` with the top-level `key="value"` entry replaced, or appended when the
+ * key is absent. Only scalar entries: a key whose value is a block is left
+ * alone and the entry is appended instead. Line endings and a leading BOM
+ * survive untouched; the appended line follows the file's dominant EOL.
+ * The value is made descriptor-safe like upsertDescriptorBlock's quoting:
+ * the format has no escape, so double quotes become apostrophes and line
+ * breaks collapse to one space.
+ */
+export function upsertDescriptorValue(text: string, key: string, value: string): string {
+  const v = value.replace(/"/g, "'").replace(/\s*\r?\n\s*/g, " ");
+  const entry = parseDescriptor(text).find((e) => e.key === key && e.value !== "");
+  if (entry) {
+    const lines = text.split(/(\r?\n)/); // keep separators at odd indices
+    const idx = entry.line * 2;
+    lines[idx] = lines[idx].replace(
+      /=\s*("[^"]*"|\S+)([ \t]*(#.*)?)$/,
+      (_m, _old, tail: string) => `="${v}"${tail}`
+    );
+    return lines.join("");
+  }
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const sep = text === "" || text.endsWith("\n") ? "" : eol;
+  return `${text}${sep}${key}="${v}"${eol}`;
+}
+
+/**
+ * `text` with the top-level `key={...}` block replaced by one holding exactly
+ * `values` (quoted, tab-indented, the file's EOL), or appended when absent.
+ * Descriptor blocks are flat, so the block ends at the first `}`-only line.
+ */
+export function upsertDescriptorBlock(text: string, key: string, values: string[]): string {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const q = (v: string) => `"${v.replace(/"/g, "'")}"`;
+  const block = [`${key}={`, ...values.map((v) => `\t${q(v)}`), `}`].join(eol);
+  const lines = text.split(/\r?\n/);
+  const open = lines.findIndex((l) => new RegExp(`^\\s*${key}\\s*=\\s*\\{`).test(l));
+  if (open >= 0) {
+    let close = open;
+    // A one-line block (`tags={ "x" }`) closes on its own line.
+    if (!/\}\s*(#.*)?$/.test(lines[open])) {
+      while (close < lines.length - 1 && !/^\s*\}\s*(#.*)?$/.test(lines[close])) close++;
+    }
+    lines.splice(open, close - open + 1, block);
+    return lines.join(eol);
+  }
+  const sep = text === "" || text.endsWith("\n") ? "" : eol;
+  return `${text}${sep}${block}${eol}`;
 }
 
 /** "1.19.0.6" -> "1.19.*" (the wildcard form that survives hotfixes). */

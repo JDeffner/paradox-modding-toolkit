@@ -174,6 +174,9 @@ export class FlagBuilderPanel {
     const { meta } = this.options;
     // The app only offers paths the host listed, but the message is still text from a webview.
     if (!this.options.mods.some((m) => m.path === modPath)) return;
+    // Same rule the typed name gets below: sourceFile can become the write
+    // target, so it must be a bare .txt name, not a path.
+    if (sourceFile !== undefined && !/^[\w.-]+\.txt$/.test(sourceFile)) return;
     const dir = path.join(modPath, meta.stageRoots?.[0] ?? "", "common", "coat_of_arms", "coat_of_arms");
     let files: string[] = [];
     try {

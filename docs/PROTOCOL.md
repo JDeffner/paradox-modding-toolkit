@@ -149,6 +149,8 @@ instead.
 | `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
+| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, vanilla `count`) per trigger, effect, event target, modifier, datafunction and data type the server knows, most used first, plus the sentences naming where the rows came from |
+| `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, and vanilla example sites as absolute paths; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -170,6 +172,21 @@ or iterator with several documented outputs stays ambiguous, and an empty
 array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
+
+The Examples Wiki is two requests because the shapes differ by orders of
+magnitude. `paradox/exampleWiki` answers the whole catalog as thousands of tiny
+rows, so a client filters and ranks locally instead of asking again per
+keystroke; `paradox/exampleWikiEntry` answers ONE row with its prose, its usage
+block and its example sites. Nothing in either answer is hand written: the rows
+come from the user's `script_docs` dump (or the bundled snapshot / wiki tables
+behind it), the datafunction tables (`DumpDataTypes` output or the bundled
+tables), and the vanilla usage harvest, and each answer says which of those it
+came from in its `provenance` / `sources` text. Example sites are searched in
+the game files when the entry is asked for, and come back as absolute paths
+with 1-based lines, so a client opens them without resolving anything. Every
+capped list carries its own total (`literalsTotal`, `membersTotal`,
+`producersTotal`), and an example list that is short for a reason carries
+`examplesNote` saying why.
 
 `paradox/eventGraph` answers `suggestions` alongside the graph: the mod-side
 `ids` (event / on_action / decision, sorted, capped at 2000) and the

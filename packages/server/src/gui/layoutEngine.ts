@@ -3,7 +3,7 @@
  * rectangles, the model behind the GUI designer's canvas.
  *
  * Every layout rule here is MEASURED, not guessed: the authority is
- * docs/gui-designer/calibration/spec.md, and rule comments cite their batch
+ * docs/gui-designer/spec.md, and rule comments cite their batch
  * ("B2-I1" = calibration batch 02, case I1). Where the spec is silent the
  * comment says "unmeasured" and names the assumption, those are the first
  * candidates for a future calibration batch when a rendering looks wrong.
@@ -289,7 +289,7 @@ export interface TextMeasurer {
  * line-box height at the fontsize they were measured at. All metrics scale
  * exactly linearly with fontsize (B3-S3), so one base size is enough. A game
  * profile carries one once an in-game probe has measured its font
- * (docs/gui-designer/calibration/probes/); until then the profile leaves it
+ * (docs/gui-designer/probes/); until then the profile leaves it
  * absent and the batch-01..03 table below is the assumption.
  */
 export interface GuiTextMetrics {

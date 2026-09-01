@@ -1,0 +1,17 @@
+{
+  // The workshop panel app is browser code, not extension-host code: it gets
+  // the DOM and NOTHING else. `types: []` is the point — no node, no vscode —
+  // so a host API can only reach app/ through messages.ts. The root tsconfig
+  // excludes this folder and typecheck runs this project on top of it.
+  "extends": "../../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "paths": {
+      "@px-lsp/protocol/*": ["../../../../../protocol/src/*"],
+      "@px-lsp/server/*": ["../../../../../server/src/*"]
+    }
+  },
+  "include": ["."]
+}

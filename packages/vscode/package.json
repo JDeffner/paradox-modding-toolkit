@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -25,6 +25,21 @@
   ],
   "contributes": {
     "languages": [
+      {
+        "id": "bbcode",
+        "aliases": [
+          "BBCode (Steam Workshop)",
+          "BBCode"
+        ],
+        "extensions": [
+          ".bbcode"
+        ],
+        "configuration": "./bbcode-language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/bbcode-light.svg",
+          "dark": "./media/fileicons/bbcode-dark.svg"
+        }
+      },
       {
         "id": "paradox",
         "aliases": [
@@ -139,6 +154,11 @@
     ],
     "grammars": [
       {
+        "language": "bbcode",
+        "scopeName": "text.bbcode",
+        "path": "./syntaxes/bbcode.tmLanguage.json"
+      },
+      {
         "language": "paradox",
         "scopeName": "source.paradox",
         "path": "./syntaxes/paradox.tmLanguage.json"
@@ -184,6 +204,9 @@
       }
     ],
     "configurationDefaults": {
+      "[bbcode]": {
+        "editor.wordBasedSuggestions": "off"
+      },
       "[paradox]": {
         "editor.wordBasedSuggestions": "off"
       },
@@ -265,7 +288,8 @@
       {
         "command": "px.createTranslationMod",
         "category": "Paradox Localization",
-        "title": "New Translation Mod (translate another mod)"
+        "title": "New Translation Mod (translate another mod)",
+        "icon": "$(copy)"
       },
       {
         "command": "px.pickFocusMod",
@@ -326,6 +350,12 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "px.showExamplesWiki",
+        "category": "Paradox",
+        "title": "Show Examples Wiki",
+        "icon": "$(book)"
+      },
+      {
         "command": "px.simulateEvent",
         "category": "Paradox",
         "title": "Simulate Event",
@@ -363,7 +393,8 @@
       {
         "command": "px.modReport",
         "category": "Paradox",
-        "title": "Show Mod Report"
+        "title": "Show Mod Report",
+        "icon": "$(checklist)"
       },
       {
         "command": "px.tigerCreateBaseline",
@@ -414,14 +445,32 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "px.openWorkshopPage",
+        "category": "Paradox",
+        "title": "Open Steam Workshop Page",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "px.openWorkshopManager",
+        "category": "Paradox",
+        "title": "Open Steam Workshop Panel",
+        "icon": "$(cloud)"
+      },
+      {
         "command": "px.translateNext",
         "category": "Paradox Localization",
-        "title": "Translate Missing Keys (one by one)"
+        "title": "Translate Missing Keys (one by one)",
+        "icon": "$(arrow-right)"
       },
       {
         "command": "px.newContent",
         "category": "Paradox",
         "title": "New Content (event, decision, …)"
+      },
+      {
+        "command": "px.createMod",
+        "category": "Paradox",
+        "title": "New Mod (project folder + launcher link)"
       },
       {
         "command": "px.convertToDds",
@@ -453,10 +502,40 @@
         "icon": "$(record-keys)"
       },
       {
+        "command": "px.openDiscord",
+        "category": "Paradox",
+        "title": "Join the Discord",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "px.openBBCodePreview",
+        "category": "Paradox",
+        "title": "Open BBCode Preview",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "px.openBBCodePreviewSide",
+        "category": "Paradox",
+        "title": "Open BBCode Preview to the Side",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "px.openBBCodeSource",
+        "category": "Paradox",
+        "title": "Show BBCode Source",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "px.customizeSidebar",
         "category": "Paradox",
         "title": "Customize Project Panel Rows",
         "icon": "$(list-selection)"
+      },
+      {
+        "command": "px.openSettings",
+        "category": "Paradox",
+        "title": "Extension Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "customEditors": [
@@ -605,13 +684,20 @@
             "scope": "machine-overridable",
             "markdownDescription": "**Leave this empty** unless your mod folder is not part of the workspace. Every workspace folder that is a mod of the active game is detected and fully indexed automatically. Features follow the file you are editing, and the sidebar views follow it too (or a mod you pin via `Paradox: Pick Focus Mod`)."
           },
+          "px.modProjectsDir": {
+            "type": "string",
+            "default": "",
+            "order": 2,
+            "scope": "machine-overridable",
+            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use."
+          },
           "px.parentMods": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "default": [],
-            "order": 2,
+            "order": 3,
             "scope": "machine-overridable",
             "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.ck3modding/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
           },
@@ -621,14 +707,14 @@
               "type": "string"
             },
             "default": [],
-            "order": 3,
+            "order": 4,
             "scope": "machine-overridable",
             "markdownDescription": "Workspace mod folders to skip entirely (absolute paths). Excluded mods are not indexed: no completion, hover, navigation, diagnostics or views. Useful when the workspace contains mods you are not currently working on.\n\nEasiest via the per-mod switches in the sidebar Project view, or `Paradox: Exclude Workspace Mods from Indexing`, which shows a checklist of the detected mods."
           },
           "px.locLanguage": {
             "type": "string",
             "default": "english",
-            "order": 4,
+            "order": 5,
             "markdownDescription": "Localization language to index and display (matches `l_<language>` yml files), e.g. `english`, `french`, `german`."
           }
         }
@@ -768,6 +854,18 @@
             "default": [],
             "order": 3,
             "markdownDescription": "Command ids to hide from the Tools section of the sidebar Project panel, e.g. `px.imageGuidelines`. A group whose rows are all hidden disappears with them.\n\nEasiest via `Paradox: Customize Project Panel Rows`, which shows a checklist of every row."
+          },
+          "px.workshop.dir": {
+            "type": "string",
+            "default": "../workshop",
+            "order": 4,
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). The default matches the `<project>/mod` + `<project>/workshop` layout: the listing sits NEXT to the mod folder, versioned but never uploaded.\n\nWhile the folder exists it is the canonical store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`. Without it, drafts stay in the mod's `workshop.json`."
+          },
+          "px.workshop.changelog": {
+            "type": "string",
+            "default": "changelog",
+            "order": 5,
+            "markdownDescription": "Where the Workshop panel looks for changenotes, resolved against the workshop folder (`px.workshop.dir`; absolute paths work too).\n\n- **A folder** (the default `changelog`): the file named after the descriptor's version is used - `1.2.md`, `v1.2.bbcode`, `1.2.txt`.\n- **A single file with headlines**: the section under the headline containing the version is used (`## 1.2.0` in Markdown, `[h2]1.2.0[/h2]` in BBCode).\n- **A single file without headlines**: the whole file.\n\nMarkdown is converted to Steam BBCode on the way."
           },
           "px.trace.server": {
             "type": "string",
@@ -928,6 +1026,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.showExamplesWiki",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.simulateEvent",
           "when": "px.isCk3Workspace"
         },
@@ -984,6 +1086,14 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openWorkshopPage",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openWorkshopManager",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.launchMapEditor",
           "when": "px.isCk3Workspace"
         },
@@ -1012,7 +1122,27 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openDiscord",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "editorLangId == bbcode"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeWebviewPanelId == px.bbcodePreview"
+        },
+        {
           "command": "px.customizeSidebar",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openSettings",
           "when": "px.isCk3Workspace"
         }
       ],
@@ -1033,9 +1163,24 @@
           "group": "navigation"
         },
         {
+          "command": "px.modReport",
+          "when": "view == px.overview",
+          "group": "navigation"
+        },
+        {
           "command": "px.createTranslation",
           "when": "view == px.locCoverage",
           "group": "navigation"
+        },
+        {
+          "command": "px.translateNext",
+          "when": "view == px.locCoverage",
+          "group": "navigation"
+        },
+        {
+          "command": "px.createTranslationMod",
+          "when": "view == px.locCoverage",
+          "group": "1_actions"
         },
         {
           "command": "px.openKeybindings",
@@ -1043,9 +1188,14 @@
           "group": "navigation@2"
         },
         {
+          "command": "px.openSettings",
+          "when": "view == px.tools",
+          "group": "1_configure@1"
+        },
+        {
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
-          "group": "1_configure"
+          "group": "1_configure@2"
         }
       ],
       "view/item/context": [
@@ -1085,6 +1235,21 @@
         }
       ],
       "editor/title": [
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "editorLangId == bbcode",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeWebviewPanelId == px.bbcodePreview",
+          "group": "navigation"
+        },
         {
           "command": "px.showGuiTree",
           "when": "resourceExtname == .gui && px.isCk3Workspace",
@@ -1246,6 +1411,16 @@
     ],
     "keybindings": [
       {
+        "command": "px.openBBCodePreview",
+        "key": "ctrl+shift+v",
+        "when": "editorTextFocus && editorLangId == bbcode"
+      },
+      {
+        "command": "px.openBBCodePreviewSide",
+        "key": "ctrl+k v",
+        "when": "editorTextFocus && editorLangId == bbcode"
+      },
+      {
         "command": "px.editLocalization",
         "key": "ctrl+alt+t",
         "when": "editorTextFocus && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || editorLangId == paradox-loc)"
@@ -1298,9 +1473,9 @@
     ]
   },
   "scripts": {
-    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs",
-    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text",
-    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020",
+    "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs",
+    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
+    "compile:webview": "esbuild src/webviews/guiEditor/app/main.ts --bundle --outfile=dist/webview/guiEditor.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/flagBuilder/app/main.ts --bundle --outfile=dist/webview/flagBuilder.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/eventGraph/app/main.ts --bundle --outfile=dist/webview/eventGraph.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/workshop/app/main.ts --bundle --outfile=dist/webview/workshop.js --format=iife --platform=browser --target=es2020 && esbuild src/webviews/exampleWiki/app/main.ts --bundle --outfile=dist/webview/exampleWiki.js --format=iife --platform=browser --target=es2020",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
     "package": "vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode",
@@ -1312,6 +1487,7 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
+    "steamwand.js": "^0.2.1",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

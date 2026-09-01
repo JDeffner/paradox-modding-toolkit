@@ -3,7 +3,10 @@ import {
   DESCRIPTOR_FIELDS,
   LAUNCHER_TAGS,
   parseDescriptor,
+  readDescriptorBlock,
   scaffoldDescriptor,
+  upsertDescriptorBlock,
+  upsertDescriptorValue,
   validateDescriptor,
   wildcardVersion,
 } from "../src/descriptorMod";
@@ -122,5 +125,76 @@ describe("helpers", () => {
     expect(validateDescriptor(text, { isDescriptorFile: true })).toEqual([]);
     expect(text).toContain('name="My Mod"');
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("readDescriptorBlock reads quoted entries, ignoring comments", () => {
+    expect(readDescriptorBlock(GOOD_DESCRIPTOR, "tags")).toEqual(["Total Conversion", "Gameplay"]);
+    expect(readDescriptorBlock('tags={\n\t"Fixes" # "NotATag"\n}\n', "tags")).toEqual(["Fixes"]);
+    expect(readDescriptorBlock(GOOD_DESCRIPTOR, "dependencies")).toEqual([]);
+  });
+});
+
+describe("upsertDescriptorValue", () => {
+  it("appends the entry when the key is absent", () => {
+    const out = upsertDescriptorValue(GOOD_DESCRIPTOR, "remote_file_id", "123456");
+    expect(out).toContain('remote_file_id="123456"\n');
+    expect(out.startsWith(GOOD_DESCRIPTOR)).toBe(true);
+  });
+
+  it("replaces an existing value in place", () => {
+    const out = upsertDescriptorValue(
+      'name="X"\nremote_file_id="1" # kept\nversion="2"\n',
+      "remote_file_id",
+      "42"
+    );
+    expect(out).toBe('name="X"\nremote_file_id="42" # kept\nversion="2"\n');
+  });
+
+  it("keeps CRLF line endings and a BOM", () => {
+    const out = upsertDescriptorValue('\uFEFFname="X"\r\n', "remote_file_id", "7");
+    expect(out).toBe('\uFEFFname="X"\r\nremote_file_id="7"\r\n');
+    const replaced = upsertDescriptorValue('\uFEFFremote_file_id="1"\r\nname="X"\r\n', "remote_file_id", "9");
+    expect(replaced).toBe('\uFEFFremote_file_id="9"\r\nname="X"\r\n');
+  });
+
+  it("handles a file without a trailing newline", () => {
+    expect(upsertDescriptorValue('name="X"', "remote_file_id", "5")).toBe('name="X"\nremote_file_id="5"\n');
+  });
+
+  it("makes the value descriptor-safe: quotes, newlines, replacement patterns", () => {
+    const quoted = upsertDescriptorValue('name="X"\n', "name", 'My "Great"\nMod');
+    expect(quoted).toBe("name=\"My 'Great' Mod\"\n");
+    // $& in a value must land literally, not echo the matched entry.
+    expect(upsertDescriptorValue('name="X"\n', "name", "a $& b")).toBe('name="a $& b"\n');
+  });
+
+  it("does not touch block-valued keys of the same name", () => {
+    const out = upsertDescriptorValue('tags={\n\t"Gameplay"\n}\n', "tags", "zzz");
+    expect(out).toBe('tags={\n\t"Gameplay"\n}\ntags="zzz"\n');
+  });
+});
+
+describe("upsertDescriptorBlock", () => {
+  it("replaces an existing multi-line block in place", () => {
+    const out = upsertDescriptorBlock(GOOD_DESCRIPTOR, "tags", ["Fixes", "Gameplay"]);
+    expect(out).toContain('tags={\n\t"Fixes"\n\t"Gameplay"\n}\n');
+    expect(out).not.toContain("Total Conversion");
+    // Everything around the block survives.
+    expect(out).toContain('replace_path="history/characters"');
+    expect(out.startsWith('version="0.4.38"')).toBe(true);
+  });
+
+  it("appends the block when the key is absent", () => {
+    const out = upsertDescriptorBlock('name="X"\n', "tags", ["Gameplay"]);
+    expect(out).toBe('name="X"\ntags={\n\t"Gameplay"\n}\n');
+  });
+
+  it("replaces a one-line block and keeps CRLF endings", () => {
+    const out = upsertDescriptorBlock('tags={ "A" }\r\nname="X"\r\n', "tags", ["B"]);
+    expect(out).toBe('tags={\r\n\t"B"\r\n}\r\nname="X"\r\n');
+  });
+
+  it("writes an empty block for no tags", () => {
+    expect(upsertDescriptorBlock("", "tags", [])).toBe("tags={\n}\n");
   });
 });

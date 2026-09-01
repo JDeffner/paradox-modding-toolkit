@@ -155,6 +155,18 @@ export interface ReleaseAsset {
   browser_download_url: string;
 }
 
+/**
+ * The release feed's `tag_name` and asset names become path segments under
+ * global storage — the tag names a directory that is rm -rf'ed and rebuilt, the
+ * asset name a file written inside it. Like the host allowlist above, this is
+ * the one assertion available (tiger publishes no checksums): a segment that
+ * could point anywhere else — separators, a leading dot, `..` — is refused
+ * instead of joined.
+ */
+export function isSafeStorageSegment(name: string): boolean {
+  return /^[A-Za-z0-9_][A-Za-z0-9._ -]*$/.test(name) && !name.includes("..");
+}
+
 /** The right tiger asset for this platform, or null (e.g. macOS has no prebuilt). */
 export function pickTigerAsset(
   assets: ReleaseAsset[],
@@ -265,6 +277,12 @@ export async function downloadLatestTiger(
       process.platform === "darwin"
         ? `${flavor.prefix} has no prebuilt macOS binary; build it from source (github.com/${flavor.repoSlug}) and set px.tigerPath.`
         : `no ${flavor.prefix} asset found for this platform in release ${tag}.`
+    );
+  }
+
+  if (!isSafeStorageSegment(tag) || !isSafeStorageSegment(asset.name)) {
+    throw new Error(
+      `refusing release ${JSON.stringify(tag)} asset ${JSON.stringify(asset.name)}: not a plain file name.`
     );
   }
 

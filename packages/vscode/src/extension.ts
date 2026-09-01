@@ -40,8 +40,9 @@ import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext }
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
-import { actionGroups } from "./webviews/dashboard/actions";
+import { actionGroups, referenceItems } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
+import { ExampleWikiPanel } from "./webviews/exampleWiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
@@ -53,6 +54,7 @@ import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
+import { showDocPanel } from "./webviews/docPanel";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher } from "./errorLog";
 import { launchGame, registerGameRun } from "./gameRun";
@@ -63,7 +65,11 @@ import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
+import { createModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
+import { registerWorkshop } from "./steam/workshop";
+import { registerBBCodeSupport } from "./bbcodeSupport";
+import { WorkshopPanel } from "./webviews/workshop/panel";
 import * as fs from "fs";
 import {
   allClientCommandIds,
@@ -84,6 +90,11 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  exampleWikiRequest,
+  exampleWikiEntryRequest,
+  type ExampleWikiDetail,
+  type ExampleWikiEntryParams,
+  type ExampleWikiIndex,
   eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
@@ -585,9 +596,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       convertToDdsCommand(arg, multi)
     ),
     vscode.commands.registerCommand("px.imageGuidelines", () =>
-      vscode.commands.executeCommand(
-        "markdown.showPreview",
-        vscode.Uri.file(context.asAbsolutePath("media/image-guidelines.md"))
+      showDocPanel(
+        "px.imageGuidelines",
+        "Image Guidelines",
+        fs.readFileSync(context.asAbsolutePath("media/image-guidelines.md"), "utf8")
       )
     ),
     DdsPreviewProvider.register(context)
@@ -612,8 +624,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the built-in command. The `@ext:` query filters the Shortcuts UI to this
     // extension; if a VS Code build ever shows an empty list, "px." is the
     // fallback query.
+    // The toolkit's community server: the Project panel footer and the palette
+    // both land here. Permanent invite, so it never needs a refresh.
+    vscode.commands.registerCommand("px.openDiscord", () =>
+      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/ESstwqycug"))
+    ),
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
+    ),
+    // Workspace scope: the settings that matter here (paths, focus, excludes)
+    // are per-project taste, and the User tab is one click away in the editor.
+    vscode.commands.registerCommand("px.openSettings", () =>
+      vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+        query: "@ext:jdeffner.px-toolkit",
+      })
     ),
     // Checked = visible, so the setting stores the INVERSE of the picks. The
     // catalog is the panel's own row list for the active game, which is why it
@@ -622,18 +646,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.customizeSidebar", async () => {
       type Item = vscode.QuickPickItem & { command: string };
       const hidden = new Set(hiddenRows());
-      const items: Item[] = actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
-        g.items.map((it) => ({
-          label: `${g.label}: ${it.label}`,
+      const items: Item[] = [
+        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
+          g.items.map((it) => ({
+            label: `${g.label}: ${it.label}`,
+            description: it.command,
+            picked: !hidden.has(it.command),
+            command: it.command,
+          }))
+        ),
+        ...referenceItems(metaFor(cfg.gameId)).map((it) => ({
+          label: `Reference: ${it.label}`,
           description: it.command,
           picked: !hidden.has(it.command),
           command: it.command,
-        }))
-      );
+        })),
+      ];
       const picked = await vscode.window.showQuickPick(items, {
         canPickMany: true,
         title: "Customize the Project panel rows",
-        placeHolder: "Checked rows show in the Tools section; unchecked ones are hidden",
+        placeHolder: "Checked rows show in the Project panel; unchecked ones are hidden",
       });
       if (!picked) return;
       const visible = new Set(picked.map((i) => i.command));
@@ -784,6 +816,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("px.showEventGraph", () => {
       EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
+    }),
+    vscode.commands.registerCommand("px.showExamplesWiki", () => {
+      ExampleWikiPanel.show(context, {
+        fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
+        fetchEntry: (params: ExampleWikiEntryParams) =>
+          lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
+      });
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
@@ -948,6 +987,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- workflow accelerators ---------------------------------------------------
 
+  // Steam Workshop (px.openWorkshopPage; publishing lives in the panel).
+  registerWorkshop(context, { cfg: () => cfg, focusRoot: () => views.focusRoot(), log });
+  registerBBCodeSupport(context);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("px.openWorkshopManager", () => {
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: readModName(p), path: p }));
+      if (!mods.length) {
+        void vscode.window.showWarningMessage(
+          "Paradox Modding Toolkit: open a mod folder as a workspace folder first."
+        );
+        return;
+      }
+      WorkshopPanel.show(context, {
+        meta: metaFor(cfg.gameId),
+        mods,
+        active: views.focusRoot() ?? cfg.modPath,
+        log,
+      });
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand("px.watchErrorLog", () => errorLog.toggle()),
     vscode.commands.registerCommand("px.clearGameProblems", () => errorLog.clear()),
@@ -957,7 +1020,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("px.newContent", () =>
       newContentCommand(cfgForActive(), notifyModFileChanged)
-    )
+    ),
+    vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log))
   );
   registerGameRun(context, cfgForActive, errorLog);
 

@@ -125,9 +125,14 @@ describe("datafunction hover teaches usage, not counts", () => {
     return hover!.markdown;
   }
 
-  it("leads with signature + description and keeps example file links", () => {
+  it("leads with a card head + description and keeps example file links", () => {
     const md = dfnHover();
-    expect(md).toContain("`GetPlayer`");
+    // Same head shape as every other hover: badge, bold name, `→ Return`.
+    expect(md.split(String.fromCharCode(10))[0]).toContain("global function");
+    expect(md).toContain("**GetPlayer**");
+    // The return type is the blue `→ <span>Character</span>` tail.
+    expect(md).toContain("→");
+    expect(md).toContain("Character");
     expect(md).toContain("The local player's character.");
     expect(md).toContain("Vanilla examples:");
     expect(md).toContain("gui/hud.gui");

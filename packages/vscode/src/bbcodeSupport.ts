@@ -1,0 +1,241 @@
+/**
+ * BBCode as a first-class editing experience for the Workshop listing files:
+ * tag completion in `.bbcode` documents and a live side-by-side preview
+ * (px.openBBCodePreview) that renders the same way the Workshop panel's
+ * preview does - both share webviews/workshop/bbcode.ts and its styles.
+ */
+import * as vscode from "vscode";
+import { bbcodeToHtml } from "./webviews/workshop/bbcode";
+import { BBPREV_CSS } from "./webviews/workshop/bbcodeCss";
+import { makeNonce } from "./webviews/nonce";
+import { tabIcon } from "./webviews/tabIcons";
+import uiCss from "./webviews/shared/ui.css";
+
+interface TagCompletion {
+  label: string;
+  snippet: string;
+  detail: string;
+}
+
+/** The tag set Steam's Workshop renders, as insertable pairs. */
+const TAG_COMPLETIONS: TagCompletion[] = [
+  { label: "h1", snippet: "h1]$1[/h1]$0", detail: "Heading 1" },
+  { label: "h2", snippet: "h2]$1[/h2]$0", detail: "Heading 2" },
+  { label: "h3", snippet: "h3]$1[/h3]$0", detail: "Heading 3" },
+  { label: "b", snippet: "b]$1[/b]$0", detail: "Bold" },
+  { label: "i", snippet: "i]$1[/i]$0", detail: "Italic" },
+  { label: "u", snippet: "u]$1[/u]$0", detail: "Underline" },
+  { label: "strike", snippet: "strike]$1[/strike]$0", detail: "Strikethrough" },
+  { label: "spoiler", snippet: "spoiler]$1[/spoiler]$0", detail: "Spoiler (hover to reveal)" },
+  { label: "url", snippet: "url=$1]$2[/url]$0", detail: "Link: [url=https://…]text[/url]" },
+  { label: "img", snippet: "img]$1[/img]$0", detail: "Image by URL" },
+  { label: "list", snippet: "list]\n[*] $1\n[/list]$0", detail: "Bullet list" },
+  { label: "olist", snippet: "olist]\n[*] $1\n[/olist]$0", detail: "Numbered list" },
+  { label: "*", snippet: "*] $0", detail: "List item" },
+  { label: "quote", snippet: "quote=$1]$2[/quote]$0", detail: "Quote with author" },
+  { label: "code", snippet: "code]\n$1\n[/code]$0", detail: "Code block (monospace, literal)" },
+  { label: "noparse", snippet: "noparse]$1[/noparse]$0", detail: "Literal text, tags not parsed" },
+  { label: "hr", snippet: "hr][/hr]$0", detail: "Horizontal rule" },
+  {
+    label: "table",
+    snippet: "table]\n[tr]\n[th]$1[/th]\n[/tr]\n[tr]\n[td]$2[/td]\n[/tr]\n[/table]$0",
+    detail: "Table",
+  },
+  { label: "tr", snippet: "tr]\n[td]$1[/td]\n[/tr]$0", detail: "Table row" },
+  { label: "th", snippet: "th]$1[/th]$0", detail: "Table header cell" },
+  { label: "td", snippet: "td]$1[/td]$0", detail: "Table cell" },
+  {
+    label: "previewyoutube",
+    snippet: "previewyoutube=$1;full][/previewyoutube]$0",
+    detail: "Embedded YouTube video (video id)",
+  },
+];
+
+/** Tags worth offering as a bare closer after `[/`. */
+const CLOSABLE = [
+  "b",
+  "i",
+  "u",
+  "strike",
+  "spoiler",
+  "url",
+  "list",
+  "olist",
+  "quote",
+  "code",
+  "noparse",
+  "table",
+  "tr",
+  "th",
+  "td",
+  "h1",
+  "h2",
+  "h3",
+];
+
+const completionProvider: vscode.CompletionItemProvider = {
+  provideCompletionItems(document, position) {
+    const line = document.lineAt(position.line).text.slice(0, position.character);
+    const m = /\[(\/?)([a-zA-Z0-9*]*)$/.exec(line);
+    if (!m) return undefined;
+    // Replace from just after the `[` (and `/`), so `[h` completes cleanly.
+    const start = position.translate(0, -m[2].length);
+    const range = new vscode.Range(start, position);
+    if (m[1] === "/") {
+      return CLOSABLE.map((tag, i) => {
+        const item = new vscode.CompletionItem(`/${tag}`, vscode.CompletionItemKind.Property);
+        item.insertText = `${tag}]`;
+        item.range = range;
+        item.filterText = tag;
+        item.sortText = String(i).padStart(2, "0");
+        return item;
+      });
+    }
+    return TAG_COMPLETIONS.map((t, i) => {
+      const item = new vscode.CompletionItem(t.label, vscode.CompletionItemKind.Snippet);
+      item.detail = t.detail;
+      item.insertText = new vscode.SnippetString(t.snippet);
+      item.range = range;
+      item.sortText = String(i).padStart(2, "0");
+      return item;
+    });
+  },
+};
+
+/**
+ * The singleton preview panel, markdown-preview style: follows edits live.
+ * `sideBySide` false opens it in the ACTIVE column (the md "Open Preview"
+ * that visually replaces the source); true opens Beside, keeping focus.
+ */
+class BBCodePreview {
+  private static instance: BBCodePreview | undefined;
+  private panel: vscode.WebviewPanel;
+  private uri: vscode.Uri;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private readonly disposables: vscode.Disposable[] = [];
+
+  static show(context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean): void {
+    const existing = BBCodePreview.instance;
+    if (existing) {
+      existing.retarget(editor.document);
+      existing.panel.reveal(sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, sideBySide);
+      return;
+    }
+    BBCodePreview.instance = new BBCodePreview(context, editor, sideBySide);
+  }
+
+  /** The preview's source, back in a text editor (the title-bar button). */
+  static showSource(): void {
+    const p = BBCodePreview.instance;
+    if (!p) return;
+    void vscode.window.showTextDocument(p.uri, {
+      viewColumn: p.panel.viewColumn ?? vscode.ViewColumn.Active,
+      preview: false,
+    });
+  }
+
+  private constructor(_context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean) {
+    this.uri = editor.document.uri;
+    this.panel = vscode.window.createWebviewPanel(
+      "px.bbcodePreview",
+      previewTitle(editor.document),
+      {
+        viewColumn: sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
+        preserveFocus: sideBySide,
+      },
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+    this.panel.iconPath = tabIcon("bbcode-preview");
+    this.panel.webview.html = shellHtml();
+    this.disposables.push(
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.document.uri.toString() === this.uri.toString()) this.queueUpdate(e.document);
+      }),
+      // Like the markdown preview, follow whichever .bbcode file is active.
+      vscode.window.onDidChangeActiveTextEditor((ed) => {
+        if (ed && ed.document.languageId === "bbcode") this.retarget(ed.document);
+      })
+    );
+    this.panel.onDidDispose(() => {
+      clearTimeout(this.timer);
+      for (const d of this.disposables.splice(0)) d.dispose();
+      BBCodePreview.instance = undefined;
+    });
+    this.update(editor.document);
+  }
+
+  private retarget(document: vscode.TextDocument): void {
+    this.uri = document.uri;
+    this.panel.title = previewTitle(document);
+    this.update(document);
+  }
+
+  private queueUpdate(document: vscode.TextDocument): void {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.update(document), 150);
+  }
+
+  private update(document: vscode.TextDocument): void {
+    void this.panel.webview.postMessage({ type: "render", html: bbcodeToHtml(document.getText()) });
+  }
+}
+
+function previewTitle(document: vscode.TextDocument): string {
+  return `Preview ${document.uri.path.split("/").pop() ?? "BBCode"}`;
+}
+
+/**
+ * A static shell that swaps content by message: replacing the whole html on
+ * every keystroke would reset the reader's scroll position.
+ */
+function shellHtml(): string {
+  const nonce = makeNonce();
+  const csp = [
+    `default-src 'none'`,
+    `img-src https: data:`,
+    `style-src 'unsafe-inline'`,
+    `script-src 'nonce-${nonce}'`,
+  ].join("; ");
+  return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="${csp}" />
+<title>BBCode Preview</title>
+<style>
+${uiCss}
+${BBPREV_CSS}
+  body { padding: 0; }
+  #page { max-width: 760px; margin: 0 auto; padding: 14px 16px 40px; }
+  #page .bbprev { border: none; background: none; padding: 0; }
+</style>
+</head>
+<body>
+<div id="page"><div id="content" class="bbprev"></div></div>
+<script nonce="${nonce}">
+window.addEventListener("message", (ev) => {
+  const m = ev.data;
+  if (m && m.type === "render") document.getElementById("content").innerHTML = m.html;
+});
+</script>
+</body>
+</html>`;
+}
+
+function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): void {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== "bbcode") {
+    void vscode.window.showInformationMessage("Paradox Modding Toolkit: open a .bbcode file to preview it.");
+    return;
+  }
+  BBCodePreview.show(context, editor, sideBySide);
+}
+
+export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.languages.registerCompletionItemProvider("bbcode", completionProvider, "[", "/"),
+    vscode.commands.registerCommand("px.openBBCodePreview", () => openPreview(context, false)),
+    vscode.commands.registerCommand("px.openBBCodePreviewSide", () => openPreview(context, true)),
+    vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource())
+  );
+}

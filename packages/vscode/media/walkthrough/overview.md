@@ -14,4 +14,4 @@ Below it, collapsed until you need them:
 - **Overrides & Conflicts** — what shadows vanilla (and who wins)
 - **Dependencies** — impact view for the definition at the cursor
 
-**Show Mod Report** collects all of it into one markdown page.
+**Show Mod Report** (the checklist button above the Mod Overview list) collects all of it into one page.

@@ -83,6 +83,17 @@ bottom says exactly where they stop.
   interactions and on_action hooks that are correct by construction.
 - **Live debugging**: **Launch Game (debug mode)** plus a **Toggle
   error.log Watcher** that surfaces in-game script errors as editor squiggles.
+- **Steam Workshop publishing**: upload through your running Steam client,
+  no Paradox launcher and no password. New items start private, the
+  changenote is prefilled from your changelog or last commit, and the
+  Workshop id lands in `descriptor.mod` where the game expects it. The
+  **Steam Workshop Panel** manages the item itself: description (BBCode, with
+  a rendered preview and `.bbcode` syntax highlighting), visibility, tags,
+  preview image, versions, translated titles and descriptions per Steam
+  language, live statistics, and confirmed selective uploads (details without
+  re-uploading content). The whole listing can live as diffable files in a
+  `workshop` folder next to the mod, one download button away, with
+  changenotes read from your changelog by version.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **GUI editor** (**Open GUI Editor**, Ctrl+Alt+P): a pixel-accurate rendering
@@ -259,6 +270,9 @@ tell me what breaks and what is missing:
   contribution.
 - **Fork it and take inspiration.** If a piece of this is useful in your own
   tooling, use it. It is GPL-3.0-or-later, so keep distributed derivatives open.
+- **[Join the Discord](https://discord.gg/ESstwqycug)** for release notes,
+  quick questions and modding help. The extension links to it from the bottom
+  of the Project panel and from `Paradox: Join the Discord`.
 
 ### Dev quickstart
 
