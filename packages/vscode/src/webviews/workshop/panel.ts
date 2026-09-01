@@ -22,7 +22,13 @@ import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type SubmitSpec } from "../../steam/jobs";
-import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
+import {
+  hasListingFiles,
+  preferListingFiles,
+  readItemJson,
+  upsertItemJson,
+  writeListingFiles,
+} from "../../steam/workshopFiles";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import {
   changelogNoteFor,
@@ -236,8 +242,10 @@ export class WorkshopPanel {
       case "saveLocal": {
         if (!root) return;
         const dir = workshopDirFor(root);
-        if (hasListingFiles(dir)) {
-          // The folder is the canonical store; workshop.json keeps only ids.
+        // Existing folder, or a mod-projects layout where the folder is the
+        // right default even before it exists: the folder is the canonical
+        // store; workshop.json keeps only ids.
+        if (preferListingFiles(root, dir)) {
           writeListingFiles(dir, {
             description: message.description,
             translations: message.translations as Record<string, WorkshopTranslation>,

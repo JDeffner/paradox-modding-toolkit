@@ -39,6 +39,24 @@ export function hasListingFiles(workshopDir: string): boolean {
   }
 }
 
+/**
+ * True when listing writes should go to the workshop folder even though it
+ * does not exist yet. The mod-projects layout keeps everything that is not
+ * the upload next to the mod (`<project>/mod` + `<project>/workshop`), so
+ * falling back to the in-mod `<configDir>/workshop.json` there would create a
+ * toolkit file inside the uploadable content for no reason. The layout is the
+ * signal: the mod root is a folder literally named `mod`, and the workshop
+ * dir resolves to a sibling of it (the default `../workshop`).
+ */
+export function preferListingFiles(root: string, workshopDir: string): boolean {
+  if (hasListingFiles(workshopDir)) return true;
+  const resolved = path.resolve(root);
+  return (
+    path.basename(resolved).toLowerCase() === "mod" &&
+    path.dirname(path.resolve(workshopDir)).toLowerCase() === path.dirname(resolved).toLowerCase()
+  );
+}
+
 export interface ListingFiles {
   /** description.bbcode, or null when the file is absent. */
   description: string | null;

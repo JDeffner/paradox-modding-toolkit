@@ -17,6 +17,7 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 import { modRootFor, readConfig, type PxConfig } from "./config";
+import { findStrayCalendar } from "./calendarSettingsCheck";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
@@ -40,9 +41,10 @@ import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext }
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
-import { actionGroups, referenceItems } from "./webviews/dashboard/actions";
+import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
-import { ExampleWikiPanel } from "./webviews/exampleWiki/panel";
+import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
+import { WikiPanel, IMAGE_GUIDELINES_ARTICLE } from "./webviews/wiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
@@ -54,7 +56,6 @@ import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { modReportCommand } from "./modReport";
-import { showDocPanel } from "./webviews/docPanel";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher } from "./errorLog";
 import { launchGame, registerGameRun } from "./gameRun";
@@ -228,6 +229,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               void vscode.commands.executeCommand("workbench.action.openSettings", "px.excludedMods");
           });
       }
+    }
+  }
+
+  // A px.calendar declared in a mod's (or mod project's) own .vscode while the
+  // OPENED folder has none: VS Code ignores that file, so every calendar
+  // feature silently does nothing. The setting is window-scoped; say so once
+  // per workspace and offer to adopt the calendar where it counts.
+  if (cfg.isCk3Workspace && !cfg.calendar && !context.workspaceState.get<boolean>("px.strayCalendarNotice")) {
+    const stray = findStrayCalendar(
+      [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods],
+      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+    );
+    if (stray) {
+      void context.workspaceState.update("px.strayCalendarNotice", true);
+      const actions = stray.calendar ? ["Use This Calendar", "Open Settings File"] : ["Open Settings File"];
+      void vscode.window
+        .showWarningMessage(
+          `Paradox Modding Toolkit: ${path.basename(path.dirname(path.dirname(stray.file)))} declares ` +
+            "px.calendar in its own .vscode/settings.json, but VS Code only reads that file when the " +
+            "folder itself is opened. Put the calendar in the settings of the folder you open " +
+            "(or the .code-workspace) to activate the date preview.",
+          ...actions
+        )
+        .then((choice) => {
+          if (choice === "Use This Calendar") {
+            void vscode.workspace
+              .getConfiguration("px")
+              .update("calendar", stray.calendar, vscode.ConfigurationTarget.Workspace);
+          } else if (choice === "Open Settings File") {
+            void vscode.window.showTextDocument(vscode.Uri.file(stray.file));
+          }
+        });
     }
   }
 
@@ -416,13 +449,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     markdown: { supportHtml: true },
     middleware: {
       // Hover markdown arrives untrusted, which strips command: links. Trust
-      // exactly the one command our cards emit ("N references").
+      // exactly the commands our cards emit ("N references", "Examples Wiki").
       provideHover: async (document, position, token, next) => {
         const hover = await next(document, position, token);
         if (hover) {
           for (const content of hover.contents) {
             if (content instanceof vscode.MarkdownString) {
-              content.isTrusted = { enabledCommands: ["px.showReferences"] };
+              content.isTrusted = { enabledCommands: ["px.showReferences", "px.showExamplesWiki"] };
               // Theme icons must be enabled per MarkdownString: the
               // `markdown: { supportHtml: true }` client option above does NOT
               // cover them. Without this the kind badges arrive as the literal
@@ -595,12 +628,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.convertToDds", (arg?: vscode.Uri, multi?: vscode.Uri[]) =>
       convertToDdsCommand(arg, multi)
     ),
+    // The guidelines are one page of the Wiki now, so the palette entry opens
+    // the hub there instead of a panel of its own.
     vscode.commands.registerCommand("px.imageGuidelines", () =>
-      showDocPanel(
-        "px.imageGuidelines",
-        "Image Guidelines",
-        fs.readFileSync(context.asAbsolutePath("media/image-guidelines.md"), "utf8")
-      )
+      WikiPanel.show(context, metaFor(cfg.gameId), IMAGE_GUIDELINES_ARTICLE)
     ),
     DdsPreviewProvider.register(context)
   );
@@ -655,12 +686,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             command: it.command,
           }))
         ),
-        ...referenceItems(metaFor(cfg.gameId)).map((it) => ({
-          label: `Reference: ${it.label}`,
-          description: it.command,
-          picked: !hidden.has(it.command),
-          command: it.command,
-        })),
       ];
       const picked = await vscode.window.showQuickPick(items, {
         canPickMany: true,
@@ -817,12 +842,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.showEventGraph", () => {
       EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
     }),
-    vscode.commands.registerCommand("px.showExamplesWiki", () => {
-      ExampleWikiPanel.show(context, {
-        fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
-        fetchEntry: (params: ExampleWikiEntryParams) =>
-          lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
-      });
+    vscode.commands.registerCommand("px.openWiki", () => {
+      WikiPanel.show(context, metaFor(cfg.gameId));
+    }),
+    // The argument is optional: the palette entry and the Project panel open
+    // the catalog, a hover link names the article it wants.
+    vscode.commands.registerCommand("px.showExamplesWiki", (arg?: unknown) => {
+      ExampleWikiPanel.show(
+        context,
+        {
+          fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
+          fetchEntry: (params: ExampleWikiEntryParams) =>
+            lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
+        },
+        exampleWikiTarget(arg)
+      );
     }),
     vscode.commands.registerCommand("px.showGuiTree", () => {
       const editor = vscode.window.activeTextEditor;
@@ -1088,6 +1122,15 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
   return scoped(ns ? { namespace: ns[1] } : {});
+}
+
+/** The article a `px.showExamplesWiki` argument names, or nothing. The argument
+ *  comes off a hover command link, so it is validated, not trusted. */
+function exampleWikiTarget(arg: unknown): ExampleWikiTarget | undefined {
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name, kind } = arg as { name?: unknown; kind?: unknown };
+  if (typeof name !== "string" || name === "" || typeof kind !== "string") return undefined;
+  return { name, kind: kind as ExampleWikiTarget["kind"] };
 }
 
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {

@@ -11,6 +11,7 @@ import {
   extractVersionSection,
   hasListingFiles,
   mdToBBCode,
+  preferListingFiles,
   readItemJson,
   readListingFiles,
   resolveChangeNote,
@@ -44,6 +45,23 @@ describe("workshop dir resolution", () => {
     expect(resolveWorkshopDir(root, "listing")).toBe(path.join(root, "listing"));
     const abs = path.resolve(path.join("somewhere", "else"));
     expect(resolveWorkshopDir(root, abs)).toBe(abs);
+  });
+
+  it("prefers the folder store for a projects-layout mod before the folder exists", () => {
+    // <project>/mod with the default sibling workshop dir: writes must go to
+    // the folder, never create <mod>/<configDir>/workshop.json in the upload.
+    expect(preferListingFiles(root, resolveWorkshopDir(root, undefined))).toBe(true);
+    // A mod living directly in the launcher's mod directory keeps the in-mod
+    // fallback until the user creates the folder.
+    const flat = path.resolve(path.join("Documents", "mod", "my_mod"));
+    expect(preferListingFiles(flat, resolveWorkshopDir(flat, undefined))).toBe(false);
+    // A workshop-dir override pointing elsewhere is not the projects layout.
+    expect(preferListingFiles(root, resolveWorkshopDir(root, path.resolve("elsewhere")))).toBe(false);
+  });
+
+  it("prefers the folder store whenever the folder already exists", () => {
+    const dir = tmp();
+    expect(preferListingFiles(path.resolve(path.join("any", "where")), dir)).toBe(true);
   });
 });
 
