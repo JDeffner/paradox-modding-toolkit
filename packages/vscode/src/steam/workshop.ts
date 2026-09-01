@@ -46,6 +46,14 @@ import {
 import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
 
 export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
+/**
+ * How long the bridge may say nothing before it counts as hung. A running job
+ * streams upload progress, and every other job answers in seconds, so silence
+ * this long means the Steam client or the native call is wedged: without a
+ * bound on it the upload promise never settles, the panel stays "uploading"
+ * for the rest of the session and the staging copy is never removed.
+ */
+const BRIDGE_SILENCE_MS = 5 * 60_000;
 /** Steam rejects preview images of 1 MB or more (k_cchFilenameMax aside). */
 export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
@@ -178,9 +186,14 @@ export function stageContent(root: string, staging: string, exclude: string[] = 
   });
 }
 
-/** The staging folder an upload of `root` copies into. */
-export function stagingDir(root: string): string {
-  return path.join(os.tmpdir(), "px-toolkit-workshop", path.basename(root));
+/**
+ * A fresh staging folder for one upload. Private per upload on purpose: two
+ * windows publishing mods whose folder name matches would otherwise stage into
+ * the same place and one would overwrite what the other is uploading. The
+ * caller removes it when the upload ends.
+ */
+export function makeStagingDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "px-toolkit-workshop-"));
 }
 
 /** Subject of the mod's last git commit, as a changenote suggestion. */
@@ -240,7 +253,18 @@ export function runBridge(
     let errorMessage: string | null = null;
     let buffer = "";
     let stderr = "";
+    let silence: NodeJS.Timeout | undefined;
+    let hung = false;
+    const heard = (): void => {
+      clearTimeout(silence);
+      silence = setTimeout(() => {
+        hung = true;
+        child.kill();
+      }, BRIDGE_SILENCE_MS);
+    };
+    heard();
     child.stdout.on("data", (chunk: Buffer) => {
+      heard();
       buffer += chunk.toString("utf8");
       let nl: number;
       while ((nl = buffer.indexOf("\n")) >= 0) {
@@ -261,11 +285,25 @@ export function runBridge(
         }
       }
     });
-    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
-    child.on("error", (err) => reject(new Error(`cannot start the Steam bridge: ${err.message}`)));
+    child.stderr.on("data", (chunk: Buffer) => {
+      heard();
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", (err) => {
+      clearTimeout(silence);
+      reject(new Error(`cannot start the Steam bridge: ${err.message}`));
+    });
     child.on("close", (code) => {
+      clearTimeout(silence);
       if (stderr.trim()) log(`steam bridge stderr: ${stderr.trim()}`);
       if (result) resolve(result);
+      else if (hung)
+        reject(
+          new Error(
+            "the Steam bridge stopped responding and was closed - Steam may be busy or hung; " +
+              "restart Steam and try again"
+          )
+        );
       else reject(new Error(errorMessage ?? `Steam bridge exited with code ${code ?? "?"}`));
     });
     child.stdin.end(JSON.stringify(job));
