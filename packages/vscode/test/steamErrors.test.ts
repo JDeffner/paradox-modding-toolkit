@@ -14,10 +14,13 @@ const submitFailed = (name: string) => `SubmitItemUpdate failed: ${name}`;
 describe("explainSteamError", () => {
   it("explains the codes an upload actually hits", () => {
     expect(explainSteamError(submitFailed("k_EResultAccessDenied"))).toBe(
-      "the Steam account you are logged in as may not edit this item. The Workshop ID in the " +
-        "descriptor must belong to that account (SubmitItemUpdate: k_EResultAccessDenied)"
+      "the Steam account you are logged in as does not own the game, or does not own this item. " +
+        "Log in as the account that created the Workshop item (SubmitItemUpdate: k_EResultAccessDenied)"
     );
-    expect(explainSteamError(submitFailed("k_EResultLimitExceeded"))).toContain("8000 characters");
+    // Valve documents LimitExceeded on SubmitItemUpdate as the 1 MB preview cap
+    // or a full Steam Cloud, NOT a text-length limit (which is what this used
+    // to claim).
+    expect(explainSteamError(submitFailed("k_EResultLimitExceeded"))).toContain("over 1 MB");
     expect(explainSteamError(submitFailed("k_EResultNotLoggedOn"))).toContain("Log in and retry");
     expect(explainSteamError("CreateItem failed: k_EResultFileNotFound")).toContain("preview image");
     expect(explainSteamError(submitFailed("k_EResultTimeout"))).toContain("retry the upload");
@@ -27,8 +30,9 @@ describe("explainSteamError", () => {
     expect(
       explainSteamError(`uploading the german translation failed: ${submitFailed("k_EResultBanned")}`)
     ).toBe(
-      "uploading the german translation failed: Steam has banned this item or this account. " +
-        "Check the item's Workshop page (SubmitItemUpdate: k_EResultBanned)"
+      "uploading the german translation failed: the Steam account has a VAC or game ban, so it " +
+        "cannot upload for this game. Check the account's bans on its Steam profile " +
+        "(SubmitItemUpdate: k_EResultBanned)"
     );
   });
 

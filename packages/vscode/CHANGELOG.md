@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **The Steam Workshop error advice now matches what Valve documents per
+  call.** The table was written from the generic one-line `EResult`
+  descriptions, which disagree with the per-call result lists on ISteamUGC
+  in the cases that matter. `k_EResultLimitExceeded` is the 1 MB preview-image
+  cap or a full Steam Cloud, not an over-long description;
+  `k_EResultServiceReadOnly` is the upload hold after a password or email
+  change, not a Steam outage; `k_EResultLockingFailed` is another update
+  still running on the same item; `k_EResultBanned` is a VAC or game ban on
+  the account. `k_EResultDuplicateName` was added, and the two codes Valve
+  documents nowhere for uploads (`k_EResultRevoked`, `k_EResultBlocked`) now
+  say so instead of guessing.
+
 ## 0.4.0 (beta) - the Steam Workshop release
 
 Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
@@ -214,10 +228,10 @@ release these notes belong to.
   VS Code notification and a line in the output channel, so it reaches you
   even after you switch away from the Workshop tab, and errors stay
   readable instead of fading like the old in-panel toasts (which are gone).
-  Steam's raw codes are rewritten as advice: `k_EResultLimitExceeded` says a
-  field is over Steam's limit (8000 characters for the description, 128 for
-  the title), `k_EResultAccessDenied` points at the logged-in account not
-  owning the item, and about thirty codes in all say what to do next. The
+  Steam's raw codes are rewritten as advice: `k_EResultLimitExceeded` points
+  at the preview image or the Steam Cloud quota,
+  `k_EResultAccessDenied` at the logged-in account not owning the game or
+  the item, and about thirty codes in all say what to do next. The
   Steamworks operation and code stay in parentheses, so a support thread
   still has the exact failure. A value Steam refuses outright is named
   ("Steam rejected the preview image") instead of surfacing as a bare
