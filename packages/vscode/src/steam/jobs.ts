@@ -35,9 +35,7 @@ export type BridgeJob =
   /** Sequential SubmitItemUpdate calls in one Steam session (details, then translations). */
   | { action: "publish"; appId: number; itemId: string; submits: SubmitSpec[] }
   /** The item's live details, plus its title/description per requested language. */
-  | { action: "query"; appId: number; itemId: string; languages?: string[] }
-  /** The user's own published items of this app (to link an existing item). */
-  | { action: "list"; appId: number };
+  | { action: "query"; appId: number; itemId: string; languages?: string[] };
 
 /** The live item details the toolkit shows (bigints already stringified). */
 export interface ItemDetails {
@@ -79,8 +77,7 @@ export type BridgeDone =
       item: ItemDetails | null;
       /** Title/description as Steam serves each requested language (its default-language fallback included). */
       translations: Record<string, { title: string; description: string }>;
-    }
-  | { action: "list"; items: { itemId: string; title: string; timeUpdated: number }[]; total: number };
+    };
 
 /** Dotted-number version compare: `a` >= `b`. Non-numeric parts compare as 0. */
 export function versionAtLeast(a: string, b: string): boolean {

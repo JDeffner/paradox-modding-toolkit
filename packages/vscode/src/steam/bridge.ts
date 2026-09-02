@@ -206,23 +206,6 @@ async function main(): Promise<void> {
       }
       break;
     }
-    case "list": {
-      try {
-        const page = await steam.workshop.getUserItems(1, steam.accountId(), { appId: job.appId });
-        done({
-          action: "list",
-          items: page.items.map((it) => ({
-            itemId: it.fileId.toString(),
-            title: it.title,
-            timeUpdated: it.timeUpdated,
-          })),
-          total: page.totalResults,
-        });
-      } catch (e) {
-        fail(`listing your Workshop items failed: ${errText(e)}`);
-      }
-      break;
-    }
     default:
       fail(`unknown action: ${(job as { action?: string }).action ?? "?"}`);
   }
