@@ -11,7 +11,6 @@ import {
   extractVersionSection,
   hasListingFiles,
   mdToBBCode,
-  preferListingFiles,
   readItemJson,
   readListingFiles,
   resolveChangeNote,
@@ -34,34 +33,25 @@ describe("workshop dir resolution", () => {
   // path.resolve, so the roots are absolute on the platform running the test:
   // users are on Windows, CI is Linux, and a drive letter is relative there.
   const root = path.resolve(path.join("Projets", "My Mod", "mod"));
+  const configDir = path.join(root, ".px-toolkit");
 
-  it("defaults to the sibling workshop folder (mod/ + workshop/ layout)", () => {
-    const sibling = path.join(path.dirname(root), "workshop");
-    expect(resolveWorkshopDir(root, undefined)).toBe(sibling);
-    expect(resolveWorkshopDir(root, "")).toBe(sibling);
+  it("defaults to the in-mod config dir", () => {
+    expect(resolveWorkshopDir(root, undefined, configDir)).toBe(path.join(configDir, "workshop"));
+    expect(resolveWorkshopDir(root, "", configDir)).toBe(path.join(configDir, "workshop"));
+  });
+
+  it("keeps an existing sibling workshop folder (mod/ + workshop/ layout)", () => {
+    const project = tmp();
+    const mod = path.join(project, "mod");
+    fs.mkdirSync(mod);
+    fs.mkdirSync(path.join(project, "workshop"));
+    expect(resolveWorkshopDir(mod, "", path.join(mod, ".px-toolkit"))).toBe(path.join(project, "workshop"));
   });
 
   it("accepts relative and absolute overrides", () => {
-    expect(resolveWorkshopDir(root, "listing")).toBe(path.join(root, "listing"));
+    expect(resolveWorkshopDir(root, "listing", configDir)).toBe(path.join(root, "listing"));
     const abs = path.resolve(path.join("somewhere", "else"));
-    expect(resolveWorkshopDir(root, abs)).toBe(abs);
-  });
-
-  it("prefers the folder store for a projects-layout mod before the folder exists", () => {
-    // <project>/mod with the default sibling workshop dir: writes must go to
-    // the folder, never create <mod>/<configDir>/workshop.json in the upload.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, undefined))).toBe(true);
-    // A mod living directly in the launcher's mod directory keeps the in-mod
-    // fallback until the user creates the folder.
-    const flat = path.resolve(path.join("Documents", "mod", "my_mod"));
-    expect(preferListingFiles(flat, resolveWorkshopDir(flat, undefined))).toBe(false);
-    // A workshop-dir override pointing elsewhere is not the projects layout.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, path.resolve("elsewhere")))).toBe(false);
-  });
-
-  it("prefers the folder store whenever the folder already exists", () => {
-    const dir = tmp();
-    expect(preferListingFiles(path.resolve(path.join("any", "where")), dir)).toBe(true);
+    expect(resolveWorkshopDir(root, abs, configDir)).toBe(abs);
   });
 });
 

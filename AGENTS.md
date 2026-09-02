@@ -50,7 +50,8 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
 - **`px` names the product, `ck3` names the game.** Ours: `px-toolkit`,
   `px.*` settings/commands, `@px-lsp/*`, `# px:ignore`. The game's:
   `gameId`, `games/ck3/`, `data/ck3/`, `ck3-tiger`, `ck3-script`,
-  `.ck3modding/`, `zzz_ck3_modding_edits_*.yml`. The `paradox*` language ids
+  `zzz_ck3_modding_edits_*.yml` (`.ck3modding/` is the pre-0.4.0 name of
+  the `.px-toolkit/` config dir, read as a fallback). The `paradox*` language ids
   and `paradox/*` wire methods mean "the engine family"; do NOT rename them.
 - **Deep validation belongs to ck3-tiger.** Our diagnostics stay structural
   and certain (braces, encodings, folder traps).

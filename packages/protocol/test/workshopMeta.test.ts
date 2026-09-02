@@ -15,17 +15,17 @@ const tmpMod = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "px-workshop-
 
 describe("workshopMeta", () => {
   it("returns null for a mod without the file", () => {
-    expect(readWorkshopMeta(tmpMod(), ".ck3modding")).toBeNull();
+    expect(readWorkshopMeta(path.join(tmpMod(), ".px-toolkit"))).toBeNull();
   });
 
   it("round-trips a record and creates the config dir", () => {
-    const dir = tmpMod();
-    upsertWorkshopMeta(dir, ".ck3modding", {
+    const cfg = path.join(tmpMod(), ".px-toolkit");
+    upsertWorkshopMeta(cfg, {
       publishedFileId: "123",
       description: "[b]Hello[/b]",
       translations: { german: { title: "Hallo", description: "Beschreibung" } },
     });
-    expect(readWorkshopMeta(dir, ".ck3modding")).toEqual({
+    expect(readWorkshopMeta(cfg)).toEqual({
       publishedFileId: "123",
       description: "[b]Hello[/b]",
       translations: { german: { title: "Hallo", description: "Beschreibung" } },
@@ -33,11 +33,11 @@ describe("workshopMeta", () => {
   });
 
   it("merges patches and preserves keys it does not know", () => {
-    const dir = tmpMod();
-    const file = path.join(dir, ".ck3modding", "workshop.json");
+    const cfg = path.join(tmpMod(), ".px-toolkit");
+    const file = path.join(cfg, "workshop.json");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ publishedFileId: "7", futureKey: true }), "utf8");
-    upsertWorkshopMeta(dir, ".ck3modding", { description: "text" });
+    upsertWorkshopMeta(cfg, { description: "text" });
     expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({
       publishedFileId: "7",
       futureKey: true,
@@ -46,10 +46,10 @@ describe("workshopMeta", () => {
   });
 
   it("leaves fields alone when the patch omits them", () => {
-    const dir = tmpMod();
-    upsertWorkshopMeta(dir, ".vic3modding", { publishedFileId: "9", description: "keep" });
-    upsertWorkshopMeta(dir, ".vic3modding", { translations: { french: { title: "t" } } });
-    expect(readWorkshopMeta(dir, ".vic3modding")).toEqual({
+    const cfg = path.join(tmpMod(), ".px-toolkit");
+    upsertWorkshopMeta(cfg, { publishedFileId: "9", description: "keep" });
+    upsertWorkshopMeta(cfg, { translations: { french: { title: "t" } } });
+    expect(readWorkshopMeta(cfg)).toEqual({
       publishedFileId: "9",
       description: "keep",
       translations: { french: { title: "t" } },

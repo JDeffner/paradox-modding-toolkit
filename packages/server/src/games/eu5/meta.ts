@@ -16,7 +16,8 @@ export const eu5Meta: GameMeta = {
   // EU5 mods carry .metadata/metadata.json (plus a required thumbnail.png);
   // descriptor.mod is at most a vestigial launcher artifact.
   descriptor: "metadata",
-  configDirName: ".eu5modding",
+  configDirName: ".px-toolkit",
+  legacyConfigDirName: ".eu5modding",
   docsFolderName: "Europa Universalis V",
   // EU5's `script_docs` console command writes to Documents/.../docs, not logs/.
   scriptDocsSubdir: "docs",

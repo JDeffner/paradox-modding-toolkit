@@ -248,7 +248,7 @@ rules (MIT, pinned commit) and has not been checked against a live install. The
 damage a wrong entry can do is bounded on purpose: a minimal hand-verified set
 of reference fields and **zero** required-localization patterns, so a mistake
 costs you navigation, never a false error squiggle. Gaps are fixable without
-waiting for a release through the `<mod>/.eu5modding/schema.json` overlay, and
+waiting for a release through the `<mod>/.px-toolkit/schema.json` overlay, and
 reports are very welcome.
 
 The same table with the detection ladder, the per-game dump paths and the

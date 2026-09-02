@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- **One config folder per mod: `.px-toolkit/`.** It replaces the per-game
+  `.ck3modding/`, `.vic3modding/` and `.eu5modding/` folders for the schema and
+  playset overlays, the tiger baseline, the GUI preview values and the
+  Workshop record. Existing folders keep working and are renamed the first time
+  the toolkit writes to them.
+- **The Workshop listing lives inside the mod by default.** `px.workshop.dir`
+  now defaults to `.px-toolkit/workshop`; a `workshop` folder next to the mod
+  (the mod-projects layout) is still picked up when it exists. Description and
+  translation drafts always go to that folder; `workshop.json` keeps only ids.
+- **`.pxignore` decides what a toolkit upload leaves out.** gitignore syntax
+  at the mod root, created with defaults (`.git/`, `.vscode/`, `.claude/`,
+  `node_modules/`, image sources, OS noise) on the first upload through the
+  toolkit, then yours to edit. `.pxignore` and `.px-toolkit/` never upload;
+  `descriptor.mod` and `.metadata/` always do. A one-time message says why the
+  exclusions only hold for toolkit uploads: the Paradox launcher ships the
+  whole folder.
+- **New Mod offers the in-mod layout first.** The game's mod folder with
+  `.px-toolkit/workshop/` and `.pxignore` inside is the default; the mod
+  projects layout stays available.
+
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
 - **"Link existing item" is gone from the Workshop panel.** The button let a

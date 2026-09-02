@@ -10,8 +10,8 @@ body:
         in that folder go unindexed (no completion, no go-to-definition).
 
         **Immediate workaround:** drop a schema overlay in your mod at
-        `<mod>/<config-dir>/schema.json` — `.ck3modding/` for CK3,
-        `.vic3modding/` for Victoria 3, `.eu5modding/` for EU5 — and add the
+        `<mod>/.px-toolkit/schema.json` (pre-0.4.0 mods: `.ck3modding/`,
+        `.vic3modding/` or `.eu5modding/`) and add the
         entry yourself. It takes effect on reload, no release needed:
 
         ```json

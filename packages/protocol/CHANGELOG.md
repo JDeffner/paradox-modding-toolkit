@@ -6,6 +6,13 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
+  `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
+  name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path
+  instead of a root plus a dir name.
+
 ## 0.2.0
 
 Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.

@@ -15,21 +15,15 @@ import type { GameMeta } from "@px-lsp/server/games/profile";
 import {
   STEAM_LANGUAGES,
   steamLanguageForLoc,
-  upsertWorkshopMeta,
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type SubmitSpec } from "../../steam/jobs";
-import {
-  hasListingFiles,
-  preferListingFiles,
-  readItemJson,
-  upsertItemJson,
-  writeListingFiles,
-} from "../../steam/workshopFiles";
+import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
+import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
   changelogNoteFor,
   findPreview,
@@ -41,7 +35,6 @@ import {
   PREVIEW_MAX_BYTES,
   readPublishInfo,
   runBridge,
-  stageContent,
   translationSubmits,
   workshopDirFor,
   workshopUrl,
@@ -155,6 +148,23 @@ export class WorkshopPanel {
   // All user feedback goes through VS Code notifications plus the output
   // channel - never a transient in-panel surface. The message survives
   // closing the panel, and errors leave a trace to re-read.
+  /**
+   * Shown once per mod, when the first toolkit upload creates `.pxignore`:
+   * the exclusions exist only on this path, and a later launcher upload of
+   * the same folder would ship everything.
+   */
+  private explainPxIgnore(root: string): void {
+    void vscode.window
+      .showInformationMessage(
+        `Created ${PXIGNORE_FILE} in the mod: git, editor and toolkit files stay out of this upload. ` +
+          "That only holds for uploads made through the toolkit; the Paradox launcher uploads the whole folder.",
+        "Open .pxignore"
+      )
+      .then((choice) => {
+        if (choice) void vscode.window.showTextDocument(vscode.Uri.file(path.join(root, PXIGNORE_FILE)));
+      });
+  }
+
   private notify(message: string, level: "info" | "warn" | "error" = "info"): void {
     this.options.log(`workshop: ${message}`);
     const full = `Paradox Modding Toolkit: ${message}`;
@@ -171,7 +181,7 @@ export class WorkshopPanel {
 
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
-    const workshopDir = workshopDirFor(root);
+    const workshopDir = workshopDirFor(root, meta);
     const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
@@ -202,7 +212,7 @@ export class WorkshopPanel {
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
-      changelogNote: changelogNoteFor(root, info?.version ?? null),
+      changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
       changelogPath: path.resolve(
         workshopDir,
         (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
@@ -246,18 +256,8 @@ export class WorkshopPanel {
         return;
       case "saveLocal": {
         if (!root) return;
-        const dir = workshopDirFor(root);
-        // Existing folder, or a mod-projects layout where the folder is the
-        // right default even before it exists: the folder is the canonical
-        // store; workshop.json keeps only ids.
-        if (preferListingFiles(root, dir)) {
-          writeListingFiles(dir, {
-            description: message.description,
-            translations: message.translations as Record<string, WorkshopTranslation>,
-          });
-          return;
-        }
-        upsertWorkshopMeta(root, meta.configDirName, {
+        // The folder is the canonical store; workshop.json keeps only ids.
+        writeListingFiles(workshopDirFor(root, meta), {
           description: message.description,
           translations: message.translations as Record<string, WorkshopTranslation>,
         });
@@ -338,7 +338,7 @@ export class WorkshopPanel {
     // The webview (and workshop.json) name the language; only the fixed Steam
     // table may become a path segment.
     if (lang !== null && !STEAM_LANGUAGES.some((l) => l.api === lang)) return;
-    const dir = workshopDirFor(root);
+    const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir)) {
       this.notify(
         `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
@@ -379,7 +379,7 @@ export class WorkshopPanel {
         fs.writeFileSync(file, JSON.stringify(md, null, 2) + "\n", "utf8");
       }
       // Keep item.json's title in step with the descriptor once files track it.
-      const dir = workshopDirFor(root);
+      const dir = workshopDirFor(root, meta);
       if (field === "title" && hasListingFiles(dir) && readItemJson(dir)) {
         upsertItemJson(dir, { title: v });
       }
@@ -464,7 +464,7 @@ export class WorkshopPanel {
       this.notify("The mod has no Workshop item to pull from.", "warn");
       return;
     }
-    const dir = workshopDirFor(root);
+    const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir) && !(await this.confirmWorkshopDirPlacement(dir))) return;
     this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
     try {
@@ -575,8 +575,9 @@ export class WorkshopPanel {
         }
         if (message.content) {
           this.post({ type: "uploadState", busy: true, message: "preparing files…" });
+          if (ensurePxIgnore(root)) this.explainPxIgnore(root);
           staging = makeStagingDir();
-          stageContent(root, staging, [workshopDirFor(root)]);
+          stageContent(root, staging, [workshopDirFor(root, meta)]);
           main.contentPath = staging;
         }
         if (message.changeNote.trim()) main.changeNote = message.changeNote.trim();

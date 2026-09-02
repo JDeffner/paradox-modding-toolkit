@@ -29,6 +29,7 @@ import { metaFor } from "../meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseDescriptor, readDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { readMetadata } from "@px-lsp/protocol/descriptorMetadata";
+import { migrateConfigDir, resolveConfigDir } from "@px-lsp/protocol/configDir";
 import {
   readWorkshopMeta,
   upsertWorkshopMeta,
@@ -57,15 +58,15 @@ const BRIDGE_SILENCE_MS = 5 * 60_000;
 export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
 /** Resolved px.workshop.dir for `root`: where the listing lives as files. */
-export function workshopDirFor(root: string): string {
+export function workshopDirFor(root: string, meta: GameMeta): string {
   const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.dir");
-  return resolveWorkshopDir(root, setting);
+  return resolveWorkshopDir(root, setting, resolveConfigDir(root, meta));
 }
 
 /** The changenote resolved from px.workshop.changelog, or null. */
-export function changelogNoteFor(root: string, version: string | null): ChangeNote | null {
+export function changelogNoteFor(root: string, meta: GameMeta, version: string | null): ChangeNote | null {
   const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.changelog");
-  return resolveChangeNote(workshopDirFor(root), setting, version);
+  return resolveChangeNote(workshopDirFor(root, meta), setting, version);
 }
 
 export interface PublishInfo {
@@ -111,9 +112,9 @@ export function findPreview(root: string, preferred: string | null): string | nu
 export function readPublishInfo(
   root: string,
   meta: GameMeta,
-  workshopDir: string = workshopDirFor(root)
+  workshopDir: string = workshopDirFor(root, meta)
 ): PublishInfo | null {
-  const store = readWorkshopMeta(root, meta.configDirName);
+  const store = readWorkshopMeta(resolveConfigDir(root, meta));
   const files = hasListingFiles(workshopDir) ? readListingFiles(workshopDir) : null;
   const translations: Record<string, WorkshopTranslation> = { ...(store?.translations ?? {}) };
   for (const [lang, t] of Object.entries(files?.translations ?? {})) {
@@ -169,25 +170,7 @@ export function persistPublishedId(root: string, meta: GameMeta, itemId: string)
     );
     return;
   }
-  upsertWorkshopMeta(root, meta.configDirName, { publishedFileId: itemId });
-}
-
-/**
- * Copy the mod into a staging folder for the upload, leaving out dot entries
- * (`.git`, `.vscode`, the toolkit's own config dir) at every level - except
- * `.metadata`, which IS the descriptor for the newer games.
- */
-export function stageContent(root: string, staging: string, exclude: string[] = []): void {
-  fs.rmSync(staging, { recursive: true, force: true });
-  const skip = exclude.map((p) => path.resolve(p).toLowerCase());
-  fs.cpSync(root, staging, {
-    recursive: true,
-    filter: (src) => {
-      if (skip.includes(path.resolve(src).toLowerCase())) return false;
-      const base = path.basename(src);
-      return !base.startsWith(".") || base === ".metadata" || src === root;
-    },
-  });
+  upsertWorkshopMeta(migrateConfigDir(root, meta), { publishedFileId: itemId });
 }
 
 /**
