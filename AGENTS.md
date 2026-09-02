@@ -25,10 +25,10 @@ folder-to-definition-kind table; **harvest** = build-time script output in
 `data/<id>/*.json`; **tiger** = ck3-tiger/vic3-tiger; **loc** = Paradox
 localization (`*_l_<lang>.yml`, UTF-8 with BOM).
 
-## Hard rules (no override; if a task fights one, stop and ask Joel)
+## Hard rules (no override; if a task fights one, stop and ask the maintainer)
 
 1. **Never commit or push to `main`.** `main` = one squash commit per PR,
-   created only by Joel. Check your branch before the first edit; never use
+   created only by the maintainer. Check your branch before the first edit; never use
    a worktree with `main` checked out. Old release recipes that push `main`
    directly are superseded.
 2. **Never hand-code game knowledge from memory.** Find it in the game
@@ -158,7 +158,7 @@ does, end with:
 pnpm run package:test   # compile, vsce package, code --install-extension --force
 ```
 
-then tell Joel it is installed and VS Code needs `Developer: Reload Window`.
+then say it is installed and VS Code needs `Developer: Reload Window`.
 Skip only for changes with nothing to try in the editor, and say so. Never
 commit a vsix.
 
@@ -176,7 +176,7 @@ commit a vsix.
    gh pr create --base main --title "<title>" --body "<why, with numbers>"
    ```
    Multi-PR efforts may target an `integration/<version>` branch.
-4. **Stop and hand Joel the PR link.** The squash merge is his call.
+4. **Stop and hand over the PR link.** The squash merge is the maintainer's call.
 5. Sourcery reviews every PR (`gh pr checks <n>`). A finding is a pointer,
    not a verdict: verify, fix what is real, dismiss false positives with a
    written reason. With stacked PRs, fix on the branch the file belongs to.
