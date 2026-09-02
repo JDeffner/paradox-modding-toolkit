@@ -1048,6 +1048,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       WorkshopPanel.show(context, {
+        gamePath: cfg.gamePath,
         meta: metaFor(cfg.gameId),
         mods,
         active: views.focusRoot() ?? cfg.modPath,

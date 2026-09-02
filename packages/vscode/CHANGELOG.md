@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Required DLC and required items in the Workshop panel.** A Requirements
+  section lists the game's DLC as Steam reports it (unowned ones marked) and
+  the required Workshop items, with installed mods and declared dependencies
+  offered first. Choices are saved to `dependencies.json` next to the listing
+  and applied to the item after each details upload; pulling the listing
+  writes Steam's current requirements down.
+- **Extra preview images and videos.** A `previews/` folder next to the
+  listing holds the gallery: images in file-name order plus `videos.txt` with
+  YouTube ids. While the folder exists a details upload replaces the item's
+  gallery with it; without it Steam's gallery is left alone. Add images from
+  the panel or drop files into the folder.
+- **Pre-upload checks.** The Publish section lists what would go wrong before
+  anything reaches Steam: a missing or overlong title, a description over
+  8000 bytes, a preview of 1 MB or more (these block the upload), and a
+  missing preview, empty description, no tags or a supported game version
+  that does not cover the installed game (these only warn).
+- **Version stamps on the item.** Every details upload sets the mod version,
+  supported game version and game as key/value tags and metadata on the
+  Workshop item. Not visible on the page; tools can compare listings without
+  downloading them.
 - **One config folder per mod: `.px-toolkit/`.** It replaces the per-game
   `.ck3modding/`, `.vic3modding/` and `.eu5modding/` folders for the schema and
   playset overlays, the tiger baseline, the GUI preview values and the

@@ -20,8 +20,22 @@ import {
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
-import { type SubmitSpec } from "../../steam/jobs";
-import { hasListingFiles, readItemJson, upsertItemJson, writeListingFiles } from "../../steam/workshopFiles";
+import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
+import {
+  hasListingFiles,
+  PREVIEWS_DIR,
+  readDependencies,
+  readItemJson,
+  readPreviews,
+  upsertItemJson,
+  writeDependencies,
+  writeListingFiles,
+  writeVideos,
+} from "../../steam/workshopFiles";
+import { preflight } from "../../steam/preflight";
+import { detectGameVersion } from "../../descriptorMod";
+import { findSteamLibraries } from "../../steamDetect";
+import { declaredDependencies, dependencyCandidates } from "../../dependencyScan";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
@@ -51,6 +65,8 @@ export interface WorkshopPanelOptions {
   mods: ModChoice[];
   /** The mod to open with (the focused one), a path from `mods`. */
   active: string | null;
+  /** The game install, for the version the supported-version check compares against. */
+  gamePath: string | null;
   log: (msg: string) => void;
 }
 
@@ -224,7 +240,59 @@ export class WorkshopPanel {
       filesPresent: hasListingFiles(workshopDir),
       steamLanguages: [...STEAM_LANGUAGES],
       suggestedLanguages: suggestedLanguages(root, this.options.meta),
+      checks: info
+        ? preflight({
+            name: info.name,
+            description: info.description ?? "",
+            tags: info.tags,
+            previewPath,
+            previewBytes: previewPath ? (fs.statSync(previewPath).size ?? null) : null,
+            supportedVersion: info.supportedVersion,
+            gameVersion: detectGameVersion(this.options.gamePath),
+          })
+        : [],
+      previews: this.previewsInfo(workshopDir),
+      dependencies: readDependencies(workshopDir),
+      dependencyCandidates: this.dependencyCandidates(root),
     };
+  }
+
+  private previewsInfo(workshopDir: string): WorkshopModInfo["previews"] {
+    const previews = readPreviews(workshopDir);
+    if (!previews) return null;
+    return {
+      dir: path.join(workshopDir, PREVIEWS_DIR),
+      images: previews.images.map((p) => ({
+        name: path.basename(p),
+        uri: `${this.panel.webview.asWebviewUri(vscode.Uri.file(p)).toString()}?v=${Math.floor(fs.statSync(p).mtimeMs)}`,
+      })),
+      videos: previews.videos,
+    };
+  }
+
+  /** Installed Workshop mods of this game, the declared dependencies first. */
+  private dependencyCandidates(root: string): WorkshopModInfo["dependencyCandidates"] {
+    const { meta } = this.options;
+    const workshopRoots = findSteamLibraries()
+      .map((lib) => path.join(lib, "steamapps", "workshop", "content", String(meta.steamAppId)))
+      .filter((p) => fs.existsSync(p));
+    return dependencyCandidates({ declared: declaredDependencies(root), workshopRoots, exclude: [root] })
+      .filter((c) => /^\d+$/.test(c.itemId))
+      .map((c) => ({ itemId: c.itemId, label: c.label, declared: c.declared }));
+  }
+
+  /** The item's live details, or null when Steam cannot answer (the caller then leaves Steam's state alone). */
+  private async queryItem(itemId: string): Promise<ItemDetails | null> {
+    try {
+      const done = await runBridge(
+        this.context,
+        { action: "query", appId: this.options.meta.steamAppId, itemId },
+        this.options.log
+      );
+      return done.action === "query" ? done.item : null;
+    } catch {
+      return null;
+    }
   }
 
   private async postInit(): Promise<void> {
@@ -302,6 +370,64 @@ export class WorkshopPanel {
       case "notify":
         this.notify(message.message, message.warn ? "warn" : "info");
         return;
+      case "loadDlc": {
+        try {
+          const done = await runBridge(
+            this.context,
+            { action: "dlc", appId: meta.steamAppId },
+            this.options.log
+          );
+          this.post({ type: "dlc", list: done.action === "dlc" ? done.dlc : [], error: null });
+        } catch (e) {
+          this.post({ type: "dlc", list: [], error: friendlyError(e, meta) });
+        }
+        return;
+      }
+      case "setDependencies": {
+        if (!root) return;
+        writeDependencies(workshopDirFor(root, meta), {
+          apps: message.apps.filter((a) => Number.isInteger(a) && a > 0),
+          items: message.items.filter((i) => /^\d+$/.test(i)),
+        });
+        await this.postInfo();
+        return;
+      }
+      case "addPreviews": {
+        if (!root) return;
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          filters: { Images: ["png", "jpg", "jpeg", "gif"] },
+          title: "Add preview images",
+        });
+        if (!picked?.length) return;
+        const dir = path.join(workshopDirFor(root, meta), PREVIEWS_DIR);
+        fs.mkdirSync(dir, { recursive: true });
+        for (const uri of picked) fs.copyFileSync(uri.fsPath, path.join(dir, path.basename(uri.fsPath)));
+        await this.postInfo();
+        return;
+      }
+      case "removePreview": {
+        if (!root || path.basename(message.name) !== message.name) return;
+        fs.rmSync(path.join(workshopDirFor(root, meta), PREVIEWS_DIR, message.name), { force: true });
+        await this.postInfo();
+        return;
+      }
+      case "setVideos": {
+        if (!root) return;
+        writeVideos(
+          workshopDirFor(root, meta),
+          message.ids.filter((id) => /^[\w-]{6,20}$/.test(id))
+        );
+        await this.postInfo();
+        return;
+      }
+      case "openPreviewsFolder": {
+        if (!root) return;
+        const dir = path.join(workshopDirFor(root, meta), PREVIEWS_DIR);
+        fs.mkdirSync(dir, { recursive: true });
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+        return;
+      }
     }
   }
 
@@ -322,8 +448,8 @@ export class WorkshopPanel {
         detail:
           `It would land at ${dir}, in the folder where every installed mod lives. ` +
           `Any other mod in that folder resolves its default workshop location to the same place, ` +
-          `so listings can overwrite each other. Recommended: keep the mod in its own project folder ` +
-          `with the listing next to it, or point px.workshop.dir somewhere outside the game's mod folder.`,
+          `so listings can overwrite each other. Clear px.workshop.dir so the listing lives inside the mod ` +
+          `(.px-toolkit/workshop), or point it somewhere outside the game's mod folder.`,
       },
       "Create Anyway"
     );
@@ -488,6 +614,10 @@ export class WorkshopPanel {
       }
       writeListingFiles(dir, { description: item.description, translations });
       upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
+      writeDependencies(dir, { apps: item.appDependencies, items: item.children });
+      // Type 1 = YouTube video. Images stay on Steam: pulling would download them.
+      const videos = item.additionalPreviews.filter((p) => p.type === 1).map((p) => p.urlOrVideoId);
+      if (videos.length) writeVideos(dir, videos);
       const n = Object.keys(translations).length;
       this.notify(`Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`);
     } catch (e) {
@@ -542,6 +672,7 @@ export class WorkshopPanel {
     let staging: string | null = null;
     try {
       let needsAgreement = false;
+      const createdNow = !itemId;
       if (!itemId) {
         this.post({ type: "uploadState", busy: true, message: "creating the Workshop item…" });
         const created = await runBridge(this.context, { action: "create", appId: meta.steamAppId }, log);
@@ -554,10 +685,43 @@ export class WorkshopPanel {
         log(`workshop: created item ${itemId} for ${root}`);
       }
 
+      // One query serves the preview replacement and the requirement diff;
+      // a just-created item has nothing on Steam yet.
+      const wsDir = workshopDirFor(root, meta);
+      const previews = message.details ? readPreviews(wsDir) : null;
+      const deps = message.details ? readDependencies(wsDir) : null;
+      const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
+
       const submits: SubmitSpec[] = [];
       if (message.content || message.details) {
         const main: SubmitSpec = {};
         if (message.details) {
+          // Version stamps on the item, for tools that compare listings without downloading.
+          main.keyValueTags = Object.fromEntries(
+            Object.entries({
+              px_version: info.version ?? "",
+              px_supported_version: info.supportedVersion ?? "",
+              px_game: meta.id,
+            }).filter(([, v]) => v !== "")
+          );
+          main.metadata = JSON.stringify({
+            version: info.version,
+            supportedVersion: info.supportedVersion,
+            game: meta.id,
+            tool: "px-toolkit",
+          });
+          if (previews) {
+            const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
+            if (small.length < previews.images.length)
+              this.notify(
+                `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
+                "warn"
+              );
+            main.previewImages = small;
+            main.previewVideos = previews.videos;
+            const count = liveItem?.additionalPreviews.length ?? 0;
+            main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
+          }
           main.title = info.name ?? undefined;
           main.description = info.description ?? undefined;
           if (info.tags.length) main.tags = info.tags;
@@ -606,6 +770,30 @@ export class WorkshopPanel {
       if (done.action !== "publish") throw new Error("unexpected bridge reply");
       needsAgreement = needsAgreement || done.needsToAcceptAgreement;
       log(`workshop: uploaded ${root} to item ${itemId} (${submits.length} submit(s))`);
+
+      if (deps && !createdNow && !liveItem) {
+        this.notify(
+          "Steam did not answer the requirements query, so the item's requirements were left as they are.",
+          "warn"
+        );
+      } else if (deps) {
+        const liveApps = liveItem?.appDependencies ?? [];
+        const liveItems = liveItem?.children ?? [];
+        const job = {
+          action: "setDependencies" as const,
+          appId: meta.steamAppId,
+          itemId,
+          addApps: deps.apps.filter((a) => !liveApps.includes(a)),
+          removeApps: liveApps.filter((a) => !deps.apps.includes(a)),
+          addItems: deps.items.filter((i) => !liveItems.includes(i)),
+          removeItems: liveItems.filter((i) => !deps.items.includes(i)),
+        };
+        if (job.addApps.length || job.removeApps.length || job.addItems.length || job.removeItems.length) {
+          this.post({ type: "uploadState", busy: true, message: "updating requirements…" });
+          await runBridge(this.context, job, log);
+          log(`workshop: requirements of ${itemId} updated`);
+        }
+      }
 
       if (needsAgreement) {
         void vscode.window

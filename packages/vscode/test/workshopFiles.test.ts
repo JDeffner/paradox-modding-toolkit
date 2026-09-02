@@ -12,11 +12,15 @@ import {
   hasListingFiles,
   mdToBBCode,
   readItemJson,
+  readDependencies,
   readListingFiles,
+  readPreviews,
   resolveChangeNote,
   resolveWorkshopDir,
   upsertItemJson,
+  writeDependencies,
   writeListingFiles,
+  writeVideos,
 } from "../src/steam/workshopFiles";
 
 const tmps: string[] = [];
@@ -91,6 +95,37 @@ describe("listing files", () => {
     fs.writeFileSync(path.join(dir, "item.json"), JSON.stringify({ custom: 1, title: "Old" }), "utf8");
     upsertItemJson(dir, { title: "New", publishedfileid: "42" });
     expect(readItemJson(dir)).toEqual({ custom: 1, title: "New", publishedfileid: "42" });
+  });
+});
+
+describe("previews and dependencies", () => {
+  it("reads the previews folder in file-name order, or null without one", () => {
+    const dir = tmp();
+    expect(readPreviews(dir)).toBeNull();
+    const previews = path.join(dir, "previews");
+    fs.mkdirSync(previews);
+    for (const f of ["10.png", "2.jpg", "notes.txt", "x.PNG"]) fs.writeFileSync(path.join(previews, f), "");
+    fs.writeFileSync(path.join(previews, "videos.txt"), "# comment\nabc123def\n\nxyz789ghi\n");
+    const got = readPreviews(dir)!;
+    expect(got.images.map((p) => path.basename(p))).toEqual(["2.jpg", "10.png", "x.PNG"]);
+    expect(got.videos).toEqual(["abc123def", "xyz789ghi"]);
+  });
+
+  it("writes and clears videos.txt", () => {
+    const dir = tmp();
+    writeVideos(dir, ["abc123def"]);
+    expect(readPreviews(dir)!.videos).toEqual(["abc123def"]);
+    writeVideos(dir, []);
+    expect(fs.existsSync(path.join(dir, "previews", "videos.txt"))).toBe(false);
+  });
+
+  it("round-trips dependencies.json and drops malformed entries", () => {
+    const dir = tmp();
+    expect(readDependencies(dir)).toBeNull();
+    writeDependencies(dir, { apps: [1158310], items: ["123"] });
+    expect(readDependencies(dir)).toEqual({ apps: [1158310], items: ["123"] });
+    fs.writeFileSync(path.join(dir, "dependencies.json"), JSON.stringify({ apps: [1, "x"], items: ["9", "no"] }));
+    expect(readDependencies(dir)).toEqual({ apps: [1], items: ["9"] });
   });
 });
 

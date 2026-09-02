@@ -84,6 +84,9 @@ function toDetails(item: WorkshopItem): ItemDetails {
     numFavorites: stat("numFavorites"),
     numUniqueWebsiteViews: stat("numUniqueWebsiteViews"),
     numComments: stat("numComments"),
+    appDependencies: [],
+    children: item.children.map((c) => c.toString()),
+    additionalPreviews: item.additionalPreviews,
   };
 }
 
@@ -106,6 +109,11 @@ function submitOnce(
         tags: spec.tags,
         visibility: spec.visibility,
         language: spec.language,
+        metadata: spec.metadata,
+        keyValueTags: spec.keyValueTags,
+        previewImages: spec.previewImages,
+        previewVideos: spec.previewVideos,
+        removePreviewIndexes: spec.removePreviewIndexes,
       },
       {
         appId,
@@ -136,6 +144,7 @@ async function main(): Promise<void> {
       if (s.contentPath && !existsSync(s.contentPath))
         fail(`content folder does not exist: ${s.contentPath}`);
       if (s.previewPath && !existsSync(s.previewPath)) fail(`preview image does not exist: ${s.previewPath}`);
+      for (const p of s.previewImages ?? []) if (!existsSync(p)) fail(`preview image does not exist: ${p}`);
     }
     if (job.submits.length === 0) fail("publish job carries no submits");
   }
@@ -191,7 +200,16 @@ async function main(): Promise<void> {
     }
     case "query": {
       try {
-        const item = await steam.workshop.getItem(BigInt(job.itemId), { longDescription: true });
+        const item = await steam.workshop.getItem(BigInt(job.itemId), {
+          longDescription: true,
+          children: true,
+          additionalPreviews: true,
+        });
+        // Required DLC is its own call; an item with none answers fine, so a
+        // failure here is Steam's, not a missing feature.
+        const appDependencies = item
+          ? await steam.workshop.getAppDependencies(item.fileId).catch(() => [])
+          : [];
         const translations: Record<string, { title: string; description: string }> = {};
         for (const language of job.languages ?? []) {
           const t = await steam.workshop.getItem(BigInt(job.itemId), {
@@ -200,9 +218,30 @@ async function main(): Promise<void> {
           });
           if (t) translations[language] = { title: t.title, description: t.description };
         }
-        done({ action: "query", item: item ? toDetails(item) : null, translations });
+        done({ action: "query", item: item ? { ...toDetails(item), appDependencies } : null, translations });
       } catch (e) {
         fail(`reading the Workshop item failed: ${errText(e)}`);
+      }
+      break;
+    }
+    case "dlc": {
+      try {
+        done({ action: "dlc", dlc: steam.dlc.listDlc() });
+      } catch (e) {
+        fail(`reading the DLC list failed: ${errText(e)}`);
+      }
+      break;
+    }
+    case "setDependencies": {
+      const itemId = BigInt(job.itemId);
+      try {
+        for (const app of job.removeApps) await steam.workshop.removeAppDependency(itemId, app);
+        for (const app of job.addApps) await steam.workshop.addAppDependency(itemId, app);
+        for (const child of job.removeItems) await steam.workshop.removeDependency(itemId, BigInt(child));
+        for (const child of job.addItems) await steam.workshop.addDependency(itemId, BigInt(child));
+        done({ action: "setDependencies", itemId: job.itemId });
+      } catch (e) {
+        fail(`updating the item's requirements failed: ${errText(e)}`);
       }
       break;
     }

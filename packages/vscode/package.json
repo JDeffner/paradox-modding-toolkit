@@ -1505,7 +1505,7 @@
   },
   "dependencies": {
     "ignore": "7.0.5",
-    "steamwand.js": "^0.2.1",
+    "steamwand.js": "^0.4.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",
