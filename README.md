@@ -16,6 +16,7 @@ localization workflow no other tool has.
 [![VS Code extension](https://img.shields.io/badge/VS%20Code-Paradox%20Modding%20Toolkit-007ACC.svg?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
 [![npm @px-lsp/server](https://img.shields.io/npm/v/@px-lsp/server?logo=npm&label=%40px-lsp%2Fserver)](https://www.npmjs.com/package/@px-lsp/server)
 ![Editor agnostic](https://img.shields.io/badge/also-any%20LSP%20client-brightgreen.svg)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/DfEJ2H9hj4)
 
 [Install](#install) · [What you get](#what-you-get) ·
 [Outside VS Code](#not-just-vs-code) · [Repo layout](#repo-layout) ·
