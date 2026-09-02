@@ -181,7 +181,9 @@ async function main(): Promise<void> {
           needsAgreement = needsAgreement || r.needsToAcceptAgreement;
         } catch (e) {
           const lang = job.submits[i].language;
-          fail(`${lang ? `uploading the ${lang} translation` : "upload"} failed: ${errText(e)}`);
+          // No prefix for the main submit: every caller already says an
+          // upload failed, and "upload failed - upload failed:" reads badly.
+          fail(lang ? `uploading the ${lang} translation failed: ${errText(e)}` : errText(e));
         }
       }
       done({ action: "publish", itemId: job.itemId, needsToAcceptAgreement: needsAgreement });

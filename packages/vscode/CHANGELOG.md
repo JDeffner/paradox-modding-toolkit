@@ -214,11 +214,15 @@ release these notes belong to.
   VS Code notification and a line in the output channel, so it reaches you
   even after you switch away from the Workshop tab, and errors stay
   readable instead of fading like the old in-panel toasts (which are gone).
-  Steam's bare error phrases carry advice now: "limit exceeded" says the
-  description is over Steam's 8000-character cap, "access denied" points at
-  the logged-in account not owning the item, and so on. An oversized
-  preview image is announced when the upload keeps the current one, instead
-  of being dropped in silence.
+  Steam's raw codes are rewritten as advice: `k_EResultLimitExceeded` says a
+  field is over Steam's limit (8000 characters for the description, 128 for
+  the title), `k_EResultAccessDenied` points at the logged-in account not
+  owning the item, and about thirty codes in all say what to do next. The
+  Steamworks operation and code stay in parentheses, so a support thread
+  still has the exact failure. A value Steam refuses outright is named
+  ("Steam rejected the preview image") instead of surfacing as a bare
+  "returned false". An oversized preview image is announced when the upload
+  keeps the current one, instead of being dropped in silence.
 
 - **The changenote box explains itself.** A source dropdown under it shows
   where the text came from - "From changelog: 1.2.md", "From last git
