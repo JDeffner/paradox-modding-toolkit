@@ -671,7 +671,6 @@ function wireGalleryDrag(gallery: HTMLElement): void {
           ghost.style.height = `${r.height}px`;
           gallery.append(ghost);
           tile.classList.add("placeholder");
-          tile.setPointerCapture(down.pointerId);
         }
         ghost.style.left = `${e.clientX - offset.x}px`;
         ghost.style.top = `${e.clientY - offset.y}px`;
@@ -692,9 +691,9 @@ function wireGalleryDrag(gallery: HTMLElement): void {
         flip(() => gallery.insertBefore(tile, target));
       };
       const onUp = (): void => {
-        tile.removeEventListener("pointermove", onMove);
-        tile.removeEventListener("pointerup", onUp);
-        tile.removeEventListener("pointercancel", onUp);
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
         if (!ghost) return;
         ghost.remove();
         tile.classList.remove("placeholder");
@@ -704,9 +703,12 @@ function wireGalleryDrag(gallery: HTMLElement): void {
           .filter(Boolean);
         if (names.join("\n") !== before.join("\n")) send({ type: "reorderPreviews", names });
       };
-      tile.addEventListener("pointermove", onMove);
-      tile.addEventListener("pointerup", onUp);
-      tile.addEventListener("pointercancel", onUp);
+      // On the document, not the tile: insertBefore re-inserts the tile on
+      // every slot change, and a re-inserted node loses its pointer capture,
+      // which froze the drag as soon as it passed one slot.
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onUp);
     });
   }
 }
@@ -908,6 +910,7 @@ function renderPublish(): void {
   const owned: [string, string][] = [
     ["incContent", "modFilesSection"],
     ["incDetails", "itemSection"],
+    ["incPreviews", "previewsSection"],
     ["incLangs", "translationsSection"],
     ["incNote", "noteSection"],
   ];
@@ -916,6 +919,7 @@ function renderPublish(): void {
   const sends: string[] = [];
   if ($<HTMLInputElement>("incContent").checked) sends.push("mod files");
   if ($<HTMLInputElement>("incDetails").checked) sends.push("details");
+  if ($<HTMLInputElement>("incPreviews").checked) sends.push("previews");
   if (on.length) sends.push(`${on.length} translation${on.length === 1 ? "" : "s"}`);
   if ($<HTMLInputElement>("incNote").checked && $<HTMLTextAreaElement>("note").value.trim())
     sends.push("changenote");
@@ -931,7 +935,7 @@ function renderPublish(): void {
 }
 $<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 
-for (const id of ["incContent", "incDetails", "incLangs", "incNote"]) {
+for (const id of ["incContent", "incDetails", "incPreviews", "incLangs", "incNote"]) {
   $(id).addEventListener("change", renderPublish);
 }
 // The per-language switches fold away: nine rows is the exception you open,
@@ -952,7 +956,8 @@ $("enableAllNo").addEventListener("click", () => {
 $("enableAllYes").addEventListener("click", () => {
   $("enableAllConfirm").hidden = true;
   $<HTMLButtonElement>("enableAll").disabled = false;
-  for (const id of ["incContent", "incDetails", "incNote"]) $<HTMLInputElement>(id).checked = true;
+  for (const id of ["incContent", "incDetails", "incPreviews", "incNote"])
+    $<HTMLInputElement>(id).checked = true;
   $<HTMLInputElement>("incLangs").checked = uploadableLanguages().length > 0;
   langsOff.clear();
   renderPublish();
@@ -1165,6 +1170,7 @@ $("upload").addEventListener(
       // Mirror the modal's last word back into the Publish switches.
       $<HTMLInputElement>("incContent").checked = picked.content;
       $<HTMLInputElement>("incDetails").checked = picked.details;
+      $<HTMLInputElement>("incPreviews").checked = picked.previews;
       $<HTMLInputElement>("incLangs").checked = picked.languages.length > 0;
       renderPublish();
       flushSave();
@@ -1172,6 +1178,7 @@ $("upload").addEventListener(
         type: "upload",
         content: picked.content,
         details: picked.details,
+        previews: picked.previews,
         languages: picked.languages,
         changeNote: $<HTMLInputElement>("incNote").checked ? $<HTMLTextAreaElement>("note").value : "",
         visibility: picked.details ? pickedVisibility : null,
@@ -1182,6 +1189,7 @@ $("upload").addEventListener(
 interface UploadChoice {
   content: boolean;
   details: boolean;
+  previews: boolean;
   languages: string[];
 }
 
@@ -1234,6 +1242,13 @@ async function uploadModal(): Promise<UploadChoice | null> {
     "Details",
     "title, description, visibility, tags, preview image"
   );
+  const previews = row(
+    "previews",
+    $<HTMLInputElement>("incPreviews").checked,
+    false,
+    "Previews",
+    "the gallery images and videos, replacing the item's gallery"
+  );
   const translations = row(
     "translations",
     langs.length > 0,
@@ -1275,9 +1290,10 @@ async function uploadModal(): Promise<UploadChoice | null> {
   const choice: UploadChoice = {
     content: content.checked,
     details: details.checked,
+    previews: previews.checked,
     languages: translations.checked ? langs : [],
   };
-  if (!choice.content && !choice.details && !choice.languages.length) {
+  if (!choice.content && !choice.details && !choice.previews && !choice.languages.length) {
     send({ type: "notify", message: "Nothing was checked - upload skipped.", warn: true });
     return null;
   }

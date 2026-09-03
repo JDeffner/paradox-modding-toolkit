@@ -334,6 +334,8 @@ ${BBPREV_CSS}
     <div class="section" id="previewsSection">
       <div class="px-panel-title">Previews
         <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload the gallery: the images and videos below replace the item's gallery on Steam. The thumbnail belongs to Details." data-tip-wrap data-tip-side="left">Previews <span class="px-switch"><input id="incPreviews" type="checkbox" checked /><span></span></span></label>
         <button id="previewsHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How previews work" data-tip="How previews work" data-tip-side="left">${icon("circleHelp")}</button>
       </div>
       <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>

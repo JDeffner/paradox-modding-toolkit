@@ -958,6 +958,7 @@ export class WorkshopPanel {
     if (!itemId) steps.push("Create item");
     if (message.content) steps.push("Mod files");
     if (message.details) steps.push("Details");
+    if (message.previews) steps.push("Previews");
     if (message.languages.length) steps.push("Translations");
     const stepOf = (name: string): number => Math.max(0, steps.indexOf(name));
     const step = (name: string, detail: string): void =>
@@ -983,14 +984,27 @@ export class WorkshopPanel {
       // One query serves the preview replacement and the requirement diff;
       // a just-created item has nothing on Steam yet.
       const wsDir = workshopDirFor(root, meta);
-      const previews = message.details ? readPreviews(wsDir) : null;
+      const previews = message.previews ? readPreviews(wsDir) : null;
       const deps = message.details ? readDependencies(wsDir) : null;
       if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
 
       const submits: SubmitSpec[] = [];
-      if (message.content || message.details) {
+      if (message.content || message.details || message.previews) {
         const main: SubmitSpec = {};
+        if (message.previews && previews) {
+          step("Previews", "listing the gallery…");
+          const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
+          if (small.length < previews.images.length)
+            this.notify(
+              `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
+              "warn"
+            );
+          main.previewImages = small;
+          main.previewVideos = previews.videos;
+          const count = liveItem?.additionalPreviews.length ?? 0;
+          main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
+        }
         if (message.details) {
           // Version stamps on the item, for tools that compare listings without downloading.
           main.keyValueTags = Object.fromEntries(
@@ -1006,18 +1020,6 @@ export class WorkshopPanel {
             game: meta.id,
             tool: "px-toolkit",
           });
-          if (previews) {
-            const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
-            if (small.length < previews.images.length)
-              this.notify(
-                `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
-                "warn"
-              );
-            main.previewImages = small;
-            main.previewVideos = previews.videos;
-            const count = liveItem?.additionalPreviews.length ?? 0;
-            main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
-          }
           main.title = info.name ?? undefined;
           main.description = info.description ?? "";
           if (info.tags.length) main.tags = info.tags;
@@ -1040,7 +1042,6 @@ export class WorkshopPanel {
           stageContent(root, staging, [workshopDirFor(root, meta)]);
           main.contentPath = staging;
         }
-        if (message.changeNote.trim()) main.changeNote = message.changeNote.trim();
         submits.push(main);
       }
       submits.push(
@@ -1052,6 +1053,10 @@ export class WorkshopPanel {
         this.notify("Nothing to upload.", "warn");
         return;
       }
+      // The note rides on the LAST submit: Steam's "Update:" entry shows the
+      // newest submit's note, so a note on the main submit vanished behind
+      // the translation submits that followed it.
+      if (message.changeNote.trim()) submits[submits.length - 1].changeNote = message.changeNote.trim();
 
       const done = await runBridge(
         this.context,

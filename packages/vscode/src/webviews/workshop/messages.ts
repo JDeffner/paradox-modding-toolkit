@@ -169,6 +169,8 @@ export type AppToHost =
       type: "upload";
       content: boolean;
       details: boolean;
+      /** The gallery (images + videos), separate from the details and the thumbnail. */
+      previews: boolean;
       languages: string[];
       changeNote: string;
       visibility: WorkshopVisibility | null;
