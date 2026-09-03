@@ -243,11 +243,53 @@ function renderContext(): Parameters<typeof renderFlag>[3] {
   };
 }
 
+/**
+ * The game's mask textures carry the shape in their color channels (white =
+ * arms, black = frame), not in alpha, so a mask decoded to PNG is opaque
+ * everywhere and `destination-in` would keep every pixel. This turns its
+ * brightness into alpha once per mask.
+ */
+const alphaMasks = new Map<string, HTMLCanvasElement>();
+function alphaMask(key: string, img: HTMLImageElement): HTMLCanvasElement {
+  const hit = alphaMasks.get(key);
+  if (hit) return hit;
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const cctx = c.getContext("2d", { willReadFrequently: true })!;
+  cctx.drawImage(img, 0, 0);
+  const data = cctx.getImageData(0, 0, c.width, c.height);
+  const d = data.data;
+  for (let o = 0; o < d.length; o += 4) {
+    d[o + 3] = Math.round((Math.max(d[o], d[o + 1], d[o + 2]) * d[o + 3]) / 255);
+  }
+  cctx.putImageData(data, 0, 0);
+  alphaMasks.set(key, c);
+  return c;
+}
+
+/**
+ * Where the arms sit on the canvas. The game insets the arms inside a frame
+ * by the ratio of the two textures (title_mask.dds is 88 px, title_86.dds is
+ * 96 px, measured on 1.19), so a frame whose mask is smaller than itself
+ * pulls the arms in by that ratio; every mapping between pointer, selection
+ * outline and pixels goes through this one rect.
+ */
+function armsRect(): { x: number; y: number; w: number; h: number } {
+  const mask = frameId ? images.get(`masks/${frameId}`) : null;
+  const frame = frameId ? images.get(`frames/${frameId}`) : null;
+  const ratio =
+    mask && frame && frame.naturalWidth > mask.naturalWidth ? mask.naturalWidth / frame.naturalWidth : 1;
+  const w = canvas.width * ratio;
+  const h = canvas.height * ratio;
+  return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+}
+
 /** `overlay` = false for the PNG export: the outline is a tool, not the arms. */
 function draw(overlay = true): void {
   if (!db) return;
   const ctx = canvas.getContext("2d")!;
-  const rect = { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  const rect = armsRect();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
@@ -267,7 +309,7 @@ function draw(overlay = true): void {
     sctx.clearRect(0, 0, scratch.width, scratch.height);
     complete = renderFlag(sctx, flag, rect, renderContext());
     sctx.globalCompositeOperation = "destination-in";
-    sctx.drawImage(mask, 0, 0, scratch.width, scratch.height);
+    sctx.drawImage(alphaMask(`masks/${frameId}`, mask), rect.x, rect.y, rect.w, rect.h);
     sctx.globalCompositeOperation = "source-over";
     ctx.drawImage(scratch, 0, 0);
     if (frame) ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
@@ -287,7 +329,8 @@ function paintSelection(ctx: CanvasRenderingContext2D): void {
   const box = boxOf(layer, picked.instance);
   const screen = canvas.getBoundingClientRect();
   const f = screen.width ? screen.width / canvas.width : 1;
-  const points = corners(box).map((p) => [p.x * canvas.width, p.y * canvas.height] as const);
+  const arms = armsRect();
+  const points = corners(box).map((p) => [arms.x + p.x * arms.w, arms.y + p.y * arms.h] as const);
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(points[0][0], points[0][1]);
@@ -648,7 +691,11 @@ function renderBackground(): void {
       "sm"
     );
     grid.style.removeProperty("--cols");
-    grid.append(note, back);
+    // One full-width cell: the grid's columns are for pattern tiles, and the
+    // note must not wrap inside one of them.
+    const wrap = el("div", "adjustedNote");
+    wrap.append(note, back);
+    grid.append(wrap);
     return;
   }
   for (const entry of cat.patterns) {
@@ -1354,12 +1401,17 @@ stage.addEventListener("pointerdown", (down) => {
 
 function unitAt(e: PointerEvent): [number, number] {
   const r = canvas.getBoundingClientRect();
-  return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  const arms = armsRect();
+  const px = ((e.clientX - r.left) / r.width) * canvas.width;
+  const py = ((e.clientY - r.top) / r.height) * canvas.height;
+  return [(px - arms.x) / arms.w, (py - arms.y) / arms.h];
 }
 
 function handleTolerance(): [number, number] {
   const r = canvas.getBoundingClientRect();
-  return [HANDLE_SIZE / 2 / r.width, HANDLE_SIZE / 2 / r.height];
+  const arms = armsRect();
+  const scale = r.width ? r.width / canvas.width : 1;
+  return [HANDLE_SIZE / 2 / (arms.w * scale), HANDLE_SIZE / 2 / (arms.h * scale)];
 }
 
 function cornerUnder(u: number, v: number): Corner | null {

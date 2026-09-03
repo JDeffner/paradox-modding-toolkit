@@ -107,6 +107,7 @@ ${uiCss}
   .check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--px-text-sm); }
   #layerList .px-item .px-item-tools { gap: 2px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .adjustedNote { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 </style>
 </head>
 <body>
