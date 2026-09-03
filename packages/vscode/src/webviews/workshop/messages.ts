@@ -72,15 +72,13 @@ export interface WorkshopModInfo {
   dependencies: { apps: number[]; items: string[] } | null;
   /** Installed Workshop mods the required-items picker offers first. */
   dependencyCandidates: { itemId: string; label: string; declared: boolean }[];
-  /** `<workshopDir>/links.json`: rendered as a block at the end of the description on upload. */
-  links: { label: string; url: string }[];
 }
 
 /** What a download from Steam writes into the listing folder; mirrors the publish parts. */
 export interface PullParts {
   /** item.json: title, tags, visibility, id. */
   details: boolean;
-  /** description.bbcode (and links.json from its trailing links block). */
+  /** description.bbcode. */
   description: boolean;
   /** translations/<lang>/ for every language whose text differs from the default. */
   translations: boolean;
@@ -160,8 +158,6 @@ export type AppToHost =
   | { type: "pullListing"; parts: PullParts }
   /** Write previews/order.txt (bare file names, gallery order). */
   | { type: "reorderPreviews"; names: string[] }
-  /** Write links.json. */
-  | { type: "setLinks"; links: { label: string; url: string }[] }
   /** Ask the Steam client for the game's DLC list. */
   | { type: "loadDlc" }
   /** Write dependencies.json (required DLC app ids, required Workshop item ids). */

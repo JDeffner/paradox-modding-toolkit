@@ -21,8 +21,8 @@
   box, so text and icons share one inset.
 
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
-  Publish first, then Previews and Requirements, then Links; the description
-  and the translations follow at full width. A step strip under the toolbar
+  Publish first, then Previews and Requirements; the description and the
+  translations follow at full width. A step strip under the toolbar
   names each stage of an upload or download and shows the percent of the one
   in flight.
 - **Download picks its parts.** The toolbar's download button now asks which
@@ -31,11 +31,8 @@
   the gallery images and videos, the requirements, the main preview image.
 - **Previews reorder by drag and drop.** The order is saved to
   `previews/order.txt`; files not listed follow by name.
-- **Links.** Steam has no link field, so the panel keeps `links.json` next to
-  the listing and appends a Links block at the end of the description on
-  upload; a download takes the block back apart.
 - **Translations moved into `translations/`.** The listing folder keeps
-  `description.bbcode`, `item.json`, `links.json` and `dependencies.json` at
+  `description.bbcode`, `item.json` and `dependencies.json` at
   its root; each language lives in `translations/<language>/`. Old root
   language folders are still read and move on the next save.
 - **Required DLC and required items in the Workshop panel.** A Requirements

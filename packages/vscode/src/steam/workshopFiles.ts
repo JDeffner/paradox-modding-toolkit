@@ -6,7 +6,6 @@
  *   <workshopDir>/
  *     item.json                    {"title": "...", "publishedfileid": "..."}
  *     description.bbcode           default-language description
- *     links.json                   links rendered as a block at the end of the description
  *     translations/<steamlang>/title.txt        localized title (optional)
  *     translations/<steamlang>/description.bbcode
  *     previews/                    extra preview images, videos.txt, order.txt
@@ -271,76 +270,6 @@ export function writeVideos(workshopDir: string, ids: string[]): void {
     return;
   }
   fs.writeFileSync(file, ids.join("\n") + "\n", "utf8");
-}
-
-// ---------------------------------------------------------------------------
-// Links: Steam has no link field, so they render as a block at the end of the
-// description. The block is recognizable, so an upload replaces it and a pull
-// takes it back apart.
-// ---------------------------------------------------------------------------
-
-export const LINKS_FILE = "links.json";
-const LINKS_HEAD = "[h2]Links[/h2]";
-
-export interface Link {
-  label: string;
-  url: string;
-}
-
-const isHttp = (u: string): boolean => /^https?:\/\/\S+$/i.test(u);
-
-/** `<workshopDir>/links.json`, or none. */
-export function readLinks(workshopDir: string): Link[] {
-  try {
-    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, LINKS_FILE), "utf8")) as unknown;
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((l): l is Link => typeof l?.url === "string" && isHttp(l.url))
-      .map((l) => ({ label: typeof l.label === "string" ? l.label : "", url: l.url }));
-  } catch {
-    return [];
-  }
-}
-
-export function writeLinks(workshopDir: string, links: Link[]): void {
-  const file = path.join(workshopDir, LINKS_FILE);
-  const kept = links.filter((l) => isHttp(l.url));
-  if (kept.length === 0) {
-    fs.rmSync(file, { force: true });
-    return;
-  }
-  fs.mkdirSync(workshopDir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(kept, null, 2) + "\n", "utf8");
-}
-
-/** The description without its trailing links block. */
-export function stripLinksBlock(description: string): string {
-  const at = description.lastIndexOf(LINKS_HEAD);
-  if (at < 0) return description;
-  // Only a block that runs to the end is ours; a heading mid-text is the author's.
-  const tail = description.slice(at + LINKS_HEAD.length);
-  if (!/^\s*\[list\][\s\S]*\[\/list\]\s*$/.test(tail)) return description;
-  return description.slice(0, at).replace(/\s+$/, "");
-}
-
-/** The description with `links` rendered as its trailing block (or none). */
-export function withLinksBlock(description: string, links: Link[]): string {
-  const base = stripLinksBlock(description);
-  const kept = links.filter((l) => isHttp(l.url));
-  if (kept.length === 0) return base;
-  const items = kept.map((l) => `[*] [url=${l.url}]${l.label.trim() || l.url}[/url]`).join("\n");
-  return `${base}${base.trim() === "" ? "" : "\n\n"}${LINKS_HEAD}\n[list]\n${items}\n[/list]`;
-}
-
-/** The links a trailing block carries, so a pulled description round-trips into links.json. */
-export function parseLinksBlock(description: string): Link[] {
-  const at = description.lastIndexOf(LINKS_HEAD);
-  if (at < 0 || stripLinksBlock(description) === description) return [];
-  const out: Link[] = [];
-  for (const m of description.slice(at).matchAll(/\[url=([^\]]+)\]([^[]*)\[\/url\]/g)) {
-    if (isHttp(m[1])) out.push({ label: m[2].trim(), url: m[1] });
-  }
-  return out;
 }
 
 export interface Dependencies {

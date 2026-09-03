@@ -24,17 +24,12 @@ import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
   hasListingFiles,
   langDir,
-  parseLinksBlock,
   PREVIEWS_DIR,
   readDependencies,
   readItemJson,
-  readLinks,
   readPreviews,
-  stripLinksBlock,
   upsertItemJson,
-  withLinksBlock,
   writeDependencies,
-  writeLinks,
   writeListingFiles,
   writePreviewOrder,
   writeVideos,
@@ -288,7 +283,6 @@ export class WorkshopPanel {
       previews: this.previewsInfo(workshopDir),
       dependencies: readDependencies(workshopDir),
       dependencyCandidates: this.dependencyCandidates(root),
-      links: readLinks(workshopDir),
     };
   }
 
@@ -403,15 +397,6 @@ export class WorkshopPanel {
         writePreviewOrder(
           workshopDirFor(root, meta),
           message.names.filter((n) => path.basename(n) === n)
-        );
-        await this.postInfo();
-        return;
-      }
-      case "setLinks": {
-        if (!root) return;
-        writeLinks(
-          workshopDirFor(root, meta),
-          message.links.map((l) => ({ label: String(l.label ?? ""), url: String(l.url ?? "") }))
         );
         await this.postInfo();
         return;
@@ -700,9 +685,7 @@ export class WorkshopPanel {
         }
         let description = current?.description ?? "";
         if (parts.description) {
-          description = stripLinksBlock(item.description);
-          const links = parseLinksBlock(item.description);
-          if (links.length) writeLinks(dir, links);
+          description = item.description;
           wrote.push("description.bbcode");
         }
         writeListingFiles(dir, { description, translations });
@@ -861,7 +844,7 @@ export class WorkshopPanel {
             main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
           }
           main.title = info.name ?? undefined;
-          main.description = withLinksBlock(info.description ?? "", readLinks(wsDir));
+          main.description = info.description ?? "";
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;

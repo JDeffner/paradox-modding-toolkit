@@ -158,8 +158,6 @@ ${BBPREV_CSS}
   .gallery .tile.dragging { opacity: 0.4; }
   .gallery .tile.drop-before { box-shadow: -3px 0 0 var(--px-primary); }
   .gallery .tile.drop-after { box-shadow: 3px 0 0 var(--px-primary); }
-  .link-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 6px; align-items: center; }
-  .link-row .px-input { width: 100%; }
   .check-row { display: flex; align-items: flex-start; gap: 6px; font-size: var(--px-text-xs); padding: 2px 0; }
   .check-row[data-level="error"] { color: var(--px-destructive); }
   .check-row[data-level="warn"] { color: var(--px-muted-fg); }
@@ -294,14 +292,6 @@ ${BBPREV_CSS}
         <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link" style="width:220px" />
       </div>
     </div>
-    <div class="section" id="linksSection">
-      <div class="px-panel-title">Links
-        <span class="px-grow"></span>
-        <button id="addLink" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add link</button>
-      </div>
-      <div id="linksHint" class="px-muted px-xs">Steam has no link field: these render as a "Links" block at the end of the description on upload, and a download takes them back apart.</div>
-      <div id="linksBox" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
     <div class="section wide">
       <div class="px-panel-title">Description
         <span class="px-grow"></span>
@@ -313,7 +303,7 @@ ${BBPREV_CSS}
       <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
       <div id="descPreview" class="bbprev" hidden></div>
       <div class="hintline">
-        <span>Saved to description.bbcode as you type; goes to Steam on Upload, with the links below appended as a block.</span>
+        <span>Saved to description.bbcode as you type; goes to Steam on Upload.</span>
         <span class="px-grow"></span>
         <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
         <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>

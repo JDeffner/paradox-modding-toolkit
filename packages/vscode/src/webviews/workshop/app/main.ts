@@ -50,7 +50,6 @@ let busy = false;
 let dlc: DlcEntry[] | null = null;
 let dlcError: string | null = null;
 let dlcLoading = false;
-let linksTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** The visibility the user picked, or null = whatever the item has. */
 let pickedVisibility: WorkshopVisibility | null = null;
@@ -119,7 +118,6 @@ function renderAll(): void {
   renderTranslations();
   renderPreviews();
   renderRequirements();
-  renderLinks();
   renderChecks();
   renderPublish();
 }
@@ -664,63 +662,6 @@ function wireGalleryDrag(gallery: HTMLElement): void {
         .filter(Boolean);
       send({ type: "reorderPreviews", names });
     });
-  }
-}
-
-/** The links rows: label + url, saved to links.json a moment after the last edit. */
-function renderLinks(): void {
-  $("linksSection").style.display = info && !info.descriptorMissing ? "" : "none";
-  if (!info || info.descriptorMissing) return;
-  const box = $("linksBox");
-  if (box.contains(document.activeElement)) return; // typing: leave the rows alone
-  box.replaceChildren();
-  const rows = info.links.map((l) => ({ ...l }));
-  const commit = () => {
-    clearTimeout(linksTimer);
-    linksTimer = setTimeout(
-      () => send({ type: "setLinks", links: rows.filter((l) => l.url.trim() !== "") }),
-      500
-    );
-  };
-  rows.forEach((link, i) => {
-    const row = document.createElement("div");
-    row.className = "link-row";
-    const label = document.createElement("input");
-    label.className = "px-input";
-    label.placeholder = "Label (Discord, GitHub, …)";
-    label.value = link.label;
-    label.addEventListener("input", () => {
-      rows[i].label = label.value;
-      commit();
-    });
-    const url = document.createElement("input");
-    url.className = "px-input";
-    url.placeholder = "https://…";
-    url.value = link.url;
-    url.spellcheck = false;
-    url.addEventListener("input", () => {
-      rows[i].url = url.value;
-      commit();
-    });
-    const rm = document.createElement("button");
-    rm.className = "px-btn";
-    rm.dataset.variant = "ghost";
-    rm.dataset.size = "icon-xs";
-    rm.setAttribute("aria-label", "Remove link");
-    rm.append(iconEl("x"));
-    rm.addEventListener("click", () => {
-      rows.splice(i, 1);
-      clearTimeout(linksTimer);
-      send({ type: "setLinks", links: rows.filter((l) => l.url.trim() !== "") });
-    });
-    row.append(label, url, rm);
-    box.append(row);
-  });
-  if (rows.length === 0) {
-    const none = document.createElement("span");
-    none.className = "px-muted px-xs";
-    none.textContent = "None yet.";
-    box.append(none);
   }
 }
 
@@ -1282,7 +1223,7 @@ $("pull").addEventListener(
       };
       const inputs = [
         part("details", "Details", "title, tags and visibility into item.json"),
-        part("description", "Description", "description.bbcode, links.json from its Links block"),
+        part("description", "Description", "description.bbcode"),
         part("translations", "Translations", "translations/<language>/ for every translated language"),
         part("previews", "Previews", "the gallery images, videos.txt and order.txt into previews/"),
         part("requirements", "Requirements", "dependencies.json"),
@@ -1352,19 +1293,6 @@ commitField("supported", "supportedVersion");
 
 $("changePreview").addEventListener("click", () => send({ type: "pickPreview" }));
 $("addPreviews").addEventListener("click", () => send({ type: "addPreviews" }));
-$("addLink").addEventListener("click", () => {
-  if (!info) return;
-  // Keep what is typed but not yet saved, then add the empty row and focus it.
-  const current = [...$("linksBox").querySelectorAll<HTMLElement>(".link-row")].map((r) => {
-    const [label, url] = r.querySelectorAll("input");
-    return { label: label.value, url: url.value };
-  });
-  info.links = [...current, { label: "", url: "" }];
-  (document.activeElement as HTMLElement | null)?.blur();
-  renderLinks();
-  const inputs = $("linksBox").querySelectorAll<HTMLInputElement>("input");
-  inputs[inputs.length - 2]?.focus();
-});
 $("openPreviews").addEventListener("click", () => send({ type: "openPreviewsFolder" }));
 {
   const videos = $<HTMLInputElement>("videos");
@@ -1460,15 +1388,11 @@ $("helpBtn").addEventListener("click", () =>
         items: [
           {
             lead: "The workshop folder",
-            text: "keeps the listing as files: description.bbcode, links.json, translations/<language>/ with title.txt and description.bbcode, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise.",
+            text: "keeps the listing as files: description.bbcode, translations/<language>/ with title.txt and description.bbcode, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise.",
           },
           {
             lead: "The download button",
             text: "in the toolbar writes the folder from what is on Steam. You pick the parts: details, description, translations, previews, requirements, the preview image. It overwrites those files and your local drafts, so anything never uploaded is lost.",
-          },
-          {
-            lead: "Links",
-            text: "have no field on Steam. The panel keeps them in links.json and appends them as a Links block at the end of the description on upload; a download takes the block back apart.",
           },
           {
             lead: "Reload",
