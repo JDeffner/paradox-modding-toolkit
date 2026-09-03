@@ -95,7 +95,14 @@ describe("visibleActionGroups", () => {
   });
 
   it("keeps working for a game without a tiger", () => {
-    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod", "px.createCoatOfArms"]);
+    // Every row the Create group has for a game without creators: hiding all
+    // of them is what drops the group.
+    const groups = visibleActionGroups(eu5Meta, 0, [
+      "px.newContent",
+      "px.createMod",
+      "px.createCoatOfArms",
+      "px.insertSnippet",
+    ]);
     const ids = commands(groups);
     expect(ids).not.toContain("px.newContent");
     expect(ids).not.toContain("px.tigerCreateBaseline");
@@ -122,6 +129,7 @@ describe("visibleActionGroups", () => {
       "px.createTradition",
       "px.openDynastyTree",
       "px.createCoatOfArms",
+      "px.insertSnippet",
     ]);
     expect(create?.items.map((it) => it.label)).toContain("Trait Creator");
   });
@@ -145,6 +153,7 @@ describe("visibleActionGroups", () => {
       "px.createMod",
       "px.newContent",
       "px.createCoatOfArms",
+      "px.insertSnippet",
     ]);
   });
 

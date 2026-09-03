@@ -1664,6 +1664,57 @@ export interface GuiUseSite {
 }
 
 /**
+ * Request: the code snippets a host can offer for one open script document;
+ * {@link SnippetsParams} -> {@link SnippetsResult}. Answers for OPEN script
+ * documents only (the server reads the client's text, not the disk); a document
+ * it does not know answers with an EMPTY list, never an error.
+ *
+ * Two sources, neither hand-written. The definition and child-block skeletons
+ * are the measured shape of the document folder's own definition kind (at least
+ * half of the game's definitions of that kind carry each key, in the median
+ * order they hold there). The token entries are the block form of the `usage:`
+ * example the game's own script_docs dump ships for an engine trigger or effect,
+ * filtered to the block the cursor sits in.
+ *
+ * Every entry carries BOTH insert forms, exactly like completion does: `snippet`
+ * for a host that expands `${1:…}` tabstops, `plain` for one that does not.
+ */
+export const snippetsRequest = "paradox/snippets";
+export interface SnippetsParams {
+  uri: string;
+  /** 0-based, as in LSP. Decides which engine block templates fit. */
+  position: { line: number; character: number };
+}
+
+/** One offer, ready to insert at the cursor. */
+export interface SnippetItem {
+  /**
+   * Stable id: the definition kind (`event`), the kind and its child block
+   * (`event.option`), or the engine token (`if`). Suitable as a picker key.
+   */
+  id: string;
+  /** Reads as what it inserts: "new event", "option block", "if". */
+  label: string;
+  /** Provenance, with the measurement behind it. */
+  detail: string;
+  /**
+   * `definition` = a whole definition of the document's kind, including the
+   * file header line when the document declares none; `block` = one child block
+   * of that kind; `token` = an engine trigger/effect's own dumped example.
+   */
+  form: "definition" | "block" | "token";
+  /** `${1:…}` tabstop form. */
+  snippet: string;
+  /** The same shape free of `${`, for hosts without snippet expansion. */
+  plain: string;
+}
+
+export interface SnippetsResult {
+  /** Skeletons first (definition, then its child blocks), then engine tokens. */
+  snippets: SnippetItem[];
+}
+
+/**
  * Request: the inferred scope chain at a cursor position;
  * {@link ScopeAtParams} -> {@link ScopeAtResult} | null. Answers for OPEN
  * script documents only (the server reads the client's text, not the disk);

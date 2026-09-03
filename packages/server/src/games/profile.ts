@@ -10,6 +10,7 @@
  */
 import type { CalendarLocSpec } from "@px-lsp/protocol/calendarLoc";
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
+import type { KindSkeleton } from "../schema/skeletons";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 import type { SaveSchema } from "../gui/saveSchema";
@@ -245,6 +246,14 @@ export interface GameProfile extends GameMeta {
    * those entries always win.
    */
   structures?: Record<string, StructureSpec>;
+  /**
+   * Definition skeletons per kind (data/<id>/skeletons.json, harvested by
+   * scripts/build-skeletons.ts): the shape a new definition of the kind takes,
+   * measured over the game's own files. Absent or empty = nobody has measured
+   * this game's vanilla tree, and completion offers no skeleton for it rather
+   * than a shape written from memory.
+   */
+  skeletons?: Record<string, KindSkeleton>;
   /**
    * Definition kinds that declare their own root scope in their body, keyed by
    * kind (scopes/inference.ts). Absent = every kind's root scope comes from the

@@ -154,6 +154,7 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
+| `paradox/snippets` | request | `SnippetsParams` → `SnippetsResult` — the code snippets a host can offer at a cursor: the measured skeleton of the document folder's definition kind (`form: "definition"`, header line included when the document declares none), that kind's child blocks (`form: "block"`), then the engine triggers/effects legal in the cursor's block whose script_docs entry ships a usable `usage:` example (`form: "token"`, frequency-ordered, capped at 60). Every entry carries both a `${1:…}` `snippet` and a `plain` form. A document the server does not know answers with an empty list |
 | `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the value list per trigger a condition builder may offer rows for (`conditions`), the modifier vocabulary, every indexed definition of the kind with its source, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
 | `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). `null` when the active profile names no formats source or no game folder is configured |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
@@ -176,6 +177,18 @@ or iterator with several documented outputs stays ambiguous, and an empty
 array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
+
+`paradox/snippets` answers only from what the game states. A definition
+skeleton carries a key because at least half of the game's own definitions of
+that kind carry it, in the median position it holds there; a value is
+pre-filled only where the key's whole measured vocabulary is small enough to be
+a choice, and is the key's own name as placeholder text otherwise. A kind whose
+definitions share no key at all (a scripted effect's body is whatever the
+effect does) still answers with the wrapper, the measured name shape and the
+file header, and an empty body — that is the honest shape, not an invented one.
+The same skeletons also reach clients that never send this request: they are
+completion items at a file's top level and on a blank line inside a definition
+body, ranked after the block's structure keys.
 
 `paradox/dynastyTree` is one method with two answers, because a family tree
 needs the whole picker before it needs one family. Both come from the game's own
