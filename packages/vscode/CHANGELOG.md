@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **The Flag Builder credits its origin.** The stage's bottom-right corner
+  reads "Ported from PDX Flag Editor by Chris Kaiser" and opens the original
+  project on GitHub; the file origin moved to the left, next to the zoom.
+
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
 - **"Link existing item" is gone from the Workshop panel.** The button let a

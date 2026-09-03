@@ -1415,6 +1415,10 @@ $("png").onclick = () => {
   send({ type: "exportPng", name: flag.name, dataUrl });
 };
 $("togglePanel").onclick = () => panel.toggle();
+$("credit").onclick = (e) => {
+  e.preventDefault();
+  send({ type: "openCredit" });
+};
 $("help").onclick = () =>
   helpDialog({
     title: "Flag Builder",

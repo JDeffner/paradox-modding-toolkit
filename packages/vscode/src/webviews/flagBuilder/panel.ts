@@ -17,7 +17,14 @@ import { parseCoaFile, upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { buildFlagDatabase, locateTexture, type FlagRoot } from "./database";
 import { flagBuilderHtml } from "./html";
-import { THUMB_DIM, type AppToHost, type HostToApp, type TextureKind, type UiState } from "./messages";
+import {
+  FLAG_EDITOR_CREDIT,
+  THUMB_DIM,
+  type AppToHost,
+  type HostToApp,
+  type TextureKind,
+  type UiState,
+} from "./messages";
 
 const BOM = "﻿";
 const UI_KEY = "px.flagBuilder.ui";
@@ -147,6 +154,9 @@ export class FlagBuilderPanel {
         return;
       case "readClipboard":
         this.post({ type: "clipboard", text: await vscode.env.clipboard.readText() });
+        return;
+      case "openCredit":
+        void vscode.env.openExternal(vscode.Uri.parse(FLAG_EDITOR_CREDIT.url));
         return;
       case "paste": {
         const text = await vscode.env.clipboard.readText();
