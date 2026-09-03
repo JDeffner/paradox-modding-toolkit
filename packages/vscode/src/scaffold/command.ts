@@ -59,16 +59,16 @@ async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate
   return pick?.template;
 }
 
-const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
-
 /**
- * The mod prefix this workspace writes with: what the user last typed in this
- * session, else the mod folder's own name. The creators name their files with
- * it too, so both commands produce one naming scheme instead of two.
+ * The prefix a generated file name starts with: what New Content used last in
+ * this session, else the mod folder's own name. Shared so every writer names
+ * its files the way the scaffold flow does.
  */
 export function scaffoldPrefix(cfg: PxConfig): string {
   return lastPrefix ?? (cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod");
 }
+
+const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
 
 async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
   const value = scaffoldPrefix(cfg);

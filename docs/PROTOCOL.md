@@ -149,6 +149,7 @@ instead.
 | `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
+| `paradox/dynastyTree` | request | `DynastyTreeParams` → `DynastyTreeResult` — without `dynasty`, every dynasty the index knows as a picker list (mod entries first, each with its member and house counts); with `dynasty`, that dynasty's houses and members read out of `history/characters`, plus the parents and spouses they name from other dynasties, marked `external` |
 | `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, keyword, scope word, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
@@ -174,6 +175,27 @@ or iterator with several documented outputs stays ambiguous, and an empty
 array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
+
+`paradox/dynastyTree` is one method with two answers, because a family tree
+needs the whole picker before it needs one family. Both come from the game's own
+files: the folders are the ones the active profile's schema maps to the
+`dynasty`, `dynasty_house` and `character` kinds, the members come from the
+character blocks (`name`, `female`, `dynasty` or `dynasty_house`, `father`,
+`mother`, `culture`, `religion`, `trait`, and the dated blocks whose KEY is the
+date of the `birth`, `death` or `add_spouse` inside them), and the display names
+come from the loc index, falling back to the loc key itself rather than
+inventing one. A character reaches its dynasty through its house when it names
+one. `nextCharacterId` and `nextDynastyId` are the largest numeric id seen
+across game and mods plus one, so a client can offer a free id without
+searching. A profile whose schema has no `dynasty` kind answers
+`supported: false` with empty lists, which a client says out loud instead of
+drawing an empty tree.
+
+Answering costs one full read of the character corpus, because the link points
+from a character to its dynasty and never back. The server does that read once
+per index revision: measured on a vanilla CK3 install (71 142 characters in
+17.4 MB), 0.8 s for the first request, 12 ms for the next, and 1 ms for one
+dynasty; the list of 10 338 dynasties is a 2.7 MB answer.
 
 The Examples Wiki is two requests because the shapes differ by orders of
 magnitude. `paradox/exampleWiki` answers the whole catalog as thousands of tiny

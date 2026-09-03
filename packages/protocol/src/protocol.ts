@@ -1789,3 +1789,107 @@ export interface DefinitionEditResult {
   /** One verdict per requested op, in request order; `refused` names why it wrote nothing. */
   ops: { refused?: string }[];
 }
+
+/**
+ * Request: a dynasty as a family tree; {@link DynastyTreeParams} ->
+ * {@link DynastyTreeResult}.
+ *
+ * Two answers behind one method. Without `dynasty` the result is the picker
+ * list: every dynasty the index knows, mod entries first. With `dynasty` it is
+ * that dynasty's houses and members, read out of the game's own
+ * `history/characters` files.
+ *
+ * Everything is DERIVED: the folders come from the active profile's schema
+ * (`dynasty`, `dynasty_house`, `character` kinds), the members from the
+ * character blocks themselves, the display names from the loc index. A profile
+ * whose schema has no `dynasty` kind answers `supported: false` and empty
+ * lists, which is what a client shows instead of an empty tree.
+ */
+export const dynastyTreeRequest = "paradox/dynastyTree";
+export interface DynastyTreeParams extends ModScopedParams {
+  /** A dynasty id: answer that dynasty's houses and members instead of the list. */
+  dynasty?: string;
+}
+
+/** One dynasty, as the picker lists it. */
+export interface DynastySummary {
+  /** The block's own key, which is what a character's `dynasty = ` names. */
+  id: string;
+  /** The `name = ` value, a loc key (`dynn_Karling`). */
+  nameKey: string;
+  /** The loc text when the server can resolve it, else `nameKey` itself. */
+  name: string;
+  culture?: string;
+  source: "vanilla" | "parent" | "mod";
+  file: string;
+  /** 0-based. */
+  line: number;
+  /** Characters whose `dynasty`, or whose house's dynasty, is this one. */
+  characterCount: number;
+  houseCount: number;
+}
+
+/** One house of a dynasty (`house_karling = { name = … dynasty = 25061 }`). */
+export interface DynastyHouse {
+  id: string;
+  nameKey: string;
+  name: string;
+  /** The dynasty id the house belongs to. */
+  dynasty: string;
+  source: "vanilla" | "parent" | "mod";
+  file: string;
+  /** 0-based. */
+  line: number;
+}
+
+/**
+ * One character of `history/characters`. Dates are the game's own
+ * `Y.M.D` strings, taken from the dated block that carries the `birth`/`death`
+ * statement.
+ */
+export interface DynastyCharacter {
+  /** The block's own key: numeric in vanilla, but `han_1234` shapes exist too. */
+  id: string;
+  /** The `name = ` value, a plain string in history, not a loc key. */
+  name: string;
+  female: boolean;
+  dynasty?: string;
+  /** `dynasty_house = `; a character carries the house OR the dynasty, not both. */
+  house?: string;
+  father?: string;
+  mother?: string;
+  culture?: string;
+  religion?: string;
+  /** `Y.M.D` of the dated block holding `birth`. */
+  birth?: string;
+  death?: string;
+  traits: string[];
+  /** Ids this character is married to (`add_spouse`), in file order. */
+  spouses: string[];
+  /**
+   * Set when the character belongs to ANOTHER dynasty and is only in the
+   * answer because a member names them as a parent or a spouse. A client draws
+   * them, but the tree is not theirs.
+   */
+  external?: true;
+  source: "vanilla" | "parent" | "mod";
+  file: string;
+  /** 0-based. */
+  line: number;
+}
+
+export interface DynastyTreeResult {
+  /** False when the active profile's schema has no `dynasty` kind. */
+  supported: boolean;
+  /** The picker list. Empty when `params.dynasty` asked for one dynasty. */
+  dynasties: DynastySummary[];
+  /** Present exactly when `params.dynasty` named a dynasty the index knows. */
+  dynasty?: DynastySummary;
+  houses?: DynastyHouse[];
+  /** Members plus the external parents and spouses they name. */
+  characters?: DynastyCharacter[];
+  /** Largest numeric character id across game and mods, plus one. */
+  nextCharacterId?: string;
+  /** Largest numeric dynasty id across game and mods, plus one. */
+  nextDynastyId?: string;
+}

@@ -16,6 +16,14 @@ changes. Before the split it moved inside the extension's version (up to
   dialect parameter on the source model. CK3's schema gains the trait icon
   folder, the trait and dynasty-legacy loc key patterns, and the per-kind
   reference rows for `opposites`, `traditions` and `parents`.
+- `paradox/dynastyTree`: a dynasty as a family tree. Without a `dynasty` the
+  answer is the picker list; with one it is that dynasty's houses and members,
+  read out of the folders the active profile's schema maps to the `dynasty`,
+  `dynasty_house` and `character` kinds, plus the parents and spouses from
+  other dynasties the members name. The character corpus is parsed once per
+  index revision: measured on vanilla CK3 (71 142 characters, 17.4 MB) at
+  0.8 s cold, 12 ms warm, 1 ms for one dynasty, 62 MB retained. A profile with
+  no `dynasty` kind answers `supported: false`.
 
 ## 0.3.0
 

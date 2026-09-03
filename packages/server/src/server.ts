@@ -53,6 +53,7 @@ import {
   exampleWikiVariableKinds,
   type ExampleWikiEntryParams,
   type ExampleWikiKind,
+  dynastyTreeRequest,
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
@@ -64,6 +65,7 @@ import {
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type DynastyTreeParams,
   type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
@@ -191,6 +193,7 @@ import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
+import { computeDynastyTree } from "./overview/dynastyTree";
 import { computeEventVocabulary, computeValueOptions } from "./overview/eventVocabulary";
 import { computeEventBanner } from "./overview/eventBanner";
 import { computeDefinitionForm } from "./creators/definitionForm";
@@ -1591,6 +1594,13 @@ connection.onRequest(overridesRequest, (params: ModScopedParams | null) =>
 
 connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
   computeEventGraph(data, params ?? {}, focusFilter(params?.modRoot))
+);
+
+// The dynasty picker list, or one dynasty's houses and members. The whole
+// character corpus is read once per index revision (see overview/dynastyTree.ts);
+// a profile without a `dynasty` schema kind answers supported: false.
+connection.onRequest(dynastyTreeRequest, (params: DynastyTreeParams | null) =>
+  computeDynastyTree(data, params ?? {}, focusFilter(params?.modRoot))
 );
 
 // What an event editor may offer: the profile's structure table, the schema's

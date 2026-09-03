@@ -11,6 +11,10 @@ version (up to 0.3.2); that history is in the extension changelog
 - `protocol`: `paradox/definitionForm` and `paradox/definitionEdit`, the
   wire pair the visual content creators are built on. Documented in
   docs/PROTOCOL.md. `paradox/guiSourceEdit` is unchanged.
+- `paradox/dynastyTree`: `DynastyTreeParams` -> `DynastyTreeResult`, with
+  `DynastySummary`, `DynastyHouse` and `DynastyCharacter`. Documented in
+  `docs/PROTOCOL.md`.
+
 - `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
   `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
   name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path

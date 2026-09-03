@@ -23,6 +23,9 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   dependenciesRequest,
+  dynastyTreeRequest,
+  type DynastyTreeParams,
+  type DynastyTreeResult,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
@@ -210,6 +213,49 @@ const CLOC_TXT = `SmokeCustom = {
 }
 `;
 
+// Dynasty tree fixture: one dynasty, one house, three characters, in the
+// shapes the vanilla files use (a dated block carries the birth).
+const DYNASTIES_TXT = `9000001 = {
+\tname = "dynn_Smoke"
+\tculture = "anglo_saxon"
+}
+`;
+
+const HOUSES_TXT = `house_smoke = {
+\tname = "dynn_Smoke"
+\tdynasty = 9000001
+}
+`;
+
+const CHARACTERS_TXT = `9000010 = {
+\tname = "Smoky"
+\tdynasty_house = house_smoke
+\t1000.1.1 = {
+\t\tbirth = yes
+\t}
+\t1020.2.2 = {
+\t\tadd_spouse = 9000011
+\t}
+}
+9000011 = {
+\tname = "Smokina"
+\tfemale = yes
+\tdynasty = 9000002
+\t1002.1.1 = {
+\t\tbirth = yes
+\t}
+}
+9000012 = {
+\tname = "Smokelet"
+\tdynasty_house = house_smoke
+\tfather = 9000010
+\tmother = 9000011
+\t1025.1.1 = {
+\t\tbirth = yes
+\t}
+}
+`;
+
 const LOC_YML =
   "﻿l_english:\n" +
   ' smoke.1.t:0 "Smoke"\n' +
@@ -257,6 +303,9 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fx("common/scripted_guis/smoke_sguis.txt", SGUI_TXT);
     fx("common/scripted_effects/smoke_gui_effects.txt", GUI_EFFECT_TXT);
     guiPanelFile = fx("gui/smoke_panel.gui", GUI_PANEL_TXT);
+    fx("common/dynasties/smoke_dynasties.txt", DYNASTIES_TXT);
+    fx("common/dynasty_houses/smoke_houses.txt", HOUSES_TXT);
+    fx("history/characters/smoke_characters.txt", CHARACTERS_TXT);
     locFile = fx("localization/english/smoke_l_english.yml", LOC_YML);
     eventsUri = toUri(eventsFile);
     locUri = toUri(locFile);
@@ -578,6 +627,27 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       file: eventsFile,
       defLine: 2,
     });
+  });
+
+  it("paradox/dynastyTree answers the picker list and one dynasty's family", async () => {
+    const list = (await conn.sendRequest(
+      dynastyTreeRequest,
+      {} satisfies DynastyTreeParams
+    )) as DynastyTreeResult;
+    expect(list.supported).toBe(true);
+    const smoke = list.dynasties.find((d) => d.id === "9000001");
+    expect(smoke).toMatchObject({ nameKey: "dynn_Smoke", source: "mod", characterCount: 2, houseCount: 1 });
+    expect(list.nextCharacterId).toBe("9000013");
+
+    const tree = (await conn.sendRequest(dynastyTreeRequest, {
+      dynasty: "9000001",
+    } satisfies DynastyTreeParams)) as DynastyTreeResult;
+    expect(tree.houses?.map((h) => h.id)).toEqual(["house_smoke"]);
+    const father = tree.characters?.find((c) => c.id === "9000010");
+    expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
+    // The wife belongs to another dynasty: drawn, but not counted as a member.
+    expect(tree.characters?.find((c) => c.id === "9000011")?.external).toBe(true);
+    expect(tree.characters?.find((c) => c.id === "9000012")?.mother).toBe("9000011");
   });
 
   it("paradox/eventGraph carries the query-box catalog, not just the selected nodes", async () => {
