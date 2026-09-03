@@ -231,11 +231,18 @@ function labeller(data: ServerData, schema: SchemaData): (kind: string, name: st
     }
     return list;
   };
+  const locValue = (key: string): string | undefined =>
+    data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
   return (kind, name) => {
     for (const pattern of patternsFor(kind)) {
-      const key = pattern.replace("$", name);
-      const value = data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
-      if (value !== undefined && value !== "") return value;
+      const value = locValue(pattern.replace("$", name));
+      if (value === undefined || value === "") continue;
+      // A value that is only another key (`tradition_hird_name:0
+      // "$innovation_hird$"`, 10 of ~200 vanilla traditions) reads as that
+      // key's text; one hop, the way the game resolves it.
+      const alias = /^\$([\w.-]+)\$$/.exec(value);
+      const resolved = alias ? locValue(alias[1]) : undefined;
+      return resolved !== undefined && resolved !== "" ? resolved : value;
     }
     return undefined;
   };
