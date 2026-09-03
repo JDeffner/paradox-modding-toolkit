@@ -21,7 +21,7 @@ import { findStrayCalendar } from "./calendarSettingsCheck";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import { creatorSupported, flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -52,6 +52,7 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -95,6 +96,12 @@ import {
   eventGraphRequest,
   exampleWikiRequest,
   exampleWikiEntryRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  type DefinitionEditParams,
+  type DefinitionEditResult,
+  type DefinitionForm,
+  type DefinitionFormParams,
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
@@ -981,6 +988,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gameMissing: cfg.gamePath === null,
       });
     }),
+    // The optional argument opens an existing track (a Project-panel row, a
+    // future context menu); with none the panel starts on a fresh one.
+    vscode.commands.registerCommand("px.createDynastyLegacy", (arg?: unknown) => {
+      const active = cfgForActive();
+      const meta = metaFor(active.gameId);
+      if (!creatorSupported(active.gameId, "dynasty_legacy")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${meta.name} has no dynasty legacies, so there is no legacy creator for it.`
+        );
+        return;
+      }
+      LegacyCreatorPanel.show(
+        context,
+        {
+          cfg: active,
+          meta,
+          actions: {
+            fetchForm: (params: DefinitionFormParams) =>
+              lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+            applyEdits: (params: DefinitionEditParams) =>
+              lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+            lookupLoc,
+          },
+        },
+        definitionName(arg)
+      );
+    }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
     vscode.commands.registerCommand("px.tigerCreateBaseline", async () => {
@@ -1138,6 +1172,15 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
   return scoped(ns ? { namespace: ns[1] } : {});
+}
+
+/** The definition a creator command was opened on, or nothing. The argument
+ *  comes off a command link or a panel row, so it is validated, not trusted. */
+function definitionName(arg: unknown): string | undefined {
+  if (typeof arg === "string") return /^[A-Za-z_][\w.-]*$/.test(arg) ? arg : undefined;
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name } = arg as { name?: unknown };
+  return typeof name === "string" && /^[A-Za-z_][\w.-]*$/.test(name) ? name : undefined;
 }
 
 /** The article a `px.showExamplesWiki` argument names, or nothing. The argument

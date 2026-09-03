@@ -90,6 +90,34 @@ describe("computeDefinitionForm", () => {
     expect(form.keys.find((k) => k.key === "parents")?.refKinds).toEqual(["culture"]);
   });
 
+  it("carries the dynasty legacy rows the vanilla files justify", () => {
+    // _dynasty_legacies.info states $_name; all 21 vanilla tracks also define
+    // $_desc, and window_dynasty_legacy.gui reads the picture off the key.
+    const legacy = computeDefinitionForm(data, schema, { kind: "dynasty_legacy" })!;
+    expect(legacy.folder).toBe("common/dynasty_legacies");
+    expect(legacy.locPatterns).toEqual(["$_name", "$_desc"]);
+    expect(legacy.iconFolder).toBe("gfx/interface/icons/dynasty");
+    expect(legacy.keys.map((k) => k.key)).toEqual(["is_shown"]);
+
+    // _dynasty_perks.info: seven documented keys, $_name only, no icon folder.
+    const perk = computeDefinitionForm(data, schema, { kind: "dynasty_perk" })!;
+    expect(perk.folder).toBe("common/dynasty_perks");
+    expect(perk.locPatterns).toEqual(["$_name"]);
+    expect(perk.iconFolder).toBeUndefined();
+    expect(perk.keys.map((k) => k.key)).toEqual([
+      "legacy",
+      "effect",
+      "character_modifier",
+      "can_be_picked",
+      "ai_chance",
+      "doctrine_character_modifier",
+      "traits",
+    ]);
+    // `traits = { trait_name = int }`: the entry keys are trait names.
+    expect(perk.keys.find((k) => k.key === "traits")?.refKinds).toEqual(["trait"]);
+    expect(perk.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
+  });
+
   it("answers null for a kind the active game's schema does not have", () => {
     expect(computeDefinitionForm(data, schema, { kind: "not_a_kind" })).toBeNull();
     expect(computeDefinitionForm(data, schema, { kind: "" })).toBeNull();

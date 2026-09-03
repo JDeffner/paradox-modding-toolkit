@@ -839,6 +839,14 @@ const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: stri
     traditions: { refKinds: ["culture_tradition"] },
     parents: { refKinds: ["culture"] },
   },
+  dynasty_perk: {
+    // _dynasty_perks.info spells the block `traits = { trait_name = int }`, and
+    // game/common/dynasty_perks/00_dynasty_perks.txt writes it that way
+    // (blood_legacy_4: `beauty_good_1 = 100`, `fecund = 50`), so the entry keys
+    // are trait names and the numbers are AI chances. Per-KIND and not a global
+    // RefField: `traits` elsewhere is a history list, a filter, a count.
+    traits: { refKinds: ["trait"] },
+  },
   scheme_type: {
     category: { values: "enum:personal|contract|hostile" },
   },

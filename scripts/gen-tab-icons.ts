@@ -19,6 +19,8 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
+  // The Dynasty Legacy Creator: the glyph its Create row uses (ck3/meta.ts).
+  "legacy-creator": "layers",
   wiki: "library",
   credits: "heart",
   workshop: "cloudUpload",

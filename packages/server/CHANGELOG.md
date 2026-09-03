@@ -16,6 +16,12 @@ changes. Before the split it moved inside the extension's version (up to
   dialect parameter on the source model. CK3's schema gains the trait icon
   folder, the trait and dynasty-legacy loc key patterns, and the per-kind
   reference rows for `opposites`, `traditions` and `parents`.
+- CK3 schema: the dynasty legacy track carries its `$_desc` loc key (all 21
+  vanilla tracks define it) and its icon folder
+  `gfx/interface/icons/dynasty`, the dynasty perk carries `$_name` (all 105
+  vanilla perks define it, and none defines a desc), and a perk's `traits`
+  entries are trait references. Read by the creators; nothing in completion
+  or diagnostics changes.
 
 ## 0.3.0
 

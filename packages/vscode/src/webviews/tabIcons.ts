@@ -18,6 +18,7 @@ export type TabIconName =
   | "workshop"
   | "bbcode-preview"
   | "examples-wiki"
+  | "legacy-creator"
   | "wiki"
   | "credits";
 
