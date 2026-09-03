@@ -42,7 +42,9 @@ describe("visibleActionGroups", () => {
     expect(info?.items.map((it) => it.command)).toEqual([
       "px.openDiscord",
       "px.openWiki",
+      "px.openCredits",
       "px.showExamplesWiki",
+      "px.modReport",
     ]);
     expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Create", "Info", "Test & Troubleshoot"]);
     // The wiki rows moved out of View, they are not listed twice.
@@ -54,7 +56,11 @@ describe("visibleActionGroups", () => {
   it("hides Info rows like any other row", () => {
     const groups = visibleActionGroups(ck3Meta, 0, ["px.openDiscord", "px.openWiki"]);
     const info = groups.find((g) => g.label === "Info");
-    expect(info?.items.map((it) => it.command)).toEqual(["px.showExamplesWiki"]);
+    expect(info?.items.map((it) => it.command)).toEqual([
+      "px.openCredits",
+      "px.showExamplesWiki",
+      "px.modReport",
+    ]);
   });
 
   it("ignores ids that match no row", () => {
