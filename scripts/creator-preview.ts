@@ -50,6 +50,8 @@ import {
 } from "../packages/vscode/src/webviews/legacyCreator/perkIndex";
 import { buildCatalog } from "../packages/vscode/src/webviews/cultureCreator/catalog";
 import { parseNamedColors } from "../packages/server/src/coa/coaParse";
+import { parseScript } from "../packages/server/src/parser";
+import { plainLoc } from "../packages/vscode/src/webviews/traitCreator/app/preview";
 import {
   buildFlagDatabase,
   locateTexture,
@@ -192,6 +194,60 @@ function allPerkLinks(folder: string) {
   }
   return links;
 }
+/**
+ * The Dynasty Tree's trait tooltip, the same shape its panel builds: the loc
+ * pair, the picture, and every `name = number` the trait's own block carries
+ * that the modifier vocabulary knows.
+ */
+const traitTipCache = new Map<string, unknown>();
+/** panel.ts asks for the print rules ONCE per panel; so does this. */
+let formatsOnce: Promise<ModifierFormatsResult | null> | undefined;
+async function traitTip(name: string): Promise<unknown> {
+  const known = traitTipCache.get(name);
+  if (known !== undefined) return known;
+  formatsOnce ??= req<ModifierFormatsResult | null>("paradox/modifierFormats", { modRoot: modPath });
+  const [all, one, formatsResult] = await Promise.all([form("trait"), form("trait", name), formatsOnce]);
+  const vocabulary = new Set(all.modifiers.map((mod) => mod.name));
+  const modifiers: { name: string; value: number }[] = [];
+  let icon = "";
+  if (one?.current) {
+    const { root: parsed } = parseScript(one.current.text);
+    const first = parsed.statements[0];
+    const block = first?.kind === "assignment" && first.value?.kind === "block" ? first.value : null;
+    for (const stmt of block?.statements ?? []) {
+      if (stmt.kind !== "assignment" || stmt.value?.kind !== "scalar") continue;
+      if (stmt.key.text === "icon") icon = stmt.value.text;
+      else if (vocabulary.has(stmt.key.text) && Number.isFinite(Number(stmt.value.text))) {
+        modifiers.push({ name: stmt.key.text, value: Number(stmt.value.text) });
+      }
+    }
+  }
+  const formats = formatsResult?.formats ?? {};
+  const values = await lookup([`trait_${name}`, `trait_${name}_desc`]);
+  const images: Record<string, string | null> = {};
+  for (const row of modifiers) {
+    for (const part of [...(formats[row.name]?.prefix ?? []), ...(formats[row.name]?.suffix ?? [])]) {
+      if ("icon" in part) images[part.icon.texture] = imageUrl(part.icon.texture, 0);
+    }
+  }
+  const tip = {
+    tip: {
+      key: name,
+      name: plainLoc(values[`trait_${name}`] ?? name),
+      desc: plainLoc(values[`trait_${name}_desc`] ?? ""),
+      iconUrl: imageUrl(`${all.iconFolder}/${icon || name}.dds`, 128),
+      frameUrl: null,
+      modifiers,
+      opposites: [],
+      flags: [],
+    },
+    formats: Object.fromEntries(modifiers.map((row) => [row.name, formats[row.name]]).filter(([, f]) => f)),
+    images,
+  };
+  traitTipCache.set(name, tip);
+  return tip;
+}
+
 async function refIconFolders(f: DefinitionForm): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const kind of new Set<string>(f.keys.flatMap((k) => k.refKinds ?? []))) {
@@ -419,11 +475,36 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
     entry: "src/webviews/dynastyTree/app/main.ts",
     handle: async (m) => {
       switch (m.type) {
+        case "traitIcons": {
+          const f = await form("trait");
+          const urls: Record<string, string | null> = {};
+          for (const name of m.names as string[]) urls[name] = imageUrl(`${f.iconFolder}/${name}.dds`, 48);
+          return [{ type: "traitIcons", urls }];
+        }
+        case "traitTip":
+          return [{ type: "traitTip", name: m.name, tip: await traitTip(String(m.name)) }];
+        // The clipboard is the host's; the preview answers with a fixed name so
+        // the DNA round trip can still be driven here.
+        case "copy":
+          return [{ type: "toast", message: "Copied to the clipboard." }];
+        case "paste":
+          return [{ type: "pasted", field: m.field, text: "preview_pasted_dna" }];
+        case "target":
+          return [
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: "history/characters/cult_characters.txt" },
+            },
+          ];
         case "ready": {
           const t0 = Date.now();
           const r = await req<Record<string, unknown>>("paradox/dynastyTree", { modRoot: modPath });
           return [
             { type: "init", gameName: "Crusader Kings III", mods },
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: "history/characters/cult_characters.txt" },
+            },
             {
               type: "list",
               supported: r.supported,
@@ -470,6 +551,17 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
             } catch {
               sets[kind] = [];
             }
+          }
+          // panel.ts labelTraits: eventValueOptions answers keys only, so the
+          // trait form's loc-resolved names are folded in the same way.
+          const traitForm = await form("trait");
+          const labels = new Map<string, string>();
+          for (const item of traitForm.options.trait ?? [])
+            if (item.label) labels.set(item.value, item.label);
+          for (const def of traitForm.existing) if (def.label) labels.set(def.name, def.label);
+          for (const item of (sets.trait as { value: string; label?: string }[]) ?? []) {
+            const label = labels.get(item.value);
+            if (label) item.label = label;
           }
           return [
             {
