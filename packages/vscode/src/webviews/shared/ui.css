@@ -803,10 +803,13 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   animation: px-pop var(--px-ease);
   transform-origin: var(--px-origin, top left);
 }
-/* A menu fills its popover edge to edge; the list scrolls, not the popover. */
+/* A menu fills its popover edge to edge; the list scrolls, not the popover.
+   The menu sets its own width (anchor or a wider request), so the popover's
+   480px cap must not apply: a wider menu spilled past the box's edges. */
 .px-popover:has(> .px-menu) {
   padding: 0;
   min-width: 0;
+  max-width: calc(100vw - 16px);
 }
 .px-popover-title {
   font-weight: 500;
@@ -834,6 +837,7 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   gap: 4px;
   padding: 4px;
   min-width: 160px;
+  max-width: calc(100vw - 16px);
 }
 /* Inline completions under a focused input: a floating px-menu of its own. */
 .px-suggest {

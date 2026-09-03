@@ -799,7 +799,7 @@ function renderRequirements(): void {
   dlcNote.className = "px-muted px-xs";
   if (dlcError) dlcNote.textContent = dlcError;
   else if (dlcLoading) dlcNote.textContent = "Reading the DLC list…";
-  else if (dlcSource === "game") dlcNote.textContent = "From the game files. Click a DLC to require it.";
+  else if (dlcSource === "game") dlcNote.textContent = "Click a DLC to require it.";
   else if (dlcSource === "steam")
     dlcNote.textContent =
       "From the Steam client (the game path is unknown, so there are no icons). Click a DLC to require it.";
