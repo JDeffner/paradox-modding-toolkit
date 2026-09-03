@@ -57,6 +57,7 @@ import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
 import { coaTargetArg } from "./webviews/flagBuilder/target";
 import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
 import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
+import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -994,7 +995,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
         return;
       }
-      const named = typeof arg === "object" && arg !== null ? (arg as { name?: unknown }).name : undefined;
+      const named = definitionName(arg);
       TraitCreatorPanel.show(context, {
         cfg: cfgForActive(),
         meta,
@@ -1003,7 +1004,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
         },
         lookupLoc,
-        ...(typeof named === "string" && named !== "" ? { name: named } : {}),
+        ...(named ? { name: named } : {}),
       });
     }),
     // `arg` is the optional target ({ name, label }): the Dynasty Tree and
@@ -1092,7 +1093,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           lookupLoc,
         },
-        creatorName(arg)
+        definitionName(arg)
+      );
+    }),
+    // The optional argument opens an existing track (a Project-panel row, a
+    // future context menu); with none the panel starts on a fresh one.
+    vscode.commands.registerCommand("px.createDynastyLegacy", (arg?: unknown) => {
+      const active = cfgForActive();
+      const meta = metaFor(active.gameId);
+      if (!creatorSupported(active.gameId, "dynasty_legacy")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${meta.name} has no dynasty legacies, so there is no legacy creator for it.`
+        );
+        return;
+      }
+      LegacyCreatorPanel.show(
+        context,
+        {
+          cfg: active,
+          meta,
+          actions: {
+            fetchForm: (params: DefinitionFormParams) =>
+              lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+            applyEdits: (params: DefinitionEditParams) =>
+              lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+            lookupLoc,
+          },
+        },
+        definitionName(arg)
       );
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
@@ -1254,14 +1282,13 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   return scoped(ns ? { namespace: ns[1] } : {});
 }
 
-/** The definition a creator command was asked to open, or nothing. */
-function creatorName(arg: unknown): string | undefined {
-  if (typeof arg === "string" && arg.trim() !== "") return arg.trim();
-  if (arg && typeof arg === "object" && "name" in arg) {
-    const name = (arg as { name?: unknown }).name;
-    if (typeof name === "string" && name.trim() !== "") return name.trim();
-  }
-  return undefined;
+/** The definition a creator command was opened on, or nothing. The argument
+ *  comes off a command link or a panel row, so it is validated, not trusted. */
+function definitionName(arg: unknown): string | undefined {
+  if (typeof arg === "string") return /^[A-Za-z_][\w.-]*$/.test(arg) ? arg : undefined;
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name } = arg as { name?: unknown };
+  return typeof name === "string" && /^[A-Za-z_][\w.-]*$/.test(name) ? name : undefined;
 }
 
 /** The article a `px.showExamplesWiki` argument names, or nothing. The argument

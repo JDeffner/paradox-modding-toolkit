@@ -159,8 +159,31 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/dynasty_houses", kind: "dynasty_house", completable: false },
   // _dynasty_legacies.info, "Generated loc keys: key + "_name"". All 21 vanilla
   // legacies define it (measured 2026-09-03), so it clears the requiredLoc bar.
-  { path: "common/dynasty_legacies", kind: "dynasty_legacy", requiredLoc: ["$_name"] },
-  { path: "common/dynasty_perks", kind: "dynasty_perk" },
+  // $_desc is not in the .info doc, but all 21 vanilla tracks define it
+  // (localization/english/dynasty_legacies/legacies_l_english.yml, e.g.
+  // blood_legacy_track_desc), so a creator asks for it too; it stays out of
+  // requiredLoc, where only the keys the doc itself states belong.
+  // iconFolder: window_dynasty_legacy.gui draws the picture from
+  // "[DynastyLegacy.GetIcon]", a code-side path with no script key behind it,
+  // and the files it finds are gfx/interface/icons/dynasty/<track key>.dds
+  // (22 files for the 21 tracks). Name-derived, so a creator writes the
+  // picture under the track's own name and never a path into the block.
+  // A track reads a SECOND name-derived picture, the window's illustration at
+  // gfx/interface/illustrations/legacy_tracks/<key>.dds ("[DynastyLegacy.
+  // GetTrackIcon]", 21 files); iconFolder holds one path, so that one is left
+  // to ck3-tiger, which names it as a missing-file warning on the track.
+  {
+    path: "common/dynasty_legacies",
+    kind: "dynasty_legacy",
+    requiredLoc: ["$_name"],
+    locPatterns: ["$_name", "$_desc"],
+    iconFolder: "gfx/interface/icons/dynasty",
+  },
+  // _dynasty_perks.info, "Generated loc keys: key + "_name"" — and only that:
+  // all 105 vanilla perks define $_name, none defines $_desc (measured
+  // 2026-09-03 over localization/english). No iconFolder: gfx/interface/icons
+  // has a dynasty folder for the tracks and nothing for the perks.
+  { path: "common/dynasty_perks", kind: "dynasty_perk", locPatterns: ["$_name"] },
 
   // --- Activities & schemes ---
   { path: "common/activities/activity_types", kind: "activity_type", rootScopes: ["character"] },

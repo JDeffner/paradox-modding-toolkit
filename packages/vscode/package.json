@@ -425,6 +425,11 @@
         "icon": "$(globe)"
       },
       {
+        "command": "px.createDynastyLegacy",
+        "category": "Paradox",
+        "title": "Dynasty Legacy Creator"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report",
@@ -1113,8 +1118,15 @@
         },
         {
           "command": "px.openDynastyTree",
+          "when": "px.isCk3Workspace && px.creator.dynasty_tree"
+        },
+        {
           "command": "px.createCulture",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.creator.culture"
+        },
+        {
+          "command": "px.createDynastyLegacy",
+          "when": "px.isCk3Workspace && px.creator.dynasty_legacy"
         },
         {
           "command": "px.modReport",

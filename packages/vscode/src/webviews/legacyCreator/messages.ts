@@ -1,0 +1,103 @@
+/**
+ * The wire between the Dynasty Legacy Creator's host (panel.ts) and its app
+ * (app/main.ts). The app draws the track and its perks and hands back the
+ * blocks to write; the host does everything a browser page cannot: ask the
+ * language server for the two forms, resolve icons, pick the files, apply the
+ * edits and write the loc.
+ */
+import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+
+/** One picture of the legacy icon folder, already decoded to a webview URL. */
+export interface IconEntry {
+  /** File name without the extension: the track key the game derives it from. */
+  key: string;
+  url: string;
+  /** Where it came from ("game", or a mod's folder name). */
+  source: string;
+}
+
+export interface CreatorInit {
+  /** The `dynasty_legacy` form: folder, loc patterns, icon folder, keys. */
+  legacy: DefinitionForm;
+  /** The `dynasty_perk` form: the seven documented keys and the vocabularies. */
+  perk: DefinitionForm;
+  /** The mod a save goes into by default, for the header badge. */
+  modLabel: string | null;
+  /** `px.locLanguage`: which loc file the values land in. */
+  locLanguage: string;
+  /** `scaffoldPrefix(cfg)`: what a fresh track's name is prefilled from. */
+  prefix: string;
+  /**
+   * Perks per track in the game's own files, or null when the game folder is
+   * not set. The app opens a new track with that many empty perk slots.
+   */
+  perksPerTrack: number | null;
+  icons: IconEntry[];
+  /** Why nothing can be written yet (no mod folder), or null. */
+  problem: string | null;
+}
+
+/** One perk of a loaded track: its block, verbatim, and where it lives. */
+export interface LoadedPerk {
+  name: string;
+  file: string;
+  source: "mod" | "vanilla" | "parent";
+  text: string;
+}
+
+/** What the app asks the host to write. */
+export interface SaveDefinition {
+  name: string;
+  /**
+   * `edit` rewrites only the keys that moved (setProperties); everything else
+   * writes the whole block (upsertBlock).
+   */
+  mode: "create" | "edit" | "override";
+  /** The whole `name = { … }` block. */
+  block: string;
+  /** The keys that moved, for `edit`. */
+  changed?: { key: string; value: string | null }[];
+  loc: { key: string; value: string }[];
+  /** The mod file it was loaded from, offered first when the target is picked. */
+  sourceFile?: string;
+}
+
+/** A perk the modder dropped from a track that already exists on disk. */
+export interface DroppedPerk {
+  name: string;
+  file: string;
+}
+
+export type AppToHost =
+  | { type: "ready" }
+  /** Load an existing track and its perks into the form. */
+  | { type: "load"; name: string }
+  /** Deep link into the Examples Wiki for a name the modder asked about. */
+  | { type: "openExamples"; name: string }
+  /** Pick a picture and convert it into the mod's icon folder under `track`. */
+  | { type: "customIcon"; track: string }
+  | {
+      type: "save";
+      track: SaveDefinition;
+      perks: SaveDefinition[];
+      dropped: DroppedPerk[];
+      /**
+       * The icon the modder picked from the grid, when it is not already the
+       * track's own picture: the host copies it to <iconFolder>/<track>.dds.
+       */
+      icon: string | null;
+    };
+
+export type HostToApp =
+  | { type: "init"; init: CreatorInit }
+  | {
+      type: "loaded";
+      track: DefinitionForm;
+      perks: LoadedPerk[];
+      /** The loc the workspace already has for those keys, so the form shows it. */
+      loc: Record<string, string>;
+    }
+  /** The icon folder was written into; `select` is the key to show as chosen. */
+  | { type: "icons"; icons: IconEntry[]; select?: string }
+  | { type: "saved" }
+  | { type: "toast"; message: string; variant?: "default" | "destructive" };

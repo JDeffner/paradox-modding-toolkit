@@ -26,6 +26,18 @@
   game culture is duplicated into your mod by default or overridden with a
   warning. Round-trips two vanilla cultures byte for byte, and ck3-tiger finds
   no problem in what it writes.
+- **Dynasty Legacy Creator.** A new panel (Project panel Create group, or
+  "Paradox: Dynasty Legacy Creator") designs a legacy track and its perks
+  together and writes them into your mod: the track's block, one perk block
+  per card with `legacy = <track>` filled in for you, and the localization.
+  Type the track's key and everything else follows it, with five perk slots
+  because that is what every vanilla track has. Perk cards carry the seven
+  keys the game documents: modifier rows for `character_modifier`,
+  `doctrine_character_modifier` and the trait chances in `traits`, text areas
+  for `effect`, `can_be_picked` and `ai_chance`. Opening a track your mod
+  already has rewrites only the lines that changed, comments and formatting
+  included, and a perk you drop off a track is reported, never deleted behind
+  your back.
 - **Groundwork for visual content creators.** The Project panel's Create
   group now lists the creators the active game has (CK3: Trait Creator,
   Dynasty Legacy Creator, Culture Creator, Dynasty Tree), and the host side

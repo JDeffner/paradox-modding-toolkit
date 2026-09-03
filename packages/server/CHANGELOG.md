@@ -37,6 +37,12 @@ changes. Before the split it moved inside the extension's version (up to
   index revision: measured on vanilla CK3 (71 142 characters, 17.4 MB) at
   0.8 s cold, 12 ms warm, 1 ms for one dynasty, 62 MB retained. A profile with
   no `dynasty` kind answers `supported: false`.
+- CK3 schema: the dynasty legacy track carries its `$_desc` loc key (all 21
+  vanilla tracks define it) and its icon folder
+  `gfx/interface/icons/dynasty`, the dynasty perk carries `$_name` (all 105
+  vanilla perks define it, and none defines a desc), and a perk's `traits`
+  entries are trait references. Read by the creators; nothing in completion
+  or diagnostics changes.
 
 ## 0.3.0
 
