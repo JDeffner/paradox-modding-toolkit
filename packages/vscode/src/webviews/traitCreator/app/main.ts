@@ -33,6 +33,7 @@ import {
   type Field,
   type IconChoice,
   type ModifierRow,
+  keyLabel,
 } from "../../shared/fields";
 import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
@@ -378,7 +379,7 @@ function numberField(spec: TraitFieldSpec, value: number | null): Field<number |
   const listeners: ((v: number | null) => void)[] = [];
   const input = numberInput(value, placeholderFor(spec) ?? "", (v) => listeners.forEach((fn) => fn(v)));
   const row = node("div", "px-field");
-  const label = node("span", "px-label", spec.key);
+  const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
@@ -585,7 +586,7 @@ function flagsField(spec: TraitFieldSpec, values: string[]): Field<string[]> {
 /** The shared label + control grid row, for the fields this file builds itself. */
 function fieldRow(spec: TraitFieldSpec, control: HTMLElement): HTMLElement {
   const row = node("div", "px-field");
-  const label = node("span", "px-label", spec.key);
+  const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
