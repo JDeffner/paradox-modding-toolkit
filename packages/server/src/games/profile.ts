@@ -137,6 +137,15 @@ export interface GameMeta {
    */
   flagBuilder?: boolean;
   /**
+   * The game ships its own in-game Coat of Arms designer, and the files that
+   * drive it (`gfx/coat_of_arms/{patterns,colored_emblems,color_palettes,
+   * emblem_layouts}/50_coa_designer_*.txt` and the `99_coa_designer_templates`
+   * coat-of-arms templates). Present = the toolkit offers the designer
+   * instead of the raw Flag Builder, when those files are actually on disk.
+   * Absent = the Flag Builder, as before.
+   */
+  coaDesigner?: boolean;
+  /**
    * Visual content creators offered for this game, in Create-group order. A
    * row is a definition kind the schema knows (the panel's command opens that
    * creator), except `dynasty_tree`, which is a view over history files rather

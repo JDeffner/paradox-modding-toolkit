@@ -87,14 +87,24 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "layoutTemplate",
           tip: "Render and edit the .gui window you are editing.",
         },
+        // One row, two panels: px.openFlagBuilder opens the game's own Coat of
+        // Arms designer where the profile says the game ships one, and the raw
+        // Flag Builder everywhere else. The label follows.
         ...(meta.flagBuilder
           ? [
-              {
-                label: "Flag Builder",
-                command: "px.openFlagBuilder",
-                icon: "flag" as const,
-                tip: "Compose a coat of arms and write it into the mod.",
-              },
+              meta.coaDesigner
+                ? {
+                    label: "Coat of Arms Designer",
+                    command: "px.openFlagBuilder",
+                    icon: "shield" as const,
+                    tip: "Design arms the way the game's own designer does.",
+                  }
+                : {
+                    label: "Flag Builder",
+                    command: "px.openFlagBuilder",
+                    icon: "flag" as const,
+                    tip: "Compose a coat of arms and write it into the mod.",
+                  },
             ]
           : []),
         {
@@ -129,7 +139,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               {
                 label: "New Coat of Arms…",
                 command: "px.createCoatOfArms",
-                icon: "flag",
+                icon: meta.coaDesigner ? "shield" : "flag",
                 tip: "Design arms for a dynasty, house or title and save them into the mod.",
               },
             ] satisfies ActionItem[])

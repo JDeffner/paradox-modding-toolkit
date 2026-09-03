@@ -13,9 +13,10 @@ import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import * as fs from "fs";
 import * as path from "path";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { parseCoaFile, upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
+import { parseCoaFile } from "@px-lsp/server/coa/coaParse";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { buildFlagDatabase, locateTexture, type FlagRoot } from "./database";
+import { saveFlagToMod } from "./save";
 import { flagBuilderHtml } from "./html";
 import {
   FLAG_EDITOR_CREDIT,
@@ -27,7 +28,6 @@ import {
   type UiState,
 } from "./messages";
 
-const BOM = "﻿";
 const UI_KEY = "px.flagBuilder.ui";
 
 export interface FlagBuilderOptions {
@@ -180,65 +180,18 @@ export class FlagBuilderPanel {
     }
   }
 
-  /**
-   * Write the flag into a coa file of the mod: an existing file of the folder
-   * (replacing the flag of that name if present) or a new one. The file keeps
-   * its BOM; a new one gets one, like every script file the games read.
-   */
+  /** Write the flag into a coa file of the mod (save.ts owns the flow). */
   private async save(name: string, script: string, modPath: string, sourceFile?: string): Promise<void> {
-    const { meta } = this.options;
     // The app only offers paths the host listed, but the message is still text from a webview.
     if (!this.options.mods.some((m) => m.path === modPath)) return;
-    // Same rule the typed name gets below: sourceFile can become the write
-    // target, so it must be a bare .txt name, not a path.
-    if (sourceFile !== undefined && !/^[\w.-]+\.txt$/.test(sourceFile)) return;
-    const dir = path.join(modPath, meta.stageRoots?.[0] ?? "", "common", "coat_of_arms", "coat_of_arms");
-    let files: string[] = [];
-    try {
-      files = fs
-        .readdirSync(dir)
-        .filter((f) => f.endsWith(".txt"))
-        .sort();
-    } catch {
-      /* folder does not exist yet */
-    }
-    const NEW = "$(new-file) New file…";
-    // The file the flag came from first: same name in the mod overrides it in the game.
-    const SAME = sourceFile ? `$(replace) ${sourceFile}` : null;
-    const items = [
-      ...(SAME ? [{ label: SAME, description: "same file name as the opened flag (overrides it)" }] : []),
-      ...files.filter((f) => f !== sourceFile).map((f) => ({ label: f })),
-      { label: NEW },
-    ];
-    const picked = await vscode.window.showQuickPick(items, {
-      placeHolder: `Save ${name} into ${path.relative(modPath, dir)}/…`,
+    const file = await saveFlagToMod({
+      name,
+      script,
+      modPath,
+      stageRoot: this.options.meta.stageRoots?.[0],
+      sourceFile,
     });
-    if (!picked) return;
-    const pick = picked.label;
-    let file = pick === SAME ? sourceFile! : pick;
-    if (pick === NEW) {
-      const typed = await vscode.window.showInputBox({
-        prompt: "File name",
-        value: `${name.toLowerCase()}_coa.txt`,
-        validateInput: (v) => (/^[\w.-]+\.txt$/.test(v) ? null : "A .txt file name without folders"),
-      });
-      if (!typed) return;
-      file = typed;
-    }
-    const abs = path.join(dir, file);
-    let text = "";
-    try {
-      text = fs.readFileSync(abs, "utf8");
-    } catch {
-      /* new file */
-    }
-    const hadBom = text.startsWith(BOM);
-    const body = upsertFlagInFile(hadBom ? text.slice(1) : text, name, script);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(abs, BOM + body, "utf8");
-    const doc = await vscode.workspace.openTextDocument(abs);
-    await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true });
-    this.post({ type: "toast", message: `Saved ${name} to ${file}.` });
+    if (file) this.post({ type: "toast", message: `Saved ${name} to ${file}.` });
   }
 
   private async exportPng(name: string, dataUrl: string): Promise<void> {

@@ -21,7 +21,13 @@ import { findStrayCalendar } from "./calendarSettingsCheck";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { creatorSupported, flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import {
+  coaDesignerSupported,
+  creatorSupported,
+  flagBuilderSupported,
+  guiEditorSupported,
+  metaFor,
+} from "./meta";
 import { GAME_METAS } from "./gameDetect";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
@@ -53,6 +59,7 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
 import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
 import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
 import { coaTargetArg } from "./webviews/flagBuilder/target";
@@ -61,7 +68,7 @@ import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
 import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
-import type { FlagRoot } from "./webviews/flagBuilder/database";
+import { hasDesignerFiles, type FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
 import { buildModReport, modReportCommand } from "./modReport";
@@ -319,6 +326,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "px.flagBuilderSupported",
       flagBuilderSupported(cfg.gameId)
     );
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.coaDesignerSupported",
+      coaDesignerSupported(cfg.gameId)
+    );
     // One key per creator kind ANY profile lists, set to whether the active
     // game lists it. Walking the union rather than the active game's rows is
     // what clears a key again when the workspace switches game; setting only
@@ -385,6 +397,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return false;
   };
+  // What both coat-of-arms panels need: game first, then dependency mods, then
+  // the workspace's own mods, which is the load order, so a mod's arms of the
+  // same name win like they do in the game.
+  const coaPanelOptions = (): {
+    meta: ReturnType<typeof metaFor>;
+    roots: FlagRoot[];
+    mods: { label: string; path: string }[];
+    gameMissing: boolean;
+  } => {
+    const roots: FlagRoot[] = [];
+    if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
+    for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
+      if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+    }
+    const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+      .filter((p, i, all) => all.indexOf(p) === i)
+      .map((p) => ({ label: readModName(p), path: p }));
+    return { meta: metaFor(cfg.gameId), roots, mods, gameMissing: cfg.gamePath === null };
+  };
+  const coaDesignerAvailable = (roots: FlagRoot[]): boolean =>
+    coaDesignerSupported(cfg.gameId) && hasDesignerFiles(roots, metaFor(cfg.gameId).stageRoots);
 
   context.subscriptions.push(tiger);
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => tiger.onDidSaveDocument(doc)));
@@ -1023,27 +1056,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       });
     }),
     // `arg` is the optional target ({ name, label }): the Dynasty Tree and
-    // "New Coat of Arms…" open the panel straight on the arms they mean.
+    // "New Coat of Arms…" open the panel straight on the arms they mean. Which
+    // panel that is comes from the profile plus what is on disk: CK3 gets the
+    // designer rebuilt from its own designer files, every other game the Flag
+    // Builder, and so does CK3 when those files are not there to read.
     vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
-      const meta = metaFor(cfg.gameId);
       if (!requireFlagBuilder()) return;
-      // Game first, then dependency mods, then the workspace's own mods: the
-      // load order, so a mod's flag of the same name wins like in the game.
-      const roots: FlagRoot[] = [];
-      if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
-      for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
-        if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+      const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
+      if (coaDesignerAvailable(options.roots)) CoaDesignerPanel.show(context, options);
+      else FlagBuilderPanel.show(context, options);
+    }),
+    // The designer by name, for a keybinding or another extension that wants
+    // it whatever the routing above would pick.
+    vscode.commands.registerCommand("px.openCoaDesigner", (arg?: unknown) => {
+      const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
+      if (!coaDesignerAvailable(options.roots)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${metaFor(cfg.gameId).name} ships no Coat of Arms designer files to build the designer from.`
+        );
+        return;
       }
-      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
-        .filter((p, i, all) => all.indexOf(p) === i)
-        .map((p) => ({ label: readModName(p), path: p }));
-      FlagBuilderPanel.show(context, {
-        meta,
-        roots,
-        mods,
-        gameMissing: cfg.gamePath === null,
-        target: coaTargetArg(arg),
-      });
+      CoaDesignerPanel.show(context, options);
     }),
     vscode.commands.registerCommand("px.createCoatOfArms", () => {
       if (!requireFlagBuilder()) return;
