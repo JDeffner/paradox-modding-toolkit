@@ -131,6 +131,8 @@ ${uiCss}
   .pub-part { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
   .pub-part > .pub-row .lbl { font-weight: 500; }
   .pub-part .off-chip { display: none; margin-left: auto; flex: 0 0 auto; }
+  #langsToggle .px-icon { transition: transform 120ms; }
+  #langsToggle[aria-expanded="true"] .px-icon { transform: rotate(180deg); }
   .pub-part[data-off] .off-chip { display: inline-flex; }
   .pub-part[data-off] > .pub-row .lbl, .pub-part[data-off] > .pub-body { opacity: 0.45; }
   .pub-part[data-off] > .pub-body { pointer-events: none; }
@@ -166,7 +168,7 @@ ${BBPREV_CSS}
     color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left;
   }
   .modal-line { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left; }
-  .gallery { display: flex; flex-wrap: wrap; gap: 8px; }
+  .gallery { position: relative; display: flex; flex-wrap: wrap; gap: 8px; }
   .gallery .tile { position: relative; width: 112px; height: 84px; border: 1px solid var(--px-border); border-radius: var(--px-radius); overflow: hidden; background: var(--px-muted); }
   .gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -300,9 +302,10 @@ ${BBPREV_CSS}
           <div class="pub-row">
             <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
             <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
+            <button id="langsToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Choose which languages go up" aria-expanded="false">${icon("chevronDown")}</button>
             <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
           </div>
-          <div id="langRows" class="pub-body"></div>
+          <div id="langRows" class="pub-body" hidden></div>
         </div>
         <div class="pub-part" data-part="note">
           <div class="pub-row">

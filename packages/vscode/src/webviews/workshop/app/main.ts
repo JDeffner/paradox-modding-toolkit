@@ -628,13 +628,23 @@ function wireGalleryDrag(gallery: HTMLElement): void {
       let offset = { x: 0, y: 0 };
       const before = tiles().map((t) => t.dataset.name);
 
+      // Layout boxes, not getBoundingClientRect: a sibling mid-slide reports
+      // its transformed rect, which made the hit test and the FLIP deltas
+      // chase the animation (the stutter). offsetLeft/Top ignore transforms.
+      const box = (t: HTMLElement) => ({
+        left: t.offsetLeft,
+        top: t.offsetTop,
+        right: t.offsetLeft + t.offsetWidth,
+        bottom: t.offsetTop + t.offsetHeight,
+        width: t.offsetWidth,
+      });
       const flip = (move: () => void): void => {
-        const first = new Map(tiles().map((t) => [t, t.getBoundingClientRect()]));
+        const first = new Map(tiles().map((t) => [t, box(t)]));
         move();
         for (const t of tiles()) {
           const a = first.get(t);
           if (!a || t === tile) continue;
-          const b = t.getBoundingClientRect();
+          const b = box(t);
           const dx = a.left - b.left;
           const dy = a.top - b.top;
           if (!dx && !dy) continue;
@@ -663,14 +673,17 @@ function wireGalleryDrag(gallery: HTMLElement): void {
         ghost.style.left = `${e.clientX - offset.x}px`;
         ghost.style.top = `${e.clientY - offset.y}px`;
         // The slot the pointer is over decides where the placeholder goes.
+        const g = gallery.getBoundingClientRect();
+        const px = e.clientX - g.left + gallery.scrollLeft;
+        const py = e.clientY - g.top + gallery.scrollTop;
         const over = tiles().find((t) => {
           if (t === tile) return false;
-          const r = t.getBoundingClientRect();
-          return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+          const r = box(t);
+          return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
         });
         if (!over) return;
-        const r = over.getBoundingClientRect();
-        const after = e.clientX > r.left + r.width / 2;
+        const r = box(over);
+        const after = px > r.left + r.width / 2;
         const target = after ? over.nextSibling : over;
         if (target === tile || (after && over.nextSibling === tile)) return;
         flip(() => gallery.insertBefore(tile, target));
@@ -897,6 +910,13 @@ function renderPublish(): void {
 for (const id of ["incContent", "incDetails", "incLangs", "incNote"]) {
   $(id).addEventListener("change", renderPublish);
 }
+// The per-language switches fold away: nine rows is the exception you open,
+// not the default view of the card.
+$("langsToggle").addEventListener("click", () => {
+  const rows = $("langRows");
+  rows.hidden = !rows.hidden;
+  $("langsToggle").setAttribute("aria-expanded", String(!rows.hidden));
+});
 $("enableAll").addEventListener("click", () => {
   $("enableAllConfirm").hidden = false;
   $<HTMLButtonElement>("enableAll").disabled = true;
