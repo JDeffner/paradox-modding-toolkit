@@ -49,6 +49,12 @@
     --vscode-button-hoverBackground,
     color-mix(in oklch, var(--px-primary) 80%, transparent)
   );
+  /* Good and bad for a value the PLAYER reads, not for the UI's own state: a
+     modifier line is green or red the way the game paints it. VS Code
+     publishes its chart palette to webviews, which is the one green/red pair a
+     theme defines for content rather than for editor decorations. */
+  --px-good: var(--vscode-charts-green, #2ea043);
+  --px-bad: var(--vscode-charts-red, var(--px-destructive));
   --px-destructive: var(--vscode-errorForeground, #f14c4c);
   --px-destructive-soft: color-mix(in oklch, var(--px-destructive) 18%, transparent);
   --px-destructive-hover: color-mix(in oklch, var(--px-destructive) 28%, transparent);
@@ -80,6 +86,9 @@
 }
 
 body.vscode-light {
+  /* The chart green reads as a pale mint on a white ground; a darker one keeps
+     the same meaning legible. */
+  --px-good: var(--vscode-charts-green, #1a7f37);
   --px-mix-muted: 4%;
   --px-mix-popover: 0%;
   --px-mix-border: 9%;
@@ -377,14 +386,23 @@ body.vscode-light .px-textarea {
   font-weight: 500;
   color: var(--px-muted-fg);
 }
+/* Label column, control column. The label column is FIXED so every row in a
+   form lines up, and it WRAPS: a definition key is as long as the game made it
+   (`monthly_county_control_change_factor`), and a nowrap label simply ran over
+   its own input. The control cell needs its own min-width: a grid track's
+   minmax(0, …) does not stop a flex child inside it from pushing wider. */
 .px-field {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
 .px-field > .px-label {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.px-field > :not(.px-label) {
+  min-width: 0;
 }
 
 /* A short prefix inside the field: <label class="px-labeled"><span>h</span><input class="px-input"></label> */
@@ -1444,6 +1462,58 @@ button.px-swatch:focus-visible {
   flex: 0 0 auto;
   object-fit: contain;
   image-rendering: auto;
+}
+
+/* How the GAME prints a modifier, and the panel that shows it (modifierLines.ts).
+   `.px-game-tip` is a quoted piece of the game's own UI, so it gets a border
+   and its own ground rather than blending into the form around it. The tones
+   are the game's `color = good/neutral/bad` read for the PLAYER, which is why
+   a negative number can be the green one. */
+.px-game-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--px-border);
+  border-radius: var(--px-radius-md);
+  background: var(--px-muted);
+}
+.px-game-tip > .px-game-tip-title {
+  font-size: var(--px-text);
+  font-weight: 600;
+}
+.px-game-tip > .px-game-tip-body {
+  font-size: var(--px-text-sm);
+  color: var(--px-muted-fg);
+  line-height: 1.4;
+}
+.px-mod-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--px-text-sm);
+  line-height: 1.5;
+}
+.px-mod-line > .px-mod-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.px-mod-line.good > .px-mod-value {
+  color: var(--px-good);
+}
+.px-mod-line.bad > .px-mod-value {
+  color: var(--px-bad);
+}
+.px-mod-line.neutral > .px-mod-value {
+  color: var(--px-fg);
+}
+.px-texticon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  vertical-align: text-bottom;
 }
 
 /* A modifier row: name, number, remove. The tools stay visible (the remove

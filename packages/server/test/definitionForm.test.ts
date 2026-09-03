@@ -65,6 +65,19 @@ beforeAll(() => {
   const culturesFile = path.join(dir, "px_cultures.txt");
   fs.writeFileSync(culturesFile, CULTURES_TXT, "utf8");
   data.index.addAll([
+    // The loc entries the labels come from: `trait_$` for a trait (the schema's
+    // own first pattern), `$_name` for a pillar (its entry names none). One
+    // trait deliberately has no loc entry at all.
+    { name: "trait_px_stoic", kind: "loc_key", file: "loc.yml", line: 1, source: "mod", value: "Stoic" },
+    { name: "trait_brave", kind: "loc_key", file: "loc.yml", line: 2, source: "vanilla", value: "Brave" },
+    {
+      name: "ethos_stoic_name",
+      kind: "loc_key",
+      file: "loc.yml",
+      line: 3,
+      source: "mod",
+      value: "Stoic Ethos",
+    },
     { name: "px_stoic", kind: "trait", file: traitsFile, line: 1, source: "mod" },
     { name: "brave", kind: "trait", file: "vanilla.txt", line: 0, source: "vanilla" },
     { name: "craven", kind: "trait", file: "vanilla.txt", line: 5, source: "vanilla" },
@@ -180,6 +193,33 @@ describe("computeDefinitionForm", () => {
     // `traits = { trait_name = int }`: the entry keys are trait names.
     expect(perk.keys.find((k) => k.key === "traits")?.refKinds).toEqual(["trait"]);
     expect(perk.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
+  });
+
+  it("labels options and existing definitions with the loc the game reads", () => {
+    const trait = computeDefinitionForm(data, schema, { kind: "trait" })!;
+    // trait_$ is the schema's first loc pattern; craven has no loc entry, so it
+    // gets no label rather than a title-cased guess.
+    expect(trait.options.trait.map((i) => [i.value, i.label])).toEqual([
+      ["px_stoic", "Stoic"],
+      ["brave", "Brave"],
+      ["craven", undefined],
+    ]);
+    expect(trait.existing.map((d) => d.label)).toEqual(["Stoic"]);
+
+    // culture_pillar's schema entry names no loc pattern: $_name, then $.
+    const culture = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    expect(culture.options.culture_pillar.map((i) => [i.value, i.label])).toEqual([
+      ["ethos_stoic", "Stoic Ethos"],
+      ["language_arabic", undefined],
+    ]);
+  });
+
+  it("carries the literal the game writes most often for a key as its example", () => {
+    const trait = computeDefinitionForm(data, schema, { kind: "trait" })!;
+    expect(trait.keys.find((k) => k.key === "category")?.example).toBe("personality");
+    expect(trait.keys.find((k) => k.key === "martial")?.example).toBe("2");
+    // A key no indexed definition writes has no example to give.
+    expect(trait.keys.find((k) => k.key === "desc")?.example).toBeUndefined();
   });
 
   it("answers null for a kind the active game's schema does not have", () => {

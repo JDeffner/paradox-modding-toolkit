@@ -111,6 +111,8 @@ export interface MenuItem {
   hint?: string;
   /** CSS color for a swatch on the left. */
   swatch?: string;
+  /** A picture for the entry (a decoded game icon), drawn left of the label. */
+  image?: string;
   /** A second, dimmer line under the label (a full path, an explanation). */
   description?: string;
 }
@@ -183,6 +185,14 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
         sw.className = "px-swatch";
         sw.style.setProperty("--px-swatch", item.swatch);
         row.append(sw);
+      }
+      if (item.image) {
+        const img = document.createElement("img");
+        img.className = "px-chip-thumb";
+        img.src = item.image;
+        img.alt = "";
+        img.loading = "lazy";
+        row.append(img);
       }
       const label = document.createElement("span");
       label.className = "px-grow";

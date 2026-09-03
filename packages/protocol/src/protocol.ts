@@ -242,6 +242,13 @@ export interface OverviewDef {
   name: string;
   file: string;
   line: number;
+  /**
+   * The loc-resolved display name, when the kind's loc pattern resolves to one
+   * ({@link EventVocabularyItem.label}). Set by {@link definitionFormRequest}
+   * only, so a creator listing what the mod already has can show the player's
+   * word for it; absent everywhere else.
+   */
+  label?: string;
 }
 export interface OverviewKind {
   kind: string;
@@ -1497,6 +1504,13 @@ export interface EventVocabularyItem {
   /** Dimmer right-hand label: where the value comes from (mod / vanilla / a kind). */
   hint?: string;
   /**
+   * The name the PLAYER reads: the loc value of the kind's first loc pattern
+   * with `$` replaced by the definition name (`trait_$` -> `trait_brave` ->
+   * "Brave"). Set by {@link definitionFormRequest} only, and absent when
+   * nothing resolves, so a client shows the key rather than an invented word.
+   */
+  label?: string;
+  /**
    * The family this definition belongs to, when one folder holds several and
    * the schema entry names the key that says so (`type = ethos` in
    * common/culture/pillars). Set by {@link definitionFormRequest} only, so a
@@ -1740,6 +1754,14 @@ export interface DefinitionFormKey {
    * honest answer for a key whose value is different in every definition.
    */
   sampled?: string[];
+  /**
+   * The scalar literal the indexed definitions of this kind write most often
+   * for this key: a real value, so a form can show it as the input's
+   * placeholder instead of inventing one. Unlike {@link sampled} it counts
+   * numbers and quoted text too (quotes stripped), and it survives the cap, so
+   * a key whose value differs in every definition still has an example.
+   */
+  example?: string;
 }
 
 export interface DefinitionForm {
@@ -1816,6 +1838,60 @@ export interface DefinitionEditResult {
   edits: GuiTextEdit[];
   /** One verdict per requested op, in request order; `refused` names why it wrote nothing. */
   ops: { refused?: string }[];
+}
+
+/**
+ * Request: how the GAME prints each modifier; {@link ModifierFormatsParams} ->
+ * {@link ModifierFormatsResult} | null (null = the active profile names no
+ * formats source, or the game folder is not configured).
+ *
+ * A creator that lets a modder add `monthly_income = 0.5` has to show what the
+ * player will see, and the player sees "[gold_i] +0.50 Monthly Income" in
+ * green. None of that is written here: the flags come from the game's own
+ * `common/modifier_definition_formats/` (documented by `_definitions.info`
+ * there), every word comes from the loc index, and every icon comes from the
+ * `texticon` blocks of the game's `gui/texticons.gui`. A modifier no format
+ * block names gets the file's documented defaults, so the answer covers every
+ * modifier token the server knows rather than only the formatted ones.
+ */
+export const modifierFormatsRequest = "paradox/modifierFormats";
+export type ModifierFormatsParams = ModScopedParams;
+
+/**
+ * One piece of a prefix or suffix: a word, or a texticon. `[gold_i]` in a loc
+ * value resolves through `game_concept_gold_i` = `"@gold_icon!"` to the
+ * `texticon` block naming the sprite, which is what an icon part carries.
+ */
+export type FormatPart =
+  { text: string } | { icon: { texture: string; uv?: [number, number, number, number] } };
+
+/** How one modifier is printed, straight out of the game's own format files. */
+export interface ModifierFormat {
+  /** The player's word for the modifier, loc-resolved; the key title-cased when it has none. */
+  label: string;
+  /** Digits after the point. The file's documented default is 2. */
+  decimals: number;
+  /** Scale the value by 100 and print a `%`. */
+  percent?: boolean;
+  /** Print a `%` without scaling: the value already is one. */
+  alreadyPercent?: boolean;
+  /** Which direction is good for the player. The file's documented default is `bad`. */
+  color: "good" | "neutral" | "bad";
+  /** `no_difference_sign`: print the number without a leading `+`/`-`. */
+  noSign?: boolean;
+  /** The game does not show this modifier at all. */
+  hidden?: boolean;
+  /** Drawn before the number (`[gold_i]`). */
+  prefix?: FormatPart[];
+  /** Drawn after the number (`/month`). */
+  suffix?: FormatPart[];
+  /** Used in place of `suffix` for negative values, when the game defines one. */
+  negativeSuffix?: FormatPart[];
+}
+
+export interface ModifierFormatsResult {
+  /** Modifier name -> its format. Every modifier token the server knows. */
+  formats: Record<string, ModifierFormat>;
 }
 
 /**

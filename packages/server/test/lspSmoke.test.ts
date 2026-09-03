@@ -36,6 +36,7 @@ import {
   guiTreeRequest,
   definitionFormRequest,
   definitionEditRequest,
+  modifierFormatsRequest,
   type DefinitionForm,
   type DefinitionEditResult,
   guiVocabularyRequest,
@@ -982,6 +983,13 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(form!.current?.text).toBe(TRAITS_TXT.trimEnd());
     // A kind this game's schema has no folder for is null, not an invented shape.
     expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
+  });
+
+  it("paradox/modifierFormats needs the game's own format files to answer", async () => {
+    // This suite runs with gamePath null (the vanilla scan is skipped to keep
+    // the smoke fast), and the print rules live in the game folder. Null is the
+    // answer, not an invented label per modifier.
+    expect(await conn.sendRequest(modifierFormatsRequest, {})).toBeNull();
   });
 
   it("paradox/definitionEdit round-trips a property change and an appended block", async () => {
