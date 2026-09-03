@@ -8,6 +8,9 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- `protocol`: `paradox/modifierFormats` (`ModifierFormatsParams`,
+  `ModifierFormatsResult`, `ModifierFormat`, `FormatPart`); `example` on
+  `DefinitionFormKey`, `label` on `EventVocabularyItem` and `OverviewDef`.
 - `protocol`: `paradox/definitionForm` and `paradox/definitionEdit`, the wire
   pair the visual content creators are built on. The form carries two optional
   fields: `group` on an option item (the family a definition belongs to when

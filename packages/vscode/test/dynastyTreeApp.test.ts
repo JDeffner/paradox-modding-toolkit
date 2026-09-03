@@ -4,8 +4,8 @@
  *
  * What it pins is that the page and the app agree: the ids html.ts writes are
  * the ids main.ts reaches for, the picker turns a click into the request the
- * host expects, and a tree draws one card per character with the vanilla ones
- * marked apart from the mod's.
+ * host expects, a tree draws one card per character with orthogonal lines
+ * between them, and the card's own actions open the form the modder wanted.
  */
 import { describe, expect, it } from "vitest";
 import * as path from "path";
@@ -118,6 +118,8 @@ function boot(): Booted {
       (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
         postMessage: (msg: Record<string, unknown>) => posted.push(msg),
       });
+      // jsdom has no layout, so the menu's keyboard scrolling needs a stand-in.
+      window.Element.prototype.scrollIntoView = () => undefined;
     },
   });
   const window = dom.window as unknown as Window & typeof globalThis;
@@ -126,6 +128,24 @@ function boot(): Booted {
     posted,
     send: (data) => window.dispatchEvent(new window.MessageEvent("message", { data })),
   };
+}
+
+/** The card of one character, by the id the renderer stamps on it. */
+function card(app: Booted, id: string): Element {
+  const found = app.window.document.querySelector(`#scene .card[data-id="${id}"]`);
+  if (!found) throw new Error(`no card for ${id}`);
+  return found;
+}
+
+function click(app: Booted, element: Element): void {
+  element.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+}
+
+function sideButton(app: Booted, label: string): HTMLButtonElement {
+  const side = app.window.document.getElementById("sideBody")!;
+  const found = [...side.querySelectorAll("button")].find((b) => b.textContent?.includes(label));
+  if (!found) throw new Error(`no ${label} button`);
+  return found;
 }
 
 describe("the Dynasty Tree app", () => {
@@ -167,72 +187,103 @@ describe("the Dynasty Tree app", () => {
     );
   });
 
-  it("draws one card per character, vanilla and external ones marked apart", () => {
+  it("draws a card per character and one orthogonal line per relationship", () => {
     const app = boot();
     app.send({ type: "tree", tree: TREE, ms: 4 });
-    const cards = app.window.document.querySelectorAll("#scene .card");
-    expect(cards).toHaveLength(3);
-    const external = app.window.document.querySelectorAll("#scene .card[data-external]");
-    expect(external).toHaveLength(1);
-    expect(app.window.document.querySelectorAll('#scene .card[data-source="mod"]')).toHaveLength(2);
-    // One marriage and two parent links.
-    expect(app.window.document.querySelectorAll('#scene .edge[data-kind="spouse"]')).toHaveLength(1);
-    expect(app.window.document.querySelectorAll('#scene .edge[data-kind="parent"]')).toHaveLength(2);
+    const doc = app.window.document;
+    expect(doc.querySelectorAll("#scene .card")).toHaveLength(3);
+    expect(doc.querySelectorAll("#scene .card[data-external]")).toHaveLength(1);
+    expect(doc.querySelectorAll('#scene .card[data-source="mod"]')).toHaveLength(2);
+    // The marriage is one bar, and the couple's child hangs on one line from it.
+    expect(doc.querySelectorAll('#scene .edge[data-kind="spouse"]')).toHaveLength(1);
+    const child = doc.querySelectorAll('#scene .edge[data-kind="parent"]');
+    expect(child).toHaveLength(1);
+    const points = child[0]
+      .getAttribute("points")!
+      .split(" ")
+      .map((p) => p.split(",").map(Number));
+    for (const [i, point] of points.entries()) {
+      if (i === 0) continue;
+      expect(point[0] === points[i - 1][0] || point[1] === points[i - 1][1]).toBe(true);
+    }
+    // The card carries the name, the years and the house as a text badge.
+    expect(card(app, "1").textContent).toContain("Smoky");
+    expect(card(app, "1").textContent).toContain("1000–");
+    expect(card(app, "1").querySelector(".ctagtext")!.textContent).toBe("Smoke");
   });
 
   it("shows the dynasty in the inspector until a character is picked", () => {
     const app = boot();
     app.send({ type: "tree", tree: TREE, ms: 4 });
     const side = app.window.document.getElementById("sideBody")!;
-    expect(side.textContent).toContain("Smoke");
     expect(side.textContent).toContain("Houses (1)");
-
-    const card = app.window.document.querySelector("#scene .card") as unknown as HTMLElement;
-    card.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+    click(app, card(app, "1"));
     expect(side.textContent).toContain("Smoky");
-    expect(side.textContent).toContain("Add child");
+    expect(app.window.document.querySelector("#scene .card[data-selected]")).not.toBeNull();
   });
 
-  it("says a vanilla character is read only, and still offers to add to them", () => {
+  it("offers add child, add spouse and edit on a card, but no edit on a vanilla one", () => {
     const app = boot();
     app.send({ type: "tree", tree: TREE, ms: 4 });
-    const cards = app.window.document.querySelectorAll("#scene .card");
-    const vanilla = [...cards].find((c) => c.getAttribute("data-external") !== null)!;
-    vanilla.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+    expect([...card(app, "1").querySelectorAll(".cact")].map((a) => a.getAttribute("data-act"))).toEqual([
+      "child",
+      "spouse",
+      "edit",
+    ]);
+    expect([...card(app, "2").querySelectorAll(".cact")].map((a) => a.getAttribute("data-act"))).toEqual([
+      "child",
+      "spouse",
+    ]);
+    click(app, card(app, "1").querySelector('.cact[data-act="spouse"]')!);
     const side = app.window.document.getElementById("sideBody")!;
-    expect(side.textContent).toContain("comes from the game files");
-    expect(side.textContent).toContain("Add spouse");
-    expect(side.textContent).not.toContain("Edit");
-  });
-
-  it("prefills a new child from the parent it was started on", () => {
-    const app = boot();
-    app.send({ type: "tree", tree: TREE, ms: 4 });
-    const card = app.window.document.querySelector("#scene .card") as unknown as HTMLElement;
-    card.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
-    const side = app.window.document.getElementById("sideBody")!;
-    const add = [...side.querySelectorAll("button")].find((b) => b.textContent?.includes("Add child"))!;
-    add.click();
     expect(side.textContent).toContain("New character 4");
-    const inputs = [...side.querySelectorAll("input.px-input")].map((i) => (i as HTMLInputElement).value);
-    // The father is the character it was started on, and the birth is his plus
-    // the offset, so the form is saveable with only a name typed.
-    expect(inputs).toContain("1020.1.1");
-    const save = [...side.querySelectorAll("button")].find((b) => b.textContent?.includes("Create"))!;
-    save.click();
-    // No name yet, so nothing is sent.
+    expect(side.textContent).toContain("Smoky (1)");
+  });
+
+  it("prefills a new child from the couple, and only suggests the birth date", () => {
+    const app = boot();
+    app.send({ type: "tree", tree: TREE, ms: 4 });
+    click(app, card(app, "1").querySelector('.cact[data-act="child"]')!);
+    const side = app.window.document.getElementById("sideBody")!;
+    expect(side.textContent).toContain("New character 4");
+    // A guessed birth date is an offer, not a value: it must not be saved
+    // because nobody looked at the field.
+    const born = [...side.querySelectorAll("input.px-input")].find(
+      (i) => (i as HTMLInputElement).placeholder === "1020.1.1"
+    ) as HTMLInputElement;
+    expect(born.value).toBe("");
+
+    sideButton(app, "Create").click();
     expect(app.posted.some((m) => m.type === "saveCharacter")).toBe(false);
     const name = side.querySelector("input.px-input") as HTMLInputElement;
     name.value = "Newborn";
     name.dispatchEvent(new app.window.Event("input"));
-    save.click();
+    sideButton(app, "Create").click();
     const sent = app.posted.find((m) => m.type === "saveCharacter") as
-      { form: { name: string; father?: string; house?: string; birth?: string } } | undefined;
+      | { form: { name: string; father?: string; mother?: string; house?: string; birth?: string } }
+      | undefined;
     expect(sent?.form).toMatchObject({
       name: "Newborn",
       father: "1",
+      mother: "2",
       house: "house_smoke",
-      birth: "1020.1.1",
     });
+    expect(sent?.form.birth).toBeUndefined();
+  });
+
+  it("offers only men born before the child in the father picker", () => {
+    const app = boot();
+    app.send({ type: "tree", tree: TREE, ms: 4 });
+    click(app, card(app, "3").querySelector('.cact[data-act="edit"]')!);
+    const side = app.window.document.getElementById("sideBody")!;
+    const father = [...side.querySelectorAll(".px-field")].find((f) =>
+      f.querySelector(".px-label")?.textContent?.includes("Father")
+    )!;
+    (father.querySelector("button.pick") as HTMLButtonElement).click();
+    const offered = [...app.window.document.querySelectorAll(".px-menu-item .px-grow")].map(
+      (row) => row.textContent
+    );
+    // Not the mother (wrong sex) and not the child itself.
+    expect(offered).toEqual(["none", "Smoky (1)"]);
   });
 });

@@ -8,6 +8,16 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- `paradox/modifierFormats`: how every modifier prints, read from the game's
+  `common/modifier_definition_formats` files, its loc and `gui/texticons.gui`,
+  behind the profile (`GameMeta.modifierFormats`, CK3 only). A modifier with no
+  `color` prints as good: the format file writes `color = bad` 113 times and
+  `color = good` twice across 667 blocks, which is what the player sees.
+- `paradox/definitionForm`: a key carries `example` (the literal the game
+  writes most, for placeholders) and option and existing entries carry
+  `label` (the loc name, following one `$key$` alias hop).
+- Coat of arms: an instance's `depth` is parsed and written back, so a design
+  that carries it round-trips.
 - `paradox/definitionForm` and `paradox/definitionEdit`: the read and the
   write a visual content creator needs. The form is assembled from the schema
   table, the harvested `_*.info` structures, the definition index and the

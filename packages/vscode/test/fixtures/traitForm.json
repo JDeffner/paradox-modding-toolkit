@@ -11,28 +11,55 @@
     {
       "key": "category",
       "doc": "What unique category this trait is in, categories have gameplay implications as well as sorting",
-      "freq": 250
+      "freq": 250,
+      "sampled": ["personality", "education"],
+      "example": "personality"
     },
     {
       "key": "culture_modifier",
       "doc": "Modifier that will be applied for characters with a culture with the specified parameter",
       "values": "block",
-      "freq": 249
+      "freq": 249,
+      "sampled": [
+        "mountain_trait_bonuses",
+        "ambitious_trait_penalty",
+        "craven_and_content_traits_looked_down_upon",
+        "craven_trait_costs_prestige",
+        "dry_trait_bonuses",
+        "hill_trait_bonuses",
+        "honorable_trait_bonuses",
+        "martial_education_more_valued",
+        "palace_politics_trait_bonuses",
+        "poorly_educated_leaders_distrusted",
+        "prowess_from_martial_education",
+        "trait_county_opinion_modifiers",
+        "winter_trait_bonuses"
+      ]
     },
     {
       "key": "ruler_designer_cost",
       "doc": "Cost to take in ruler designer, defaults to zero",
-      "freq": 222
+      "freq": 222,
+      "example": "40"
     },
     {
       "key": "flag",
       "doc": "Flag this trait is marked with, can add multiple, localized as TRAIT_FLAG_DESC_name",
-      "freq": 204
+      "freq": 204,
+      "sampled": [
+        "higher_chance_of_dying_in_battle",
+        "level_1_education",
+        "lower_chance_of_dying_in_combat",
+        "military_province"
+      ],
+      "example": "higher_chance_of_dying_in_battle"
     },
     {
       "key": "ai_energy",
       "doc": "Used 101x in vanilla traits (not in the .info docs).",
-      "freq": 101
+      "freq": 101,
+      "sampled": ["low_negative_ai_value", "low_positive_ai_value", "very_high_positive_ai_value"],
+      "example": "low_negative_ai_value"
     },
     {
       "key": "opposites",
@@ -49,7 +76,8 @@
     },
     {
       "key": "diplomacy",
-      "freq": 90
+      "freq": 90,
+      "example": "1"
     },
     {
       "key": "shown_in_ruler_designer",
@@ -60,51 +88,63 @@
     {
       "key": "level",
       "doc": "What level in the group this trait is",
-      "freq": 77
+      "freq": 77,
+      "example": "1"
     },
     {
       "key": "group",
       "doc": "What trait group this trait is in, grouping is used for both inheritance and equivalence",
-      "freq": 69
+      "freq": 69,
+      "sampled": ["education_martial"],
+      "example": "education_martial"
     },
     {
       "key": "intrigue",
       "doc": "Used 63x in vanilla traits (not in the .info docs).",
-      "freq": 63
+      "freq": 63,
+      "example": "1"
     },
     {
       "key": "learning",
       "doc": "Used 62x in vanilla traits (not in the .info docs).",
-      "freq": 62
+      "freq": 62,
+      "example": "1"
     },
     {
       "key": "same_opinion",
       "doc": "Opinion impact if two characters share the trait",
-      "freq": 60
+      "freq": 60,
+      "example": "-15"
     },
     {
       "key": "ai_rationality",
       "doc": "Used 58x in vanilla traits (not in the .info docs).",
-      "freq": 58
+      "freq": 58,
+      "sampled": ["low_negative_ai_value", "very_low_positive_ai_value"],
+      "example": "low_negative_ai_value"
     },
     {
       "key": "prowess",
       "doc": "Used 58x in vanilla traits (not in the .info docs).",
-      "freq": 58
+      "freq": 58,
+      "example": "-3"
     },
     {
       "key": "attraction_opinion",
       "doc": "Used 57x in vanilla traits (not in the .info docs).",
-      "freq": 57
+      "freq": 57,
+      "example": "-10"
     },
     {
       "key": "stewardship",
-      "freq": 56
+      "freq": 56,
+      "example": "1"
     },
     {
       "key": "martial",
       "doc": "Used 55x in vanilla traits (not in the .info docs).",
-      "freq": 55
+      "freq": 55,
+      "example": "2"
     },
     {
       "key": "name",
@@ -113,7 +153,9 @@
     {
       "key": "ai_honor",
       "doc": "Used 49x in vanilla traits (not in the .info docs).",
-      "freq": 49
+      "freq": 49,
+      "sampled": ["low_negative_ai_value"],
+      "example": "low_negative_ai_value"
     },
     {
       "key": "health",
@@ -123,7 +165,8 @@
     {
       "key": "minimum_age",
       "doc": "Min age required to have this trait",
-      "freq": 39
+      "freq": 39,
+      "example": "16"
     },
     {
       "key": "physical",
@@ -161,7 +204,8 @@
     {
       "key": "opposite_opinion",
       "doc": "Opinion impact if two characters have opposite traits",
-      "freq": 30
+      "freq": 30,
+      "example": "-10"
     },
     {
       "key": "icon",
@@ -325,19 +369,28 @@
     "trait": [
       {
         "value": "px_stoic",
-        "hint": "this mod"
+        "hint": "this mod",
+        "label": "Stoic"
       },
       {
         "value": "ambitious",
-        "hint": "vanilla"
+        "hint": "vanilla",
+        "label": "Ambitious"
       },
       {
         "value": "brave",
-        "hint": "vanilla"
+        "hint": "vanilla",
+        "label": "Brave"
       },
       {
         "value": "craven",
-        "hint": "vanilla"
+        "hint": "vanilla",
+        "label": "Craven"
+      },
+      {
+        "value": "education_martial_1",
+        "hint": "vanilla",
+        "label": "Misguided Warrior"
       }
     ]
   },
@@ -1547,7 +1600,8 @@
     {
       "name": "px_stoic",
       "file": "px_traits.txt",
-      "line": 1
+      "line": 1,
+      "label": "Stoic"
     }
   ]
 }

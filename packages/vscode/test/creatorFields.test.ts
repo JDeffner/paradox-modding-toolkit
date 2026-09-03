@@ -1,16 +1,20 @@
 /**
  * The decisions inside the creators' shared field widgets: what a search box
- * keeps, what a chip list does to a value that is already there, and how a
- * modifier row reaches script. The DOM these functions dress is checked by the
- * gallery and by the trait creator's jsdom boot; these are the parts a reader
- * cannot verify by eye.
+ * keeps, what a chip list does to a value that is already there, how a modifier
+ * row reaches script, and the two things every creator's form depends on being
+ * true (an empty input shows an example, and a picker reads the player's word
+ * for a definition while still naming the key that gets written).
+ *
+ * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
 import {
   addChip,
   filterVocabulary,
   modifierRowsToScript,
+  refField,
   removeChip,
+  textField,
   titleCaseFromName,
 } from "../src/webviews/shared/fields";
 
@@ -31,6 +35,11 @@ describe("filterVocabulary", () => {
   it("keeps the source order and answers everything for an empty query", () => {
     expect(filterVocabulary(TRAITS, "  ").map((i) => i.value)).toEqual(["brave", "craven", "px_stoic"]);
     expect(filterVocabulary(TRAITS, "a").map((i) => i.value)).toEqual(["brave", "craven", "px_stoic"]);
+  });
+
+  it("matches the loc-resolved name a picker actually shows", () => {
+    const items = [{ value: "px_stoic", label: "Stoic" }, { value: "brave" }];
+    expect(filterVocabulary(items, "stoi").map((i) => i.value)).toEqual(["px_stoic"]);
   });
 
   it("ignores case on both sides", () => {
@@ -72,6 +81,44 @@ describe("modifierRowsToScript", () => {
 
   it("writes an integer without a decimal point", () => {
     expect(modifierRowsToScript([{ name: "health", value: 2 }])).toBe("health = 2");
+  });
+});
+
+describe("placeholders", () => {
+  it("shows the example the caller gave as the input's own placeholder", () => {
+    const field = textField({ label: "Category", placeholder: "personality" });
+    const input = field.el.querySelector("input")!;
+    expect(input.placeholder).toBe("personality");
+    // No example: the input says nothing rather than inventing an instruction.
+    expect(textField({ label: "Category" }).el.querySelector("input")!.placeholder).toBe("");
+  });
+});
+
+describe("refField picker", () => {
+  // jsdom has no layout, so the menu's "keep the active row in view" call has
+  // nothing to do here.
+  Element.prototype.scrollIntoView = (): undefined => undefined;
+
+  const open = (items: Parameters<typeof refField>[0]["items"]): HTMLElement[] => {
+    document.body.replaceChildren();
+    const field = refField({ label: "Opposite", items });
+    document.body.append(field.el);
+    field.el.querySelector<HTMLButtonElement>("button")!.click();
+    return [...document.body.querySelectorAll<HTMLElement>(".px-menu-item")];
+  };
+
+  it("reads the player's word and keeps the key as the hint", () => {
+    const rows = open([{ value: "brave", label: "Brave", hint: "game" }]);
+    const row = rows.find((r) => r.textContent?.includes("Brave"))!;
+    expect(row.querySelector(".px-grow")!.textContent).toBe("Brave");
+    expect(row.querySelector(".px-menu-hint")!.textContent).toBe("brave");
+  });
+
+  it("leads with the key when loc has no name for the definition", () => {
+    const rows = open([{ value: "px_stoic", hint: "this mod" }]);
+    const row = rows.find((r) => r.textContent?.includes("px_stoic"))!;
+    expect(row.querySelector(".px-grow")!.textContent).toBe("px_stoic");
+    expect(row.querySelector(".px-menu-hint")!.textContent).toBe("this mod");
   });
 });
 

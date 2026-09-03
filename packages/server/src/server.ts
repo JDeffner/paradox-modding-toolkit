@@ -59,6 +59,8 @@ import {
   eventVocabularyRequest,
   definitionFormRequest,
   definitionEditRequest,
+  modifierFormatsRequest,
+  type ModifierFormatsParams,
   type DefinitionFormParams,
   type DefinitionEditParams,
   guiTreeRequest,
@@ -198,6 +200,7 @@ import { computeEventVocabulary, computeValueOptions } from "./overview/eventVoc
 import { computeEventBanner } from "./overview/eventBanner";
 import { computeDefinitionForm } from "./creators/definitionForm";
 import { computeDefinitionEdits } from "./creators/definitionEdit";
+import { computeModifierFormats } from "./creators/modifierFormats";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -1633,6 +1636,13 @@ connection.onRequest(definitionFormRequest, (params: DefinitionFormParams | null
 // text the host handed over, applied there as one WorkspaceEdit.
 connection.onRequest(definitionEditRequest, (params: DefinitionEditParams | null) =>
   computeDefinitionEdits(params)
+);
+
+// How the game itself prints a modifier: the profile's format folder, the loc
+// index and the game's own texticon blocks. A profile that names no formats
+// source answers null instead of a made-up label.
+connection.onRequest(modifierFormatsRequest, (_params: ModifierFormatsParams | null) =>
+  computeModifierFormats(data, activeProfile().modifierFormats, settings.gamePath)
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));

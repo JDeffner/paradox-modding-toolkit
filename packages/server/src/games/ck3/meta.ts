@@ -61,6 +61,15 @@ export const ck3Meta: GameMeta = {
       tip: "See and edit a dynasty's characters across history.",
     },
   ],
+  // Measured on the 1.19 install: common/modifier_definition_formats/ holds 13
+  // files documented by _definitions.info in the same folder (decimals, color,
+  // prefix/suffix/negative_suffix as loc keys, percent, already_percent,
+  // hidden, no_difference_sign), and gui/texticons.gui holds the `texticon`
+  // blocks a `[gold_i]` in one of those loc values resolves to.
+  modifierFormats: {
+    folder: "common/modifier_definition_formats",
+    textIcons: "gui/texticons.gui",
+  },
   // Date-format keys verified in ck3.exe 1.19 (the gamedate.cpp string block);
   // formats mirror game/localization/english/core_l_english.yml. Vanilla
   // appends $ERA$/$ERA_BCE$ itself - dropped here, the {era} slot replaces it.
@@ -108,8 +117,22 @@ export const ck3Meta: GameMeta = {
   // common/coat_of_arms/coat_of_arms with 0 parse errors, and 100% of both the
   // 7800 texture references (1629 files, every one decoding) and the 15327
   // colors resolve, the named ones out of the 112 in common/named_colors. 239
-  // flags (8.0%) carry something the model drops, 387 of those 399 keys being
-  // `depth` on an instance; Vic3, which has shipped the builder since 0.3.2,
-  // drops something on 8.3% of its flags, so CK3 is no worse off.
+  // flags (8.0%) carried something the model dropped, 387 of those 399 keys
+  // being `depth` on an instance, which the model now carries; Vic3, which has
+  // shipped the builder since 0.3.2, drops something on 8.3% of its flags, so
+  // CK3 is no worse off.
   flagBuilder: true,
+  // Measured on this install (1.19.0.6, 2026-09-03): the in-game designer's
+  // own files are all present and parse - 38 visible patterns of 42 rows in
+  // gfx/coat_of_arms/patterns/50_coa_designer_patterns.txt, 1576 visible
+  // emblems of 1578 rows in 13 categories in
+  // colored_emblems/50_coa_designer_emblems.txt, 13 palette colors in
+  // color_palettes/50_coa_designer_palettes.txt, 35 whole layouts in
+  // emblem_layouts/50_coa_designer_emblem_layouts.txt, the
+  // `coa_designer_blank_default` template in
+  // common/coat_of_arms/coat_of_arms/99_coa_designer_templates.txt and 35
+  // preview frames under gfx/interface/coat_of_arms. Victoria 3 ships no
+  // gfx/coat_of_arms/color_palettes or emblem_layouts at all, and EU5 no coa
+  // designer either, so neither sets this.
+  coaDesigner: true,
 };

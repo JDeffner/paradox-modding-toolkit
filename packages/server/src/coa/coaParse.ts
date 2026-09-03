@@ -138,6 +138,9 @@ function parseInstances(statements: Statement[], vars: Vars): CoaInstance[] {
       if (a.key.text === "rotation" && a.value.kind === "scalar") {
         const r = resolveNumber(a.value.text, vars);
         if (Number.isFinite(r)) inst.rotation = r;
+      } else if (a.key.text === "depth" && a.value.kind === "scalar") {
+        const d = resolveNumber(a.value.text, vars);
+        if (Number.isFinite(d)) inst.depth = d;
       } else if (a.key.text === "scale" && a.value.kind === "block") inst.scale = pair(a.value, vars, [1, 1]);
       else if (a.key.text === "position" && a.value.kind === "block")
         inst.position = pair(a.value, vars, [0.5, 0.5]);

@@ -173,7 +173,14 @@ function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[]
   );
   if (wanted.length === 0) return;
   const counts = new Map<string, Map<string, number>>();
-  for (const key of wanted) counts.set(key.key, new Map());
+  // Read in the same pass, but counted separately: an example is ONE literal
+  // the game writes (a number, a loc key, a quoted line), and those are exactly
+  // the values `offerable` refuses as a value SET.
+  const literals = new Map<string, Map<string, number>>();
+  for (const key of wanted) {
+    counts.set(key.key, new Map());
+    literals.set(key.key, new Map());
+  }
   let read = 0;
   for (const { name, file } of definitionFiles(data, kind)) {
     if (read >= EVENT_VOCABULARY_MAX_VALUES) break;
@@ -185,15 +192,60 @@ function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[]
       const bucket = counts.get(s.key.text);
       if (!bucket) continue;
       namesIn(s.value, (v) => bucket.set(v, (bucket.get(v) ?? 0) + 1));
+      if (s.value.kind === "scalar" && s.value.text !== "") {
+        const seen = literals.get(s.key.text)!;
+        seen.set(s.value.text, (seen.get(s.value.text) ?? 0) + 1);
+      }
     }
   }
+  const mostUsed = (bucket: Map<string, number>): [string, number][] =>
+    [...bucket.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   for (const key of wanted) {
     const bucket = counts.get(key.key)!;
-    if (bucket.size === 0 || bucket.size > DEFINITION_FORM_MAX_SAMPLED) continue;
-    key.sampled = [...bucket.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([value]) => value);
+    if (bucket.size > 0 && bucket.size <= DEFINITION_FORM_MAX_SAMPLED) {
+      key.sampled = mostUsed(bucket).map(([value]) => value);
+    }
+    // Kept even when the value set was dropped for being past the cap: a key
+    // whose value differs in every definition is exactly the one a form has to
+    // show an example for.
+    const example = mostUsed(literals.get(key.key)!)[0];
+    if (example) key.example = example[0];
   }
+}
+
+/**
+ * The name the PLAYER reads for a definition. The loc key is the schema's own
+ * pattern for the kind with `$` replaced by the name; a kind whose entry names
+ * none gets the two shapes the games write for a bare definition, and a name
+ * nothing resolves for keeps no label at all rather than a made-up one.
+ */
+function labeller(data: ServerData, schema: SchemaData): (kind: string, name: string) => string | undefined {
+  const patterns = new Map<string, string[]>();
+  const patternsFor = (kind: string): string[] => {
+    let list = patterns.get(kind);
+    if (!list) {
+      const entry = schema.entries.find((e) => e.kind === kind);
+      const own = entry?.locPatterns ?? entry?.requiredLoc ?? [];
+      list = own.length > 0 ? [own[0]] : ["$_name", "$"];
+      patterns.set(kind, list);
+    }
+    return list;
+  };
+  const locValue = (key: string): string | undefined =>
+    data.index.lookup(key).find((d) => d.kind === "loc_key" && d.value !== undefined)?.value;
+  return (kind, name) => {
+    for (const pattern of patternsFor(kind)) {
+      const value = locValue(pattern.replace("$", name));
+      if (value === undefined || value === "") continue;
+      // A value that is only another key (`tradition_hird_name:0
+      // "$innovation_hird$"`, 10 of ~200 vanilla traditions) reads as that
+      // key's text; one hop, the way the game resolves it.
+      const alias = /^\$([\w.-]+)\$$/.exec(value);
+      const resolved = alias ? locValue(alias[1]) : undefined;
+      return resolved !== undefined && resolved !== "" ? resolved : value;
+    }
+    return undefined;
+  };
 }
 
 export function computeDefinitionForm(
@@ -214,6 +266,7 @@ export function computeDefinitionForm(
   }
 
   const files: FileCache = new Map();
+  const labelOf = labeller(data, schema);
 
   // One list per ref kind any key names, so several keys pointing at the same
   // kind share it instead of shipping the list twice.
@@ -223,6 +276,12 @@ export function computeDefinitionForm(
       if (options[refKind]) continue;
       options[refKind] = definitionsOfKind(data, refKind, inFocus);
       groupOptions(data, schema, refKind, options[refKind], files);
+      // A picker reads better with the player's word for the definition than
+      // with its key, and only the loc index knows it.
+      for (const item of options[refKind]) {
+        const label = labelOf(refKind, item.value);
+        if (label !== undefined) item.label = label;
+      }
     }
   }
 
@@ -233,7 +292,14 @@ export function computeDefinitionForm(
   const existing: OverviewDef[] = [];
   for (const def of data.index.allDefinitions()) {
     if (def.kind !== kind || def.source !== "mod" || !inFocus(def.file)) continue;
-    if (existing.length < EXISTING_CAP) existing.push({ name: def.name, file: def.file, line: def.line });
+    if (existing.length >= EXISTING_CAP) continue;
+    const label = labelOf(kind, def.name);
+    existing.push({
+      name: def.name,
+      file: def.file,
+      line: def.line,
+      ...(label !== undefined ? { label } : {}),
+    });
   }
   existing.sort((a, b) => a.name.localeCompare(b.name));
 

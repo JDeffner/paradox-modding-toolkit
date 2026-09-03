@@ -20,8 +20,9 @@ to humans too.
 
 ## Setup
 
-You need Node 22 or newer and [pnpm](https://pnpm.io). A game install is not
-required for most work; the test suite skips what it cannot reach.
+You need Node 22 or newer and [pnpm](https://pnpm.io) 11 or newer. A game
+install is not required for most work; the test suite skips what it cannot
+reach.
 
 ```bash
 git clone https://github.com/JDeffner/paradox-modding-toolkit.git

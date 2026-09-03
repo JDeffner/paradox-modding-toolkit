@@ -155,6 +155,7 @@ instead.
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
 | `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). `null` when the active profile names no formats source or no game folder is configured |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
@@ -559,6 +560,18 @@ is the script_docs modifier vocabulary hover already reads; `existing` is the
 bytes read off disk. A key with no widget in a client is still in `keys`, so a
 form can show it rather than hide it (AD-5).
 
+Three more fields answer questions the flat lists cannot. An option (and an
+`existing` entry) carries `label` when the loc index resolves the kind's first
+loc pattern with `$` replaced by the definition name (`trait_$` →
+`trait_brave` → "Brave"); a kind whose schema entry names no pattern is tried
+as `$_name` then `$`, and a name nothing resolves for has no `label` at all, so
+a client shows the key rather than an invented word. A key carries `example`
+with the scalar literal the indexed definitions of the kind write most often
+for it: a real value for a form to show as its input's placeholder. Unlike
+`sampled` it counts numbers and quoted text (quotes stripped) and it survives
+the cap, because a key whose value differs in every definition is exactly the
+one that needs an example.
+
 Two fields answer questions one flat list cannot. An option carries `group`
 when the schema entry for its kind names a `groupKey`: one folder can hold
 several families of the same kind (CK3 keeps all five culture pillars in
@@ -572,6 +585,27 @@ the files at request time rather than stored. A key whose value differs in
 every definition has no value SET, so past `DEFINITION_FORM_MAX_SAMPLED` (80)
 the field is absent instead of listing everything; a key with `refKinds` never
 carries it, because `options` already answers it.
+
+`paradox/modifierFormats` completes the pair for a client that lets a modder
+add modifiers: `paradox/definitionForm` says which modifiers exist, this says
+what the player will READ. A modifier row is not its script. The game prints
+`monthly_income = 0.5` as a gold icon, `+0.50` in green and the words "Monthly
+Income", and every part of that is stated in the game's own files: the flags in
+the profile's format folder (one block per modifier, documented by the
+`_definitions.info` sitting beside them; `decimals` defaults to 2, and `color`
+defaults to `good` even though the doc says `bad`: the file writes `color =
+bad` 113 times and `color = good` twice across its 667 blocks, and the game
+prints an unmarked `diplomacy = 1` green), the words in the loc index (the modifier's own key, else
+`MOD_<NAME>`, else the name made readable), and the pictures in the profile's
+texticon file, which a `[gold_i]` in a loc value reaches through the concept
+entry `game_concept_gold_i` = `"@gold_icon!"`. A bracket that resolves to
+nothing stays as text rather than disappearing. Every modifier token the server
+knows gets an entry, with those defaults when no block names it, so a client
+never has to decide what an unformatted modifier looks like. `color` says which
+direction is GOOD FOR THE PLAYER, not which sign is positive: `stress_gain_mult`
+is `bad`, so a negative value is the green one. `negativeSuffix` is why
+`noSign` is safe — the game hides the sign exactly where the suffix carries the
+direction in words ("5 days faster").
 
 `paradox/definitionEdit` is the script sibling of `paradox/guiSourceEdit` and
 follows the same contract: the server never writes, `edits` are

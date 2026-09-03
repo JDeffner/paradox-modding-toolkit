@@ -42,6 +42,13 @@ export interface FieldOptions {
   label: string;
   /** The game's own one-line doc for the key, shown as the label's tooltip. */
   doc?: string;
+  /**
+   * What an empty input shows: an EXAMPLE value, not an instruction. Every
+   * creator has one to hand (`DefinitionFormKey.example` is the literal the
+   * game itself writes most often for the key), and a form whose blank fields
+   * say nothing is a form nobody can start filling in.
+   */
+  placeholder?: string;
 }
 
 /** One `name = value` row of a modifier block. */
@@ -65,7 +72,7 @@ export interface IconChoice {
  * line all match, because a modder looking for "the one about stress" knows
  * the sentence and not the key.
  */
-export function filterVocabulary<T extends { value: string; doc?: string; hint?: string }>(
+export function filterVocabulary<T extends { value: string; doc?: string; hint?: string; label?: string }>(
   items: readonly T[],
   query: string
 ): T[] {
@@ -74,6 +81,7 @@ export function filterVocabulary<T extends { value: string; doc?: string; hint?:
   return items.filter(
     (item) =>
       item.value.toLowerCase().includes(q) ||
+      (item.label ?? "").toLowerCase().includes(q) ||
       (item.hint ?? "").toLowerCase().includes(q) ||
       (item.doc ?? "").toLowerCase().includes(q)
   );
@@ -120,10 +128,25 @@ function el(tag: string, cls = "", text?: string): HTMLElement {
   return node;
 }
 
+/**
+ * A field label for a script key. The key wraps at its underscores, never
+ * inside a word (`same_opinion_if_same_faith` in a 112px column): a <wbr>
+ * after each underscore gives the browser the break and leaves the text
+ * untouched, so `textContent` is still the key.
+ */
+export function keyLabel(text: string): HTMLSpanElement {
+  const label = el("span", "px-label");
+  text.split("_").forEach((part, index) => {
+    if (index > 0) label.append("_", document.createElement("wbr"));
+    label.append(part);
+  });
+  return label;
+}
+
 /** The label + control grid row every field shares. */
 function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
   const row = el("div", "px-field");
-  const label = el("span", "px-label", options.label);
+  const label = keyLabel(options.label);
   if (options.doc) {
     label.dataset.tip = options.doc;
     label.dataset.tipWrap = "";
@@ -165,11 +188,17 @@ function paintTrigger(button: HTMLButtonElement, value: string, placeholder: str
   else button.dataset.placeholder = "";
 }
 
+/**
+ * The picker's face for an indexed definition. A definition the loc index has
+ * a name for reads as that name, with its KEY as the dimmer hint: a modder
+ * picking "Brave" still has to see it is `brave` that gets written. Without a
+ * label the key leads and the hint stays the source badge.
+ */
 function vocabularyItems(items: readonly EventVocabularyItem[]): MenuItem[] {
   return items.map((item) => ({
     value: item.value,
-    label: item.value,
-    ...(item.hint ? { hint: item.hint } : {}),
+    label: item.label || item.value,
+    ...(item.label ? { hint: item.value } : item.hint ? { hint: item.hint } : {}),
     ...(item.doc ? { description: item.doc } : {}),
   }));
 }
@@ -209,7 +238,6 @@ function searchPopover(
 
 export interface TextFieldOptions extends FieldOptions {
   value?: string;
-  placeholder?: string;
   /** Values the game already uses for this key, offered behind a chevron. */
   suggestions?: readonly string[];
 }
@@ -272,7 +300,6 @@ export interface NumberFieldOptions extends FieldOptions {
   value?: number | null;
   /** Scrub and typing step; 1 by default (most script numbers are integers). */
   step?: number;
-  placeholder?: string;
 }
 
 /** A number that drags (scrub.ts). Blank is `null`: the key is not written. */
@@ -353,7 +380,6 @@ export function boolField(options: BoolFieldOptions): Field<boolean | null> {
 export interface EnumFieldOptions extends FieldOptions {
   values: readonly string[];
   value?: string;
-  placeholder?: string;
 }
 
 /** One of a known list, through `menu()` (never a native `<select>`). */
@@ -392,7 +418,8 @@ export interface RefFieldOptions extends FieldOptions {
   /** Everything the index knows of the kind: value, source badge, doc line. */
   items: readonly EventVocabularyItem[];
   value?: string;
-  placeholder?: string;
+  /** A picture for an entry, when the kind has one (an icon URL). */
+  thumb?: (value: string) => string | null;
 }
 
 /** One definition of another kind, picked from the index. */
@@ -402,8 +429,13 @@ export function refField(options: RefFieldOptions): Field<string> {
   let current = options.value ?? "";
   const trigger = dropdownTrigger(placeholder);
   paintTrigger(trigger, current, placeholder);
+  const items = (): MenuItem[] =>
+    vocabularyItems(options.items).map((item) => {
+      const url = options.thumb?.(item.value);
+      return url ? { ...item, image: url } : item;
+    });
   trigger.onclick = () =>
-    menu(trigger, [{ value: "", label: placeholder }, ...vocabularyItems(options.items)], {
+    menu(trigger, [{ value: "", label: placeholder }, ...items()], {
       value: current,
       search: true,
       width: 320,
@@ -505,13 +537,14 @@ export function multiRefField(options: MultiRefFieldOptions): Field<string[]> {
           img.alt = "";
           row.append(img);
         }
-        const label = el("span", "px-grow", item.value);
+        const label = el("span", "px-grow", item.label || item.value);
         if (item.doc) {
           row.dataset.twoLine = "";
           label.append(el("span", "px-menu-description", item.doc));
         }
         row.append(label);
-        if (item.hint) row.append(el("span", "px-menu-hint", item.hint));
+        const hint = item.label ? item.value : item.hint;
+        if (hint) row.append(el("span", "px-menu-hint", hint));
         row.onclick = () => {
           current = addChip(current, item.value);
           paint();
@@ -686,6 +719,9 @@ export function modifierListField(options: ModifierListFieldOptions): Field<Modi
   const box = el("div", "px-stack");
   const list = el("div", "px-list");
   const add = ghostButton(options.addLabel ?? "Add modifier", "plus");
+  // The stack stretches its children; a stretched ghost button reads as
+  // centered text, so the button keeps its own width at the left edge.
+  add.style.alignSelf = "flex-start";
   const menuItems: MenuItem[] = options.items.map((item) => ({
     value: item.name,
     label: item.name,
@@ -760,7 +796,6 @@ export interface LocFieldOptions extends FieldOptions {
   /** The generated key, shown but never editable: the game derives it. */
   key: string;
   value?: string;
-  placeholder?: string;
   multiline?: boolean;
 }
 
@@ -793,7 +828,6 @@ export function locField(options: LocFieldOptions): Field<string> {
 
 export interface ScriptFieldOptions extends FieldOptions {
   value?: string;
-  placeholder?: string;
   rows?: number;
 }
 

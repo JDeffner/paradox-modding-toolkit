@@ -15,6 +15,8 @@ import { PATHS, type IconName } from "../packages/vscode/src/webviews/shared/ico
 export const TAB_ICONS: Record<string, IconName> = {
   "gui-editor": "layoutTemplate",
   "flag-builder": "flag",
+  // The Coat of Arms Designer: a shield, so its tab is not the Flag Builder's.
+  "coa-designer": "shield",
   "event-graph": "waypoints",
   "dynasty-tree": "users",
   "gui-tree": "listTree",

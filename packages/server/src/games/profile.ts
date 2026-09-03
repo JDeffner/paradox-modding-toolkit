@@ -137,6 +137,15 @@ export interface GameMeta {
    */
   flagBuilder?: boolean;
   /**
+   * The game ships its own in-game Coat of Arms designer, and the files that
+   * drive it (`gfx/coat_of_arms/{patterns,colored_emblems,color_palettes,
+   * emblem_layouts}/50_coa_designer_*.txt` and the `99_coa_designer_templates`
+   * coat-of-arms templates). Present = the toolkit offers the designer
+   * instead of the raw Flag Builder, when those files are actually on disk.
+   * Absent = the Flag Builder, as before.
+   */
+  coaDesigner?: boolean;
+  /**
    * Visual content creators offered for this game, in Create-group order. A
    * row is a definition kind the schema knows (the panel's command opens that
    * creator), except `dynasty_tree`, which is a view over history files rather
@@ -152,6 +161,14 @@ export interface GameMeta {
     /** One-line hint for the panel row. */
     tip?: string;
   }[];
+  /**
+   * Where the game states how a modifier is PRINTED: the folder of format
+   * definitions (one block per modifier), and the `.gui` file whose `texticon`
+   * blocks map an icon name to its sprite. Both paths are relative to the game
+   * data dir. Absent = this game's print rules have not been read out of its
+   * own files, and `paradox/modifierFormats` answers null rather than guessing.
+   */
+  modifierFormats?: { folder: string; textIcons: string };
   /**
    * Database entry-mode prefixes legal on top-level definition keys
    * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before

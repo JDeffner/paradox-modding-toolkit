@@ -3,9 +3,50 @@
  * Everything the app knows about the game arrives in `init`; textures are
  * fetched on demand as webview URLs because the app cannot read the disk.
  */
-import type { CoaFlag, Rgb } from "@px-lsp/server/coa/coa";
+import type { CoaFlag, DesignerEntry, Rgb } from "@px-lsp/server/coa/coa";
 
 export type TextureKind = "patterns" | "colored_emblems" | "textured_emblems";
+
+/** One palette swatch: the game's color name and what it resolves to. */
+export interface DesignerPaletteColor {
+  name: string;
+  rgb: Rgb;
+}
+
+/** A preview frame: `<id>.dds` drawn over the arms masked by `<id>_mask.dds`. */
+export interface DesignerFrame {
+  id: string;
+  label: string;
+}
+
+/** A whole coat of arms written against the layouts file's placeholders. */
+export interface DesignerLayout {
+  name: string;
+  flag: CoaFlag;
+}
+
+/**
+ * What the game's own Coat of Arms designer offers, read from the files that
+ * drive it (see @px-lsp/server/coa/coaDesigner). Only built when the panel
+ * asking for the database is the designer; the Flag Builder never needs it.
+ */
+export interface DesignerCatalog {
+  /** Visible patterns, in file order; `colors` is how many color buttons to show. */
+  patterns: DesignerEntry[];
+  /** Visible emblems, in file order, each carrying its category. */
+  emblems: DesignerEntry[];
+  /** Category ids in the order the emblem file first uses them. */
+  categories: string[];
+  palette: DesignerPaletteColor[];
+  layouts: DesignerLayout[];
+  /** The layouts file's own `@name = value` defaults: what a layout thumbnail draws with. */
+  layoutDefaults: Record<string, string>;
+  /** "Start From Scratch": the `coa_designer_blank_default` template, or null. */
+  template: CoaFlag | null;
+  frames: DesignerFrame[];
+  /** The emblem that means "no emblem" (`colors = 0`), or "" when the catalog has none. */
+  emptyEmblem: string;
+}
 
 /** One flag of the database: where it comes from is what the browser shows. */
 export interface FlagEntry {
@@ -25,6 +66,8 @@ export interface FlagDatabase {
   definitions: Record<string, CoaFlag>;
   /** True when the game folder was not found: the database is the mod alone. */
   gameMissing: boolean;
+  /** Present only when the caller asked for it (the Coat of Arms Designer). */
+  designer?: DesignerCatalog;
 }
 
 /** Per-user layout the host remembers across sessions. */

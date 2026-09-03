@@ -5,7 +5,8 @@
  * language server for the two forms, resolve icons, pick the files, apply the
  * edits and write the loc.
  */
-import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
+import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
 
 /** One picture of the legacy icon folder, already decoded to a webview URL. */
 export interface IconEntry {
@@ -33,6 +34,19 @@ export interface CreatorInit {
    */
   perksPerTrack: number | null;
   icons: IconEntry[];
+  /**
+   * How the GAME prints each modifier (`paradox/modifierFormats`), so a perk
+   * tile's tooltip reads "+0.30 Positive Genetic Chance" and not the script.
+   * Null when the profile names no formats source or the game folder is unset;
+   * the tooltip then falls back to the key and a plain number.
+   */
+  formats: Record<string, ModifierFormat> | null;
+  /**
+   * Icon folder per ref kind a perk key names (`traits` -> `trait` ->
+   * `gfx/interface/icons/traits`), read off THAT kind's own form so nothing
+   * here hard-codes a game path. Absent kinds simply get no picture.
+   */
+  refIconFolders: Record<string, string>;
   /** Why nothing can be written yet (no mod folder), or null. */
   problem: string | null;
 }
@@ -76,6 +90,14 @@ export type AppToHost =
   | { type: "openExamples"; name: string }
   /** Pick a picture and convert it into the mod's icon folder under `track`. */
   | { type: "customIcon"; track: string }
+  /** Decode game assets (a trait icon, the track frame) into webview URLs. */
+  | CreatorImagesRequest
+  /**
+   * Resolve loc keys the app found in the script itself: a perk's effect prose
+   * lives in `custom_description_no_bullet = { text = <key> }` and the tooltip
+   * has to print the sentence, not the key.
+   */
+  | { type: "loc"; keys: string[] }
   | {
       type: "save";
       track: SaveDefinition;
@@ -99,5 +121,8 @@ export type HostToApp =
     }
   /** The icon folder was written into; `select` is the key to show as chosen. */
   | { type: "icons"; icons: IconEntry[]; select?: string }
+  | CreatorImagesReply
+  /** One entry per key the app asked for; a key with no loc is simply absent. */
+  | { type: "locValues"; values: Record<string, string> }
   | { type: "saved" }
   | { type: "toast"; message: string; variant?: "default" | "destructive" };
