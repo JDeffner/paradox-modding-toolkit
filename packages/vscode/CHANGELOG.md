@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **The content creators are rebuilt for people who do not script.** Every
+  value the toolkit's index knows is a picker (traits, pillars, traditions,
+  name lists, modifiers, doctrines, houses, parents), every empty input shows
+  the value the game itself writes most as its placeholder, labels no longer
+  run into their inputs, and each creator shows the result the way the game
+  draws it, from the game's own art and text through the indexed game and
+  mod folders: the Trait Creator previews the trait's tooltip (framed icon,
+  skill and modifier lines printed by the game's own format rules, opposites,
+  flags); the Dynasty Legacy Creator shows the track as the game's legacy row
+  with its five perk tiles, a perk's tooltip on hover and a perk editor beside
+  it; the Culture Creator previews the culture window header with the pillar
+  icons and the layered tradition icons; the Dynasty Tree lays a dynasty out
+  as a family tree (couples side by side under a marriage bar, children
+  centered under their own marriage, orthogonal lines) with an editor of
+  pickers and Add child / Add spouse on every card.
+- **A Coat of Arms Designer for Crusader Kings III that works like the game's
+  own.** Background, Layout and Emblems tabs; the game's pattern list, color
+  palette, emblem catalog by category and preset layouts, read from the
+  designer's own data files; a detail edit with position, scale, rotation,
+  flip and depth; the dynasty, house and title frames drawn around the arms
+  the way the game insets them; Start From Scratch, Adjust Existing Design
+  (any game or mod definition), Randomize, copy and paste as script. The
+  Flag Builder stays as it was for the other games. Instance `depth` is read
+  and written back.
+- **Modifiers print as the player reads them.** A new `paradox/modifierFormats`
+  request carries the game's own format rules (decimals, percent, prefix and
+  suffix text and icons, color) and loc names, so a creator's preview prints
+  `+2 Martial` with the skill icon rather than `martial = 2`.
 - **GUI editor texture cache evicts the right file.** A decoded texture
   from an earlier session could carry a write time a fraction ahead of the
   clock the cache starts from, so it was never the oldest and the budget
