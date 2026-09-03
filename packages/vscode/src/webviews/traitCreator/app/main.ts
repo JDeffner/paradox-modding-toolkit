@@ -525,6 +525,9 @@ function rowList(options: RowListOptions): HTMLElement {
     paint();
   };
   paint();
+  // A flex column stretches its children: the ghost button would span the
+  // column and read as centered text.
+  add.style.alignSelf = "flex-start";
   box.append(list, add);
   return box;
 }

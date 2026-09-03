@@ -711,6 +711,9 @@ export function modifierListField(options: ModifierListFieldOptions): Field<Modi
   const box = el("div", "px-stack");
   const list = el("div", "px-list");
   const add = ghostButton(options.addLabel ?? "Add modifier", "plus");
+  // The stack stretches its children; a stretched ghost button reads as
+  // centered text, so the button keeps its own width at the left edge.
+  add.style.alignSelf = "flex-start";
   const menuItems: MenuItem[] = options.items.map((item) => ({
     value: item.name,
     label: item.name,

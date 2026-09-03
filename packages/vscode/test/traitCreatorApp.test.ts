@@ -249,10 +249,12 @@ describe("the preview is the game's own tooltip", () => {
     );
   });
 
-  it("shows the key in place of the picture when nothing resolved one", () => {
+  it("shows an empty tile that names the missing picture when nothing resolved one", () => {
     const app = boot();
     type(app, "#name", "px_stoic");
-    expect(app.document.querySelector("#tip .tip-icon .noicon")!.textContent).toBe("px_stoic");
+    const tile = app.document.querySelector<HTMLElement>("#tip .tip-icon .noicon")!;
+    expect(tile.textContent).toBe("");
+    expect(tile.title).toContain("px_stoic");
     // The name follows the key until the modder types over it.
     expect(app.document.querySelector("#tip .px-game-tip-title")!.textContent).toBe("Px Stoic");
   });

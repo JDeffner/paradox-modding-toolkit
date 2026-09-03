@@ -107,9 +107,12 @@ function picture(input: PreviewInput): HTMLElement {
     img.alt = "";
     box.append(img);
   } else {
-    // No picture resolved (no game folder, or a name the folder has no file
-    // for): the key itself, so the tile still says which trait this is.
-    box.append(el("div", "noicon", input.key || "trait"));
+    // No picture resolved yet (no game folder, or a name the folder has no
+    // file for): an empty tile, the way the game shows a missing texture. The
+    // title beside it already names the trait.
+    const empty = el("div", "noicon");
+    empty.title = input.key ? `No picture named ${input.key} in the icon folder` : "No picture";
+    box.append(empty);
   }
   if (input.frameUrl) {
     const frame = document.createElement("img");
