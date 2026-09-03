@@ -8,15 +8,14 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
-- `protocol`: `paradox/definitionForm` gains two optional fields, both
-  documented in docs/PROTOCOL.md: `group` on an option item (the family a
-  definition belongs to when one folder holds several) and `sampled` on a
-  form key (the values the game's own definitions write for a key no index
-  can answer), capped by the new `DEFINITION_FORM_MAX_SAMPLED`. Both are
-  additive; a client that ignores them behaves as before.
-- `protocol`: `paradox/definitionForm` and `paradox/definitionEdit`, the
-  wire pair the visual content creators are built on. Documented in
-  docs/PROTOCOL.md. `paradox/guiSourceEdit` is unchanged.
+- `protocol`: `paradox/definitionForm` and `paradox/definitionEdit`, the wire
+  pair the visual content creators are built on. The form carries two optional
+  fields: `group` on an option item (the family a definition belongs to when
+  one folder holds several) and `sampled` on a form key (the values the game's
+  own definitions write for a key no index can answer), capped by the new
+  `DEFINITION_FORM_MAX_SAMPLED`. Both are additive; a client that ignores them
+  behaves as before. Documented in docs/PROTOCOL.md; `paradox/guiSourceEdit` is
+  unchanged.
 - `paradox/dynastyTree`: `DynastyTreeParams` -> `DynastyTreeResult`, with
   `DynastySummary`, `DynastyHouse` and `DynastyCharacter`. Documented in
   `docs/PROTOCOL.md`.

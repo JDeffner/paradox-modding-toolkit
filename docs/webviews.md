@@ -34,6 +34,24 @@ comes from the language server over a `paradox/*` request, typed in
 `packages/protocol` and documented in `docs/PROTOCOL.md`. The host is a
 courier, not a brain.
 
+### Creators are the same pattern, twice shared
+
+The definition creators (`traitCreator`, `legacyCreator`, `cultureCreator`) are
+ordinary panels, but they share two modules instead of writing the same code
+three times. `packages/vscode/src/creators/save.ts` is the host half: pick the
+mod, pick the file, refuse a name that would replace a whole game file, apply
+the server's edits as one `WorkspaceEdit`, and write the loc through the normal
+loc writer. `src/webviews/shared/fields.ts` is the app half: the form controls
+a creator draws its fields from, so creators differ in the form they lay out,
+never in how a field behaves. (`dynastyTree` sits in the same Create group but
+writes history entries, not a definition block, so it keeps its own writer.)
+
+Neither shared module knows anything per kind. That comes over the wire, from
+`paradox/definitionForm` and `paradox/definitionEdit`: the server assembles the
+key list, the docs and the option lists out of the schema and the game's own
+files. So a new creator is a new panel folder plus a `GameMeta.creators` row on
+the profile that has the data for it, not a new field table.
+
 ## The build finds your panel
 
 `scripts/compile-webviews.mjs` bundles every `src/webviews/<name>/app/main.ts`

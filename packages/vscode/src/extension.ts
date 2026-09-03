@@ -22,6 +22,7 @@ import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 import { creatorSupported, flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import { GAME_METAS } from "./gameDetect";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -318,10 +319,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "px.flagBuilderSupported",
       flagBuilderSupported(cfg.gameId)
     );
-    // One key per creator the profile lists, so a palette entry appears only
-    // where a panel was actually built against that game's own files.
-    for (const creator of metaFor(cfg.gameId).creators ?? []) {
-      void vscode.commands.executeCommand("setContext", `px.creator.${creator.kind}`, true);
+    // One key per creator kind ANY profile lists, set to whether the active
+    // game lists it. Walking the union rather than the active game's rows is
+    // what clears a key again when the workspace switches game; setting only
+    // the active ones would leave a CK3 palette entry visible in a Vic3
+    // workspace for the rest of the session.
+    const activeCreators = new Set((metaFor(cfg.gameId).creators ?? []).map((c) => c.kind));
+    const allCreators = new Set(
+      Object.values(GAME_METAS).flatMap((meta) => (meta.creators ?? []).map((c) => c.kind))
+    );
+    for (const kind of allCreators) {
+      void vscode.commands.executeCommand("setContext", `px.creator.${kind}`, activeCreators.has(kind));
     }
     statusBar.update({
       tokens: lastServerStatus.tokens,
@@ -1037,6 +1045,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The argument is optional: the palette entry opens the picker, a deep link
     // names the dynasty it wants.
     vscode.commands.registerCommand("px.openDynastyTree", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      // Same host-side gate as the other creators: the profile lists the ones
+      // built against that game's own files. The server's `supported: false`
+      // still covers a client that gets here another way.
+      if (!creatorSupported(cfg.gameId, "dynasty_tree")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Dynasty Tree has been built for ${meta.name} yet.`
+        );
+        return;
+      }
       const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)
         .map((p) => ({ label: readModName(p), path: p }));
@@ -1049,7 +1067,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
       if (!cfg.gamePath)
         problems.push(
-          `No game folder set, so only your own dynasties are listed. Set px.gamePath to .../steamapps/common/${metaFor(cfg.gameId).name}/game`
+          `No game folder set, so only your own dynasties are listed. Set px.gamePath to .../steamapps/common/${meta.name}/game`
         );
       DynastyTreePanel.show(
         context,
@@ -1060,7 +1078,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
         },
         {
-          meta: metaFor(cfg.gameId),
+          meta,
           gamePath: cfg.gamePath,
           mods,
           modRoot: views.focusRoot(),

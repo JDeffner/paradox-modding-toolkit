@@ -8,27 +8,21 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
-- `paradox/definitionForm` answers two more things a creator cannot work
-  out for itself, both measured rather than stored. An option carries
-  `group` when the schema entry declares a `groupKey`, read out of the
-  definition's own block: CK3's `culture_pillar` sets it to `type`, which
-  is what splits one folder of 163 pillars into the five families
-  `_pillars.info` documents. A key with no `refKinds` carries `sampled`,
-  the distinct values the indexed definitions of the kind write for it,
-  most used first and dropped past 80 (a key whose value differs per
-  definition is a free field, not a list): this is the only honest source
-  for a culture's art sets and ethnicities, which no index can answer.
-  CK3's schema also gains culture's full loc key set (`$`, `$_prefix`,
-  `$_collective_noun`, all three defined by 244 of 244 vanilla cultures)
-  and the per-kind reference rows for the five pillar keys and `name_list`.
 - `paradox/definitionForm` and `paradox/definitionEdit`: the read and the
-  write a visual content creator needs. The form is assembled from the
-  schema table, the harvested `_*.info` structures, the definition index
-  and the modifier tokens, so no field list is written for it; the edit is
-  the GUI editor's span writer applied to plain script through a new
-  dialect parameter on the source model. CK3's schema gains the trait icon
-  folder, the trait and dynasty-legacy loc key patterns, and the per-kind
-  reference rows for `opposites`, `traditions` and `parents`.
+  write a visual content creator needs. The form is assembled from the schema
+  table, the harvested `_*.info` structures, the definition index and the
+  modifier tokens, so no field list is written for it; the edit is the GUI
+  editor's span writer applied to plain script through a new dialect parameter
+  on the source model. The form also answers two things a creator cannot work
+  out for itself, both measured rather than stored. An option carries `group`
+  when the schema entry declares a `groupKey`, read out of the definition's own
+  block: CK3's `culture_pillar` sets it to `type`, which is what splits one
+  folder of 163 pillars into the five families `_pillars.info` documents. A key
+  with no `refKinds` carries `sampled`, the distinct values the indexed
+  definitions of the kind write for it, most used first and dropped past 80 (a
+  key whose value differs per definition is a free field, not a list): this is
+  the only honest source for a culture's art sets and ethnicities, which no
+  index can answer.
 - `paradox/dynastyTree`: a dynasty as a family tree. Without a `dynasty` the
   answer is the picker list; with one it is that dynasty's houses and members,
   read out of the folders the active profile's schema maps to the `dynasty`,
@@ -37,12 +31,16 @@ changes. Before the split it moved inside the extension's version (up to
   index revision: measured on vanilla CK3 (71 142 characters, 17.4 MB) at
   0.8 s cold, 12 ms warm, 1 ms for one dynasty, 62 MB retained. A profile with
   no `dynasty` kind answers `supported: false`.
-- CK3 schema: the dynasty legacy track carries its `$_desc` loc key (all 21
-  vanilla tracks define it) and its icon folder
-  `gfx/interface/icons/dynasty`, the dynasty perk carries `$_name` (all 105
-  vanilla perks define it, and none defines a desc), and a perk's `traits`
-  entries are trait references. Read by the creators; nothing in completion
-  or diagnostics changes.
+- CK3 schema rows the creators read; nothing in completion or diagnostics
+  changes. A trait carries its icon folder, its loc key patterns and the
+  per-kind reference row for `opposites`. A culture carries its full loc key
+  set (`$`, `$_prefix`, `$_collective_noun`, all three defined by 244 of 244
+  vanilla cultures) and the reference rows for the five pillar keys,
+  `name_list`, `traditions` and `parents`. A dynasty legacy track carries its
+  `$_desc` loc key (all 21 vanilla tracks define it) and its icon folder
+  `gfx/interface/icons/dynasty`, a perk carries `$_name` (all 105 vanilla perks
+  define it, and none defines a desc), and a perk's `traits` entries are trait
+  references.
 
 ## 0.3.0
 

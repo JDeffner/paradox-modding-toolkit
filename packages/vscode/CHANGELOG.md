@@ -2,49 +2,47 @@
 
 ## Unreleased
 
-- **Trait Creator (CK3).** Design a trait as a form and write it into your
-  mod: the 60 keys the game documents for a trait, each with the game's own
-  one-line explanation, laid out in sections, plus the two loc values and a
-  grid of the trait icons your game and your mods actually have. A new trait
-  saves with only a name typed. Opening one you already have loads it and
-  writes back only the lines you changed, so a vanilla trait you duplicate
-  keeps its own formatting, its comments and everything no field can stand
-  for. Custom image converts a PNG into the mod under the trait's name.
-  Project panel > Create > Trait Creator, or "Paradox: Trait Creator".
-- **Culture Creator (CK3).** "Paradox: Culture Creator", and the Create group's
-  Culture Creator row, open a form that composes a culture out of the game's
-  own parts: the five pillars as one picker each (the pillars all live in one
-  folder, so the server labels each with the family its own block declares),
-  the traditions as searchable chips with the game's description on every
-  entry, a name list, the art sets and ethnicities with the values the game
-  itself writes for them, a color as a named color or a picked one, and
-  parents plus a creation date for a hybrid or divergent culture. Every other
-  key the game documents is still there, as raw script, and a statement the
-  form has no widget for is kept exactly as it was. Saving asks which file it
-  goes into, writes the block and its three loc keys, and opens the file
-  beside; editing your own culture rewrites only the lines that changed, and a
-  game culture is duplicated into your mod by default or overridden with a
-  warning. Round-trips two vanilla cultures byte for byte, and ck3-tiger finds
-  no problem in what it writes.
-- **Dynasty Legacy Creator.** A new panel (Project panel Create group, or
-  "Paradox: Dynasty Legacy Creator") designs a legacy track and its perks
-  together and writes them into your mod: the track's block, one perk block
-  per card with `legacy = <track>` filled in for you, and the localization.
-  Type the track's key and everything else follows it, with five perk slots
-  because that is what every vanilla track has. Perk cards carry the seven
-  keys the game documents: modifier rows for `character_modifier`,
-  `doctrine_character_modifier` and the trait chances in `traits`, text areas
-  for `effect`, `can_be_picked` and `ai_chance`. Opening a track your mod
-  already has rewrites only the lines that changed, comments and formatting
-  included, and a perk you drop off a track is reported, never deleted behind
+- **Visual content creators (CK3).** The Project panel's Create group lists the
+  creators the active game has, and each row opens a form over the game's own
+  documented keys instead of a blank file. They share one host side: you pick
+  the mod and the file, a file name that would replace a whole game file is
+  refused, the whole save lands as one undo step, and the display names go
+  through the normal localization writer. Opening something you already have
+  loads it and writes back only the lines you changed, so the comments, the
+  formatting and everything no field can stand for survive. None of them
+  validates your script; ck3-tiger stays the validator.
+- **Trait Creator.** The 60 keys the game documents for a trait, each with the
+  game's own one-line explanation, laid out in sections, plus the two loc
+  values and a grid of the trait icons your game and your mods actually have.
+  A new trait saves with only a name typed. Custom image converts a PNG into
+  the mod under the trait's name.
+- **Dynasty Legacy Creator.** A legacy track and its perks designed together
+  and written as the track's block, one perk block per card with
+  `legacy = <track>` filled in for you, and the localization. Type the track's
+  key and everything else follows it, into five perk slots because that is what
+  every vanilla track has. Perk cards carry the seven keys the game documents:
+  modifier rows for `character_modifier`, `doctrine_character_modifier` and the
+  trait chances in `traits`, text areas for `effect`, `can_be_picked` and
+  `ai_chance`. A perk you drop off a track is reported, never deleted behind
   your back.
-- **Groundwork for visual content creators.** The Project panel's Create
-  group now lists the creators the active game has (CK3: Trait Creator,
-  Dynasty Legacy Creator, Culture Creator, Dynasty Tree), and the host side
-  they share is in place: pick a mod and a file, refuse a file name that
-  would replace a whole game file, apply the server's edits as one undo
-  step, write the loc through the normal loc writer. The panels themselves
-  come next; the rows open nothing yet.
+- **Culture Creator.** A culture composed out of the game's own parts: the five
+  pillars as one picker each (the pillars all live in one folder, so the server
+  labels each with the family its own block declares), the traditions as
+  searchable chips with the game's description on every entry, a name list, the
+  art sets and ethnicities with the values the game itself writes for them, a
+  color as a named color or a picked one, and parents plus a creation date for a
+  hybrid or divergent culture. Every other key the game documents is still
+  there, as raw script. Your own culture is rewritten in place; a game culture
+  is duplicated into your mod by default, or overridden with a warning.
+  Round-trips two vanilla cultures byte for byte, and ck3-tiger finds no problem
+  in what it writes.
+- **Dynasty Tree.** Any dynasty of the game or your mod as a family tree:
+  generations top down, spouses side by side, siblings oldest first, houses as a
+  badge, and vanilla characters drawn apart from your own. Clicking a node opens
+  an inspector that edits your characters and adds a child or a spouse to
+  anyone, vanilla included; the new character is written into your mod pointing
+  at the one it descends from. New dynasty, New house and a Design coat of arms
+  button that hands the id to the Flag Builder round it out.
 - **The Flag Builder opens for Crusader Kings III.** `Paradox: Open Flag
   Builder` and `Paradox: New Coat of Arms…` now work in a CK3 workspace, which
   is where the dynasty, house, landed-title and character targets belong.
@@ -60,16 +58,6 @@
   character has no coa key of their own, so the pick resolves to their house
   and falls back to their dynasty. `px.openFlagBuilder` now takes an optional
   `{ name, label }` argument, so any panel can hand the builder its target.
-- **Dynasty Tree.** A new panel (`Paradox: Dynasty Tree`) browses any dynasty
-  of the game or your mod as a family tree: generations top down, spouses side
-  by side, siblings oldest first, houses as a badge, and vanilla characters
-  drawn apart from your own. Clicking a node opens an inspector that edits
-  your characters and adds a child or a spouse to anyone, vanilla included; the
-  new character is written into your mod pointing at the one it descends from.
-  New dynasty, New house and a Design coat of arms button that hands the id to
-  the Flag Builder round it out. Everything the panel writes is one undoable
-  edit, into the file you pick, with the BOM the games need, and the display
-  names go through the usual localization writer.
 
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
