@@ -251,21 +251,14 @@ export class WorkshopPanel {
    */
   private notifyError(friendly: string, e: unknown): void {
     this.options.log(`workshop: ${friendly} [raw: ${e instanceof Error ? e.message : String(e)}]`);
-    const cut = friendly.indexOf(" - ");
-    const title = cut > 0 ? friendly.slice(0, cut) : "Workshop error";
-    const detail = cut > 0 ? friendly.slice(cut + 3) : friendly;
-    void vscode.window.showErrorMessage(title, { modal: true, detail });
+    void vscode.window.showErrorMessage(`Workshop: ${friendly}`);
   }
 
-  /** The upload result as a dialog with the item page one click away, in the Steam client first. */
+  /** The upload result as a toast with the item page one click away, in the Steam client first. */
   private notifyUploaded(itemId: string, submits: number): void {
     void vscode.window
       .showInformationMessage(
-        "Upload done.",
-        {
-          modal: true,
-          detail: `Item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
-        },
+        `Upload done: item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
         "Open in Steam",
         "Open in Browser"
       )
@@ -673,15 +666,9 @@ export class WorkshopPanel {
     const gameModDir = gameDocsSubdir(this.options.meta, "mod");
     if (!gameModDir || !isInsideDir(gameModDir, dir)) return true;
     const choice = await vscode.window.showWarningMessage(
-      "Create the workshop folder inside the game's mod folder?",
-      {
-        modal: true,
-        detail:
-          `It would land at ${dir}, in the folder where every installed mod lives. ` +
-          `Any other mod in that folder resolves its default workshop location to the same place, ` +
-          `so listings can overwrite each other. Clear px.workshop.dir so the listing lives inside the mod ` +
-          `(.px-toolkit/workshop), or point it somewhere outside the game's mod folder.`,
-      },
+      `Create the workshop folder inside the game's mod folder (${dir})? Every installed mod lives there ` +
+        `and resolves its default workshop location to the same place, so listings can overwrite each other. ` +
+        `Clear px.workshop.dir so the listing lives inside the mod (.px-toolkit/workshop), or point it outside.`,
       "Create Anyway"
     );
     return choice === "Create Anyway";

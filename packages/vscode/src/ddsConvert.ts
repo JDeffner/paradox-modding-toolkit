@@ -82,7 +82,6 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
             if (await exists(target)) {
               const answer = await vscode.window.showWarningMessage(
                 `${target.path.split("/").pop()} already exists. Overwrite?`,
-                { modal: true },
                 "Overwrite"
               );
               if (answer !== "Overwrite") continue;

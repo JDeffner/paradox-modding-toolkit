@@ -161,8 +161,8 @@ export class EventGraphPanel {
     const pending = this.session.pending;
     if (pending.length === 0) return;
     const answer = await vscode.window.showWarningMessage(
-      `The event graph has ${pending.length} unsaved change${pending.length === 1 ? "" : "s"}.`,
-      { modal: true, detail: "Cancel reopens the graph with your changes still in it." },
+      `The event graph has ${pending.length} unsaved change${pending.length === 1 ? "" : "s"}. ` +
+        "Dismiss this to reopen the graph with your changes still in it.",
       "Save",
       "Discard"
     );

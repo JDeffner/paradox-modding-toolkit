@@ -589,7 +589,6 @@ export function registerPxViews(
       }
       const yes = await vscode.window.showWarningMessage(
         `Suppress every “${code}” diagnostic in this workspace? It is added to px.diagnostics.ignore.`,
-        { modal: true },
         "Suppress"
       );
       if (yes !== "Suppress") return;

@@ -95,7 +95,6 @@ export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
     const regenerate = "Regenerate";
     const pick = await vscode.window.showWarningMessage(
       `Overwrite the generated calendar files (${existing.map((t) => path.basename(t)).join(", ")})?`,
-      { modal: true },
       regenerate
     );
     if (pick !== regenerate) return;

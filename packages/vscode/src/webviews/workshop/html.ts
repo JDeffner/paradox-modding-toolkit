@@ -138,7 +138,8 @@ ${uiCss}
   .hdr-switch .px-switch { transform: scale(0.85); }
   .off-chip { display: none; flex: 0 0 auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
   .section[data-off] .px-panel-title .off-chip { display: inline-flex; }
-  .section[data-off] > :not(.px-panel-title) { opacity: 0.45; pointer-events: none; }
+  /* Off means "not uploaded", not locked: the body dims but stays editable. */
+  .section[data-off] > :not(.px-panel-title) { opacity: 0.55; }
   #langsToggle .px-icon { transition: transform 120ms; }
   #langsToggle[aria-expanded="true"] .px-icon { transform: rotate(180deg); }
   #langRows { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--px-border); }
