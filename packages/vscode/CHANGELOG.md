@@ -48,7 +48,11 @@
   with a picker per layer and a live preview, cost, parameters as switches
   with their tooltip sentences, modifier blocks with the player's lines,
   conditions as script with real examples. Keys are written in the order the
-  game writes them; the output passes ck3-tiger clean.
+  game writes them; the output passes ck3-tiger clean. The icon section shows
+  the composed tile at the game's 220x120 from full-size decodes of the chosen
+  layers (picker thumbnails stay small), an empty layer reads as an empty slot,
+  the cost prints as the game's `<CURRENCY>_COST` line with its icon, and the
+  tooltip tones `#P`, `#N` and `#V` text the way the game does.
 - **Dynasty Legacy Creator without script.** `is_shown` and a perk's
   `can_be_picked` are rows over the DLC features, game rules and scripted
   triggers the game files use; `ai_chance` is a number; a perk's `effect` is

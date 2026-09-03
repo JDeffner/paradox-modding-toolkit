@@ -8,7 +8,9 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
-- `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`).
+- `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`);
+  `lines` on `ModifierFormatsParams` / `ModifierFormatsResult` (loc keys
+  answered as the same word-or-texticon parts a prefix is).
 - `protocol`: `source` on `OverviewDef`, `conditions` on `DefinitionForm`,
   `DEFINITION_FORM_MAX_EXAMPLE`; `dna` and `skills` on `DynastyCharacter`,
   `DYNASTY_SKILLS`.
