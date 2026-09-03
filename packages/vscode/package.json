@@ -457,6 +457,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "px.moveWorkshopListing",
+        "category": "Paradox",
+        "title": "Move Workshop Listing"
+      },
+      {
         "command": "px.openWorkshopManager",
         "category": "Paradox",
         "title": "Open Steam Workshop Panel",
@@ -695,7 +700,7 @@
             "default": "",
             "order": 2,
             "scope": "machine-overridable",
-            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use."
+            "markdownDescription": "Optional folder for mod PROJECTS, the layout that keeps git history, notes and the Steam Workshop listing files outside the mod folder: each mod gets its own subfolder there with the real mod content in `<project>/mod` and the listing in `<project>/workshop`. The game finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\nThe default layout needs no setting: the mod lives in the game's mod folder and a `.pxignore` file keeps git, editor and toolkit files out of toolkit uploads. `Paradox: New Mod` offers both."
           },
           "px.parentMods": {
             "type": "array",
@@ -864,9 +869,9 @@
           },
           "px.workshop.dir": {
             "type": "string",
-            "default": "../workshop",
+            "default": "",
             "order": 4,
-            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). The default matches the `<project>/mod` + `<project>/workshop` layout: the listing sits NEXT to the mod folder, versioned but never uploaded.\n\nWhile the folder exists it is the canonical store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`. Without it, drafts stay in the mod's `workshop.json`."
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`."
           },
           "px.workshop.changelog": {
             "type": "string",
@@ -1104,6 +1109,10 @@
         },
         {
           "command": "px.openWorkshopPage",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.moveWorkshopListing",
           "when": "px.isCk3Workspace"
         },
         {
@@ -1504,7 +1513,8 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "steamwand.js": "^0.2.1",
+    "ignore": "7.0.5",
+    "steamwand.js": "^0.4.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

@@ -11,13 +11,17 @@ import {
   extractVersionSection,
   hasListingFiles,
   mdToBBCode,
-  preferListingFiles,
   readItemJson,
+  moveListing,
+  readDependencies,
   readListingFiles,
+  readPreviews,
   resolveChangeNote,
   resolveWorkshopDir,
   upsertItemJson,
+  writeDependencies,
   writeListingFiles,
+  writeVideos,
 } from "../src/steam/workshopFiles";
 
 const tmps: string[] = [];
@@ -34,34 +38,25 @@ describe("workshop dir resolution", () => {
   // path.resolve, so the roots are absolute on the platform running the test:
   // users are on Windows, CI is Linux, and a drive letter is relative there.
   const root = path.resolve(path.join("Projets", "My Mod", "mod"));
+  const configDir = path.join(root, ".px-toolkit");
 
-  it("defaults to the sibling workshop folder (mod/ + workshop/ layout)", () => {
-    const sibling = path.join(path.dirname(root), "workshop");
-    expect(resolveWorkshopDir(root, undefined)).toBe(sibling);
-    expect(resolveWorkshopDir(root, "")).toBe(sibling);
+  it("defaults to the in-mod config dir", () => {
+    expect(resolveWorkshopDir(root, undefined, configDir)).toBe(path.join(configDir, "workshop"));
+    expect(resolveWorkshopDir(root, "", configDir)).toBe(path.join(configDir, "workshop"));
+  });
+
+  it("keeps an existing sibling workshop folder (mod/ + workshop/ layout)", () => {
+    const project = tmp();
+    const mod = path.join(project, "mod");
+    fs.mkdirSync(mod);
+    fs.mkdirSync(path.join(project, "workshop"));
+    expect(resolveWorkshopDir(mod, "", path.join(mod, ".px-toolkit"))).toBe(path.join(project, "workshop"));
   });
 
   it("accepts relative and absolute overrides", () => {
-    expect(resolveWorkshopDir(root, "listing")).toBe(path.join(root, "listing"));
+    expect(resolveWorkshopDir(root, "listing", configDir)).toBe(path.join(root, "listing"));
     const abs = path.resolve(path.join("somewhere", "else"));
-    expect(resolveWorkshopDir(root, abs)).toBe(abs);
-  });
-
-  it("prefers the folder store for a projects-layout mod before the folder exists", () => {
-    // <project>/mod with the default sibling workshop dir: writes must go to
-    // the folder, never create <mod>/<configDir>/workshop.json in the upload.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, undefined))).toBe(true);
-    // A mod living directly in the launcher's mod directory keeps the in-mod
-    // fallback until the user creates the folder.
-    const flat = path.resolve(path.join("Documents", "mod", "my_mod"));
-    expect(preferListingFiles(flat, resolveWorkshopDir(flat, undefined))).toBe(false);
-    // A workshop-dir override pointing elsewhere is not the projects layout.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, path.resolve("elsewhere")))).toBe(false);
-  });
-
-  it("prefers the folder store whenever the folder already exists", () => {
-    const dir = tmp();
-    expect(preferListingFiles(path.resolve(path.join("any", "where")), dir)).toBe(true);
+    expect(resolveWorkshopDir(root, abs, configDir)).toBe(abs);
   });
 });
 
@@ -101,6 +96,60 @@ describe("listing files", () => {
     fs.writeFileSync(path.join(dir, "item.json"), JSON.stringify({ custom: 1, title: "Old" }), "utf8");
     upsertItemJson(dir, { title: "New", publishedfileid: "42" });
     expect(readItemJson(dir)).toEqual({ custom: 1, title: "New", publishedfileid: "42" });
+  });
+});
+
+describe("moveListing", () => {
+  it("moves an existing folder and refuses to overwrite", () => {
+    const project = tmp();
+    const from = path.join(project, "workshop");
+    writeListingFiles(from, { description: "d", translations: { german: { title: "t" } } });
+    const to = path.join(project, "mod", ".px-toolkit", "workshop");
+    moveListing(from, to, { description: "", translations: {} });
+    expect(hasListingFiles(from)).toBe(false);
+    expect(readListingFiles(to).translations.german).toEqual({ title: "t" });
+    expect(() => moveListing(to, to, { description: "", translations: {} })).toThrow(/already exists/);
+  });
+
+  it("creates the target from the drafts when no folder exists yet", () => {
+    const project = tmp();
+    const to = path.join(project, "workshop");
+    moveListing(path.join(project, "nowhere"), to, { description: "from json", translations: {} });
+    expect(readListingFiles(to).description).toBe("from json");
+  });
+});
+
+describe("previews and dependencies", () => {
+  it("reads the previews folder in file-name order, or null without one", () => {
+    const dir = tmp();
+    expect(readPreviews(dir)).toBeNull();
+    const previews = path.join(dir, "previews");
+    fs.mkdirSync(previews);
+    for (const f of ["10.png", "2.jpg", "notes.txt", "x.PNG"]) fs.writeFileSync(path.join(previews, f), "");
+    fs.writeFileSync(path.join(previews, "videos.txt"), "# comment\nabc123def\n\nxyz789ghi\n");
+    const got = readPreviews(dir)!;
+    expect(got.images.map((p) => path.basename(p))).toEqual(["2.jpg", "10.png", "x.PNG"]);
+    expect(got.videos).toEqual(["abc123def", "xyz789ghi"]);
+  });
+
+  it("writes and clears videos.txt", () => {
+    const dir = tmp();
+    writeVideos(dir, ["abc123def"]);
+    expect(readPreviews(dir)!.videos).toEqual(["abc123def"]);
+    writeVideos(dir, []);
+    expect(fs.existsSync(path.join(dir, "previews", "videos.txt"))).toBe(false);
+  });
+
+  it("round-trips dependencies.json and drops malformed entries", () => {
+    const dir = tmp();
+    expect(readDependencies(dir)).toBeNull();
+    writeDependencies(dir, { apps: [1158310], items: ["123"] });
+    expect(readDependencies(dir)).toEqual({ apps: [1158310], items: ["123"] });
+    fs.writeFileSync(
+      path.join(dir, "dependencies.json"),
+      JSON.stringify({ apps: [1, "x"], items: ["9", "no"] })
+    );
+    expect(readDependencies(dir)).toEqual({ apps: [1], items: ["9"] });
   });
 });
 

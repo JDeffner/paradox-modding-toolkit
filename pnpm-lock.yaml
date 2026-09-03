@@ -97,9 +97,12 @@ importers:
 
   packages/vscode:
     dependencies:
+      ignore:
+        specifier: 7.0.5
+        version: 7.0.5
       steamwand.js:
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.4.0
+        version: 0.4.0
       vscode-languageclient:
         specifier: ^10.1.0
         version: 10.1.0
@@ -1983,8 +1986,8 @@ packages:
     resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
     engines: {node: '>=18'}
 
-  steamwand.js@0.2.1:
-    resolution: {integrity: sha512-h6LjY+xy7AVOI7mbDbMHth4LhskVns8RaOSL4AuV8t+Cm0fJNlbQx2EgizJeRr/obQpqaztiDuw/bEywlv2PZw==}
+  steamwand.js@0.4.0:
+    resolution: {integrity: sha512-thM+WHBJkJ3W7CoPBWijOfgjKqFpIG1Ia0HK+raWLV56MFl2ipJoT1DGfk1c3akjqm87pL9x3i/h3moJ7SoFzg==}
     engines: {node: '>=18'}
 
   string-width@4.2.3:
@@ -4330,7 +4333,7 @@ snapshots:
 
   stdin-discarder@0.2.2: {}
 
-  steamwand.js@0.2.1:
+  steamwand.js@0.4.0:
     dependencies:
       koffi: 2.16.3
 

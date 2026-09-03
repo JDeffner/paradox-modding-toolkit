@@ -11,4 +11,4 @@ The extension then:
 
 If your mod lives somewhere else, set `px.modPath` instead.
 
-Starting fresh? **Paradox: New Mod** creates the mod for you — recommended into a mod projects folder, where the mod's content lives in `<project>/mod` and git or Steam Workshop files stay next to it, outside the upload. The game finds the mod through a link in its own mod folder.
+Starting fresh? **Paradox: New Mod** creates the mod for you in the game's mod folder, with a `.pxignore` file that keeps git, editor and toolkit files out of Workshop uploads made through the toolkit. It can also create a mod project instead, where the content lives in `<project>/mod` and everything else stays next to it, linked from the game's mod folder.

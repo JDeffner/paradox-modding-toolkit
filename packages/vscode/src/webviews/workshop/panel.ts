@@ -15,21 +15,29 @@ import type { GameMeta } from "@px-lsp/server/games/profile";
 import {
   STEAM_LANGUAGES,
   steamLanguageForLoc,
-  upsertWorkshopMeta,
   type WorkshopTranslation,
 } from "@px-lsp/protocol/workshopMeta";
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
-import { type SubmitSpec } from "../../steam/jobs";
+import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
   hasListingFiles,
-  preferListingFiles,
+  PREVIEWS_DIR,
+  readDependencies,
   readItemJson,
+  readPreviews,
   upsertItemJson,
+  writeDependencies,
   writeListingFiles,
+  writeVideos,
 } from "../../steam/workshopFiles";
+import { preflight } from "../../steam/preflight";
+import { detectGameVersion } from "../../descriptorMod";
+import { findSteamLibraries } from "../../steamDetect";
+import { declaredDependencies, dependencyCandidates } from "../../dependencyScan";
 import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
+import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
   changelogNoteFor,
   findPreview,
@@ -41,9 +49,9 @@ import {
   PREVIEW_MAX_BYTES,
   readPublishInfo,
   runBridge,
-  stageContent,
   translationSubmits,
   workshopDirFor,
+  workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
 import { gameDocsSubdir } from "../../config";
@@ -58,6 +66,8 @@ export interface WorkshopPanelOptions {
   mods: ModChoice[];
   /** The mod to open with (the focused one), a path from `mods`. */
   active: string | null;
+  /** The game install, for the version the supported-version check compares against. */
+  gamePath: string | null;
   log: (msg: string) => void;
 }
 
@@ -155,6 +165,23 @@ export class WorkshopPanel {
   // All user feedback goes through VS Code notifications plus the output
   // channel - never a transient in-panel surface. The message survives
   // closing the panel, and errors leave a trace to re-read.
+  /**
+   * Shown once per mod, when the first toolkit upload creates `.pxignore`:
+   * the exclusions exist only on this path, and a later launcher upload of
+   * the same folder would ship everything.
+   */
+  private explainPxIgnore(root: string): void {
+    void vscode.window
+      .showInformationMessage(
+        `Created ${PXIGNORE_FILE} in the mod: git, editor and toolkit files stay out of this upload. ` +
+          "That only holds for uploads made through the toolkit; the Paradox launcher uploads the whole folder.",
+        "Open .pxignore"
+      )
+      .then((choice) => {
+        if (choice) void vscode.window.showTextDocument(vscode.Uri.file(path.join(root, PXIGNORE_FILE)));
+      });
+  }
+
   private notify(message: string, level: "info" | "warn" | "error" = "info"): void {
     this.options.log(`workshop: ${message}`);
     const full = `Paradox Modding Toolkit: ${message}`;
@@ -163,15 +190,41 @@ export class WorkshopPanel {
     else void vscode.window.showInformationMessage(full);
   }
 
-  /** notify() for a caught error: the friendly text out, the raw one logged. */
+  /**
+   * A caught error as a dialog: a toast folds long advice behind a chevron,
+   * and the Steam advice is the part that matters. The raw error is logged.
+   */
   private notifyError(friendly: string, e: unknown): void {
     this.options.log(`workshop: ${friendly} [raw: ${e instanceof Error ? e.message : String(e)}]`);
-    void vscode.window.showErrorMessage(`Paradox Modding Toolkit: ${friendly}`);
+    const cut = friendly.indexOf(" - ");
+    const title = cut > 0 ? friendly.slice(0, cut) : "Workshop error";
+    const detail = cut > 0 ? friendly.slice(cut + 3) : friendly;
+    void vscode.window.showErrorMessage(title, { modal: true, detail });
+  }
+
+  /** The upload result as a dialog with the item page one click away, in the Steam client first. */
+  private notifyUploaded(itemId: string, submits: number): void {
+    void vscode.window
+      .showInformationMessage(
+        "Upload done.",
+        {
+          modal: true,
+          detail: `Item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
+        },
+        "Open in Steam",
+        "Open in Browser"
+      )
+      .then((choice) => {
+        if (choice === "Open in Steam")
+          void vscode.env.openExternal(vscode.Uri.parse(workshopSteamUrl(itemId)));
+        else if (choice === "Open in Browser")
+          void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(itemId)));
+      });
   }
 
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
-    const workshopDir = workshopDirFor(root);
+    const workshopDir = workshopDirFor(root, meta);
     const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
@@ -202,7 +255,7 @@ export class WorkshopPanel {
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
-      changelogNote: changelogNoteFor(root, info?.version ?? null),
+      changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
       changelogPath: path.resolve(
         workshopDir,
         (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
@@ -214,7 +267,59 @@ export class WorkshopPanel {
       filesPresent: hasListingFiles(workshopDir),
       steamLanguages: [...STEAM_LANGUAGES],
       suggestedLanguages: suggestedLanguages(root, this.options.meta),
+      checks: info
+        ? preflight({
+            name: info.name,
+            description: info.description ?? "",
+            tags: info.tags,
+            previewPath,
+            previewBytes: previewPath ? (fs.statSync(previewPath).size ?? null) : null,
+            supportedVersion: info.supportedVersion,
+            gameVersion: detectGameVersion(this.options.gamePath),
+          })
+        : [],
+      previews: this.previewsInfo(workshopDir),
+      dependencies: readDependencies(workshopDir),
+      dependencyCandidates: this.dependencyCandidates(root),
     };
+  }
+
+  private previewsInfo(workshopDir: string): WorkshopModInfo["previews"] {
+    const previews = readPreviews(workshopDir);
+    if (!previews) return null;
+    return {
+      dir: path.join(workshopDir, PREVIEWS_DIR),
+      images: previews.images.map((p) => ({
+        name: path.basename(p),
+        uri: `${this.panel.webview.asWebviewUri(vscode.Uri.file(p)).toString()}?v=${Math.floor(fs.statSync(p).mtimeMs)}`,
+      })),
+      videos: previews.videos,
+    };
+  }
+
+  /** Installed Workshop mods of this game, the declared dependencies first. */
+  private dependencyCandidates(root: string): WorkshopModInfo["dependencyCandidates"] {
+    const { meta } = this.options;
+    const workshopRoots = findSteamLibraries()
+      .map((lib) => path.join(lib, "steamapps", "workshop", "content", String(meta.steamAppId)))
+      .filter((p) => fs.existsSync(p));
+    return dependencyCandidates({ declared: declaredDependencies(root), workshopRoots, exclude: [root] })
+      .filter((c) => /^\d+$/.test(c.itemId))
+      .map((c) => ({ itemId: c.itemId, label: c.label, declared: c.declared }));
+  }
+
+  /** The item's live details, or null when Steam cannot answer (the caller then leaves Steam's state alone). */
+  private async queryItem(itemId: string): Promise<ItemDetails | null> {
+    try {
+      const done = await runBridge(
+        this.context,
+        { action: "query", appId: this.options.meta.steamAppId, itemId },
+        this.options.log
+      );
+      return done.action === "query" ? done.item : null;
+    } catch {
+      return null;
+    }
   }
 
   private async postInit(): Promise<void> {
@@ -246,18 +351,8 @@ export class WorkshopPanel {
         return;
       case "saveLocal": {
         if (!root) return;
-        const dir = workshopDirFor(root);
-        // Existing folder, or a mod-projects layout where the folder is the
-        // right default even before it exists: the folder is the canonical
-        // store; workshop.json keeps only ids.
-        if (preferListingFiles(root, dir)) {
-          writeListingFiles(dir, {
-            description: message.description,
-            translations: message.translations as Record<string, WorkshopTranslation>,
-          });
-          return;
-        }
-        upsertWorkshopMeta(root, meta.configDirName, {
+        // The folder is the canonical store; workshop.json keeps only ids.
+        writeListingFiles(workshopDirFor(root, meta), {
           description: message.description,
           translations: message.translations as Record<string, WorkshopTranslation>,
         });
@@ -302,6 +397,64 @@ export class WorkshopPanel {
       case "notify":
         this.notify(message.message, message.warn ? "warn" : "info");
         return;
+      case "loadDlc": {
+        try {
+          const done = await runBridge(
+            this.context,
+            { action: "dlc", appId: meta.steamAppId },
+            this.options.log
+          );
+          this.post({ type: "dlc", list: done.action === "dlc" ? done.dlc : [], error: null });
+        } catch (e) {
+          this.post({ type: "dlc", list: [], error: friendlyError(e, meta) });
+        }
+        return;
+      }
+      case "setDependencies": {
+        if (!root) return;
+        writeDependencies(workshopDirFor(root, meta), {
+          apps: message.apps.filter((a) => Number.isInteger(a) && a > 0),
+          items: message.items.filter((i) => /^\d+$/.test(i)),
+        });
+        await this.postInfo();
+        return;
+      }
+      case "addPreviews": {
+        if (!root) return;
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          filters: { Images: ["png", "jpg", "jpeg", "gif"] },
+          title: "Add preview images",
+        });
+        if (!picked?.length) return;
+        const dir = path.join(workshopDirFor(root, meta), PREVIEWS_DIR);
+        fs.mkdirSync(dir, { recursive: true });
+        for (const uri of picked) fs.copyFileSync(uri.fsPath, path.join(dir, path.basename(uri.fsPath)));
+        await this.postInfo();
+        return;
+      }
+      case "removePreview": {
+        if (!root || path.basename(message.name) !== message.name) return;
+        fs.rmSync(path.join(workshopDirFor(root, meta), PREVIEWS_DIR, message.name), { force: true });
+        await this.postInfo();
+        return;
+      }
+      case "setVideos": {
+        if (!root) return;
+        writeVideos(
+          workshopDirFor(root, meta),
+          message.ids.filter((id) => /^[\w-]{6,20}$/.test(id))
+        );
+        await this.postInfo();
+        return;
+      }
+      case "openPreviewsFolder": {
+        if (!root) return;
+        const dir = path.join(workshopDirFor(root, meta), PREVIEWS_DIR);
+        fs.mkdirSync(dir, { recursive: true });
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+        return;
+      }
     }
   }
 
@@ -322,8 +475,8 @@ export class WorkshopPanel {
         detail:
           `It would land at ${dir}, in the folder where every installed mod lives. ` +
           `Any other mod in that folder resolves its default workshop location to the same place, ` +
-          `so listings can overwrite each other. Recommended: keep the mod in its own project folder ` +
-          `with the listing next to it, or point px.workshop.dir somewhere outside the game's mod folder.`,
+          `so listings can overwrite each other. Clear px.workshop.dir so the listing lives inside the mod ` +
+          `(.px-toolkit/workshop), or point it somewhere outside the game's mod folder.`,
       },
       "Create Anyway"
     );
@@ -338,7 +491,7 @@ export class WorkshopPanel {
     // The webview (and workshop.json) name the language; only the fixed Steam
     // table may become a path segment.
     if (lang !== null && !STEAM_LANGUAGES.some((l) => l.api === lang)) return;
-    const dir = workshopDirFor(root);
+    const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir)) {
       this.notify(
         `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
@@ -379,7 +532,7 @@ export class WorkshopPanel {
         fs.writeFileSync(file, JSON.stringify(md, null, 2) + "\n", "utf8");
       }
       // Keep item.json's title in step with the descriptor once files track it.
-      const dir = workshopDirFor(root);
+      const dir = workshopDirFor(root, meta);
       if (field === "title" && hasListingFiles(dir) && readItemJson(dir)) {
         upsertItemJson(dir, { title: v });
       }
@@ -464,7 +617,7 @@ export class WorkshopPanel {
       this.notify("The mod has no Workshop item to pull from.", "warn");
       return;
     }
-    const dir = workshopDirFor(root);
+    const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir) && !(await this.confirmWorkshopDirPlacement(dir))) return;
     this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
     try {
@@ -488,6 +641,10 @@ export class WorkshopPanel {
       }
       writeListingFiles(dir, { description: item.description, translations });
       upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
+      writeDependencies(dir, { apps: item.appDependencies, items: item.children });
+      // Type 1 = YouTube video. Images stay on Steam: pulling would download them.
+      const videos = item.additionalPreviews.filter((p) => p.type === 1).map((p) => p.urlOrVideoId);
+      if (videos.length) writeVideos(dir, videos);
       const n = Object.keys(translations).length;
       this.notify(`Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`);
     } catch (e) {
@@ -542,6 +699,7 @@ export class WorkshopPanel {
     let staging: string | null = null;
     try {
       let needsAgreement = false;
+      const createdNow = !itemId;
       if (!itemId) {
         this.post({ type: "uploadState", busy: true, message: "creating the Workshop item…" });
         const created = await runBridge(this.context, { action: "create", appId: meta.steamAppId }, log);
@@ -554,10 +712,43 @@ export class WorkshopPanel {
         log(`workshop: created item ${itemId} for ${root}`);
       }
 
+      // One query serves the preview replacement and the requirement diff;
+      // a just-created item has nothing on Steam yet.
+      const wsDir = workshopDirFor(root, meta);
+      const previews = message.details ? readPreviews(wsDir) : null;
+      const deps = message.details ? readDependencies(wsDir) : null;
+      const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
+
       const submits: SubmitSpec[] = [];
       if (message.content || message.details) {
         const main: SubmitSpec = {};
         if (message.details) {
+          // Version stamps on the item, for tools that compare listings without downloading.
+          main.keyValueTags = Object.fromEntries(
+            Object.entries({
+              px_version: info.version ?? "",
+              px_supported_version: info.supportedVersion ?? "",
+              px_game: meta.id,
+            }).filter(([, v]) => v !== "")
+          );
+          main.metadata = JSON.stringify({
+            version: info.version,
+            supportedVersion: info.supportedVersion,
+            game: meta.id,
+            tool: "px-toolkit",
+          });
+          if (previews) {
+            const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
+            if (small.length < previews.images.length)
+              this.notify(
+                `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
+                "warn"
+              );
+            main.previewImages = small;
+            main.previewVideos = previews.videos;
+            const count = liveItem?.additionalPreviews.length ?? 0;
+            main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
+          }
           main.title = info.name ?? undefined;
           main.description = info.description ?? undefined;
           if (info.tags.length) main.tags = info.tags;
@@ -575,8 +766,9 @@ export class WorkshopPanel {
         }
         if (message.content) {
           this.post({ type: "uploadState", busy: true, message: "preparing files…" });
+          if (ensurePxIgnore(root)) this.explainPxIgnore(root);
           staging = makeStagingDir();
-          stageContent(root, staging, [workshopDirFor(root)]);
+          stageContent(root, staging, [workshopDirFor(root, meta)]);
           main.contentPath = staging;
         }
         if (message.changeNote.trim()) main.changeNote = message.changeNote.trim();
@@ -606,6 +798,30 @@ export class WorkshopPanel {
       needsAgreement = needsAgreement || done.needsToAcceptAgreement;
       log(`workshop: uploaded ${root} to item ${itemId} (${submits.length} submit(s))`);
 
+      if (deps && !createdNow && !liveItem) {
+        this.notify(
+          "Steam did not answer the requirements query, so the item's requirements were left as they are.",
+          "warn"
+        );
+      } else if (deps) {
+        const liveApps = liveItem?.appDependencies ?? [];
+        const liveItems = liveItem?.children ?? [];
+        const job = {
+          action: "setDependencies" as const,
+          appId: meta.steamAppId,
+          itemId,
+          addApps: deps.apps.filter((a) => !liveApps.includes(a)),
+          removeApps: liveApps.filter((a) => !deps.apps.includes(a)),
+          addItems: deps.items.filter((i) => !liveItems.includes(i)),
+          removeItems: liveItems.filter((i) => !deps.items.includes(i)),
+        };
+        if (job.addApps.length || job.removeApps.length || job.addItems.length || job.removeItems.length) {
+          this.post({ type: "uploadState", busy: true, message: "updating requirements…" });
+          await runBridge(this.context, job, log);
+          log(`workshop: requirements of ${itemId} updated`);
+        }
+      }
+
       if (needsAgreement) {
         void vscode.window
           .showWarningMessage(
@@ -617,7 +833,7 @@ export class WorkshopPanel {
             if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
           });
       }
-      this.notify("Upload done.");
+      this.notifyUploaded(itemId, submits.length);
       await this.postInfo();
     } catch (e) {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);

@@ -52,6 +52,7 @@ import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert"
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { readModName } from "@px-lsp/protocol/modName";
+import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
@@ -196,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.window.showInformationMessage(
       "EU5 support is community-sourced (folder mappings imported from cwtools-eu5-config) and not yet " +
         "verified against a live install. Wrong or missing mappings degrade navigation, never diagnostics. " +
-        "Please report gaps; a .eu5modding/schema.json overlay in your mod fixes them immediately."
+        "Please report gaps; a .px-toolkit/schema.json overlay in your mod fixes them immediately."
     );
   }
   log(
@@ -318,10 +319,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   updateStatus();
 
   // Baselines are per mod (multi-mod workspaces): each run suppresses the
-  // baseline of the mod it validates, not one global file. The config dir is
-  // the active game's (.ck3modding / .vic3modding / …).
+  // baseline of the mod it validates, not one global file.
   const baselineFileFor = (root: string | null) =>
-    root ? path.join(root, metaFor(cfg.gameId).configDirName, "tiger-baseline.json") : null;
+    root ? path.join(migrateConfigDir(root, metaFor(cfg.gameId)), "tiger-baseline.json") : null;
   let tigerUnusedOnce = false;
   const tigerExtraArgs = (modRoot: string): string[] => {
     const args: string[] = [];
@@ -1048,6 +1048,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       WorkshopPanel.show(context, {
+        gamePath: cfg.gamePath,
         meta: metaFor(cfg.gameId),
         mods,
         active: views.focusRoot() ?? cfg.modPath,

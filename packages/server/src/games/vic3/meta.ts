@@ -12,7 +12,8 @@ export const vic3Meta: GameMeta = {
   engine: "jomini",
   // Vic3 mods carry .metadata/metadata.json instead of a launcher .mod file.
   descriptor: "metadata",
-  configDirName: ".vic3modding",
+  configDirName: ".px-toolkit",
+  legacyConfigDirName: ".vic3modding",
   docsFolderName: "Victoria 3",
   // Vic3's `script_docs` writes to Documents/.../docs (like EU5), while
   // `dump_data_types` writes to logs/data_types — verified on a live install.

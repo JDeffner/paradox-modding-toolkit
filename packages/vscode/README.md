@@ -13,6 +13,7 @@ overview, and a localization workflow no other tool has.
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 ![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.90-007ACC.svg?logo=visualstudiocode)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/DfEJ2H9hj4)
 
 </div>
 
@@ -247,7 +248,7 @@ rules (MIT, pinned commit) and has not been checked against a live install. The
 damage a wrong entry can do is bounded on purpose: a minimal hand-verified set
 of reference fields and **zero** required-localization patterns, so a mistake
 costs you navigation, never a false error squiggle. Gaps are fixable without
-waiting for a release through the `<mod>/.eu5modding/schema.json` overlay, and
+waiting for a release through the `<mod>/.px-toolkit/schema.json` overlay, and
 reports are very welcome.
 
 The same table with the detection ladder, the per-game dump paths and the

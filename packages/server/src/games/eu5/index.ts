@@ -8,7 +8,7 @@
  * upstream, commit and license) and has NOT been checked against a live EU5
  * install. Folder→kind mappings are only as right as those rules are; report
  * gaps with the "Schema gap" issue form, and work around them locally with the
- * `<mod>/.eu5modding/schema.json` overlay.
+ * `<mod>/.px-toolkit/schema.json` overlay.
  */
 import type { GameProfile } from "../profile";
 import type { RefField, SchemaEntry } from "../../schema/types";

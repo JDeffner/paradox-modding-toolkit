@@ -4,7 +4,8 @@
  * disk); the item's live state arrives in `live` after the host asked Steam
  * through the bridge. The app never touches the disk or Steam itself.
  */
-import type { ItemDetails, WorkshopVisibility } from "../../steam/jobs";
+import type { DlcEntry, ItemDetails, WorkshopVisibility } from "../../steam/jobs";
+import type { PreflightCheck } from "../../steam/preflight";
 
 /**
  * One language's local draft. Structurally the protocol's WorkshopTranslation
@@ -63,6 +64,14 @@ export interface WorkshopModInfo {
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];
+  /** What would go wrong on upload, from the local files alone. */
+  checks: PreflightCheck[];
+  /** Extra previews from `<workshopDir>/previews/` (null = no such folder, Steam's gallery is left alone). */
+  previews: { dir: string; images: { name: string; uri: string }[]; videos: string[] } | null;
+  /** Required DLC and items from `<workshopDir>/dependencies.json` (null = never set, Steam's are left alone). */
+  dependencies: { apps: number[]; items: string[] } | null;
+  /** Installed Workshop mods the required-items picker offers first. */
+  dependencyCandidates: { itemId: string; label: string; declared: boolean }[];
 }
 
 /** Title/description as Steam serves one language (its fallback included). */
@@ -82,7 +91,9 @@ export type HostToApp =
       /** Steam unreachable or the query failed; disk data stays usable. */
       error: string | null;
     }
-  | { type: "uploadState"; busy: boolean; message?: string };
+  | { type: "uploadState"; busy: boolean; message?: string }
+  /** The game's DLC list, or why it could not be read. */
+  | { type: "dlc"; list: DlcEntry[]; error: string | null };
 
 export type AppToHost =
   | { type: "ready" }
@@ -119,4 +130,16 @@ export type AppToHost =
   /** Surface a message as a VS Code notification (the app has no UI for it). */
   | { type: "notify"; message: string; warn?: boolean }
   /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
-  | { type: "pullListing" };
+  | { type: "pullListing" }
+  /** Ask the Steam client for the game's DLC list. */
+  | { type: "loadDlc" }
+  /** Write dependencies.json (required DLC app ids, required Workshop item ids). */
+  | { type: "setDependencies"; apps: number[]; items: string[] }
+  /** Pick images to copy into the previews folder (host opens the file dialog). */
+  | { type: "addPreviews" }
+  /** Delete one file of the previews folder (a bare file name). */
+  | { type: "removePreview"; name: string }
+  /** Write previews/videos.txt. */
+  | { type: "setVideos"; ids: string[] }
+  /** Reveal the previews folder in the OS file manager, creating it first. */
+  | { type: "openPreviewsFolder" };

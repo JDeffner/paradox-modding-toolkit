@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "../config";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
+import { hasKindStyle, kindStyle } from "@px-lsp/protocol/kinds";
 import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
 import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
 import { metaFor } from "../meta";
@@ -35,10 +36,20 @@ interface KindItem extends vscode.QuickPickItem {
   template: ScaffoldTemplate;
 }
 
+/**
+ * The picker draws each kind with the glyph hovers, completion and the tree
+ * use for it (protocol/kinds.ts), so a decision looks the same everywhere.
+ * A template whose id has no kind style keeps the icon baked into its label.
+ */
+function labelWithKindIcon(template: ScaffoldTemplate): string {
+  if (!hasKindStyle(template.id)) return template.label;
+  return template.label.replace(/^\$\([^)]*\)\s*/, `$(${kindStyle(template.id).codicon}) `);
+}
+
 async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate | undefined> {
   const items: KindItem[] = templates.map((template) => ({
     template,
-    label: template.label,
+    label: labelWithKindIcon(template),
     detail: template.detail,
   }));
   const pick = await vscode.window.showQuickPick<KindItem>(items, {

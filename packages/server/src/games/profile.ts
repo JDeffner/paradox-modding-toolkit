@@ -70,8 +70,10 @@ export interface GameMeta {
   engine: "jomini" | "clausewitz-classic";
   /** Mod descriptor convention: Paradox-launcher `.mod` file vs `.metadata/metadata.json`. */
   descriptor: "mod" | "metadata";
-  /** Per-workspace config dir holding schema.json / playset.json overlays. */
+  /** Per-mod config dir holding schema.json / playset.json overlays, workshop.json, the listing folder. */
   configDirName: string;
+  /** The pre-0.4.0 per-game name of that dir, still read as a fallback and renamed on first write. */
+  legacyConfigDirName?: string;
   /** Game folder under `Documents/Paradox Interactive/` (script_docs logs live in its logs/). */
   docsFolderName: string;
   /**

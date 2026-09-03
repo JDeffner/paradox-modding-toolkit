@@ -127,6 +127,18 @@ ${BBPREV_CSS}
     color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left;
   }
   .modal-line { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left; }
+  .gallery { display: flex; flex-wrap: wrap; gap: 8px; }
+  .gallery .tile { position: relative; width: 112px; height: 84px; border: 1px solid var(--px-border); border-radius: var(--px-radius); overflow: hidden; background: var(--px-muted); }
+  .gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gallery .tile .rm { position: absolute; top: 2px; right: 2px; }
+  .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .check-row { display: flex; align-items: flex-start; gap: 6px; font-size: var(--px-text-xs); padding: 2px 0; }
+  .check-row[data-level="error"] { color: var(--px-destructive); }
+  .check-row[data-level="warn"] { color: var(--px-muted-fg); }
+  .dlc-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: var(--px-text-sm); }
+  .dlc-row .own { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .req-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--px-text-sm); }
 </style>
 </head>
 <body>
@@ -231,8 +243,35 @@ ${BBPREV_CSS}
       <div id="translations"></div>
     </div>
 
+    <div class="section" id="previewsSection">
+      <div class="px-panel-title">Previews</div>
+      <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
+      <div id="gallery" class="gallery"></div>
+      <div class="hintline" style="margin-top:6px">
+        <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
+        <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
+      </div>
+      <div class="field-row" style="margin-top:8px">
+        <span class="px-label">Videos</span>
+        <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
+      </div>
+    </div>
+
+    <div class="section" id="requirementsSection">
+      <div class="px-panel-title">Requirements</div>
+      <div class="px-label" style="margin-bottom:4px">Required DLC</div>
+      <div id="dlcBox"></div>
+      <div class="px-label" style="margin:10px 0 4px">Required items</div>
+      <div id="itemsBox"></div>
+      <div class="hintline" style="margin-top:4px">
+        <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto">${icon("plus")} Add item${icon("chevronDown")}</button>
+        <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link" style="width:220px" />
+      </div>
+    </div>
+
     <div class="section">
       <div class="px-panel-title">Publish</div>
+      <div id="checks" style="margin-bottom:6px"></div>
       <div id="publishRows">
         <div class="pub-row">
           <label class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></label>

@@ -10,11 +10,12 @@
  *     <steamlang>/description.bbcode
  *     changelog/                   changenote sources (see resolveChangeNote)
  *
- * The folder's location is `px.workshop.dir`, resolved against the mod root
- * (default `../workshop`: the mod's content lives in `<project>/mod`, the
- * listing next to it in `<project>/workshop`). While the folder exists it is
- * the canonical store for the description and the translations; without it
- * everything stays in `<configDir>/workshop.json` as before.
+ * The folder's location is `px.workshop.dir`, resolved against the mod root.
+ * Empty (the default) means `<configDir>/workshop` inside the mod, which a
+ * toolkit upload leaves out (see pxignore.ts); a mod-projects layout with a
+ * `workshop` folder next to the mod (`<project>/mod` + `<project>/workshop`)
+ * keeps using that. The folder is the canonical store for the description
+ * and the translations; `workshop.json` keeps only ids and pre-0.4.0 drafts.
  *
  * No vscode imports: unit-tested in plain Node.
  */
@@ -22,12 +23,18 @@ import * as fs from "fs";
 import * as path from "path";
 import { STEAM_LANGUAGES, type WorkshopTranslation } from "@px-lsp/protocol/workshopMeta";
 
-export const DEFAULT_WORKSHOP_DIR = "../workshop";
+export const SIBLING_WORKSHOP_DIR = "../workshop";
 export const DEFAULT_CHANGELOG = "changelog";
 
-/** The workshop folder of `root`, from the `px.workshop.dir` setting. */
-export function resolveWorkshopDir(root: string, setting: string | undefined): string {
-  return path.resolve(root, (setting ?? "").trim() || DEFAULT_WORKSHOP_DIR);
+/**
+ * The workshop folder of `root`: the `px.workshop.dir` setting when set, else
+ * the existing `../workshop` sibling, else `<configDir>/workshop`.
+ */
+export function resolveWorkshopDir(root: string, setting: string | undefined, configDir: string): string {
+  const explicit = (setting ?? "").trim();
+  if (explicit) return path.resolve(root, explicit);
+  const sibling = path.resolve(root, SIBLING_WORKSHOP_DIR);
+  return hasListingFiles(sibling) ? sibling : path.join(configDir, "workshop");
 }
 
 /** True when the mod tracks its listing as files (the folder exists). */
@@ -37,24 +44,6 @@ export function hasListingFiles(workshopDir: string): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * True when listing writes should go to the workshop folder even though it
- * does not exist yet. The mod-projects layout keeps everything that is not
- * the upload next to the mod (`<project>/mod` + `<project>/workshop`), so
- * falling back to the in-mod `<configDir>/workshop.json` there would create a
- * toolkit file inside the uploadable content for no reason. The layout is the
- * signal: the mod root is a folder literally named `mod`, and the workshop
- * dir resolves to a sibling of it (the default `../workshop`).
- */
-export function preferListingFiles(root: string, workshopDir: string): boolean {
-  if (hasListingFiles(workshopDir)) return true;
-  const resolved = path.resolve(root);
-  return (
-    path.basename(resolved).toLowerCase() === "mod" &&
-    path.dirname(path.resolve(workshopDir)).toLowerCase() === path.dirname(resolved).toLowerCase()
-  );
 }
 
 export interface ListingFiles {
@@ -161,6 +150,119 @@ export function upsertItemJson(workshopDir: string, patch: ItemJson): void {
   }
   fs.mkdirSync(workshopDir, { recursive: true });
   fs.writeFileSync(path.join(workshopDir, "item.json"), JSON.stringify(current, null, 2) + "\n", "utf8");
+}
+
+/**
+ * Move the listing folder from one location to the other (project layout
+ * `<project>/workshop` <-> in-mod `<configDir>/workshop`). A missing source
+ * folder is not an error: the listing then gets created at the target from
+ * `drafts` (what workshop.json still holds), so nothing is lost either way.
+ * Refuses to overwrite an existing target.
+ */
+export function moveListing(
+  from: string,
+  to: string,
+  drafts: { description: string; translations: Record<string, WorkshopTranslation> }
+): void {
+  if (hasListingFiles(to)) throw new Error(`a listing folder already exists at ${to}`);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (!hasListingFiles(from)) {
+    writeListingFiles(to, drafts);
+    return;
+  }
+  try {
+    fs.renameSync(from, to);
+  } catch {
+    fs.cpSync(from, to, { recursive: true });
+    fs.rmSync(from, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Extra previews and dependencies
+// ---------------------------------------------------------------------------
+
+export const PREVIEWS_DIR = "previews";
+export const VIDEOS_FILE = "videos.txt";
+export const DEPENDENCIES_FILE = "dependencies.json";
+const PREVIEW_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif"]);
+
+export interface Previews {
+  /** Absolute image paths, in file-name order: the order of Steam's gallery. */
+  images: string[];
+  /** YouTube video ids, one per line of videos.txt. */
+  videos: string[];
+}
+
+/**
+ * `<workshopDir>/previews/`: the item's extra preview images plus
+ * `videos.txt`. Null when the folder does not exist, which means the toolkit
+ * leaves the item's gallery on Steam alone.
+ */
+export function readPreviews(workshopDir: string): Previews | null {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const images = names
+    .filter((n) => PREVIEW_EXTS.has(path.extname(n).toLowerCase()))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((n) => path.join(dir, n));
+  let videos: string[] = [];
+  try {
+    videos = fs
+      .readFileSync(path.join(dir, VIDEOS_FILE), "utf8")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l !== "" && !l.startsWith("#"));
+  } catch {
+    /* no videos file */
+  }
+  return { images, videos };
+}
+
+export function writeVideos(workshopDir: string, ids: string[]): void {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, VIDEOS_FILE);
+  if (ids.length === 0) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  fs.writeFileSync(file, ids.join("\n") + "\n", "utf8");
+}
+
+export interface Dependencies {
+  /** Required DLC, as Steam app ids. */
+  apps: number[];
+  /** Required Workshop items, as decimal id strings. */
+  items: string[];
+}
+
+/** `<workshopDir>/dependencies.json`, or null when absent (Steam's are then left alone). */
+export function readDependencies(workshopDir: string): Dependencies | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, DEPENDENCIES_FILE), "utf8")) as {
+      apps?: unknown;
+      items?: unknown;
+    };
+    return {
+      apps: Array.isArray(raw.apps) ? raw.apps.filter((a): a is number => Number.isInteger(a)) : [],
+      items: Array.isArray(raw.items)
+        ? raw.items.filter((i): i is string => typeof i === "string" && /^\d+$/.test(i))
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeDependencies(workshopDir: string, deps: Dependencies): void {
+  fs.mkdirSync(workshopDir, { recursive: true });
+  fs.writeFileSync(path.join(workshopDir, DEPENDENCIES_FILE), JSON.stringify(deps, null, 2) + "\n", "utf8");
 }
 
 // ---------------------------------------------------------------------------

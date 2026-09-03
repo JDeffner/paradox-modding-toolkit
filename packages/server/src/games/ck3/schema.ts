@@ -1,7 +1,7 @@
 /**
  * The bundled CK3 schema table (rework plan AD-3). One entry per game folder
  * we understand; community-editable in-repo, extendable per-workspace via
- * .ck3modding/schema.json.
+ * .px-toolkit/schema.json.
  *
  * Every entry was verified against a real CK3 install (game version with
  * common/ ~150 subfolders): the folder was listed, a file opened, and the

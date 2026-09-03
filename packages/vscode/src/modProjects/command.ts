@@ -13,6 +13,7 @@ import { gameDocsSubdir } from "../config";
 import { detectGameVersion } from "../descriptorMod";
 import { GAME_METAS } from "../gameDetect";
 import { metaFor } from "../meta";
+import { ensurePxIgnore, PXIGNORE_FILE } from "../steam/pxignore";
 import { PROJECT_CONTENT_DIR, pointerModText, projectFolderName, slugify } from "./core";
 
 const PREFIX = "Paradox Modding Toolkit";
@@ -153,18 +154,20 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
   const loc = await vscode.window.showQuickPick<LocItem>(
     [
       {
-        label: "Mod projects folder (recommended)",
+        label: "Game mod folder (recommended)",
+        description: gameModDir ?? undefined,
+        detail:
+          `Everything in one folder. A ${PXIGNORE_FILE} file keeps git, editor and toolkit files ` +
+          `(${meta.configDirName}/) out of Workshop uploads made through the toolkit.`,
+        mode: "game",
+      },
+      {
+        label: "Mod projects folder",
         description: projectsDir ?? "you pick the folder next",
         detail:
           `The mod lives in <project>/${PROJECT_CONTENT_DIR}; git, notes and Workshop listing files stay ` +
           `next to it, outside the upload. The game finds it via ${linkNoun} in its mod folder.`,
         mode: "project",
-      },
-      {
-        label: "Game mod folder",
-        description: gameModDir ?? undefined,
-        detail: "The classic location. Everything in the folder ships with a Workshop upload.",
-        mode: "game",
       },
     ],
     { title: "New Mod — where", placeHolder: "Where should the mod live?" }
@@ -188,6 +191,8 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
       const file = path.join(dir, ...scaffold.relPath);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, scaffold.text, "utf8");
+      fs.mkdirSync(path.join(dir, meta.configDirName, "workshop"), { recursive: true });
+      ensurePxIgnore(dir);
       log(`new mod created at ${dir}${maybeThumbnailNote(meta, dir)}`);
       await offerToOpen(dir);
       return;

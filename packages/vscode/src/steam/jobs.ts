@@ -28,6 +28,31 @@ export interface SubmitSpec {
   visibility?: WorkshopVisibility;
   /** Steam API language code (`german`, `schinese`, ...). */
   language?: string;
+  /** Developer metadata on the item, not shown to users (max 5000 bytes). */
+  metadata?: string;
+  /** Key/value tags; each key replaces the item's existing values for it. */
+  keyValueTags?: Record<string, string>;
+  /** Extra preview images to add (absolute paths, PNG/JPG/GIF). */
+  previewImages?: string[];
+  /** YouTube video ids to add as previews. */
+  previewVideos?: string[];
+  /** Indexes into the item's additional previews to remove before the adds. */
+  removePreviewIndexes?: number[];
+}
+
+/** One DLC of the game as the Steam client lists it. */
+export interface DlcEntry {
+  appId: number;
+  name: string;
+  /** Owned by the logged-in account. Unowned DLC is still a valid requirement. */
+  available: boolean;
+}
+
+/** An extra preview on the item: an image URL, or a YouTube video id (type 1). */
+export interface AdditionalPreview {
+  type: number;
+  urlOrVideoId: string;
+  originalFileName: string;
 }
 
 export type BridgeJob =
@@ -35,7 +60,19 @@ export type BridgeJob =
   /** Sequential SubmitItemUpdate calls in one Steam session (details, then translations). */
   | { action: "publish"; appId: number; itemId: string; submits: SubmitSpec[] }
   /** The item's live details, plus its title/description per requested language. */
-  | { action: "query"; appId: number; itemId: string; languages?: string[] };
+  | { action: "query"; appId: number; itemId: string; languages?: string[] }
+  /** The game's DLC list from the Steam client. */
+  | { action: "dlc"; appId: number }
+  /** Required DLC and required items are keyed by the item, not by an update: applied as their own calls. */
+  | {
+      action: "setDependencies";
+      appId: number;
+      itemId: string;
+      addApps: number[];
+      removeApps: number[];
+      addItems: string[];
+      removeItems: string[];
+    };
 
 /** The live item details the toolkit shows (bigints already stringified). */
 export interface ItemDetails {
@@ -54,6 +91,11 @@ export interface ItemDetails {
   numFavorites: number | null;
   numUniqueWebsiteViews: number | null;
   numComments: number | null;
+  /** Required DLC app ids. */
+  appDependencies: number[];
+  /** Required items (Workshop ids). */
+  children: string[];
+  additionalPreviews: AdditionalPreview[];
 }
 
 export type BridgeEvent =
@@ -77,7 +119,9 @@ export type BridgeDone =
       item: ItemDetails | null;
       /** Title/description as Steam serves each requested language (its default-language fallback included). */
       translations: Record<string, { title: string; description: string }>;
-    };
+    }
+  | { action: "dlc"; dlc: DlcEntry[] }
+  | { action: "setDependencies"; itemId: string };
 
 /** Dotted-number version compare: `a` >= `b`. Non-numeric parts compare as 0. */
 export function versionAtLeast(a: string, b: string): boolean {

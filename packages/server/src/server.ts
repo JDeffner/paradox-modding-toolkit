@@ -149,6 +149,7 @@ import { ModOriginResolver } from "./index/modOrigin";
 import { loadSchema, type SchemaData } from "./schema/loader";
 import { VARIABLE_KINDS } from "./games/jomini/variables";
 import { activeProfile, setActiveProfile } from "./games/active";
+import { resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { resolveProfile } from "./games/registry";
 import type { SchemaEntry } from "./schema/types";
 import { URI } from "vscode-uri";
@@ -1077,7 +1078,7 @@ function rebuildModNamespaces(): void {
 
 /** Ordered parent-mod roots from <mod>/<configDir>/playset.json, if present. */
 function readPlayset(modPath: string): string[] {
-  const file = path.join(modPath, activeProfile().configDirName, "playset.json");
+  const file = path.join(resolveConfigDir(modPath, activeProfile()), "playset.json");
   try {
     if (!fs.existsSync(file)) return [];
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));

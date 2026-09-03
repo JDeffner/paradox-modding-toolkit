@@ -71,7 +71,7 @@ body:
       options:
         - label: '`script_docs` logs generated (status bar says "script_docs + wiki")'
         - label: "`DumpDataTypes` dump loaded (`data_types.log` in the logs folder)"
-        - label: Using a `.ck3modding/schema.json` overlay or `playset.json` (attach it below if so)
+        - label: Using a `.px-toolkit/schema.json` overlay or `playset.json` (attach it below if so)
 
   - type: textarea
     id: repro

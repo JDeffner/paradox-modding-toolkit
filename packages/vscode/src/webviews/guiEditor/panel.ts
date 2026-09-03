@@ -41,6 +41,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
+import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import {
   LAYOUT_DEBOUNCE_MS,
   type AppToHost,
@@ -128,7 +129,7 @@ const TEXTURE_ANSWER_MAX = 200;
 const THUMBNAIL_BATCH_MAX = 60;
 /**
  * The modder's preview text per `[expression]`, kept with the mod under its
- * game's config folder (`.vic3modding/gui-preview-values.json`): it describes
+ * toolkit config folder (`.px-toolkit/gui-preview-values.json`): it describes
  * what THAT mod's datafunctions should read as, so it travels with the mod and
  * not with the user.
  */
@@ -417,7 +418,7 @@ export class GuiEditorPanel {
 
   private previewValuesPath(): string | null {
     return this.roots.modPath
-      ? path.join(this.roots.modPath, this.meta.configDirName, PREVIEW_VALUES_FILE)
+      ? path.join(migrateConfigDir(this.roots.modPath, this.meta), PREVIEW_VALUES_FILE)
       : null;
   }
 

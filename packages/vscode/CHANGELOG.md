@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+- **Required DLC and required items in the Workshop panel.** A Requirements
+  section lists the game's DLC as Steam reports it (unowned ones marked) and
+  the required Workshop items, with installed mods and declared dependencies
+  offered first. Choices are saved to `dependencies.json` next to the listing
+  and applied to the item after each details upload; pulling the listing
+  writes Steam's current requirements down.
+- **Extra preview images and videos.** A `previews/` folder next to the
+  listing holds the gallery: images in file-name order plus `videos.txt` with
+  YouTube ids. While the folder exists a details upload replaces the item's
+  gallery with it; without it Steam's gallery is left alone. Add images from
+  the panel or drop files into the folder.
+- **Pre-upload checks.** The Publish section lists what would go wrong before
+  anything reaches Steam: a missing or overlong title, a description over
+  8000 bytes, a preview of 1 MB or more (these block the upload), and a
+  missing preview, empty description, no tags or a supported game version
+  that does not cover the installed game (these only warn).
+- **Version stamps on the item.** Every details upload sets the mod version,
+  supported game version and game as key/value tags and metadata on the
+  Workshop item. Not visible on the page; tools can compare listings without
+  downloading them.
+- **One config folder per mod: `.px-toolkit/`.** It replaces the per-game
+  `.ck3modding/`, `.vic3modding/` and `.eu5modding/` folders for the schema and
+  playset overlays, the tiger baseline, the GUI preview values and the
+  Workshop record. Existing folders keep working and are renamed the first time
+  the toolkit writes to them.
+- **The Workshop listing lives inside the mod by default.** `px.workshop.dir`
+  now defaults to `.px-toolkit/workshop`; a `workshop` folder next to the mod
+  (the mod-projects layout) is still picked up when it exists. Description and
+  translation drafts always go to that folder; `workshop.json` keeps only ids.
+- **`.pxignore` decides what a toolkit upload leaves out.** gitignore syntax
+  at the mod root, created with defaults (`.git/`, `.vscode/`, `.claude/`,
+  `node_modules/`, image sources, OS noise) on the first upload through the
+  toolkit, then yours to edit. `.pxignore` and `.px-toolkit/` never upload;
+  `descriptor.mod` and `.metadata/` always do. A one-time message says why the
+  exclusions only hold for toolkit uploads: the Paradox launcher ships the
+  whole folder.
+- **New Content uses the toolkit's kind glyphs.** The picker draws each kind
+  with the same icon hovers, completion and the tree use for it.
+- **Workshop errors and the upload result open as dialogs**, so the full Steam
+  advice is readable instead of folded into a toast. The upload dialog links
+  the item page, in the Steam client (`steam://`) or the browser.
+- **Move Workshop Listing** (command palette) moves the listing folder between
+  the two layouts, `<project>/workshop` and `<mod>/.px-toolkit/workshop`, in
+  either direction. A mod that only has `workshop.json` drafts gets its
+  listing files created at the target. An explicit `px.workshop.dir` is
+  cleared, since both places are what the empty default resolves to.
+- **New Mod offers the in-mod layout first.** The game's mod folder with
+  `.px-toolkit/workshop/` and `.pxignore` inside is the default; the mod
+  projects layout stays available.
+
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
 - **"Link existing item" is gone from the Workshop panel.** The button let a
@@ -228,11 +280,15 @@ release these notes belong to.
   VS Code notification and a line in the output channel, so it reaches you
   even after you switch away from the Workshop tab, and errors stay
   readable instead of fading like the old in-panel toasts (which are gone).
-  Steam's bare error phrases carry advice now: "limit exceeded" says the
-  description is over Steam's 8000-character cap, "access denied" points at
-  the logged-in account not owning the item, and so on. An oversized
-  preview image is announced when the upload keeps the current one, instead
-  of being dropped in silence.
+  Steam's raw codes are rewritten as advice: `k_EResultLimitExceeded` says a
+  field is over Steam's limit (8000 characters for the description, 128 for
+  the title), `k_EResultAccessDenied` points at the logged-in account not
+  owning the item, and about thirty codes in all say what to do next. The
+  Steamworks operation and code stay in parentheses, so a support thread
+  still has the exact failure. A value Steam refuses outright is named
+  ("Steam rejected the preview image") instead of surfacing as a bare
+  "returned false". An oversized preview image is announced when the upload
+  keeps the current one, instead of being dropped in silence.
 
 - **The changenote box explains itself.** A source dropdown under it shows
   where the text came from - "From changelog: 1.2.md", "From last git

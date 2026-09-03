@@ -6,7 +6,12 @@
  * folder exists); nothing reaches Steam until Upload confirms. Built from the
  * shared px-ui classes; talks to the host only through messages.ts.
  */
-import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
+import {
+  versionAtLeast,
+  type DlcEntry,
+  type ItemDetails,
+  type WorkshopVisibility,
+} from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
 import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, type MenuItem } from "../../shared/overlay";
@@ -40,6 +45,10 @@ let liveTranslations: Record<string, LiveTranslation> = {};
 let liveError: string | null = null;
 let fetching = false;
 let busy = false;
+/** The game's DLC list, fetched once per session on demand. */
+let dlc: DlcEntry[] | null = null;
+let dlcError: string | null = null;
+let dlcLoading = false;
 
 /** The visibility the user picked, or null = whatever the item has. */
 let pickedVisibility: WorkshopVisibility | null = null;
@@ -106,8 +115,13 @@ function renderAll(): void {
   renderStats();
   renderDescriptionHints();
   renderTranslations();
+  renderPreviews();
+  renderRequirements();
+  renderChecks();
   renderPublish();
 }
+
+const hasErrors = (): boolean => !!info?.checks.some((c) => c.level === "error");
 
 function renderToolbar(): void {
   const modBtn = $<HTMLButtonElement>("mod");
@@ -123,7 +137,7 @@ function renderToolbar(): void {
   state.setAttribute("data-tip", liveError ?? "");
 
   $<HTMLButtonElement>("openPage").disabled = !info?.publishedId;
-  $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing;
+  $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing || hasErrors();
   $<HTMLButtonElement>("refresh").disabled = fetching || !info?.publishedId;
   $<HTMLButtonElement>("pull").disabled = busy || fetching || !info?.publishedId;
   $("busy").classList.toggle("on", busy || fetching);
@@ -501,6 +515,194 @@ function renderTranslations(): void {
   }
 }
 
+/** The upload's blockers and warnings, read from the local files. */
+function renderChecks(): void {
+  const box = $("checks");
+  box.replaceChildren();
+  for (const c of info?.checks ?? []) {
+    const row = document.createElement("div");
+    row.className = "check-row";
+    row.dataset.level = c.level;
+    row.append(iconEl(c.level === "error" ? "circleX" : "alert"), document.createTextNode(c.message));
+    box.append(row);
+  }
+}
+
+/**
+ * The extra previews: the local `previews/` folder when it exists (it then
+ * REPLACES the item's gallery on upload), else Steam's current gallery,
+ * read-only.
+ */
+function renderPreviews(): void {
+  $("previewsSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  if (!info || info.descriptorMissing) return;
+  const gallery = $("gallery");
+  gallery.replaceChildren();
+  const hint = $("previewsHint");
+  const liveCount = live?.additionalPreviews.length ?? 0;
+  const videos = $<HTMLInputElement>("videos");
+  if (!info.previews) {
+    hint.textContent =
+      `No previews folder yet. Add images to create ${info.workshopDir.replace(/\\/g, "/")}/previews; ` +
+      `until then the item's gallery on Steam stays as it is` +
+      (liveCount ? ` (${liveCount} on Steam now).` : ".");
+    for (const p of live?.additionalPreviews ?? [])
+      gallery.append(liveTile(p.type, p.urlOrVideoId, p.originalFileName));
+    videos.value = "";
+    videos.disabled = true;
+    return;
+  }
+  videos.disabled = false;
+  const n = info.previews.images.length + info.previews.videos.length;
+  hint.textContent =
+    n === 0
+      ? "The previews folder is empty: the next details upload removes every extra preview on Steam."
+      : `${info.previews.images.length} image(s) and ${info.previews.videos.length} video(s). ` +
+        `The next details upload replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}.`;
+  for (const img of info.previews.images) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    const el = document.createElement("img");
+    el.src = img.uri;
+    el.alt = img.name;
+    const cap = document.createElement("span");
+    cap.className = "cap";
+    cap.textContent = img.name;
+    const rm = document.createElement("button");
+    rm.className = "px-btn rm";
+    rm.dataset.variant = "secondary";
+    rm.dataset.size = "icon-xs";
+    rm.setAttribute("aria-label", `Remove ${img.name}`);
+    rm.append(iconEl("x"));
+    rm.addEventListener("click", () => send({ type: "removePreview", name: img.name }));
+    tile.append(el, cap, rm);
+    gallery.append(tile);
+  }
+  for (const id of info.previews.videos) gallery.append(liveTile(1, id, ""));
+  if (document.activeElement !== videos) videos.value = info.previews.videos.join(", ");
+}
+
+function liveTile(type: number, urlOrId: string, name: string): HTMLElement {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  if (type === 1) {
+    tile.classList.add("video");
+    tile.append(iconEl("play"), document.createTextNode(` ${urlOrId}`));
+    tile.setAttribute("data-tip", `YouTube video ${urlOrId}`);
+    return tile;
+  }
+  const el = document.createElement("img");
+  el.src = urlOrId;
+  el.alt = name;
+  const cap = document.createElement("span");
+  cap.className = "cap";
+  cap.textContent = name || "on Steam";
+  tile.append(el, cap);
+  return tile;
+}
+
+/** YouTube ids from ids, watch links or youtu.be links, comma or space separated. */
+function parseVideoIds(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/[,\s]+/)) {
+    const m = /(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{6,20})/.exec(raw) ?? /^([\w-]{6,20})$/.exec(raw);
+    if (m && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+/** What the listing requires: DLC of the game and other Workshop items. */
+function renderRequirements(): void {
+  $("requirementsSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  if (!info || info.descriptorMissing) return;
+  // Local dependencies.json wins; without it Steam's current state shows, read-only until edited.
+  const apps = info.dependencies?.apps ?? live?.appDependencies ?? [];
+  const items = info.dependencies?.items ?? live?.children ?? [];
+  const commit = (nextApps: number[], nextItems: string[]) =>
+    send({ type: "setDependencies", apps: nextApps, items: nextItems });
+
+  const dlcBox = $("dlcBox");
+  dlcBox.replaceChildren();
+  if (dlc === null) {
+    const btn = document.createElement("button");
+    btn.className = "px-btn";
+    btn.dataset.variant = "outline";
+    btn.dataset.size = "sm";
+    btn.disabled = dlcLoading;
+    btn.textContent = dlcLoading ? "Asking Steam…" : "Load the DLC list from Steam";
+    btn.addEventListener("click", () => {
+      dlcLoading = true;
+      renderRequirements();
+      send({ type: "loadDlc" });
+    });
+    const note = document.createElement("span");
+    note.className = "px-muted px-xs";
+    note.textContent = dlcError ?? (apps.length ? `${apps.length} required on Steam now.` : "");
+    const row = document.createElement("div");
+    row.className = "hintline";
+    row.append(btn, note);
+    dlcBox.append(row);
+  } else {
+    for (const d of dlc) {
+      const row = document.createElement("label");
+      row.className = "dlc-row";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = apps.includes(d.appId);
+      cb.addEventListener("change", () => {
+        const next = cb.checked ? [...apps, d.appId] : apps.filter((a) => a !== d.appId);
+        commit(next, items);
+      });
+      const name = document.createElement("span");
+      name.textContent = d.name;
+      row.append(cb, name);
+      if (!d.available) {
+        const own = document.createElement("span");
+        own.className = "own";
+        own.textContent = "not owned";
+        row.append(own);
+      }
+      dlcBox.append(row);
+    }
+    if (dlc.length === 0) {
+      const none = document.createElement("span");
+      none.className = "px-muted px-xs";
+      none.textContent = "Steam lists no DLC for this game.";
+      dlcBox.append(none);
+    }
+  }
+
+  const itemsBox = $("itemsBox");
+  itemsBox.replaceChildren();
+  for (const id of items) {
+    const row = document.createElement("div");
+    row.className = "req-item";
+    const label = info.dependencyCandidates.find((c) => c.itemId === id)?.label;
+    const text = document.createElement("span");
+    text.textContent = label ? `${label} (#${id})` : `#${id}`;
+    const rm = document.createElement("button");
+    rm.className = "px-btn";
+    rm.dataset.variant = "ghost";
+    rm.dataset.size = "icon-xs";
+    rm.setAttribute("aria-label", `Remove #${id}`);
+    rm.append(iconEl("x"));
+    rm.addEventListener("click", () =>
+      commit(
+        apps,
+        items.filter((i) => i !== id)
+      )
+    );
+    row.append(text, rm);
+    itemsBox.append(row);
+  }
+  if (items.length === 0) {
+    const none = document.createElement("span");
+    none.className = "px-muted px-xs";
+    none.textContent = "None. Subscribers are told to get these first.";
+    itemsBox.append(none);
+  }
+}
+
 function renderPublish(): void {
   const langs = uploadableLanguages();
   $("langCount").textContent = langs.length ? `- ${langs.map(langLabel).join(", ")}` : "- none drafted yet";
@@ -581,6 +783,12 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
       busy = m.busy;
       renderToolbar();
       $("liveState").textContent = m.message ?? (busy ? "uploading…" : "");
+      return;
+    case "dlc":
+      dlcLoading = false;
+      dlc = m.error ? null : m.list;
+      dlcError = m.error;
+      renderRequirements();
       return;
   }
 });
@@ -969,6 +1177,54 @@ commitField("version", "version");
 commitField("supported", "supportedVersion");
 
 $("changePreview").addEventListener("click", () => send({ type: "pickPreview" }));
+$("addPreviews").addEventListener("click", () => send({ type: "addPreviews" }));
+$("openPreviews").addEventListener("click", () => send({ type: "openPreviewsFolder" }));
+{
+  const videos = $<HTMLInputElement>("videos");
+  const commitVideos = () => {
+    if (!info?.previews) return;
+    const ids = parseVideoIds(videos.value);
+    if (ids.join(",") !== info.previews.videos.join(",")) send({ type: "setVideos", ids });
+  };
+  videos.addEventListener("change", commitVideos);
+  videos.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") videos.blur();
+  });
+}
+{
+  const input = $<HTMLInputElement>("itemIdInput");
+  const currentItems = () => info?.dependencies?.items ?? live?.children ?? [];
+  const currentApps = () => info?.dependencies?.apps ?? live?.appDependencies ?? [];
+  const addItem = (id: string) => {
+    if (!/^\d+$/.test(id) || currentItems().includes(id)) return;
+    send({ type: "setDependencies", apps: currentApps(), items: [...currentItems(), id] });
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const m = /(\d{6,})/.exec(input.value);
+    if (m) addItem(m[1]);
+    input.value = "";
+  });
+  $("addItem").addEventListener("click", () => {
+    if (!info) return;
+    const present = new Set(currentItems());
+    const items: MenuItem[] = info.dependencyCandidates
+      .filter((c) => !present.has(c.itemId))
+      .map((c) => ({
+        value: c.itemId,
+        label: c.label,
+        hint: c.declared ? "declared in the descriptor" : `#${c.itemId}`,
+      }));
+    if (items.length === 0) {
+      send({
+        type: "notify",
+        message: "No other installed Workshop mod to pick; paste an id or link instead.",
+      });
+      return;
+    }
+    menu($("addItem"), items, { search: true, onPick: addItem });
+  });
+}
 $("openDescFile").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
 $("reloadLocal").addEventListener("click", () => {
   // Drop the pending autosave so the reload cannot be overwritten mid-flight.
@@ -1051,6 +1307,19 @@ $("helpBtn").addEventListener("click", () =>
           {
             lead: "A language with no text",
             text: "never uploads, and its row says so. Removing a language deletes its local draft, not the text already on Steam.",
+          },
+        ],
+      },
+      {
+        title: "Previews and requirements",
+        items: [
+          {
+            lead: "Extra previews",
+            text: "live in the listing's previews folder: images in file-name order plus videos.txt. While the folder exists, a details upload replaces the item's whole gallery with it. Without the folder, Steam's gallery is left alone.",
+          },
+          {
+            lead: "Required DLC and required items",
+            text: "are saved in dependencies.json next to the listing and applied after the upload. Steam shows them on the item page; subscribers see what to get first.",
           },
         ],
       },
