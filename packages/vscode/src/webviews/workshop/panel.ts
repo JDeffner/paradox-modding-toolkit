@@ -558,10 +558,12 @@ export class WorkshopPanel {
   }
 
   /**
-   * A webview URI for one DLC icon. The game ships them as .dds, which no
-   * browser decodes, so they are decoded to PNG once and cached under
-   * globalStorage; the source file's mtime is in the cache file's name, so a
-   * game patch invalidates the entry without a staleness check.
+   * One DLC icon as a data URI. The game ships them as .dds, which no browser
+   * decodes, so they are decoded to PNG once and cached under globalStorage;
+   * the source file's mtime is in the cache file's name, so a game patch
+   * invalidates the entry without a staleness check. Inline rather than a
+   * webview file URI: 16 icons at 96 px are ~350 KB, and a data URI needs no
+   * resource root, which is what silently blocked them as files.
    */
   private dlcIconUri(iconPath: string): string | null {
     try {
@@ -577,7 +579,7 @@ export class WorkshopPanel {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(cached, encodePng(img.width, img.height, img.pixels));
       }
-      return this.fileUri(cached);
+      return `data:image/png;base64,${fs.readFileSync(cached).toString("base64")}`;
     } catch (e) {
       this.options.log(`workshop: DLC icon ${iconPath} could not be decoded: ${String(e)}`);
       return null;
