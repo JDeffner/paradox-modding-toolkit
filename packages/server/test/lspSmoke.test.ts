@@ -23,6 +23,9 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   dependenciesRequest,
+  dynastyTreeRequest,
+  type DynastyTreeParams,
+  type DynastyTreeResult,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
@@ -31,6 +34,10 @@ import {
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  type DefinitionForm,
+  type DefinitionEditResult,
   guiVocabularyRequest,
   guiWidgetEditRequest,
   guiWidgetInfoRequest,
@@ -149,6 +156,18 @@ const DEP_MACRO_TXT = `macro = {
 }
 `;
 
+// A mod trait, so paradox/definitionForm has one to list and to load.
+const TRAITS_TXT = `px_smoke_bold = {
+	category = personality
+	martial = 2
+}
+`;
+
+/** A second trait, written by paradox/definitionEdit's upsertBlock. */
+const MEEK_BLOCK = `px_smoke_meek = {
+	category = personality
+}`;
+
 const GUI_TXT = `widget = {
 	name = "smoke_root"
 	flowcontainer = {
@@ -194,6 +213,49 @@ const CLOC_TXT = `SmokeCustom = {
 }
 `;
 
+// Dynasty tree fixture: one dynasty, one house, three characters, in the
+// shapes the vanilla files use (a dated block carries the birth).
+const DYNASTIES_TXT = `9000001 = {
+\tname = "dynn_Smoke"
+\tculture = "anglo_saxon"
+}
+`;
+
+const HOUSES_TXT = `house_smoke = {
+\tname = "dynn_Smoke"
+\tdynasty = 9000001
+}
+`;
+
+const CHARACTERS_TXT = `9000010 = {
+\tname = "Smoky"
+\tdynasty_house = house_smoke
+\t1000.1.1 = {
+\t\tbirth = yes
+\t}
+\t1020.2.2 = {
+\t\tadd_spouse = 9000011
+\t}
+}
+9000011 = {
+\tname = "Smokina"
+\tfemale = yes
+\tdynasty = 9000002
+\t1002.1.1 = {
+\t\tbirth = yes
+\t}
+}
+9000012 = {
+\tname = "Smokelet"
+\tdynasty_house = house_smoke
+\tfather = 9000010
+\tmother = 9000011
+\t1025.1.1 = {
+\t\tbirth = yes
+\t}
+}
+`;
+
 const LOC_YML =
   "﻿l_english:\n" +
   ' smoke.1.t:0 "Smoke"\n' +
@@ -212,6 +274,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let parentDir: string;
   let depDir: string;
   let eventsFile: string;
+  let traitsFile: string;
   let eventsUri: string;
   let locFile: string;
   let locUri: string;
@@ -234,11 +297,15 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fxIn(parentDir, "events/parent_events.txt", PARENT_EVENTS_TXT);
     fxIn(depDir, "data_binding/px_smoke_macros.txt", DEP_MACRO_TXT);
     fx("common/scripted_effects/smoke_effects.txt", EFFECTS_TXT);
+    traitsFile = fx("common/traits/px_smoke_traits.txt", TRAITS_TXT);
     eventsFile = fx("events/smoke_events.txt", EVENTS_TXT);
     fx("common/customizable_localization/smoke_cloc.txt", CLOC_TXT);
     fx("common/scripted_guis/smoke_sguis.txt", SGUI_TXT);
     fx("common/scripted_effects/smoke_gui_effects.txt", GUI_EFFECT_TXT);
     guiPanelFile = fx("gui/smoke_panel.gui", GUI_PANEL_TXT);
+    fx("common/dynasties/smoke_dynasties.txt", DYNASTIES_TXT);
+    fx("common/dynasty_houses/smoke_houses.txt", HOUSES_TXT);
+    fx("history/characters/smoke_characters.txt", CHARACTERS_TXT);
     locFile = fx("localization/english/smoke_l_english.yml", LOC_YML);
     eventsUri = toUri(eventsFile);
     locUri = toUri(locFile);
@@ -562,6 +629,27 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     });
   });
 
+  it("paradox/dynastyTree answers the picker list and one dynasty's family", async () => {
+    const list = (await conn.sendRequest(
+      dynastyTreeRequest,
+      {} satisfies DynastyTreeParams
+    )) as DynastyTreeResult;
+    expect(list.supported).toBe(true);
+    const smoke = list.dynasties.find((d) => d.id === "9000001");
+    expect(smoke).toMatchObject({ nameKey: "dynn_Smoke", source: "mod", characterCount: 2, houseCount: 1 });
+    expect(list.nextCharacterId).toBe("9000013");
+
+    const tree = (await conn.sendRequest(dynastyTreeRequest, {
+      dynasty: "9000001",
+    } satisfies DynastyTreeParams)) as DynastyTreeResult;
+    expect(tree.houses?.map((h) => h.id)).toEqual(["house_smoke"]);
+    const father = tree.characters?.find((c) => c.id === "9000010");
+    expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
+    // The wife belongs to another dynasty: drawn, but not counted as a member.
+    expect(tree.characters?.find((c) => c.id === "9000011")?.external).toBe(true);
+    expect(tree.characters?.find((c) => c.id === "9000012")?.mother).toBe("9000011");
+  });
+
   it("paradox/eventGraph carries the query-box catalog, not just the selected nodes", async () => {
     const graph = (await conn.sendRequest("paradox/eventGraph", { root: "smoke.1" })) as {
       nodes: Array<{ id: string }>;
@@ -875,6 +963,49 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       ops: [move(3, "{ 2 2 }")],
     })) as GuiSourceEditResult | null;
     expect(both).toBeNull();
+  });
+
+  it("paradox/definitionForm answers the trait form from the schema, harvest and index", async () => {
+    const form = (await conn.sendRequest(definitionFormRequest, {
+      kind: "trait",
+      name: "px_smoke_bold",
+    })) as DefinitionForm | null;
+    expect(form).not.toBeNull();
+    expect(form!.folder).toBe("common/traits");
+    expect(form!.locPatterns).toEqual(["trait_$", "trait_$_desc"]);
+    expect(form!.iconFolder).toBe("gfx/interface/icons/traits");
+    expect(form!.keys.map((k) => k.key)).toContain("category");
+    expect(form!.keys.find((k) => k.key === "opposites")?.refKinds).toEqual(["trait"]);
+    expect(form!.existing.map((d) => d.name)).toContain("px_smoke_bold");
+    expect(form!.existing.find((d) => d.name === "px_smoke_bold")?.file).toBe(traitsFile);
+    expect(form!.current?.source).toBe("mod");
+    expect(form!.current?.text).toBe(TRAITS_TXT.trimEnd());
+    // A kind this game's schema has no folder for is null, not an invented shape.
+    expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
+  });
+
+  it("paradox/definitionEdit round-trips a property change and an appended block", async () => {
+    const edit = (await conn.sendRequest(definitionEditRequest, {
+      uri: toUri(traitsFile),
+      text: TRAITS_TXT,
+      ops: [
+        { op: "setProperties", name: "px_smoke_bold", properties: [{ key: "martial", value: "3" }] },
+        { op: "upsertBlock", name: "px_smoke_meek", text: MEEK_BLOCK },
+      ],
+    })) as DefinitionEditResult;
+    expect(edit.ops).toEqual([{}, {}]);
+    expect(applyEdits(TRAITS_TXT, edit.edits)).toBe(
+      TRAITS_TXT.replace("martial = 2", "martial = 3") + "\n" + MEEK_BLOCK + "\n"
+    );
+
+    // A refusal is an answer, per op, and it never throws.
+    const refused = (await conn.sendRequest(definitionEditRequest, {
+      uri: toUri(traitsFile),
+      text: TRAITS_TXT,
+      ops: [{ op: "setProperties", name: "px_absent", properties: [{ key: "martial", value: "1" }] }],
+    })) as DefinitionEditResult;
+    expect(refused.edits).toEqual([]);
+    expect(refused.ops[0].refused).toContain("px_absent");
   });
 
   it("paradox/guiWidgetInfo reports a widget's properties with their origins", async () => {

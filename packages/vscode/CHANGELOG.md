@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+- **Visual content creators (CK3).** The Project panel's Create group lists the
+  creators the active game has, and each row opens a form over the game's own
+  documented keys instead of a blank file. They share one host side: you pick
+  the mod and the file, a file name that would replace a whole game file is
+  refused, the whole save lands as one undo step, and the display names go
+  through the normal localization writer. Opening something you already have
+  loads it and writes back only the lines you changed, so the comments, the
+  formatting and everything no field can stand for survive. None of them
+  validates your script; ck3-tiger stays the validator.
+- **Trait Creator.** The 60 keys the game documents for a trait, each with the
+  game's own one-line explanation, laid out in sections, plus the two loc
+  values and a grid of the trait icons your game and your mods actually have.
+  A new trait saves with only a name typed. Custom image converts a PNG into
+  the mod under the trait's name.
+- **Dynasty Legacy Creator.** A legacy track and its perks designed together
+  and written as the track's block, one perk block per card with
+  `legacy = <track>` filled in for you, and the localization. Type the track's
+  key and everything else follows it, into five perk slots because that is what
+  every vanilla track has. Perk cards carry the seven keys the game documents:
+  modifier rows for `character_modifier`, `doctrine_character_modifier` and the
+  trait chances in `traits`, text areas for `effect`, `can_be_picked` and
+  `ai_chance`. A perk you drop off a track is reported, never deleted behind
+  your back.
+- **Culture Creator.** A culture composed out of the game's own parts: the five
+  pillars as one picker each (the pillars all live in one folder, so the server
+  labels each with the family its own block declares), the traditions as
+  searchable chips with the game's description on every entry, a name list, the
+  art sets and ethnicities with the values the game itself writes for them, a
+  color as a named color or a picked one, and parents plus a creation date for a
+  hybrid or divergent culture. Every other key the game documents is still
+  there, as raw script. Your own culture is rewritten in place; a game culture
+  is duplicated into your mod by default, or overridden with a warning.
+  Round-trips two vanilla cultures byte for byte, and ck3-tiger finds no problem
+  in what it writes.
+- **Dynasty Tree.** Any dynasty of the game or your mod as a family tree:
+  generations top down, spouses side by side, siblings oldest first, houses as a
+  badge, and vanilla characters drawn apart from your own. Clicking a node opens
+  an inspector that edits your characters and adds a child or a spouse to
+  anyone, vanilla included; the new character is written into your mod pointing
+  at the one it descends from. New dynasty, New house and a Design coat of arms
+  button that hands the id to the Flag Builder round it out.
+- **The Flag Builder opens for Crusader Kings III.** `Paradox: Open Flag
+  Builder` and `Paradox: New Coat of Arms…` now work in a CK3 workspace, which
+  is where the dynasty, house, landed-title and character targets belong.
+  Measured against 1.19.0.6: the parser reads all 2992 vanilla coat-of-arms
+  definitions with no parse errors, and every one of the 7800 texture
+  references and 15327 colors resolves. Instance `depth`, which only CK3
+  writes (387 instances in 234 flags), is not read, so a preview of one of
+  those flags can stack its emblems in file order instead.
+- **New Coat of Arms…** A Create row and a `Paradox: New Coat of Arms…`
+  command ask what the arms are for (a dynasty, a house, a landed title, a
+  character, or a key you type), list the mod's own definitions of that kind,
+  and open the Flag Builder on the key the game reads the arms under. A
+  character has no coa key of their own, so the pick resolves to their house
+  and falls back to their dynasty. `px.openFlagBuilder` now takes an optional
+  `{ name, label }` argument, so any panel can hand the builder its target.
+
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar

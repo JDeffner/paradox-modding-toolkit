@@ -53,13 +53,19 @@ import {
   exampleWikiVariableKinds,
   type ExampleWikiEntryParams,
   type ExampleWikiKind,
+  dynastyTreeRequest,
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  type DefinitionFormParams,
+  type DefinitionEditParams,
   guiTreeRequest,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type DynastyTreeParams,
   type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
@@ -187,8 +193,11 @@ import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
+import { computeDynastyTree } from "./overview/dynastyTree";
 import { computeEventVocabulary, computeValueOptions } from "./overview/eventVocabulary";
 import { computeEventBanner } from "./overview/eventBanner";
+import { computeDefinitionForm } from "./creators/definitionForm";
+import { computeDefinitionEdits } from "./creators/definitionEdit";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -1587,6 +1596,13 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
   computeEventGraph(data, params ?? {}, focusFilter(params?.modRoot))
 );
 
+// The dynasty picker list, or one dynasty's houses and members. The whole
+// character corpus is read once per index revision (see overview/dynastyTree.ts);
+// a profile without a `dynasty` schema kind answers supported: false.
+connection.onRequest(dynastyTreeRequest, (params: DynastyTreeParams | null) =>
+  computeDynastyTree(data, params ?? {}, focusFilter(params?.modRoot))
+);
+
 // What an event editor may offer: the profile's structure table, the schema's
 // reference fields resolved through the index, and the script_docs tokens.
 // Never a hand-written name list.
@@ -1604,6 +1620,19 @@ connection.onRequest(eventValueOptionsRequest, (params: EventValueOptionsParams 
 // event_backgrounds hops. Answering "nothing resolved" is a real answer.
 connection.onRequest(eventBannerRequest, (params: EventBannerParams) =>
   computeEventBanner(data, params?.theme ?? "")
+);
+
+// What a visual creator may offer for one definition kind: the schema entry,
+// the harvested structure keys, the index (options and the mod's own
+// definitions) and the modifier tokens. Never a hand-written field list.
+connection.onRequest(definitionFormRequest, (params: DefinitionFormParams | null) =>
+  computeDefinitionForm(data, schema, params ?? { kind: "" }, focusFilter(params?.modRoot))
+);
+
+// The script sibling of guiSourceEdit: the creators' writes as offsets into the
+// text the host handed over, applied there as one WorkspaceEdit.
+connection.onRequest(definitionEditRequest, (params: DefinitionEditParams | null) =>
+  computeDefinitionEdits(params)
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));

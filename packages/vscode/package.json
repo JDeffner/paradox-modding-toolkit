@@ -403,6 +403,33 @@
         "title": "Open Flag Builder"
       },
       {
+        "command": "px.createTrait",
+        "category": "Paradox",
+        "title": "Open Trait Creator",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "px.createCoatOfArms",
+        "category": "Paradox",
+        "title": "New Coat of Arms…"
+      },
+      {
+        "command": "px.openDynastyTree",
+        "category": "Paradox",
+        "title": "Open Dynasty Tree"
+      },
+      {
+        "command": "px.createCulture",
+        "category": "Paradox",
+        "title": "Open Culture Creator",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "px.createDynastyLegacy",
+        "category": "Paradox",
+        "title": "Open Dynasty Legacy Creator"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report",
@@ -1080,6 +1107,26 @@
         {
           "command": "px.openFlagBuilder",
           "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.createTrait",
+          "when": "px.isCk3Workspace && px.creator.trait"
+        },
+        {
+          "command": "px.createCoatOfArms",
+          "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.openDynastyTree",
+          "when": "px.isCk3Workspace && px.creator.dynasty_tree"
+        },
+        {
+          "command": "px.createCulture",
+          "when": "px.isCk3Workspace && px.creator.culture"
+        },
+        {
+          "command": "px.createDynastyLegacy",
+          "when": "px.isCk3Workspace && px.creator.dynasty_legacy"
         },
         {
           "command": "px.modReport",

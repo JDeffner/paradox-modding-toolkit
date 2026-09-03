@@ -19,6 +19,18 @@ user's VS Code theme. No framework, no Tailwind.
 | `colorPicker.ts` | SV square + hue bar + hex, in a popover. |
 | `tips.ts` | `installTips()`: the one `data-tip` runtime. Call it once per page (an inlined-script page ships it with `tipScript(nonce)`). |
 
+Two modules here are not UI. `fields.ts` is the form control set the definition
+creators draw their fields from, and `scriptBlock.ts` is the script side of the
+same deal: one tolerant scanner for a `name = { ... }` definition (statements
+with their source spans, so comments, blank lines and anything no widget models
+survive a save byte for byte), the readers a widget needs for a value (scalar,
+token list, `key = number` rows), the span-preserving `writeBlock`, and the
+`changedProperties` / `locKeyFor` / `baseName` a save reports with. Both are
+browser code with no game knowledge: what a key means arrives over the wire
+from `paradox/definitionForm`. Anything one creator alone knows (how a culture
+writes a color, how a perk block carries its comments) stays in that panel's
+own `app/script.ts`.
+
 ## Tokens
 
 `--px-bg` / `--px-fg` are the editor colors. Every other surface is a

@@ -21,7 +21,8 @@ import { findStrayCalendar } from "./calendarSettingsCheck";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import { creatorSupported, flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import { GAME_METAS } from "./gameDetect";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -52,6 +53,12 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
+import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
+import { coaTargetArg } from "./webviews/flagBuilder/target";
+import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
+import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
+import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -93,14 +100,22 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  definitionEditRequest,
+  definitionFormRequest,
+  type DefinitionEditParams,
+  type DefinitionEditResult,
+  type DefinitionForm,
+  type DefinitionFormParams,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
+  dynastyTreeRequest,
   eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
+  type DynastyTreeResult,
   type EventDetail,
   type EventBannerParams,
   type EventBannerResult,
@@ -304,6 +319,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "px.flagBuilderSupported",
       flagBuilderSupported(cfg.gameId)
     );
+    // One key per creator kind ANY profile lists, set to whether the active
+    // game lists it. Walking the union rather than the active game's rows is
+    // what clears a key again when the workspace switches game; setting only
+    // the active ones would leave a CK3 palette entry visible in a Vic3
+    // workspace for the rest of the session.
+    const activeCreators = new Set((metaFor(cfg.gameId).creators ?? []).map((c) => c.kind));
+    const allCreators = new Set(
+      Object.values(GAME_METAS).flatMap((meta) => (meta.creators ?? []).map((c) => c.kind))
+    );
+    for (const kind of allCreators) {
+      void vscode.commands.executeCommand("setContext", `px.creator.${kind}`, activeCreators.has(kind));
+    }
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -349,6 +376,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return false;
   };
+  // Same gate, same wording, for every door into the Flag Builder: opening it
+  // and creating a coat of arms are the same feature.
+  const requireFlagBuilder = (): boolean => {
+    if (flagBuilderSupported(cfg.gameId)) return true;
+    void vscode.window.showInformationMessage(
+      `Paradox Modding Toolkit: the Flag Builder has no coat-of-arms format for ${metaFor(cfg.gameId).name} yet.`
+    );
+    return false;
+  };
+
   context.subscriptions.push(tiger);
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => tiger.onDidSaveDocument(doc)));
 
@@ -956,14 +993,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         metaFor(cfg.gameId)
       );
     }),
-    vscode.commands.registerCommand("px.openFlagBuilder", () => {
+    // The argument is optional: the palette entry and the Project panel open a
+    // blank form, an "edit this trait" caller names the definition.
+    vscode.commands.registerCommand("px.createTrait", (arg?: unknown) => {
       const meta = metaFor(cfg.gameId);
-      if (!flagBuilderSupported(cfg.gameId)) {
+      if (!creatorSupported(cfg.gameId, "trait")) {
         void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${meta.name}.`
+          `Paradox Modding Toolkit: no Trait Creator has been built for ${meta.name} yet.`
         );
         return;
       }
+      const named = definitionName(arg);
+      TraitCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+        },
+        lookupLoc,
+        ...(named ? { name: named } : {}),
+      });
+    }),
+    // `arg` is the optional target ({ name, label }): the Dynasty Tree and
+    // "New Coat of Arms…" open the panel straight on the arms they mean.
+    vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      if (!requireFlagBuilder()) return;
       // Game first, then dependency mods, then the workspace's own mods: the
       // load order, so a mod's flag of the same name wins like in the game.
       const roots: FlagRoot[] = [];
@@ -979,7 +1035,111 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         roots,
         mods,
         gameMissing: cfg.gamePath === null,
+        target: coaTargetArg(arg),
       });
+    }),
+    vscode.commands.registerCommand("px.createCoatOfArms", () => {
+      if (!requireFlagBuilder()) return;
+      void createCoatOfArmsCommand(lc, views.focusRoot());
+    }),
+    // The argument is optional: the palette entry opens the picker, a deep link
+    // names the dynasty it wants.
+    vscode.commands.registerCommand("px.openDynastyTree", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      // Same host-side gate as the other creators: the profile lists the ones
+      // built against that game's own files. The server's `supported: false`
+      // still covers a client that gets here another way.
+      if (!creatorSupported(cfg.gameId, "dynasty_tree")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Dynasty Tree has been built for ${meta.name} yet.`
+        );
+        return;
+      }
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: readModName(p), path: p }));
+      // Nothing to write into, or nothing to read: say which, in the words the
+      // setup flow uses, instead of opening a panel that cannot do anything.
+      const problems: string[] = [];
+      if (mods.length === 0)
+        problems.push(
+          "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+        );
+      if (!cfg.gamePath)
+        problems.push(
+          `No game folder set, so only your own dynasties are listed. Set px.gamePath to .../steamapps/common/${meta.name}/game`
+        );
+      DynastyTreePanel.show(
+        context,
+        {
+          fetchTree: (params) => lc.sendRequest<DynastyTreeResult>(dynastyTreeRequest, params),
+          fetchOptions: (params) =>
+            lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+        },
+        {
+          cfg: cfgForActive(),
+          meta,
+          mods,
+          modRoot: views.focusRoot(),
+          setupProblem: problems.join(" ") || undefined,
+        },
+        typeof arg === "object" && arg !== null && typeof (arg as { dynasty?: unknown }).dynasty === "string"
+          ? (arg as { dynasty: string }).dynasty
+          : undefined
+      );
+    }),
+    // A creator row of the Create group. The profile decides which games have
+    // one (GameMeta.creators); a game with no culture folder gets an honest
+    // "nothing to write" from the form request rather than an empty panel.
+    vscode.commands.registerCommand("px.createCulture", (arg?: unknown) => {
+      const active = cfgForActive();
+      if (!metaFor(active.gameId).creators?.some((c) => c.kind === "culture")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the Culture Creator is not built for ${metaFor(active.gameId).name} yet.`
+        );
+        return;
+      }
+      CultureCreatorPanel.show(
+        context,
+        active,
+        {
+          fetchForm: (params: DefinitionFormParams) =>
+            lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          applyEdits: (params: DefinitionEditParams) =>
+            lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          lookupLoc,
+        },
+        definitionName(arg)
+      );
+    }),
+    // The optional argument opens an existing track (a Project-panel row, a
+    // future context menu); with none the panel starts on a fresh one.
+    vscode.commands.registerCommand("px.createDynastyLegacy", (arg?: unknown) => {
+      const active = cfgForActive();
+      const meta = metaFor(active.gameId);
+      if (!creatorSupported(active.gameId, "dynasty_legacy")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${meta.name} has no dynasty legacies, so there is no legacy creator for it.`
+        );
+        return;
+      }
+      LegacyCreatorPanel.show(
+        context,
+        {
+          cfg: active,
+          meta,
+          actions: {
+            fetchForm: (params: DefinitionFormParams) =>
+              lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+            applyEdits: (params: DefinitionEditParams) =>
+              lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+            lookupLoc,
+          },
+        },
+        definitionName(arg)
+      );
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
@@ -1138,6 +1298,15 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
   return scoped(ns ? { namespace: ns[1] } : {});
+}
+
+/** The definition a creator command was opened on, or nothing. The argument
+ *  comes off a command link or a panel row, so it is validated, not trusted. */
+function definitionName(arg: unknown): string | undefined {
+  if (typeof arg === "string") return /^[A-Za-z_][\w.-]*$/.test(arg) ? arg : undefined;
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name } = arg as { name?: unknown };
+  return typeof name === "string" && /^[A-Za-z_][\w.-]*$/.test(name) ? name : undefined;
 }
 
 /** The article a `px.showExamplesWiki` argument names, or nothing. The argument

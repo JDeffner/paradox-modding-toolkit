@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
+import { PATHS } from "../src/webviews/shared/icons";
 import { actionGroups, visibleActionGroups } from "../src/webviews/dashboard/actions";
 
 /** Every command id the panel offers for a game, groups flattened. */
@@ -63,6 +64,18 @@ describe("visibleActionGroups", () => {
     ]);
   });
 
+  it("offers the coat-of-arms creator right after New Content, per game", () => {
+    // Both Flag Builder doors are gated on the same meta fact: the creator in
+    // Create, the blank canvas in View.
+    const ids = actionGroups(eu5Meta, 0)
+      .find((g) => g.label === "Create")!
+      .items.map((it) => it.command);
+    expect(ids.indexOf("px.createCoatOfArms")).toBe(ids.indexOf("px.newContent") + 1);
+    // CK3 has the Flag Builder too (measured coverage in games/ck3/meta.ts).
+    expect(commands(actionGroups(ck3Meta, 0))).toContain("px.createCoatOfArms");
+    expect(commands(actionGroups(ck3Meta, 0))).toContain("px.openFlagBuilder");
+  });
+
   it("ignores ids that match no row", () => {
     const all = visibleActionGroups(ck3Meta, 0, []);
     const withJunk = visibleActionGroups(ck3Meta, 0, ["px.notARow", ""]);
@@ -70,7 +83,7 @@ describe("visibleActionGroups", () => {
   });
 
   it("keeps working for a game without a tiger", () => {
-    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod"]);
+    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod", "px.createCoatOfArms"]);
     const ids = commands(groups);
     expect(ids).not.toContain("px.newContent");
     expect(ids).not.toContain("px.tigerCreateBaseline");
@@ -84,6 +97,42 @@ describe("visibleActionGroups", () => {
     expect(ids).not.toContain("px.launchGame");
     expect(ids).not.toContain("px.launchMapEditor");
     expect(ids).toContain("px.clearGameProblems");
+  });
+
+  it("lists the game's creators in the Create group, after the two scaffolds", () => {
+    const create = actionGroups(ck3Meta, 0).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).toEqual([
+      "px.createMod",
+      "px.newContent",
+      "px.createTrait",
+      "px.createDynastyLegacy",
+      "px.createCulture",
+      "px.openDynastyTree",
+      "px.createCoatOfArms",
+    ]);
+    expect(create?.items.map((it) => it.label)).toContain("Trait Creator");
+  });
+
+  it("every creator row names an icon the client actually ships", () => {
+    for (const creator of ck3Meta.creators ?? []) {
+      expect(Object.keys(PATHS)).toContain(creator.icon);
+    }
+  });
+
+  it("hides a creator row like any other row", () => {
+    const create = visibleActionGroups(ck3Meta, 0, ["px.createTrait"]).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).not.toContain("px.createTrait");
+    expect(create?.items.map((it) => it.command)).toContain("px.createCulture");
+  });
+
+  it("a game with no creators keeps the Create group it had", () => {
+    expect(eu5Meta.creators).toBeUndefined();
+    const create = actionGroups(eu5Meta, 0).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).toEqual([
+      "px.createMod",
+      "px.newContent",
+      "px.createCoatOfArms",
+    ]);
   });
 
   it("shows the error.log clear row only while there are problems", () => {

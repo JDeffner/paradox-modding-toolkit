@@ -16,9 +16,16 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-editor": "layoutTemplate",
   "flag-builder": "flag",
   "event-graph": "waypoints",
+  "dynasty-tree": "users",
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
+  // The Create-group row this tab belongs to (games/ck3/meta.ts creators).
+  "trait-creator": "sparkles",
+  // The Create-group row's glyph: ck3Meta.creators names "globe" for culture.
+  "culture-creator": "globe",
+  // The Dynasty Legacy Creator: the glyph its Create row uses (ck3/meta.ts).
+  "legacy-creator": "layers",
   wiki: "library",
   credits: "heart",
   workshop: "cloudUpload",

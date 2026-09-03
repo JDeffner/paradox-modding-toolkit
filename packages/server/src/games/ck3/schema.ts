@@ -29,7 +29,20 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "localization", kind: "loc_key", ext: ".yml", extraction: "loc-key" },
 
   // --- Characters, traits, interactions ---
-  { path: "common/traits", kind: "trait", requiredLoc: ["trait_$"], rootScopes: ["character"] },
+  // locPatterns and iconFolder verbatim from common/traits/_traits.info
+  // ("== Loc/icon ==": "the name key is trait_<key>, and the desc key is
+  // trait_<key>_desc", "The default icon path is
+  // gfx/interface/icons/traits/<trait>.dds"). trait_$_desc stays OUT of
+  // requiredLoc: schemaVanilla.test.ts measures it at 90.4% of vanilla traits,
+  // under the 95% bar a missing-loc diagnostic needs.
+  {
+    path: "common/traits",
+    kind: "trait",
+    requiredLoc: ["trait_$"],
+    locPatterns: ["trait_$", "trait_$_desc"],
+    iconFolder: "gfx/interface/icons/traits",
+    rootScopes: ["character"],
+  },
   {
     path: "common/character_interactions",
     kind: "character_interaction",
@@ -97,8 +110,27 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/court_types", kind: "court_type" },
 
   // --- Culture ---
-  { path: "common/culture/cultures", kind: "culture", requiredLoc: ["$"] },
-  { path: "common/culture/pillars", kind: "culture_pillar" },
+  {
+    path: "common/culture/cultures",
+    kind: "culture",
+    requiredLoc: ["$"],
+    // Every one of the 244 vanilla cultures defines all three keys in
+    // game/localization/english/culture/cultures_l_english.yml (`bedouin`,
+    // `bedouin_prefix`, `bedouin_collective_noun`), measured 244/244 in
+    // 2026-09. requiredLoc keeps only `$` because the diagnostic that hangs
+    // off it is the conservative one; a creator writes the whole set.
+    locPatterns: ["$", "$_prefix", "$_collective_noun"],
+  },
+  {
+    path: "common/culture/pillars",
+    kind: "culture_pillar",
+    // One folder, five families: game/common/culture/pillars/_pillars.info
+    // documents `type = ethos/heritage/language/martial` on top of the common
+    // cultural-trait shape, and the files spell it that way
+    // (00_ethos.txt `type = ethos`, 00_martial_custom.txt `type =
+    // martial_custom`, 00_head_determination.txt `type = head_determination`).
+    groupKey: "type",
+  },
   {
     path: "common/culture/traditions",
     kind: "culture_tradition",
@@ -125,8 +157,33 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   // dynasties top-level keys are numeric ids; huge and never typed → not completable.
   { path: "common/dynasties", kind: "dynasty", completable: false },
   { path: "common/dynasty_houses", kind: "dynasty_house", completable: false },
-  { path: "common/dynasty_legacies", kind: "dynasty_legacy" },
-  { path: "common/dynasty_perks", kind: "dynasty_perk" },
+  // _dynasty_legacies.info, "Generated loc keys: key + "_name"". All 21 vanilla
+  // legacies define it (measured 2026-09-03), so it clears the requiredLoc bar.
+  // $_desc is not in the .info doc, but all 21 vanilla tracks define it
+  // (localization/english/dynasty_legacies/legacies_l_english.yml, e.g.
+  // blood_legacy_track_desc), so a creator asks for it too; it stays out of
+  // requiredLoc, where only the keys the doc itself states belong.
+  // iconFolder: window_dynasty_legacy.gui draws the picture from
+  // "[DynastyLegacy.GetIcon]", a code-side path with no script key behind it,
+  // and the files it finds are gfx/interface/icons/dynasty/<track key>.dds
+  // (22 files for the 21 tracks). Name-derived, so a creator writes the
+  // picture under the track's own name and never a path into the block.
+  // A track reads a SECOND name-derived picture, the window's illustration at
+  // gfx/interface/illustrations/legacy_tracks/<key>.dds ("[DynastyLegacy.
+  // GetTrackIcon]", 21 files); iconFolder holds one path, so that one is left
+  // to ck3-tiger, which names it as a missing-file warning on the track.
+  {
+    path: "common/dynasty_legacies",
+    kind: "dynasty_legacy",
+    requiredLoc: ["$_name"],
+    locPatterns: ["$_name", "$_desc"],
+    iconFolder: "gfx/interface/icons/dynasty",
+  },
+  // _dynasty_perks.info, "Generated loc keys: key + "_name"" — and only that:
+  // all 105 vanilla perks define $_name, none defines $_desc (measured
+  // 2026-09-03 over localization/english). No iconFolder: gfx/interface/icons
+  // has a dynasty folder for the tracks and nothing for the perks.
+  { path: "common/dynasty_perks", kind: "dynasty_perk", locPatterns: ["$_name"] },
 
   // --- Activities & schemes ---
   { path: "common/activities/activity_types", kind: "activity_type", rootScopes: ["character"] },

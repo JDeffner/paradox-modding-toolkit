@@ -23,6 +23,42 @@ export const ck3Meta: GameMeta = {
   guiTextMetrics: GITAN_MEASURED_METRICS,
   scaffolds: CK3_SCAFFOLDS,
   tiger: { binaryName: "ck3-tiger", repoSlug: "amtep/tiger", confName: "ck3-tiger.conf" },
+  // Visual creators. Every row is backed by a folder the schema table already
+  // indexes and a shape read out of the game's own files:
+  //   trait          common/traits, documented by common/traits/_traits.info
+  //   dynasty_legacy common/dynasty_legacies, per _dynasty_legacies.info
+  //                  ("Dynasty Legacies are containers for perks"); the perks
+  //                  themselves live in common/dynasty_perks (`legacy = <track>`)
+  //   culture        common/culture/cultures (00_arabic.txt: color, ethos,
+  //                  heritage, language, traditions, name_list, parents…)
+  //   dynasty_tree   NOT a definition kind: history/characters linked by
+  //                  father/mother/dynasty/house (history/characters/*.txt)
+  creators: [
+    {
+      kind: "trait",
+      label: "Trait Creator",
+      icon: "sparkles",
+      tip: "Design a character trait and write it into the mod.",
+    },
+    {
+      kind: "dynasty_legacy",
+      label: "Dynasty Legacy Creator",
+      icon: "layers",
+      tip: "Build a legacy track and its perks.",
+    },
+    {
+      kind: "culture",
+      label: "Culture Creator",
+      icon: "globe",
+      tip: "Compose a culture from the game's own pillars and traditions.",
+    },
+    {
+      kind: "dynasty_tree",
+      label: "Dynasty Tree",
+      icon: "users",
+      tip: "See and edit a dynasty's characters across history.",
+    },
+  ],
   // Date-format keys verified in ck3.exe 1.19 (the gamedate.cpp string block);
   // formats mirror game/localization/english/core_l_english.yml. Vanilla
   // appends $ERA$/$ERA_BCE$ itself - dropped here, the {era} slot replaces it.
@@ -65,4 +101,13 @@ export const ck3Meta: GameMeta = {
   // "" keeps the pre-profile cache filenames (docsCache.json, vanillaIndex-*.json)
   // so existing users' caches survive the M2 restructure.
   cacheSuffix: "",
+  // Coat-of-arms coverage measured against this install (1.19.0.6, 2026-09-03):
+  // parseCoaFile reads all 2992 vanilla definitions in the 10 files of
+  // common/coat_of_arms/coat_of_arms with 0 parse errors, and 100% of both the
+  // 7800 texture references (1629 files, every one decoding) and the 15327
+  // colors resolve, the named ones out of the 112 in common/named_colors. 239
+  // flags (8.0%) carry something the model drops, 387 of those 399 keys being
+  // `depth` on an instance; Vic3, which has shipped the builder since 0.3.2,
+  // drops something on 8.3% of its flags, so CK3 is no worse off.
+  flagBuilder: true,
 };

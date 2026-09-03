@@ -1,5 +1,35 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import type { IconName } from "../shared/icons";
+import { PATHS, type IconName } from "../shared/icons";
+
+/**
+ * The command each creator kind opens. The profile names the creators a game
+ * has; the command that draws them is the client's, so the mapping lives here.
+ * A kind with no row here has no panel yet and is left out rather than shown as
+ * a button that does nothing.
+ */
+const CREATOR_COMMANDS: Record<string, string> = {
+  trait: "px.createTrait",
+  dynasty_legacy: "px.createDynastyLegacy",
+  culture: "px.createCulture",
+  // Not a definition kind: a view over history/characters.
+  dynasty_tree: "px.openDynastyTree",
+};
+
+/** The creator rows of the Create group, in the profile's own order. */
+function creatorItems(meta: GameMeta): ActionItem[] {
+  const items: ActionItem[] = [];
+  for (const creator of meta.creators ?? []) {
+    const command = CREATOR_COMMANDS[creator.kind];
+    if (!command || !(creator.icon in PATHS)) continue;
+    items.push({
+      label: creator.label,
+      command,
+      icon: creator.icon as IconName,
+      ...(creator.tip ? { tip: creator.tip } : {}),
+    });
+  }
+  return items;
+}
 
 export interface ActionItem {
   label: string;
@@ -90,6 +120,20 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "plus",
           tip: "Scaffold an event, decision or trait into the right folder.",
         },
+        // The visual creators follow the two scaffolds: same group, richer tool.
+        ...creatorItems(meta),
+        // Same glyph as the View group's Flag Builder row: one tool, one
+        // icon. This row is the creation door, that one the blank canvas.
+        ...(meta.flagBuilder
+          ? ([
+              {
+                label: "New Coat of Arms…",
+                command: "px.createCoatOfArms",
+                icon: "flag",
+                tip: "Design arms for a dynasty, house or title and save them into the mod.",
+              },
+            ] satisfies ActionItem[])
+          : []),
       ],
     },
     {

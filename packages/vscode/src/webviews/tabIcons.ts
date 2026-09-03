@@ -13,11 +13,15 @@ export type TabIconName =
   | "gui-editor"
   | "flag-builder"
   | "event-graph"
+  | "dynasty-tree"
   | "gui-tree"
   | "event-sim"
   | "workshop"
   | "bbcode-preview"
   | "examples-wiki"
+  | "trait-creator"
+  | "culture-creator"
+  | "legacy-creator"
   | "wiki"
   | "credits";
 
