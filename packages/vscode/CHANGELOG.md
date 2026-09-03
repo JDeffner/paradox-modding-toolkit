@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Credits panel.** A new Credits view lists every upstream project the
+  toolkit builds on, what each one is used for, its license and a link to
+  its home. Open it from the Project panel's Info group or from the command
+  palette ("Paradox: Credits").
+
 ## 0.4.0 (beta) - the Steam Workshop release
 
 Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
