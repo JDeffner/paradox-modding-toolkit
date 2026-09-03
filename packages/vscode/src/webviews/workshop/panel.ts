@@ -23,13 +23,20 @@ import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
   hasListingFiles,
+  langDir,
+  parseLinksBlock,
   PREVIEWS_DIR,
   readDependencies,
   readItemJson,
+  readLinks,
   readPreviews,
+  stripLinksBlock,
   upsertItemJson,
+  withLinksBlock,
   writeDependencies,
+  writeLinks,
   writeListingFiles,
+  writePreviewOrder,
   writeVideos,
 } from "../../steam/workshopFiles";
 import { preflight } from "../../steam/preflight";
@@ -58,7 +65,7 @@ import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { workshopHtml } from "./html";
-import type { AppToHost, HostToApp, ModChoice, WorkshopModInfo } from "./messages";
+import type { AppToHost, HostToApp, ModChoice, PullParts, WorkshopModInfo } from "./messages";
 
 export interface WorkshopPanelOptions {
   meta: GameMeta;
@@ -281,7 +288,13 @@ export class WorkshopPanel {
       previews: this.previewsInfo(workshopDir),
       dependencies: readDependencies(workshopDir),
       dependencyCandidates: this.dependencyCandidates(root),
+      links: readLinks(workshopDir),
     };
+  }
+
+  /** One line of the progress strip: the step list, the current one, and its percent. */
+  private progress(steps: string[], step: number, message: string, percent: number | null = null): void {
+    this.post({ type: "uploadState", busy: true, message, steps, step, percent });
   }
 
   private previewsInfo(workshopDir: string): WorkshopModInfo["previews"] {
@@ -383,8 +396,26 @@ export class WorkshopPanel {
         await this.pickPreview();
         return;
       case "pullListing":
-        await this.pullListing();
+        await this.pullListing(message.parts);
         return;
+      case "reorderPreviews": {
+        if (!root) return;
+        writePreviewOrder(
+          workshopDirFor(root, meta),
+          message.names.filter((n) => path.basename(n) === n)
+        );
+        await this.postInfo();
+        return;
+      }
+      case "setLinks": {
+        if (!root) return;
+        writeLinks(
+          workshopDirFor(root, meta),
+          message.links.map((l) => ({ label: String(l.label ?? ""), url: String(l.url ?? "") }))
+        );
+        await this.postInfo();
+        return;
+      }
       case "openListingFile":
         await this.openListingFile(message.lang);
         return;
@@ -499,7 +530,9 @@ export class WorkshopPanel {
       );
       return;
     }
-    const file = lang ? path.join(dir, lang, "description.bbcode") : path.join(dir, "description.bbcode");
+    const file = lang
+      ? path.join(langDir(dir, lang), "description.bbcode")
+      : path.join(dir, "description.bbcode");
     if (!fs.existsSync(file)) {
       // Seed a missing file with the draft the store holds, so nothing is lost.
       const info = readPublishInfo(root, meta, dir);
@@ -603,25 +636,30 @@ export class WorkshopPanel {
   }
 
   /**
-   * Download the live listing into the workshop folder: description.bbcode,
-   * one `<lang>/` folder per language whose text differs from the default
-   * (Steam serves the default as fallback for everything else), and item.json.
-   * The app confirms first - this REPLACES the folder's listing files.
+   * Download the chosen parts of the live listing into the workshop folder.
+   * Translations are written for every language whose text differs from the
+   * default (Steam serves the default as fallback for everything else). The
+   * app confirms first - this REPLACES the matching local files.
    */
-  private async pullListing(): Promise<void> {
+  private async pullListing(parts: PullParts): Promise<void> {
     const { meta, log } = this.options;
     const root = this.active;
     if (!root) return;
-    const itemId = readPublishInfo(root, meta)?.publishedId;
+    const info = readPublishInfo(root, meta);
+    const itemId = info?.publishedId;
     if (!itemId) {
       this.notify("The mod has no Workshop item to pull from.", "warn");
       return;
     }
     const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir) && !(await this.confirmWorkshopDirPlacement(dir))) return;
-    this.post({ type: "uploadState", busy: true, message: "downloading the listing…" });
+    const steps = ["Ask Steam"];
+    if (parts.details || parts.description || parts.translations) steps.push("Text");
+    if (parts.previews || parts.thumbnail) steps.push("Images");
+    if (parts.requirements) steps.push("Requirements");
+    this.progress(steps, 0, "asking Steam…");
     try {
-      const languages = STEAM_LANGUAGES.map((l) => l.api);
+      const languages = parts.translations ? STEAM_LANGUAGES.map((l) => l.api) : [];
       const done = await runBridge(
         this.context,
         { action: "query", appId: meta.steamAppId, itemId, languages },
@@ -629,24 +667,90 @@ export class WorkshopPanel {
       );
       if (done.action !== "query" || !done.item) throw new Error("Steam returned no item details");
       const item = done.item;
-      const translations: Record<string, WorkshopTranslation> = {};
-      for (const [lang, t] of Object.entries(done.translations)) {
-        const title = t.title !== item.title ? t.title : "";
-        const description = t.description !== item.description ? t.description : "";
-        if (title === "" && description === "") continue;
-        translations[lang] = {
-          ...(title !== "" ? { title } : {}),
-          ...(description !== "" ? { description } : {}),
-        };
+      const wrote: string[] = [];
+
+      if (parts.details || parts.description || parts.translations) {
+        this.progress(steps, steps.indexOf("Text"), "writing text…");
       }
-      writeListingFiles(dir, { description: item.description, translations });
-      upsertItemJson(dir, { title: item.title, publishedfileid: item.itemId });
-      writeDependencies(dir, { apps: item.appDependencies, items: item.children });
-      // Type 1 = YouTube video. Images stay on Steam: pulling would download them.
-      const videos = item.additionalPreviews.filter((p) => p.type === 1).map((p) => p.urlOrVideoId);
-      if (videos.length) writeVideos(dir, videos);
-      const n = Object.keys(translations).length;
-      this.notify(`Wrote the description${n ? ` and ${n} translation(s)` : ""} to ${dir}.`);
+      if (parts.details) {
+        upsertItemJson(dir, {
+          title: item.title,
+          publishedfileid: item.itemId,
+          tags: item.tags,
+          visibility: item.visibility,
+        });
+        wrote.push("item.json");
+      }
+      if (parts.description || parts.translations) {
+        const current = readPublishInfo(root, meta, dir);
+        const translations: Record<string, WorkshopTranslation> = parts.translations
+          ? {}
+          : { ...(current?.translations ?? {}) };
+        if (parts.translations) {
+          for (const [lang, t] of Object.entries(done.translations)) {
+            const title = t.title !== item.title ? t.title : "";
+            const description = t.description !== item.description ? t.description : "";
+            if (title === "" && description === "") continue;
+            translations[lang] = {
+              ...(title !== "" ? { title } : {}),
+              ...(description !== "" ? { description } : {}),
+            };
+          }
+          wrote.push(`${Object.keys(translations).length} translation(s)`);
+        }
+        let description = current?.description ?? "";
+        if (parts.description) {
+          description = stripLinksBlock(item.description);
+          const links = parseLinksBlock(item.description);
+          if (links.length) writeLinks(dir, links);
+          wrote.push("description.bbcode");
+        }
+        writeListingFiles(dir, { description, translations });
+      }
+
+      if (parts.previews || parts.thumbnail)
+        this.progress(steps, steps.indexOf("Images"), "downloading images…");
+      if (parts.previews) {
+        const previewsDir = path.join(dir, PREVIEWS_DIR);
+        fs.mkdirSync(previewsDir, { recursive: true });
+        const images = item.additionalPreviews.filter((p) => p.type === 0);
+        const names: string[] = [];
+        for (let i = 0; i < images.length; i++) {
+          const p = images[i];
+          const ext = path.extname(p.originalFileName || new URL(p.urlOrVideoId).pathname) || ".png";
+          const base =
+            path.basename(p.originalFileName || "", ext) || `steam-${String(i + 1).padStart(2, "0")}`;
+          const name = `${base}${ext}`;
+          this.progress(
+            steps,
+            steps.indexOf("Images"),
+            `downloading ${name}…`,
+            Math.round((i / images.length) * 100)
+          );
+          fs.writeFileSync(path.join(previewsDir, name), await download(p.urlOrVideoId));
+          names.push(name);
+        }
+        if (names.length) writePreviewOrder(dir, names);
+        writeVideos(
+          dir,
+          item.additionalPreviews.filter((p) => p.type === 1).map((p) => p.urlOrVideoId)
+        );
+        wrote.push(`${names.length} preview image(s)`);
+      }
+      if (parts.thumbnail && item.previewUrl) {
+        const target = info?.previewPath ?? path.join(root, "thumbnail.png");
+        fs.writeFileSync(target, await download(item.previewUrl));
+        wrote.push(path.basename(target));
+      }
+
+      if (parts.requirements) {
+        this.progress(steps, steps.indexOf("Requirements"), "writing requirements…");
+        writeDependencies(dir, { apps: item.appDependencies, items: item.children });
+        wrote.push("dependencies.json");
+      }
+      this.notify(
+        wrote.length ? `Wrote ${wrote.join(", ")} to ${dir}.` : "Nothing was selected to download."
+      );
     } catch (e) {
       this.notifyError(`Pulling the listing failed - ${friendlyError(e, meta)}`, e);
     } finally {
@@ -695,13 +799,19 @@ export class WorkshopPanel {
     // The app's upload modal already confirmed (incl. the new-item case).
     let itemId = info.publishedId;
     this.uploading = true;
-    this.post({ type: "uploadState", busy: true, message: "starting…" });
+    const steps: string[] = [];
+    if (!itemId) steps.push("Create item");
+    if (message.content) steps.push("Mod files");
+    if (message.details) steps.push("Details");
+    if (message.languages.length) steps.push("Translations");
+    const stepOf = (name: string): number => Math.max(0, steps.indexOf(name));
+    this.progress(steps, 0, "starting…");
     let staging: string | null = null;
     try {
       let needsAgreement = false;
       const createdNow = !itemId;
       if (!itemId) {
-        this.post({ type: "uploadState", busy: true, message: "creating the Workshop item…" });
+        this.progress(steps, stepOf("Create item"), "creating the Workshop item…");
         const created = await runBridge(this.context, { action: "create", appId: meta.steamAppId }, log);
         if (created.action !== "create") throw new Error("unexpected bridge reply");
         itemId = created.itemId;
@@ -717,6 +827,7 @@ export class WorkshopPanel {
       const wsDir = workshopDirFor(root, meta);
       const previews = message.details ? readPreviews(wsDir) : null;
       const deps = message.details ? readDependencies(wsDir) : null;
+      if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
 
       const submits: SubmitSpec[] = [];
@@ -750,7 +861,7 @@ export class WorkshopPanel {
             main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
           }
           main.title = info.name ?? undefined;
-          main.description = info.description ?? undefined;
+          main.description = withLinksBlock(info.description ?? "", readLinks(wsDir));
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;
@@ -765,7 +876,7 @@ export class WorkshopPanel {
           }
         }
         if (message.content) {
-          this.post({ type: "uploadState", busy: true, message: "preparing files…" });
+          this.progress(steps, stepOf("Mod files"), "preparing files…");
           if (ensurePxIgnore(root)) this.explainPxIgnore(root);
           staging = makeStagingDir();
           stageContent(root, staging, [workshopDirFor(root, meta)]);
@@ -789,9 +900,13 @@ export class WorkshopPanel {
         { action: "publish", appId: meta.steamAppId, itemId, submits },
         log,
         (status, uploaded, total, submit, count) => {
-          const pct = total > 0 ? ` (${Math.round((uploaded / total) * 100)}%)` : "";
-          const step = count > 1 ? ` - step ${submit}/${count}` : "";
-          this.post({ type: "uploadState", busy: true, message: `${status.toLowerCase()}${pct}${step}` });
+          // Submit 1 carries files and details; the rest are one language each.
+          const onFiles = submit === 1 && message.content && /content/i.test(status);
+          const name =
+            submit > 1 ? "Translations" : onFiles ? "Mod files" : message.details ? "Details" : "Mod files";
+          const pct = total > 0 ? Math.round((uploaded / total) * 100) : null;
+          const step = count > 1 && submit > 1 ? ` (${submit - 1}/${count - 1})` : "";
+          this.progress(steps, stepOf(name), `${status.toLowerCase()}${step}`, pct);
         }
       );
       if (done.action !== "publish") throw new Error("unexpected bridge reply");
@@ -816,7 +931,7 @@ export class WorkshopPanel {
           removeItems: liveItems.filter((i) => !deps.items.includes(i)),
         };
         if (job.addApps.length || job.removeApps.length || job.addItems.length || job.removeItems.length) {
-          this.post({ type: "uploadState", busy: true, message: "updating requirements…" });
+          this.progress(steps, stepOf("Requirements"), "updating requirements…");
           await runBridge(this.context, job, log);
           log(`workshop: requirements of ${itemId} updated`);
         }
@@ -843,6 +958,13 @@ export class WorkshopPanel {
       this.post({ type: "uploadState", busy: false });
     }
   }
+}
+
+/** One http(s) resource as bytes; Steam serves preview images from its CDN. */
+async function download(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`download of ${url} failed: HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 /**

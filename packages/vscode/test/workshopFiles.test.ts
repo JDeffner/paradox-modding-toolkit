@@ -13,6 +13,12 @@ import {
   mdToBBCode,
   readItemJson,
   moveListing,
+  parseLinksBlock,
+  readLinks,
+  stripLinksBlock,
+  withLinksBlock,
+  writeLinks,
+  writePreviewOrder,
   readDependencies,
   readListingFiles,
   readPreviews,
@@ -71,8 +77,8 @@ describe("listing files", () => {
       },
     });
     expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toBe("[h1]Hello[/h1]");
-    expect(fs.readFileSync(path.join(dir, "german", "title.txt"), "utf8")).toBe("Hallo\n");
-    expect(fs.existsSync(path.join(dir, "french", "title.txt"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "title.txt"), "utf8")).toBe("Hallo\n");
+    expect(fs.existsSync(path.join(dir, "translations", "french", "title.txt"))).toBe(false);
 
     const back = readListingFiles(dir);
     expect(back.description).toBe("[h1]Hello[/h1]");
@@ -87,7 +93,7 @@ describe("listing files", () => {
       translations: { german: { title: "Hallo", description: "x" } },
     });
     writeListingFiles(dir, { description: "d", translations: {} });
-    expect(fs.existsSync(path.join(dir, "german"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, "translations", "german"))).toBe(false);
     expect(hasListingFiles(dir)).toBe(true);
   });
 
@@ -96,6 +102,63 @@ describe("listing files", () => {
     fs.writeFileSync(path.join(dir, "item.json"), JSON.stringify({ custom: 1, title: "Old" }), "utf8");
     upsertItemJson(dir, { title: "New", publishedfileid: "42" });
     expect(readItemJson(dir)).toEqual({ custom: 1, title: "New", publishedfileid: "42" });
+  });
+});
+
+describe("translations folder", () => {
+  it("writes languages under translations/ and clears the pre-0.4.0 root folder", () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, "german"));
+    fs.writeFileSync(path.join(dir, "german", "title.txt"), "Alt\n");
+    expect(readListingFiles(dir).translations.german).toEqual({ title: "Alt" });
+    writeListingFiles(dir, { description: "d", translations: { german: { title: "Neu" } } });
+    expect(fs.existsSync(path.join(dir, "german"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "title.txt"), "utf8")).toBe("Neu\n");
+    expect(readListingFiles(dir).translations.german).toEqual({ title: "Neu" });
+  });
+});
+
+describe("preview order and links", () => {
+  it("orders previews by order.txt, then by name", () => {
+    const dir = tmp();
+    const previews = path.join(dir, "previews");
+    fs.mkdirSync(previews);
+    for (const f of ["a.png", "b.png", "c.png"]) fs.writeFileSync(path.join(previews, f), "");
+    writePreviewOrder(dir, ["c.png", "a.png", "gone.png"]);
+    expect(readPreviews(dir)!.images.map((p) => path.basename(p))).toEqual(["c.png", "a.png", "b.png"]);
+  });
+
+  it("renders links as a trailing block and takes it apart again", () => {
+    const links = [
+      { label: "Discord", url: "https://discord.gg/x" },
+      { label: "", url: "https://example.com" },
+      { label: "bad", url: "javascript:alert(1)" },
+    ];
+    const text = withLinksBlock("Hello [b]there[/b]", links);
+    expect(text).toBe(
+      "Hello [b]there[/b]\n\n[h2]Links[/h2]\n[list]\n[*] [url=https://discord.gg/x]Discord[/url]\n[*] [url=https://example.com]https://example.com[/url]\n[/list]"
+    );
+    expect(stripLinksBlock(text)).toBe("Hello [b]there[/b]");
+    expect(parseLinksBlock(text)).toEqual([
+      { label: "Discord", url: "https://discord.gg/x" },
+      { label: "https://example.com", url: "https://example.com" },
+    ]);
+    // Replacing keeps one block, and an author's own [h2]Links[/h2] mid-text is left alone.
+    expect(withLinksBlock(text, [links[0]]).match(/\[h2\]Links\[\/h2\]/g)).toHaveLength(1);
+    expect(stripLinksBlock("[h2]Links[/h2]\nsee below\n[b]x[/b]")).toBe(
+      "[h2]Links[/h2]\nsee below\n[b]x[/b]"
+    );
+  });
+
+  it("round-trips links.json and drops non-http urls", () => {
+    const dir = tmp();
+    writeLinks(dir, [
+      { label: "a", url: "https://a" },
+      { label: "b", url: "ftp://b" },
+    ]);
+    expect(readLinks(dir)).toEqual([{ label: "a", url: "https://a" }]);
+    writeLinks(dir, []);
+    expect(fs.existsSync(path.join(dir, "links.json"))).toBe(false);
   });
 });
 
