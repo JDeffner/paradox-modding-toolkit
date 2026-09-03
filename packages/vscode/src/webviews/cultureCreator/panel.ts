@@ -198,12 +198,8 @@ export class CultureCreatorPanel {
         await this.load(msg.name);
         return;
       case "openExamples":
-        // The command validates its argument and drops a bare string, so the
-        // deep link has to carry the shape the wiki reads ({ name, kind }).
-        await vscode.commands.executeCommand("px.showExamplesWiki", {
-          name: msg.name,
-          kind: "modifier",
-        });
+        // A culture key is no wiki article, so the button opens the index.
+        await vscode.commands.executeCommand("px.showExamplesWiki");
         return;
       case "save":
         await this.save(msg);

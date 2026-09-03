@@ -53,7 +53,8 @@ export type AppToHost =
   /** Load this culture into the form (the mod's copy first, else the game's). */
   | { type: "load"; name: string }
   /** Open the Examples Wiki on a name the form shows. */
-  | { type: "openExamples"; name: string }
+  /** Open the Examples Wiki; a culture key is no article, so no target is sent. */
+  | { type: "openExamples" }
   | {
       type: "save";
       name: string;

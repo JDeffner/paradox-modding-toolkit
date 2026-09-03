@@ -781,7 +781,7 @@ $("open").onclick = () => {
   menu($("open"), items, { search: true, width: 320, onPick: (name) => send({ type: "load", name }) });
 };
 
-$("wiki").onclick = () => send({ type: "openExamples", name: currentName() });
+$("wiki").onclick = () => send({ type: "openExamples" });
 
 $("save").onclick = () => {
   const name = currentName();

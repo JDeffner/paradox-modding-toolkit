@@ -84,7 +84,7 @@ ${uiCss}
     <span class="px-grow"></span>
     <span id="target" class="px-muted px-xs"></span>
     <button id="save" class="px-btn" data-variant="default" data-size="sm">${icon("save")}Save</button>
-    <button id="wiki" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Look this culture's words up in the Examples Wiki" data-tip-side="left">${icon("bookOpen")}</button>
+    <button id="wiki" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Open the Examples Wiki" data-tip-side="left">${icon("bookOpen")}</button>
   </div>
   <div id="form">
     <div id="inner">
