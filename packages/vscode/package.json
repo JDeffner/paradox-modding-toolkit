@@ -490,6 +490,11 @@
         "title": "New Mod (project folder + launcher link)"
       },
       {
+        "command": "px.moveMod",
+        "category": "Paradox",
+        "title": "Move Mod (between game folder and project folder)"
+      },
+      {
         "command": "px.convertToDds",
         "category": "Paradox",
         "title": "Convert Image to DDS",
@@ -1035,6 +1040,10 @@
     },
     "menus": {
       "commandPalette": [
+        {
+          "command": "px.moveMod",
+          "when": "px.isCk3Workspace"
+        },
         {
           "command": "px.addLocalizationFromView",
           "when": "false"

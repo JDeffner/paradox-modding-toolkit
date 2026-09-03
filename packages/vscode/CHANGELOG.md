@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Paradox: Move Mod is back, as a command.** It converts a mod between
+  the game folder layout and the mod projects layout in either direction
+  and carries the Workshop listing with it: `.px-toolkit/workshop` inside
+  the mod becomes the project's sibling `workshop` folder and back, so the
+  panel finds it with no setting change. Copy, verify, swap the workspace
+  folder, then retire the source; a folder Windows will not release is
+  renamed `.moved-<time>` or named in a toast, never lost.
 - **Required DLC comes from the game files.** The Requirements card shows
   the DLC the install ships (`game/dlc/*/*.dlc`) as a grid of their own
   icons; hover names one, click requires it. Chapters and the Subscription
