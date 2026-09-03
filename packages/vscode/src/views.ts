@@ -517,13 +517,14 @@ export function registerPxViews(
 
     // ---- Dependencies view actions ----
     vscode.commands.registerCommand("px.dependenciesClear", () => dependencies.clear()),
-    vscode.commands.registerCommand("px.dependenciesInfo", () => {
-      void vscode.window.showInformationMessage(
-        "Dependencies shows one definition at a time. Dependents are the definitions in your mod that " +
-          "reference it, so they break if you rename or remove it. Dependencies are what it references " +
-          "itself. Put the cursor on a definition and run “Paradox: Show Dependencies” to fill the view.",
-        { modal: true }
+    // A toast, not a modal: the note is orientation, not a decision.
+    vscode.commands.registerCommand("px.dependenciesInfo", async () => {
+      const pick = await vscode.window.showInformationMessage(
+        "One definition at a time. Dependents reference it (they break if you rename or remove it); " +
+          "Dependencies are what it references. Fill the view from the definition under the cursor.",
+        "Show for Cursor"
       );
+      if (pick) await vscode.commands.executeCommand("px.showDependencies");
     }),
     // Re-roots the view on the clicked row. The server resolves from a cursor
     // position, so the row's file+line is turned back into one: the first word
