@@ -1954,6 +1954,20 @@ export interface DynastyHouse {
 }
 
 /**
+ * The character-level skill keys, in the order a client shows them. MEASURED
+ * over the vanilla `history/characters` corpus (2026-09-03): stewardship 8 964,
+ * martial 8 940, diplomacy 8 908, intrigue 8 892, learning 495, prowess 150.
+ */
+export const DYNASTY_SKILLS = [
+  "diplomacy",
+  "martial",
+  "stewardship",
+  "intrigue",
+  "learning",
+  "prowess",
+] as const;
+
+/**
  * One character of `history/characters`. Dates are the game's own
  * `Y.M.D` strings, taken from the dated block that carries the `birth`/`death`
  * statement.
@@ -1974,6 +1988,17 @@ export interface DynastyCharacter {
   /** `Y.M.D` of the dated block holding `birth`. */
   birth?: string;
   death?: string;
+  /**
+   * `dna = `, the portrait DNA name, without the quotes the file may put
+   * around it (350 of 438 vanilla statements write it bare).
+   */
+  dna?: string;
+  /**
+   * The skills the block sets, keyed by {@link DYNASTY_SKILLS}. A skill the
+   * block does not name is absent, which is not the same as zero: the game
+   * rolls one it was not given.
+   */
+  skills?: Record<string, number>;
   traits: string[];
   /** Ids this character is married to (`add_spouse`), in file order. */
   spouses: string[];

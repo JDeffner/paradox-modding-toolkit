@@ -230,7 +230,10 @@ const HOUSES_TXT = `house_smoke = {
 
 const CHARACTERS_TXT = `9000010 = {
 \tname = "Smoky"
+\tdna = "smoky_dna"
 \tdynasty_house = house_smoke
+\tmartial = 8
+\tlearning = 3
 \t1000.1.1 = {
 \t\tbirth = yes
 \t}
@@ -646,6 +649,11 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(tree.houses?.map((h) => h.id)).toEqual(["house_smoke"]);
     const father = tree.characters?.find((c) => c.id === "9000010");
     expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
+    // The portrait name without the quotes the file wrote, and only the skills
+    // the block actually sets.
+    expect(father?.dna).toBe("smoky_dna");
+    expect(father?.skills).toEqual({ martial: 8, learning: 3 });
+    expect(tree.characters?.find((c) => c.id === "9000012")?.skills).toBeUndefined();
     // The wife belongs to another dynasty: drawn, but not counted as a member.
     expect(tree.characters?.find((c) => c.id === "9000011")?.external).toBe(true);
     expect(tree.characters?.find((c) => c.id === "9000012")?.mother).toBe("9000011");

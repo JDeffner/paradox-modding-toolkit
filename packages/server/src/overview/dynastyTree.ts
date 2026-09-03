@@ -8,7 +8,8 @@
  * repo's dev-paths point at (2026-09-03, 71 142 blocks), keys at the
  * character's own level: name 71 138, culture 71 082, religion 70 078,
  * dynasty 56 738, father 55 961, trait 28 690, mother 14 911, female 12 520,
- * dynasty_house 10 426, then the four skill keys. `birth` (56 451) and `death`
+ * dynasty_house 10 426, stewardship 8 964, martial 8 940, diplomacy 8 908,
+ * intrigue 8 892, learning 495, dna 438, prowess 150. `birth` (56 451) and `death`
  * (56 465) are NOT character-level keys: they sit inside a dated
  * `880.1.1 = { … }` block, which is also where `add_spouse` lives (6 811 of
  * 6 816). So the date of a birth is the KEY of the block that carries it.
@@ -23,6 +24,7 @@
  * request, 12 ms for the next, 1 ms for one dynasty, 62 MB retained.
  */
 import * as fs from "fs";
+import { DYNASTY_SKILLS } from "@px-lsp/protocol/protocol";
 import type {
   DynastyCharacter,
   DynastyHouse,
@@ -45,6 +47,8 @@ const SOURCE_RANK: Record<DefSource, number> = { mod: 2, parent: 1, vanilla: 0 }
 
 /** A dated block key: the game writes `880.1.1 = { birth = yes }`. */
 const DATE_RE = /^-?\d+\.\d+\.\d+$/;
+
+const SKILL_KEYS: ReadonlySet<string> = new Set(DYNASTY_SKILLS);
 
 interface FileRef {
   file: string;
@@ -143,9 +147,9 @@ function scalarOf(stmt: Statement): string | null {
 }
 
 /**
- * One character block into a record. Keys the form does not model (the four
- * skills, dna, nicknames, effects) are left where they are: this view reads,
- * and the writer preserves them from the source span.
+ * One character block into a record. Keys the form does not model (nicknames,
+ * effects, claims) are left where they are: this view reads, and the writer
+ * preserves them from the source span.
  */
 export function readCharacterBlock(
   id: string,
@@ -178,6 +182,14 @@ export function readCharacterBlock(
     }
     const value = scalarOf(stmt);
     if (value === null) continue;
+    if (SKILL_KEYS.has(key)) {
+      // A skill the game rolls is not written at all, so a value that is not a
+      // number (a script value, `@my_martial`) is left to the writer's verbatim
+      // path rather than shown as an editable number the form cannot round trip.
+      const number = Number(value);
+      if (Number.isFinite(number)) (out.skills ??= {})[key] = number;
+      continue;
+    }
     switch (key) {
       case "name":
         out.name = value;
@@ -202,6 +214,11 @@ export function readCharacterBlock(
         break;
       case "religion":
         out.religion = intern(value);
+        break;
+      case "dna":
+        // Written both bare and quoted; the parser hands over the text either
+        // way, so the record carries the NAME and never the quotes.
+        out.dna = value;
         break;
       case "trait":
         traits.push(intern(value));
