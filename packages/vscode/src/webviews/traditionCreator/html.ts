@@ -9,7 +9,11 @@
  * actually has is "what will the player see and read", and script is not an
  * answer to it. The tile is 220x120 in the game
  * (`window_add_tradition.gui`'s `widget_tradition_item`), so the preview keeps
- * that shape rather than squaring the picture.
+ * that shape rather than squaring the picture: at real size in the Icon
+ * section, where the layers are picked, and up to twice that in the panel.
+ *
+ * The section chrome (fold, lede, modrow) is the trait creator's, value for
+ * value, so the two creators read as one family.
  */
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
@@ -65,22 +69,55 @@ ${uiCss}
     font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
     font-weight: 600; color: var(--px-muted-fg);
   }
-  .fold-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 14px; }
+  .fold-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 14px; container-type: inline-size; }
   .fold:not([data-open]) > .fold-body { display: none; }
+  /* A lone button in the body (the Examples Wiki link) keeps its own width
+     instead of stretching to the column and reading as centered text. */
+  .fold-body > .px-btn { align-self: flex-start; }
   .lede { color: var(--px-muted-fg); font-size: var(--px-text-xs); margin: -2px 0 2px; }
+  /* A multi-row control (the layers, the cost) reads from its first row, so
+     the key label sits level with that row rather than mid-block. */
+  .px-field[data-rows] { align-items: start; }
+  .px-field[data-rows] > .px-label { padding-top: 6px; }
 
-  /* One layer of the picture: its folder's name, the picked file, the picker.
-     The caption is narrow because the folders name themselves (0-background). */
-  .layerrow {
-    display: grid; grid-template-columns: 104px 28px minmax(0, 1fr); gap: 6px; align-items: center;
+  /* The picture: its layer rows on the left, the composed tile at the game's
+     own 220x120 on the right, so a pick is seen where it is made. */
+  .iconblock { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 8px 12px; align-items: start; }
+  .iconblock > .px-stack { gap: 6px; }
+  /* A narrow panel (the section, not the window: the preview beside it takes
+     its share) puts the tile under the rows rather than squeezing the pickers. */
+  @container (max-width: 560px) {
+    .iconblock { grid-template-columns: minmax(0, 1fr); }
   }
-  .layerrow > .px-icontile { width: 28px; height: 28px; }
-  /* One currency of the cost, in the same two-column shape. */
-  .costrow { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px; align-items: center; }
+  /* One layer: the folder's own name, the picked file at the file's 545x285
+     shape (measured), the picker. The slot is always drawn, so an empty layer
+     keeps the row's grid and reads as empty instead of losing its picker. */
+  .layerrow {
+    display: grid; grid-template-columns: 96px 54px minmax(0, 1fr); gap: 6px; align-items: center;
+  }
+  .layerthumb {
+    display: block; width: 54px; height: 28px; object-fit: contain;
+    border-radius: var(--px-radius-sm);
+  }
+  .layerthumb[data-empty] { border: 1px dashed var(--px-border); }
+  /* The live composed tile, and the same box empty while nothing is picked. */
+  .iconlive { position: relative; width: 220px; height: 120px; }
+  .iconlive > .px-tradicon { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .iconlive > .noicon {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
+    color: var(--px-muted-fg); font-size: var(--px-text-xs);
+  }
+  /* One currency of the cost: the game's own icon and word, then the value,
+     in the layer rows' columns so the two blocks share one grid. */
+  .costrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px; align-items: center; }
+  .costrow > .px-label { display: inline-flex; align-items: center; gap: 6px; }
+  .costrow > .px-input { max-width: 282px; }
 
   /* A modifier row: what gets written on top, what the player reads under it. */
   .modrow { display: grid; grid-template-columns: minmax(0, 1fr) 92px 24px; gap: 6px; align-items: center; }
-  .modrow > .px-mod-line { grid-column: 1 / -1; padding-left: 2px; }
+  .modrow > .px-mod-line, .modrow > .modrow-empty { grid-column: 1 / -1; padding-left: 2px; }
+  .modrow-empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
 
   /* A key the file keeps the last word on: named, never silently dropped. */
   .kept {
@@ -101,23 +138,29 @@ ${uiCss}
     font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
     font-weight: 600; color: var(--px-muted-fg);
   }
-  /* The game's own tile: a 220x120 picture with the name centred under it. */
+  /* The game's own tile: the 220x120 picture (drawn up to twice that from
+     full-size layers) with the name centred under it, then its cost line. */
   .tile { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .tile-icon { position: relative; width: 100%; max-width: 220px; aspect-ratio: 11 / 6; }
+  .tile-icon { position: relative; width: 100%; max-width: 440px; aspect-ratio: 11 / 6; }
   .tile-icon > .px-tradicon { position: absolute; inset: 0; width: 100%; height: 100%; }
   .tile-icon > .noicon {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
   }
   .tile > .px-game-tip-title { text-align: center; }
-  .tile-cost { display: flex; gap: 8px; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  .tile-cost { display: flex; gap: 12px; font-size: var(--px-text-sm); }
+  .tile-cost-line { display: inline-flex; align-items: center; gap: 4px; }
+  .tile-cost-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tile-cost-word { color: var(--px-muted-fg); }
   .tip-mods { display: flex; flex-direction: column; gap: 1px; }
   .tip-note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .tip-params { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tip-params > span {
-    padding: 1px 6px; border: 1px solid var(--px-border); border-radius: var(--px-radius-sm);
-    font-family: var(--px-font-mono); font-size: var(--px-text-xs);
-  }
+  /* The parameter sentences, as lines of the effect description; the game's
+     #P/#N/#V runs keep their tone (textformatting.gui, measured). */
+  .tip-params { display: flex; flex-direction: column; gap: 1px; }
+  .tip-param { font-size: var(--px-text-sm); line-height: 1.5; }
+  .tip-good { color: var(--px-good); font-weight: 600; }
+  .tip-bad { color: var(--px-bad); font-weight: 600; }
+  .tip-value { font-weight: 600; }
   #problem {
     margin: 12px 16px; padding: 10px 12px; border: 1px solid var(--px-border);
     border-radius: var(--px-radius-md); background: var(--px-muted);

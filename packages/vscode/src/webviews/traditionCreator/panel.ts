@@ -44,7 +44,13 @@ import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { buildTraditionCatalog } from "./catalog";
 import { traditionCreatorHtml } from "./html";
-import type { AppToHost, HostToApp, TraditionCatalog, TraditionSave } from "./messages";
+import {
+  costLocKey,
+  type AppToHost,
+  type HostToApp,
+  type TraditionCatalog,
+  type TraditionSave,
+} from "./messages";
 
 /** The definition kind the CK3 schema table gives common/culture/traditions. */
 const KIND = "culture_tradition";
@@ -221,13 +227,17 @@ export class TraditionCreatorPanel {
     if (!actions.fetchModifierFormats) return;
     let result: ModifierFormatsResult | null = null;
     try {
-      result = await actions.fetchModifierFormats({ modRoot: cfg.modPath });
+      result = await actions.fetchModifierFormats({
+        modRoot: cfg.modPath,
+        // The game's own cost line per currency, for the tile preview.
+        lines: (this.catalog?.costKeys ?? []).map(costLocKey),
+      });
     } catch {
       // A server that does not know the request leaves the preview unformatted,
       // which is a smaller failure than a panel that does not open.
       return;
     }
-    this.post({ type: "modifierFormats", formats: result?.formats ?? null });
+    this.post({ type: "modifierFormats", formats: result?.formats ?? null, lines: result?.lines ?? {} });
   }
 
   private async onMessage(message: AppToHost): Promise<void> {

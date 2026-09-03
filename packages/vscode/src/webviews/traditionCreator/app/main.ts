@@ -19,7 +19,12 @@
  *
  * Browser code: no vscode, no file system, no server. It asks the host.
  */
-import type { DefinitionForm, EventVocabularyItem, ModifierFormat } from "@px-lsp/protocol/protocol";
+import type {
+  DefinitionForm,
+  EventVocabularyItem,
+  FormatPart,
+  ModifierFormat,
+} from "@px-lsp/protocol/protocol";
 import {
   boolField,
   keyLabel,
@@ -33,7 +38,7 @@ import {
 } from "../../shared/fields";
 import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
-import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
+import { modifierLine, renderModifierLine, renderParts } from "../../shared/modifierLines";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { baseName, writeBlock } from "../../shared/scriptBlock";
@@ -41,9 +46,23 @@ import { scriptSection } from "../../shared/scriptSection";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
-import type { TraditionLayerImage } from "../../shared/traditionIcon";
-import type { AppToHost, HostToApp, SaveMode, TraditionCreatorInit, TraditionLayerFolder } from "../messages";
-import { categoryLocKey, parameterLocKey, renderTraditionTip, type PreviewModifierBlock } from "./preview";
+import { traditionIcon, type TraditionLayerImage } from "../../shared/traditionIcon";
+import {
+  costLocKey,
+  type AppToHost,
+  type HostToApp,
+  type SaveMode,
+  type TraditionCreatorInit,
+  type TraditionLayerFolder,
+} from "../messages";
+import {
+  categoryLocKey,
+  parameterLocKey,
+  plainLoc,
+  renderTraditionTip,
+  type PreviewCost,
+  type PreviewModifierBlock,
+} from "./preview";
 import {
   emptyState,
   fieldLines,
@@ -115,8 +134,14 @@ const SECTIONS: { id: SectionId; title: string; lede?: string; open: boolean }[]
   },
 ];
 
-/** Thumbnails in a layer picker; the same box the shared icon grid draws. */
-const THUMB_DIM = 96;
+/**
+ * Longest edge of a thumbnail decode: a layer row's slot, a picker entry, a
+ * texticon. The host's own thumbnail cap (textureCache.THUMBNAIL_MAX_DIM), so
+ * the DDS hovers and the GUI editor share the cached files.
+ */
+const THUMB_DIM = 256;
+/** No cap: the composed tile is drawn from the layer files as they are (545x285, measured). */
+const FULL_DIM = 0;
 
 const HELP = {
   title: "Tradition Creator",
@@ -194,9 +219,25 @@ let paramLocFields: { key: string; field: Field<string> }[] = [];
 const paramLocTyped = new Map<string, string>();
 /** How the game prints each modifier; undefined until the host answers. */
 let formats: Record<string, ModifierFormat> | undefined;
-/** Texture path -> URL, for the layer thumbnails and a modifier's texticons. */
-const textureUrls = new Map<string, string | null>();
-const textureAsked = new Set<string>();
+/** `costLocKey(currency)` -> the game's cost line as parts (`[prestige_i] $VALUE|0$`). */
+let costLines: Record<string, FormatPart[]> = {};
+/**
+ * Texture path -> URL, twice: capped decodes for the layer slots, the picker
+ * entries and a modifier's texticons, and full-size decodes for the composed
+ * tile alone. Only the chosen layers are ever asked for at full size.
+ */
+const thumbUrls = new Map<string, string | null>();
+const fullUrls = new Map<string, string | null>();
+const thumbAsked = new Set<string>();
+const fullAsked = new Set<string>();
+/**
+ * The layer picker that is open, so a thumbnail arriving while it is open lands
+ * in it: the entries are built when the menu opens, before a cold folder has
+ * decoded. `menu()` rebuilds its rows from these same objects on filter.
+ */
+let openLayerMenu: { items: MenuItem[]; rels: Map<string, string> } | null = null;
+/** Controls that draw a texticon and redraw themselves when it arrives; reset by `render()`. */
+let latePainters: (() => void)[] = [];
 /** Loc key -> the player's word, for the category headers. */
 const locValues = new Map<string, string>();
 const locAsked = new Set<string>();
@@ -347,37 +388,66 @@ function keptRow(key: string, why: string): HTMLElement {
 // Pictures and loc
 // ---------------------------------------------------------------------------
 
-/** A texture the form needs; asked for once, drawn when it arrives. */
+/** A batch of textures at one cap, asked in one message: a layer folder is 81 files. */
+function askFor(keys: readonly string[], maxDim: number): void {
+  const asked = maxDim === FULL_DIM ? fullAsked : thumbAsked;
+  const fresh = keys.filter((key) => !asked.has(key));
+  if (fresh.length === 0) return;
+  for (const key of fresh) asked.add(key);
+  post({ type: "images", keys: fresh, maxDim });
+}
+
+/** A thumbnail the form needs; asked for once, drawn when it arrives. */
 function textureUrl(texture: string): string | null {
-  const known = textureUrls.get(texture);
+  const known = thumbUrls.get(texture);
   if (known !== undefined) return known;
-  if (!textureAsked.has(texture)) {
-    textureAsked.add(texture);
-    post({ type: "images", keys: [texture], maxDim: THUMB_DIM });
-  }
+  askFor([texture], THUMB_DIM);
   return null;
 }
 
-/** A batch of textures, asked in one message: a layer folder is up to 80 files. */
-function askForTextures(keys: readonly string[]): void {
-  const fresh = keys.filter((key) => !textureAsked.has(key));
-  if (fresh.length === 0) return;
-  for (const key of fresh) textureAsked.add(key);
-  post({ type: "images", keys: fresh, maxDim: THUMB_DIM });
+/** The same at full size, for the composed tile. */
+function fullUrl(texture: string): string | null {
+  const known = fullUrls.get(texture);
+  if (known !== undefined) return known;
+  askFor([texture], FULL_DIM);
+  return null;
 }
 
 /**
- * Fill in every placeholder whose picture has since arrived. A layer thumbnail
- * and a preview layer both carry their `data-rel`, so a late answer paints
- * without redrawing the form the modder is typing in.
+ * Fill in every placeholder whose picture has since arrived. A layer slot and a
+ * composed layer both carry their `data-rel`, so a late answer paints without
+ * redrawing the form the modder is typing in; a composed layer (inside a
+ * `.px-tradicon`) takes the full-size file, everything else the thumbnail.
  */
 function paintImages(): void {
   for (const img of Array.from(document.querySelectorAll<HTMLImageElement>("img[data-rel]"))) {
-    const url = textureUrls.get(img.dataset.rel ?? "");
+    const urls = img.closest(".px-tradicon") ? fullUrls : thumbUrls;
+    const url = urls.get(img.dataset.rel ?? "");
     if (url) {
       img.src = url;
       img.hidden = false;
     }
+  }
+  for (const paint of latePainters) paint();
+  if (!openLayerMenu) return;
+  // The open picker's entries: set for the rows `menu()` rebuilds on filter,
+  // and drawn into the rows already on screen.
+  const rows = new Map<string, HTMLElement>();
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>(".px-menu-item"))) {
+    rows.set(row.querySelector(".px-grow")?.textContent ?? "", row);
+  }
+  for (const item of openLayerMenu.items) {
+    const rel = openLayerMenu.rels.get(item.value);
+    const url = rel ? thumbUrls.get(rel) : null;
+    if (!url || item.image) continue;
+    item.image = url;
+    const row = rows.get(item.label);
+    if (!row || row.querySelector("img")) continue;
+    const img = document.createElement("img");
+    img.className = "px-chip-thumb";
+    img.src = url;
+    img.alt = "";
+    row.querySelector(".px-grow")?.before(img);
   }
 }
 
@@ -529,19 +599,61 @@ function pickField(spec: TraditionFieldSpec, value: string): Field<string> {
   };
 }
 
+/** `0-background` -> `background`: the layer's own name, for an empty row. */
+function layerName(folder: TraditionLayerFolder): string {
+  return folder.label.replace(/^\d+-/, "");
+}
+
+/** The picked file's slot in a layer row: the thumbnail, or a dashed empty box the same size. */
+function layerSlot(rel: string | null): HTMLElement {
+  if (rel === null) {
+    const empty = node("span", "layerthumb");
+    empty.dataset.empty = "";
+    return empty;
+  }
+  const thumb = document.createElement("img");
+  thumb.className = "layerthumb";
+  thumb.alt = "";
+  thumb.dataset.rel = rel;
+  const url = textureUrl(rel);
+  if (url) thumb.src = url;
+  else thumb.hidden = true;
+  return thumb;
+}
+
+/** The composed tile at the game's own size, or the same box empty. */
+function liveTile(picks: LayerPicks): HTMLElement {
+  const box = node("div", "iconlive");
+  const layers = layersFrom(picks);
+  // One message for the whole picture, before each layer asks for itself.
+  askFor(
+    layers.map((layer) => layer.rel),
+    FULL_DIM
+  );
+  if (layers.length > 0) box.append(traditionIcon(layers, null, fullUrl));
+  else box.append(node("div", "noicon", "No layer picked yet"));
+  return box;
+}
+
 /**
- * The picture: one picker per layer folder, in the index order the engine
- * stacks them. A folder entry is offered as the folder, not as its files,
- * because that is what the game reads as "any of these".
+ * The picture: one row per layer folder, in the index order the engine stacks
+ * them, with the composed tile beside the rows. A folder entry is offered as
+ * the folder, not as its files, because that is what the game reads as "any
+ * of these". "Use an existing tradition's layers" fills every row at once.
  */
 function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPicks> {
   const listeners: ((v: LayerPicks) => void)[] = [];
   let current: LayerPicks = { ...picks };
-  const box = node("div", "px-stack");
+  const block = node("div", "iconblock");
+  const rows = node("div", "px-stack");
   const emit = (): void => listeners.forEach((fn) => fn({ ...current }));
+  const set = (next: LayerPicks): void => {
+    current = { ...next };
+    paint();
+  };
 
   const paint = (): void => {
-    box.replaceChildren();
+    rows.replaceChildren();
     for (const folder of layerFolders()) {
       const index = String(folder.index);
       const row = node("div", "layerrow");
@@ -550,56 +662,52 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
       caption.dataset.tipWrap = "";
       const value = current[index] ?? "";
       const choice = folder.choices.find((c) => c.value === value);
-      const thumb = document.createElement("img");
-      thumb.className = "px-icontile";
-      thumb.alt = "";
-      const url = choice ? textureUrl(choice.rel) : null;
-      if (choice) thumb.dataset.rel = choice.rel;
-      thumb.hidden = url === null;
-      if (url) thumb.src = url;
-      const trigger = dropdown(value, "not used");
+      const trigger = dropdown(value, `No ${layerName(folder)}`);
       trigger.onclick = () => {
-        askForTextures(folder.choices.map((c) => c.rel));
-        menu(
-          trigger,
-          [
-            { value: "", label: "Not used", hint: "the layer is left out" },
-            ...folder.choices.map((c) => ({
-              value: c.value,
-              label: c.value,
-              hint: c.folder ? "a folder the game picks from" : "",
-              ...(textureUrl(c.rel) ? { image: textureUrl(c.rel)! } : {}),
-            })),
-          ],
-          {
-            value,
-            search: true,
-            width: 320,
-            onPick: (picked) => {
-              if (picked === "") delete current[index];
-              else current[index] = picked;
-              paint();
-              emit();
-            },
-          }
+        askFor(
+          folder.choices.map((c) => c.rel),
+          THUMB_DIM
         );
+        const items: MenuItem[] = [
+          { value: "", label: "None", hint: "the layer is left out" },
+          ...folder.choices.map((c) => ({
+            value: c.value,
+            label: c.value,
+            hint: c.folder ? "a folder the game picks from" : "",
+            ...(textureUrl(c.rel) ? { image: textureUrl(c.rel)! } : {}),
+          })),
+        ];
+        openLayerMenu = { items, rels: new Map(folder.choices.map((c) => [c.value, c.rel])) };
+        menu(trigger, items, {
+          value,
+          search: true,
+          width: 320,
+          onPick: (picked) => {
+            openLayerMenu = null;
+            if (picked === "") delete current[index];
+            else current[index] = picked;
+            paint();
+            emit();
+          },
+        });
       };
-      row.append(caption, thumb, trigger);
-      box.append(row);
+      row.append(caption, layerSlot(choice ? choice.rel : null), trigger);
+      rows.append(row);
     }
     if (layerFolders().length === 0) {
-      box.append(node("div", "lede", "No game folder is set, so the layer folders could not be read."));
+      rows.append(node("div", "lede", "No game folder is set, so the layer folders could not be read."));
     }
+    rows.append(startFromRow(set));
+    block.replaceChildren(rows, liveTile(current));
   };
 
   paint();
+  const row = fieldRow(spec, block);
+  row.dataset.rows = "";
   return {
-    el: fieldRow(spec, box),
+    el: row,
     get: () => ({ ...current }),
-    set: (next) => {
-      current = { ...next };
-      paint();
-    },
+    set,
     onChange: (listener) => listeners.push(listener),
   };
 }
@@ -615,7 +723,17 @@ function costField(spec: TraditionFieldSpec, values: CostValues): Field<CostValu
   const box = node("div", "px-stack");
   for (const currency of init?.catalog.costKeys ?? []) {
     const row = node("div", "costrow");
-    const caption = node("span", "px-label", currency);
+    const caption = node("span", "px-label");
+    // The currency's own icon, out of the game's cost line for it; drawn again
+    // when the sprite arrives, since the form is not redrawn for a picture.
+    const icons = (costLines[costLocKey(currency)] ?? []).filter((part) => "icon" in part);
+    const paintCaption = (): void => {
+      caption.replaceChildren();
+      renderParts(icons, caption, textureUrl);
+      caption.append(currency);
+    };
+    paintCaption();
+    latePainters.push(paintCaption);
     const input = document.createElement("input");
     input.className = "px-input";
     input.dataset.size = "sm";
@@ -636,8 +754,10 @@ function costField(spec: TraditionFieldSpec, values: CostValues): Field<CostValu
   if ((init?.catalog.costKeys ?? []).length === 0) {
     box.append(node("div", "lede", "The game's own documentation for a cost could not be read."));
   }
+  const row = fieldRow(spec, box);
+  row.dataset.rows = "";
   return {
-    el: fieldRow(spec, box),
+    el: row,
     get: () => ({ ...current }),
     set: (next) => {
       for (const key of Object.keys(current)) delete current[key];
@@ -694,7 +814,7 @@ function parameterLocRows(): HTMLElement[] {
       row.append(iconEl("check"));
       const code = document.createElement("code");
       code.textContent = name;
-      row.append(code, document.createTextNode(` already reads "${known}".`));
+      row.append(code, document.createTextNode(` already reads "${plainLoc(known)}".`));
       rows.push(row);
       continue;
     }
@@ -825,9 +945,8 @@ function examplesRow(): HTMLElement {
 }
 
 /** "Start from the layers of…": every tradition the catalog read, by category. */
-function startFromRow(): HTMLElement {
+function startFromRow(set: (picks: LayerPicks) => void): HTMLElement {
   const button = ghostButton("Use an existing tradition's layers", "image");
-  button.style.alignSelf = "flex-start";
   const entries = Object.entries(init?.catalog.traditions ?? {});
   button.onclick = () => {
     const labels = new Map((form?.existing ?? []).map((def) => [def.name, def.label]));
@@ -844,10 +963,8 @@ function startFromRow(): HTMLElement {
         onPick: (name) => {
           const entry = init?.catalog.traditions[name];
           if (!entry) return;
-          const field = fields.get("layers");
           state.values.layers = { ...entry.layers };
-          field?.set({ ...entry.layers } as FieldValue);
-          askForTextures(previewLayers().map((layer) => layer.rel));
+          set({ ...entry.layers });
           refreshPreview();
         },
       }
@@ -860,6 +977,7 @@ function render(): void {
   sectionsBox.replaceChildren();
   fields.clear();
   paramLocFields = [];
+  latePainters = [];
   if (!form) return;
 
   const bySection = new Map<SectionId, TraditionFieldSpec[]>();
@@ -898,7 +1016,6 @@ function render(): void {
         body.append(...parameterLocRows());
       }
     }
-    if (section.id === "icon") body.append(startFromRow());
     if (section.id === "modifiers") body.append(examplesRow());
     sectionsBox.append(box);
   }
@@ -946,8 +1063,7 @@ const PATTERN_INDEX = 1;
 const STROKE_INDEX = 3;
 const STROKE_SCALE = 0.9;
 
-function previewLayers(): TraditionLayerImage[] {
-  const picks = (state.values.layers as LayerPicks | undefined) ?? {};
+function layersFrom(picks: LayerPicks): TraditionLayerImage[] {
   const out: TraditionLayerImage[] = [];
   for (const folder of layerFolders()) {
     const value = picks[String(folder.index)];
@@ -962,6 +1078,10 @@ function previewLayers(): TraditionLayerImage[] {
   return out;
 }
 
+function previewLayers(): TraditionLayerImage[] {
+  return layersFrom((state.values.layers as LayerPicks | undefined) ?? {});
+}
+
 function previewBlocks(): PreviewModifierBlock[] {
   const out: PreviewModifierBlock[] = [];
   for (const spec of specs) {
@@ -972,11 +1092,17 @@ function previewBlocks(): PreviewModifierBlock[] {
   return out;
 }
 
-function previewCost(): { currency: string; value: string }[] {
+function previewCost(): PreviewCost[] {
   const costs = (state.values.cost as CostValues | undefined) ?? {};
   return Object.entries(costs)
     .filter(([, value]) => value.trim() !== "")
-    .map(([currency, value]) => ({ currency, value: value.trim() }));
+    .map(([currency, value]) => {
+      // A line whose icon the server could not resolve (CK3's piety icon is a
+      // datafunction of the player's faith) prints as number and word instead.
+      const line = costLines[costLocKey(currency)];
+      const drawn = line?.some((part) => "icon" in part);
+      return { currency, value: value.trim(), ...(drawn ? { line } : {}) };
+    });
 }
 
 function refreshPreview(): void {
@@ -984,7 +1110,10 @@ function refreshPreview(): void {
   const category = String(state.values.category ?? "");
   if (category) askForLoc([categoryLocKey(category)]);
   const layers = previewLayers();
-  askForTextures(layers.map((layer) => layer.rel));
+  askFor(
+    layers.map((layer) => layer.rel),
+    FULL_DIM
+  );
   tipBox.replaceChildren(
     renderTraditionTip(
       {
@@ -1007,7 +1136,7 @@ function refreshPreview(): void {
             name
         ),
       },
-      { formats, imageUrl: textureUrl }
+      { formats, imageUrl: textureUrl, fullImageUrl: fullUrl }
     )
   );
 
@@ -1060,7 +1189,6 @@ function applyForm(next: DefinitionForm, keepName?: string): void {
 
   buildLocFields(name);
   render();
-  askForTextures(previewLayers().map((layer) => layer.rel));
   // A loaded tradition already sets parameters; their sentences decide whether
   // the form has to ask for one.
   askForLoc(currentParameters().map(parameterLocKey));
@@ -1277,15 +1405,22 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       // The formats reach a modifier row's label, so the whole form is redrawn
       // rather than only the preview.
       formats = message.formats ?? undefined;
+      costLines = message.lines ?? {};
       render();
       break;
-    case "images":
-      for (const [key, url] of Object.entries(message.urls)) textureUrls.set(key, url);
+    case "images": {
+      // A host that does not say which cap it decoded at answers both.
+      const into =
+        message.maxDim === undefined
+          ? [thumbUrls, fullUrls]
+          : [message.maxDim === FULL_DIM ? fullUrls : thumbUrls];
+      for (const urls of into) for (const [key, url] of Object.entries(message.urls)) urls.set(key, url);
       // The form is not redrawn: a picture arriving while a modder types must
       // not take their field away. Every image carries its own path.
       paintImages();
       refreshPreview();
       break;
+    }
     case "loc": {
       for (const [key, value] of Object.entries(message.values)) {
         locValues.set(key, value);

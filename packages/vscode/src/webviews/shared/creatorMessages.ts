@@ -25,6 +25,8 @@ export interface CreatorImagesRequest {
 export interface CreatorImagesReply {
   type: "images";
   urls: Record<string, string | null>;
+  /** The request's own cap, echoed: a thumbnail and a full-size decode of one path are two pictures. */
+  maxDim?: number;
 }
 
 /**

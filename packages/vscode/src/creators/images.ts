@@ -59,10 +59,29 @@ export function resolveImage(
   return null;
 }
 
+/** `resolveImage` with the decode on a worker thread (textureCache.resolveFileAsync). */
+async function resolveImageAsync(
+  roots: readonly ImageRoot[],
+  rel: string,
+  maxDim: number,
+  textures: GuiTextureCache
+): Promise<string | null> {
+  if (!safeRelative(rel)) return null;
+  for (let i = roots.length - 1; i >= 0; i--) {
+    const abs = path.join(roots[i].path, rel);
+    if (!fs.existsSync(abs)) continue;
+    const png = await textures.resolveFileAsync(abs, maxDim);
+    if (png) return png;
+  }
+  return null;
+}
+
 /**
  * Answer one `{ type: "images" }` request on `panel`: the pattern every creator
  * panel's message switch calls, so the resolution, the safety guard and the
- * reply shape are written once.
+ * reply shape are written once. The decodes run off the extension host: a
+ * tradition layer folder is 81 files of 545x285, and a synchronous loop over
+ * them kept every other request of VS Code waiting.
  */
 export function wireImages(
   panel: vscode.WebviewPanel,
@@ -70,10 +89,23 @@ export function wireImages(
   textures: GuiTextureCache,
   message: CreatorImagesRequest
 ): void {
-  const urls: Record<string, string | null> = {};
-  for (const key of message.keys) {
-    const png = resolveImage(roots, key, message.maxDim ?? 0, textures);
-    urls[key] = png ? panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
-  }
-  void panel.webview.postMessage({ type: "images", urls });
+  const maxDim = message.maxDim ?? 0;
+  void Promise.all(message.keys.map((key) => resolveImageAsync(roots, key, maxDim, textures))).then(
+    (files) => {
+      const urls: Record<string, string | null> = {};
+      message.keys.forEach((key, i) => {
+        const png = files[i];
+        urls[key] = png ? panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null;
+      });
+      try {
+        void panel.webview.postMessage({
+          type: "images",
+          urls,
+          ...(message.maxDim !== undefined ? { maxDim } : {}),
+        });
+      } catch {
+        // The panel closed while the decodes ran; nobody is waiting for them.
+      }
+    }
+  );
 }
