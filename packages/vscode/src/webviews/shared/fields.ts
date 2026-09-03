@@ -131,7 +131,14 @@ function el(tag: string, cls = "", text?: string): HTMLElement {
 /** The label + control grid row every field shares. */
 function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
   const row = el("div", "px-field");
-  const label = el("span", "px-label", options.label);
+  // A script key wraps at its underscores, never inside a word
+  // (`same_opinion_if_same_faith` in a 112px column): a <wbr> after each
+  // underscore gives the browser the break and leaves the text untouched.
+  const label = el("span", "px-label");
+  options.label.split("_").forEach((part, index) => {
+    if (index > 0) label.append("_", document.createElement("wbr"));
+    label.append(part);
+  });
   if (options.doc) {
     label.dataset.tip = options.doc;
     label.dataset.tipWrap = "";
