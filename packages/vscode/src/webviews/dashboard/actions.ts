@@ -125,6 +125,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           tip: "The toolkit's reference pages in one searchable place.",
         },
         {
+          label: "Credits",
+          command: "px.openCredits",
+          icon: "heart",
+          tip: "Every project the toolkit builds on, with links.",
+        },
+        {
           label: "Examples Wiki",
           command: "px.showExamplesWiki",
           icon: "bookOpen",

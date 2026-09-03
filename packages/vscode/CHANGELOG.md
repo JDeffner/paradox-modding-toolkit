@@ -69,6 +69,82 @@
 - **New Mod offers the in-mod layout first.** The game's mod folder with
   `.px-toolkit/workshop/` and `.pxignore` inside is the default; the mod
   projects layout stays available.
+- **Credits panel.** A new Credits view lists every upstream project the
+  toolkit builds on, what each one is used for, its license and a link to
+  its home. Open it from the Project panel's Info group or from the command
+  palette ("Paradox: Credits").
+
+- **The Flag Builder credits its origin.** The stage's bottom-right corner
+  reads "Ported from PDX Flag Editor by Chris Kaiser" and opens the original
+  project on GitHub; the file origin moved to the left, next to the zoom.
+
+- **The Workshop panel uses the width it has.** Two columns of cards: Item and
+  Publish first, then Previews and Requirements, then Links; the description
+  and the translations follow at full width. A step strip under the toolbar
+  names each stage of an upload or download and shows the percent of the one
+  in flight.
+- **Download picks its parts.** The toolbar's download button now asks which
+  parts to write, the same list as Publish plus the preview image: details
+  into item.json (title, tags, visibility), the description, translations,
+  the gallery images and videos, the requirements, the main preview image.
+- **Previews reorder by drag and drop.** The order is saved to
+  `previews/order.txt`; files not listed follow by name.
+- **Links.** Steam has no link field, so the panel keeps `links.json` next to
+  the listing and appends a Links block at the end of the description on
+  upload; a download takes the block back apart.
+- **Translations moved into `translations/`.** The listing folder keeps
+  `description.bbcode`, `item.json`, `links.json` and `dependencies.json` at
+  its root; each language lives in `translations/<language>/`. Old root
+  language folders are still read and move on the next save.
+- **Required DLC and required items in the Workshop panel.** A Requirements
+  section lists the game's DLC as Steam reports it (unowned ones marked) and
+  the required Workshop items, with installed mods and declared dependencies
+  offered first. Choices are saved to `dependencies.json` next to the listing
+  and applied to the item after each details upload; pulling the listing
+  writes Steam's current requirements down.
+- **Extra preview images and videos.** A `previews/` folder next to the
+  listing holds the gallery: images in file-name order plus `videos.txt` with
+  YouTube ids. While the folder exists a details upload replaces the item's
+  gallery with it; without it Steam's gallery is left alone. Add images from
+  the panel or drop files into the folder.
+- **Pre-upload checks.** The Publish section lists what would go wrong before
+  anything reaches Steam: a missing or overlong title, a description over
+  8000 bytes, a preview of 1 MB or more (these block the upload), and a
+  missing preview, empty description, no tags or a supported game version
+  that does not cover the installed game (these only warn).
+- **Version stamps on the item.** Every details upload sets the mod version,
+  supported game version and game as key/value tags and metadata on the
+  Workshop item. Not visible on the page; tools can compare listings without
+  downloading them.
+- **One config folder per mod: `.px-toolkit/`.** It replaces the per-game
+  `.ck3modding/`, `.vic3modding/` and `.eu5modding/` folders for the schema and
+  playset overlays, the tiger baseline, the GUI preview values and the
+  Workshop record. Existing folders keep working and are renamed the first time
+  the toolkit writes to them.
+- **The Workshop listing lives inside the mod by default.** `px.workshop.dir`
+  now defaults to `.px-toolkit/workshop`; a `workshop` folder next to the mod
+  (the mod-projects layout) is still picked up when it exists. Description and
+  translation drafts always go to that folder; `workshop.json` keeps only ids.
+- **`.pxignore` decides what a toolkit upload leaves out.** gitignore syntax
+  at the mod root, created with defaults (`.git/`, `.vscode/`, `.claude/`,
+  `node_modules/`, image sources, OS noise) on the first upload through the
+  toolkit, then yours to edit. `.pxignore` and `.px-toolkit/` never upload;
+  `descriptor.mod` and `.metadata/` always do. A one-time message says why the
+  exclusions only hold for toolkit uploads: the Paradox launcher ships the
+  whole folder.
+- **New Content uses the toolkit's kind glyphs.** The picker draws each kind
+  with the same icon hovers, completion and the tree use for it.
+- **Workshop errors and the upload result open as dialogs**, so the full Steam
+  advice is readable instead of folded into a toast. The upload dialog links
+  the item page, in the Steam client (`steam://`) or the browser.
+- **Move Workshop Listing** (command palette) moves the listing folder between
+  the two layouts, `<project>/workshop` and `<mod>/.px-toolkit/workshop`, in
+  either direction. A mod that only has `workshop.json` drafts gets its
+  listing files created at the target. An explicit `px.workshop.dir` is
+  cleared, since both places are what the empty default resolves to.
+- **New Mod offers the in-mod layout first.** The game's mod folder with
+  `.px-toolkit/workshop/` and `.pxignore` inside is the default; the mod
+  projects layout stays available.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
@@ -83,7 +159,6 @@
   adoptable by hand, by writing the item id where the game's own tooling
   keeps it: `remote_file_id` in `descriptor.mod` for CK3, `publishedFileId`
   in `workshop.json` for the newer games.
-
 ## 0.4.0 (beta) - the Steam Workshop release
 
 Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the

@@ -18,7 +18,8 @@ export type TabIconName =
   | "workshop"
   | "bbcode-preview"
   | "examples-wiki"
-  | "wiki";
+  | "wiki"
+  | "credits";
 
 let extensionUri: vscode.Uri | undefined;
 
