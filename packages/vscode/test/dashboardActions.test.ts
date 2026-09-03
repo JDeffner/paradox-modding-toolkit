@@ -62,15 +62,30 @@ describe("visibleActionGroups", () => {
   });
 
   it("offers the coat-of-arms creator right after New Content, per game", () => {
-    // Both Flag Builder doors are gated on the same meta fact: the creator in
-    // Create, the blank canvas in View.
     const ids = actionGroups(eu5Meta, 0)
       .find((g) => g.label === "Create")!
       .items.map((it) => it.command);
     expect(ids.indexOf("px.createCoatOfArms")).toBe(ids.indexOf("px.newContent") + 1);
     // CK3 has the Flag Builder too (measured coverage in games/ck3/meta.ts).
     expect(commands(actionGroups(ck3Meta, 0))).toContain("px.createCoatOfArms");
-    expect(commands(actionGroups(ck3Meta, 0))).toContain("px.openFlagBuilder");
+  });
+
+  it("the designer is ONE row, in Create, and never a second one in View", () => {
+    const groups = actionGroups(ck3Meta, 0);
+    const ids = commands(groups);
+    expect(ids.filter((id) => id === "px.createCoatOfArms")).toHaveLength(1);
+    // The View row (px.openFlagBuilder) read as a second tool; the palette
+    // command stays, the panel row does not.
+    expect(ids).not.toContain("px.openFlagBuilder");
+    const row = groups
+      .find((g) => g.label === "Create")!
+      .items.find((it) => it.command === "px.createCoatOfArms");
+    expect(row?.label).toBe("Coat of Arms Designer");
+    // A game with no designer files gets the honest label for what opens.
+    const eu5 = actionGroups(eu5Meta, 0)
+      .find((g) => g.label === "Create")!
+      .items.find((it) => it.command === "px.createCoatOfArms");
+    expect(eu5?.label).toBe("Flag Builder");
   });
 
   it("ignores ids that match no row", () => {

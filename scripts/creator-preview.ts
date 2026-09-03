@@ -385,7 +385,16 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
       const db = () => buildFlagDatabase("Crusader Kings III", flagRoots, undefined, false, true);
       switch (m.type) {
         case "ready":
-          return [{ type: "init", db: db(), mods }];
+          return [
+            { type: "init", db: db(), mods },
+            {
+              type: "target",
+              target: {
+                modLabel: mods[0]?.label ?? path.basename(modPath),
+                path: "common/coat_of_arms/coat_of_arms/preview_coat_of_arms.txt",
+              },
+            },
+          ];
         case "textures": {
           const urls: Record<string, string | null> = {};
           for (const key of m.keys as string[]) {
@@ -408,7 +417,7 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return entry ? [{ type: "opened", entry, flag: d.definitions[entry.name] }] : [];
         }
         default:
-          return ["save", "paste", "exportPng", "copy"].includes(String(m.type))
+          return ["save", "paste", "exportPng", "copy", "changeTarget"].includes(String(m.type))
             ? [refuse(String(m.type))]
             : [];
       }

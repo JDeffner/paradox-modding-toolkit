@@ -255,6 +255,52 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(layer.instances[0].scale).toEqual([-0.7, 0.7]);
   });
 
+  it("Match X and Y scale is on before anyone touches it", () => {
+    const app = boot();
+    app.tab("emblems");
+    const match = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .check")].find((l) =>
+      l.textContent?.includes("Match X and Y scale")
+    );
+    expect(match?.querySelector<HTMLInputElement>("input")?.checked).toBe(true);
+    // And it bites: one axis pulls the other with it.
+    const scaleY = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .px-field")].find((f) =>
+      f.querySelector(".px-label")?.textContent?.startsWith("Scale")
+    );
+    const input = scaleY!.querySelector<HTMLInputElement>("input")!;
+    input.value = "0.4";
+    input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    const layer = app.current().layers[0];
+    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
+    expect(layer.instances[0].scale).toEqual([0.4, 0.4]);
+  });
+
+  it("selecting every instance of an emblem and centring them moves all of them", () => {
+    const app = boot();
+    app.tab("layout");
+    // The layout puts the design's emblem down twice, at 0.3 and at 0.7.
+    app.click("#layoutGrid .tile");
+    app.tab("emblems");
+    const selectAll = [...app.document.querySelectorAll<HTMLElement>("#layerList button")].find((b) =>
+      b.dataset.tip?.startsWith("Select all")
+    );
+    if (!selectAll) throw new Error("no select-all-instances action");
+    selectAll.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+    const centre = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .selTools button")].find(
+      (b) => b.dataset.tip === "Centre horizontally on the selection"
+    );
+    if (!centre) throw new Error("no align tool for a multi-selection");
+    centre.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+    const layer = app.current().layers[0];
+    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
+    const xs = layer.instances.map((i) => i.position[0]);
+    expect(xs).toHaveLength(2);
+    expect(xs[0]).toBe(xs[1]);
+    // Only that axis moved.
+    expect(layer.instances.map((i) => i.position[1])).toEqual([0.3, 0.7]);
+  });
+
   it("draws all three tabs and a randomize without throwing", () => {
     const app = boot();
     for (const name of ["background", "layout", "emblems", "background"] as const) app.tab(name);

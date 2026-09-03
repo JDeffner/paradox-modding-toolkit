@@ -10,6 +10,7 @@
  */
 import type { FlagDatabase, FlagEntry, FlagTarget, ModTarget } from "../flagBuilder/messages";
 import type { CoaFlag } from "@px-lsp/server/coa/coa";
+import type { CreatorSaveTarget } from "../shared/creatorMessages";
 
 export type { FlagDatabase, FlagEntry, FlagTarget, ModTarget };
 
@@ -24,6 +25,16 @@ export interface DesignerUiState {
   savePath?: string;
   /** The preview frame, "" for none. */
   frame?: string;
+  /**
+   * Which cell of a frame sheet the preview draws, 1-based. House and dynasty
+   * frames are one 160px cell per title tier (house_frame_26.dds is 960x160,
+   * measured on 1.19); a single-cell frame ignores this.
+   */
+  frameTier?: number;
+  /** The grid over the arms: whether it is drawn and snapped to, and how fine. */
+  grid?: boolean;
+  /** Cells per axis: 2, 4, 8 or 16. */
+  gridDiv?: number;
   tab?: DesignerTab;
 }
 
@@ -34,6 +45,8 @@ export type HostToApp =
   /** "Adjust Existing Design": what the modder picked out of the host's list. */
   | { type: "opened"; entry: FlagEntry; flag: CoaFlag }
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
+  /** Where the next save lands, for the top bar to SHOW (shared/saveTarget.ts). */
+  | { type: "target"; target: CreatorSaveTarget | null }
   | { type: "toast"; message: string };
 
 export type AppToHost =
@@ -42,9 +55,11 @@ export type AppToHost =
   | { type: "textures"; keys: string[]; thumbs: boolean }
   | { type: "copy"; text: string }
   | { type: "uiState"; state: DesignerUiState }
-  /** `sourceFile`: the coa file the arms were opened from, offered as the save target. */
-  | { type: "save"; name: string; script: string; modPath: string; sourceFile?: string }
+  /** Where it lands is the host's `target`, in the top bar since the panel opened. */
+  | { type: "save"; name: string; script: string; modPath: string }
   | { type: "paste" }
+  /** The target line was clicked: open the picker for the file a save writes. */
+  | { type: "changeTarget" }
   /**
    * "Adjust Existing Design". The picker is the host's QuickPick rather than a
    * menu in the page: the list is every definition the game and the mods ship
