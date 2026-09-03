@@ -362,6 +362,12 @@
         "icon": "$(library)"
       },
       {
+        "command": "px.openCredits",
+        "category": "Paradox",
+        "title": "Credits",
+        "icon": "$(heart)"
+      },
+      {
         "command": "px.simulateEvent",
         "category": "Paradox",
         "title": "Simulate Event",
@@ -1044,6 +1050,10 @@
         },
         {
           "command": "px.openWiki",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openCredits",
           "when": "px.isCk3Workspace"
         },
         {

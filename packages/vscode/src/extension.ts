@@ -45,6 +45,7 @@ import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
 import { WikiPanel, IMAGE_GUIDELINES_ARTICLE } from "./webviews/wiki/panel";
+import { CreditsPanel } from "./webviews/credits/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
@@ -855,6 +856,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("px.openWiki", () => {
       WikiPanel.show(context, metaFor(cfg.gameId));
+    }),
+    vscode.commands.registerCommand("px.openCredits", () => {
+      CreditsPanel.show();
     }),
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.
