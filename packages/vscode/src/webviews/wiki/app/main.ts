@@ -107,16 +107,13 @@ function renderToc(nav: HTMLElement): void {
     const node = row(entry.icon, entry.label, entry.tip, () => open(entry));
     const page = "page" in entry.target ? entry.target.page : null;
     node.setAttribute("aria-selected", String(page !== null && page === selected));
-    if ("command" in entry.target) {
-      const ext = iconEl("externalLink");
-      ext.classList.add("twist");
-      node.appendChild(ext);
-    }
     list.appendChild(node);
     if (page !== DIAGNOSTICS) continue;
 
-    const twist = iconEl(diagOpen ? "chevronDown" : "chevronRight");
-    twist.classList.add("twist");
+    // A span, not the svg itself: px-icon svgs are pointer-events: none, so
+    // a listener on the icon never fires and the row's open() wins.
+    const twist = el("span", "twist");
+    twist.appendChild(iconEl(diagOpen ? "chevronDown" : "chevronRight"));
     twist.setAttribute("data-tip", diagOpen ? "Fold the codes" : "List the codes");
     twist.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -199,12 +196,6 @@ function renderHub(content: HTMLElement): void {
     const head = el("div", "head");
     head.appendChild(iconEl(entry.icon));
     head.appendChild(el("span", undefined, entry.label));
-    if ("command" in entry.target) {
-      const ext = el("span", "ext");
-      ext.appendChild(iconEl("externalLink"));
-      ext.setAttribute("data-tip", "Opens in its own tab.");
-      head.appendChild(ext);
-    }
     card.appendChild(head);
     card.appendChild(el("div", "tip", entry.tip));
     card.addEventListener("click", () => open(entry));
@@ -356,15 +347,15 @@ $("helpBtn").addEventListener("click", () =>
       },
       {
         title: "Other views",
-        intro: "Cards with an arrow open a view of their own.",
+        intro: "These cards open a view of their own.",
         items: [
           {
             lead: "Examples Wiki",
             text: "is the searchable list of every trigger, effect, target, modifier and datafunction, with real examples out of the game's files.",
           },
           {
-            lead: "The docs card",
-            text: "opens what the game itself documents for the file you are editing: the _*.info format docs where the game ships them, otherwise the vanilla files of that folder plus a search on the game's modding wiki.",
+            lead: "Format Docs",
+            text: "opens the game's own _*.info format docs for the file you are editing. Only CK3 ships them, so the card is CK3 only.",
           },
           { lead: "Credits", text: "names every project the toolkit builds on." },
         ],

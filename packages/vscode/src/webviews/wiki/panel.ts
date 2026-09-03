@@ -155,21 +155,17 @@ function hub(meta: GameMeta): WikiHubEntry[] {
       tip: "Search every trigger, effect and datafunction, with real examples out of the game's files.",
       target: { command: "px.showExamplesWiki" },
     },
-    // Only CK3 ships _*.info docs; elsewhere the same command opens the
-    // vanilla files of the folder plus a search on the game's modding wiki.
-    hasFormatDocs(meta.id)
-      ? {
-          label: "Format Docs",
-          icon: "fileText",
-          tip: "The game's own format docs for the file you are editing.",
-          target: { command: "px.openInfoDocs" },
-        }
-      : {
-          label: "Vanilla Examples & Wiki",
-          icon: "fileText",
-          tip: "The vanilla files of this folder, and the game's modding wiki.",
-          target: { command: "px.openInfoDocs" },
-        },
+    // Only CK3 ships _*.info docs; the other games get no docs card.
+    ...(hasFormatDocs(meta.id)
+      ? [
+          {
+            label: "Format Docs",
+            icon: "fileText" as const,
+            tip: "The game's own format docs for the file you are editing.",
+            target: { command: "px.openInfoDocs" },
+          },
+        ]
+      : []),
     {
       label: "Image Guidelines",
       icon: "image",

@@ -90,8 +90,6 @@ ${uiCss}
   .card:focus-visible { outline: 1px solid var(--px-ring); outline-offset: 1px; }
   .card .head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
   .card .head svg { width: 16px; height: 16px; flex: 0 0 auto; }
-  .card .head .ext { margin-left: auto; opacity: 0.6; }
-  .card .head .ext svg { width: 12px; height: 12px; }
   .card .tip { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
   #pending { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); padding: 12px 0; }
 </style>
