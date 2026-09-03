@@ -7,7 +7,7 @@
  * Where a node sits is app/layout.ts, which is pure and tested separately; this
  * file draws what that says and wires the gestures.
  */
-import type { DynastyCharacter, DynastySummary, EventVocabularyItem } from "@px-lsp/protocol/protocol";
+import type { DynastyCharacter, DynastySummary } from "@px-lsp/protocol/protocol";
 import { isValidScriptDate, parseScriptDate } from "@px-lsp/protocol/calendar";
 import type { AppToHost, CharacterForm, HostToApp, ModTarget, OptionSets, TreeData } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
@@ -16,7 +16,16 @@ import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
 import { layoutTree, NODE_H, NODE_W, type Layout, type LayoutCharacter } from "./layout";
 
-declare function acquireVsCodeApi(): { postMessage(msg: AppToHost): void };
+/** What the panel remembers between openings; the host keeps it for us. */
+interface AppState {
+  sideWidth?: number;
+}
+
+declare function acquireVsCodeApi(): {
+  postMessage(msg: AppToHost): void;
+  getState?(): AppState | undefined;
+  setState?(state: AppState): void;
+};
 const vscode = acquireVsCodeApi();
 const post = (msg: AppToHost): void => vscode.postMessage(msg);
 
@@ -62,6 +71,8 @@ interface State {
   draft: CharacterForm | null;
   /** The file the drafted character already lives in (an edit, not an add). */
   draftFile?: string;
+  /** A birth date worth suggesting for the draft; shown as a placeholder only. */
+  birthHint?: string;
   layout: Layout | null;
 }
 
@@ -79,7 +90,10 @@ const state: State = {
   layout: null,
 };
 
-sidePanel($side, { width: 320 });
+sidePanel($side, {
+  width: vscode.getState?.()?.sideWidth ?? 340,
+  onChange: ({ width }) => vscode.setState?.({ ...vscode.getState?.(), sideWidth: width }),
+});
 installTips();
 
 // ---------------------------------------------------------------------------
@@ -127,12 +141,25 @@ function textInput(value: string, onChange: (v: string) => void, disabled = fals
   return input;
 }
 
+/**
+ * An item a picker offers: the key that goes into the file, plus how it reads.
+ * A source that knows a human name sends `label`; everything else shows the key.
+ */
+interface PickItem {
+  value: string;
+  label?: string;
+  hint?: string;
+}
+
+const labelOf = (items: PickItem[], value: string): string =>
+  items.find((i) => i.value === value)?.label ?? value;
+
 /** A value picked from a list; a list the server could not fill stays typable. */
 function picker(
   value: string,
-  items: EventVocabularyItem[],
+  items: PickItem[],
   onPick: (v: string) => void,
-  disabled: boolean
+  disabled = false
 ): HTMLElement {
   if (items.length === 0) return textInput(value, onPick, disabled);
   const btn = document.createElement("button");
@@ -140,18 +167,18 @@ function picker(
   btn.dataset.variant = "outline";
   btn.dataset.size = "sm";
   btn.disabled = disabled;
-  const val = node("span", "val", value || "none");
+  const val = node("span", "val", labelOf(items, value) || "none");
   btn.append(val, iconEl("chevronsUpDown"));
   btn.addEventListener("click", () => {
     const list: MenuItem[] = [
       { value: "", label: "none" },
-      ...items.map((i) => ({ value: i.value, label: i.value, hint: i.hint })),
+      ...items.map((i) => ({ value: i.value, label: i.label ?? i.value, hint: i.hint })),
     ];
     menu(btn, list, {
       value,
       search: true,
       onPick: (picked) => {
-        val.textContent = picked || "none";
+        val.textContent = labelOf(items, picked) || "none";
         onPick(picked);
       },
     });
@@ -176,6 +203,12 @@ function chip(text: string, onRemove?: () => void): HTMLElement {
 
 function year(date: string | undefined): string {
   return date ? date.split(".")[0] : "";
+}
+
+/** `Y.M.D` as one comparable number; an undated entry sorts last. */
+function dateOrder(date: string | undefined): number {
+  const parsed = date ? parseScriptDate(date) : null;
+  return parsed ? parsed.y * 10000 + parsed.m * 100 + parsed.d : Number.MAX_SAFE_INTEGER;
 }
 
 /** A date the engine can read; empty is allowed (the game fills it in). */
@@ -281,6 +314,61 @@ function fit(): void {
   applyView();
 }
 
+function svgText(className: string, x: number, y: number, text: string, anchor?: string): SVGElement {
+  const element = svg("text", { class: className, x, y });
+  if (anchor) element.setAttribute("text-anchor", anchor);
+  element.textContent = text;
+  return element;
+}
+
+/** The house or dynasty a character belongs to, as it should read on the card. */
+function belonging(char: DynastyCharacter): string {
+  const tree = state.tree;
+  if (char.house) return tree?.houses.find((h) => h.id === char.house)?.name ?? char.house;
+  if (!char.dynasty) return "";
+  if (tree && char.dynasty === tree.dynasty.id) return tree.dynasty.name || tree.dynasty.id;
+  return char.dynasty;
+}
+
+/** Add child, add spouse, edit: the three things a card is used for. */
+function cardActions(char: DynastyCharacter): SVGElement {
+  const acts: Array<{ act: string; glyph: IconName; tip: string; run: () => void }> = [
+    { act: "child", glyph: "plus", tip: "Add a child of this character", run: () => startChild(char) },
+    { act: "spouse", glyph: "heart", tip: "Add a spouse for this character", run: () => startSpouse(char) },
+  ];
+  if (char.source === "mod") {
+    acts.push({ act: "edit", glyph: "pencil", tip: "Edit this character", run: () => startEdit(char) });
+  }
+  const size = 18;
+  const gap = 3;
+  const group = document.createElementNS(SVG_NS, "g");
+  group.setAttribute("class", "cacts");
+  const total = acts.length * size + (acts.length - 1) * gap;
+  group.setAttribute("transform", `translate(${NODE_W - 9 - total},${NODE_H - 9 - size})`);
+  acts.forEach((action, i) => {
+    const btn = document.createElementNS(SVG_NS, "g");
+    btn.setAttribute("class", "cact");
+    btn.setAttribute("data-act", action.act);
+    btn.setAttribute("transform", `translate(${i * (size + gap)},0)`);
+    btn.append(svg("rect", { width: size, height: size, rx: 5 }));
+    const glyph = iconEl(action.glyph);
+    for (const [key, value] of Object.entries({ width: 12, height: 12, x: 3, y: 3 })) {
+      glyph.setAttribute(key, String(value));
+    }
+    btn.append(glyph);
+    const title = document.createElementNS(SVG_NS, "title");
+    title.textContent = action.tip;
+    btn.append(title);
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      select(char.id);
+      action.run();
+    });
+    group.append(btn);
+  });
+  return group;
+}
+
 function drawTree(): void {
   const tree = state.tree;
   $scene.replaceChildren();
@@ -291,27 +379,21 @@ function drawTree(): void {
     mother: c.mother,
     spouses: c.spouses,
     birth: c.birth,
-    external: c.external,
   }));
   const layout = layoutTree(input);
   state.layout = layout;
-  const at = new Map(layout.nodes.map((n) => [n.id, n]));
   const byId = new Map(tree.characters.map((c) => [c.id, c]));
 
-  const edges = document.createElementNS(SVG_NS, "g");
+  // Every line the layout worked out, drawn as it came: corner points only.
+  const lines = document.createElementNS(SVG_NS, "g");
+  const drawn: Array<{ element: SVGElement; members: string[] }> = [];
   for (const edge of layout.edges) {
-    const from = at.get(edge.from);
-    const to = at.get(edge.to);
-    if (!from || !to) continue;
-    const path =
-      edge.kind === "spouse"
-        ? `M ${from.x} ${from.y} L ${to.x} ${to.y}`
-        : `M ${from.x} ${from.y + NODE_H / 2} C ${from.x} ${from.y + NODE_H}, ${to.x} ${to.y - NODE_H}, ${to.x} ${to.y - NODE_H / 2}`;
-    const line = svg("path", { class: "edge", d: path });
+    const line = svg("polyline", { class: "edge", points: edge.points.map((p) => p.join(",")).join(" ") });
     line.setAttribute("data-kind", edge.kind);
-    edges.append(line);
+    lines.append(line);
+    drawn.push({ element: line, members: edge.members });
   }
-  $scene.append(edges);
+  $scene.append(lines);
 
   for (const spot of layout.nodes) {
     const char = byId.get(spot.id);
@@ -320,21 +402,35 @@ function drawTree(): void {
     card.setAttribute("class", "card");
     card.setAttribute("transform", `translate(${spot.x - NODE_W / 2},${spot.y - NODE_H / 2})`);
     card.setAttribute("data-source", char.source);
+    card.setAttribute("data-id", char.id);
     if (char.external) card.setAttribute("data-external", "");
     if (state.selected === char.id) card.setAttribute("data-selected", "");
-    card.append(svg("rect", { width: NODE_W, height: NODE_H, rx: 6 }));
-    const name = svg("text", { class: "cname", x: 10, y: 20 });
-    name.textContent = `${char.female ? "♀" : "♂"} ${char.name}`;
-    const dates = svg("text", { class: "cdates", x: 10, y: 36 });
-    dates.textContent = `${year(char.birth) || "?"}–${year(char.death) || ""}  ${char.id}`;
-    card.append(name, dates);
-    const houseName = char.house ? (tree.houses.find((h) => h.id === char.house)?.name ?? char.house) : "";
-    if (houseName) {
-      const house = svg("text", { class: "chouse", x: 10, y: 49 });
-      house.textContent = houseName;
-      card.append(house);
+    card.append(svg("rect", { class: "cbg", width: NODE_W, height: NODE_H, rx: 8 }));
+    card.append(svg("rect", { class: "cring", x: -3, y: -3, width: NODE_W + 6, height: NODE_H + 6, rx: 11 }));
+    card.append(svgText("csex", 10, 20, char.female ? "♀" : "♂"));
+    card.append(svgText("cname", 24, 20, char.name));
+    card.append(svgText("cdates", 10, 36, `${year(char.birth) || "?"}–${year(char.death) || ""}`));
+    card.append(svgText("cid", NODE_W - 10, 36, char.id, "end"));
+    const tag = belonging(char);
+    if (tag) {
+      // A text badge, not a coloured edge: the tag has to read as a word.
+      const text = tag.length > 13 ? `${tag.slice(0, 12)}…` : tag;
+      card.append(
+        svg("rect", { class: "ctag", x: 9, y: NODE_H - 25, width: text.length * 5.4 + 12, height: 14, rx: 7 })
+      );
+      card.append(svgText("ctagtext", 15, NODE_H - 15, text));
     }
+    card.append(cardActions(char));
     card.addEventListener("click", () => select(char.id));
+    // Hovering a card lights the lines it is on: its marriage and its children.
+    card.addEventListener("mouseenter", () => {
+      for (const line of drawn) {
+        if (line.members.includes(char.id)) line.element.setAttribute("data-hot", "");
+      }
+    });
+    card.addEventListener("mouseleave", () => {
+      for (const line of drawn) line.element.removeAttribute("data-hot");
+    });
     $scene.append(card);
   }
   $empty.hidden = tree.characters.length > 0;
@@ -358,11 +454,20 @@ function select(id: string | null): void {
   renderInspector();
 }
 
-function characterItems(exclude?: string): MenuItem[] {
+/**
+ * The people already in the tree, as picker items. A parent picker asks for one
+ * sex and for someone born before the child, so the menu cannot offer a father
+ * who was born after his son; an undated candidate stays offered, because an
+ * undated entry is unknown, not impossible.
+ */
+function memberItems(opts: { exclude?: string; female?: boolean; bornBefore?: string } = {}): PickItem[] {
   const tree = state.tree;
   if (!tree) return [];
+  const limit = opts.bornBefore ? dateOrder(opts.bornBefore) : Number.MAX_SAFE_INTEGER;
   return tree.characters
-    .filter((c) => c.id !== exclude)
+    .filter((c) => c.id !== opts.exclude)
+    .filter((c) => opts.female === undefined || c.female === opts.female)
+    .filter((c) => !c.birth || dateOrder(c.birth) < limit)
     .map((c) => ({ value: c.id, label: `${c.name} (${c.id})`, hint: year(c.birth) }));
 }
 
@@ -519,21 +624,33 @@ function startEdit(char: DynastyCharacter): void {
     spouses: [...char.spouses],
   };
   state.draftFile = char.file;
+  state.birthHint = undefined;
   renderInspector();
 }
 
-/** A new child of `parent`, prefilled with everything the parent already says. */
+/**
+ * A new child of `parent`, prefilled with everything the parent already says.
+ * The other parent comes with it when the couple is unambiguous: one marriage
+ * means one couple, several marriages mean the modder has to say which.
+ * The birth date is only a suggestion, so it goes in the placeholder: a guessed
+ * date must not end up in a history file because nobody looked at the field.
+ */
 function startChild(parent: DynastyCharacter): void {
   const form = blankForm();
   form.house = parent.house ?? form.house;
   form.dynasty = parent.house ? undefined : (parent.dynasty ?? form.dynasty);
-  if (parent.female) form.mother = parent.id;
-  else form.father = parent.id;
+  const mates = parent.spouses.filter((id) => state.tree?.characters.some((c) => c.id === id));
+  const other = mates.length === 1 ? state.tree?.characters.find((c) => c.id === mates[0]) : undefined;
+  for (const person of [parent, other]) {
+    if (!person) continue;
+    if (person.female) form.mother = person.id;
+    else form.father = person.id;
+  }
   form.culture = parent.culture ?? form.culture;
   form.religion = parent.religion ?? form.religion;
-  form.birth = shiftYears(parent.birth, CHILD_OFFSET);
   state.draft = form;
   state.draftFile = undefined;
+  state.birthHint = shiftYears(parent.birth, CHILD_OFFSET);
   renderInspector();
 }
 
@@ -545,11 +662,11 @@ function startSpouse(partner: DynastyCharacter): void {
   form.dynasty = undefined;
   form.culture = partner.culture ?? form.culture;
   form.religion = partner.religion ?? form.religion;
-  form.birth = partner.birth;
   form.spouses = [partner.id];
   form.marriageDate = shiftYears(partner.birth, CHILD_OFFSET);
   state.draft = form;
   state.draftFile = undefined;
+  state.birthHint = partner.birth;
   renderInspector();
 }
 
@@ -559,12 +676,10 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   if (state.setupProblem) root.append(node("div", "note", state.setupProblem));
 
   const body = node("div", "sec");
-  body.append(
-    field(
-      "Name",
-      textInput(form.name, (v) => (form.name = v))
-    )
-  );
+  const name = textInput(form.name, (v) => (form.name = v));
+  // An example rather than a description: the name of someone already here.
+  name.placeholder = tree?.characters[0]?.name || tree?.dynasty.name || tree?.dynasty.id || "";
+  body.append(field("Name", name));
 
   const sex = document.createElement("label");
   sex.className = "px-switch";
@@ -576,28 +691,20 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   body.append(field("Sex", sex));
 
   if (tree) {
-    const houseItems: EventVocabularyItem[] = tree.houses.map((h) => ({ value: h.id, hint: h.name }));
-    if (houseItems.length > 0) {
-      body.append(
-        field(
-          "House",
-          picker(
-            form.house ?? "",
-            houseItems,
-            (v) => {
-              form.house = v || undefined;
-              if (v) form.dynasty = undefined;
-              else form.dynasty = tree.dynasty.id;
-            },
-            false
-          )
-        )
-      );
-    }
+    // A character carries a house OR a dynasty, so one menu offers both and
+    // picking one clears the other.
+    const belongItems: PickItem[] = [
+      { value: `d:${tree.dynasty.id}`, label: tree.dynasty.name || tree.dynasty.id, hint: "dynasty" },
+      ...tree.houses.map((h) => ({ value: `h:${h.id}`, label: h.name || h.id, hint: "house" })),
+    ];
+    const belongValue = form.house ? `h:${form.house}` : form.dynasty ? `d:${form.dynasty}` : "";
     body.append(
       field(
-        "Dynasty",
-        textInput(form.dynasty ?? "", (v) => (form.dynasty = v.trim() || undefined), Boolean(form.house))
+        "House or dynasty",
+        picker(belongValue, belongItems, (v) => {
+          form.house = v.startsWith("h:") ? v.slice(2) : undefined;
+          form.dynasty = v.startsWith("d:") ? v.slice(2) : undefined;
+        })
       )
     );
   }
@@ -605,23 +712,24 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   body.append(
     field(
       "Culture",
-      picker(form.culture ?? "", state.options.culture, (v) => (form.culture = v || undefined), false)
+      picker(form.culture ?? "", state.options.culture, (v) => (form.culture = v || undefined))
     )
   );
   body.append(
     field(
       "Faith",
-      picker(form.religion ?? "", state.options.religion, (v) => (form.religion = v || undefined), false)
+      picker(form.religion ?? "", state.options.religion, (v) => (form.religion = v || undefined))
     )
   );
 
   const dateField = (
     label: string,
     get: () => string | undefined,
-    set: (v: string | undefined) => void
+    set: (v: string | undefined) => void,
+    suggestion?: string
   ): void => {
     const input = textInput(get() ?? "", () => undefined);
-    input.placeholder = "1066.9.28";
+    input.placeholder = suggestion || "867.1.1";
     input.addEventListener("input", () => {
       const problem = dateProblem(input.value);
       input.setAttribute("aria-invalid", problem ? "true" : "false");
@@ -633,7 +741,8 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   dateField(
     "Born",
     () => form.birth,
-    (v) => (form.birth = v)
+    (v) => (form.birth = v),
+    state.birthHint
   );
   dateField(
     "Died",
@@ -643,27 +752,27 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
 
   const parentField = (
     label: string,
+    female: boolean,
     get: () => string | undefined,
     set: (v: string | undefined) => void
   ): void => {
-    const items: EventVocabularyItem[] = characterItems(form.id).map((i) => ({
-      value: i.value,
-      hint: i.label,
-    }));
+    const items = memberItems({ exclude: form.id, female, bornBefore: form.birth });
     body.append(
       field(
         label,
-        picker(get() ?? "", items, (v) => set(v || undefined), false)
+        picker(get() ?? "", items, (v) => set(v || undefined))
       )
     );
   };
   parentField(
     "Father",
+    false,
     () => form.father,
     (v) => (form.father = v)
   );
   parentField(
     "Mother",
+    true,
     () => form.mother,
     (v) => (form.mother = v)
   );
@@ -681,7 +790,7 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     }
     const add = button("Add", "plus", "ghost");
     add.addEventListener("click", () => {
-      const items = state.options.trait
+      const items: MenuItem[] = state.options.trait
         .filter((t) => !form.traits.includes(t.value))
         .map((t) => ({ value: t.value, label: t.value, hint: t.hint }));
       if (items.length === 0) {
@@ -715,7 +824,9 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     }
     const add = button("Add", "plus", "ghost");
     add.addEventListener("click", () => {
-      const items = characterItems(form.id).filter((i) => !form.spouses.includes(i.value));
+      const items: MenuItem[] = memberItems({ exclude: form.id })
+        .filter((i) => !form.spouses.includes(i.value))
+        .map((i) => ({ value: i.value, label: i.label ?? i.value, hint: i.hint }));
       if (items.length === 0) {
         toast("There is nobody else in this tree to marry.");
         return;
@@ -734,7 +845,7 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   body.append(field("Spouses", spouses));
   if (form.spouses.length > 0) {
     const married = textInput(form.marriageDate ?? "", (v) => (form.marriageDate = v.trim() || undefined));
-    married.placeholder = "1066.9.28";
+    married.placeholder = "867.1.1";
     body.append(field("Married", married));
   }
   root.append(body);
@@ -874,6 +985,7 @@ el("newHouse").addEventListener("click", () => void newHouse());
 el("newCharacter").addEventListener("click", () => {
   state.draft = blankForm();
   state.draftFile = undefined;
+  state.birthHint = undefined;
   renderInspector();
 });
 

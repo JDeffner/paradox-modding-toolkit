@@ -46,19 +46,31 @@ ${uiCss}
   #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
   #canvas[data-panning] { cursor: grabbing; }
   #canvas text { user-select: none; }
-  .edge { fill: none; stroke: var(--px-border); stroke-width: 1.5; }
-  .edge[data-kind="spouse"] { stroke-dasharray: 3 3; }
+  /* Child links are thin, marriage bars are heavier: the couple reads first. */
+  .edge { fill: none; stroke: var(--px-border); stroke-width: 1.4; stroke-linejoin: round; }
+  .edge[data-kind="spouse"] { stroke: var(--px-muted-fg); stroke-width: 2.6; }
+  .edge[data-hot] { stroke: var(--px-primary); }
   .card { cursor: pointer; }
-  .card > rect {
-    fill: var(--px-muted); stroke: var(--px-border); stroke-width: 1; rx: 6;
-  }
-  .card[data-source="mod"] > rect { stroke: var(--px-primary); stroke-width: 2; }
-  .card[data-external] > rect { fill: transparent; stroke-dasharray: 4 3; }
-  .card[data-selected] > rect { stroke: var(--px-primary); stroke-width: 2.5; }
+  .card .cbg { fill: var(--px-muted); stroke: var(--px-border); stroke-width: 1; }
+  .card[data-source="mod"] .cbg { fill: var(--px-muted-strong); }
+  .card[data-external] .cbg { fill: transparent; stroke-dasharray: 4 3; }
+  .card:hover .cbg { stroke: var(--px-muted-fg); }
+  .card .cring { fill: none; stroke: var(--px-ring); stroke-width: 2; opacity: 0; }
+  .card[data-selected] .cring { opacity: 1; }
   .card .cname { font-size: 12px; font-weight: 600; fill: var(--px-fg); }
   .card[data-external] .cname { fill: var(--px-muted-fg); }
-  .card .cdates, .card .chouse { font-size: 10px; fill: var(--px-muted-fg); }
-  .card .csex { font-size: 10px; }
+  .card .csex { font-size: 11px; fill: var(--px-muted-fg); }
+  .card .cdates, .card .cid { font-size: 10px; fill: var(--px-muted-fg); }
+  .card .cid { font-family: var(--px-font-mono); }
+  .card .ctag { fill: var(--px-bg); stroke: var(--px-border); stroke-width: 1; }
+  .card .ctagtext { font-size: 9.5px; fill: var(--px-muted-fg); }
+  /* Contextual actions: only on the card the pointer is on. */
+  .cacts { opacity: 0; }
+  .card:hover .cacts, .card[data-selected] .cacts { opacity: 1; }
+  .cact rect { fill: var(--px-bg); stroke: var(--px-border); stroke-width: 1; }
+  .cact .px-icon { color: var(--px-muted-fg); }
+  .cact:hover rect { fill: var(--px-primary); stroke: var(--px-primary); }
+  .cact:hover .px-icon { color: var(--px-primary-fg); }
   #empty {
     position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; color: var(--px-muted-fg); padding: 24px;
