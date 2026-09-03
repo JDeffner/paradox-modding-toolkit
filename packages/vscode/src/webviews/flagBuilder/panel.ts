@@ -21,6 +21,7 @@ import {
   FLAG_EDITOR_CREDIT,
   THUMB_DIM,
   type AppToHost,
+  type FlagTarget,
   type HostToApp,
   type TextureKind,
   type UiState,
@@ -36,6 +37,8 @@ export interface FlagBuilderOptions {
   /** Mods the flag can be saved into (the workspace's own), first = default. */
   mods: { label: string; path: string }[];
   gameMissing: boolean;
+  /** What the arms are for. Absent = the panel opens on a fresh flag, as before. */
+  target?: FlagTarget;
 }
 
 export class FlagBuilderPanel {
@@ -115,9 +118,9 @@ export class FlagBuilderPanel {
   }
 
   private postInit(): void {
-    const { meta, roots, gameMissing, mods } = this.options;
+    const { meta, roots, gameMissing, mods, target } = this.options;
     const db = buildFlagDatabase(meta.name, roots, meta.stageRoots, gameMissing);
-    this.post({ type: "init", db, mods, ui: this.state.get<UiState>(UI_KEY) });
+    this.post({ type: "init", db, mods, ui: this.state.get<UiState>(UI_KEY), target });
   }
 
   private async onMessage(message: AppToHost): Promise<void> {

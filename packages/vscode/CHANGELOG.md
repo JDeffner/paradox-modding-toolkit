@@ -18,6 +18,21 @@
   would replace a whole game file, apply the server's edits as one undo
   step, write the loc through the normal loc writer. The panels themselves
   come next; the rows open nothing yet.
+- **The Flag Builder opens for Crusader Kings III.** `Paradox: Open Flag
+  Builder` and `Paradox: New Coat of Arms…` now work in a CK3 workspace, which
+  is where the dynasty, house, landed-title and character targets belong.
+  Measured against 1.19.0.6: the parser reads all 2992 vanilla coat-of-arms
+  definitions with no parse errors, and every one of the 7800 texture
+  references and 15327 colors resolves. Instance `depth`, which only CK3
+  writes (387 instances in 234 flags), is not read, so a preview of one of
+  those flags can stack its emblems in file order instead.
+- **New Coat of Arms…** A Create row and a `Paradox: New Coat of Arms…`
+  command ask what the arms are for (a dynasty, a house, a landed title, a
+  character, or a key you type), list the mod's own definitions of that kind,
+  and open the Flag Builder on the key the game reads the arms under. A
+  character has no coa key of their own, so the pick resolves to their house
+  and falls back to their dynasty. `px.openFlagBuilder` now takes an optional
+  `{ name, label }` argument, so any panel can hand the builder its target.
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar

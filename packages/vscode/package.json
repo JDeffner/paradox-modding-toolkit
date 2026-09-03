@@ -409,6 +409,11 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "px.createCoatOfArms",
+        "category": "Paradox",
+        "title": "New Coat of Arms…"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report",
@@ -1090,6 +1095,10 @@
         {
           "command": "px.createTrait",
           "when": "px.isCk3Workspace && px.creator.trait"
+        },
+        {
+          "command": "px.createCoatOfArms",
+          "when": "px.isCk3Workspace && px.flagBuilderSupported"
         },
         {
           "command": "px.modReport",
