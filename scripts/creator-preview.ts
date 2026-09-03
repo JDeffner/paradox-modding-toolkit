@@ -51,6 +51,7 @@ import {
 } from "../packages/vscode/src/webviews/legacyCreator/perkIndex";
 import { buildCatalog } from "../packages/vscode/src/webviews/cultureCreator/catalog";
 import { buildTraditionCatalog } from "../packages/vscode/src/webviews/traditionCreator/catalog";
+import { costLocKey } from "../packages/vscode/src/webviews/traditionCreator/messages";
 import { parseNamedColors } from "../packages/server/src/coa/coaParse";
 import { parseScript } from "../packages/server/src/parser";
 import { plainLoc } from "../packages/vscode/src/webviews/traitCreator/app/preview";
@@ -390,9 +391,13 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
     handle: async (m) => {
       switch (m.type) {
         case "ready": {
+          const catalog = buildTraditionCatalog(roots);
           const [f, formats] = await Promise.all([
             form("culture_tradition"),
-            req<ModifierFormatsResult | null>("paradox/modifierFormats", { modRoot: modPath }),
+            req<ModifierFormatsResult | null>("paradox/modifierFormats", {
+              modRoot: modPath,
+              lines: catalog.costKeys.map(costLocKey),
+            }),
           ]);
           return [
             {
@@ -401,7 +406,7 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
                 form: f,
                 locLanguage: "english",
                 prefix: "cult",
-                catalog: buildTraditionCatalog(roots),
+                catalog,
               },
             },
             // The host resolves where a save lands; here the default name is
@@ -410,7 +415,7 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
               type: "target",
               target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_culture_traditions.txt` },
             },
-            { type: "modifierFormats", formats: formats?.formats ?? null },
+            { type: "modifierFormats", formats: formats?.formats ?? null, lines: formats?.lines ?? {} },
           ];
         }
         case "open":
@@ -419,7 +424,9 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return f ? [{ type: "form", form: f }] : [];
         }
         case "images":
-          return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
+          return [
+            { type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0), maxDim: m.maxDim },
+          ];
         case "loc":
           return [{ type: "loc", values: await lookup(m.keys as string[]) }];
         default:

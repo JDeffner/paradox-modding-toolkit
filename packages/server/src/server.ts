@@ -1645,8 +1645,8 @@ connection.onRequest(definitionEditRequest, (params: DefinitionEditParams | null
 // How the game itself prints a modifier: the profile's format folder, the loc
 // index and the game's own texticon blocks. A profile that names no formats
 // source answers null instead of a made-up label.
-connection.onRequest(modifierFormatsRequest, (_params: ModifierFormatsParams | null) =>
-  computeModifierFormats(data, activeProfile().modifierFormats, settings.gamePath)
+connection.onRequest(modifierFormatsRequest, (params: ModifierFormatsParams | null) =>
+  computeModifierFormats(data, activeProfile().modifierFormats, settings.gamePath, params?.lines)
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));

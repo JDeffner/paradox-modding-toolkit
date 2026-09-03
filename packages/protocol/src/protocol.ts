@@ -1941,7 +1941,15 @@ export interface DefinitionEditResult {
  * modifier token the server knows rather than only the formatted ones.
  */
 export const modifierFormatsRequest = "paradox/modifierFormats";
-export type ModifierFormatsParams = ModScopedParams;
+export interface ModifierFormatsParams extends ModScopedParams {
+  /**
+   * Loc keys to render as parts too, through the same texticon chain the
+   * prefixes take. A client that prints a line of the game's own UI (a cost
+   * line such as `"[prestige_i] $VALUE|0$"`) asks for the key and gets its
+   * icon and text back; a key the loc index cannot resolve is absent.
+   */
+  lines?: string[];
+}
 
 /**
  * One piece of a prefix or suffix: a word, or a texticon. `[gold_i]` in a loc
@@ -1978,6 +1986,8 @@ export interface ModifierFormat {
 export interface ModifierFormatsResult {
   /** Modifier name -> its format. Every modifier token the server knows. */
   formats: Record<string, ModifierFormat>;
+  /** Loc key -> its parts, for each `lines` entry the loc index resolved. */
+  lines?: Record<string, FormatPart[]>;
 }
 
 /**

@@ -127,6 +127,16 @@ const FORMATS = {
   },
 };
 
+/**
+ * The game's own cost line for prestige, as `paradox/modifierFormats` answers
+ * `PRESTIGE_COST` = `"[prestige_i] $VALUE|0$"` (core_l_english.yml) through
+ * `game_concept_prestige_i` = `"@prestige_icon!"` and texticons.gui.
+ */
+const PRESTIGE_ICON = "gfx/interface/icons/modifiers/icon_prestige_01.dds";
+const COST_LINES = {
+  PRESTIGE_COST: [{ icon: { texture: PRESTIGE_ICON } }, { text: " $VALUE|0$" }],
+};
+
 interface Booted {
   window: Window & typeof globalThis;
   document: Document;
@@ -304,15 +314,39 @@ describe("every list is a picker over what the game has", () => {
     const app = boot();
     const captions = [...app.document.querySelectorAll(".layerrow > .px-label")].map((l) => l.textContent);
     expect(captions).toEqual(["0-background", "1-pattern", "2-support", "3-stroke", "4-items"]);
+    // An empty layer keeps its slot and its picker names the layer, so the row
+    // reads as empty rather than as a control that lost its label.
+    expect(app.document.querySelectorAll(".layerrow > .layerthumb[data-empty]")).toHaveLength(5);
+    expect(layerTrigger(app, "0-background").textContent).toBe("No background");
+    expect(layerTrigger(app, "0-background").hasAttribute("data-placeholder")).toBe(true);
     // A subfolder is offered as itself: that is what the game randomizes over.
     layerTrigger(app, "0-background").click();
     expect(offered(app)).toContain("martial | a folder the game picks from");
-    // The thumbnails are asked for lazily, when the picker opens.
-    expect(
-      app.posted.some(
-        (m) => m.type === "images" && m.keys.includes(`${ICONS}/0-background/martial/martial1.dds`)
-      )
-    ).toBe(true);
+    // The thumbnails are asked for lazily, when the picker opens, capped.
+    const martial = `${ICONS}/0-background/martial/martial1.dds`;
+    expect(app.posted.some((m) => m.type === "images" && m.maxDim === 256 && m.keys.includes(martial))).toBe(
+      true
+    );
+  });
+
+  it("draws the picked layers full size beside the rows, and only those", () => {
+    const app = boot();
+    const martial = `${ICONS}/0-background/martial/martial1.dds`;
+    pickFrom(app, layerTrigger(app, "0-background"), "martial");
+    // The composed tile sits in the Icon section, at the game's own 220x120.
+    const live = [...app.document.querySelectorAll<HTMLImageElement>(".iconlive .px-tradicon > img")];
+    expect(live.map((img) => img.dataset.rel)).toEqual([martial]);
+    // Full-size decodes are asked for the chosen file alone, never a folder.
+    const full = app.posted.filter((m) => m.type === "images" && m.maxDim === 0);
+    expect(full.flatMap((m) => (m.type === "images" ? m.keys : []))).toEqual([martial]);
+    // A full-size answer paints the tile; the row's slot keeps its thumbnail.
+    app.send({ type: "images", urls: { [martial]: "https://host/full.png" }, maxDim: 0 });
+    expect(live[0].src).toBe("https://host/full.png");
+    const slot = app.document.querySelector<HTMLImageElement>(".layerrow > img.layerthumb")!;
+    expect(slot.dataset.rel).toBe(martial);
+    expect(slot.hidden).toBe(true);
+    app.send({ type: "images", urls: { [martial]: "https://host/thumb.png" }, maxDim: 256 });
+    expect(slot.src).toBe("https://host/thumb.png");
   });
 
   it("names a modifier the way the game prints it, with its key as the hint", () => {
@@ -330,6 +364,31 @@ describe("every list is a picker over what the game has", () => {
     const app = boot();
     const captions = [...app.document.querySelectorAll(".costrow > .px-label")].map((l) => l.textContent);
     expect(captions).toEqual(["gold", "prestige", "piety"]);
+  });
+
+  it("prints a cost the way the game's own cost line does: the icon, then the whole number", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS, lines: COST_LINES });
+    setValue(app, app.document.querySelector('input[data-currency="prestige"]')!, "300");
+    // The texticon is asked for as a thumbnail and drawn where it arrives: in
+    // the cost row's caption and in the tile's cost line.
+    expect(app.posted.some((m) => m.type === "images" && m.keys.includes(PRESTIGE_ICON))).toBe(true);
+    app.send({ type: "images", urls: { [PRESTIGE_ICON]: "https://host/prestige.png" }, maxDim: 256 });
+    const line = app.document.querySelector("#tip .tile-cost-line")!;
+    expect([...line.children].map((c) => c.className)).toEqual(["px-texticon", "tile-cost-value"]);
+    expect(line.querySelector(".tile-cost-value")!.textContent).toBe("300");
+    expect(line.textContent).toBe(" 300");
+    const caption = [...app.document.querySelectorAll(".costrow > .px-label")][1];
+    expect(caption.querySelector(".px-texticon")).not.toBeNull();
+    // A script value's name is the game's to resolve: printed as written.
+    setValue(app, app.document.querySelector('input[data-currency="prestige"]')!, "tradition_base_cost");
+    expect(app.document.querySelector("#tip .tile-cost-value")!.textContent).toBe("tradition_base_cost");
+    // A currency whose icon the host could not resolve (the game picks the
+    // piety icon by faith at runtime) reads as number and word, never a guess.
+    setValue(app, app.document.querySelector('input[data-currency="piety"]')!, "150");
+    const piety = [...app.document.querySelectorAll("#tip .tile-cost-line")][1];
+    expect(piety.querySelector(".px-texticon")).toBeNull();
+    expect(piety.textContent).toBe("150piety");
   });
 });
 

@@ -8,7 +8,7 @@
  * `init.catalog`, read off the game and mod folders by the host, and the
  * pictures come back as webview URLs on request.
  */
-import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
+import type { DefinitionForm, FormatPart, ModifierFormat } from "@px-lsp/protocol/protocol";
 import type {
   CreatorChangeTargetRequest,
   CreatorCopyRequest,
@@ -19,6 +19,18 @@ import type {
 
 /** How the save writes: the app decides, the host obeys. */
 export type SaveMode = "create" | "edit" | "duplicate" | "override";
+
+/**
+ * The loc key the game prints one currency's cost with. Measured in
+ * game/localization/english/core_l_english.yml for all three currencies
+ * `_cultural_traits.info` names: `GOLD_COST:0 "[gold_i] $VALUE|0$"`,
+ * `PRESTIGE_COST:0 "[prestige_i] $VALUE|0$"`, `PIETY_COST:0 "[piety_i]
+ * $VALUE|0$"`. The host asks `paradox/modifierFormats` for these as `lines`, and
+ * the tile preview prints the cost from the parts that come back.
+ */
+export function costLocKey(currency: string): string {
+  return `${currency.toUpperCase()}_COST`;
+}
 
 /** One entry a layer folder offers: what the block writes, and its picture. */
 export interface TraditionLayerChoice {
@@ -101,7 +113,12 @@ export type HostToApp =
    * once per panel. `null` when the profile names no formats source: the
    * preview then title-cases the names instead of showing nothing.
    */
-  | { type: "modifierFormats"; formats: Record<string, ModifierFormat> | null }
+  | {
+      type: "modifierFormats";
+      formats: Record<string, ModifierFormat> | null;
+      /** `costLocKey(currency)` -> the game's cost line as parts, for the currencies that resolved. */
+      lines: Record<string, FormatPart[]>;
+    }
   /** Pictures for the game-relative texture paths the app asked for. */
   | CreatorImagesReply
   /** Loc values for the keys asked for; a key nothing resolves is absent. */
