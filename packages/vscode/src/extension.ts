@@ -52,6 +52,8 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
+import { coaTargetArg } from "./webviews/flagBuilder/target";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -349,6 +351,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return false;
   };
+  // Same gate, same wording, for every door into the Flag Builder: opening it
+  // and creating a coat of arms are the same feature.
+  const requireFlagBuilder = (): boolean => {
+    if (flagBuilderSupported(cfg.gameId)) return true;
+    void vscode.window.showInformationMessage(
+      `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${metaFor(cfg.gameId).name}.`
+    );
+    return false;
+  };
+
   context.subscriptions.push(tiger);
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => tiger.onDidSaveDocument(doc)));
 
@@ -956,14 +968,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         metaFor(cfg.gameId)
       );
     }),
-    vscode.commands.registerCommand("px.openFlagBuilder", () => {
+    // `arg` is the optional target ({ name, label }): the Dynasty Tree and
+    // "New Coat of Arms…" open the panel straight on the arms they mean.
+    vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
       const meta = metaFor(cfg.gameId);
-      if (!flagBuilderSupported(cfg.gameId)) {
-        void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${meta.name}.`
-        );
-        return;
-      }
+      if (!requireFlagBuilder()) return;
       // Game first, then dependency mods, then the workspace's own mods: the
       // load order, so a mod's flag of the same name wins like in the game.
       const roots: FlagRoot[] = [];
@@ -979,7 +988,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         roots,
         mods,
         gameMissing: cfg.gamePath === null,
+        target: coaTargetArg(arg),
       });
+    }),
+    vscode.commands.registerCommand("px.createCoatOfArms", () => {
+      if (!requireFlagBuilder()) return;
+      void createCoatOfArmsCommand(lc, views.focusRoot());
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),

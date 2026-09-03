@@ -90,6 +90,18 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "plus",
           tip: "Scaffold an event, decision or trait into the right folder.",
         },
+        // Same glyph as the View group's Flag Builder row: one tool, one
+        // icon. This row is the creation door, that one the blank canvas.
+        ...(meta.flagBuilder
+          ? ([
+              {
+                label: "New Coat of Arms…",
+                command: "px.createCoatOfArms",
+                icon: "flag",
+                tip: "Design arms for a dynasty, house or title and save them into the mod.",
+              },
+            ] satisfies ActionItem[])
+          : []),
       ],
     },
     {

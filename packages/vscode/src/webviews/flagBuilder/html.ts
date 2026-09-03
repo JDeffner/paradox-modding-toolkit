@@ -30,6 +30,9 @@ ${uiCss}
   }
   #toolbar .px-grow { flex: 1 1 auto; }
   #name { width: 170px; font-weight: 600; }
+  /* What the arms are for, when the panel was opened on a target. */
+  #target { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  #target:empty { display: none; }
   #toolbar .px-separator { height: 20px; align-self: center; }
   #main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
   #stage {
@@ -94,6 +97,7 @@ ${uiCss}
   <div id="toolbar">
     <input id="name" class="px-input" placeholder="flag_name" spellcheck="false" data-tip="Flag name (the key in the coa file)" />
     <button id="resetName" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reset the name to the opened flag's name" hidden>${icon("rotate")}</button>
+    <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
     <div class="px-row" style="gap:2px">
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="New flag">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open a flag from the game or a mod">${icon("folderOpen")}</button>

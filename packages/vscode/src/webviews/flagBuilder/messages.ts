@@ -43,8 +43,19 @@ export interface ModTarget {
   path: string;
 }
 
+/**
+ * What the arms the panel opens on are for. `name` is the key the game reads
+ * them under; `label` ("Karling (dynasty)") is what the modder called it. It
+ * rides on `init` so that re-targeting an already open panel is the same one
+ * message as opening a new one.
+ */
+export interface FlagTarget {
+  name: string;
+  label?: string;
+}
+
 export type HostToApp =
-  | { type: "init"; db: FlagDatabase; mods: ModTarget[]; ui?: UiState }
+  | { type: "init"; db: FlagDatabase; mods: ModTarget[]; ui?: UiState; target?: FlagTarget }
   /** The clipboard held a flag definition; the app asks before replacing its own. */
   | { type: "pasted"; flag: CoaFlag }
   | { type: "clipboard"; text: string }

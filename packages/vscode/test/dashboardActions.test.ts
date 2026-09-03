@@ -63,6 +63,17 @@ describe("visibleActionGroups", () => {
     ]);
   });
 
+  it("offers the coat-of-arms creator right after New Content, per game", () => {
+    // Both Flag Builder doors are gated on the same meta fact: the creator in
+    // Create, the blank canvas in View.
+    const ids = actionGroups(eu5Meta, 0)
+      .find((g) => g.label === "Create")!
+      .items.map((it) => it.command);
+    expect(ids.indexOf("px.createCoatOfArms")).toBe(ids.indexOf("px.newContent") + 1);
+    expect(commands(actionGroups(ck3Meta, 0))).not.toContain("px.createCoatOfArms");
+    expect(commands(actionGroups(ck3Meta, 0))).not.toContain("px.openFlagBuilder");
+  });
+
   it("ignores ids that match no row", () => {
     const all = visibleActionGroups(ck3Meta, 0, []);
     const withJunk = visibleActionGroups(ck3Meta, 0, ["px.notARow", ""]);
@@ -70,7 +81,7 @@ describe("visibleActionGroups", () => {
   });
 
   it("keeps working for a game without a tiger", () => {
-    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod"]);
+    const groups = visibleActionGroups(eu5Meta, 0, ["px.newContent", "px.createMod", "px.createCoatOfArms"]);
     const ids = commands(groups);
     expect(ids).not.toContain("px.newContent");
     expect(ids).not.toContain("px.tigerCreateBaseline");

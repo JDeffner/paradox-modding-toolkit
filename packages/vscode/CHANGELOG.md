@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **New Coat of Arms…** A Create row and a `Paradox: New Coat of Arms…`
+  command ask what the arms are for (a dynasty, a house, a landed title, a
+  character, or a key you type), list the mod's own definitions of that kind,
+  and open the Flag Builder on the key the game reads the arms under. A
+  character has no coa key of their own, so the pick resolves to their house
+  and falls back to their dynasty. `px.openFlagBuilder` now takes an optional
+  `{ name, label }` argument, so any panel can hand the builder its target.
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar

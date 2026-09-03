@@ -17,7 +17,16 @@ import {
   type CoaLayer,
   type Rgb,
 } from "@px-lsp/server/coa/coa";
-import type { AppToHost, FlagDatabase, HostToApp, ModTarget, TextureKind, UiState } from "../messages";
+import type {
+  AppToHost,
+  FlagDatabase,
+  FlagTarget,
+  HostToApp,
+  ModTarget,
+  TextureKind,
+  UiState,
+} from "../messages";
+import { targetAction } from "../target";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
@@ -1091,6 +1100,9 @@ function updateOrigin(): void {
 function setFlag(next: CoaFlag): void {
   flag = next;
   $<HTMLInputElement>("name").value = flag.name;
+  // Whatever the panel was opened for, this is a different flag now.
+  // applyTarget writes the label back when a target is what replaced it.
+  $("target").textContent = "";
   selected = -1;
   picked = null;
   resetHistory();
@@ -1116,6 +1128,27 @@ function newFlag(): void {
       : [],
     layers: [],
   });
+  refresh(false);
+}
+
+/**
+ * The panel was opened on a target ("New Coat of Arms…", or the Dynasty Tree):
+ * edit the definition that key already has, or start a fresh flag under it.
+ * The name stays editable either way; the label only says what the arms are
+ * for, so the modder does not have to remember why this key.
+ */
+async function applyTarget(target: FlagTarget): Promise<void> {
+  if (!db) return;
+  if (!(await confirmDiscard(`Opening ${target.name}`))) return;
+  const action = targetAction(target.name, db.flags);
+  if (action.kind === "open") {
+    loadFlag(action.entry);
+  } else {
+    newFlag();
+    flag.name = action.name;
+    $<HTMLInputElement>("name").value = action.name;
+  }
+  $("target").textContent = target.label ?? "";
   refresh(false);
 }
 
@@ -1597,6 +1630,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
         newFlag();
       } else refresh(false);
       updateModPicker();
+      if (m.target) void applyTarget(m.target);
       return;
     }
     case "textures":
