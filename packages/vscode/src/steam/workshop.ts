@@ -289,6 +289,11 @@ export function workshopUrl(itemId: string): string {
   return `https://steamcommunity.com/sharedfiles/filedetails/?id=${itemId}`;
 }
 
+/** The same page inside the Steam client (Steam browser protocol). */
+export function workshopSteamUrl(itemId: string): string {
+  return `steam://url/CommunityFilePage/${itemId}`;
+}
+
 export function friendlyError(e: unknown, meta: GameMeta): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("Steam init failed")) {

@@ -51,6 +51,7 @@ import {
   runBridge,
   translationSubmits,
   workshopDirFor,
+  workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
 import { gameDocsSubdir } from "../../config";
@@ -189,10 +190,36 @@ export class WorkshopPanel {
     else void vscode.window.showInformationMessage(full);
   }
 
-  /** notify() for a caught error: the friendly text out, the raw one logged. */
+  /**
+   * A caught error as a dialog: a toast folds long advice behind a chevron,
+   * and the Steam advice is the part that matters. The raw error is logged.
+   */
   private notifyError(friendly: string, e: unknown): void {
     this.options.log(`workshop: ${friendly} [raw: ${e instanceof Error ? e.message : String(e)}]`);
-    void vscode.window.showErrorMessage(`Paradox Modding Toolkit: ${friendly}`);
+    const cut = friendly.indexOf(" - ");
+    const title = cut > 0 ? friendly.slice(0, cut) : "Workshop error";
+    const detail = cut > 0 ? friendly.slice(cut + 3) : friendly;
+    void vscode.window.showErrorMessage(title, { modal: true, detail });
+  }
+
+  /** The upload result as a dialog with the item page one click away, in the Steam client first. */
+  private notifyUploaded(itemId: string, submits: number): void {
+    void vscode.window
+      .showInformationMessage(
+        "Upload done.",
+        {
+          modal: true,
+          detail: `Item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
+        },
+        "Open in Steam",
+        "Open in Browser"
+      )
+      .then((choice) => {
+        if (choice === "Open in Steam")
+          void vscode.env.openExternal(vscode.Uri.parse(workshopSteamUrl(itemId)));
+        else if (choice === "Open in Browser")
+          void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(itemId)));
+      });
   }
 
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
@@ -806,7 +833,7 @@ export class WorkshopPanel {
             if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
           });
       }
-      this.notify("Upload done.");
+      this.notifyUploaded(itemId, submits.length);
       await this.postInfo();
     } catch (e) {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);

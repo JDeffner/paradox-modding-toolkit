@@ -38,6 +38,9 @@
   `descriptor.mod` and `.metadata/` always do. A one-time message says why the
   exclusions only hold for toolkit uploads: the Paradox launcher ships the
   whole folder.
+- **Workshop errors and the upload result open as dialogs**, so the full Steam
+  advice is readable instead of folded into a toast. The upload dialog links
+  the item page, in the Steam client (`steam://`) or the browser.
 - **Move Workshop Listing** (command palette) moves the listing folder between
   the two layouts, `<project>/workshop` and `<mod>/.px-toolkit/workshop`, in
   either direction. A mod that only has `workshop.json` drafts gets its
