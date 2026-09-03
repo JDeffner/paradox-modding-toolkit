@@ -135,6 +135,19 @@ describe("definitionEdit upsertBlock", () => {
     expect(out.applied).toBe(crlf + "\r\npx_new = {\r\n\tmartial = 1\r\n}\r\n");
   });
 
+  it("appends several blocks as ONE edit, in the order they were asked for", () => {
+    // The Legacy Creator sends one op per new perk. Zero-width edits at the
+    // same offset have no order of their own, so they are grown into one.
+    const perks = ["px_perk_1", "px_perk_2", "px_perk_3"];
+    const out = run(
+      FILE,
+      perks.map((name) => ({ op: "upsertBlock" as const, name, text: `${name} = {\n\tmartial = 1\n}` }))
+    );
+    expect(out.ops).toEqual([{}, {}, {}]);
+    expect(out.edits).toHaveLength(1);
+    expect(out.applied).toBe(FILE + perks.map((name) => `\n${name} = {\n\tmartial = 1\n}\n`).join(""));
+  });
+
   it("refuses an upsert with no name or no block text", () => {
     const out = run(FILE, [
       { op: "upsertBlock", name: "", text: "x = {}" },

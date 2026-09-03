@@ -6,11 +6,11 @@
  * awkward case on purpose: an unquoted name, a birth block that also carries an
  * effect, a nickname block, and a marriage to a woman of another dynasty.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { clearDynastyModel, computeDynastyTree } from "../src/overview/dynastyTree";
+import { clearDynastyModel, computeDynastyTree, hasDynastyModel } from "../src/overview/dynastyTree";
 import { ServerData } from "../src/serverData";
 import type { Definition } from "@px-lsp/protocol/types";
 
@@ -213,5 +213,25 @@ describe("computeDynastyTree", () => {
     const result = computeDynastyTree(data, { dynasty: "9999999" });
     expect(result.dynasty).toBeUndefined();
     expect(result.supported).toBe(true);
+  });
+
+  // The model is 62 MB on a vanilla install and the panel is not open forever.
+  it("releases the character model when nothing has asked for it in a while", () => {
+    vi.useFakeTimers();
+    try {
+      computeDynastyTree(data, {});
+      expect(hasDynastyModel()).toBe(true);
+      // A later request pushes the release back.
+      vi.advanceTimersByTime(9 * 60 * 1000);
+      computeDynastyTree(data, {});
+      vi.advanceTimersByTime(9 * 60 * 1000);
+      expect(hasDynastyModel()).toBe(true);
+      vi.advanceTimersByTime(60 * 1000 + 1);
+      expect(hasDynastyModel()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+    // Rebuilt on the next request, with the same answer as before.
+    expect(computeDynastyTree(data, {}).dynasties.length).toBeGreaterThan(0);
   });
 });

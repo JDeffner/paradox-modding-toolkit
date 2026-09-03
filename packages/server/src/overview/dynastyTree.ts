@@ -99,9 +99,34 @@ interface DynastyModel {
 
 let cached: DynastyModel | null = null;
 
+/**
+ * How long a model outlives the last request that used it. The panel is opened
+ * for a while and then closed, and 62 MB is too much to hold for the life of
+ * the server for a view nobody is looking at; a rebuild is a second's work.
+ */
+const IDLE_RELEASE_MS = 10 * 60 * 1000;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** Test hook: forget the cached model (the server invalidates by revision). */
 export function clearDynastyModel(): void {
   cached = null;
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+}
+
+/** True while a model is held; the release path is what a test watches. */
+export function hasDynastyModel(): boolean {
+  return cached !== null;
+}
+
+/** Restart the idle clock: the model lives ten minutes past its last reader. */
+function keepAlive(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(clearDynastyModel, IDLE_RELEASE_MS);
+  // A pending release must never hold the process open.
+  idleTimer.unref?.();
 }
 
 function blockOf(stmt: Statement): BlockNode | null {
@@ -320,8 +345,12 @@ function buildModel(data: ServerData): DynastyModel {
   };
 }
 
-/** The model for the current index revision, built on first use and reused. */
+/**
+ * The model for the current index revision, built on first use and reused
+ * until the index moves on or nothing has asked for it in {@link IDLE_RELEASE_MS}.
+ */
 function modelFor(data: ServerData): DynastyModel {
+  keepAlive();
   if (cached && cached.revision === data.index.revision) return cached;
   cached = buildModel(data);
   return cached;

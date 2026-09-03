@@ -198,7 +198,12 @@ export class CultureCreatorPanel {
         await this.load(msg.name);
         return;
       case "openExamples":
-        await vscode.commands.executeCommand("px.showExamplesWiki", msg.name);
+        // The command validates its argument and drops a bare string, so the
+        // deep link has to carry the shape the wiki reads ({ name, kind }).
+        await vscode.commands.executeCommand("px.showExamplesWiki", {
+          name: msg.name,
+          kind: "modifier",
+        });
         return;
       case "save":
         await this.save(msg);
@@ -212,13 +217,33 @@ export class CultureCreatorPanel {
       this.post({ type: "idle" });
       return;
     }
-    const target = await pickSaveTarget(this.cfg, folder, {
-      kind: KIND,
-      ...(msg.sourceFile ? { sourceFile: msg.sourceFile } : {}),
-    });
-    if (!target) {
-      this.post({ type: "idle" });
-      return;
+    // An edit rewrites the file the block was loaded from: `setProperties` only
+    // works against that file, and asking would let a modder pick one it is
+    // refused in. Everything else asks where it goes.
+    let abs: string;
+    let text: string;
+    let label: string;
+    if (msg.mode === "edit" && this.form?.current && this.form.current.source === "mod") {
+      abs = this.form.current.file;
+      label = path.basename(abs);
+      try {
+        text = (await vscode.workspace.openTextDocument(abs)).getText();
+      } catch (err) {
+        this.post({ type: "error", message: errorText(err) });
+        return;
+      }
+    } else {
+      const target = await pickSaveTarget(this.cfg, folder, {
+        kind: KIND,
+        ...(msg.sourceFile ? { sourceFile: msg.sourceFile } : {}),
+      });
+      if (!target) {
+        this.post({ type: "idle" });
+        return;
+      }
+      abs = target.abs;
+      text = target.text;
+      label = target.file;
     }
     // An edit of the mod's own culture touches only the keys that changed; a
     // new, duplicated or overriding culture is one whole block.
@@ -229,8 +254,8 @@ export class CultureCreatorPanel {
     let result: DefinitionEditResult;
     try {
       result = await this.actions.applyEdits({
-        uri: vscode.Uri.file(target.abs).toString(),
-        text: target.text,
+        uri: vscode.Uri.file(abs).toString(),
+        text,
         ops: [op],
       });
     } catch (err) {
@@ -242,15 +267,28 @@ export class CultureCreatorPanel {
       this.post({ type: "error", message: refused });
       return;
     }
-    if (!(await applyDefinitionEdits(target.abs, target.text, result.edits))) {
+    if (!(await applyDefinitionEdits(abs, text, result.edits))) {
       this.post({ type: "idle" });
       return;
     }
-    const locFiles = await writeLocValues(this.cfg, this.actions.lookupLoc, msg.loc);
+    let locFiles: string[];
+    try {
+      locFiles = await writeLocValues(this.cfg, this.actions.lookupLoc, msg.loc);
+    } catch (err) {
+      // The block is written; only the loc failed. Say so and let the app go
+      // back to idle, or its Save button stays disabled for good.
+      this.post({ type: "idle" });
+      void vscode.window.showWarningMessage(
+        `Paradox Modding Toolkit: ${msg.name} was written to ${label}, but its localization was not: ${errorText(err)}`
+      );
+      return;
+    }
     this.post({ type: "saved", name: msg.name });
     void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: ${msg.name} written to ${target.file}` +
-        (locFiles.length > 0 ? ` and ${locFiles.length} localization key(s) saved.` : ".")
+      `Paradox Modding Toolkit: ${msg.name} written to ${label}` +
+        (locFiles.length > 0
+          ? ` and ${locFiles.length} localization ${locFiles.length === 1 ? "key" : "keys"} saved.`
+          : ".")
     );
     // The form now holds a mod definition: reload so a second save edits it.
     await this.load(msg.name);

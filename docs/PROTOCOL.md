@@ -154,7 +154,7 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
-| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, required loc key patterns and icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
@@ -545,8 +545,10 @@ Render the string.
 `paradox/definitionForm` and `paradox/definitionEdit` are the creators' pair:
 the read that lets a client draw a form for a definition kind, and the write
 that puts one into a file. Nothing in the form is written for the creator. The
-folder, the `locPatterns` (`$` is the definition name, so `trait_$_desc` is
-`trait_brave_desc`) and the `iconFolder` are the schema table's row for the
+folder, the `locPatterns` (every loc key the game reads for the kind, `$` being
+the definition name, so `trait_$_desc` is `trait_brave_desc`; the schema's
+`requiredLoc` is the narrower subset a diagnostic may demand, and the form
+answers the full set) and the `iconFolder` are the schema table's row for the
 kind; `keys` and `blocks` are the harvest of the game's own `_*.info` docs, in
 its own order (curated keys first, then by vanilla usage count), each with the
 game's one-line documentation, a coarse `values` hint and its `freq`; `options`

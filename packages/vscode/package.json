@@ -405,7 +405,7 @@
       {
         "command": "px.createTrait",
         "category": "Paradox",
-        "title": "Trait Creator",
+        "title": "Open Trait Creator",
         "icon": "$(sparkle)"
       },
       {
@@ -416,18 +416,18 @@
       {
         "command": "px.openDynastyTree",
         "category": "Paradox",
-        "title": "Dynasty Tree"
+        "title": "Open Dynasty Tree"
       },
       {
         "command": "px.createCulture",
         "category": "Paradox",
-        "title": "Culture Creator",
+        "title": "Open Culture Creator",
         "icon": "$(globe)"
       },
       {
         "command": "px.createDynastyLegacy",
         "category": "Paradox",
-        "title": "Dynasty Legacy Creator"
+        "title": "Open Dynasty Legacy Creator"
       },
       {
         "command": "px.modReport",

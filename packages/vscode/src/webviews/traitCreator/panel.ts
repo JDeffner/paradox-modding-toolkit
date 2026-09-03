@@ -372,7 +372,20 @@ export class TraitCreatorPanel {
       return;
     }
 
-    const locFiles = await writeLocValues(cfg, lookupLoc, save.loc);
+    let locFiles: string[];
+    try {
+      locFiles = await writeLocValues(cfg, lookupLoc, save.loc);
+    } catch (err) {
+      // The block is written; only the loc failed. The app is told the save is
+      // over either way, or its Save button stays disabled until it reopens.
+      this.post({
+        type: "toast",
+        message: `${save.name} was written, but its localization was not: ${messageOf(err)}`,
+        variant: "destructive",
+      });
+      this.post({ type: "saved", ok: false, name: save.name });
+      return;
+    }
     const written = [path.basename(abs), ...locFiles.map((file) => path.basename(file))];
     this.post({ type: "toast", message: `Saved ${save.name} into ${written.join(", ")}.` });
     this.post({ type: "saved", ok: true, name: save.name });

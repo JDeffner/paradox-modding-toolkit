@@ -9,14 +9,6 @@
 /** Every script and loc file the games read is UTF-8 with a BOM. */
 export const BOM = "﻿";
 
-export function stripBom(text: string): string {
-  return text.startsWith(BOM) ? text.slice(1) : text;
-}
-
-export function withBom(text: string): string {
-  return text.startsWith(BOM) ? text : BOM + text;
-}
-
 /** A bare file name, no folders: anything else could write outside the mod. */
 export function isPlainScriptFileName(name: string): boolean {
   return /^[\w.-]+\.txt$/.test(name);
@@ -24,11 +16,13 @@ export function isPlainScriptFileName(name: string): boolean {
 
 /**
  * The file a new definition of `kind` goes into by default: `<prefix>_<kind>s.txt`
- * (`mymod_traits.txt`). The prefix is the one the New Content flow remembers,
- * so a modder's files keep one naming scheme across both commands.
+ * (`mymod_traits.txt`), with the English `y -> ies` so a `dynasty` does not read
+ * as `dynastys`. The prefix is the one the New Content flow remembers, so a
+ * modder's files keep one naming scheme across both commands.
  */
 export function defaultDefinitionFileName(prefix: string, kind: string): string {
-  return `${prefix}_${kind}s.txt`;
+  const plural = /[^aeiou]y$/.test(kind) ? `${kind.slice(0, -1)}ies` : `${kind}s`;
+  return `${prefix}_${plural}.txt`;
 }
 
 /**

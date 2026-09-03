@@ -23,6 +23,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
+import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
@@ -194,9 +195,12 @@ export class LegacyCreatorPanel {
         prefix: scaffoldPrefix(cfg),
         perksPerTrack: cfg.gamePath ? commonPerkCount(this.perkLinksIn(cfg.gamePath, perk.folder)) : null,
         icons,
-        problem: cfg.modPath
-          ? null
-          : "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder.",
+        // Any mod of the workspace can be written into (writableMods in
+        // creators/save.ts), not only a focus mod.
+        problem:
+          cfg.modPath || cfg.workspaceMods.length > 0
+            ? null
+            : "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder.",
       },
     });
     const target = name ?? this.pending;
@@ -382,8 +386,35 @@ export class LegacyCreatorPanel {
       ]))
     );
 
+    // A refusal means those bytes were NOT written, so it is reported before
+    // anything claims a save happened.
+    for (const reason of refused) {
+      void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${reason}`);
+    }
+    if (refused.length > 0) {
+      this.post({
+        type: "toast",
+        message: `${refused.length} of the blocks ${refused.length === 1 ? "was" : "were"} refused and nothing else was written. See the warning.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const pairs = [...message.track.loc, ...message.perks.flatMap((perk) => perk.loc)];
-    const locFiles = await writeLocValues(cfg, actions.lookupLoc, pairs);
+    let locFiles: string[];
+    try {
+      locFiles = await writeLocValues(cfg, actions.lookupLoc, pairs);
+    } catch (err) {
+      // The blocks are written; only the loc failed. The app still gets its
+      // reply, so the panel does not sit on a half-reported save.
+      this.post({ type: "saved" });
+      this.post({
+        type: "toast",
+        message: `${message.track.name} was written, but its localization was not: ${err instanceof Error ? err.message : String(err)}`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     let iconNote = "";
     if (message.icon) iconNote = this.copyIcon(message.icon, message.track.name, trackTarget.modPath);
@@ -401,9 +432,6 @@ export class LegacyCreatorPanel {
           `left the track but ${message.dropped.length === 1 ? "its block is" : "their blocks are"} still in ${files}. ` +
           `Delete ${message.dropped.length === 1 ? "it" : "them"} there to remove ${message.dropped.length === 1 ? "it" : "them"} from the game.`
       );
-    }
-    for (const reason of refused) {
-      void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${reason}`);
     }
   }
 
@@ -429,14 +457,15 @@ export class LegacyCreatorPanel {
   }
 
   /**
-   * A picture of the modder's own, converted by the toolkit's own DDS command
-   * (px.convertToDds) so the format question and the encoder stay in one place.
-   * The source is copied into the icon folder under the track's key first,
-   * because the converter writes next to what it reads.
+   * A picture of the modder's own, converted by the toolkit's own encoder
+   * (convertImageToDds, the non-interactive half of the DDS command): the
+   * creator already knows the format question's answer and the target path,
+   * so nothing is asked and nothing is announced twice.
    */
   private async convertIcon(track: string): Promise<void> {
+    const { cfg } = this.options;
     const folder = this.legacyForm?.iconFolder;
-    const modPath = this.options.cfg.modPath;
+    const modPath = cfg.modPath ?? cfg.workspaceMods[0];
     if (!folder || !modPath) return;
     if (!/^[a-z][a-z0-9_]*$/.test(track)) {
       this.post({ type: "toast", message: "Give the track its key first: the picture is saved under it." });
@@ -456,10 +485,7 @@ export class LegacyCreatorPanel {
       if (source.toLowerCase().endsWith(".dds")) {
         fs.copyFileSync(source, target);
       } else {
-        const staged = path.join(dir, `${track}${path.extname(source)}`);
-        fs.copyFileSync(source, staged);
-        await vscode.commands.executeCommand("px.convertToDds", vscode.Uri.file(staged));
-        fs.rmSync(staged, { force: true });
+        await convertImageToDds(vscode.Uri.file(source), vscode.Uri.file(target));
       }
     } catch (err) {
       this.post({

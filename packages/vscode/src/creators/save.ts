@@ -69,7 +69,13 @@ function warnNoMod(): void {
   );
 }
 
+/** Every panel already banners the missing game folder; the notification is
+ *  the same sentence, so it is said once per session and not once per save. */
+let warnedNoGame = false;
+
 function warnNoGame(): void {
+  if (warnedNoGame) return;
+  warnedNoGame = true;
   void vscode.window
     .showWarningMessage(
       "Paradox Modding Toolkit: the game folder is not set, so a file name that would replace a game file cannot be caught.",

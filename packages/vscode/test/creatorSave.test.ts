@@ -1,22 +1,21 @@
 /**
  * The creators' save decisions, the half that has no vscode in it: the default
- * file name, the BOM rule and the refusal that stops a modder from replacing a
- * whole vanilla file by naming a mod file after it.
+ * file name, the bare-name rule and the refusal that stops a modder from
+ * replacing a whole vanilla file by naming a mod file after it.
  */
 import { describe, expect, it } from "vitest";
 import {
-  BOM,
   defaultDefinitionFileName,
   isPlainScriptFileName,
-  stripBom,
   vanillaNameClash,
-  withBom,
 } from "../src/creators/saveTargets";
 
 describe("defaultDefinitionFileName", () => {
   it("names the file after the mod prefix and the kind", () => {
     expect(defaultDefinitionFileName("mymod", "trait")).toBe("mymod_traits.txt");
     expect(defaultDefinitionFileName("agot", "culture")).toBe("agot_cultures.txt");
+    // `dynastys` is not a word; the one irregular the creators' kinds hit.
+    expect(defaultDefinitionFileName("mymod", "dynasty")).toBe("mymod_dynasties.txt");
   });
 });
 
@@ -42,18 +41,11 @@ describe("vanillaNameClash", () => {
   });
 });
 
-describe("file names and the BOM", () => {
+describe("file names", () => {
   it("takes a bare .txt name and nothing that could leave the folder", () => {
     expect(isPlainScriptFileName("mymod_traits.txt")).toBe(true);
     expect(isPlainScriptFileName("../evil.txt")).toBe(false);
     expect(isPlainScriptFileName("sub/mymod.txt")).toBe(false);
     expect(isPlainScriptFileName("mymod.yml")).toBe(false);
-  });
-
-  it("adds a BOM once and takes it off again", () => {
-    expect(withBom("a = {}")).toBe(BOM + "a = {}");
-    expect(withBom(BOM + "a = {}")).toBe(BOM + "a = {}");
-    expect(stripBom(withBom("a = {}"))).toBe("a = {}");
-    expect(stripBom("a = {}")).toBe("a = {}");
   });
 });

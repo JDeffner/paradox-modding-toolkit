@@ -54,8 +54,17 @@ function toFileNewline(text: string, file: GuiSourceFile): string {
  * line between the file's last content and the new block, and a file that is
  * empty (or holds nothing but its BOM) gets the block on its own with no
  * leading blank line to open it.
+ *
+ * `appended` is what earlier ops of the SAME batch already add at the end of
+ * the file: the separator is decided against the text as it will read, so five
+ * appended blocks are separated like one appended block is.
  */
-function upsertBlock(file: GuiSourceFile, name: string, blockText: string): GuiEdit | string {
+function upsertBlock(
+  file: GuiSourceFile,
+  name: string,
+  blockText: string,
+  appended: string
+): GuiEdit | string {
   const trimmed = blockText.trim();
   if (name.trim() === "" || trimmed === "") {
     return "an upsert needs both a definition name and the block text to write.";
@@ -64,9 +73,9 @@ function upsertBlock(file: GuiSourceFile, name: string, blockText: string): GuiE
   const existing = topLevelBlock(file, name);
   if (existing) return { start: existing.span.start, end: existing.span.end, newText: body };
 
-  const text = file.text;
+  const text = file.text + appended;
   const eol = file.newline;
-  const at = text.length;
+  const at = file.text.length;
   if (text.trim() === "") return { start: at, end: at, newText: body + eol };
   const closeLastLine = text.endsWith("\n") ? "" : eol;
   return { start: at, end: at, newText: closeLastLine + eol + body + eol };
@@ -131,8 +140,14 @@ export function computeDefinitionEdits(params: DefinitionEditParams | null): Def
 
   const edits: GuiTextEdit[] = [];
   const verdicts: { refused?: string }[] = [];
+  // Appends all land at the end of the text, where nothing separates one
+  // zero-width edit from the next: they are grown into ONE edit in request
+  // order, so the file reads in the order the client asked for.
+  const endOfFile = text.length;
+  let appended = "";
+  let appendEdit: GuiTextEdit | null = null;
   for (const op of ops) {
-    const answer = runOp(file, op);
+    const answer = runOp(file, op, appended);
     if (typeof answer === "string") {
       verdicts.push({ refused: answer });
       continue;
@@ -149,13 +164,24 @@ export function computeDefinitionEdits(params: DefinitionEditParams | null): Def
       });
       continue;
     }
-    edits.push(...answer);
+    for (const edit of answer) {
+      if (edit.start === endOfFile && edit.end === endOfFile) {
+        appended += edit.newText;
+        if (appendEdit) appendEdit.newText += edit.newText;
+        else {
+          appendEdit = { ...edit };
+          edits.push(appendEdit);
+        }
+        continue;
+      }
+      edits.push(edit);
+    }
     verdicts.push({});
   }
   return { edits, ops: verdicts };
 }
 
-function runOp(file: GuiSourceFile, op: DefinitionOp): GuiEdit[] | string {
+function runOp(file: GuiSourceFile, op: DefinitionOp, appended: string): GuiEdit[] | string {
   if (!op || typeof op.op !== "string") return "the server has no such edit.";
   switch (op.op) {
     case "setProperties": {
@@ -163,7 +189,7 @@ function runOp(file: GuiSourceFile, op: DefinitionOp): GuiEdit[] | string {
       return typeof answer === "string" ? answer : answer;
     }
     case "upsertBlock": {
-      const answer = upsertBlock(file, op.name ?? "", op.text ?? "");
+      const answer = upsertBlock(file, op.name ?? "", op.text ?? "", appended);
       return typeof answer === "string" ? answer : [answer];
     }
     default:

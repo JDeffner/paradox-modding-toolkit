@@ -1746,7 +1746,11 @@ export interface DefinitionForm {
   kind: string;
   /** Schema path the definition is written into, e.g. `common/traits`. */
   folder: string;
-  /** Loc keys the game requires; `$` is the definition name (`trait_$_desc`). */
+  /**
+   * Every loc key the game reads for this kind, `$` being the definition name
+   * (`trait_$_desc`). The full set a form should offer, not the conservative
+   * `requiredLoc` subset a diagnostic is allowed to demand.
+   */
   locPatterns: string[];
   /** Where the game looks for this kind's icon, e.g. `gfx/interface/icons/traits`. */
   iconFolder?: string;
@@ -1844,7 +1848,7 @@ export interface DynastySummary {
   /** The loc text when the server can resolve it, else `nameKey` itself. */
   name: string;
   culture?: string;
-  source: "vanilla" | "parent" | "mod";
+  source: DefSource;
   file: string;
   /** 0-based. */
   line: number;
@@ -1860,7 +1864,7 @@ export interface DynastyHouse {
   name: string;
   /** The dynasty id the house belongs to. */
   dynasty: string;
-  source: "vanilla" | "parent" | "mod";
+  source: DefSource;
   file: string;
   /** 0-based. */
   line: number;
@@ -1896,7 +1900,7 @@ export interface DynastyCharacter {
    * them, but the tree is not theirs.
    */
   external?: true;
-  source: "vanilla" | "parent" | "mod";
+  source: DefSource;
   file: string;
   /** 0-based. */
   line: number;

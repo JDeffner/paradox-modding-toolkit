@@ -45,7 +45,20 @@ export interface GeneratedBlock {
 }
 
 function quote(value: string): string {
-  return `"${value.replace(/"/g, "")}"`;
+  return `"${value}"`;
+}
+
+/**
+ * The first value of a form that carries a `"` itself, or null.
+ *
+ * Paradox script has no escape for a quote inside a quoted value, and dropping
+ * it would rename the character silently, so the caller refuses the save.
+ */
+export function unquotableValue(form: object): string | null {
+  for (const value of Object.values(form)) {
+    if (typeof value === "string" && value.includes('"')) return value;
+  }
+  return null;
 }
 
 /** `1050.3.4` as a sortable number; the game reads dates, not file order. */

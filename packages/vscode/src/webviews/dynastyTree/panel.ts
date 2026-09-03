@@ -5,37 +5,42 @@
  * dynasty model, turn a filled form into script and write it into the mod, and
  * open the file it wrote. Drawing, panning and every form lives in app/.
  *
- * Writing follows the Flag Builder's flow (webviews/flagBuilder/panel.ts): the
- * mod is the one from the configuration, the file is picked from the mod's own
- * folder or typed, a file name that also exists in the game's same folder is
- * refused (a same-named script file replaces the whole vanilla file), the BOM
- * is kept, and the whole change lands as ONE WorkspaceEdit so one save is one
- * undo step.
+ * Writing is the other creators' flow (creators/save.ts): the target is
+ * resolved by `pickSaveTarget` (the mod, the file, the vanilla-name refusal and
+ * the BOM in one place), the server answers offsets into the text that pick
+ * handed back, and `applyDefinitionEdits` applies them as ONE WorkspaceEdit
+ * against a document that has not moved since. Nothing here reads or writes a
+ * file itself, so unsaved editor changes are never overwritten.
  */
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import type {
+  DefinitionEditParams,
+  DefinitionEditResult,
   DynastyTreeParams,
   DynastyTreeResult,
   EventValueOptionsParams,
   EventValueOptionsResult,
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
-import { characterBlock, dynastyBlock, houseBlock } from "./blocks";
+import type { PxConfig } from "../../config";
+import { applyDefinitionEdits, pickSaveTarget } from "../../creators/save";
+import { characterBlock, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
 import { dynastyTreeHtml } from "./html";
 import type { AppToHost, HostToApp, ModTarget, OptionSets } from "./messages";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 
-const BOM = "﻿";
-/** Schema folders, one per kind this panel writes (games/ck3/schema.ts). */
-const FOLDERS = {
-  character: path.join("history", "characters"),
-  dynasty: path.join("common", "dynasties"),
-  house: path.join("common", "dynasty_houses"),
+/**
+ * Schema folder and definition kind, one pair per kind this panel writes
+ * (games/ck3/schema.ts). The folder is root-relative with `/` separators,
+ * which is what `pickSaveTarget` splits on.
+ */
+const TARGETS = {
+  character: { folder: "history/characters", kind: "character" },
+  dynasty: { folder: "common/dynasties", kind: "dynasty" },
+  house: { folder: "common/dynasty_houses", kind: "dynasty_house" },
 };
 /**
  * The server re-indexes a written file through the client's watcher, which is
@@ -47,19 +52,19 @@ const REINDEX_GRACE_MS = 800;
 export interface DynastyTreeActions {
   fetchTree(params: DynastyTreeParams): Promise<DynastyTreeResult>;
   fetchOptions(params: EventValueOptionsParams): Promise<EventValueOptionsResult | null>;
+  /** paradox/definitionEdit: the offsets a block's write lands at. */
+  editDefinition(params: DefinitionEditParams): Promise<DefinitionEditResult>;
   /** writeLocSmart: the one entry point for a loc value (locCommands.ts). */
   writeLoc(key: string, value: string): Promise<string>;
 }
 
 export interface DynastyTreeOptions {
+  cfg: PxConfig;
   meta: GameMeta;
-  gamePath: string | null;
   /** Mods the panel may write into, `modPath` first (the default target). */
   mods: ModTarget[];
   /** Focus mod for the server request, or null for every workspace mod. */
   modRoot: string | null;
-  /** File-name prefix the scaffold flow remembers, else the mod folder's name. */
-  filePrefix: string;
   /** Set when the workspace is not ready to be written to (no mod, no game). */
   setupProblem?: string;
 }
@@ -73,8 +78,6 @@ export class DynastyTreePanel {
   private options: DynastyTreeOptions;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
-  /** The mod chosen for this session once the workspace holds several. */
-  private savePath: string | undefined;
   /** A deep-linked dynasty, replayed once the app has booted. */
   private pending: string | undefined;
   /** The dynasty currently drawn, so a save can reload the same tree. */
@@ -89,7 +92,6 @@ export class DynastyTreePanel {
     this.actions = actions;
     this.options = options;
     this.pending = dynasty;
-    this.savePath = options.mods[0]?.path;
     const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       DynastyTreePanel.viewType,
@@ -180,31 +182,22 @@ export class DynastyTreePanel {
         await vscode.commands.executeCommand("px.openFlagBuilder", { name: msg.name });
         return;
       case "saveCharacter": {
-        const block = characterBlock(msg.form, this.previousBlock(msg.file, msg.form.id));
+        if (this.refuseQuote(msg.form)) return;
+        const block = characterBlock(msg.form, await this.previousBlock(msg.file, msg.form.id));
         for (const note of block.notes) this.post({ type: "toast", message: note });
-        await this.write(FOLDERS.character, "characters", msg.form.id, block.text, msg.file);
+        await this.write(TARGETS.character, msg.form.id, block.text, msg.file);
         return;
       }
       case "saveDynasty": {
-        const written = await this.write(
-          FOLDERS.dynasty,
-          "dynasties",
-          msg.form.id,
-          dynastyBlock(msg.form),
-          msg.file
-        );
+        if (this.refuseQuote(msg.form)) return;
+        const written = await this.write(TARGETS.dynasty, msg.form.id, dynastyBlock(msg.form), msg.file);
         if (written) await this.writeName(msg.form.nameKey, msg.name);
         if (written && msg.openTree) await this.loadTree(msg.form.id);
         return;
       }
       case "saveHouse": {
-        const written = await this.write(
-          FOLDERS.house,
-          "dynasty_houses",
-          msg.form.id,
-          houseBlock(msg.form),
-          msg.file
-        );
+        if (this.refuseQuote(msg.form)) return;
+        const written = await this.write(TARGETS.house, msg.form.id, houseBlock(msg.form), msg.file);
         if (written) await this.writeName(msg.form.nameKey, msg.name);
         return;
       }
@@ -290,12 +283,16 @@ export class DynastyTreePanel {
 
   // ---- writing --------------------------------------------------------------
 
-  /** The exact source of the block being edited, for a faithful round trip. */
-  private previousBlock(file: string | undefined, name: string): string | undefined {
+  /**
+   * The exact source of the block being edited, for a faithful round trip.
+   * Read through the editor, so the text is the one on screen (unsaved edits
+   * included) and the encoding is VS Code's, not an assumed UTF-8.
+   */
+  private async previousBlock(file: string | undefined, name: string): Promise<string | undefined> {
     if (!file) return undefined;
     let text: string;
     try {
-      text = fs.readFileSync(file, "utf8");
+      text = (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
     } catch {
       return undefined;
     }
@@ -315,81 +312,46 @@ export class DynastyTreePanel {
     return undefined;
   }
 
-  private modPath(): string | undefined {
-    if (this.savePath && this.options.mods.some((m) => m.path === this.savePath)) return this.savePath;
-    return this.options.mods[0]?.path;
-  }
-
-  private async pickMod(): Promise<string | undefined> {
-    const mods = this.options.mods;
-    if (mods.length <= 1) return this.modPath();
-    const picked = await vscode.window.showQuickPick(
-      mods.map((m) => ({ label: m.label, description: m.path })),
-      { placeHolder: "Which mod does this belong to?" }
-    );
-    if (!picked) return undefined;
-    this.savePath = picked.description;
-    return picked.description;
-  }
-
   /**
-   * Write one block into a `.txt` of the mod's `folder`. Returns true when
+   * Write one block into a `.txt` of the mod's folder. Returns true when
    * something was written.
+   *
+   * The target, the offsets and the application are the shared creator flow:
+   * `pickSaveTarget` opens the file and hands back the text the server must
+   * answer against, `paradox/definitionEdit` computes the upsert, and
+   * `applyDefinitionEdits` refuses to write a document that moved meanwhile.
    */
   private async write(
-    folder: string,
-    what: string,
+    target: { folder: string; kind: string },
     name: string,
     script: string,
     previousFile?: string
   ): Promise<boolean> {
-    const modPath = await this.pickMod();
-    if (!modPath) {
-      this.post({
-        type: "toast",
-        message:
-          "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder.",
-        variant: "destructive",
-      });
-      return false;
-    }
-    const dir = path.join(modPath, this.options.meta.stageRoots?.[0] ?? "", folder);
-    let abs: string | undefined;
-    // A block that already lives in this mod is rewritten where it is.
-    if (previousFile && isInside(modPath, previousFile)) abs = previousFile;
-    if (!abs) {
-      const file = await this.askFile(dir, folder, `${this.options.filePrefix}_${what}.txt`);
-      if (!file) return false;
-      abs = path.join(dir, file);
-    }
-    let text = "";
+    const stage = this.options.meta.stageRoots?.[0];
+    const folder = stage ? `${stage}/${target.folder}` : target.folder;
+    const where = await this.saveTarget(folder, target.kind, previousFile);
+    if (!where) return false;
+    const { abs, text } = where;
+
+    let result: DefinitionEditResult;
     try {
-      text = fs.readFileSync(abs, "utf8");
-    } catch {
-      /* new file */
-    }
-    const existed = text !== "";
-    const hadBom = text.startsWith(BOM);
-    const body = upsertFlagInFile(hadBom ? text.slice(1) : text, name, script);
-    const uri = vscode.Uri.file(abs);
-    const edit = new vscode.WorkspaceEdit();
-    if (!existed) {
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-      // Script files the games read are UTF-8 WITH BOM; a new one gets one.
-      edit.createFile(uri, { overwrite: false, ignoreIfExists: true });
-      edit.insert(uri, new vscode.Position(0, 0), BOM + body);
-    } else {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const whole = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-      edit.replace(uri, whole, (hadBom ? BOM : "") + body);
-    }
-    if (!(await vscode.workspace.applyEdit(edit))) {
-      this.post({ type: "toast", message: `Could not write ${path.basename(abs)}.`, variant: "destructive" });
+      result = await this.actions.editDefinition({
+        uri: vscode.Uri.file(abs).toString(),
+        text,
+        ops: [{ op: "upsertBlock", name, text: script }],
+      });
+    } catch (err) {
+      this.post({ type: "toast", message: message(err), variant: "destructive" });
       return false;
     }
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await doc.save();
-    await this.openDocument(abs, 0);
+    const refused = result.ops.find((op) => op.refused)?.refused;
+    if (refused) {
+      this.post({ type: "toast", message: refused, variant: "destructive" });
+      return false;
+    }
+    if (!(await applyDefinitionEdits(abs, text, result.edits))) return false;
+
+    await this.openDocument(abs, await this.blockLine(abs, name));
     this.post({ type: "toast", message: `Saved ${name} to ${path.basename(abs)}.` });
     // The written file reaches the index through the client's watcher.
     setTimeout(() => {
@@ -400,39 +362,54 @@ export class DynastyTreePanel {
   }
 
   /**
-   * An existing `.txt` of the folder, or a typed new one. A name the GAME also
-   * uses in the same folder is refused: a same-named script file replaces the
-   * whole vanilla file instead of adding to it.
+   * The file the block goes into, with the text its offsets are into. A block
+   * that already lives in one of the workspace's mods is rewritten where it is
+   * (the Trait Creator's edit path); anything else asks, which is where the
+   * mod pick, the file list and the vanilla-name refusal live.
    */
-  private async askFile(dir: string, folder: string, suggestion: string): Promise<string | undefined> {
-    let files: string[] = [];
-    try {
-      files = fs
-        .readdirSync(dir)
-        .filter((f) => f.toLowerCase().endsWith(".txt"))
-        .sort();
-    } catch {
-      /* the folder does not exist yet */
-    }
-    const NEW = "$(new-file) New file…";
-    const picked = await vscode.window.showQuickPick([...files.map((f) => ({ label: f })), { label: NEW }], {
-      placeHolder: `Save into ${folder}/…`,
-    });
-    if (!picked) return undefined;
-    if (picked.label !== NEW) return picked.label;
-    const gameDir = this.options.gamePath ? path.join(this.options.gamePath, folder) : null;
-    const typed = await vscode.window.showInputBox({
-      prompt: `File name in ${folder}`,
-      value: suggestion,
-      validateInput: (v) => {
-        const name = v.trim();
-        if (!/^[\w.-]+\.txt$/.test(name)) return "A .txt file name without folders";
-        if (gameDir && fs.existsSync(path.join(gameDir, name)))
-          return `The game has a ${name} in this folder. A file of the same name replaces the whole vanilla file, so pick another name.`;
+  private async saveTarget(
+    folder: string,
+    kind: string,
+    previousFile?: string
+  ): Promise<{ abs: string; text: string } | null> {
+    if (previousFile && this.options.mods.some((m) => isInside(m.path, previousFile))) {
+      try {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(previousFile));
+        return { abs: previousFile, text: doc.getText() };
+      } catch (err) {
+        this.post({ type: "toast", message: message(err), variant: "destructive" });
         return null;
-      },
+      }
+    }
+    const picked = await pickSaveTarget(this.options.cfg, folder, { kind });
+    return picked ? { abs: picked.abs, text: picked.text } : null;
+  }
+
+  /** The line the block ended up on, so the file opens where it was written. */
+  private async blockLine(abs: string, name: string): Promise<number> {
+    try {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
+      const at = new RegExp(`^${escapeRegExp(name)}[ \t]*=`, "m").exec(doc.getText());
+      return at ? doc.positionAt(at.index).line : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * A `"` inside a value the block writer quotes cannot be written: the script
+   * has no escape for it and dropping it would rename what is saved. Returns
+   * true when the save was refused, with the value named in the toast.
+   */
+  private refuseQuote(form: { id: string }): boolean {
+    const bad = unquotableValue(form);
+    if (bad === null) return false;
+    this.post({
+      type: "toast",
+      message: `${form.id} was not saved: remove the " from ${bad}. Paradox script cannot escape a quote inside a value.`,
+      variant: "destructive",
     });
-    return typed?.trim() || undefined;
+    return true;
   }
 
   /** The display name of a dynasty or house: a loc key, written through writeLocSmart. */

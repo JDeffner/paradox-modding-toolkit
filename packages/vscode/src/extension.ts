@@ -74,7 +74,7 @@ import { planWatchRoots } from "./watchRoots";
 import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
-import { newContentCommand, scaffoldPrefix } from "./scaffold/command";
+import { newContentCommand } from "./scaffold/command";
 import { createModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
@@ -1075,14 +1075,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           fetchTree: (params) => lc.sendRequest<DynastyTreeResult>(dynastyTreeRequest, params),
           fetchOptions: (params) =>
             lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
         },
         {
+          cfg: cfgForActive(),
           meta,
-          gamePath: cfg.gamePath,
           mods,
           modRoot: views.focusRoot(),
-          filePrefix: scaffoldPrefix(cfg),
           setupProblem: problems.join(" ") || undefined,
         },
         typeof arg === "object" && arg !== null && typeof (arg as { dynasty?: unknown }).dynasty === "string"
