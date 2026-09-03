@@ -39,6 +39,15 @@ export function flagBuilderSupported(gameId: string): boolean {
 }
 
 /**
+ * Whether a visual creator exists for this game and kind. The profile's
+ * `creators` list is the answer, so a game gains a creator by gaining the row,
+ * not by being named here.
+ */
+export function creatorSupported(gameId: string, kind: string): boolean {
+  return (metaFor(gameId).creators ?? []).some((creator) => creator.kind === kind);
+}
+
+/**
  * Whether the game ships `_*.info` format docs inside its own files. Only CK3
  * does; for the other games "format docs" means the vanilla files of the same
  * folder plus a search on the game's modding wiki.

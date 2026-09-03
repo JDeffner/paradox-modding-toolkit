@@ -21,7 +21,7 @@ import { findStrayCalendar } from "./calendarSettingsCheck";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import { creatorSupported, flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -52,6 +52,7 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -95,6 +96,10 @@ import {
   eventGraphRequest,
   exampleWikiRequest,
   exampleWikiEntryRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  type DefinitionForm,
+  type DefinitionEditResult,
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
@@ -304,6 +309,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "px.flagBuilderSupported",
       flagBuilderSupported(cfg.gameId)
     );
+    // One key per creator the profile lists, so a palette entry appears only
+    // where a panel was actually built against that game's own files.
+    for (const creator of metaFor(cfg.gameId).creators ?? []) {
+      void vscode.commands.executeCommand("setContext", `px.creator.${creator.kind}`, true);
+    }
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -955,6 +965,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { gamePath: cfg.gamePath, modPath: modRootFor(editor.document.uri.fsPath, cfg) ?? cfg.modPath },
         metaFor(cfg.gameId)
       );
+    }),
+    // The argument is optional: the palette entry and the Project panel open a
+    // blank form, an "edit this trait" caller names the definition.
+    vscode.commands.registerCommand("px.createTrait", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      if (!creatorSupported(cfg.gameId, "trait")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Trait Creator has been built for ${meta.name} yet.`
+        );
+        return;
+      }
+      const named = typeof arg === "object" && arg !== null ? (arg as { name?: unknown }).name : undefined;
+      TraitCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+        },
+        lookupLoc,
+        ...(typeof named === "string" && named !== "" ? { name: named } : {}),
+      });
     }),
     vscode.commands.registerCommand("px.openFlagBuilder", () => {
       const meta = metaFor(cfg.gameId);

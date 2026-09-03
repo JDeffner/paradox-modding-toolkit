@@ -1,0 +1,69 @@
+/**
+ * The wire between the Trait Creator's host (panel.ts) and its app (app/).
+ *
+ * The app draws a form and produces a block of script; it never reads a file,
+ * never talks to the language server and never decides where anything goes.
+ * Everything it knows about the game arrives in `init` (the form the server
+ * answered, the mod it saves into, the loc language, the icon folder's file
+ * names), and the pictures come back as webview URLs on request, because a
+ * webview cannot read the disk.
+ */
+import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+
+/** How the save writes: the app decides, the host obeys. */
+export type SaveMode = "create" | "edit" | "duplicate" | "override";
+
+export interface TraitCreatorInit {
+  form: DefinitionForm;
+  /** The mod a save goes into, for the app to SHOW. The host picks the file. */
+  modLabel: string | null;
+  /** The language the loc values are written for (`english`). */
+  locLanguage: string;
+  /** The prefix the New Content flow remembers; the default name starts with it. */
+  prefix: string;
+  /** File names in `form.iconFolder`, mod entries first. Thumbs on request. */
+  iconKeys: string[];
+  /** What is missing and how to fix it, when the workspace is not ready. */
+  problem?: string;
+}
+
+export type HostToApp =
+  | { type: "init"; init: TraitCreatorInit }
+  /** The answer to `load`: the same form with `current` filled (or not). */
+  | { type: "form"; form: DefinitionForm }
+  /** Thumbnails for the icon keys that were asked for; null = undecodable. */
+  | { type: "icons"; urls: Record<string, string | null> }
+  /** A converted custom image is now the trait's icon under this file name. */
+  | { type: "iconWritten"; key: string; url: string | null }
+  /** A save finished. `ok` false leaves the form exactly as it was. */
+  | { type: "saved"; ok: boolean; name: string }
+  | { type: "toast"; message: string; variant?: "default" | "destructive" };
+
+export type AppToHost =
+  | { type: "ready" }
+  /** Load an existing definition into the form (`current` comes back). */
+  | { type: "load"; name: string }
+  /** Decode these icon file names to PNG and answer with webview URLs. */
+  | { type: "icons"; keys: string[] }
+  | { type: "save"; save: TraitSave }
+  | { type: "openFile"; file: string; line: number }
+  /** Deep link into the Examples Wiki for a trigger, effect or modifier name. */
+  | { type: "openExamples"; name: string }
+  /** Pick an image and convert it into the mod's icon folder under `name`. */
+  | { type: "convertIcon"; name: string };
+
+export interface TraitSave {
+  name: string;
+  mode: SaveMode;
+  /** The whole `name = { … }` block the app built. */
+  block: string;
+  /**
+   * Edit mode only: the keys that changed, as raw script text (`null` removes
+   * the key). The host sends these as a `setProperties` op so an edit rewrites
+   * the lines it touched and nothing else in the modder's file.
+   */
+  changed?: { key: string; value: string | null }[];
+  loc: { key: string; value: string }[];
+  /** The file the definition was loaded from, offered first as the target. */
+  sourceFile?: string;
+}

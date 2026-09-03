@@ -19,6 +19,8 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
+  // The Create-group row this tab belongs to (games/ck3/meta.ts creators).
+  "trait-creator": "sparkles",
   wiki: "library",
   credits: "heart",
   workshop: "cloudUpload",

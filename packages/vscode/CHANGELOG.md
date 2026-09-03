@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Trait Creator (CK3).** Design a trait as a form and write it into your
+  mod: the 60 keys the game documents for a trait, each with the game's own
+  one-line explanation, laid out in sections, plus the two loc values and a
+  grid of the trait icons your game and your mods actually have. A new trait
+  saves with only a name typed. Opening one you already have loads it and
+  writes back only the lines you changed, so a vanilla trait you duplicate
+  keeps its own formatting, its comments and everything no field can stand
+  for. Custom image converts a PNG into the mod under the trait's name.
+  Project panel > Create > Trait Creator, or "Paradox: Trait Creator".
 - **Groundwork for visual content creators.** The Project panel's Create
   group now lists the creators the active game has (CK3: Trait Creator,
   Dynasty Legacy Creator, Culture Creator, Dynasty Tree), and the host side

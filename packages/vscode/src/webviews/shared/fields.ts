@@ -430,6 +430,12 @@ export interface MultiRefFieldOptions extends FieldOptions {
   /** A picture for an entry, when the kind has one (an icon URL). */
   thumb?: (value: string) => string | null;
   addLabel?: string;
+  /**
+   * The search box can also ADD what was typed. For lists the game does not
+   * enumerate: a trait's `flag` is any name a modder invents, and refusing an
+   * unlisted one would make the field useless.
+   */
+  allowNew?: boolean;
 }
 
 /** Several definitions of another kind: chips, plus a searchable picker. */
@@ -472,7 +478,19 @@ export function multiRefField(options: MultiRefFieldOptions): Field<string[]> {
     searchPopover(add, "Search…", (query, body, close) => {
       body.replaceChildren();
       const matches = filterVocabulary(options.items, query).filter((item) => !current.includes(item.value));
-      if (matches.length === 0) {
+      const typed = query.trim();
+      if (options.allowNew && typed !== "" && !matches.some((item) => item.value === typed)) {
+        const row = el("div", "px-menu-item");
+        row.append(iconEl("plus"), el("span", "px-grow", typed));
+        row.append(el("span", "px-menu-hint", "add"));
+        row.onclick = () => {
+          current = addChip(current, typed);
+          paint();
+          fire([...current]);
+          close();
+        };
+        body.append(row);
+      } else if (matches.length === 0) {
         body.append(el("div", "px-menu-empty", "No match"));
         return;
       }
