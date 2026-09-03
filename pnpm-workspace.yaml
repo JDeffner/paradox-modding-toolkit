@@ -1,2 +1,18 @@
 packages:
   - "packages/*"
+
+# Moved out of package.json's "pnpm" field: pnpm 11 no longer reads it.
+overrides:
+  "brace-expansion@<5.0.8": ">=5.0.8"
+
+# pnpm 11 replaces onlyBuiltDependencies/ignoredBuiltDependencies with allowBuilds.
+allowBuilds:
+  "@vscode/vsce-sign": true
+  esbuild: true
+  keytar: true
+  koffi: false
+
+# steamwand.js is ours (github.com/JDeffner). pnpm 11's minimumReleaseAge guard
+# otherwise blocks installs for the first day after we publish a release.
+minimumReleaseAgeExclude:
+  - steamwand.js
