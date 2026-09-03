@@ -19,10 +19,14 @@ import type {
   DefinitionEditResult,
   DefinitionForm,
   DefinitionFormParams,
+  ModifierFormatsParams,
+  ModifierFormatsResult,
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
+import { wireImages, type ImageRoot } from "../../creators/images";
 import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
+import { readModName } from "@px-lsp/protocol/modName";
 import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
@@ -37,10 +41,18 @@ import type { AppToHost, HostToApp, TraitSave } from "./messages";
 const THUMB_DIM = 64;
 /** Decodes per message, so a folder of 400 icons never blocks the host. */
 const ICON_CHUNK = 40;
+/** Loc keys answered per message: a trait's flags, not a dictionary. */
+const LOC_CHUNK = 64;
 
 export interface TraitCreatorActions {
   fetchForm(params: DefinitionFormParams): Promise<DefinitionForm | null>;
   editDefinition(params: DefinitionEditParams): Promise<DefinitionEditResult>;
+  /**
+   * How the game prints each modifier, for the tooltip preview. Optional so a
+   * client whose server predates the request still gets a working panel: the
+   * preview then title-cases the names instead of quoting the game.
+   */
+  fetchModifierFormats?(params: ModifierFormatsParams): Promise<ModifierFormatsResult | null>;
 }
 
 export interface TraitCreatorOptions {
@@ -169,6 +181,40 @@ export class TraitCreatorPanel {
         ...(this.problem() ? { problem: this.problem()! } : {}),
       },
     });
+    await this.postModifierFormats();
+  }
+
+  /**
+   * The game's own print rules for every modifier, fetched ONCE per panel: the
+   * preview needs them for every line and they do not change while it is open.
+   */
+  private async postModifierFormats(): Promise<void> {
+    const { cfg, actions } = this.options;
+    if (!actions.fetchModifierFormats) return;
+    let result: ModifierFormatsResult | null = null;
+    try {
+      result = await actions.fetchModifierFormats({ modRoot: cfg.modPath });
+    } catch {
+      // A server that does not know the request leaves the preview unformatted,
+      // which is a smaller failure than a panel that does not open.
+      return;
+    }
+    this.post({ type: "modifierFormats", formats: result?.formats ?? null });
+  }
+
+  /**
+   * Where a texture path is looked up: the load order, game first, so a mod's
+   * own picture of the same path wins the way it does in the game (the roots
+   * `px.openFlagBuilder` builds).
+   */
+  private imageRoots(): ImageRoot[] {
+    const { cfg } = this.options;
+    const roots: ImageRoot[] = [];
+    if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
+    for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
+      if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+    }
+    return roots;
   }
 
   private async onMessage(message: AppToHost): Promise<void> {
@@ -190,6 +236,14 @@ export class TraitCreatorPanel {
       }
       case "icons":
         await this.sendIcons(message.keys);
+        return;
+      case "images":
+        // The texticons of a modifier line ("[gold_i]"), which are ordinary
+        // game textures rather than files of the trait icon folder.
+        wireImages(this.panel, this.imageRoots(), this.textures, message);
+        return;
+      case "loc":
+        await this.sendLoc(message.keys);
         return;
       case "save":
         await this.save(message.save);
@@ -251,6 +305,25 @@ export class TraitCreatorPanel {
       }
     }
     return [...seen];
+  }
+
+  /**
+   * The player's word for a loc key, for the preview. Mod first: a key the mod
+   * redefines reads the way the mod defines it, the way the game reads it.
+   */
+  private async sendLoc(keys: string[]): Promise<void> {
+    const values: Record<string, string> = {};
+    for (const key of keys.slice(0, LOC_CHUNK)) {
+      let entries;
+      try {
+        entries = await this.options.lookupLoc(key);
+      } catch {
+        continue; // the index is not up yet; the app shows the key instead
+      }
+      const value = (entries.find((e) => e.source === "mod") ?? entries[0])?.value;
+      if (value) values[key] = value;
+    }
+    if (Object.keys(values).length > 0) this.post({ type: "loc", values });
   }
 
   private locateIcon(file: string): string | null {

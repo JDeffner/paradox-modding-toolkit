@@ -2,12 +2,14 @@
  * The Trait Creator booted in jsdom from the REAL page markup (html.ts) and
  * the REAL app bundle, with the host stubbed by a message recorder and fed the
  * REAL trait form (fixtures/traitForm.json, captured from the server the way
- * definitionForm.test.ts builds it: the bundled harvest, schema and modifier
- * dump, with the same four-trait stub index).
+ * definitionForm.test.ts builds it: the bundled harvest and schema over one mod
+ * trait and four vanilla ones copied out of the game's own 00_traits.txt).
  *
- * What it pins is the promise a form makes: a freshly opened creator is
- * saveable with only a name typed, and the block it then posts is the script
- * the fields say - built from 60 keys nobody wrote down here.
+ * What it pins is the promise the form makes to a modder who cannot script: a
+ * freshly opened creator is saveable with only a name typed, every list is a
+ * picker over what the game HAS, every empty input shows a value the game
+ * itself writes, and the panel on the right prints the trait the way the game's
+ * tooltip will.
  */
 import { describe, expect, it } from "vitest";
 import * as path from "path";
@@ -47,7 +49,17 @@ const INIT: TraitCreatorInit = {
   modLabel: "cultivation",
   locLanguage: "english",
   prefix: "px",
-  iconKeys: ["brave.dds", "craven.dds"],
+  iconKeys: ["_frame_education.dds", "brave.dds", "craven.dds"],
+};
+
+/**
+ * A slice of what `paradox/modifierFormats` answers for CK3: the game prints
+ * `martial` as a whole number where more is better, and gives a modifier its
+ * own word rather than its key.
+ */
+const FORMATS = {
+  martial: { label: "Martial", decimals: 0, color: "good" as const },
+  dynasty_opinion: { label: "Dynasty Opinion", decimals: 0, color: "good" as const },
 };
 
 interface Booted {
@@ -57,7 +69,7 @@ interface Booted {
   send(message: unknown): void;
   save(): TraitSave | undefined;
   labels(): string[];
-  preview(): string;
+  script(): string;
 }
 
 function boot(init: TraitCreatorInit = INIT): Booted {
@@ -68,6 +80,8 @@ function boot(init: TraitCreatorInit = INIT): Booted {
       (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
         postMessage: (msg: AppToHost) => posted.push(msg),
       });
+      // jsdom has no layout, and menu() scrolls its active row into view.
+      window.Element.prototype.scrollIntoView = () => undefined;
     },
   });
   const window = dom.window as unknown as Window & typeof globalThis;
@@ -85,9 +99,13 @@ function boot(init: TraitCreatorInit = INIT): Booted {
         .filter((m) => m.type === "save")
         .map((m) => m.save)
         .at(-1),
+    // Every name the form shows: the field rows, the skills row's captions and
+    // the keys a loaded file keeps the last word on.
     labels: () =>
-      [...window.document.querySelectorAll("#sections .px-label")].map((l) => l.textContent ?? ""),
-    preview: () => window.document.getElementById("preview")?.textContent ?? "",
+      [...window.document.querySelectorAll("#sections .px-label, #sections .skill > span, .kept > code")].map(
+        (l) => l.textContent ?? ""
+      ),
+    script: () => window.document.getElementById("script")?.textContent ?? "",
   };
 }
 
@@ -100,9 +118,37 @@ function type(app: Booted, selector: string, value: string): void {
 }
 
 /** The control of the field whose label is `key`. */
-function fieldInput(app: Booted, key: string): HTMLInputElement {
+function control(app: Booted, key: string): HTMLElement {
   const label = [...app.document.querySelectorAll("#sections .px-label")].find((l) => l.textContent === key)!;
-  return label.parentElement!.querySelector("input, textarea") as HTMLInputElement;
+  return label.nextElementSibling as HTMLElement;
+}
+
+/** One of the six skill inputs, which sit under their caption, not beside it. */
+function skill(app: Booted, key: string): HTMLInputElement {
+  return app.document.querySelector<HTMLInputElement>(`#sections input[data-key="${key}"]`)!;
+}
+
+function setSkill(app: Booted, key: string, value: string): void {
+  const input = skill(app, key);
+  input.value = value;
+  input.dispatchEvent(new app.window.Event("change", { bubbles: true }));
+}
+
+/** The entries a just-opened picker offers, as "label | hint". */
+function offered(app: Booted, within = ""): string[] {
+  return [...app.document.querySelectorAll(`${within} .px-menu-item`)].map((row) =>
+    [row.querySelector(".px-grow")?.textContent, row.querySelector(".px-menu-hint")?.textContent]
+      .filter(Boolean)
+      .join(" | ")
+  );
+}
+
+function pickEnum(app: Booted, key: string, value: string): void {
+  (control(app, key) as HTMLButtonElement).click();
+  const row = [...app.document.querySelectorAll(".px-menu-item")].find(
+    (item) => item.querySelector(".px-grow")?.textContent === value
+  ) as HTMLElement;
+  row.click();
 }
 
 describe("the Trait Creator boots on the real form", () => {
@@ -115,12 +161,11 @@ describe("the Trait Creator boots on the real form", () => {
   it("shows every key the form answered, in its designed section", () => {
     const app = boot();
     const labels = app.labels();
-    // The whole harvest reaches the panel: 60 keys, minus the two the Look
-    // section renders as loc pairs and the modifier row, plus those three.
+    // The whole harvest reaches the panel: nothing is dropped for being
+    // uncommon, it is only folded away under Advanced (AD-5).
     for (const key of FORM.keys) expect(labels).toContain(key.key);
     expect(labels).toContain("Name");
     expect(labels).toContain("Description");
-    expect(labels).toContain("modifiers");
   });
 
   it("prefills the name from the mod prefix and says where it saves", () => {
@@ -145,21 +190,88 @@ describe("the Trait Creator boots on the real form", () => {
   });
 });
 
+describe("every list is a picker over what the game has", () => {
+  it("offers the categories the game's own traits write, not a text box", () => {
+    const app = boot();
+    const trigger = control(app, "category") as HTMLButtonElement;
+    expect(trigger.tagName).toBe("BUTTON");
+    // The form sampled these out of the indexed traits; nothing is listed here.
+    trigger.click();
+    expect(offered(app)).toContain("personality");
+    expect(offered(app)).toContain("education");
+  });
+
+  it("names a trait the way the player reads it, with its key as the hint", () => {
+    const app = boot();
+    (control(app, "opposites").querySelector("button") as HTMLButtonElement).click();
+    expect(offered(app, ".px-picker-results")).toContain("Brave | brave");
+  });
+
+  it("names a modifier the way the game prints it, with its key as the hint", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS });
+    const add = [...app.document.querySelectorAll("#sections .px-btn")].find(
+      (b) => b.textContent === "Add modifier"
+    ) as HTMLButtonElement;
+    add.click();
+    (app.document.querySelector("#sections .modrow > .px-dropdown") as HTMLButtonElement).click();
+    expect(offered(app)).toContain("Dynasty Opinion | dynasty_opinion");
+  });
+
+  it("shows the value the game writes most often as every skill's placeholder", () => {
+    const app = boot();
+    // `martial = 2` is the literal the indexed traits write most; a blank field
+    // that says only "not set" is what this replaces.
+    expect(skill(app, "martial").placeholder).toBe("2");
+    for (const key of ["diplomacy", "martial", "stewardship", "intrigue", "learning", "prowess"]) {
+      expect(skill(app, key)).toBeTruthy();
+    }
+  });
+});
+
+describe("the preview is the game's own tooltip", () => {
+  it("prints a skill the way the game prints it, and frames it by category", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS });
+    setSkill(app, "martial", "3");
+    pickEnum(app, "category", "education");
+    // The frame is asked for by name; the host answers with a decoded picture.
+    expect(app.posted.some((m) => m.type === "icons" && m.keys.includes("_frame_education.dds"))).toBe(true);
+    app.send({ type: "icons", urls: { "_frame_education.dds": "https://host/frame.png" } });
+
+    const line = app.document.querySelector("#tip .px-mod-line")!;
+    expect(line.querySelector(".px-mod-value")!.textContent).toBe("+3");
+    expect(line.querySelector(".px-mod-label")!.textContent).toBe("Martial");
+    // `color = good` and a positive value: the player's green.
+    expect(line.className).toContain("good");
+    expect(app.document.querySelector<HTMLImageElement>("#tip .tip-icon img.frame")!.src).toBe(
+      "https://host/frame.png"
+    );
+  });
+
+  it("shows the key in place of the picture when nothing resolved one", () => {
+    const app = boot();
+    type(app, "#name", "px_stoic");
+    expect(app.document.querySelector("#tip .tip-icon .noicon")!.textContent).toBe("px_stoic");
+    // The name follows the key until the modder types over it.
+    expect(app.document.querySelector("#tip .px-game-tip-title")!.textContent).toBe("Px Stoic");
+  });
+});
+
 describe("a new trait saves with a name and one stat", () => {
   it("posts the block the form shows, with the loc the name derives", () => {
     const app = boot();
     type(app, "#name", "px_stoic");
-    type(app, `#sections input`, "personality"); // the first field is `category`
-    fieldInput(app, "martial").value = "3";
-    fieldInput(app, "martial").dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    pickEnum(app, "category", "personality");
+    setSkill(app, "martial", "3");
 
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
     const save = app.save()!;
     expect(save.mode).toBe("create");
     expect(save.name).toBe("px_stoic");
     expect(save.block).toBe("px_stoic = {\n\tcategory = personality\n\tmartial = 3\n}");
-    // The preview is the same text, so what a modder reads is what is written.
-    expect(app.preview()).toBe(save.block);
+    // The script panel is the same text, so what a modder reads is what is written.
+    expect(app.script()).toBe(save.block);
     expect(save.loc).toEqual([{ key: "trait_px_stoic", value: "Px Stoic" }]);
   });
 
@@ -183,8 +295,7 @@ describe("editing a trait the mod already has", () => {
     const app = boot();
     app.send({ type: "form", form: { ...FORM, current: CURRENT } });
     expect(app.document.getElementById("source")!.textContent).toBe("Mod");
-    fieldInput(app, "martial").value = "5";
-    fieldInput(app, "martial").dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    setSkill(app, "martial", "5");
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
 
     const save = app.save()!;
