@@ -62,7 +62,7 @@ export interface Layout {
 
 /** Card box and the space around it, in the layout's own units. */
 export const NODE_W = 168;
-export const NODE_H = 58;
+export const NODE_H = 74;
 /** Between two partner cards; the marriage bar spans it. */
 export const MATE_GAP = 26;
 /** Kept clear between two neighbouring subtrees. */

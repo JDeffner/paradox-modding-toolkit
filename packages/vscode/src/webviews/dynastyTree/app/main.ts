@@ -416,9 +416,9 @@ function drawTree(): void {
       // A text badge, not a coloured edge: the tag has to read as a word.
       const text = tag.length > 13 ? `${tag.slice(0, 12)}…` : tag;
       card.append(
-        svg("rect", { class: "ctag", x: 9, y: NODE_H - 25, width: text.length * 5.4 + 12, height: 14, rx: 7 })
+        svg("rect", { class: "ctag", x: 9, y: NODE_H - 28, width: text.length * 5.4 + 12, height: 14, rx: 7 })
       );
-      card.append(svgText("ctagtext", 15, NODE_H - 15, text));
+      card.append(svgText("ctagtext", 15, NODE_H - 18, text));
     }
     card.append(cardActions(char));
     card.addEventListener("click", () => select(char.id));
