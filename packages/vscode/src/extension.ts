@@ -116,6 +116,8 @@ import {
   type DefinitionEditResult,
   type DefinitionForm,
   type DefinitionFormParams,
+  modifierFormatsRequest,
+  type ModifierFormatsResult,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
@@ -1053,6 +1055,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         actions: {
           fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
         },
         lookupLoc,
         ...(named ? { name: named } : {}),

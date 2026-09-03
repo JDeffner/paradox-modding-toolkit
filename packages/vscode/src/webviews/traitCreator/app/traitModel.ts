@@ -6,7 +6,7 @@
  * which reads the harvest of `common/traits/_traits.info`. What is listed is
  * the LAYOUT - which of those keys a designed section shows, and in what
  * order - and the layout carries the source it was read from. A key the game
- * adds tomorrow still reaches the panel: it lands in "Other keys" with the
+ * adds tomorrow still reaches the panel: it lands in "Advanced" with the
  * widget its own value hint asks for (AD-5: annotate, never hide).
  *
  * `_traits.info` ends its property list with "Any other unknown property is
@@ -30,7 +30,7 @@ import {
   type ParsedBlock,
 } from "../../shared/scriptBlock";
 
-export type SectionId = "identity" | "look" | "stats" | "relations" | "ai" | "other";
+export type SectionId = "identity" | "skills" | "opinions" | "relations" | "advanced";
 
 export type WidgetKind =
   "text" | "number" | "bool" | "enum" | "script" | "multiRef" | "refRows" | "chips" | "icon";
@@ -40,34 +40,22 @@ export interface TraitFieldSpec {
   section: SectionId;
   widget: WidgetKind;
   doc?: string;
-  /** For `enum`: the values the schema's hint carries. */
+  /** For `enum`: the values the key may take (a schema hint, or what the game writes). */
   values?: string[];
   /** For `multiRef` / `refRows`: the option list to pick from. */
   refKind?: string;
+  /** The literal the game itself writes most often: an input's placeholder. */
+  example?: string;
+  /** Every value the indexed definitions write, when the form sampled them. */
+  sampled?: string[];
 }
 
 /**
- * Identity: `_traits.info`'s "=== Trait Properties ===", "### Trait
- * validation", "### Trait generation", "### Groups" and "### Misc properties",
- * in the order a modder answers them (what it is, who may have it, how it is
- * handed out).
+ * Identity: what the trait IS, in the order a modder answers it. The name and
+ * the description are not here because they are not block keys at all: they
+ * are the `trait_$` / `trait_$_desc` loc pair the panel writes separately.
  */
-const IDENTITY = [
-  "category",
-  "valid_sex",
-  "minimum_age",
-  "maximum_age",
-  "group",
-  "level",
-  "physical",
-  "genetic",
-  "good",
-  "birth",
-  "random_creation",
-  "inherit_chance",
-  "shown_in_ruler_designer",
-  "ruler_designer_cost",
-];
+const IDENTITY = ["icon", "category"];
 
 /**
  * The keys `_traits.info` documents as an integer or a 0-100 percentage
@@ -90,32 +78,30 @@ const NUMERIC = new Set([
 ]);
 
 /**
- * Stats and opinions: the modifier-shaped keys vanilla traits use most.
- * `same_opinion`, `same_opinion_if_same_faith` and `opposite_opinion` are
- * `_traits.info`'s "### Special opinion impacts"; the six skills, `health` and
- * `attraction_opinion` are the catch-all modifiers of the same file, verified
- * as plain integers in `00_traits.txt` (brave: `martial = 2`, `prowess = 3`,
- * `attraction_opinion = 10`, `same_opinion = 10`, `opposite_opinion = -10`).
+ * The six skills, in the order `_traits.info` lists them under "### Modifiers"
+ * ("diplomacy martial stewardship intrigue learning prowess = <int>"), and
+ * verified as plain integers in `00_traits.txt` (brave: `martial = 2`,
+ * `prowess = 3`). They are ordinary modifiers to the game, which is why the
+ * preview prints them through the same formatter as a modifier row.
  */
-const STATS = [
-  "diplomacy",
-  "martial",
-  "stewardship",
-  "intrigue",
-  "learning",
-  "prowess",
-  "health",
-  "same_opinion",
-  "same_opinion_if_same_faith",
-  "opposite_opinion",
-  "attraction_opinion",
-];
+const SKILLS = ["diplomacy", "martial", "stewardship", "intrigue", "learning", "prowess"];
+
+/**
+ * `_traits.info`'s "### Special opinion impacts" (`same_opinion`,
+ * `same_opinion_if_same_faith`, `opposite_opinion`) plus `attraction_opinion`,
+ * the one of the same shape vanilla writes most (brave: `attraction_opinion =
+ * 10`, `same_opinion = 10`, `opposite_opinion = -10`).
+ */
+const OPINIONS = ["same_opinion", "same_opinion_if_same_faith", "opposite_opinion", "attraction_opinion"];
 
 /** `_traits.info`'s "### Trait relations" plus the flag of "### Misc properties". */
 const RELATIONS = ["opposites", "compatibility", "flag"];
 
-/** The one key of the Look section that lives in the block (the rest is loc). */
+/** The one key of the Identity section that is a picture rather than a value. */
 const ICON_KEY = "icon";
+
+/** The key whose value the game reads as the trait's category. */
+const CATEGORY_KEY = "category";
 
 /** `enum:all|male|female` -> the values, or undefined. */
 function enumValues(hint: string | undefined): string[] | undefined {
@@ -123,25 +109,34 @@ function enumValues(hint: string | undefined): string[] | undefined {
   return hint.slice(5).split("|").filter(Boolean);
 }
 
+/**
+ * The values a one-of picker offers. `category` has no enum hint in the
+ * harvest (the game documents it as free text), so the honest list is the one
+ * the indexed traits actually write, which `sampled` measured; a game patch
+ * that adds a category adds it to the picker with no code change.
+ */
+function pickValues(key: DefinitionFormKey): string[] | undefined {
+  return enumValues(key.values) ?? (key.key === CATEGORY_KEY ? key.sampled : undefined);
+}
+
 function widgetFor(key: DefinitionFormKey, section: SectionId): WidgetKind {
   if (key.key === ICON_KEY) return "icon";
   if (key.key === "opposites") return "multiRef";
   if (key.key === "compatibility") return "refRows";
   if (key.key === "flag") return "chips";
-  if (enumValues(key.values)) return "enum";
+  if (pickValues(key)?.length) return "enum";
   if (key.values === "bool") return "bool";
-  if (section === "stats" || NUMERIC.has(key.key)) return "number";
+  if (section === "skills" || section === "opinions" || NUMERIC.has(key.key)) return "number";
   if (key.values === "block") return "script";
   return "text";
 }
 
 function sectionFor(key: string): SectionId {
-  if (key === ICON_KEY) return "look";
   if (IDENTITY.includes(key)) return "identity";
-  if (STATS.includes(key)) return "stats";
+  if (SKILLS.includes(key)) return "skills";
+  if (OPINIONS.includes(key)) return "opinions";
   if (RELATIONS.includes(key)) return "relations";
-  if (key.startsWith("ai_")) return "ai";
-  return "other";
+  return "advanced";
 }
 
 /** Every key the form answered, placed and given a widget. Nothing is dropped. */
@@ -150,7 +145,7 @@ export function traitFieldSpecs(form: DefinitionForm): TraitFieldSpec[] {
   const ordered: DefinitionFormKey[] = [];
   // The designed sections read in their own order; the rest keep the harvest's
   // (most used first), which is the order the form arrived in.
-  for (const key of [...IDENTITY, ICON_KEY, ...STATS, ...RELATIONS]) {
+  for (const key of [...IDENTITY, ...SKILLS, ...OPINIONS, ...RELATIONS]) {
     const spec = byKey.get(key);
     if (spec) {
       ordered.push(spec);
@@ -167,7 +162,9 @@ export function traitFieldSpecs(form: DefinitionForm): TraitFieldSpec[] {
       section,
       widget,
       ...(key.doc ? { doc: key.doc } : {}),
-      ...(enumValues(key.values) ? { values: enumValues(key.values) } : {}),
+      ...(pickValues(key)?.length ? { values: pickValues(key) } : {}),
+      ...(key.example ? { example: key.example } : {}),
+      ...(key.sampled?.length ? { sampled: key.sampled } : {}),
       ...(key.refKinds?.[0] ? { refKind: key.refKinds[0] } : {}),
       // compatibility names traits too, but the harvest has no ref row for it
       // (it is `trait = number`, not a list); the panel passes the trait list.
@@ -227,7 +224,10 @@ function readValue(spec: TraitFieldSpec, value: string, block: boolean): FieldVa
     case "bool":
       return value === "yes" ? true : value === "no" ? false : null;
     case "enum":
-      return spec.values?.includes(value) ? value : null;
+      // A value no list carries is still the file's value: it loads, and the
+      // picker widens to include it (AD-5, annotate never hide). Only a BLOCK
+      // is refused, because no one-of picker can stand for one.
+      return block ? null : value;
     case "multiRef":
       return block ? readTokenList(value) : null;
     case "refRows":

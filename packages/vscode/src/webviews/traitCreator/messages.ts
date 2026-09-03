@@ -8,7 +8,8 @@
  * names), and the pictures come back as webview URLs on request, because a
  * webview cannot read the disk.
  */
-import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
+import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
 
 /** How the save writes: the app decides, the host obeys. */
 export type SaveMode = "create" | "edit" | "duplicate" | "override";
@@ -37,6 +38,16 @@ export type HostToApp =
   | { type: "iconWritten"; key: string; url: string | null }
   /** A save finished. `ok` false leaves the form exactly as it was. */
   | { type: "saved"; ok: boolean; name: string }
+  /**
+   * How the game prints each modifier (`paradox/modifierFormats`), fetched
+   * once per panel. `null` when the profile names no formats source: the
+   * preview then title-cases the names instead of showing nothing.
+   */
+  | { type: "modifierFormats"; formats: Record<string, ModifierFormat> | null }
+  /** Pictures for the game-relative texture paths the preview asked for. */
+  | CreatorImagesReply
+  /** Loc values for the keys asked for; a key nothing resolves is absent. */
+  | { type: "loc"; values: Record<string, string> }
   | { type: "toast"; message: string; variant?: "default" | "destructive" };
 
 export type AppToHost =
@@ -50,7 +61,11 @@ export type AppToHost =
   /** Deep link into the Examples Wiki for a trigger, effect or modifier name. */
   | { type: "openExamples"; name: string }
   /** Pick an image and convert it into the mod's icon folder under `name`. */
-  | { type: "convertIcon"; name: string };
+  | { type: "convertIcon"; name: string }
+  /** Decode these game-relative texture paths (a modifier line's texticon). */
+  | CreatorImagesRequest
+  /** Resolve these loc keys (a trait flag's `TRAIT_FLAG_DESC_<name>`). */
+  | { type: "loc"; keys: string[] };
 
 export interface TraitSave {
   name: string;
