@@ -1537,6 +1537,15 @@ export const EVENT_VOCABULARY_MAX_VALUES = 400;
 export const DEFINITION_FORM_MAX_SAMPLED = 80;
 
 /**
+ * How long a block body {@link DefinitionFormKey.example} may be. A placeholder
+ * is read at a glance, and the shortest bodies a game writes for a block key
+ * (a trait's `triggered_opinion`, a culture's `parameters`) fit well inside
+ * this; a longer one is cut with an ellipsis rather than dropped, because half
+ * a real body still says what the key wants.
+ */
+export const DEFINITION_FORM_MAX_EXAMPLE = 120;
+
+/**
  * Request: the value set a VALUE belongs to, resolved through the definition
  * index; {@link EventValueOptionsParams} -> {@link EventValueOptionsResult} |
  * null. The static vocabulary maps a KEY to its values, which only works where
@@ -1762,11 +1771,19 @@ export interface DefinitionFormKey {
    */
   sampled?: string[];
   /**
-   * The scalar literal the indexed definitions of this kind write most often
-   * for this key: a real value, so a form can show it as the input's
-   * placeholder instead of inventing one. Unlike {@link sampled} it counts
-   * numbers and quoted text too (quotes stripped), and it survives the cap, so
-   * a key whose value differs in every definition still has an example.
+   * The literal the indexed definitions of this kind write most often for this
+   * key: a real value, so a form can show it as the input's placeholder
+   * instead of inventing one. Unlike {@link sampled} it counts numbers and
+   * quoted text too (quotes stripped), and it survives the cap, so a key whose
+   * value differs in every definition still has an example.
+   *
+   * A key whose value is a BLOCK gets the most written body instead, collapsed
+   * onto one line and capped at {@link DEFINITION_FORM_MAX_EXAMPLE}
+   * characters, so a script field has a placeholder too.
+   *
+   * A key whose value set is already stated (`bool`, `enum:`) carries an
+   * example as well, though no {@link sampled}: a dropdown showing the value
+   * the game itself writes says more than one reading "not set".
    */
   example?: string;
 }

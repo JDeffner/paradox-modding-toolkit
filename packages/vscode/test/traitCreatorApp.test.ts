@@ -62,6 +62,19 @@ const TARGET = { modLabel: "cultivation", path: "common/traits/px_traits.txt" };
 const FORMATS = {
   martial: { label: "Martial", decimals: 0, color: "good" as const },
   dynasty_opinion: { label: "Dynasty Opinion", decimals: 0, color: "good" as const },
+  // `hidden = yes` in the game's own 00_definitions.txt: the whole ai_* family.
+  ai_boldness: { label: "Ai Boldness", decimals: 0, color: "good" as const, hidden: true },
+};
+
+/**
+ * The entries the game's trait tooltip prints an opinion through, verbatim
+ * from localization/english/custom_localization/character_relations_l_english.yml
+ * and core_l_english.yml.
+ */
+const OPINION_LOC_VALUES = {
+  TRAIT_OPINION_SAME_TRAIT: "Opinion of [TRAIT.GetName( GetNullCharacter )] Characters",
+  TRAIT_OPINION_ATTRACTION: "[attraction|E] Opinion",
+  TRAIT_COMPATIBILITY_LIKES: "$TRAIT$ likes $OTHER_TRAIT$: $VALUE|=+0$",
 };
 
 interface Booted {
@@ -103,10 +116,9 @@ function boot(init: TraitCreatorInit = INIT): Booted {
         .filter((m) => m.type === "save")
         .map((m) => m.save)
         .at(-1),
-    // Every name the form shows: the field rows, the skills row's captions and
-    // the keys a loaded file keeps the last word on.
+    // Every name the form shows: the field rows and the skills row's captions.
     labels: () =>
-      [...window.document.querySelectorAll("#sections .px-label, #sections .skill > span, .kept > code")].map(
+      [...window.document.querySelectorAll("#sections .px-label, #sections .skill > span")].map(
         (l) => l.textContent ?? ""
       ),
     script: () => window.document.querySelector(".px-script > pre")?.textContent ?? "",
@@ -130,6 +142,13 @@ function control(app: Booted, key: string): HTMLElement {
 /** One of the six skill inputs, which sit under their caption, not beside it. */
 function skill(app: Booted, key: string): HTMLInputElement {
   return app.document.querySelector<HTMLInputElement>(`#sections input[data-key="${key}"]`)!;
+}
+
+/** A number field that sits beside its label (an opinion, a rule). */
+function setNumber(app: Booted, key: string, value: string): void {
+  const input = control(app, key).querySelector("input")!;
+  input.value = value;
+  input.dispatchEvent(new app.window.Event("change", { bubbles: true }));
 }
 
 function setSkill(app: Booted, key: string, value: string): void {
@@ -223,6 +242,19 @@ describe("every list is a picker over what the game has", () => {
     expect(offered(app)).toContain("Dynasty Opinion | dynasty_opinion");
   });
 
+  it("shows the body the game writes as a script field's placeholder", () => {
+    const example = "{ parameter = mountain_trait_bonuses mountains_max_combat_roll = 3 }";
+    const app = boot({
+      ...INIT,
+      form: {
+        ...FORM,
+        keys: FORM.keys.map((key) => (key.key === "culture_modifier" ? { ...key, example } : key)),
+      },
+    });
+    const area = control(app, "culture_modifier").querySelector("textarea")!;
+    expect(area.placeholder).toBe(example);
+  });
+
   it("shows the value the game writes most often as every skill's placeholder", () => {
     const app = boot();
     // `martial = 2` is the literal the indexed traits write most; a blank field
@@ -252,6 +284,114 @@ describe("the preview is the game's own tooltip", () => {
     expect(app.document.querySelector<HTMLImageElement>("#tip .tip-icon img.frame")!.src).toBe(
       "https://host/frame.png"
     );
+  });
+
+  it("draws the category frame UNDER the picture, at the same size", () => {
+    const app = boot();
+    type(app, "#name", "brave");
+    pickEnum(app, "category", "education");
+    app.send({
+      type: "icons",
+      urls: { "_frame_education.dds": "https://host/frame.png", "brave.dds": "https://host/brave.png" },
+    });
+    // The frames are opaque in the middle and share the picture's own 120x120
+    // canvas, so drawn over it they would hide the trait entirely.
+    const images = [...app.document.querySelectorAll<HTMLImageElement>("#tip .tip-icon img")];
+    expect(images.map((img) => img.className)).toEqual(["frame", ""]);
+    expect(images[1].src).toBe("https://host/brave.png");
+  });
+
+  it("prints the opinion keys through the game's own tooltip loc entries", () => {
+    const app = boot();
+    type(app, "#name", "px_stoic");
+    setNumber(app, "same_opinion", "10");
+    // The panel asks for the entries rather than carrying words of its own.
+    expect(app.posted.some((m) => m.type === "loc" && m.keys.includes("TRAIT_OPINION_SAME_TRAIT"))).toBe(
+      true
+    );
+    app.send({ type: "loc", values: OPINION_LOC_VALUES });
+    const line = [...app.document.querySelectorAll("#tip .px-mod-line")].find((el) =>
+      el.textContent?.includes("Opinion of")
+    )!;
+    expect(line.querySelector(".px-mod-label")!.textContent).toBe("Opinion of Px Stoic Characters");
+    expect(line.querySelector(".px-mod-value")!.textContent).toBe("+10");
+  });
+
+  it("puts a modifier the game marks hidden under its own heading", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS });
+    setSkill(app, "martial", "3");
+    const add = [...app.document.querySelectorAll("#sections .px-btn")].find(
+      (b) => b.textContent === "Add modifier"
+    ) as HTMLButtonElement;
+    add.click();
+    (app.document.querySelector("#sections .modrow > .px-dropdown") as HTMLButtonElement).click();
+    (
+      [...app.document.querySelectorAll(".px-menu-item")].find(
+        (item) => item.querySelector(".px-menu-hint")?.textContent === "ai_boldness"
+      ) as HTMLElement
+    ).click();
+
+    const hidden = app.document.querySelector("#tip .tip-hidden")!;
+    expect(hidden.textContent).toContain("Not shown to the player");
+    expect(hidden.textContent).toContain("Ai Boldness");
+    // The skill the player DOES read stays above the rule.
+    expect(hidden.textContent).not.toContain("Martial");
+  });
+
+  it("puts a rule the game prints no tooltip line for under the same heading, with its doc", () => {
+    const app = boot();
+    app.send({
+      type: "form",
+      form: {
+        ...FORM,
+        current: {
+          file: "D:/mod/common/traits/px_traits.txt",
+          line: 0,
+          source: "mod" as const,
+          text: "px_undying = {\n\tcategory = fame\n\timmortal = yes\n}",
+        },
+      },
+    });
+    const hidden = app.document.querySelector("#tip .tip-hidden")!;
+    expect(hidden.textContent).toContain("immortal = yes");
+    // The note is _traits.info's own sentence about the key, by way of the harvest.
+    expect(hidden.textContent).toContain("Will stop visual aging");
+  });
+
+  it("words a triggered_opinion with the modifier's own loc, and keeps the key when it is a datafunction", () => {
+    // Both blocks kinslayer_1 writes in the game's own 00_traits.txt.
+    const text =
+      "px_kinslayer = {\n" +
+      "\tcategory = fame\n" +
+      "\ttriggered_opinion = {\n\t\topinion_modifier = kinslayer_intolerant\n\t}\n" +
+      "\ttriggered_opinion = {\n\t\topinion_modifier = kinslayer_crime_dynasty\n\t\tsame_dynasty = yes\n\t}\n" +
+      "}";
+    const app = boot();
+    app.send({
+      type: "form",
+      form: {
+        ...FORM,
+        current: { file: "D:/mod/common/traits/px_traits.txt", line: 0, source: "mod" as const, text },
+      },
+    });
+    expect(app.posted.some((m) => m.type === "loc" && m.keys.includes("kinslayer_intolerant"))).toBe(true);
+    app.send({
+      type: "loc",
+      values: {
+        // secrets_l_english.yml: an entry the panel has no character to resolve
+        // the datafunction against.
+        kinslayer_intolerant: "Known [GetTrait('kinslayer_3').GetName( Getnullcharacter )]",
+        // religion_l_english.yml: prose, so the player's word is shown.
+        kinslayer_crime_dynasty: "Kinslayer",
+      },
+    });
+    const facts = [...app.document.querySelectorAll("#tip .tip-fact")].map((el) => el.textContent ?? "");
+    expect(facts.some((text) => text.startsWith("kinslayer_intolerant"))).toBe(true);
+    expect(facts.some((text) => text.startsWith("Kinslayer") && text.includes("same_dynasty = yes"))).toBe(
+      true
+    );
+    expect(app.document.querySelector("#tip")!.textContent).not.toContain("GetTrait");
   });
 
   it("shows an empty tile that names the missing picture when nothing resolved one", () => {
@@ -311,6 +451,24 @@ describe("editing a trait the mod already has", () => {
     expect(save.sourceFile).toBe("px_traits.txt");
     // The whole block travels too, byte-identical apart from the one line.
     expect(save.block).toBe(CURRENT.text.replace("martial = 2", "martial = 5"));
+  });
+
+  it("a repeated block key opens as one script box per statement, and saves back", () => {
+    const text =
+      "px_stoic = {\n" +
+      "\tcategory = personality\n" +
+      "\ttriggered_opinion = {\n\t\topinion_modifier = a\n\t}\n" +
+      "\ttriggered_opinion = {\n\t\topinion_modifier = b\n\t}\n" +
+      "}";
+    const app = boot();
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    // Nothing is left as raw text a form cannot reach: both statements are
+    // boxes, and saving with neither touched writes the file back as it was.
+    const areas = control(app, "triggered_opinion").querySelectorAll("textarea");
+    expect(areas.length).toBe(2);
+    expect(areas[1].value).toContain("opinion_modifier = b");
+    app.document.querySelector<HTMLButtonElement>("#save")!.click();
+    expect(app.save()!.block).toBe(text);
   });
 
   it("a game trait opens as a duplicate under the mod's prefix", () => {

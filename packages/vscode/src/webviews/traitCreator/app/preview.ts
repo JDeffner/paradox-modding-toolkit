@@ -35,9 +35,45 @@ export function plainLoc(text: string): string {
     );
 }
 
+/**
+ * One of the game's trait-tooltip loc values with the names filled in.
+ *
+ * The engine resolves `[TRAIT.GetName( … )]` against the trait the tooltip is
+ * for and `[TRAIT_2. … ]` against the other one; `$TRAIT$`, `$OTHER_TRAIT$`
+ * and `$VALUE|=+0$` are the same three pieces written as parameters (compare
+ * `TRAIT_OPINION_SAME_TRAIT` with `TRAIT_COMPATIBILITY_LIKES`). Everything
+ * after that is ordinary markup, which `plainLoc` takes off.
+ */
+export function fillTraitLoc(
+  template: string,
+  parts: { trait: string; other?: string; value?: number }
+): string {
+  // `$VALUE|=+0$`: a whole number that always carries its sign.
+  const signed = parts.value === undefined ? "" : `${parts.value >= 0 ? "+" : ""}${parts.value}`;
+  const filled = template
+    .replace(/\[TRAIT_2\.[^\]]*\]/g, parts.other ?? "")
+    .replace(/\[TRAIT\.[^\]]*\]/g, parts.trait)
+    .replace(/\$TRAIT\$/g, parts.trait)
+    .replace(/\$OTHER_TRAIT\$/g, parts.other ?? "")
+    .replace(/\$VALUE[^$]*\$/g, signed);
+  return plainLoc(filled).replace(/\s+/g, " ").trim();
+}
+
 export interface PreviewModifier {
   name: string;
   value: number | string;
+}
+
+/** One opinion effect, already worded by the game's own loc entry for it. */
+export interface PreviewOpinion {
+  label: string;
+  value: number;
+}
+
+/** A line the tooltip prints as prose, with one line of explanation under it. */
+export interface PreviewFact {
+  text: string;
+  note?: string;
 }
 
 /** Another trait the tooltip names (an opposite), with what it looks like. */
@@ -59,6 +95,24 @@ export interface PreviewInput {
   opposites: PreviewTrait[];
   /** A trait flag, as the player's word for it when the loc resolved. */
   flags: string[];
+  /**
+   * `same_opinion` and its neighbours, worded through the game's own
+   * `TRAIT_OPINION_*` loc entries by the caller (which is the only side that
+   * can resolve loc). Optional so another panel may reuse this tooltip
+   * without them.
+   */
+  opinions?: PreviewOpinion[];
+  /** `compatibility` rows, each already a whole `TRAIT_COMPATIBILITY_*` line. */
+  compatibility?: PreviewFact[];
+  /** `triggered_opinion` blocks: the opinion modifier, and its conditions. */
+  triggered?: PreviewFact[];
+  /**
+   * What the trait does that the player never reads as a tooltip line: the
+   * modifiers the game's format files mark `hidden`, and the rule keys that
+   * only change behaviour. Each carries one line saying how the game does
+   * surface it, if it does.
+   */
+  hidden?: PreviewFact[];
 }
 
 export interface PreviewDeps {
@@ -99,8 +153,29 @@ function el(tag: string, cls = "", text?: string): HTMLElement {
   return node;
 }
 
+/**
+ * The framed picture. The game draws ONE icon widget for a trait
+ * (`trait_icon_texture` in gui/shared/icons.gui, `texture =
+ * "[Trait.GetIcon(Character.Self)]"`; the trait tooltip this preview stands in
+ * for sizes it 52x52, gui/shared/cooltip.gui `character_trait_tooltip`): the
+ * frame is not a second widget, it is part of the art, and every
+ * `gfx/interface/icons/traits/*.dds` shares one 120x120 canvas with the
+ * `_frame_*.dds` templates (measured).
+ *
+ * So the frame goes UNDER the picture, at the same size. Drawn over it, it
+ * hides the trait: the frames are opaque in the middle (alpha 255 at the centre
+ * in 9 of the 10 templates, 0 at every corner; 37-53% of their pixels are
+ * opaque, measured).
+ */
 function picture(input: PreviewInput): HTMLElement {
   const box = el("div", "tip-icon");
+  if (input.frameUrl) {
+    const frame = document.createElement("img");
+    frame.className = "frame";
+    frame.src = input.frameUrl;
+    frame.alt = "";
+    box.append(frame);
+  }
   if (input.iconUrl) {
     const img = document.createElement("img");
     img.src = input.iconUrl;
@@ -114,15 +189,33 @@ function picture(input: PreviewInput): HTMLElement {
     empty.title = input.key ? `No picture named ${input.key} in the icon folder` : "No picture";
     box.append(empty);
   }
-  if (input.frameUrl) {
-    const frame = document.createElement("img");
-    frame.className = "frame";
-    frame.src = input.frameUrl;
-    frame.alt = "";
-    box.append(frame);
-  }
   return box;
 }
+
+/**
+ * How the game prints an opinion number: a whole number with a forced sign.
+ * That is `$VALUE|=+0$`, the format its own loc entries use for one
+ * (`TRAIT_COMPATIBILITY_LIKES`, `OPINION_MTTH` in core_l_english.yml). The
+ * label is the caller's, read out of the game's `TRAIT_OPINION_*` entries.
+ */
+function opinionFormat(label: string): ModifierFormat {
+  return { label, decimals: 0, color: "good" };
+}
+
+/** A prose line of the tooltip, with the one line of explanation under it. */
+function factRow(fact: PreviewFact): HTMLElement {
+  const row = el("div", "tip-fact");
+  row.append(el("div", "", fact.text));
+  if (fact.note) row.append(el("div", "tip-note", fact.note));
+  return row;
+}
+
+/**
+ * The heading the hidden group carries. It is UI copy, not a game string: the
+ * game has no tooltip for "you will not see this", which is exactly why the
+ * panel has to say it.
+ */
+const HIDDEN_TITLE = "Not shown to the player";
 
 /** The tooltip, as one element the caller drops into its panel. */
 export function renderTraitTip(input: PreviewInput, deps: PreviewDeps): HTMLElement {
@@ -134,15 +227,38 @@ export function renderTraitTip(input: PreviewInput, deps: PreviewDeps): HTMLElem
 
   if (input.desc) tip.append(el("div", "px-game-tip-body", input.desc));
 
-  if (input.modifiers.length > 0) {
+  // `hidden = yes` in the game's modifier_definition_formats means the game
+  // never prints the modifier (13 blocks write it in 00_definitions.txt, the
+  // whole `ai_*` family): those lines belong under the separator, not in the
+  // tooltip the player reads.
+  const isHidden = (mod: PreviewModifier): boolean => deps.formats?.[mod.name]?.hidden === true;
+  const shownMods = input.modifiers.filter((mod) => !isHidden(mod));
+  const hiddenMods = input.modifiers.filter(isHidden);
+  const line = (mod: PreviewModifier): HTMLElement =>
+    renderModifierLine(modifierLine(mod.name, mod.value, deps.formats?.[mod.name]), deps.imageUrl);
+
+  if (shownMods.length > 0) {
     const box = el("div", "tip-mods");
-    for (const mod of input.modifiers) {
+    for (const mod of shownMods) box.append(line(mod));
+    tip.append(box);
+  }
+
+  const opinions = input.opinions ?? [];
+  if (opinions.length > 0) {
+    const box = el("div", "tip-mods");
+    for (const opinion of opinions) {
       box.append(
-        renderModifierLine(modifierLine(mod.name, mod.value, deps.formats?.[mod.name]), deps.imageUrl)
+        renderModifierLine(
+          modifierLine(opinion.label, opinion.value, opinionFormat(opinion.label)),
+          deps.imageUrl
+        )
       );
     }
     tip.append(box);
   }
+
+  for (const fact of input.compatibility ?? []) tip.append(factRow(fact));
+  for (const fact of input.triggered ?? []) tip.append(factRow(fact));
 
   if (input.opposites.length > 0) {
     const box = el("div", "tip-rel");
@@ -162,5 +278,18 @@ export function renderTraitTip(input: PreviewInput, deps: PreviewDeps): HTMLElem
   }
 
   for (const flag of input.flags) tip.append(el("div", "tip-note", plainLoc(flag)));
+
+  const facts = input.hidden ?? [];
+  if (hiddenMods.length > 0 || facts.length > 0) {
+    const box = el("div", "tip-hidden");
+    box.append(el("div", "tip-hidden-title", HIDDEN_TITLE));
+    if (hiddenMods.length > 0) {
+      const mods = el("div", "tip-mods");
+      for (const mod of hiddenMods) mods.append(line(mod));
+      box.append(mods);
+    }
+    for (const fact of facts) box.append(factRow(fact));
+    tip.append(box);
+  }
   return tip;
 }

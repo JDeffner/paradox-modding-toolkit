@@ -25,6 +25,7 @@
  */
 import * as fs from "fs";
 import {
+  DEFINITION_FORM_MAX_EXAMPLE,
   DEFINITION_FORM_MAX_SAMPLED,
   EVENT_VOCABULARY_MAX_VALUES,
   type DefinitionForm,
@@ -73,6 +74,8 @@ function formKeys(specs: Map<string, KeySpec> | undefined): DefinitionFormKey[] 
 interface ParsedDef {
   block: BlockNode;
   source: string;
+  /** Where `source` starts in the file, so a statement's range indexes into it. */
+  start: number;
 }
 type FileCache = Map<string, Map<string, ParsedDef>>;
 
@@ -89,7 +92,11 @@ function parsedFile(file: string, cache: FileCache): Map<string, ParsedDef> {
   }
   for (const s of parseScript(text).root.statements) {
     if (s.kind !== "assignment" || s.value?.kind !== "block") continue;
-    defs.set(s.key.text, { block: s.value, source: text.slice(s.key.range.start, s.value.range.end) });
+    defs.set(s.key.text, {
+      block: s.value,
+      source: text.slice(s.key.range.start, s.value.range.end),
+      start: s.key.range.start,
+    });
   }
   return defs;
 }
@@ -174,18 +181,25 @@ function groupOptions(
  * of everything.
  */
 function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[], cache: FileCache): void {
-  const wanted = keys.filter(
-    (k) => !k.refKinds?.length && !k.values?.startsWith("enum:") && k.values !== "bool"
-  );
+  // Bools and enums are in: their value SET is known already, but the value the
+  // game writes most often for the key is still the honest thing a form shows
+  // in an empty control, and a dropdown reading only "not set" tells a modder
+  // nothing. A key answered by the definition index stays out: its options are
+  // the index's, and its widget has no placeholder slot to fill.
+  const wanted = keys.filter((k) => !k.refKinds?.length);
   if (wanted.length === 0) return;
   const counts = new Map<string, Map<string, number>>();
   // Read in the same pass, but counted separately: an example is ONE literal
   // the game writes (a number, a loc key, a quoted line), and those are exactly
   // the values `offerable` refuses as a value SET.
   const literals = new Map<string, Map<string, number>>();
+  // A block key has no scalar literal at all, so its example is the BODY the
+  // game writes most often for it: what a script field shows as a placeholder.
+  const bodies = new Map<string, Map<string, number>>();
   for (const key of wanted) {
     counts.set(key.key, new Map());
     literals.set(key.key, new Map());
+    bodies.set(key.key, new Map());
   }
   let read = 0;
   for (const { name, file } of definitionFiles(data, kind)) {
@@ -201,6 +215,14 @@ function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[]
       if (s.value.kind === "scalar" && s.value.text !== "") {
         const seen = literals.get(s.key.text)!;
         seen.set(s.value.text, (seen.get(s.value.text) ?? 0) + 1);
+      } else if (s.value.kind === "block") {
+        const body = oneLineBody(
+          def.source.slice(s.value.range.start - def.start, s.value.range.end - def.start)
+        );
+        if (body !== "") {
+          const seen = bodies.get(s.key.text)!;
+          seen.set(body, (seen.get(body) ?? 0) + 1);
+        }
       }
     }
   }
@@ -208,15 +230,37 @@ function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[]
     [...bucket.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   for (const key of wanted) {
     const bucket = counts.get(key.key)!;
-    if (bucket.size > 0 && bucket.size <= DEFINITION_FORM_MAX_SAMPLED) {
+    // A key whose value set the schema or the doc already states (`bool`,
+    // `enum:`) gets no measured one: two lists of the same thing, one of them
+    // only as complete as the files happen to be.
+    const stated = key.values === "bool" || key.values?.startsWith("enum:") === true;
+    if (!stated && bucket.size > 0 && bucket.size <= DEFINITION_FORM_MAX_SAMPLED) {
       key.sampled = mostUsed(bucket).map(([value]) => value);
     }
     // Kept even when the value set was dropped for being past the cap: a key
     // whose value differs in every definition is exactly the one a form has to
     // show an example for.
-    const example = mostUsed(literals.get(key.key)!)[0];
+    // A scalar literal first: it is what most keys are. A key the game only
+    // ever writes as a block falls back to its most written body, so a script
+    // field is never the one field with no example on it.
+    const example = mostUsed(literals.get(key.key)!)[0] ?? mostUsed(bodies.get(key.key)!)[0];
     if (example) key.example = example[0];
   }
+}
+
+/**
+ * A `{ … }` body as a placeholder can be: one line, inner runs of whitespace
+ * collapsed, cut with an ellipsis rather than dropped when it is long. The
+ * braces stay, because they are what the modder has to type.
+ */
+function oneLineBody(text: string): string {
+  const flat = text
+    .replace(/#[^\n]*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return flat.length > DEFINITION_FORM_MAX_EXAMPLE
+    ? `${flat.slice(0, DEFINITION_FORM_MAX_EXAMPLE - 1).trimEnd()}…`
+    : flat;
 }
 
 /**
