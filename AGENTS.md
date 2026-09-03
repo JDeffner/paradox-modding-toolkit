@@ -215,6 +215,7 @@ record. Do not create notes under `docs/`.
 | `build-structures-json.ts` | `data/ck3/structures.json` | Harvests every `_*.info` doc (CK3-only) |
 | `build-gui-schema.ts [--game]` | `data/<id>/guiSchema.json` | Widget types + property counts from vanilla `gui/` |
 | `build-freqs.ts [--game]` | `data/<id>/freqs.json` | Per-context usage counts. CK3 regen stays byte-identical modulo `meta.generated` unless the game patched |
+| `build-skeletons.ts [--game]` | `data/<id>/skeletons.json` | Definition skeletons: the keys at least half a kind's vanilla definitions carry, in median order, with the measured value vocabulary. Byte-identical modulo `meta.generated` unless the game patched; a game with no `gamePath` writes an empty table |
 | `import-cwt-types.ts <clone>` | `games/eu5/schema.generated.ts` | Importer from a pinned cwtools-eu5-config clone; update the pinned commit in the file header AND `THIRD-PARTY-NOTICES.md` |
 | `audit-schema-coverage.ts [--game]` | stdout | Schema vs game folders; gaps 0 or documented |
 | `gen-brand.ts` / `gen-icons.ts` | `media/` | Geometry in `brandGeometry.ts`; guide in `docs/file-icons.md` |

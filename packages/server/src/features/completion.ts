@@ -72,6 +72,7 @@ import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion } from "./assetPaths";
 import { snippetSupport } from "../clientMode";
 import { blockTemplateFor } from "./blockSnippets";
+import { skeletonsAt } from "./definitionSkeletons";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */
 export const MAX_ITEMS = 1000;
@@ -477,11 +478,44 @@ export class CompletionFeature {
       }
       ranked.push(out);
     }
-    const structured =
-      structureItems.length > 0
-        ? [...structureItems.filter((s) => matchesTypedWord(wordLow, s.label)), ...ranked]
-        : ranked;
+    const lead = [...structureItems, ...this.skeletonItems(result, offset, entry, lineSuffix)].filter((s) =>
+      matchesTypedWord(wordLow, s.label)
+    );
+    const structured = lead.length > 0 ? [...lead, ...ranked] : ranked;
     return finalize(structured, typedWord, limit, /*alreadyFiltered*/ true);
+  }
+
+  /**
+   * Definition and child-block skeletons (schema/skeletons.ts) as items of their
+   * own kind, ranked right after the block's structure keys.
+   *
+   * Gated on a BLANK line tail: a multi-line insert must not land inside an
+   * existing statement, and half a definition pasted over `= { … }` is worse
+   * than no offer. That gate also keeps these items out of every rank-eval
+   * sample, which always leaves the `= …` in place when it strips a key, so the
+   * ranking of existing items is unchanged by construction.
+   */
+  private skeletonItems(
+    result: ParseResult,
+    offset: number,
+    entry: SchemaEntry | null,
+    lineSuffix: string
+  ): CompletionItem[] {
+    if (!entry?.kind || lineSuffix.trim() !== "") return [];
+    return skeletonsAt(result, offset, entry.kind, activeProfile().skeletons).map((offer) => {
+      const item: CompletionItem = {
+        label: offer.label,
+        kind: CompletionItemKind.Snippet,
+        detail: offer.detail,
+        // Structure tier, coldest rank: after every structure key of the block
+        // and ahead of the token list. At a file's top level there are no
+        // structure keys, so the skeleton leads a list that otherwise has
+        // nothing to offer outside a definition body.
+        sortText: TIER_STRUCTURE + rankBucket(99) + SRC_MOD + offer.label,
+      };
+      setInsert(item, offer.text.snippet, offer.text.plain);
+      return item;
+    });
   }
 
   /**

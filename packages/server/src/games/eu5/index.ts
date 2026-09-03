@@ -11,6 +11,8 @@
  * `<mod>/.px-toolkit/schema.json` overlay.
  */
 import type { GameProfile } from "../profile";
+import type { SkeletonData } from "../../schema/skeletons";
+import SKELETONS from "../../../data/eu5/skeletons.json";
 import type { RefField, SchemaEntry } from "../../schema/types";
 import { JOMINI_VARIABLE_BLOCK_REFS } from "../jomini/variables";
 import { eu5Meta } from "./meta";
@@ -68,6 +70,10 @@ export const eu5Profile: GameProfile = {
   blockRefFields: { ...JOMINI_VARIABLE_BLOCK_REFS },
   // No `_*.info` docs ship with EU5, so the structures layer has no source.
   structureSources: {},
+  // Nobody here owns EU5, so its vanilla tree has never been measured and
+  // data/eu5/skeletons.json is empty. Wired anyway: a harvest run on a machine
+  // that has the game turns skeletons on with no code change.
+  skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   modifierPlaceholders: {},
   // No bundled wiki tokens in the preview cut, so nothing ever renders this.
   wikiNote: "",
