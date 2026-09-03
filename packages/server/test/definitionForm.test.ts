@@ -51,6 +51,32 @@ px_levantine = {
 }
 `;
 
+/**
+ * `unrestricted_dynasty_legacies` VERBATIM out of common/game_rules/
+ * 00_game_rules.txt (CK3 1.19.0.6). Its three settings ARE its inner blocks,
+ * which is the only place a `has_game_rule` value list can come from
+ * (_game_rules.info documents `categories` and `default` as the other two
+ * keys).
+ */
+const GAME_RULES_TXT = `unrestricted_dynasty_legacies = {
+	categories = { game_modes tweaks }
+
+	default = unrestricted_dynasty_legacies_default
+
+	unrestricted_dynasty_legacies_default = { }
+	unrestricted_dynasty_legacies_player_only = { }
+	unrestricted_dynasty_legacies_all = { }
+}
+`;
+
+/**
+ * `has_dlc_feature`'s own entry as triggers.log 1.19 writes it, with the
+ * `Traits:` label the docs parser keeps in front of the enumeration.
+ */
+const DLC_FEATURE_TRAITS =
+  "Traits: Valid Features: garments_of_the_hre, fashion_of_the_abbasid_court, " +
+  "the_northern_lords, and songs_of_the_realm";
+
 let dir: string;
 let traitsFile: string;
 const data = new ServerData();
@@ -64,7 +90,20 @@ beforeAll(() => {
   fs.writeFileSync(pillarsFile, PILLARS_TXT, "utf8");
   const culturesFile = path.join(dir, "px_cultures.txt");
   fs.writeFileSync(culturesFile, CULTURES_TXT, "utf8");
+  const rulesFile = path.join(dir, "00_game_rules.txt");
+  fs.writeFileSync(rulesFile, GAME_RULES_TXT, "utf8");
+  data.setTokens([
+    { name: "has_dlc_feature", kind: "trigger", doc: "", scopes: [], traits: DLC_FEATURE_TRAITS },
+  ]);
   data.index.addAll([
+    { name: "unrestricted_dynasty_legacies", kind: "game_rule", file: rulesFile, line: 0, source: "vanilla" },
+    {
+      name: "can_start_new_legacy_track_trigger",
+      kind: "scripted_trigger",
+      file: "vanilla.txt",
+      line: 0,
+      source: "vanilla",
+    },
     // The loc entries the labels come from: `trait_$` for a trait (the schema's
     // own first pattern), `$_name` for a pillar (its entry names none). One
     // trait deliberately has no loc entry at all.
@@ -199,6 +238,36 @@ describe("computeDefinitionForm", () => {
     // `traits = { trait_name = int }`: the entry keys are trait names.
     expect(perk.keys.find((k) => k.key === "traits")?.refKinds).toEqual(["trait"]);
     expect(perk.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
+  });
+
+  it("answers each condition trigger from the source the profile names", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "dynasty_legacy" })!;
+    const values = (trigger: string): string[] | undefined =>
+      form.conditions?.[trigger]?.map((item) => item.value);
+    // docList: the whole enumeration, INCLUDING the first entry, which the
+    // `Traits:` label in front of `Valid Features:` used to swallow.
+    expect(values("has_dlc_feature")).toEqual([
+      "garments_of_the_hre",
+      "fashion_of_the_abbasid_court",
+      "the_northern_lords",
+      "songs_of_the_realm",
+    ]);
+    // innerKeys: a game rule's settings, without `categories` and `default`.
+    expect(values("has_game_rule")).toEqual([
+      "unrestricted_dynasty_legacies_default",
+      "unrestricted_dynasty_legacies_player_only",
+      "unrestricted_dynasty_legacies_all",
+    ]);
+    // kind: the definition index, the same resolver the options use.
+    expect(values("scripted_trigger")).toEqual(["can_start_new_legacy_track_trigger"]);
+  });
+
+  it("leaves a trigger nothing resolves for out of the table entirely", () => {
+    // A trigger with an empty list would draw an empty picker; its ABSENCE is
+    // what tells a creator to offer a free input instead.
+    const bare = new ServerData();
+    const form = computeDefinitionForm(bare, schema, { kind: "dynasty_legacy" })!;
+    expect(form.conditions).toBeUndefined();
   });
 
   it("labels options and existing definitions with the loc the game reads", () => {

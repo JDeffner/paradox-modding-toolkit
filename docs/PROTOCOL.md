@@ -154,7 +154,7 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
-| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, every indexed definition of the kind with its source, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the value list per trigger a condition builder may offer rows for (`conditions`), the modifier vocabulary, every indexed definition of the kind with its source, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
 | `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). `null` when the active profile names no formats source or no game folder is configured |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -589,6 +589,21 @@ the files at request time rather than stored. A key whose value differs in
 every definition has no value SET, so past `DEFINITION_FORM_MAX_SAMPLED` (80)
 the field is absent instead of listing everything; a key with `refKinds` never
 carries it, because `options` already answers it.
+
+`conditions` answers a question `options` cannot: a key whose value is a whole
+TRIGGER (`is_shown`, `can_be_picked`) names no kind, so a client that wants to
+offer condition rows instead of a text area has nothing to fill them from. It
+maps a trigger name to the values that trigger accepts, for the handful of
+triggers the active game's profile names. Each list comes from what the server
+already holds: the trigger's own script_docs entry where the game enumerates
+the values on it (CK3's `has_dlc_feature` carries `Valid Features: …` in
+triggers.log), every indexed definition of a kind (`scripted_trigger`), or the
+inner block keys of every definition of a kind (a CK3 game rule's settings ARE
+its inner blocks, so `has_game_rule` is answered from `common/game_rules`). A
+trigger nothing resolves for in this workspace (no script_docs dump, no game
+folder) is ABSENT rather than empty, so a client offers a free input instead of
+a picker with nothing in it, and the whole field is absent for a game whose
+profile names no triggers.
 
 `paradox/modifierFormats` completes the pair for a client that lets a modder
 add modifiers: `paradox/definitionForm` says which modifiers exist, this says
