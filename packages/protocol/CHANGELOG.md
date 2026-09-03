@@ -12,6 +12,14 @@ version (up to 0.3.2); that history is in the extension changelog
   `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
   name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path
   instead of a root plus a dir name.
+- `EventGraphParams.connectedOnly` (default true): definitions with no edge
+  are left out of `paradox/eventGraph` before their cards are read; `root`
+  always stays. Send `false` for the whole namespace.
+
+- `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
+  `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
+  name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path
+  instead of a root plus a dir name.
 
 ## 0.2.0
 
