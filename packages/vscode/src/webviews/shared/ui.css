@@ -1493,6 +1493,25 @@ button.px-swatch:focus-visible {
   image-rendering: auto;
 }
 
+/* A culture tradition's composed picture (traditionIcon.ts): the engine stacks
+   one file per layer folder, so the layers are absolutely positioned in DOM
+   order. `--px-tradicon` sizes a square box; a caller with a shape of its own
+   (the game's 220x120 tile) sizes the box in its own page styles instead. */
+.px-tradicon {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: var(--px-tradicon, 48px);
+  height: var(--px-tradicon, 48px);
+}
+.px-tradicon > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* How the GAME prints a modifier, and the panel that shows it (modifierLines.ts).
    `.px-game-tip` is a quoted piece of the game's own UI, so it gets a border
    and its own ground rather than blending into the form around it. The tones

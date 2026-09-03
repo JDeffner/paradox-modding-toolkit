@@ -112,13 +112,8 @@ ${uiCss}
   .dlchead { display: flex; align-items: center; gap: 6px; }
   .dlchead > span { flex: 1 1 auto; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
 
-  /* The composed tradition icon: the game stacks its layer folders in index
-     order, so the layers are absolutely positioned in DOM order. */
-  .tradicon {
-    position: relative; flex: 0 0 auto; display: block;
-    width: var(--tradicon, 48px); height: var(--tradicon, 48px);
-  }
-  .tradicon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  /* The composed tradition icon is .px-tradicon in the shared stylesheet
+     (shared/traditionIcon.ts), which the Tradition Creator draws too. */
   /* The tradition picker's group heading (the game groups by category). */
   .catgroup {
     padding: 8px 6px 2px; font-size: var(--px-text-xs); font-weight: 600;
