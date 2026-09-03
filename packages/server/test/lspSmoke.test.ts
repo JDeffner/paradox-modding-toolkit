@@ -114,6 +114,12 @@ smoke.3 = {
 		set_variable = { name = smoke_toll value = 5 }
 	}
 }
+# Nothing fires this and it fires nothing: the graph's default leaves it out.
+smoke.3 = {
+	type = character_event
+	title = smoke.3.t
+}
+
 `;
 
 // Parent-mod fixture (submod workflow): indexed via settings.parentPaths.
@@ -566,6 +572,19 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(graph.suggestions?.ids).toContain("smoke.2");
     expect(graph.suggestions?.namespaces).toContain("smoke");
     expect(graph.suggestions?.namespaces).toContain("psmoke");
+  });
+
+  it("paradox/eventGraph leaves unconnected definitions out unless asked for them", async () => {
+    const ids = async (params: object) => {
+      const graph = (await conn.sendRequest("paradox/eventGraph", params)) as {
+        nodes: Array<{ id: string }>;
+      };
+      return graph.nodes.map((n) => n.id);
+    };
+    expect(await ids({ namespace: "smoke" })).not.toContain("smoke.3");
+    expect(await ids({ namespace: "smoke", connectedOnly: false })).toContain("smoke.3");
+    // The queried root stays even when nothing links to it.
+    expect(await ids({ root: "smoke.3" })).toContain("smoke.3");
   });
 
   it("paradox/exampleWiki answers the searchable catalog", async () => {

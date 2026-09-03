@@ -1364,6 +1364,13 @@ export interface EventGraphParams {
   /** Also read each mod event's `theme`. Off by default: it costs one parse per
    *  event file, and only a client that draws the theme's art needs it. */
   themes?: boolean;
+  /**
+   * Leave out every definition that has no edge in the answer. ON by default
+   * (absent = true): the pruned definitions are dropped before their cards
+   * are read, so a mod with hundreds of standalone events stays cheap. `root`
+   * is always kept. Send `false` to see the whole namespace, edges or not.
+   */
+  connectedOnly?: boolean;
 }
 /**
  * One row of a mod event's card, in EXECUTION order (immediate, then the

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Event graph: Connected only, on by default.** A rail tool leaves out every
+  event nothing fires and that fires nothing. The server drops them before it
+  reads their cards, so a mod with hundreds of standalone events opens faster.
+  Turn it off to see the whole namespace; the queried event always stays.
+
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
 - **"Link existing item" is gone from the Workshop panel.** The button let a

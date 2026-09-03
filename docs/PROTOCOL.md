@@ -237,9 +237,11 @@ completes a query box from the answer it already has instead of asking again.
 predates it simply omits it.
 
 `paradox/eventGraph` reports a namespace (or the whole mod) as its
-DEFINITIONS, not as the endpoints of the edges between them: an event nothing
-calls yet is still part of its namespace, and deriving the node set from edges
-hid exactly the event the author had just written. Edges that pass through a
+DEFINITIONS, not as the endpoints of the edges between them, and then applies
+`connectedOnly` (on unless the request says `false`): definitions with no edge
+are dropped before their cards are read, `root` always stays, and a graph that
+lost every node says so in `emptyReason`. A client that wants the event the
+author just wrote, edges or not, sends `connectedOnly: false`. Edges that pass through a
 scripted effect are followed transitively (visited-guarded, three hops) and
 answered as a direct `from` -> `to` edge whose `label` reads
 `via effect_a -> effect_b`, so an event whose `trigger_event` sits inside a

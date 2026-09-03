@@ -49,6 +49,7 @@ let ui: UiState = {
   railCollapsed: false,
   titleMode: "raw",
   banner: false,
+  connectedOnly: true,
 };
 let currentGraph: EventGraph | null = null;
 let currentParams: EventGraphParams = {};
@@ -525,10 +526,10 @@ window.addEventListener("keydown", (ev) => {
 // ---------------------------------------------------------------------------
 
 function baseParams(): EventGraphParams {
-  return { maxNodes: currentParams.maxNodes, themes: ui.banner };
+  return { maxNodes: currentParams.maxNodes, themes: ui.banner, connectedOnly: ui.connectedOnly ?? true };
 }
 function fetchGraph(params: EventGraphParams): void {
-  send({ type: "fetch", params: { ...params, themes: ui.banner } });
+  send({ type: "fetch", params: { ...params, themes: ui.banner, connectedOnly: ui.connectedOnly ?? true } });
 }
 
 $("titleRaw").onclick = () => setTitleMode("raw");
@@ -625,6 +626,13 @@ $("toolAll").onclick = () => {
 $("toolSource").onclick = () => {
   const node = currentGraph?.nodes.find((n) => n.id === selectedId);
   if (node?.file) send({ type: "open", file: node.file, line: node.line });
+};
+$("toolConnected").onclick = () => {
+  ui = { ...ui, connectedOnly: !(ui.connectedOnly ?? true) };
+  saveUi();
+  $("toolConnected").setAttribute("aria-pressed", String(ui.connectedOnly));
+  // The pruning happens on the server, so either direction is a round trip.
+  fetchGraph(currentParams);
 };
 $("toolBanner").onclick = () => {
   ui = { ...ui, banner: !ui.banner };
@@ -977,6 +985,7 @@ function applyUi(next: UiState | undefined): void {
   if (ui.panelCollapsed !== side.collapsed) side.toggle(ui.panelCollapsed);
   setTitleMode(ui.titleMode);
   $("toolBanner").setAttribute("aria-pressed", String(ui.banner));
+  $("toolConnected").setAttribute("aria-pressed", String(ui.connectedOnly ?? true));
   view.setOptions({ banner: ui.banner });
   if (ui.simX !== undefined && ui.simY !== undefined) sim.setPosition(ui.simX, ui.simY);
   updatePanelToggle();

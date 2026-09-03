@@ -378,6 +378,23 @@ export function computeEventGraph(
   }
   labelEdges(data, graphEdges, sites);
 
+  // Connected only (the default): a definition no edge touches is dropped here,
+  // BEFORE the card facts are read, since that read is the expensive part.
+  // The queried root stays so a lone event still answers its own query.
+  let pruned = 0;
+  if (params.connectedOnly ?? true) {
+    const linked = new Set<string>();
+    for (const e of graphEdges) {
+      linked.add(e.from);
+      linked.add(e.to);
+    }
+    for (const id of [...selected]) {
+      if (linked.has(id) || id === params.root) continue;
+      selected.delete(id);
+      pruned++;
+    }
+  }
+
   // What each node fires, for the card's third line. Free: the edges are here.
   const firesCount = new Map<string, number>();
   for (const e of graphEdges) firesCount.set(e.from, (firesCount.get(e.from) ?? 0) + 1);
@@ -425,7 +442,10 @@ export function computeEventGraph(
   nodes.sort((a, b) => a.id.localeCompare(b.id));
   const graph: EventGraph = { nodes, edges: graphEdges, truncated, suggestions: suggestionsOf(vocabulary) };
   if (nodes.length === 0) {
-    const reason = emptyReason(data, params, inFocus);
+    const reason =
+      pruned > 0
+        ? `${pruned} definition(s) are here but none is connected to another. Turn "Connected only" off to show them.`
+        : emptyReason(data, params, inFocus);
     if (reason) graph.emptyReason = reason;
   }
   return graph;
