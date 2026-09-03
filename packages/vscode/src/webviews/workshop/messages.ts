@@ -88,6 +88,8 @@ export interface WorkshopModInfo {
   supportedVersion: string | null;
   /** Resolved px.workshop.dir - where the listing lives as files. */
   workshopDir: string;
+  /** True when px.workshop.dir is set, false for the default folder inside the mod. */
+  workshopDirCustom: boolean;
   /** True when that folder exists: it is then the canonical listing store. */
   filesPresent: boolean;
   steamLanguages: SteamLanguage[];

@@ -284,8 +284,8 @@ ${BBPREV_CSS}
             <div id="tags" style="align-items:center"></div>
           </div>
           <div class="field">
-            <span class="px-label">Files</span>
-            <div id="filesBox" class="px-row" style="gap:6px;align-items:center;min-width:0"></div>
+            <span class="px-label">Files <span id="filesBadge"></span></span>
+            <div id="filesBox" class="px-muted px-xs px-truncate"></div>
           </div>
         </div>
       </div>

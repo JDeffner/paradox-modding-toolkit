@@ -302,6 +302,8 @@ export class WorkshopPanel {
       changeNoteSuggestion: await lastCommitSubject(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
       changelogPath,
+      workshopDirCustom:
+        (vscode.workspace.getConfiguration("px").get<string>("workshop.dir") ?? "").trim() !== "",
       changelogPresent: fs.existsSync(changelogPath),
       changelogCandidates: changelogCandidates(root, workshopDir, changelogPath),
       version: info?.version ?? null,

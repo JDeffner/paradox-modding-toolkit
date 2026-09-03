@@ -311,36 +311,32 @@ function renderTags(current: string[]): void {
 }
 
 /** Where the listing lives: the workshop folder (as files) or workshop.json. */
+/** The capsule by the label says which storage rule is in force; the line under it is the path. */
 function renderFilesRow(): void {
+  const badge = $("filesBadge");
   const box = $("filesBox");
-  box.replaceChildren();
+  badge.replaceChildren();
+  box.textContent = "";
   if (!info) return;
-  const badge = document.createElement("span");
-  badge.className = "px-badge";
-  badge.dataset.variant = "outline";
-  const hint = document.createElement("span");
-  hint.className = "px-muted px-xs px-truncate";
-  const where =
-    "The listing lives in .px-toolkit/workshop inside the mod unless the px.workshop.dir setting moves it.";
-  if (info.filesPresent) {
-    badge.textContent = "listing stored at";
-    badge.setAttribute(
-      "data-tip",
-      `The listing is stored as files here, so it diffs and versions like code. ${where}`
-    );
-    hint.textContent = info.workshopDir;
-    hint.setAttribute("data-tip", info.workshopDir);
+  const chip = document.createElement("span");
+  chip.className = "px-badge";
+  chip.dataset.variant = "outline";
+  if (!info.filesPresent) {
+    chip.textContent = "workshop.json";
+    chip.setAttribute("data-tip", "No listing folder yet: drafts save to workshop.json in the mod.");
+    box.textContent = `no folder at ${info.workshopDir}`;
+  } else if (info.workshopDirCustom) {
+    chip.textContent = "custom";
+    chip.setAttribute("data-tip", "Folder set by px.workshop.dir.");
+    box.textContent = info.workshopDir;
   } else {
-    badge.textContent = "workshop.json";
-    badge.setAttribute(
-      "data-tip",
-      `Drafts save to workshop.json inside the mod, not as listing files. ${where}`
-    );
-    hint.textContent = `no folder at ${info.workshopDir}`;
-    hint.setAttribute("data-tip", info.workshopDir);
+    chip.textContent = "default";
+    chip.setAttribute("data-tip", ".px-toolkit/workshop inside the mod.");
+    box.textContent = info.workshopDir;
   }
-  badge.setAttribute("data-tip-wrap", "");
-  box.append(badge, hint);
+  chip.setAttribute("data-tip-wrap", "");
+  badge.append(chip);
+  box.setAttribute("data-tip", info.workshopDir);
 }
 
 function renderStats(): void {
