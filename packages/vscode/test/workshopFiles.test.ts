@@ -12,6 +12,7 @@ import {
   hasListingFiles,
   mdToBBCode,
   readItemJson,
+  moveListing,
   readDependencies,
   readListingFiles,
   readPreviews,
@@ -98,6 +99,26 @@ describe("listing files", () => {
   });
 });
 
+describe("moveListing", () => {
+  it("moves an existing folder and refuses to overwrite", () => {
+    const project = tmp();
+    const from = path.join(project, "workshop");
+    writeListingFiles(from, { description: "d", translations: { german: { title: "t" } } });
+    const to = path.join(project, "mod", ".px-toolkit", "workshop");
+    moveListing(from, to, { description: "", translations: {} });
+    expect(hasListingFiles(from)).toBe(false);
+    expect(readListingFiles(to).translations.german).toEqual({ title: "t" });
+    expect(() => moveListing(to, to, { description: "", translations: {} })).toThrow(/already exists/);
+  });
+
+  it("creates the target from the drafts when no folder exists yet", () => {
+    const project = tmp();
+    const to = path.join(project, "workshop");
+    moveListing(path.join(project, "nowhere"), to, { description: "from json", translations: {} });
+    expect(readListingFiles(to).description).toBe("from json");
+  });
+});
+
 describe("previews and dependencies", () => {
   it("reads the previews folder in file-name order, or null without one", () => {
     const dir = tmp();
@@ -124,7 +145,10 @@ describe("previews and dependencies", () => {
     expect(readDependencies(dir)).toBeNull();
     writeDependencies(dir, { apps: [1158310], items: ["123"] });
     expect(readDependencies(dir)).toEqual({ apps: [1158310], items: ["123"] });
-    fs.writeFileSync(path.join(dir, "dependencies.json"), JSON.stringify({ apps: [1, "x"], items: ["9", "no"] }));
+    fs.writeFileSync(
+      path.join(dir, "dependencies.json"),
+      JSON.stringify({ apps: [1, "x"], items: ["9", "no"] })
+    );
     expect(readDependencies(dir)).toEqual({ apps: [1], items: ["9"] });
   });
 });

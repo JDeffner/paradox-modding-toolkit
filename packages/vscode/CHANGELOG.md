@@ -38,6 +38,11 @@
   `descriptor.mod` and `.metadata/` always do. A one-time message says why the
   exclusions only hold for toolkit uploads: the Paradox launcher ships the
   whole folder.
+- **Move Workshop Listing** (command palette) moves the listing folder between
+  the two layouts, `<project>/workshop` and `<mod>/.px-toolkit/workshop`, in
+  either direction. A mod that only has `workshop.json` drafts gets its
+  listing files created at the target. An explicit `px.workshop.dir` is
+  cleared, since both places are what the empty default resolves to.
 - **New Mod offers the in-mod layout first.** The game's mod folder with
   `.px-toolkit/workshop/` and `.pxignore` inside is the default; the mod
   projects layout stays available.

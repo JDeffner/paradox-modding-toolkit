@@ -457,6 +457,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "px.moveWorkshopListing",
+        "category": "Paradox",
+        "title": "Move Workshop Listing"
+      },
+      {
         "command": "px.openWorkshopManager",
         "category": "Paradox",
         "title": "Open Steam Workshop Panel",
@@ -1104,6 +1109,10 @@
         },
         {
           "command": "px.openWorkshopPage",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.moveWorkshopListing",
           "when": "px.isCk3Workspace"
         },
         {

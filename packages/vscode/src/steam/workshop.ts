@@ -38,9 +38,11 @@ import {
 import { explainSteamError } from "./steamErrors";
 import {
   hasListingFiles,
+  moveListing,
   readListingFiles,
   resolveChangeNote,
   resolveWorkshopDir,
+  SIBLING_WORKSHOP_DIR,
   type ChangeNote,
 } from "./workshopFiles";
 import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
@@ -323,6 +325,61 @@ export function registerWorkshop(
         return;
       }
       void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(info.publishedId)));
+    }),
+    vscode.commands.registerCommand("px.moveWorkshopListing", async () => {
+      const cfg = deps.cfg();
+      const meta = metaFor(cfg.gameId);
+      const root = activeRoot();
+      if (!root) {
+        void vscode.window.showWarningMessage("Paradox Modding Toolkit: no mod is focused.");
+        return;
+      }
+      const current = workshopDirFor(root, meta);
+      const inMod = path.join(resolveConfigDir(root, meta), "workshop");
+      const sibling = path.resolve(root, SIBLING_WORKSHOP_DIR);
+      const isInMod = path.resolve(current).toLowerCase() === inMod.toLowerCase();
+      type Item = vscode.QuickPickItem & { to: string };
+      const pick = await vscode.window.showQuickPick<Item>(
+        [
+          {
+            label: `Into the mod: ${meta.configDirName}/workshop`,
+            description: isInMod ? "already there" : undefined,
+            detail: "Everything in one folder; toolkit uploads leave it out.",
+            to: inMod,
+          },
+          {
+            label: "Next to the mod: ../workshop",
+            description: !isInMod && path.resolve(current) === sibling ? "already there" : undefined,
+            detail: `The mod-projects layout: ${sibling}`,
+            to: sibling,
+          },
+        ].filter((i) => i.description === undefined),
+        { title: "Move Workshop Listing", placeHolder: `Now at ${current}` }
+      );
+      if (!pick) return;
+      const info = readPublishInfo(root, meta, current);
+      try {
+        moveListing(current, pick.to, {
+          description: info?.description ?? "",
+          translations: info?.translations ?? {},
+        });
+      } catch (e) {
+        void vscode.window.showErrorMessage(
+          `Paradox Modding Toolkit: ${e instanceof Error ? e.message : String(e)}`
+        );
+        return;
+      }
+      // Both targets are what an empty setting resolves to, so an explicit
+      // override would only point at the old place now.
+      const setting = vscode.workspace.getConfiguration("px");
+      if ((setting.get<string>("workshop.dir") ?? "").trim() !== "") {
+        await setting.update("workshop.dir", undefined, vscode.ConfigurationTarget.Workspace);
+        await setting.update("workshop.dir", undefined, vscode.ConfigurationTarget.Global);
+      }
+      deps.log(`workshop: listing moved ${current} -> ${pick.to}`);
+      void vscode.window.showInformationMessage(
+        `Paradox Modding Toolkit: Workshop listing moved to ${pick.to}.`
+      );
     })
   );
 }

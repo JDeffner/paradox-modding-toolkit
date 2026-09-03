@@ -152,6 +152,32 @@ export function upsertItemJson(workshopDir: string, patch: ItemJson): void {
   fs.writeFileSync(path.join(workshopDir, "item.json"), JSON.stringify(current, null, 2) + "\n", "utf8");
 }
 
+/**
+ * Move the listing folder from one location to the other (project layout
+ * `<project>/workshop` <-> in-mod `<configDir>/workshop`). A missing source
+ * folder is not an error: the listing then gets created at the target from
+ * `drafts` (what workshop.json still holds), so nothing is lost either way.
+ * Refuses to overwrite an existing target.
+ */
+export function moveListing(
+  from: string,
+  to: string,
+  drafts: { description: string; translations: Record<string, WorkshopTranslation> }
+): void {
+  if (hasListingFiles(to)) throw new Error(`a listing folder already exists at ${to}`);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (!hasListingFiles(from)) {
+    writeListingFiles(to, drafts);
+    return;
+  }
+  try {
+    fs.renameSync(from, to);
+  } catch {
+    fs.cpSync(from, to, { recursive: true });
+    fs.rmSync(from, { recursive: true, force: true });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Extra previews and dependencies
 // ---------------------------------------------------------------------------
