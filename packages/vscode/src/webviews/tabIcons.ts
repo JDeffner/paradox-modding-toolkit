@@ -22,6 +22,7 @@ export type TabIconName =
   | "examples-wiki"
   | "trait-creator"
   | "culture-creator"
+  | "tradition-creator"
   | "legacy-creator"
   | "wiki"
   | "credits";

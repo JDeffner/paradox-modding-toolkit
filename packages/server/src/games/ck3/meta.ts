@@ -33,6 +33,9 @@ export const ck3Meta: GameMeta = {
   //                  themselves live in common/dynasty_perks (`legacy = <track>`)
   //   culture        common/culture/cultures (00_arabic.txt: color, ethos,
   //                  heritage, language, traditions, name_list, parents…)
+  //   culture_tradition common/culture/traditions, whose _traditions.info adds
+  //                  `category` and `layers` to the shape _cultural_traits.info
+  //                  documents for every cultural trait
   //   dynasty_tree   NOT a definition kind: history/characters linked by
   //                  father/mother/dynasty/house (history/characters/*.txt)
   creators: [
@@ -53,6 +56,12 @@ export const ck3Meta: GameMeta = {
       label: "Culture Creator",
       icon: "globe",
       tip: "Compose a culture from the game's own pillars and traditions.",
+    },
+    {
+      kind: "culture_tradition",
+      label: "Tradition Creator",
+      icon: "flame",
+      tip: "Design a culture tradition, its layered icon and its modifiers.",
     },
     {
       kind: "dynasty_tree",

@@ -173,6 +173,19 @@ describe("computeDefinitionForm", () => {
     expect(key("ethos")).toBeUndefined();
   });
 
+  it("answers the culture tradition form the Tradition Creator draws", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "culture_tradition" })!;
+    expect(form.folder).toBe("common/culture/traditions");
+    // All 196 vanilla traditions localize both; requiredLoc keeps only $_name.
+    expect(form.locPatterns).toEqual(["$_name", "$_desc"]);
+    // The picture is composed from layer folders, not one file, so the schema
+    // entry names no icon folder and the creator reads the layers itself.
+    expect(form.iconFolder).toBeUndefined();
+    // The harvest's own keys, most used first: `layers` and `category` are what
+    // _traditions.info adds on top of the shared cultural-trait shape.
+    expect(form.keys.slice(0, 4).map((k) => k.key)).toEqual(["layers", "category", "cost", "parameters"]);
+  });
+
   it("carries the dynasty legacy rows the vanilla files justify", () => {
     // _dynasty_legacies.info states $_name; all 21 vanilla tracks also define
     // $_desc, and window_dynasty_legacy.gui reads the picture off the key.

@@ -4,7 +4,8 @@
  *
  *   pnpm run preview:creators [-- --port 5331]
  *   http://localhost:5331/creator/traitCreator      (dynastyTree, legacyCreator,
- *                                                     cultureCreator, coaDesigner)
+ *                                                     cultureCreator, coaDesigner,
+ *                                                     traditionCreator)
  *
  * The server bundle (packages/server/dist/server.js, so `pnpm run compile`
  * first) is forked over node IPC with the game and mod from dev-paths.json and
@@ -49,6 +50,7 @@ import {
   perksOfTrack,
 } from "../packages/vscode/src/webviews/legacyCreator/perkIndex";
 import { buildCatalog } from "../packages/vscode/src/webviews/cultureCreator/catalog";
+import { buildTraditionCatalog } from "../packages/vscode/src/webviews/traditionCreator/catalog";
 import { parseNamedColors } from "../packages/server/src/coa/coaParse";
 import {
   buildFlagDatabase,
@@ -316,6 +318,49 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return [{ type: "loc", values: await lookup(m.keys as string[]) }];
         default:
           return ["save", "convertIcon"].includes(String(m.type)) ? [refuse(String(m.type))] : [];
+      }
+    },
+  },
+  traditionCreator: {
+    html: "src/webviews/traditionCreator/html.ts",
+    entry: "src/webviews/traditionCreator/app/main.ts",
+    handle: async (m) => {
+      switch (m.type) {
+        case "ready": {
+          const [f, formats] = await Promise.all([
+            form("culture_tradition"),
+            req<ModifierFormatsResult | null>("paradox/modifierFormats", { modRoot: modPath }),
+          ]);
+          return [
+            {
+              type: "init",
+              init: {
+                form: f,
+                locLanguage: "english",
+                prefix: "cult",
+                catalog: buildTraditionCatalog(roots),
+              },
+            },
+            // The host resolves where a save lands; here the default name is
+            // enough to show the line the panel draws.
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_culture_traditions.txt` },
+            },
+            { type: "modifierFormats", formats: formats?.formats ?? null },
+          ];
+        }
+        case "open":
+        case "load": {
+          const f = await form("culture_tradition", String(m.name));
+          return f ? [{ type: "form", form: f }] : [];
+        }
+        case "images":
+          return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
+        case "loc":
+          return [{ type: "loc", values: await lookup(m.keys as string[]) }];
+        default:
+          return String(m.type) === "save" ? [refuse("save")] : [];
       }
     },
   },
