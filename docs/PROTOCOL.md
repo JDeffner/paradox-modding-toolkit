@@ -182,11 +182,15 @@ needs the whole picker before it needs one family. Both come from the game's own
 files: the folders are the ones the active profile's schema maps to the
 `dynasty`, `dynasty_house` and `character` kinds, the members come from the
 character blocks (`name`, `female`, `dynasty` or `dynasty_house`, `father`,
-`mother`, `culture`, `religion`, `trait`, and the dated blocks whose KEY is the
+`mother`, `culture`, `religion`, `trait`, `dna`, the six skills of
+`DYNASTY_SKILLS` as a `skills` map, and the dated blocks whose KEY is the
 date of the `birth`, `death` or `add_spouse` inside them), and the display names
 come from the loc index, falling back to the loc key itself rather than
 inventing one. A character reaches its dynasty through its house when it names
-one. `nextCharacterId` and `nextDynastyId` are the largest numeric id seen
+one. `dna` is the portrait name without the quotes the file may put around it,
+and a skill whose value is not a number (a script value) is left out of `skills`
+rather than guessed at, so a client rewriting the block keeps that line as
+written. `nextCharacterId` and `nextDynastyId` are the largest numeric id seen
 across game and mods plus one, so a client can offer a free id without
 searching. A profile whose schema has no `dynasty` kind answers
 `supported: false` with empty lists, which a client says out loud instead of

@@ -107,21 +107,34 @@ describe("characterBlock round trip", () => {
       religion: "catholic",
       birth: "849.1.1",
       death: "899.10.26",
+      dna: "7627_earl_alfred",
+      skills: { martial: 11, learning: 13 },
       traits: ["honest", "just"],
       spouses: ["306020"],
     },
     PREVIOUS
   );
 
-  it("keeps every statement the form does not model, byte for byte", () => {
-    for (const line of [
-      "\tdna = 7627_earl_alfred",
-      "\tmartial = 11",
-      "\tlearning = 13",
-      "\tsexuality = heterosexual",
-    ]) {
+  it("writes the dna and the skills the form carries back, unchanged", () => {
+    for (const line of ["\tdna = 7627_earl_alfred", "\tmartial = 11", "\tlearning = 13"]) {
       expect(edited.text).toContain(`${line}\n`);
     }
+    // Once each: the form owns them now, so the source lines are not kept too.
+    expect(edited.text.match(/martial = /g)).toHaveLength(1);
+  });
+
+  it("keeps every statement the form does not model, byte for byte", () => {
+    expect(edited.text).toContain("\tsexuality = heterosexual\n");
+  });
+
+  // A skill written as a script value never becomes a number in the form, so
+  // the form must not be allowed to write it away.
+  it("keeps a skill the form could not read as a number", () => {
+    const kept = characterBlock(
+      { id: "7627", name: "Alfred", female: false, traits: [], spouses: [] },
+      `7627 = {\n\tname = Alfred\n\tmartial = @heroic_martial\n}`
+    );
+    expect(kept.text).toContain("\tmartial = @heroic_martial\n");
   });
 
   it("keeps a dated block that carries more than a birth, exactly as written", () => {

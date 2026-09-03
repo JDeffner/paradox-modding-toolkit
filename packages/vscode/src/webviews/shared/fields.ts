@@ -159,7 +159,12 @@ function labelledRow(
   return { row, label };
 }
 
-function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
+/**
+ * The label + control row on its own, for a creator that builds a control the
+ * field builders do not cover (the Dynasty Tree's date parts) and still has to
+ * line up with the rows around it.
+ */
+export function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
   return labelledRow(options, control).row;
 }
 

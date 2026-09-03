@@ -1155,6 +1155,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          lookupLoc,
         },
         {
           cfg: cfgForActive(),
