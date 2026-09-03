@@ -301,6 +301,10 @@ export class CultureCreatorPanel {
       case "images":
         wireImages(this.panel, this.imageRoots(), this.textures, msg);
         return;
+      case "editTradition":
+        // The Tradition Creator is its own panel and command; an empty name opens it blank.
+        await vscode.commands.executeCommand("px.createTradition", msg.name || undefined);
+        return;
       case "openExamples":
         // A culture key is no wiki article, so the button opens the index.
         await vscode.commands.executeCommand("px.showExamplesWiki");

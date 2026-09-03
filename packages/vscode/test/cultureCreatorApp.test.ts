@@ -193,6 +193,21 @@ describe("culture creator app", () => {
     expect(layers).toEqual(CATALOG.traditions.tradition_mubarizuns.layers);
   });
 
+  it("hands a tradition chip to the Tradition Creator, and a blank form for a new one", () => {
+    const { document, posted } = boot();
+    addTradition(document);
+    const edit = document.querySelector<HTMLButtonElement>('.px-chip button[data-tip*="Tradition Creator"]');
+    expect(edit, document.querySelector(".px-chip")?.outerHTML).not.toBeNull();
+    edit!.click();
+    expect(posted.at(-1)).toEqual({ type: "editTradition", name: "tradition_mubarizuns" });
+    const create = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("New tradition")
+    );
+    expect(create).toBeDefined();
+    create!.click();
+    expect(posted.at(-1)).toEqual({ type: "editTradition", name: "" });
+  });
+
   it("writes a named color when one is picked, not three components", () => {
     const { document, posted } = boot();
     const color = rowControl(document, "Color");

@@ -112,6 +112,8 @@ export type AppToHost =
   /** Open the Examples Wiki on a name the form shows. */
   /** Open the Examples Wiki; a culture key is no article, so no target is sent. */
   | { type: "openExamples" }
+  /** Open the Tradition Creator on this tradition, or on a blank form when the name is empty. */
+  | { type: "editTradition"; name: string }
   /** Put the generated block on the clipboard; a webview cannot reach it. */
   | CreatorCopyRequest
   /** The target line was clicked: ask where the next save should go. */

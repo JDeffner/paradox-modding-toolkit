@@ -408,11 +408,22 @@ function traditionsField(
   const box = el("div", "px-chips");
   const add = ghost("Add tradition", "plus");
   const items = (): EventVocabularyItem[] => optionsOf("culture_tradition");
+  // A tradition the game does not have yet is its own creator; this only opens it.
+  const create = ghost("New tradition", "filePlus");
+  create.dataset.tip = "Design a new tradition in the Tradition Creator, then add it here.";
+  create.onclick = () => send({ type: "editTradition", name: "" });
   const paint = (): void => {
     box.replaceChildren();
     for (const value of current) {
       const chip = el("span", "px-chip");
       chip.append(traditionIcon(value, 16), el("span", "", labelOf(value)));
+      const edit = document.createElement("button");
+      edit.className = "px-btn";
+      edit.dataset.variant = "ghost";
+      edit.dataset.size = "icon-xs";
+      edit.dataset.tip = `Open ${value} in the Tradition Creator`;
+      edit.append(iconEl("pencil"));
+      edit.onclick = () => send({ type: "editTradition", name: value });
       const drop = document.createElement("button");
       drop.className = "px-btn";
       drop.dataset.variant = "ghost";
@@ -424,12 +435,12 @@ function traditionsField(
         paint();
         onChange();
       };
-      chip.append(drop);
+      chip.append(edit, drop);
       box.append(chip);
     }
     if (current.length === 0)
       box.append(el("span", "px-muted px-xs", "No tradition yet. The game allows several."));
-    box.append(add);
+    box.append(add, create);
   };
   add.onclick = () =>
     searchPopover(add, "Search traditions…", (query, body, close) => {
