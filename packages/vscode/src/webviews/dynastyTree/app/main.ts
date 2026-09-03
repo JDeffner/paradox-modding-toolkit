@@ -7,13 +7,32 @@
  * Where a node sits is app/layout.ts, which is pure and tested separately; this
  * file draws what that says and wires the gestures.
  */
-import type { DynastyCharacter, DynastySummary } from "@px-lsp/protocol/protocol";
-import { isValidScriptDate, parseScriptDate } from "@px-lsp/protocol/calendar";
-import type { AppToHost, CharacterForm, HostToApp, ModTarget, OptionSets, TreeData } from "../messages";
+import { DYNASTY_SKILLS, type DynastyCharacter, type DynastySummary } from "@px-lsp/protocol/protocol";
+import {
+  convertDisplayInput,
+  displayDate,
+  displayYear,
+  isValidScriptDate,
+  monthsOf,
+  parseScriptDate,
+  type CalendarSetting,
+} from "@px-lsp/protocol/calendar";
+import type {
+  AppToHost,
+  CharacterForm,
+  HostToApp,
+  ModTarget,
+  OptionSets,
+  TraitTip,
+  TreeData,
+} from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
-import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { fieldRow, numberField } from "../../shared/fields";
+import { confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
+import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
-import { installTips } from "../../shared/tips";
+import { clampToViewport, installTips } from "../../shared/tips";
+import { renderTraitTip } from "../../traitCreator/app/preview";
 import { layoutTree, NODE_H, NODE_W, type Layout, type LayoutCharacter } from "./layout";
 
 /** What the panel remembers between openings; the host keeps it for us. */
@@ -34,9 +53,17 @@ const post = (msg: AppToHost): void => vscode.postMessage(msg);
  * calendar (px.calendar) maps how a date READS; what a history file may hold
  * is this, so validation uses it.
  */
-const ENGINE_CALENDAR = { epoch: 1, after: "AD" };
+const ENGINE_CALENDAR: CalendarSetting = { epoch: 1, after: "AD" };
 /** Years between a parent's birth and a prefilled child's. */
 const CHILD_OFFSET = 20;
+/**
+ * How long the pointer has to settle on a trait before its tooltip is asked
+ * for. Scrolling a list of traits crosses dozens of rows, and every one of them
+ * would otherwise be a request the modder never sees the answer to.
+ */
+const TIP_DELAY_MS = 150;
+/** Rows of the trait picker that fit its 300px results box at 26px a row. */
+const FIRST_SCREEN = 12;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -65,6 +92,8 @@ interface State {
   mods: ModTarget[];
   setupProblem?: string;
   gameName: string;
+  /** `px.calendar`, when the workspace declares one; undefined = script dates. */
+  calendar?: CalendarSetting;
   /** The character the inspector shows, or null for the dynasty itself. */
   selected: string | null;
   /** A form being filled: a new character, or an edit of an existing one. */
@@ -74,6 +103,10 @@ interface State {
   /** A birth date worth suggesting for the draft; shown as a placeholder only. */
   birthHint?: string;
   layout: Layout | null;
+  /** Trait name -> its picture, or null when no file resolved. Panel-lifetime. */
+  traitIcons: Map<string, string | null>;
+  /** Trait name -> its game tooltip, or null when nothing is indexed for it. */
+  traitTips: Map<string, TraitTip | null>;
 }
 
 const state: State = {
@@ -88,7 +121,13 @@ const state: State = {
   selected: null,
   draft: null,
   layout: null,
+  traitIcons: new Map(),
+  traitTips: new Map(),
 };
+
+/** Where the next character save lands, said from the moment the panel opens. */
+const target = saveTargetLine(() => post({ type: "changeTarget" }));
+el("targetSlot").append(target.el);
 
 sidePanel($side, {
   width: vscode.getState?.()?.sideWidth ?? 340,
@@ -123,12 +162,9 @@ function svg(tag: string, attrs: Record<string, string | number>): SVGElement {
   return element;
 }
 
-/** A labelled row of the inspector. */
+/** A labelled row of the inspector: the shared grid, so every row lines up. */
 function field(label: string, control: HTMLElement): HTMLElement {
-  const row = node("div", "px-field");
-  const caption = node("span", "px-label", label);
-  row.append(caption, control);
-  return row;
+  return fieldRow({ label }, control);
 }
 
 function textInput(value: string, onChange: (v: string) => void, disabled = false): HTMLInputElement {
@@ -224,6 +260,383 @@ function dateProblem(value: string): string | null {
   return isValidScriptDate(ENGINE_CALENDAR, parsed.y, parsed.m, parsed.d)
     ? null
     : "That month or day does not exist.";
+}
+
+// ---------------------------------------------------------------------------
+// dates, read and written through the mod's own calendar
+// ---------------------------------------------------------------------------
+
+/** The calendar a control's months and days come from; the engine's by default. */
+function calendarOf(): CalendarSetting {
+  return state.calendar ?? ENGINE_CALENDAR;
+}
+
+/** The year of a script date as the modder reads it: "1000 BC", "8074 AD". */
+function displayYearOf(date: string | undefined): string {
+  const parsed = date ? parseScriptDate(date) : null;
+  if (!parsed) return "";
+  if (!state.calendar) return String(parsed.y);
+  return displayYear(state.calendar, parsed.y) ?? String(parsed.y);
+}
+
+/** A whole date as the modder reads it; the script date when no calendar maps it. */
+function displayDateOf(date: string | undefined): string {
+  const parsed = date ? parseScriptDate(date) : null;
+  if (!parsed) return date ?? "";
+  if (!state.calendar) return date!;
+  return displayDate(state.calendar, parsed.y, parsed.m, parsed.d) ?? date!;
+}
+
+/** The parts a date control shows for a script date, and their era. */
+interface DateParts {
+  era: string;
+  year: number | null;
+  month: number;
+  day: number;
+}
+
+function splitDate(date: string | undefined): DateParts {
+  const cal = state.calendar;
+  const parsed = date ? parseScriptDate(date) : null;
+  if (!parsed) return { era: cal?.after ?? "", year: null, month: 1, day: 1 };
+  if (!cal) return { era: "", year: parsed.y, month: parsed.m, day: parsed.d };
+  const before = cal.before && parsed.y < cal.epoch;
+  return {
+    era: before ? cal.before! : cal.after,
+    year: before ? cal.epoch - parsed.y : parsed.y - cal.epoch + 1,
+    month: parsed.m,
+    day: parsed.d,
+  };
+}
+
+/**
+ * The parts back into the `Y.M.D` a history file holds. With a calendar that
+ * is `convertDisplayInput`, which owns the era arithmetic; without one the
+ * parts ARE the script date and only the month and day are bounded.
+ */
+function joinDate(parts: DateParts): { script?: string; error?: string } {
+  if (parts.year === null) return {};
+  const cal = state.calendar;
+  if (cal) {
+    const result = convertDisplayInput(cal, `${parts.year} ${parts.era} ${parts.month} ${parts.day}`);
+    return result.ok ? { script: result.script } : { error: result.error };
+  }
+  if (parts.year < 1) return { error: "years start at 1 (no year zero)" };
+  if (!isValidScriptDate(ENGINE_CALENDAR, parts.year, parts.month, parts.day)) {
+    return { error: "that month or day does not exist" };
+  }
+  return { script: `${parts.year}.${parts.month}.${parts.day}` };
+}
+
+/** A dropdown that reads as its current choice, sized to the control column. */
+function partMenu(
+  face: string,
+  className: string,
+  open: (btn: HTMLButtonElement) => void
+): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.className = `px-btn ${className}`;
+  btn.dataset.variant = "outline";
+  btn.dataset.size = "sm";
+  btn.append(node("span", "val", face), iconEl("chevronDown"));
+  btn.addEventListener("click", () => open(btn));
+  return btn;
+}
+
+/**
+ * Born and Died: an era (only when the calendar has one to choose), a year, a
+ * month of the calendar and a day sized to that month. The file always gets a
+ * script `Y.M.D`; nothing here can produce a date the calendar does not have.
+ */
+function dateControl(
+  label: string,
+  get: () => string | undefined,
+  set: (v: string | undefined) => void,
+  suggestion?: string
+): HTMLElement {
+  const parts = splitDate(get());
+  const box = node("div", "dparts");
+  const note = node("div", "dnote");
+  const cal = state.calendar;
+  const months = monthsOf(calendarOf());
+
+  const face = (btn: HTMLButtonElement, text: string): void => {
+    (btn.firstElementChild as HTMLElement).textContent = text;
+  };
+  // Both menus paint each other: picking a month may shorten the day list.
+
+  const commit = (): void => {
+    const result = joinDate(parts);
+    note.textContent = result.error ?? (result.script ? displayDateOf(result.script) : "");
+    if (result.error) note.dataset.bad = "";
+    else note.removeAttribute("data-bad");
+    set(result.script);
+  };
+  const clampDay = (): void => {
+    const days = months[parts.month - 1]?.days ?? 31;
+    if (parts.day > days) parts.day = days;
+    face(dayBtn, String(parts.day));
+  };
+
+  if (cal?.before) {
+    const eras = [cal.after, cal.before];
+    box.append(
+      partMenu(parts.era, "era", (btn) =>
+        menu(
+          btn,
+          eras.map((value) => ({ value, label: value })),
+          {
+            value: parts.era,
+            width: 120,
+            onPick: (picked) => {
+              parts.era = picked;
+              face(btn, picked);
+              commit();
+            },
+          }
+        )
+      )
+    );
+  }
+
+  const yearInput = document.createElement("input");
+  yearInput.className = "px-input year";
+  yearInput.dataset.size = "sm";
+  yearInput.type = "number";
+  yearInput.min = "1";
+  yearInput.placeholder = suggestion ? displayYearOf(suggestion) : "year";
+  yearInput.value = parts.year === null ? "" : String(parts.year);
+  yearInput.addEventListener("input", () => {
+    parts.year = yearInput.value.trim() === "" ? null : Number(yearInput.value);
+    commit();
+  });
+  box.append(yearInput);
+
+  const monthBtn = partMenu(months[parts.month - 1]?.name ?? String(parts.month), "month", (btn) =>
+    menu(
+      btn,
+      months.map((m, i) => ({ value: String(i + 1), label: m.name })),
+      {
+        value: String(parts.month),
+        width: 180,
+        onPick: (picked) => {
+          parts.month = Number(picked);
+          face(btn, months[parts.month - 1].name);
+          clampDay();
+          commit();
+        },
+      }
+    )
+  );
+  const dayBtn = partMenu(String(parts.day), "day", (btn) => {
+    const days = months[parts.month - 1]?.days ?? 31;
+    menu(
+      btn,
+      Array.from({ length: days }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+      {
+        value: String(parts.day),
+        width: 90,
+        onPick: (picked) => {
+          parts.day = Number(picked);
+          face(btn, picked);
+          commit();
+        },
+      }
+    );
+  });
+  box.append(monthBtn, dayBtn);
+
+  const stack = node("div", "sec");
+  stack.append(box, note);
+  note.textContent = displayDateOf(get());
+  return field(label, stack);
+}
+
+// ---------------------------------------------------------------------------
+// trait pictures and the game's own tooltip
+// ---------------------------------------------------------------------------
+
+/** Names whose picture has been asked for, so a row asks at most once. */
+const iconAsked = new Set<string>();
+let iconBatch: string[] = [];
+
+/**
+ * A picture request for the rows that are on screen. The names collected inside
+ * one tick go out as ONE message, so scrolling a list of 200 traits is a
+ * handful of requests rather than 200. A timer rather than an animation frame:
+ * a panel the editor has hidden still runs timers, and a request that waits for
+ * a frame that never comes would leave the pictures blank on the way back.
+ */
+function askForIcon(name: string): void {
+  if (iconAsked.has(name)) return;
+  iconAsked.add(name);
+  if (iconBatch.length === 0) {
+    setTimeout(() => {
+      const names = iconBatch;
+      iconBatch = [];
+      if (names.length > 0) post({ type: "traitIcons", names });
+    }, 0);
+  }
+  iconBatch.push(name);
+}
+
+/** Fill in the pictures that have arrived; a row waiting for one stays blank. */
+function paintTraitIcons(): void {
+  for (const img of document.querySelectorAll<HTMLImageElement>("img[data-trait]")) {
+    const url = state.traitIcons.get(img.dataset.trait!);
+    if (url) img.src = url;
+    img.hidden = !url;
+  }
+}
+
+/** The 20px picture tile of a trait row or chip, filled in when it arrives. */
+function traitThumb(name: string): HTMLImageElement {
+  const img = document.createElement("img");
+  img.className = "px-chip-thumb";
+  img.alt = "";
+  img.dataset.trait = name;
+  const url = state.traitIcons.get(name);
+  if (url) img.src = url;
+  else img.hidden = true;
+  return img;
+}
+
+let tipBox: HTMLElement | null = null;
+let tipTimer = 0;
+/** The trait the pointer has settled on, and the row it settled on. */
+let tipFor: string | null = null;
+let tipAnchor: HTMLElement | null = null;
+
+function hideTraitTip(): void {
+  if (tipTimer) clearTimeout(tipTimer);
+  tipTimer = 0;
+  tipFor = null;
+  tipAnchor = null;
+  tipBox?.remove();
+  tipBox = null;
+}
+
+/** Draw the tooltip the host answered with, beside the row it belongs to. */
+function showTraitTip(): void {
+  const name = tipFor;
+  const anchor = tipAnchor;
+  const tip = name === null ? undefined : state.traitTips.get(name);
+  if (name === null || tip === undefined || !anchor?.isConnected) return;
+  tipBox?.remove();
+  tipBox = node("div", "px-popover ttip");
+  if (tip === null) {
+    tipBox.append(node("div", "tip-note", `Nothing indexed for ${name}.`));
+  } else {
+    tipBox.append(
+      renderTraitTip(tip.tip, {
+        formats: tip.formats,
+        imageUrl: (texture) => tip.images[texture] ?? null,
+      })
+    );
+  }
+  document.body.append(tipBox);
+  // offsetWidth/Height, not the client rect: the popover opens with a scale
+  // animation (`px-pop`), and a rect measured mid-animation is 5% short, which
+  // clamps a tooltip near the bottom edge to a spot it then grows out of.
+  const box = { width: tipBox.offsetWidth, height: tipBox.offsetHeight };
+  const a = anchor.getBoundingClientRect();
+  // Left of the row: the picker and the inspector both sit at the right edge.
+  const at = clampToViewport(box, a.left - box.width - 8, a.top);
+  tipBox.style.left = `${at.left}px`;
+  tipBox.style.top = `${at.top}px`;
+}
+
+/**
+ * Hovering `el` opens the game's tooltip for `name`, once the pointer has
+ * settled. The answer is cached for the panel's life on both sides, so a
+ * second hover of the same trait costs neither a request nor a decode.
+ */
+function tipOnHover(el: HTMLElement, name: string): void {
+  el.addEventListener("pointerenter", () => {
+    hideTraitTip();
+    tipFor = name;
+    tipAnchor = el;
+    tipTimer = window.setTimeout(() => {
+      if (state.traitTips.has(name)) showTraitTip();
+      else post({ type: "traitTip", name });
+    }, TIP_DELAY_MS);
+  });
+  el.addEventListener("pointerleave", hideTraitTip);
+}
+
+/** The player's word for a trait, with its key as the dimmer hint. */
+function traitLabel(value: string): string {
+  return state.options.trait.find((t) => t.value === value)?.label || value;
+}
+
+/**
+ * The trait picker: a searchable list 320px wide, showing the name the player
+ * reads with the key that gets written beside it, each with its own picture.
+ * Pictures are asked for only as a row scrolls into view, and hovering a row
+ * opens the trait's game tooltip.
+ */
+function traitPicker(anchor: HTMLElement, taken: readonly string[], onPick: (value: string) => void): void {
+  const root = node("div", "px-picker tpicker");
+  const group = node("div", "px-input-group");
+  group.append(iconEl("search"));
+  const search = document.createElement("input");
+  search.className = "px-input";
+  search.dataset.size = "sm";
+  search.placeholder = "Search traits…";
+  search.spellcheck = false;
+  group.append(search);
+  const body = node("div", "px-picker-results");
+  root.append(group, body);
+  let close = (): void => undefined;
+
+  // Only the rows the modder can actually see are worth a decode.
+  const seen = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      askForIcon((entry.target as HTMLElement).dataset.value!);
+      seen.unobserve(entry.target);
+    }
+  });
+
+  const fill = (): void => {
+    body.replaceChildren();
+    const q = search.value.trim().toLowerCase();
+    const matches = state.options.trait.filter(
+      (item) =>
+        !taken.includes(item.value) &&
+        (q === "" || item.value.toLowerCase().includes(q) || (item.label ?? "").toLowerCase().includes(q))
+    );
+    for (const item of matches.slice(0, 400)) {
+      const row = node("div", "px-menu-item");
+      row.setAttribute("role", "option");
+      row.dataset.value = item.value;
+      row.append(traitThumb(item.value), node("span", "px-grow", item.label || item.value));
+      if (item.label) row.append(node("span", "tid", item.value));
+      row.addEventListener("click", () => {
+        hideTraitTip();
+        close();
+        onPick(item.value);
+      });
+      tipOnHover(row, item.value);
+      body.append(row);
+      seen.observe(row);
+    }
+    if (matches.length === 0) body.append(node("div", "px-menu-empty", "No match"));
+    // The observer's first delivery is a frame away, which would leave the
+    // rows the modder is already looking at blank; a screenful fits the
+    // 300px results box. Everything past it waits for the scroll.
+    for (const item of matches.slice(0, FIRST_SCREEN)) askForIcon(item.value);
+  };
+
+  // Filled BEFORE it opens, so the popover is measured at its real height and
+  // flips above the button instead of running off the bottom of the panel.
+  fill();
+  close = popover(anchor, root, () => {
+    seen.disconnect();
+    hideTraitTip();
+  });
+  search.oninput = fill;
+  search.focus();
 }
 
 function sanitizeKey(raw: string): string {
@@ -560,10 +973,19 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
     char.house ? (state.tree?.houses.find((h) => h.id === char.house)?.name ?? char.house) : undefined
   );
   line("Dynasty", char.dynasty);
-  line("Born", char.birth);
-  line("Died", char.death);
+  // Dates read the way the mod's calendar reads them, with the script date the
+  // file holds on the tooltip: both are facts the modder needs.
+  const dateLine = (label: string, date: string | undefined): void => {
+    if (!date) return;
+    const value = node("span", "px-sm", displayDateOf(date));
+    value.dataset.tip = date;
+    facts.append(field(label, value));
+  };
+  dateLine("Born", char.birth);
+  dateLine("Died", char.death);
   line("Culture", char.culture);
   line("Faith", char.religion);
+  line("DNA", char.dna);
   // A parent reads as a person, not as the id the file writes.
   const person = (id: string | undefined): string | undefined => {
     if (!id) return undefined;
@@ -574,9 +996,21 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
   line("Mother", person(char.mother));
   if (char.spouses.length > 0)
     line(char.spouses.length === 1 ? "Spouse" : "Spouses", char.spouses.map(person).join(", "));
+  const skills = Object.entries(char.skills ?? {});
+  if (skills.length > 0) {
+    facts.append(
+      field("Skills", node("span", "px-sm", skills.map(([key, value]) => `${key} ${value}`).join(" · ")))
+    );
+  }
   if (char.traits.length > 0) {
     const chips = node("div", "chips");
-    for (const trait of char.traits) chips.append(chip(trait));
+    for (const trait of char.traits) {
+      const badge = chip(traitLabel(trait));
+      badge.prepend(traitThumb(trait));
+      askForIcon(trait);
+      tipOnHover(badge, trait);
+      chips.append(badge);
+    }
     facts.append(field("Traits", chips));
   }
   root.append(facts);
@@ -633,11 +1067,14 @@ function startEdit(char: DynastyCharacter): void {
     religion: char.religion,
     birth: char.birth,
     death: char.death,
+    dna: char.dna,
+    skills: char.skills ? { ...char.skills } : undefined,
     traits: [...char.traits],
     spouses: [...char.spouses],
   };
   state.draftFile = char.file;
   state.birthHint = undefined;
+  post({ type: "target", file: char.file });
   renderInspector();
 }
 
@@ -664,6 +1101,7 @@ function startChild(parent: DynastyCharacter): void {
   state.draft = form;
   state.draftFile = undefined;
   state.birthHint = shiftYears(parent.birth, CHILD_OFFSET);
+  post({ type: "target" });
   renderInspector();
 }
 
@@ -680,6 +1118,7 @@ function startSpouse(partner: DynastyCharacter): void {
   state.draft = form;
   state.draftFile = undefined;
   state.birthHint = partner.birth;
+  post({ type: "target" });
   renderInspector();
 }
 
@@ -747,32 +1186,20 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     )
   );
 
-  const dateField = (
-    label: string,
-    get: () => string | undefined,
-    set: (v: string | undefined) => void,
-    suggestion?: string
-  ): void => {
-    const input = textInput(get() ?? "", () => undefined);
-    input.placeholder = suggestion || "867.1.1";
-    input.addEventListener("input", () => {
-      const problem = dateProblem(input.value);
-      input.setAttribute("aria-invalid", problem ? "true" : "false");
-      input.title = problem ?? "";
-      set(input.value.trim() || undefined);
-    });
-    body.append(field(label, input));
-  };
-  dateField(
-    "Born",
-    () => form.birth,
-    (v) => (form.birth = v),
-    state.birthHint
+  body.append(
+    dateControl(
+      "Born",
+      () => form.birth,
+      (v) => (form.birth = v),
+      state.birthHint
+    )
   );
-  dateField(
-    "Died",
-    () => form.death,
-    (v) => (form.death = v)
+  body.append(
+    dateControl(
+      "Died",
+      () => form.death,
+      (v) => (form.death = v)
+    )
   );
 
   const parentField = (
@@ -802,32 +1229,69 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     (v) => (form.mother = v)
   );
 
+  // DNA is a name of the portrait editor's export, not something a form can
+  // build: it is carried, copied and pasted, and never invented here.
+  const dnaRow = node("div", "px-row");
+  const dna = textInput(form.dna ?? "", (v) => (form.dna = v.trim() || undefined));
+  dna.placeholder = "from the portrait editor";
+  const copyDna = button("", "copy", "ghost");
+  copyDna.dataset.size = "icon-sm";
+  copyDna.dataset.tip = "Copy this DNA";
+  copyDna.addEventListener("click", () => {
+    if (dna.value.trim()) post({ type: "copy", text: dna.value.trim() });
+  });
+  const pasteDna = button("", "paste", "ghost");
+  pasteDna.dataset.size = "icon-sm";
+  pasteDna.dataset.tip = "Paste a DNA from the clipboard";
+  pasteDna.addEventListener("click", () => post({ type: "paste", field: "dna" }));
+  dnaRow.append(dna, copyDna, pasteDna);
+  body.append(field("DNA", dnaRow));
+
+  // The six skills as one row across the WHOLE panel: six numbers do not fit
+  // the control column, and each keeps the shared number field, so its label
+  // is the drag handle and a blank value leaves the key out of the block.
+  const skills = node("div", "skills");
+  for (const key of DYNASTY_SKILLS) {
+    const field$ = numberField({
+      label: key,
+      doc: `Starting ${key}. Blank means the game rolls it.`,
+      value: form.skills?.[key] ?? null,
+      placeholder: "",
+    });
+    field$.onChange((value) => {
+      const rest = { ...(form.skills ?? {}) };
+      if (value === null) delete rest[key];
+      else rest[key] = value;
+      form.skills = Object.keys(rest).length > 0 ? rest : undefined;
+    });
+    skills.append(field$.el);
+  }
+  const skillSection = node("div", "skillsec");
+  skillSection.append(node("span", "px-label", "Skills"), skills);
+  body.append(skillSection);
+
   const traits = node("div", "chips");
   const drawTraits = (): void => {
     traits.replaceChildren();
     for (const trait of form.traits) {
-      traits.append(
-        chip(trait, () => {
-          form.traits = form.traits.filter((t) => t !== trait);
-          drawTraits();
-        })
-      );
+      const badge = chip(traitLabel(trait), () => {
+        form.traits = form.traits.filter((t) => t !== trait);
+        drawTraits();
+      });
+      badge.prepend(traitThumb(trait));
+      askForIcon(trait);
+      tipOnHover(badge, trait);
+      traits.append(badge);
     }
     const add = button("Add", "plus", "ghost");
     add.addEventListener("click", () => {
-      const items: MenuItem[] = state.options.trait
-        .filter((t) => !form.traits.includes(t.value))
-        .map((t) => ({ value: t.value, label: t.value, hint: t.hint }));
-      if (items.length === 0) {
+      if (state.options.trait.length === 0) {
         toast("No trait list is available here; type the trait into the file after saving.");
         return;
       }
-      menu(add, items, {
-        search: true,
-        onPick: (value) => {
-          form.traits.push(value);
-          drawTraits();
-        },
+      traitPicker(add, form.traits, (value) => {
+        form.traits.push(value);
+        drawTraits();
       });
     });
     traits.append(add);
@@ -1011,6 +1475,7 @@ el("newCharacter").addEventListener("click", () => {
   state.draft = blankForm();
   state.draftFile = undefined;
   state.birthHint = undefined;
+  post({ type: "target" });
   renderInspector();
 });
 
@@ -1052,9 +1517,29 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "init":
       state.mods = msg.mods;
       state.gameName = msg.gameName;
+      state.calendar = msg.calendar;
       state.setupProblem = msg.setupProblem;
       $banner.hidden = !msg.setupProblem;
       if (msg.setupProblem) $banner.textContent = msg.setupProblem;
+      break;
+    case "target":
+      target.set(msg.target);
+      break;
+    case "traitIcons":
+      for (const [name, url] of Object.entries(msg.urls)) state.traitIcons.set(name, url);
+      paintTraitIcons();
+      break;
+    case "traitTip":
+      state.traitTips.set(msg.name, msg.tip);
+      // The pointer may have moved on while the host was answering; only the
+      // trait it is still on gets drawn.
+      if (tipFor === msg.name) showTraitTip();
+      break;
+    case "pasted":
+      if (state.draft) {
+        state.draft.dna = msg.text || undefined;
+        renderInspector();
+      }
       break;
     case "loading":
       $pickerNote.textContent = `Reading ${msg.what}…`;

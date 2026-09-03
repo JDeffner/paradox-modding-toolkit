@@ -6,8 +6,9 @@
  * The key set and its spelling are MEASURED from the vanilla files, not
  * remembered (counts in packages/server/src/overview/dynastyTree.ts): a
  * character's own level carries `name` (quoted plain text, never a loc key),
- * `female = yes`, `dynasty` or `dynasty_house`, `culture`, `religion`,
- * `father`, `mother` and one `trait = X` per trait, while `birth`, `death` and
+ * `dna`, `female = yes`, `dynasty` or `dynasty_house`, the six skills,
+ * `culture`, `religion`, `father`, `mother` and one `trait = X` per trait,
+ * while `birth`, `death` and
  * `add_spouse` sit inside a dated `880.1.1 = { … }` block whose KEY is the
  * date. A dynasty is `<id> = { name = "dynn_X" culture = "y" }` and a house is
  * `house_x = { name = "dynn_X" dynasty = <id> }`
@@ -17,6 +18,7 @@
  * everything else exactly as written, comments included, by copying the source
  * LINES of the statements the form does not model.
  */
+import { DYNASTY_SKILLS } from "@px-lsp/protocol/protocol";
 import { parseScript, type BlockNode, type Statement } from "@px-lsp/server/parser";
 import type { CharacterForm, DynastyForm, HouseForm } from "./messages";
 
@@ -26,12 +28,23 @@ const OWNED_KEYS = new Set([
   "female",
   "dynasty",
   "dynasty_house",
+  "dna",
   "culture",
   "religion",
   "father",
   "mother",
   "trait",
+  ...DYNASTY_SKILLS,
 ]);
+
+/**
+ * A dna name the game writes bare (`dna = 73957_ibn_marwan`, 350 of the 438
+ * vanilla statements); anything else is quoted so a value with a space still
+ * writes one statement.
+ */
+const BARE_DNA = /^[A-Za-z0-9_.-]+$/;
+
+const SKILL_KEYS: ReadonlySet<string> = new Set(DYNASTY_SKILLS);
 
 /** Statements inside a dated block the form owns. */
 const OWNED_DATED = new Set(["birth", "death", "add_spouse"]);
@@ -158,7 +171,11 @@ function readPrevious(previous: string): Previous {
       }
       continue;
     }
-    if (OWNED_KEYS.has(key)) continue;
+    // A skill the reader could not turn into a number (a script value) never
+    // reached the form, so the form cannot write it back: keep the line.
+    const numericSkill =
+      !SKILL_KEYS.has(key) || (stmt.value?.kind === "scalar" && Number.isFinite(Number(stmt.value.text)));
+    if (numericSkill && OWNED_KEYS.has(key)) continue;
     out.plain.push(statementLines(lines, starts, stmt));
   }
   return out;
@@ -173,9 +190,15 @@ export function characterBlock(form: CharacterForm, previous?: string): Generate
   const prev = previous ? readPrevious(previous) : null;
   const body: string[] = [];
   body.push(`\tname = ${quote(form.name)}`);
+  // The game's own order: the dna sits right under the name it portrays.
+  if (form.dna) body.push(`\tdna = ${BARE_DNA.test(form.dna) ? form.dna : quote(form.dna)}`);
   if (form.female) body.push(`\tfemale = yes`);
   if (form.house) body.push(`\tdynasty_house = ${form.house}`);
   else if (form.dynasty) body.push(`\tdynasty = ${form.dynasty}`);
+  for (const skill of DYNASTY_SKILLS) {
+    const value = form.skills?.[skill];
+    if (typeof value === "number") body.push(`\t${skill} = ${value}`);
+  }
   if (form.culture) body.push(`\tculture = ${quote(form.culture)}`);
   if (form.religion) body.push(`\treligion = ${quote(form.religion)}`);
   if (form.father) body.push(`\tfather = ${form.father}`);

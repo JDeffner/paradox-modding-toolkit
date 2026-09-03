@@ -79,16 +79,60 @@ ${uiCss}
   #empty[hidden] { display: none; }
   #empty .note { font-size: var(--px-text-xs); }
 
-  /* The inspector. */
-  #side > .px-sidepanel-body { gap: 10px; }
+  /* The inspector. The padding is the trait creator's, so a control never sits
+     on the panel's own edge, and .px-field keeps its label column. */
+  #side > .px-sidepanel-body { gap: 10px; padding: 10px; }
   #side h2 { margin: 0; font-size: 14px; }
   #side .sec { display: flex; flex-direction: column; gap: 6px; }
-  #side .px-field > .px-label { font-size: var(--px-text-xs); }
-  #side .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  #side .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   #side .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #side .actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .pick { justify-content: space-between; width: 100%; }
   .pick > .val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* One date, four parts: era (only when the calendar has one), year, month,
+     day. Year, month and day together are 186px, which fits the 199px control
+     column the default 340px panel has (measured 2026-09-03), so a date without
+     an era reads on one line. A fourth part WRAPS rather than being clipped:
+     a squeezed day dropdown is worse than a second line. */
+  .dparts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+  .dparts > .px-btn { flex: 0 1 auto; min-width: 0; justify-content: space-between; gap: 2px; }
+  .dparts > .year { width: 58px; flex: 0 0 auto; }
+  .dparts > .month { min-width: 78px; }
+  .dparts > .day { min-width: 42px; }
+  .dparts .val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dnote { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .dnote[data-bad] { color: var(--vscode-errorForeground, #f85149); }
+  /* The six skills as one row across the whole panel: the label sits over its
+     number and still drags it. A skill name is one word, so it ellipsizes
+     rather than breaking mid-word; the label's tooltip spells it out. */
+  .skillsec { display: flex; flex-direction: column; gap: 3px; }
+  .skills { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+  .skills .px-field { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .skills .px-field > .px-label {
+    font-size: var(--px-text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .skills .px-row { max-width: none !important; }
+  .skills .px-input { padding-left: 5px; padding-right: 2px; }
+  /* A trait chip carries the same 16px picture the menu rows do. */
+  .px-badge > img { width: 16px; height: 16px; object-fit: contain; }
+  /* The trait picker and the tooltip a hovered trait opens. */
+  .tpicker { width: 320px; }
+  .tpicker .px-menu-item { cursor: pointer; }
+  .tpicker .tid { color: var(--px-muted-fg); font-family: var(--px-font-mono); font-size: var(--px-text-xs); }
+  .ttip { position: fixed; z-index: 60; max-width: 320px; pointer-events: none; }
+  .tip-head { display: flex; align-items: center; gap: 8px; }
+  .tip-icon { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
+  .tip-icon > img { position: absolute; inset: 8px; width: 48px; height: 48px; object-fit: contain; }
+  .tip-icon > img.frame { inset: 0; width: 64px; height: 64px; }
+  .tip-icon > .noicon {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 2px; border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
+    font-family: var(--px-font-mono); font-size: var(--px-text-xs); color: var(--px-muted-fg);
+    text-align: center; overflow-wrap: anywhere; line-height: 1.1;
+  }
+  .tip-mods { display: flex; flex-direction: column; gap: 1px; }
+  .tip-rel { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tip-note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #banner {
     padding: 6px 10px; background: var(--px-muted); border-bottom: 1px solid var(--px-border);
     color: var(--px-muted-fg); font-size: var(--px-text-xs);
@@ -103,6 +147,7 @@ ${uiCss}
     <div class="px-input-group" id="queryGroup">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search dynasties…" /></div>
     <span id="title" class="px-sm"></span>
     <span class="px-grow"></span>
+    <span id="targetSlot"></span>
     <button id="newDynasty" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")}Dynasty</button>
     <button id="newHouse" class="px-btn" data-variant="outline" data-size="sm" hidden>${icon("plus")}House</button>
     <button id="newCharacter" class="px-btn" data-variant="outline" data-size="sm" hidden>${icon("plus")}Character</button>

@@ -10,7 +10,11 @@ import type {
   DynastyHouse,
   DynastySummary,
   EventVocabularyItem,
+  ModifierFormat,
 } from "@px-lsp/protocol/protocol";
+import type { CalendarSetting } from "@px-lsp/protocol/calendar";
+import type { CreatorSaveTarget } from "../shared/creatorMessages";
+import type { PreviewInput } from "../traitCreator/app/preview";
 /** The forms the app fills in and blocks.ts turns into script. */
 export interface CharacterForm {
   id: string;
@@ -26,6 +30,10 @@ export interface CharacterForm {
   /** `Y.M.D`; the date of the block that carries `birth = yes`. */
   birth?: string;
   death?: string;
+  /** `dna = `, the portrait DNA name, without quotes. */
+  dna?: string;
+  /** Skill key -> value, for the keys the modder gave a number. */
+  skills?: Record<string, number>;
   traits: string[];
   /** Spouse ids. */
   spouses: string[];
@@ -72,14 +80,37 @@ export interface TreeData {
   nextCharacterId: string;
 }
 
+/**
+ * What the game's own tooltip for one trait needs, resolved by the host: the
+ * player's words, the picture, and the trait's modifier rows. `renderTraitTip`
+ * (traitCreator/app/preview.ts) turns it into the tooltip itself.
+ */
+export interface TraitTip {
+  tip: PreviewInput;
+  /** The game's print rules for the modifier names this tip carries. */
+  formats: Record<string, ModifierFormat>;
+  /** Texture path -> URL, for the texticons those rules name. */
+  images: Record<string, string | null>;
+}
+
 export type HostToApp =
   | {
       type: "init";
       gameName: string;
       mods: ModTarget[];
+      /** `px.calendar`, when the workspace declares one: how a date READS. */
+      calendar?: CalendarSetting;
       /** Set when the workspace cannot be written to yet; the app says so. */
       setupProblem?: string;
     }
+  /** One trait picture per requested key; `null` = no file resolved. */
+  | { type: "traitIcons"; urls: Record<string, string | null> }
+  /** The tooltip for one trait, or null when the server does not know it. */
+  | { type: "traitTip"; name: string; tip: TraitTip | null }
+  /** Where the next character save lands (saveTarget.ts). */
+  | { type: "target"; target: CreatorSaveTarget | null }
+  /** The clipboard's text, for the field that asked for it. */
+  | { type: "pasted"; field: "dna"; text: string }
   | { type: "loading"; what: string }
   | {
       type: "list";
@@ -109,4 +140,14 @@ export type AppToHost =
   | { type: "saveDynasty"; form: DynastyForm; name: string; file?: string; openTree: boolean }
   | { type: "saveHouse"; form: HouseForm; name: string; file?: string }
   /** Hand a dynasty id or house key to the Flag Builder. */
-  | { type: "coa"; name: string };
+  | { type: "coa"; name: string }
+  /** Pictures for the trait rows that are on screen; batched by the app. */
+  | { type: "traitIcons"; names: string[] }
+  /** The game's tooltip for one trait; answered once per name per panel. */
+  | { type: "traitTip"; name: string }
+  /** Recompute the save target: `file` = the file the draft already lives in. */
+  | { type: "target"; file?: string }
+  /** The target line was clicked: open the picker. */
+  | { type: "changeTarget" }
+  | { type: "copy"; text: string }
+  | { type: "paste"; field: "dna" };

@@ -99,9 +99,30 @@ const TREE = {
       file: "c.txt",
       line: 0,
       birth: "1025.1.1",
+      dna: "3_smokelet",
+      skills: { martial: 7, learning: 2 },
     },
   ],
   nextCharacterId: "4",
+};
+
+/**
+ * A total conversion's calendar: script year 8000 is year 1 of "AC", earlier
+ * years count backwards as "BC", and the year is six moons long. What the panel
+ * writes is still the engine's `Y.M.D`.
+ */
+const CALENDAR = {
+  epoch: 8000,
+  after: "AC",
+  before: "BC",
+  months: [
+    { name: "First Moon", days: 30 },
+    { name: "Second Moon", days: 30 },
+    { name: "Third Moon", days: 31 },
+    { name: "Fourth Moon", days: 30 },
+    { name: "Fifth Moon", days: 31 },
+    { name: "Sixth Moon", days: 30 },
+  ],
 };
 
 interface Booted {
@@ -120,6 +141,14 @@ function boot(): Booted {
       });
       // jsdom has no layout, so the menu's keyboard scrolling needs a stand-in.
       window.Element.prototype.scrollIntoView = () => undefined;
+      // ... and no IntersectionObserver, which is how the trait picker decides
+      // a row is worth a picture. Observing nothing leaves the first screen,
+      // which the app asks for outright.
+      (window as unknown as { IntersectionObserver: unknown }).IntersectionObserver = class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      };
     },
   });
   const window = dom.window as unknown as Window & typeof globalThis;
@@ -247,10 +276,10 @@ describe("the Dynasty Tree app", () => {
     const side = app.window.document.getElementById("sideBody")!;
     expect(side.textContent).toContain("New character 4");
     // A guessed birth date is an offer, not a value: it must not be saved
-    // because nobody looked at the field.
-    const born = [...side.querySelectorAll("input.px-input")].find(
-      (i) => (i as HTMLInputElement).placeholder === "1020.1.1"
-    ) as HTMLInputElement;
+    // because nobody looked at the field. Without a calendar the year reads as
+    // the script year it is.
+    const born = side.querySelector("input.year") as HTMLInputElement;
+    expect(born.placeholder).toBe("1020");
     expect(born.value).toBe("");
 
     sideButton(app, "Create").click();
@@ -269,6 +298,132 @@ describe("the Dynasty Tree app", () => {
       house: "house_smoke",
     });
     expect(sent?.form.birth).toBeUndefined();
+  });
+
+  it("reads and writes a date through the mod's own calendar", () => {
+    const app = boot();
+    app.send({ type: "init", gameName: "Crusader Kings III", mods: [], calendar: CALENDAR });
+    app.send({ type: "tree", tree: TREE, ms: 4 });
+    const side = app.window.document.getElementById("sideBody")!;
+    click(app, card(app, "1"));
+    // Script 1000.1.1 is 7000 years before the epoch, so it READS as 7000 BC.
+    expect(side.textContent).toContain("7000 BC");
+
+    click(app, card(app, "1").querySelector('.cact[data-act="edit"]')!);
+    const parts = side.querySelector(".dparts")!;
+    expect((parts.querySelector("input.year") as HTMLInputElement).value).toBe("7000");
+    expect(parts.querySelector("button.era .val")!.textContent).toBe("BC");
+
+    // The months are the calendar's own, and the day list is that month's length.
+    const open = (selector: string): string[] => {
+      (parts.querySelector(selector) as HTMLButtonElement).click();
+      const items = [...app.window.document.querySelectorAll(".px-menu-item .px-grow")];
+      return items.map((row) => row.textContent ?? "");
+    };
+    const pick = (label: string): void => {
+      const item = [...app.window.document.querySelectorAll(".px-menu-item")].find(
+        (row) => row.querySelector(".px-grow")?.textContent === label
+      );
+      if (!item) throw new Error(`no ${label} to pick`);
+      (item as HTMLElement).click();
+    };
+    expect(open("button.month")).toEqual(CALENDAR.months.map((m) => m.name));
+    pick("Third Moon");
+    expect(open("button.day")).toHaveLength(31);
+    pick("31");
+
+    sideButton(app, "Save").click();
+    const sent = app.posted.find((m) => m.type === "saveCharacter") as {
+      form: { birth?: string };
+      file?: string;
+    };
+    // 7000 BC in that calendar is script year 1000: the file never sees a
+    // display year.
+    expect(sent.form.birth).toBe("1000.3.31");
+    expect(sent.file).toBe("c.txt");
+    // Editing an existing character re-asks where a save would land, so the
+    // top bar names the file that character is already in.
+    expect(app.posted).toContainEqual({ type: "target", file: "c.txt" });
+  });
+
+  it("carries the dna and the skills it read back to the host", () => {
+    const app = boot();
+    app.send({ type: "tree", tree: TREE, ms: 4 });
+    const side = app.window.document.getElementById("sideBody")!;
+    click(app, card(app, "3"));
+    expect(side.textContent).toContain("3_smokelet");
+    expect(side.textContent).toContain("martial 7");
+
+    click(app, card(app, "3").querySelector('.cact[data-act="edit"]')!);
+    const prowess = [...side.querySelectorAll(".skills .px-field")].find(
+      (f) => f.querySelector(".px-label")?.textContent === "prowess"
+    )!;
+    const input = prowess.querySelector("input.px-input") as HTMLInputElement;
+    input.value = "9";
+    input.dispatchEvent(new app.window.Event("change"));
+    sideButton(app, "Save").click();
+    const sent = app.posted.find((m) => m.type === "saveCharacter") as {
+      form: { dna?: string; skills?: Record<string, number> };
+    };
+    // The two skills the block already set are untouched by typing a third.
+    expect(sent.form).toMatchObject({ dna: "3_smokelet", skills: { martial: 7, learning: 2, prowess: 9 } });
+  });
+
+  it("offers a trait by the name the player reads, with its key beside it", () => {
+    const app = boot();
+    app.send({ type: "tree", tree: TREE, ms: 4 });
+    app.send({
+      type: "options",
+      sets: {
+        culture: [],
+        religion: [],
+        trait: [
+          { value: "brave", label: "Brave", hint: "vanilla" },
+          { value: "craven", label: "Craven", hint: "vanilla" },
+        ],
+      },
+    });
+    click(app, card(app, "3").querySelector('.cact[data-act="edit"]')!);
+    const side = app.window.document.getElementById("sideBody")!;
+    const traits = [...side.querySelectorAll(".px-field")].find(
+      (f) => f.querySelector(".px-label")?.textContent === "Traits"
+    )!;
+    (
+      [...traits.querySelectorAll("button")].find((b) => b.textContent?.includes("Add")) as HTMLElement
+    ).click();
+
+    const rows = (): Element[] => [...app.window.document.querySelectorAll(".tpicker .px-menu-item")];
+    expect(rows().map((r) => r.querySelector(".px-grow")?.textContent)).toEqual(["Brave", "Craven"]);
+    expect(rows().map((r) => r.querySelector(".tid")?.textContent)).toEqual(["brave", "craven"]);
+    // Every row has its picture tile from the start, hidden until the host
+    // answers with a URL for it; a trait with no file resolved stays hidden.
+    expect(rows().map((r) => (r.querySelector("img[data-trait]") as HTMLImageElement).hidden)).toEqual([
+      true,
+      true,
+    ]);
+    app.send({ type: "traitIcons", urls: { brave: "brave.png", craven: null } });
+    const thumb = (row: Element): HTMLImageElement => row.querySelector("img[data-trait]")!;
+    expect(thumb(rows()[0]).hidden).toBe(false);
+    expect(thumb(rows()[0]).getAttribute("src")).toBe("brave.png");
+    expect(thumb(rows()[1]).hidden).toBe(true);
+
+    // The search matches the player's word and the key alike.
+    const search = app.window.document.querySelector(".tpicker input.px-input") as HTMLInputElement;
+    const shown = (): (string | undefined)[] => rows().map((r) => r.querySelector(".px-grow")?.textContent);
+    search.value = "brav";
+    search.dispatchEvent(new app.window.Event("input"));
+    expect(shown()).toEqual(["Brave"]);
+    // A key nothing in the words matches still finds its trait.
+    search.value = "craven";
+    search.dispatchEvent(new app.window.Event("input"));
+    expect(shown()).toEqual(["Craven"]);
+
+    (rows()[0] as HTMLElement).click();
+    expect(traits.textContent).toContain("Craven");
+    sideButton(app, "Save").click();
+    const sent = app.posted.find((m) => m.type === "saveCharacter") as { form: { traits: string[] } };
+    // The chip reads "Craven"; the file gets the key.
+    expect(sent.form.traits).toEqual(["craven"]);
   });
 
   it("offers only men born before the child in the father picker", () => {
