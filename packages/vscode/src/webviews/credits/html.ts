@@ -34,7 +34,9 @@ function entryHtml(entry: CreditEntry): string {
 export function creditsHtml({ csp }: { csp: string }): string {
   const sections = CREDIT_SECTIONS.map(
     (section) => /* html */ `<h2>${escape(section.title)}</h2>
-${section.entries.map(entryHtml).join("\n")}`
+<div class="grid">
+${section.entries.map(entryHtml).join("\n")}
+</div>`
   ).join("\n");
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -45,18 +47,21 @@ ${section.entries.map(entryHtml).join("\n")}`
 <style>
 ${uiCss}
   body { overflow-y: auto; }
-  #page { max-width: 760px; padding: 22px 24px 48px; }
+  #page { max-width: 1180px; padding: 22px 24px 48px; }
   h1 { font-size: 1.6em; margin: 0 0 4px; }
   h2 {
     font-size: 1.05em; margin: 26px 0 10px; padding-bottom: 4px;
     border-bottom: 1px solid var(--px-border);
   }
   #intro { color: var(--px-muted-fg); margin: 0 0 6px; }
+  /* Squarish cards that wrap: as many per row as the width allows, one column on narrow panes. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
   .entry {
-    padding: 10px 12px; margin: 8px 0;
+    display: flex; flex-direction: column; gap: 4px; min-height: 120px; padding: 12px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
     background: var(--px-sidebar);
   }
+  .entry .used { flex: 1 1 auto; }
   .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .name {
     display: inline-flex; align-items: center; gap: 5px;

@@ -1210,7 +1210,7 @@ function updateModPicker(): void {
 
 const stage = $("stage");
 const viewport = $("viewport");
-const view = { frozen: false, x: 0, y: 0, scale: 1 };
+const view = { x: 0, y: 0, scale: 1 };
 
 function applyView(): void {
   viewport.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
@@ -1228,7 +1228,6 @@ $("recenter").onclick = recenter;
 stage.addEventListener(
   "wheel",
   (e) => {
-    if (view.frozen) return;
     e.preventDefault();
     const r = stage.getBoundingClientRect();
     const px = e.clientX - r.left;
@@ -1245,7 +1244,7 @@ stage.addEventListener(
 stage.addEventListener("pointerdown", (down) => {
   // Drags starting on the floating stage chrome interact with it, never pan.
   if (down.target instanceof Element && down.target.closest("#stageTools, #stageInfo")) return;
-  if (view.frozen || down.button !== 1) return;
+  if (down.button !== 1) return;
   down.preventDefault();
   stage.setPointerCapture(down.pointerId);
   stage.setAttribute("data-panning", "");
