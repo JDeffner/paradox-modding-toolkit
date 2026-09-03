@@ -61,6 +61,15 @@ export const ck3Meta: GameMeta = {
       tip: "See and edit a dynasty's characters across history.",
     },
   ],
+  // Measured on the 1.19 install: common/modifier_definition_formats/ holds 13
+  // files documented by _definitions.info in the same folder (decimals, color,
+  // prefix/suffix/negative_suffix as loc keys, percent, already_percent,
+  // hidden, no_difference_sign), and gui/texticons.gui holds the `texticon`
+  // blocks a `[gold_i]` in one of those loc values resolves to.
+  modifierFormats: {
+    folder: "common/modifier_definition_formats",
+    textIcons: "gui/texticons.gui",
+  },
   // Date-format keys verified in ck3.exe 1.19 (the gamedate.cpp string block);
   // formats mirror game/localization/english/core_l_english.yml. Vanilla
   // appends $ERA$/$ERA_BCE$ itself - dropped here, the {era} slot replaces it.

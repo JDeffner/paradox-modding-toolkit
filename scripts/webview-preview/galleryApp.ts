@@ -13,6 +13,8 @@ import { scrubbable } from "../../packages/vscode/src/webviews/shared/scrub";
 import { sortable } from "../../packages/vscode/src/webviews/shared/sortable";
 import { colorPicker, paintSwatch, type Rgb } from "../../packages/vscode/src/webviews/shared/colorPicker";
 import { icon } from "../../packages/vscode/src/webviews/shared/icons";
+import { modifierLine, renderModifierLine } from "../../packages/vscode/src/webviews/shared/modifierLines";
+import type { ModifierFormat } from "../../packages/protocol/src/protocol";
 import {
   boolField,
   colorField,
@@ -162,6 +164,7 @@ function markup(): string {
     ${section("Badges, kbd, tooltip", passive)}
     ${section("List (sortable)", list)}
     ${section("Overlays", overlays)}
+    ${section("Game tooltip (modifierLines.ts)", `<div id="gametip" class="px-stack"></div>`)}
     ${section("Creator fields (fields.ts)", `<div id="fields" class="px-stack"></div>`)}
     ${section("Tokens", `<div id="tokens">${tokens}</div>`)}
   </main>`;
@@ -270,6 +273,60 @@ byId("demo-toast-err").addEventListener("click", () =>
   toast("The engine would drop that write.", "destructive")
 );
 
+// The game tooltip: modifier rows printed the way the game prints them. These
+// formats are the shape paradox/modifierFormats answers with (CK3's own
+// numbers for these four, read out of common/modifier_definition_formats), and
+// the icon is a data URI - the gallery has no game folder to decode a .dds from.
+const ICON_PNG = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#c9a227"/></svg>`
+)}`;
+
+const FORMATS: Record<string, ModifierFormat> = {
+  diplomacy: {
+    label: "Diplomacy",
+    decimals: 0,
+    color: "good",
+    prefix: [{ icon: { texture: "icon_skills.dds" } }],
+  },
+  monthly_income: {
+    label: "Monthly Income",
+    decimals: 2,
+    color: "good",
+    prefix: [{ icon: { texture: "icon_gold.dds" } }],
+    suffix: [{ text: "/month" }],
+  },
+  stress_gain_mult: { label: "Stress Gain", decimals: 0, percent: true, color: "bad" },
+  hostile_scheme_phase_duration_add: {
+    label: "Scheme Phase Duration",
+    decimals: 0,
+    color: "bad",
+    noSign: true,
+    suffix: [{ text: " days slower per Scheme Phase" }],
+    negativeSuffix: [{ text: " days faster per Scheme Phase" }],
+  },
+};
+
+const gametip = byId("gametip");
+const tip = document.createElement("div");
+tip.className = "px-game-tip";
+const tipTitle = document.createElement("div");
+tipTitle.className = "px-game-tip-title";
+tipTitle.textContent = "Stoic";
+const tipBody = document.createElement("div");
+tipBody.className = "px-game-tip-body";
+tipBody.textContent = "Feels nothing, says less.";
+tip.append(tipTitle, tipBody);
+for (const [name, value] of [
+  ["diplomacy", 2],
+  ["monthly_income", 0.3],
+  ["stress_gain_mult", -0.1],
+  ["hostile_scheme_phase_duration_add", -5],
+  ["some_unformatted_modifier", 1],
+] as [string, number][]) {
+  tip.append(renderModifierLine(modifierLine(name, value, FORMATS[name]), () => ICON_PNG));
+}
+gametip.append(tip);
+
 // Creator fields (fields.ts): one of each, with the shapes a creator feeds
 // them. The pictures are inline SVG data URIs — the gallery has no game.
 const swatchPng = (fill: string): string =>
@@ -277,10 +334,12 @@ const swatchPng = (fill: string): string =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${fill}"/></svg>`
   )}`;
 
+// `label` is the loc-resolved name the server sends: the picker reads it, and
+// keeps the KEY as the dimmer hint, because the key is what gets written.
 const TRAITS = [
-  { value: "brave", doc: "Courage in war and in council.", hint: "game" },
-  { value: "craven", doc: "Avoids every risk.", hint: "game" },
-  { value: "px_stoic", doc: "Feels nothing, says less.", hint: "this mod" },
+  { value: "brave", label: "Brave", doc: "Courage in war and in council.", hint: "game" },
+  { value: "craven", label: "Craven", doc: "Avoids every risk.", hint: "game" },
+  { value: "px_stoic", label: "Stoic", doc: "Feels nothing, says less.", hint: "this mod" },
   { value: "ambitious", doc: "Wants more than it holds.", hint: "game" },
 ];
 
@@ -294,6 +353,11 @@ for (const field of [
     suggestions: ["personality", "education", "lifestyle", "fame", "health"],
   }),
   numberField({ label: "Martial", doc: "Added to the character's martial skill.", value: 2 }),
+  textField({
+    label: "monthly_county_control_change_factor",
+    doc: "A key as long as the game made it: the label wraps, the input keeps its width.",
+    placeholder: "0.15",
+  }),
   boolField({ label: "Physical", doc: "A trait of the body, not the mind." }),
   enumField({ label: "Valid sex", doc: "Who may have it.", values: ["all", "male", "female"], value: "all" }),
   refField({ label: "Opposite", doc: "A trait that cannot be held with this one.", items: TRAITS }),
