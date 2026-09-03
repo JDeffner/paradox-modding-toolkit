@@ -9,14 +9,13 @@
  * would pass neither, and would silently reformat every culture a modder opens.
  */
 import { describe, expect, it } from "vitest";
+import { changedProperties, firstValues, parseBlock } from "../src/webviews/shared/scriptBlock";
 import {
   buildBlock,
-  changedProperties,
   inlineList,
   multiList,
   numberList,
   numbersOf,
-  readBlock,
   rgbList,
   rgbOf,
   tokensOf,
@@ -32,55 +31,54 @@ const LEVANTINE =
 
 /** Every key the form binds, with the value the loaded block gives it. */
 function bindAll(source: string): { values: Map<string, string | null>; keys: string[] } {
-  const parsed = readBlock(source)!;
   const values = new Map<string, string | null>();
-  for (const [key, value] of parsed.values) values.set(key, value);
-  return { values, keys: [...parsed.values.keys()] };
+  for (const [key, value] of firstValues(parseBlock(source)!)) values.set(key, value);
+  return { values, keys: [...values.keys()] };
 }
 
 describe("culture block writer", () => {
   it("gives a vanilla block back byte for byte when nothing changed", () => {
     for (const source of [BEDOUIN, LEVANTINE]) {
-      const parsed = readBlock(source)!;
+      const parsed = parseBlock(source)!;
       const { values, keys } = bindAll(source);
-      expect(buildBlock(parsed.name, parsed.chunks, values, values, keys)).toBe(source);
+      expect(buildBlock(parsed.name, parsed, values, values, keys)).toBe(source);
     }
   });
 
   it("rewrites exactly the line whose value changed", () => {
-    const parsed = readBlock(BEDOUIN)!;
+    const parsed = parseBlock(BEDOUIN)!;
     const { values, keys } = bindAll(BEDOUIN);
     const loaded = new Map(values);
     values.set("ethos", "ethos_bellicose");
-    const after = buildBlock(parsed.name, parsed.chunks, values, loaded, keys);
+    const after = buildBlock(parsed.name, parsed, values, loaded, keys);
     const before = BEDOUIN.split("\n");
     const now = after.split("\n");
     expect(now.length).toBe(before.length);
     const differing = now.map((line, i) => (line === before[i] ? null : i)).filter((i) => i !== null);
     expect(differing).toEqual([3]);
     expect(now[3]).toBe("\tethos = ethos_bellicose");
-    expect(changedProperties(values, loaded)).toEqual([{ key: "ethos", value: "ethos_bellicose" }]);
+    expect(changedProperties(loaded, values)).toEqual([{ key: "ethos", value: "ethos_bellicose" }]);
   });
 
   it("drops the statement of a key the modder cleared", () => {
-    const parsed = readBlock(BEDOUIN)!;
+    const parsed = parseBlock(BEDOUIN)!;
     const { values, keys } = bindAll(BEDOUIN);
     const loaded = new Map(values);
     values.set("house_coa_frame", null);
-    const after = buildBlock(parsed.name, parsed.chunks, values, loaded, keys);
+    const after = buildBlock(parsed.name, parsed, values, loaded, keys);
     expect(after).not.toContain("house_coa_frame");
     expect(after.split("\n").length).toBe(BEDOUIN.split("\n").length - 1);
-    expect(changedProperties(values, loaded)).toEqual([{ key: "house_coa_frame", value: null }]);
+    expect(changedProperties(loaded, values)).toEqual([{ key: "house_coa_frame", value: null }]);
   });
 
   it("keeps a statement the form does not model, in place", () => {
     // A key no widget binds (here a comment and an unknown key) is copied out
     // of the source untouched: AD-5, annotate, never hide.
     const source = "px_x = {\n\t# hand written\n\tsome_future_key = yes\n\tethos = ethos_stoic\n}";
-    const parsed = readBlock(source)!;
+    const parsed = parseBlock(source)!;
     const values = new Map<string, string | null>([["ethos", "ethos_bellicose"]]);
     const loaded = new Map<string, string | null>([["ethos", "ethos_stoic"]]);
-    expect(buildBlock("px_x", parsed.chunks, values, loaded, ["ethos"])).toBe(
+    expect(buildBlock("px_x", parsed, values, loaded, ["ethos"])).toBe(
       "px_x = {\n\t# hand written\n\tsome_future_key = yes\n\tethos = ethos_bellicose\n}"
     );
   });
@@ -96,7 +94,7 @@ describe("culture block writer", () => {
       ["house_coa_mask_scale", numberList([0.95, 0.95])],
       ["ethnicities", weightList([{ weight: 100, value: "arab" }])],
     ]);
-    const block = buildBlock("px_test", [], values, new Map(), [
+    const block = buildBlock("px_test", null, values, new Map(), [
       "color",
       "ethos",
       "traditions",
@@ -120,13 +118,13 @@ describe("culture block writer", () => {
   });
 
   it("reads the value shapes the vanilla file writes", () => {
-    const bedouin = readBlock(BEDOUIN)!.values;
+    const bedouin = firstValues(parseBlock(BEDOUIN)!);
     expect(tokensOf(bedouin.get("clothing_gfx"))).toEqual(["dde_abbasid_clothing_gfx", "mena_clothing_gfx"]);
     expect(tokensOf(bedouin.get("traditions"))).toHaveLength(5);
     expect(weightRowsOf(bedouin.get("ethnicities"))).toEqual([{ weight: 100, value: "arab" }]);
     expect(numbersOf(bedouin.get("house_coa_mask_offset"))).toEqual([0, -0.03]);
     // A named color is not three components, and must not be read as one.
     expect(rgbOf(bedouin.get("color"))).toBeNull();
-    expect(rgbOf(readBlock(LEVANTINE)!.values.get("color"))).toEqual([77, 242, 77]);
+    expect(rgbOf(firstValues(parseBlock(LEVANTINE)!).get("color"))).toEqual([77, 242, 77]);
   });
 });

@@ -9,12 +9,7 @@
  * changing one field changes exactly one line.
  */
 import { describe, expect, it } from "vitest";
-import {
-  parseBlock,
-  readNumberRows,
-  readTokenList,
-  writeBlock,
-} from "../src/webviews/traitCreator/app/script";
+import { parseBlock, readNumberRows, readTokenList, writeBlock } from "../src/webviews/shared/scriptBlock";
 import {
   emptyState,
   loadTrait,

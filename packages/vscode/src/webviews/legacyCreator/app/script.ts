@@ -10,6 +10,11 @@
  * block opened and saved with nothing touched comes out byte-identical, and
  * changing one modifier's number changes exactly that one line.
  *
+ * The scanner is `../shared/scriptBlock`: it reports every statement with its
+ * source span, so the comments and blank lines are the GAPS between the spans.
+ * This file turns those gaps into the `before` / `after` a form row carries,
+ * which is what a nested modifier block needs and a span rewrite cannot give.
+ *
  * The one normalization: CRLF is read as LF and a block is written with LF.
  * `paradox/definitionEdit` retypes the block into the file's own newline
  * before it lands (definitionEdit.ts `toFileNewline`), so nothing here has to
@@ -18,6 +23,14 @@
  * Browser code. No DOM, no host, no game knowledge: which keys exist and what
  * they mean arrives from `paradox/definitionForm`.
  */
+import {
+  changedProperties as diffValues,
+  parseBlock,
+  scanItems,
+  type ScriptItem,
+} from "../../shared/scriptBlock";
+
+export { locKeyFor } from "../../shared/scriptBlock";
 
 /** One `key = value` of a definition body. */
 export interface Statement {
@@ -45,102 +58,47 @@ export interface FieldValue {
   value: string | null;
 }
 
-const SPACE = new Set([" ", "\t"]);
-/** Ends a bare word: whitespace, the assignment, a brace, a comment, a quote. */
-const WORD_END = new Set([" ", "\t", "\r", "\n", "=", "{", "}", "#", '"']);
+type Body = Omit<DefBlock, "name">;
 
-function skipSpace(text: string, i: number): number {
-  while (i < text.length && SPACE.has(text[i])) i++;
-  return i;
+/**
+ * A gap between two spans: what is left of the line the previous span ended
+ * on, then the whole lines before the next one. The final fragment is the next
+ * statement's own indentation, which the writer puts back itself.
+ */
+function splitGap(gap: string): { rest: string; lines: string[] } {
+  const parts = gap.split("\n");
+  return { rest: parts[0], lines: parts.slice(1, -1) };
 }
 
-function lineEnd(text: string, i: number): number {
-  while (i < text.length && text[i] !== "\n") i++;
-  return i;
-}
-
-function readWord(text: string, i: number): number {
-  while (i < text.length && !WORD_END.has(text[i])) i++;
-  return i;
+/** The comment a line ends on, verbatim from its `#`, or "". */
+function commentOf(rest: string): string {
+  const text = rest.trimStart();
+  return text.startsWith("#") ? text : "";
 }
 
 /**
- * End offset of the value starting at `i`, or -1 when it does not close. A
- * block value counts braces while stepping over comments and quoted strings,
- * which is what keeps a `#` or a `"{"` inside an effect from ending it early.
+ * The statements of a block body, with the lines around them attached.
+ *
+ * Null when the body holds something that is not `key = value` (a bare token,
+ * a stray brace): the form has nowhere to put that back, so it declines the
+ * whole block rather than dropping part of it.
  */
-function readValue(text: string, i: number): number {
-  if (text[i] === '"') {
-    let j = i + 1;
-    while (j < text.length && text[j] !== '"') j++;
-    return j < text.length ? j + 1 : -1;
-  }
-  if (text[i] !== "{") {
-    const end = readWord(text, i);
-    return end > i ? end : -1;
-  }
-  let depth = 0;
-  let j = i;
-  while (j < text.length) {
-    const c = text[j];
-    if (c === "#") j = lineEnd(text, j);
-    else if (c === '"') {
-      j++;
-      while (j < text.length && text[j] !== '"') j++;
-      j++;
-    } else {
-      if (c === "{") depth++;
-      else if (c === "}" && --depth === 0) return j + 1;
-      j++;
-    }
-  }
-  return -1;
-}
-
-interface Body {
-  statements: Statement[];
-  tail: string[];
-  /** Offset of the closing brace, or -1 when the text ran out first. */
-  close: number;
-}
-
-/** Walk a block body from `from` up to its closing brace. */
-function parseBody(text: string, from: number): Body {
+function readBody(body: string, items: readonly ScriptItem[]): Body | null {
   const statements: Statement[] = [];
-  let pending: string[] = [];
-  let i = from;
-  while (i < text.length) {
-    const lineStart = i;
-    let j = skipSpace(text, i);
-    if (text[j] === "}") return { statements, tail: pending, close: j };
-    if (j >= text.length) break;
-    if (text[j] === "\n" || text[j] === "\r" || text[j] === "#") {
-      const eol = lineEnd(text, j);
-      pending.push(text.slice(lineStart, eol));
-      i = eol + 1;
-      continue;
-    }
-    const keyEnd = readWord(text, j);
-    if (keyEnd === j) break;
-    const key = text.slice(j, keyEnd);
-    j = skipSpace(text, keyEnd);
-    if (text[j] !== "=") break;
-    j = skipSpace(text, j + 1);
-    const valueEnd = readValue(text, j);
-    if (valueEnd < 0) break;
-    const value = text.slice(j, valueEnd);
-    j = skipSpace(text, valueEnd);
-    let after = "";
-    if (text[j] === "#") {
-      const eol = lineEnd(text, j);
-      after = text.slice(j, eol);
-      j = eol;
-    }
-    statements.push({ before: pending, key, value, after });
-    pending = [];
-    i = text[j] === "\n" ? j + 1 : j;
+  let head = "";
+  let cursor = 0;
+  for (const item of items) {
+    if (item.key === null || item.op !== "=") return null;
+    const gap = splitGap(body.slice(cursor, item.start));
+    if (statements.length === 0) head = commentOf(gap.rest);
+    else statements[statements.length - 1].after = commentOf(gap.rest);
+    statements.push({ before: gap.lines, key: item.key, value: item.value, after: "" });
+    cursor = item.end;
   }
-  return { statements, tail: pending, close: -1 };
+  const end = splitGap(body.slice(cursor));
+  if (statements.length === 0) head = commentOf(end.rest);
+  else statements[statements.length - 1].after = commentOf(end.rest);
+  return { head, statements, tail: end.lines };
 }
 
 /**
@@ -148,27 +106,10 @@ function parseBody(text: string, from: number): Body {
  * form request answers with exactly this shape (`DefinitionForm.current.text`).
  */
 export function parseDefBlock(source: string): DefBlock | null {
-  const text = source.replace(/\r\n/g, "\n");
-  let i = 0;
-  while (i < text.length && /\s/.test(text[i])) i++;
-  const nameEnd = readWord(text, i);
-  if (nameEnd === i) return null;
-  const name = text.slice(i, nameEnd);
-  let j = skipSpace(text, nameEnd);
-  if (text[j] !== "=") return null;
-  j = skipSpace(text, j + 1);
-  if (text[j] !== "{") return null;
-  j = skipSpace(text, j + 1);
-  let head = "";
-  if (text[j] === "#") {
-    const eol = lineEnd(text, j);
-    head = text.slice(j, eol);
-    j = eol;
-  }
-  if (text[j] === "\n") j++;
-  const body = parseBody(text, j);
-  if (body.close < 0) return null;
-  return { name, head, statements: body.statements, tail: body.tail };
+  const block = parseBlock(source.replace(/\r\n/g, "\n"));
+  if (!block) return null;
+  const body = readBody(block.body, block.items);
+  return body === null ? null : { name: block.name, ...body };
 }
 
 /** An empty definition of `name`, ready for the form's answers. */
@@ -256,13 +197,9 @@ export function changedProperties(
   next: DefBlock,
   keys: readonly string[]
 ): { key: string; value: string | null }[] {
-  const out: { key: string; value: string | null }[] = [];
-  for (const key of keys) {
-    const was = valueOf(original, key);
-    const now = valueOf(next, key);
-    if (was !== now) out.push({ key, value: now });
-  }
-  return out;
+  const valuesOf = (def: DefBlock): Map<string, string | null> =>
+    new Map(keys.map((key) => [key, valueOf(def, key)]));
+  return diffValues(valuesOf(original), valuesOf(next));
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +219,11 @@ export type ModifierEntry =
 export function parseModifierBlock(value: string): ModifierEntry[] {
   const text = value.replace(/\r\n/g, "\n");
   if (!text.startsWith("{")) return [];
-  const body = parseBody(text, 1);
+  const inner = text.slice(1, text.lastIndexOf("}"));
+  const body = readBody(inner, scanItems(inner));
+  // Not a statement list: hold the source as one uneditable entry rather than
+  // dropping what the modder wrote.
+  if (body === null) return [{ kind: "raw", text: inner.trim() }];
   const entries: ModifierEntry[] = [];
   const keep = (lines: readonly string[]): void => {
     for (const line of lines) {
@@ -290,6 +231,7 @@ export function parseModifierBlock(value: string): ModifierEntry[] {
       if (trimmed !== "") entries.push({ kind: "raw", text: trimmed });
     }
   };
+  if (body.head !== "") entries.push({ kind: "raw", text: body.head });
   for (const st of body.statements) {
     keep(st.before);
     const number = Number(st.value);
@@ -367,13 +309,8 @@ export function wrapBlockValue(text: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Names and loc keys
+// Names
 // ---------------------------------------------------------------------------
-
-/** `$_name` + `blood_legacy_track` -> `blood_legacy_track_name`. */
-export function locKeyFor(pattern: string, name: string): string {
-  return pattern.replace(/\$/g, name);
-}
 
 /**
  * The name a track's nth perk gets by default.

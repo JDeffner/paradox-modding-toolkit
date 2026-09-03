@@ -30,6 +30,7 @@ import {
   type ModifierRow,
 } from "../../shared/fields";
 import type { AppToHost, CreatorInit, HostToApp, LoadedPerk, SaveDefinition } from "../messages";
+import { baseName } from "../../shared/scriptBlock";
 import {
   applyValues,
   changedProperties,
@@ -465,12 +466,8 @@ function definitionFor(
     block: writeDefBlock(block),
     ...(changed ? { changed } : {}),
     loc,
-    ...(source === "mod" && file ? { sourceFile: fileName(file) } : {}),
+    ...(source === "mod" && file ? { sourceFile: baseName(file) } : {}),
   };
-}
-
-function fileName(file: string): string {
-  return file.split(/[\\/]/).pop() ?? file;
 }
 
 function save(): void {

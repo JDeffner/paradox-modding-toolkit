@@ -28,20 +28,24 @@ import {
 } from "../../shared/fields";
 import type { AppToHost, CultureInit, HostToApp, SaveMode } from "../messages";
 import {
-  buildBlock,
+  baseName,
   changedProperties,
-  inlineList,
+  firstValues,
   locKeyFor,
+  parseBlock,
+  type ParsedBlock,
+} from "../../shared/scriptBlock";
+import {
+  buildBlock,
+  inlineList,
   multiList,
   numberList,
   numbersOf,
-  readBlock,
   rgbList,
   rgbOf,
   tokensOf,
   weightList,
   weightRowsOf,
-  type BlockChunk,
 } from "./script";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -66,7 +70,8 @@ interface Bound {
 }
 
 let init: CultureInit | null = null;
-let chunks: BlockChunk[] = [];
+/** The block as the file has it, when one was loaded; null for a new culture. */
+let source: ParsedBlock | null = null;
 /** The values of the block currently loaded, keyed; empty for a new culture. */
 let currentValues = new Map<string, string>();
 /** What each bound key said when the block was loaded; the changed-key baseline. */
@@ -431,7 +436,7 @@ function refresh(): void {
   const name = currentName();
   const block = buildBlock(
     name || "culture",
-    chunks,
+    source,
     values(),
     loaded,
     init?.form.keys.map((k) => k.key) ?? []
@@ -651,9 +656,9 @@ function locLabel(pattern: string): string {
 function applyInit(next: CultureInit): void {
   init = next;
   const current = next.form.current;
-  const parsed = current ? readBlock(current.text) : null;
-  chunks = parsed?.chunks ?? [];
-  currentValues = parsed?.values ?? new Map();
+  const parsed = current ? parseBlock(current.text) : null;
+  source = parsed;
+  currentValues = parsed ? firstValues(parsed) : new Map();
   sourceName = parsed?.name ?? "";
 
   nameInput.readOnly = false;
@@ -788,17 +793,18 @@ $("save").onclick = () => {
     return;
   }
   const now = values();
-  const block = buildBlock(name, chunks, now, loaded, init?.form.keys.map((k) => k.key) ?? []);
+  const block = buildBlock(name, source, now, loaded, init?.form.keys.map((k) => k.key) ?? []);
   const loc = locRows
     .map((row) => ({ key: locKeyFor(row.pattern, name), value: row.field.get() }))
     .filter((pair) => pair.value.trim() !== "");
-  const sourceFile = init?.form.current?.file.split(/[\\/]/).pop();
+  const file = init?.form.current?.file;
+  const sourceFile = file ? baseName(file) : undefined;
   send({
     type: "save",
     name,
     mode,
     block,
-    ...(mode === "edit" ? { changed: changedProperties(now, loaded) } : {}),
+    ...(mode === "edit" ? { changed: changedProperties(loaded, now) } : {}),
     loc,
     ...(mode === "edit" || mode === "override" ? { sourceFile } : {}),
   });
