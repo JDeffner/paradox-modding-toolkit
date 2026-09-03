@@ -7,9 +7,11 @@
  * SKELETON_MAJORITY of the game's own definitions of that kind carry it; its
  * order is the median position it holds in them; its pre-filled value is the
  * value the corpus uses most, and only where the key's whole measured
- * vocabulary is small enough to be a real choice. A key with a wide vocabulary
- * (loc keys, names, paths) gets its own name as placeholder text instead, which
- * says "fill this in" without asserting a value.
+ * vocabulary is small enough to be a real choice. A key whose vocabulary is
+ * wider but entirely NUMERIC still gets the number the corpus writes most,
+ * since a key name is valid script nowhere in a numeric slot. Anything wider
+ * than that (loc keys, names, paths) gets its own name as placeholder text,
+ * which says "fill this in" without asserting a value.
  *
  * Both insert forms are rendered at once, exactly like features/blockSnippets.ts:
  * `snippet` for clients that declared snippetSupport, `plain` (free of `${`) for
@@ -35,6 +37,14 @@ export interface SkeletonKey {
    * rather than a guess; absent = the value is a placeholder.
    */
   choices?: string[];
+  /**
+   * The single most-used measured value, set only where the vocabulary is too
+   * wide to offer as a choice AND every value the corpus writes for the key is
+   * a number. A key name is valid script nowhere in a numeric slot, so a
+   * measured number is the honest placeholder; it stays a tabstop, so it still
+   * reads as "fill this in".
+   */
+  placeholder?: string;
   /**
    * Nested one level: the block this key opens, carrying the keys measured in
    * at least SKELETON_MAJORITY of its occurrences. An empty array = the block
@@ -90,9 +100,10 @@ function escapeSnippet(text: string): string {
 
 /** The right-hand side of a leaf key, in one of the two forms. */
 function leafValue(spec: SkeletonKey, snippet: boolean, c: Counter): string {
-  if (!snippet) return spec.choices?.[0] ?? spec.key;
+  const filled = spec.choices?.[0] ?? spec.placeholder ?? spec.key;
+  if (!snippet) return filled;
   if (spec.choices && spec.choices.length > 1) return `\${${++c.n}|${spec.choices.join(",")}|}`;
-  return `\${${++c.n}:${escapeSnippet(spec.choices?.[0] ?? spec.key)}}`;
+  return `\${${++c.n}:${escapeSnippet(filled)}}`;
 }
 
 function renderKeys(keys: SkeletonKey[], indent: string, snippet: boolean, c: Counter): string {

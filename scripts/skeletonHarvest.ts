@@ -13,9 +13,11 @@
  *    nested ONE level, with the same majority rule over the block's own
  *    occurrences;
  *  - a leaf key keeps its vocabulary only when the corpus uses at most
- *    MAX_VOCAB distinct snippet-safe values for it, most-used first; anything
- *    wider (loc keys, names, paths) becomes a placeholder, which says "fill
- *    this in" without asserting a value;
+ *    MAX_VOCAB distinct snippet-safe values for it, most-used first; a wider
+ *    vocabulary that is entirely NUMERIC keeps the number the corpus writes
+ *    most, because a key name is valid script nowhere in a numeric slot;
+ *    anything wider still (loc keys, names, paths) becomes a placeholder, which
+ *    says "fill this in" without asserting a value;
  *  - the header key (`namespace`) is the top-level scalar most files declare
  *    AND that most of the kind's names are built from.
  *
@@ -37,6 +39,8 @@ export const MIN_SAMPLES = 10;
 export const MAX_VOCAB = 8;
 /** Values a snippet choice can carry: no quotes, spaces, commas or pipes. */
 const SAFE_VALUE = /^-?[A-Za-z0-9_][A-Za-z0-9_.:-]*$/;
+/** A number as the game's files write one: `5`, `-1`, `0.25`, `.5`, `2.0`. */
+const NUMBER = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
 /** Also excludes the `@constant = 5` script-value lines that head many folders. */
 const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
@@ -110,12 +114,30 @@ function median(values: number[]): number {
   return sorted[Math.floor((sorted.length - 1) / 2)];
 }
 
+/** The key's measured values, most-used first, ties by value. Deterministic. */
+function rankedValues(s: KeyStats): string[] {
+  return [...s.values.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([v]) => v);
+}
+
 /** Most-used first, ties by value; null when the vocabulary is not a choice. */
 function choicesOf(s: KeyStats): string[] | null {
   if (s.values.size === 0 || s.values.size > MAX_VOCAB) return null;
-  const all = [...s.values.entries()];
-  if (!all.every(([v]) => SAFE_VALUE.test(v))) return null;
-  return all.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([v]) => v);
+  if (![...s.values.keys()].every((v) => SAFE_VALUE.test(v))) return null;
+  return rankedValues(s);
+}
+
+/**
+ * The number the corpus writes most for a key whose vocabulary is too wide to
+ * offer as a choice but is entirely numeric. `ai_will_do = { base = base }` is
+ * a script error the modder has to notice; `base = 100` is the value the game's
+ * own files use most and is valid on insert. Null as soon as one measured value
+ * is not a number, since a mixed slot (a script value name, a `@constant`) has
+ * no honest single stand-in.
+ */
+function numericPlaceholderOf(s: KeyStats): string | null {
+  if (s.values.size === 0) return null;
+  if (![...s.values.keys()].every((v) => NUMBER.test(v))) return null;
+  return rankedValues(s)[0];
 }
 
 /**
@@ -137,7 +159,9 @@ function deriveKeys(bodies: Body[], depth: number): SkeletonKey[] {
       return { key, block: depth > 0 ? deriveKeys(s.inner, depth - 1) : [] };
     }
     const choices = choicesOf(s);
-    return choices ? { key, choices } : { key };
+    if (choices) return { key, choices };
+    const placeholder = numericPlaceholderOf(s);
+    return placeholder !== null ? { key, placeholder } : { key };
   });
 }
 

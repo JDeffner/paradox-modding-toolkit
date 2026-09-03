@@ -79,6 +79,30 @@ describe("skeleton harvest", () => {
     expect(skel.keys.find((k) => k.key === "title")?.choices).toBeUndefined();
   });
 
+  it("pre-fills the most-used number where a wide vocabulary is all numeric", () => {
+    // 10 distinct values each, past MAX_VOCAB, so neither key is a choice
+    // list. Every `base` value is a number and `base = base` would be a script
+    // error on insert; `weight` mixes numbers with script value names, which
+    // has no honest single stand-in.
+    const files = repeat(
+      (i) =>
+        `d_${i} = {\n` +
+        `\tbase = ${i < 3 ? "100" : String(i + 10)}\n` +
+        `\tweight = ${i < 3 ? "0.5" : `sv_${i}`}\n` +
+        `}\n`,
+      12
+    );
+    const skel = harvestOf(files, "top-level-key")!;
+    const base = skel.keys.find((k) => k.key === "base")!;
+    expect(base.choices).toBeUndefined();
+    expect(base.placeholder).toBe("100");
+    expect(skel.keys.find((k) => k.key === "weight")?.placeholder).toBeUndefined();
+    // The renderer fills the number in both forms, and keeps it a tabstop.
+    const { snippet, plain } = renderDefinitionSkeleton("decision", skel, {});
+    expect(snippet).toContain("base = ${2:100}");
+    expect(plain).toContain("base = 100");
+  });
+
   it("nests one level and offers the nested block on its own", () => {
     const files = repeat(
       (i) => `d_${i} = {\n\toption = {\n\t\tname = n_${i}\n\t\tdeep = { x = 1 }\n\t}\n}\n`,
