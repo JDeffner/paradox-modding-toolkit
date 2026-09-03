@@ -16,6 +16,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-editor": "layoutTemplate",
   "flag-builder": "flag",
   "event-graph": "waypoints",
+  "dynasty-tree": "users",
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",

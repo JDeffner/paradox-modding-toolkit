@@ -52,6 +52,7 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -67,7 +68,7 @@ import { planWatchRoots } from "./watchRoots";
 import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
-import { newContentCommand } from "./scaffold/command";
+import { newContentCommand, scaffoldPrefix } from "./scaffold/command";
 import { createModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
@@ -98,9 +99,11 @@ import {
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
+  dynastyTreeRequest,
   eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
+  type DynastyTreeResult,
   type EventDetail,
   type EventBannerParams,
   type EventBannerResult,
@@ -980,6 +983,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         mods,
         gameMissing: cfg.gamePath === null,
       });
+    }),
+    // The argument is optional: the palette entry opens the picker, a deep link
+    // names the dynasty it wants.
+    vscode.commands.registerCommand("px.openDynastyTree", (arg?: unknown) => {
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+        .filter((p, i, all) => all.indexOf(p) === i)
+        .map((p) => ({ label: readModName(p), path: p }));
+      // Nothing to write into, or nothing to read: say which, in the words the
+      // setup flow uses, instead of opening a panel that cannot do anything.
+      const problems: string[] = [];
+      if (mods.length === 0)
+        problems.push(
+          "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+        );
+      if (!cfg.gamePath)
+        problems.push(
+          `No game folder set, so only your own dynasties are listed. Set px.gamePath to .../steamapps/common/${metaFor(cfg.gameId).name}/game`
+        );
+      DynastyTreePanel.show(
+        context,
+        {
+          fetchTree: (params) => lc.sendRequest<DynastyTreeResult>(dynastyTreeRequest, params),
+          fetchOptions: (params) =>
+            lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
+          writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+        },
+        {
+          meta: metaFor(cfg.gameId),
+          gamePath: cfg.gamePath,
+          mods,
+          modRoot: views.focusRoot(),
+          filePrefix: scaffoldPrefix(cfg),
+          setupProblem: problems.join(" ") || undefined,
+        },
+        typeof arg === "object" && arg !== null && typeof (arg as { dynasty?: unknown }).dynasty === "string"
+          ? (arg as { dynasty: string }).dynasty
+          : undefined
+      );
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),

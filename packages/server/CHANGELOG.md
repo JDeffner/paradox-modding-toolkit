@@ -6,6 +6,17 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `paradox/dynastyTree`: a dynasty as a family tree. Without a `dynasty` the
+  answer is the picker list; with one it is that dynasty's houses and members,
+  read out of the folders the active profile's schema maps to the `dynasty`,
+  `dynasty_house` and `character` kinds, plus the parents and spouses from
+  other dynasties the members name. The character corpus is parsed once per
+  index revision: measured on vanilla CK3 (71 142 characters, 17.4 MB) at
+  0.8 s cold, 12 ms warm, 1 ms for one dynasty, 62 MB retained. A profile with
+  no `dynasty` kind answers `supported: false`.
+
 ## 0.3.0
 
 Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.

@@ -13,6 +13,7 @@ export type TabIconName =
   | "gui-editor"
   | "flag-builder"
   | "event-graph"
+  | "dynasty-tree"
   | "gui-tree"
   | "event-sim"
   | "workshop"

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Dynasty Tree.** A new panel (`Paradox: Dynasty Tree`) browses any dynasty
+  of the game or your mod as a family tree: generations top down, spouses side
+  by side, siblings oldest first, houses as a badge, and vanilla characters
+  drawn apart from your own. Clicking a node opens an inspector that edits
+  your characters and adds a child or a spouse to anyone, vanilla included; the
+  new character is written into your mod pointing at the one it descends from.
+  New dynasty, New house and a Design coat of arms button that hands the id to
+  the Flag Builder round it out. Everything the panel writes is one undoable
+  edit, into the file you pick, with the BOM the games need, and the display
+  names go through the usual localization writer.
+
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar
