@@ -232,7 +232,6 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
             type: "init",
             init: {
               form: f,
-              saveMod: path.basename(modPath),
               locLanguage: "english",
               prefix: "cult",
               namedColors,
@@ -240,6 +239,12 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
               noMod: false,
               noGame: false,
             },
+          },
+          // The host resolves where a save lands; here the default name is
+          // enough to show the line the panel draws.
+          {
+            type: "target",
+            target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_cultures.txt` },
           },
         ];
       };
@@ -252,8 +257,10 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return load(String(m.name));
         case "images":
           return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
+        case "copy":
+          return [{ type: "toast", message: "preview: the clipboard is the extension host's" }];
         default:
-          return String(m.type) === "save" ? [refuse("save")] : [];
+          return ["save", "changeTarget"].includes(String(m.type)) ? [refuse(String(m.type))] : [];
       }
     },
   },

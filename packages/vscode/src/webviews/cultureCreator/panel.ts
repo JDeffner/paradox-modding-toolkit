@@ -23,7 +23,15 @@ import type {
 import { parseNamedColors } from "@px-lsp/server/coa/coaParse";
 import type { PxConfig } from "../../config";
 import { type ImageRoot, wireImages } from "../../creators/images";
-import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
+import {
+  applyDefinitionEdits,
+  defaultSaveTarget,
+  openSaveTarget,
+  pickSaveTargetChoice,
+  samePath,
+  writeLocValues,
+  type SaveTargetChoice,
+} from "../../creators/save";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -97,6 +105,8 @@ export class CultureCreatorPanel {
   private form: DefinitionForm | null = null;
   /** Read from disk once: it describes the game, not the culture being edited. */
   private catalog: CultureCatalog | undefined;
+  /** Where the modder said the next save goes; null means the default rules. */
+  private chosen: SaveTargetChoice | null = null;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
@@ -181,6 +191,9 @@ export class CultureCreatorPanel {
   /** Fetch the form (for `name`, when given) and hand the app everything at once. */
   private async load(name?: string): Promise<void> {
     this.post({ type: "loading" });
+    // The culture being opened decides where a save goes, so a target picked
+    // for the previous one does not carry over to it.
+    this.chosen = null;
     let form: DefinitionForm | null;
     try {
       form = await this.actions.fetchForm({
@@ -202,7 +215,6 @@ export class CultureCreatorPanel {
     this.form = form;
     const init: CultureInit = {
       form,
-      saveMod: this.cfg.modPath ? path.basename(this.cfg.modPath) : null,
       locLanguage: this.cfg.locLanguage,
       prefix: scaffoldPrefix(this.cfg),
       namedColors: readNamedColors(this.cfg),
@@ -212,6 +224,45 @@ export class CultureCreatorPanel {
       noGame: this.cfg.gamePath === null,
     };
     this.post({ type: "init", init });
+    this.postTarget();
+  }
+
+  // -- where it saves ------------------------------------------------------
+
+  /**
+   * Where the next save goes: what the modder picked, else the default rules
+   * (the file a mod culture was loaded from, else the mod of record under the
+   * kind's default file name).
+   */
+  private targetChoice(): SaveTargetChoice | null {
+    if (this.chosen) return this.chosen;
+    const current = this.form?.current;
+    return defaultSaveTarget(this.cfg, {
+      kind: KIND,
+      ...(current && current.source === "mod" ? { sourcePath: current.file } : {}),
+    });
+  }
+
+  /** Tell the app where it saves, so its top bar can say so. */
+  private postTarget(): void {
+    const choice = this.targetChoice();
+    const folder = this.form?.folder;
+    this.post({
+      type: "target",
+      target: choice && folder ? { modLabel: choice.modLabel, path: `${folder}/${choice.file}` } : null,
+    });
+  }
+
+  /** The target line was clicked: the same picker the save used to open. */
+  private async changeTarget(): Promise<void> {
+    if (!this.form) return;
+    const picked = await pickSaveTargetChoice(this.cfg, this.form.folder, {
+      kind: KIND,
+      ...(this.form.current ? { sourceFile: path.basename(this.form.current.file) } : {}),
+    });
+    if (!picked) return;
+    this.chosen = picked;
+    this.postTarget();
   }
 
   /**
@@ -254,6 +305,13 @@ export class CultureCreatorPanel {
         // A culture key is no wiki article, so the button opens the index.
         await vscode.commands.executeCommand("px.showExamplesWiki");
         return;
+      case "copy":
+        await vscode.env.clipboard.writeText(msg.text);
+        this.post({ type: "toast", message: "Script copied to the clipboard." });
+        return;
+      case "changeTarget":
+        await this.changeTarget();
+        return;
       case "save":
         await this.save(msg);
         return;
@@ -266,14 +324,24 @@ export class CultureCreatorPanel {
       this.post({ type: "idle" });
       return;
     }
-    // An edit rewrites the file the block was loaded from: `setProperties` only
-    // works against that file, and asking would let a modder pick one it is
-    // refused in. Everything else asks where it goes.
+    // No question here: the target has been in the top bar since the form
+    // loaded, and clicking it is how a modder changes where this lands.
+    const choice = this.targetChoice();
+    if (!choice) {
+      this.post({ type: "error", message: "No mod folder to save into." });
+      return;
+    }
+    const wanted = path.join(choice.modPath, ...folder.split("/"), choice.file);
+    const from = msg.mode === "edit" && this.form?.current?.source === "mod" ? this.form.current.file : null;
+    // Writing back into the file the culture already lives in: the block is
+    // there, so `setProperties` can touch only the statements that moved.
+    const inPlace = from !== null && samePath(wanted, from);
+
     let abs: string;
     let text: string;
     let label: string;
-    if (msg.mode === "edit" && this.form?.current && this.form.current.source === "mod") {
-      abs = this.form.current.file;
+    if (inPlace) {
+      abs = from;
       label = path.basename(abs);
       try {
         text = (await vscode.workspace.openTextDocument(abs)).getText();
@@ -282,10 +350,7 @@ export class CultureCreatorPanel {
         return;
       }
     } else {
-      const target = await pickSaveTarget(this.cfg, folder, {
-        kind: KIND,
-        ...(msg.sourceFile ? { sourceFile: msg.sourceFile } : {}),
-      });
+      const target = await openSaveTarget(this.cfg, folder, choice);
       if (!target) {
         this.post({ type: "idle" });
         return;
@@ -294,10 +359,10 @@ export class CultureCreatorPanel {
       text = target.text;
       label = target.file;
     }
-    // An edit of the mod's own culture touches only the keys that changed; a
-    // new, duplicated or overriding culture is one whole block.
+    // An edit of the mod's own culture, in its own file, touches only the keys
+    // that changed; everything else is one whole block.
     const op: DefinitionOp =
-      msg.mode === "edit" && msg.changed
+      inPlace && msg.changed
         ? { op: "setProperties", name: msg.name, properties: msg.changed }
         : { op: "upsertBlock", name: msg.name, text: msg.block };
     let result: DefinitionEditResult;
