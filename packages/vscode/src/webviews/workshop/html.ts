@@ -284,9 +284,7 @@ ${BBPREV_CSS}
             <div id="tags" style="align-items:center"></div>
           </div>
           <div class="field">
-            <span class="px-label">Files
-              <button id="filesInfo" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="Where the listing files live" data-tip="The listing lives in .px-toolkit/workshop inside the mod. The px.workshop.dir setting moves it." data-tip-wrap>${icon("info")}</button>
-            </span>
+            <span class="px-label">Files</span>
             <div id="filesBox" class="px-row" style="gap:6px;align-items:center;min-width:0"></div>
           </div>
         </div>

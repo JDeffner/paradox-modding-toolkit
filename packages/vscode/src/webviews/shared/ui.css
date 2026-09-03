@@ -877,9 +877,6 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.px-menu-item[data-accent] {
-  box-shadow: inset 3px 0 0 var(--px-primary);
-}
 /* Two-line rows breathe: without the padding and the description's own
    margin, one row's description sat flush against the next row's label and
    the list read as alternating unrelated lines rather than as pairs. The

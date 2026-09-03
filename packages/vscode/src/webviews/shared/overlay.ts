@@ -113,8 +113,6 @@ export interface MenuItem {
   swatch?: string;
   /** A second, dimmer line under the label (a full path, an explanation). */
   description?: string;
-  /** A primary-colored bar on the left: the rows that matter most in a long list. */
-  accent?: boolean;
 }
 
 export interface MenuOptions {
@@ -179,7 +177,6 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
       row.className = "px-menu-item";
       row.setAttribute("role", "option");
       if (item.value === options.value) row.setAttribute("aria-selected", "true");
-      if (item.accent) row.setAttribute("data-accent", "");
       row.innerHTML = CHECK;
       if (item.swatch) {
         const sw = document.createElement("span");

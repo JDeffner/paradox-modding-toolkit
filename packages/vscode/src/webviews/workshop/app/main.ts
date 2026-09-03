@@ -228,9 +228,13 @@ function renderItem(): void {
   const meta = $("itemMeta");
   if (live) {
     const when = (t: number) => new Date(t * 1000).toLocaleDateString();
-    meta.textContent =
-      `created ${when(live.timeCreated)}, last update ${when(live.timeUpdated)}` +
-      (live.banned ? " - BANNED by Steam" : "");
+    meta.replaceChildren(
+      document.createTextNode(`created ${when(live.timeCreated)}`),
+      document.createElement("br"),
+      document.createTextNode(
+        `last update ${when(live.timeUpdated)}` + (live.banned ? " - BANNED by Steam" : "")
+      )
+    );
   } else {
     meta.textContent = "";
   }
@@ -316,17 +320,22 @@ function renderFilesRow(): void {
   badge.dataset.variant = "outline";
   const hint = document.createElement("span");
   hint.className = "px-muted px-xs px-truncate";
+  const where =
+    "The listing lives in .px-toolkit/workshop inside the mod unless the px.workshop.dir setting moves it.";
   if (info.filesPresent) {
-    badge.textContent = "workshop folder";
+    badge.textContent = "listing stored at";
     badge.setAttribute(
       "data-tip",
-      "The listing is stored as files here, so it diffs and versions like code."
+      `The listing is stored as files here, so it diffs and versions like code. ${where}`
     );
     hint.textContent = info.workshopDir;
     hint.setAttribute("data-tip", info.workshopDir);
   } else {
     badge.textContent = "workshop.json";
-    badge.setAttribute("data-tip", "Drafts save to workshop.json inside the mod, not as listing files.");
+    badge.setAttribute(
+      "data-tip",
+      `Drafts save to workshop.json inside the mod, not as listing files. ${where}`
+    );
     hint.textContent = `no folder at ${info.workshopDir}`;
     hint.setAttribute("data-tip", info.workshopDir);
   }
@@ -1142,13 +1151,14 @@ $("addLang").addEventListener("click", () => {
     ...game.map<MenuItem>((api) => ({
       value: api,
       label: langLabel(api),
-      hint: suggested.has(api) ? "game language, in this mod" : "game language",
-      accent: true,
+      hint: suggested.has(api) ? "game · in this mod" : "game",
     })),
     ...rest.map<MenuItem>((l) => ({ value: l.api, label: l.label })),
   ];
+  // Wide enough that "Spanish (Latin America)" and its tag both fit.
   menu($("addLang"), items, {
     search: true,
+    width: 300,
     onPick: (api) => {
       if (!draftTranslations[api]) draftTranslations[api] = {};
       knownLangs.add(api);
