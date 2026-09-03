@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **GUI editor texture cache evicts the right file.** A decoded texture
+  from an earlier session could carry a write time a fraction ahead of the
+  clock the cache starts from, so it was never the oldest and the budget
+  overshot. The clock now starts past every file on disk.
 - **Paradox: Move Mod is back, as a command.** It converts a mod between
   the game folder layout and the mod projects layout in either direction
   and carries the Workshop listing with it: `.px-toolkit/workshop` inside

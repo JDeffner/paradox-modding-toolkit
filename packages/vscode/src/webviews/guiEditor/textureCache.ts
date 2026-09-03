@@ -211,7 +211,13 @@ export class GuiTextureCache {
         /* raced with another window's eviction */
       }
     }
-    this.clock = Date.now();
+    // The clock starts past every mtime on disk, not at Date.now(): a file
+    // written moments ago can carry an mtime a fraction ahead of the wall
+    // clock (NTFS rounds), and a new decode stamped below it would never
+    // evict it. Measured as a flaky "earlier session" test under load.
+    let latest = 0;
+    for (const e of this.entries.values()) if (e.used > latest) latest = e.used;
+    this.clock = Math.max(Date.now(), Math.ceil(latest));
   }
 
   private record(key: string, size: number): void {
