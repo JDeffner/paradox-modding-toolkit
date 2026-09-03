@@ -86,12 +86,9 @@ ${uiCss}
   .modrow > .px-mod-line, .modrow > .modrow-empty { grid-column: 1 / -1; padding-left: 2px; }
   .modrow-empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
 
-  /* A key the file keeps the last word on: named, never silently dropped. */
-  .kept {
-    display: flex; align-items: center; gap: 6px;
-    color: var(--px-muted-fg); font-size: var(--px-text-xs);
-  }
-  .kept > code { font-family: var(--px-font-mono); color: var(--px-fg); }
+  /* One statement of a key written as script; the game reads a repeated key as
+     several, so each gets its own box and its own remove button. */
+  .scriptrow { display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 6px; align-items: start; }
 
   /* The preview panel. */
   #side > .px-sidepanel-body { gap: 10px; padding: 10px; }
@@ -100,12 +97,14 @@ ${uiCss}
     font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
     font-weight: 600; color: var(--px-muted-fg);
   }
-  /* The framed icon: the game draws the frame over the picture, so the picture
-     is inset and the frame covers the whole tile. */
+  /* The framed icon. The game's trait tooltip draws ONE widget for it
+     (character_trait_tooltip in gui/shared/cooltip.gui, trait_icon_texture at
+     size = { 52 52 }), and a trait's picture shares one 120x120 canvas with the
+     _frame_*.dds templates (measured): so the frame sits UNDER the picture,
+     same box, same size. */
   .tip-head { display: flex; align-items: center; gap: 8px; }
-  .tip-icon { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
-  .tip-icon > img { position: absolute; inset: 8px; width: 48px; height: 48px; object-fit: contain; }
-  .tip-icon > img.frame { inset: 0; width: 64px; height: 64px; }
+  .tip-icon { position: relative; width: 52px; height: 52px; flex: 0 0 auto; }
+  .tip-icon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .tip-icon > .noicon {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 2px; border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
@@ -121,6 +120,18 @@ ${uiCss}
   }
   .tip-rel img { width: 20px; height: 20px; object-fit: contain; }
   .tip-note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .tip-fact { display: flex; flex-direction: column; gap: 1px; font-size: var(--px-text-sm); }
+  /* What the player never reads, kept in the tooltip but behind a rule so it
+     cannot be mistaken for a line the game prints. */
+  .tip-hidden {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--px-border);
+  }
+  .tip-hidden-title {
+    font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 600; color: var(--px-muted-fg);
+  }
+  .tip-hidden .tip-fact > div:first-child { font-family: var(--px-font-mono); }
   #problem {
     margin: 12px 16px; padding: 10px 12px; border: 1px solid var(--px-border);
     border-radius: var(--px-radius-md); background: var(--px-muted);

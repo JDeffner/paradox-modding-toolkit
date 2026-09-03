@@ -19,6 +19,7 @@
 import type { DefinitionForm, DefinitionFormKey } from "@px-lsp/protocol/protocol";
 import type { ModifierRow } from "../../shared/fields";
 import {
+  innerOf,
   locKeyFor,
   parseBlock,
   quoteIfNeeded,
@@ -26,6 +27,7 @@ import {
   readNumberRows,
   readQuoted,
   readTokenList,
+  scanItems,
   type BlockWrite,
   type ParsedBlock,
 } from "../../shared/scriptBlock";
@@ -88,11 +90,20 @@ const SKILLS = ["diplomacy", "martial", "stewardship", "intrigue", "learning", "
 
 /**
  * `_traits.info`'s "### Special opinion impacts" (`same_opinion`,
- * `same_opinion_if_same_faith`, `opposite_opinion`) plus `attraction_opinion`,
- * the one of the same shape vanilla writes most (brave: `attraction_opinion =
- * 10`, `same_opinion = 10`, `opposite_opinion = -10`).
+ * `same_opinion_if_same_faith`, `opposite_opinion`, `triggered_opinion`) plus
+ * `attraction_opinion`, the one of the same shape vanilla writes most (brave:
+ * `attraction_opinion = 10`, `same_opinion = 10`, `opposite_opinion = -10`).
  */
-const OPINIONS = ["same_opinion", "same_opinion_if_same_faith", "opposite_opinion", "attraction_opinion"];
+const OPINIONS = [
+  "same_opinion",
+  "same_opinion_if_same_faith",
+  "opposite_opinion",
+  "attraction_opinion",
+  "triggered_opinion",
+];
+
+/** The one of them that is a block, so the section lays it out on its own row. */
+export const TRIGGERED_OPINION_KEY = "triggered_opinion";
 
 /** `_traits.info`'s "### Trait relations" plus the flag of "### Misc properties". */
 const RELATIONS = ["opposites", "compatibility", "flag"];
@@ -126,8 +137,11 @@ function widgetFor(key: DefinitionFormKey, section: SectionId): WidgetKind {
   if (key.key === "flag") return "chips";
   if (pickValues(key)?.length) return "enum";
   if (key.values === "bool") return "bool";
-  if (section === "skills" || section === "opinions" || NUMERIC.has(key.key)) return "number";
+  // The block check comes before the section one: `triggered_opinion` sits
+  // under "Special opinion impacts" in `_traits.info` but is a block, not the
+  // plain number its four neighbours are.
   if (key.values === "block") return "script";
+  if (section === "skills" || section === "opinions" || NUMERIC.has(key.key)) return "number";
   return "text";
 }
 
@@ -184,13 +198,15 @@ export interface TraitState {
 
 export interface LoadedTrait {
   block: ParsedBlock;
-  state: TraitState;
   /**
-   * Keys whose statement no widget can stand for, so the file keeps the last
-   * word: they are written back byte for byte and the panel says so rather
-   * than showing an empty field that would silently add a second statement.
+   * The specs the form must draw for THIS file. A key whose statement its
+   * designed widget cannot stand for (a `desc = { first_valid … }`, a
+   * `triggered_opinion` written five times) is promoted to the script widget,
+   * which holds one raw value per statement: the modder edits the game's own
+   * text instead of reading "kept as the file writes it" over a dead field.
    */
-  verbatim: Set<string>;
+  specs: TraitFieldSpec[];
+  state: TraitState;
 }
 
 /** The value a widget starts at when the block says nothing about its key. */
@@ -202,12 +218,18 @@ export function emptyValue(widget: WidgetKind): FieldValue {
       return null;
     case "multiRef":
     case "chips":
+    case "script":
       return [];
     case "refRows":
       return [];
     default:
       return "";
   }
+}
+
+/** The widgets that hold one entry per statement, so a repeat is not a clash. */
+function repeatable(widget: WidgetKind): boolean {
+  return widget === "chips" || widget === "script";
 }
 
 export function emptyState(specs: readonly TraitFieldSpec[]): TraitState {
@@ -237,16 +259,40 @@ function readValue(spec: TraitFieldSpec, value: string, block: boolean): FieldVa
     case "icon":
       return block ? null : (readQuoted(value) ?? value);
     case "script":
-      return value;
+      // The value's own source text, block or not: what makes the script
+      // widget the one every other widget can fall back to.
+      return [value];
     default:
       return block ? null : (readQuoted(value) ?? value);
   }
 }
 
 /**
- * Fill the form from a definition's own text. A statement a widget cannot
- * stand for is not forced into one: its key goes to `verbatim` and the source
- * span is what a save writes back.
+ * Which keys of this file their designed widget cannot stand for: a value of
+ * the wrong shape (`desc = { first_valid … }` where a loc key was expected),
+ * or a second statement of a key that holds one value. Both are promoted to
+ * the script widget, which takes any value and any number of them.
+ */
+function promoted(block: ParsedBlock, bySpec: Map<string, TraitFieldSpec>): Set<string> {
+  const out = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const item of block.items) {
+    if (item.key === null || item.op !== "=") continue;
+    const spec = bySpec.get(item.key);
+    if (!spec) continue;
+    counts.set(item.key, (counts.get(item.key) ?? 0) + 1);
+    if (readValue(spec, item.value, item.block) === null) out.add(item.key);
+  }
+  for (const [key, n] of counts) {
+    if (n > 1 && !repeatable(bySpec.get(key)!.widget)) out.add(key);
+  }
+  return out;
+}
+
+/**
+ * Fill the form from a definition's own text. Nothing is left out of the form:
+ * a statement no designed widget fits promotes its key to the script widget,
+ * so every line of the file has a control that writes it back.
  */
 export function loadTrait(
   specs: readonly TraitFieldSpec[],
@@ -255,9 +301,13 @@ export function loadTrait(
 ): LoadedTrait | null {
   const block = parseBlock(text);
   if (!block) return null;
-  const bySpec = new Map(specs.map((spec) => [spec.key, spec]));
-  const state = emptyState(specs);
-  const verbatim = new Set<string>();
+  const designed = new Map(specs.map((spec) => [spec.key, spec]));
+  const promotions = promoted(block, designed);
+  const ownSpecs = specs.map((spec) =>
+    promotions.has(spec.key) ? { ...spec, widget: "script" as const } : spec
+  );
+  const bySpec = new Map(ownSpecs.map((spec) => [spec.key, spec]));
+  const state = emptyState(ownSpecs);
   const seen = new Set<string>();
 
   for (const item of block.items) {
@@ -272,37 +322,17 @@ export function loadTrait(
       continue;
     }
     const read = readValue(spec, item.value, item.block);
-    if (read === null) {
-      verbatim.add(item.key);
-      continue;
-    }
-    if (spec.widget === "chips" && seen.has(item.key)) {
-      // `flag` is written once per flag; every one joins the same chip list.
+    if (read === null) continue;
+    if (repeatable(spec.widget) && seen.has(item.key)) {
+      // `flag` is written once per flag, `triggered_opinion` once per block;
+      // every one joins the same list.
       (state.values[item.key] as string[]).push(...(read as string[]));
     } else {
       state.values[item.key] = read;
     }
     seen.add(item.key);
   }
-  // A key that appears twice but is not repeatable cannot be edited as one
-  // field without losing the other statement: keep both, verbatim.
-  for (const key of countedTwice(block, bySpec)) {
-    const spec = bySpec.get(key)!;
-    if (spec.widget === "chips") continue;
-    verbatim.add(key);
-    state.values[key] = emptyValue(spec.widget);
-  }
-  for (const key of verbatim) state.values[key] = emptyValue(bySpec.get(key)!.widget);
-  return { block, state, verbatim };
-}
-
-function countedTwice(block: ParsedBlock, bySpec: Map<string, TraitFieldSpec>): string[] {
-  const counts = new Map<string, number>();
-  for (const item of block.items) {
-    if (item.key === null || !bySpec.has(item.key)) continue;
-    counts.set(item.key, (counts.get(item.key) ?? 0) + 1);
-  }
-  return [...counts].filter(([, n]) => n > 1).map(([key]) => key);
+  return { block, specs: ownSpecs, state };
 }
 
 /** The statement(s) one field's value becomes, or [] when it writes nothing. */
@@ -324,10 +354,13 @@ export function fieldLines(spec: TraitFieldSpec, value: FieldValue): string[] {
       const body = rows.map((row) => `\t${row.name} = ${row.value}`).join("\n");
       return [`${spec.key} = {\n${body}\n}`];
     }
-    case "script": {
-      const text = String(value).trim();
-      return text === "" ? [] : [`${spec.key} = ${text}`];
-    }
+    case "script":
+      // One statement per entry, so a repeated block key writes back the way
+      // the file has it.
+      return (value as string[])
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => `${spec.key} = ${entry}`);
     case "icon": {
       const text = String(value).trim();
       // Vanilla writes the bare file name (00_traits.txt: `icon = reveler.dds`).
@@ -355,12 +388,10 @@ function sameValue(a: FieldValue, b: FieldValue): boolean {
 export function traitWrites(
   specs: readonly TraitFieldSpec[],
   state: TraitState,
-  baseline: TraitState | null,
-  verbatim: ReadonlySet<string> = new Set()
+  baseline: TraitState | null
 ): BlockWrite[] {
   const writes: BlockWrite[] = [];
   for (const spec of specs) {
-    if (verbatim.has(spec.key)) continue;
     const value = state.values[spec.key];
     const was = baseline ? baseline.values[spec.key] : undefined;
     writes.push({
@@ -383,6 +414,39 @@ export function traitWrites(
     if (!now.has(name)) writes.push({ key: name, lines: [], changed: true });
   }
   return writes;
+}
+
+/** One `triggered_opinion = { … }` block, as the preview reads it. */
+export interface TriggeredOpinion {
+  /** What `opinion_modifier = …` names; "" when the block names none yet. */
+  modifier: string;
+  /**
+   * Every other statement of the block, as the file writes it. `_traits.info`
+   * documents them as the conditions the opinion is applied under
+   * (`parameter`, `same_faith`, `same_dynasty`, `male_only`, …), so they are
+   * shown rather than interpreted.
+   */
+  conditions: string[];
+}
+
+const OPINION_MODIFIER_KEY = "opinion_modifier";
+
+/** The blocks a `triggered_opinion` field holds, read for the preview. */
+export function readTriggeredOpinions(values: readonly string[]): TriggeredOpinion[] {
+  const out: TriggeredOpinion[] = [];
+  for (const raw of values) {
+    const inner = innerOf(raw);
+    if (inner === null) continue;
+    let modifier = "";
+    const conditions: string[] = [];
+    for (const item of scanItems(inner)) {
+      if (item.key === null) continue;
+      if (item.key === OPINION_MODIFIER_KEY) modifier = item.value;
+      else conditions.push(`${item.key} ${item.op ?? "="} ${item.value}`);
+    }
+    out.push({ modifier, conditions });
+  }
+  return out;
 }
 
 /** The loc pairs a save writes: `locPatterns` with `$` replaced by the name. */
