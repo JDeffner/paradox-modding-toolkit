@@ -49,7 +49,7 @@ ${uiCss}
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #stageTools { left: 8px; }
+  #stageTools { left: 8px; padding-right: 10px; }
   #stageInfo { right: 8px; gap: 8px; }
   #resetName[hidden] { display: none; }
   #origin { padding-left: 8px; }
@@ -117,9 +117,8 @@ ${uiCss}
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="top" data-tip-wrap>${icon("unlock")}</button>
-        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
+        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="hint" class="px-muted px-xs"></span>
         <span id="origin" class="px-muted px-xs"></span>
       </div>

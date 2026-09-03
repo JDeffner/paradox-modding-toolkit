@@ -1205,7 +1205,7 @@ function updateModPicker(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Stage view: live by default (wheel zooms, middle-drag pans); the lock freezes
+// Stage view: wheel zooms, middle-drag pans, recenter resets.
 // ---------------------------------------------------------------------------
 
 const stage = $("stage");
@@ -1215,9 +1215,6 @@ const view = { frozen: false, x: 0, y: 0, scale: 1 };
 function applyView(): void {
   viewport.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
   $("zoom").textContent = `${Math.round(view.scale * 100)}%`;
-  const b = $("lock");
-  b.replaceChildren(iconEl(view.frozen ? "lock" : "unlock"));
-  b.dataset.tip = view.frozen ? "Unfreeze the canvas zoom and pan" : "Freeze the canvas zoom and pan";
   draw();
 }
 
@@ -1227,13 +1224,6 @@ function recenter(): void {
   applyView();
 }
 
-$("lock").onclick = () => {
-  view.frozen = !view.frozen;
-  uiState = { ...uiState, viewFrozen: view.frozen };
-  send({ type: "uiState", state: uiState });
-  applyView();
-};
-// Recentering is a way out of a lost view, so the freeze does not block it.
 $("recenter").onclick = recenter;
 stage.addEventListener(
   "wheel",
@@ -1602,7 +1592,6 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
           uiState = m.ui;
           panel.setWidth(m.ui.panelWidth);
           panel.toggle(m.ui.panelCollapsed);
-          view.frozen = m.ui.viewFrozen ?? false;
           applyView();
         }
         updateToggle();
