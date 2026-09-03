@@ -174,8 +174,11 @@ function renderToolbar(): void {
 
 function renderItem(): void {
   $("noDescriptor").classList.toggle("on", !!info?.descriptorMissing);
-  $("itemSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  for (const id of ["itemSection", "modFilesSection", "noteSection"])
+    $(id).style.display = info && !info.descriptorMissing ? "" : "none";
   if (!info || info.descriptorMissing) return;
+  $("modRoot").textContent = info.root;
+  $("modRoot").setAttribute("data-tip", info.root);
 
   const title = $<HTMLInputElement>("title");
   if (document.activeElement !== title) {
@@ -867,10 +870,10 @@ function renderPublish(): void {
   if (!langs.length) incLangs.checked = false;
   const on = enabledLanguages();
   $("langCount").textContent = !langs.length
-    ? "- none drafted yet"
+    ? "Upload (none drafted)"
     : on.length === langs.length
-      ? `- all ${langs.length}`
-      : `- ${on.length} of ${langs.length}`;
+      ? `Upload all ${langs.length}`
+      : `Upload ${on.length} of ${langs.length}`;
 
   const rows = $("langRows");
   rows.replaceChildren();
@@ -901,11 +904,32 @@ function renderPublish(): void {
     rows.append(row);
   }
 
-  for (const part of Array.from(document.querySelectorAll<HTMLElement>(".pub-part"))) {
-    const input = part.querySelector<HTMLInputElement>(".pub-row input")!;
-    part.toggleAttribute("data-off", !input.checked);
-  }
+  // Each switch owns the card it sits in; the summary says what an upload sends.
+  const owned: [string, string][] = [
+    ["incContent", "modFilesSection"],
+    ["incDetails", "itemSection"],
+    ["incLangs", "translationsSection"],
+    ["incNote", "noteSection"],
+  ];
+  for (const [input, section] of owned)
+    $(section).toggleAttribute("data-off", !$<HTMLInputElement>(input).checked);
+  const sends: string[] = [];
+  if ($<HTMLInputElement>("incContent").checked) sends.push("mod files");
+  if ($<HTMLInputElement>("incDetails").checked) sends.push("details");
+  if (on.length) sends.push(`${on.length} translation${on.length === 1 ? "" : "s"}`);
+  if ($<HTMLInputElement>("incNote").checked && $<HTMLTextAreaElement>("note").value.trim())
+    sends.push("changenote");
+  const summary = $("publishSummary");
+  summary.replaceChildren();
+  const lead = document.createElement("span");
+  lead.className = "sub";
+  lead.textContent = sends.length ? "Sends: " : "";
+  summary.append(
+    lead,
+    document.createTextNode(sends.length ? sends.join(", ") : "Nothing: every part is off.")
+  );
 }
+$<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 
 for (const id of ["incContent", "incDetails", "incLangs", "incNote"]) {
   $(id).addEventListener("change", renderPublish);
@@ -1666,8 +1690,8 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       title: "Uploading",
       items: [
         {
-          lead: "The switches under Publish",
-          text: "decide what goes: the mod files, the details (title, description, visibility, tags, preview, gallery, requirements), the translations (all, or one by one) and the changenote. A part switched off is dimmed and marked Not uploaded.",
+          lead: "The switch in each card's title row",
+          text: "decides whether that part goes: the mod files, the Item details (title, description, visibility, tags, preview, gallery, requirements), the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card sums up what the next upload sends.",
         },
         {
           lead: "Enable all",

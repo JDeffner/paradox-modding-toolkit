@@ -58,7 +58,12 @@ ${uiCss}
     max-width: 1400px; margin: 0 auto; padding: 12px 16px 40px;
     display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start;
   }
-  @media (min-width: 1164px) { #page { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1164px) {
+    #page { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* The tall Item card on the left; Publish, Mod files and Changenote stack beside it. */
+    #itemSection { grid-row: span 3; }
+    #modFilesSection, #noteSection { grid-column: 2; }
+  }
   .section {
     display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); background: var(--px-card, transparent);
@@ -123,21 +128,25 @@ ${uiCss}
   .lang textarea { min-height: 90px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
   .lang .livehint { display: flex; align-items: baseline; gap: 6px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .lang .livehint .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  #publishRows { display: flex; flex-direction: column; gap: 6px; }
+  #publishRows { display: flex; flex-direction: column; gap: 8px; }
   .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .pub-row .lbl { min-width: 0; }
   .pub-row .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  /* A publish part: its switch row, then the part's body; off = dimmed + "Not uploaded". */
-  .pub-part { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
-  .pub-part > .pub-row .lbl { font-weight: 500; }
-  .pub-part .off-chip { display: none; margin-left: auto; flex: 0 0 auto; }
+  /* A card with a publish switch in its title row: off = the body dimmed,
+     inert, and a "Not uploaded" chip beside the switch. */
+  .hdr-switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: var(--px-text-xs); color: var(--px-muted-fg); text-transform: none; letter-spacing: 0; cursor: pointer; }
+  .hdr-switch .px-switch { transform: scale(0.85); }
+  .off-chip { display: none; flex: 0 0 auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .section[data-off] .px-panel-title .off-chip { display: inline-flex; }
+  .section[data-off] > :not(.px-panel-title) { opacity: 0.45; pointer-events: none; }
   #langsToggle .px-icon { transition: transform 120ms; }
   #langsToggle[aria-expanded="true"] .px-icon { transform: rotate(180deg); }
-  .pub-part[data-off] .off-chip { display: inline-flex; }
-  .pub-part[data-off] > .pub-row .lbl, .pub-part[data-off] > .pub-body { opacity: 0.45; }
-  .pub-part[data-off] > .pub-body { pointer-events: none; }
-  .pub-body { display: flex; flex-direction: column; gap: 4px; }
-  .lang-row { display: flex; align-items: center; gap: 8px; padding-left: 26px; min-height: 22px; font-size: var(--px-text-sm); }
+  #langRows { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--px-border); }
+  #langRows[hidden] { display: none; }
+  #publishSummary { font-size: var(--px-text-sm); }
+  #publishSummary .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  #modRoot { font-family: var(--vscode-editor-font-family, monospace); font-size: var(--px-text-xs); }
+  .lang-row { display: flex; align-items: center; gap: 8px; padding-left: 2px; min-height: 22px; font-size: var(--px-text-sm); }
   .lang-row[data-off] { opacity: 0.55; }
   .lang-row .px-switch { transform: scale(0.85); transform-origin: left center; }
   #enableAllBox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -233,7 +242,11 @@ ${BBPREV_CSS}
     </div>
 
     <div class="section" id="itemSection">
-      <div class="px-panel-title">Item</div>
+      <div class="px-panel-title">Item
+        <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload the details: title, description, visibility, tags and the preview image." data-tip-wrap data-tip-side="left">Details <span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
+      </div>
       <div id="itemGrid">
         <div id="previewBox" style="position:relative">
           <span id="previewInfo" tabindex="0" data-tip="A square image, 512x512 or larger, PNG or JPG, under 1 MB." data-tip-wrap>${icon("alert")}</span>
@@ -282,46 +295,9 @@ ${BBPREV_CSS}
     </div>
     <div class="section">
       <div class="px-panel-title">Publish</div>
-      <div id="checks" style="margin-bottom:6px"></div>
+      <div id="checks"></div>
       <div id="publishRows">
-        <div class="pub-part" data-part="content">
-          <div class="pub-row">
-            <label class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></label>
-            <span class="lbl">Mod files <span class="sub">- upload the mod's content</span></span>
-            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-          </div>
-        </div>
-        <div class="pub-part" data-part="details">
-          <div class="pub-row">
-            <label class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></label>
-            <span class="lbl">Details <span class="sub">- title, description, visibility, tags, preview image</span></span>
-            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-          </div>
-        </div>
-        <div class="pub-part" data-part="translations">
-          <div class="pub-row">
-            <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
-            <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
-            <button id="langsToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Choose which languages go up" aria-expanded="false">${icon("chevronDown")}</button>
-            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-          </div>
-          <div id="langRows" class="pub-body" hidden></div>
-        </div>
-        <div class="pub-part" data-part="note">
-          <div class="pub-row">
-            <label class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></label>
-            <span class="lbl">Changenote <span class="sub">- shown on the item's Change Notes tab</span></span>
-            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-          </div>
-          <div class="pub-body">
-            <textarea id="note" class="px-textarea" spellcheck="false" placeholder="What changed in this update"></textarea>
-            <div class="hintline">
-              <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-              <span class="px-grow"></span>
-              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
-            </div>
-          </div>
-        </div>
+        <div id="publishSummary"></div>
         <div id="enableAllBox">
           <button id="enableAll" class="px-btn" data-variant="outline" data-size="sm" data-tip="Switch every part on, translations included">${icon("check")} Enable all</button>
           <div id="enableAllConfirm" hidden>
@@ -330,6 +306,28 @@ ${BBPREV_CSS}
             <button id="enableAllNo" class="px-btn" data-variant="ghost" data-size="sm">Cancel</button>
           </div>
         </div>
+      </div>
+    </div>
+    <div class="section" id="modFilesSection">
+      <div class="px-panel-title">Mod files
+        <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload every file of the mod, replacing what subscribers have." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></span></label>
+      </div>
+      <div id="modRoot" class="px-truncate"></div>
+      <div class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
+    </div>
+    <div class="section" id="noteSection">
+      <div class="px-panel-title">Changenote
+        <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Send the changenote with the upload; it appears on the item's Change Notes tab." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></span></label>
+      </div>
+      <textarea id="note" class="px-textarea" spellcheck="false" placeholder="What changed in this update"></textarea>
+      <div class="hintline">
+        <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+        <span class="px-grow"></span>
+        <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
       </div>
     </div>
     <div class="section" id="previewsSection">
@@ -380,11 +378,15 @@ ${BBPREV_CSS}
         <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
       </div>
     </div>
-    <div class="section wide">
+    <div class="section wide" id="translationsSection">
       <div class="px-panel-title">${icon("globe")} Translations
         <span class="px-grow"></span>
         <button id="addLang" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add language</button>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload the drafted translations. The chevron picks languages one by one." data-tip-wrap data-tip-side="left"><span id="langCount"></span> <span class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></span></label>
+        <button id="langsToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Choose which languages go up" data-tip-side="left" aria-expanded="false">${icon("chevronDown")}</button>
       </div>
+      <div id="langRows" hidden></div>
       <div class="hintline"><span>Title and description shown to Workshop visitors browsing Steam in that language. The default text above is what everyone else sees.</span></div>
       <div id="translations"></div>
     </div>
