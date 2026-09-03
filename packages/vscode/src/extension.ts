@@ -405,6 +405,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // same name win like they do in the game.
   const coaPanelOptions = (): {
     meta: ReturnType<typeof metaFor>;
+    cfg: PxConfig;
     roots: FlagRoot[];
     mods: { label: string; path: string }[];
     gameMissing: boolean;
@@ -417,7 +418,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
       .filter((p, i, all) => all.indexOf(p) === i)
       .map((p) => ({ label: readModName(p), path: p }));
-    return { meta: metaFor(cfg.gameId), roots, mods, gameMissing: cfg.gamePath === null };
+    return {
+      meta: metaFor(cfg.gameId),
+      cfg: cfgForActive(),
+      roots,
+      mods,
+      gameMissing: cfg.gamePath === null,
+    };
   };
   const coaDesignerAvailable = (roots: FlagRoot[]): boolean =>
     coaDesignerSupported(cfg.gameId) && hasDesignerFiles(roots, metaFor(cfg.gameId).stageRoots);

@@ -21,7 +21,11 @@ export function isPlainScriptFileName(name: string): boolean {
  * modder's files keep one naming scheme across both commands.
  */
 export function defaultDefinitionFileName(prefix: string, kind: string): string {
-  const plural = /[^aeiou]y$/.test(kind) ? `${kind.slice(0, -1)}ies` : `${kind}s`;
+  const plural = kind.endsWith("s")
+    ? kind // `coat_of_arms` is already the folder's own plural
+    : /[^aeiou]y$/.test(kind)
+      ? `${kind.slice(0, -1)}ies`
+      : `${kind}s`;
   return `${prefix}_${plural}.txt`;
 }
 

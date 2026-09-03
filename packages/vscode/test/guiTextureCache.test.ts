@@ -109,6 +109,23 @@ describe("resolving a texture", () => {
   });
 });
 
+describe("the off-thread decode", () => {
+  // Whether a worker can run is a property of the build, not of the cache: no
+  // bundle beside extension.js (a unit test, a bare client) has to answer the
+  // same PNG on this thread instead of nothing at all.
+  it("answers the same file the synchronous path does", async () => {
+    const game = path.join(root, "game");
+    writeDds(game, "gfx/interface/window.dds", 32);
+    const abs = path.join(game, "gfx/interface/window.dds");
+    const cache = cacheIn("storage", { gamePath: game });
+
+    const png = await cache.resolveFileAsync(abs, THUMBNAIL_MAX_DIM);
+    expect(png).not.toBeNull();
+    expect(png).toBe(cache.resolveFile(abs, THUMBNAIL_MAX_DIM));
+    expect(pngSize(png!)).toEqual({ w: 32, h: 32 });
+  });
+});
+
 describe("the thumbnail cap", () => {
   it("caps the longest edge, and keeps its own entry beside the full-size one", () => {
     const game = path.join(root, "game");

@@ -22,6 +22,7 @@ import {
   type CoaFlag,
   type CoaInstance,
   type CoaLayer,
+  type CoaSubInstance,
   type DesignerEntry,
   type Rgb,
 } from "@px-lsp/server/coa/coa";
@@ -43,16 +44,33 @@ import {
   boxOf,
   cornerAt,
   cornerCursor,
+  containsPoint,
   corners,
-  hitElement,
-  moveBox,
+  instanceCount,
   resizeBox,
   writeBox,
   DRAG_THRESHOLD,
   HANDLE_SIZE,
   type Corner,
+  type ElementBox,
   type ElementRef,
 } from "../../flagBuilder/app/elements";
+import {
+  alignDeltas,
+  ARMS_RECT,
+  distributeDeltas,
+  mirrorGroup,
+  moveGroup,
+  rectCentre,
+  rotateGroup,
+  scaleGroup,
+  selectionBounds,
+  snapDelta,
+  snapTolerance,
+  snapValue,
+  type AlignMode,
+  type Rect,
+} from "./groups";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
@@ -61,6 +79,7 @@ import { scrubbable } from "../../shared/scrub";
 import { colorPicker, paintSwatch, rgbToHex } from "../../shared/colorPicker";
 import { sortable } from "../../shared/sortable";
 import { installTips } from "../../shared/tips";
+import { saveTargetLine } from "../../shared/saveTarget";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -87,14 +106,88 @@ let tab: DesignerTab = "background";
 let layerIndex = -1;
 /** The instance of that layer the detail edit is on. */
 let instIndex = 0;
-/** The element the canvas outlines, or null. */
-let picked: ElementRef | null = null;
+/**
+ * What the canvas outlines and every tool acts on, in pick order: the last one
+ * is the PRIMARY, whose numbers the detail panel shows and whose value a mass
+ * edit takes its delta from.
+ */
+let selection: ElementRef[] = [];
+/**
+ * Layers a click cannot reach and a gesture cannot move, by index. UI state,
+ * not script: the game has no such key, so a lock is never written and never
+ * survives a reload.
+ */
+const locked = new Set<number>();
 let frameId = "";
+/** Which cell of a frame sheet the preview draws, 1-based (see frameCells). */
+let frameTier = 2;
+/** The grid over the arms: drawn and snapped to when on, `div` cells per axis. */
+const grid = { on: false, div: 4 };
 let emblemCategory = "";
 let opened: { name: string; source: string; file: string } | null = null;
 let target: FlagTarget | undefined;
 
 const designer = (): FlagDatabase["designer"] | undefined => db?.designer;
+
+// ---------------------------------------------------------------------------
+// The selection
+// ---------------------------------------------------------------------------
+
+const sameRef = (a: ElementRef, b: ElementRef): boolean => a.layer === b.layer && a.instance === b.instance;
+
+/** The last picked element: whose numbers the detail panel shows. */
+const primary = (): ElementRef | null => selection[selection.length - 1] ?? null;
+
+const isSelected = (ref: ElementRef): boolean => selection.some((r) => sameRef(r, ref));
+
+/** Shift adds or removes; a plain pick replaces. A locked layer is never taken. */
+function select(ref: ElementRef, add: boolean): void {
+  if (locked.has(ref.layer)) return;
+  if (!add) {
+    selection = [ref];
+    return;
+  }
+  const at = selection.findIndex((r) => sameRef(r, ref));
+  if (at >= 0) selection.splice(at, 1);
+  else selection.push(ref);
+}
+
+function selectMany(refs: ElementRef[]): void {
+  selection = refs.filter((r) => !locked.has(r.layer));
+}
+
+/** Every unlocked element of every layer: what Ctrl+A means. */
+function allElements(): ElementRef[] {
+  const out: ElementRef[] = [];
+  flag.layers.forEach((layer, index) => {
+    if (locked.has(index)) return;
+    for (let i = 0; i < instanceCount(layer); i++) out.push({ layer: index, instance: i });
+  });
+  return out;
+}
+
+const selectedBoxes = (): ElementBox[] => selection.map((r) => boxOf(flag.layers[r.layer], r.instance));
+
+/** Write boxes back, one per selected element, materializing implicit instances. */
+function writeBoxes(boxes: readonly ElementBox[]): void {
+  selection.forEach((ref, i) => {
+    const layer = flag.layers[ref.layer];
+    materialize(layer);
+    writeBox(layer, ref.instance, boxes[i]);
+  });
+}
+
+/** The topmost element under the point, skipping locked layers. */
+function hitUnlocked(u: number, v: number): ElementRef | null {
+  for (let l = flag.layers.length - 1; l >= 0; l--) {
+    if (locked.has(l)) continue;
+    const layer = flag.layers[l];
+    for (let i = instanceCount(layer) - 1; i >= 0; i--) {
+      if (containsPoint(boxOf(layer, i), u, v)) return { layer: l, instance: i };
+    }
+  }
+  return null;
+}
 
 /** The one layer kind this panel creates: the designer only makes colored emblems. */
 type EmblemLayer = Extract<CoaLayer, { kind: "colored_emblem" }>;
@@ -278,11 +371,28 @@ function alphaMask(key: string, img: HTMLImageElement): HTMLCanvasElement {
 function armsRect(): { x: number; y: number; w: number; h: number } {
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
-  const ratio =
-    mask && frame && frame.naturalWidth > mask.naturalWidth ? mask.naturalWidth / frame.naturalWidth : 1;
+  const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
+  const ratio = mask && frame && cell > mask.naturalWidth ? mask.naturalWidth / cell : 1;
   const w = canvas.width * ratio;
   const h = canvas.height * ratio;
   return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+}
+
+/**
+ * How many frames a frame texture holds. The house and dynasty frames are
+ * SPRITE SHEETS, one square cell per title tier laid out across
+ * (`gfx/interface/coat_of_arms/frames/house_frame_26.dds` is 960x160 next to a
+ * 160x160 mask, measured on 1.19); the title pair is a single cell. The cell
+ * is square either way, so the count is the aspect ratio.
+ */
+function frameCells(frame: HTMLImageElement): number {
+  if (!frame.naturalHeight) return 1;
+  return Math.max(1, Math.round(frame.naturalWidth / frame.naturalHeight));
+}
+
+/** The tier the preview draws, clamped to what this frame actually has. */
+function frameCellIndex(cells: number): number {
+  return Math.min(cells, Math.max(1, frameTier)) - 1;
 }
 
 /** `overlay` = false for the PNG export: the outline is a tool, not the arms. */
@@ -312,7 +422,7 @@ function draw(overlay = true): void {
     sctx.drawImage(alphaMask(`masks/${frameId}`, mask), rect.x, rect.y, rect.w, rect.h);
     sctx.globalCompositeOperation = "source-over";
     ctx.drawImage(scratch, 0, 0);
-    if (frame) ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    if (frame) drawFrame(ctx, frame);
   } else {
     complete = renderFlag(ctx, flag, rect, renderContext());
   }
@@ -320,18 +430,69 @@ function draw(overlay = true): void {
   if (!complete) for (const key of keys) request(key, false);
   const missing = keys.filter((k) => images.get(k) === null);
   $("hint").textContent = missing.length ? `Missing textures: ${missing.join(", ")}` : "";
-  if (overlay) paintSelection(ctx);
+  if (overlay) {
+    paintGrid(ctx);
+    paintSelection(ctx);
+  }
+  updateTierControl();
 }
 
-function paintSelection(ctx: CanvasRenderingContext2D): void {
-  const layer = picked ? flag.layers[picked.layer] : null;
-  if (!picked || !layer) return;
-  const box = boxOf(layer, picked.instance);
+/** ONE cell of the frame sheet, over the whole preview. */
+function drawFrame(ctx: CanvasRenderingContext2D, frame: HTMLImageElement): void {
+  const cells = frameCells(frame);
+  const cell = frame.naturalWidth / cells;
+  ctx.drawImage(
+    frame,
+    frameCellIndex(cells) * cell,
+    0,
+    cell,
+    frame.naturalHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+}
+
+/** The grid over the arms, so a placement can be read off as well as felt. */
+function paintGrid(ctx: CanvasRenderingContext2D): void {
+  if (!grid.on) return;
+  const arms = armsRect();
   const screen = canvas.getBoundingClientRect();
   const f = screen.width ? screen.width / canvas.width : 1;
-  const arms = armsRect();
-  const points = corners(box).map((p) => [arms.x + p.x * arms.w, arms.y + p.y * arms.h] as const);
   ctx.save();
+  ctx.lineWidth = 1 / f;
+  for (let i = 0; i <= grid.div; i++) {
+    // The centre lines are the ones a design is built around, so they read
+    // stronger than the rest; the border is the arms' own edge.
+    const middle = i * 2 === grid.div;
+    ctx.strokeStyle = middle ? "rgba(79,193,255,0.55)" : "rgba(255,255,255,0.22)";
+    const x = arms.x + (arms.w * i) / grid.div;
+    const y = arms.y + (arms.h * i) / grid.div;
+    ctx.beginPath();
+    ctx.moveTo(x, arms.y);
+    ctx.lineTo(x, arms.y + arms.h);
+    ctx.moveTo(arms.x, y);
+    ctx.lineTo(arms.x + arms.w, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Canvas pixels per screen pixel: outlines stay one pixel wide at any zoom. */
+function screenFactor(): number {
+  const screen = canvas.getBoundingClientRect();
+  return screen.width ? screen.width / canvas.width : 1;
+}
+
+/** Arms fractions to canvas pixels. */
+function toCanvas(u: number, v: number): [number, number] {
+  const arms = armsRect();
+  return [arms.x + u * arms.w, arms.y + v * arms.h];
+}
+
+function outline(ctx: CanvasRenderingContext2D, points: readonly (readonly [number, number])[]): void {
+  const f = screenFactor();
   ctx.beginPath();
   ctx.moveTo(points[0][0], points[0][1]);
   for (const [x, y] of points.slice(1)) ctx.lineTo(x, y);
@@ -342,6 +503,10 @@ function paintSelection(ctx: CanvasRenderingContext2D): void {
   ctx.lineWidth = 1.5 / f;
   ctx.strokeStyle = SELECT_STROKE;
   ctx.stroke();
+}
+
+function handles(ctx: CanvasRenderingContext2D, points: readonly (readonly [number, number])[]): void {
+  const f = screenFactor();
   const side = HANDLE_SIZE / f;
   ctx.lineWidth = 1 / f;
   ctx.strokeStyle = SELECT_SHADOW;
@@ -350,6 +515,71 @@ function paintSelection(ctx: CanvasRenderingContext2D): void {
     ctx.fillRect(x - side / 2, y - side / 2, side, side);
     ctx.strokeRect(x - side / 2, y - side / 2, side, side);
   }
+}
+
+/** The group box's four corners, in arms fractions, clockwise from the top left. */
+function groupCorners(bounds: Rect): { corner: Corner; x: number; y: number }[] {
+  return [
+    { corner: "nw" as const, x: bounds.x, y: bounds.y },
+    { corner: "ne" as const, x: bounds.x + bounds.w, y: bounds.y },
+    { corner: "se" as const, x: bounds.x + bounds.w, y: bounds.y + bounds.h },
+    { corner: "sw" as const, x: bounds.x, y: bounds.y + bounds.h },
+  ];
+}
+
+/** Where the rotate grip sits: above the top edge, on the group's centre line. */
+function rotateGrip(bounds: Rect): [number, number] {
+  const arms = armsRect();
+  const reach = arms.h ? (ROTATE_GRIP_PX * screenFactor()) / arms.h : 0.05;
+  return [bounds.x + bounds.w / 2, bounds.y - reach];
+}
+
+/** How far above the group box the rotate grip sits, in SCREEN pixels. */
+const ROTATE_GRIP_PX = 22;
+
+function paintSelection(ctx: CanvasRenderingContext2D): void {
+  if (selection.length === 0) return;
+  const boxes = selectedBoxes();
+  ctx.save();
+  for (const box of boxes) {
+    outline(
+      ctx,
+      corners(box).map((p) => toCanvas(p.x, p.y))
+    );
+  }
+  if (boxes.length === 1) {
+    handles(
+      ctx,
+      corners(boxes[0]).map((p) => toCanvas(p.x, p.y))
+    );
+    ctx.restore();
+    return;
+  }
+  // Several: the members keep their thin outlines and the group box carries
+  // the handles, because one gesture now moves the arrangement, not a member.
+  const bounds = selectionBounds(boxes);
+  const points = groupCorners(bounds).map((p) => toCanvas(p.x, p.y));
+  const f = screenFactor();
+  ctx.setLineDash([6 / f, 4 / f]);
+  outline(ctx, points);
+  ctx.setLineDash([]);
+  const [gx, gy] = rotateGrip(bounds);
+  const [rx, ry] = toCanvas(gx, gy);
+  const [tx, ty] = toCanvas(bounds.x + bounds.w / 2, bounds.y);
+  ctx.lineWidth = 1.5 / f;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(rx, ry);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(rx, ry, HANDLE_SIZE / 2 / f, 0, Math.PI * 2);
+  ctx.fillStyle = SELECT_STROKE;
+  ctx.fill();
+  ctx.strokeStyle = SELECT_SHADOW;
+  ctx.lineWidth = 1 / f;
+  ctx.stroke();
+  handles(ctx, points);
   ctx.restore();
 }
 
@@ -385,13 +615,17 @@ function iconButton(name: Parameters<typeof iconEl>[0], tip: string, onClick: ()
   return b;
 }
 
-function field(label: string, control: HTMLElement): HTMLElement {
-  const wrap = el("div", "px-field");
-  wrap.append(el("span", "px-label", label), control);
-  return wrap;
-}
-
-function numberInput(value: number, step: number, onChange: (v: number) => void): HTMLInputElement {
+/**
+ * A labelled number. The LABEL is the drag handle and the input is only ever
+ * typed in, which is the rule the shared fields follow (shared/scrub.ts): a
+ * press inside the box must not move the value out from under the caret.
+ */
+function numberField(
+  label: string,
+  value: number,
+  step: number,
+  onChange: (v: number) => void
+): { el: HTMLElement; input: HTMLInputElement } {
   const input = el("input", "px-input");
   input.type = "number";
   input.step = String(step);
@@ -404,15 +638,19 @@ function numberInput(value: number, step: number, onChange: (v: number) => void)
     apply(Number(input.value));
     commit();
   };
+  const row = el("div", "px-field");
+  const caption = el("span", "px-label", label);
+  row.append(caption, input);
   scrubbable(input, {
     step,
+    handle: caption,
     onChange: (v) => {
       input.value = String(Math.round(v * 1000) / 1000);
       apply(v);
     },
     onCommit: commit,
   });
-  return input;
+  return { el: row, input };
 }
 
 function checkbox(label: string, checked: boolean, onChange: (on: boolean) => void): HTMLElement {
@@ -570,8 +808,8 @@ function clampSelection(): void {
   }
   const current = selectedLayer();
   if (current && instIndex >= Math.max(1, current.instances.length)) instIndex = 0;
-  if (picked && (!flag.layers[picked.layer] || picked.instance >= Math.max(1, boxCount(picked.layer))))
-    picked = null;
+  selection = selection.filter((r) => flag.layers[r.layer] && r.instance < boxCount(r.layer));
+  for (const index of [...locked]) if (!flag.layers[index]) locked.delete(index);
 }
 
 function boxCount(index: number): number {
@@ -803,7 +1041,8 @@ function renderLayout(): void {
         flag.layers = substituteLayout(layout.flag, cat.layoutDefaults).layers;
         layerIndex = emblemLayers()[0]?.index ?? -1;
         instIndex = 0;
-        picked = null;
+        selection = [];
+        locked.clear();
         refresh();
       }
     );
@@ -830,12 +1069,36 @@ function renderLayerList(): void {
     if (layer.kind !== "colored_emblem") continue;
     const row = el("div", "px-item");
     if (index === layerIndex) row.setAttribute("aria-selected", "true");
+    if (locked.has(index)) row.dataset.locked = "";
     row.append(el("span", "px-item-kind", iconEl("shapes")));
     row.append(el("span", "px-item-label", emblemLabel(layer.texture) || "no emblem"));
     const tools = el("div", "px-item-tools");
+    const instances = instanceCount(layer);
+    if (instances > 1) {
+      tools.append(
+        iconButton("focus", `Select all ${instances} instances of this emblem`, () => {
+          selectMany(Array.from({ length: instances }, (_, i) => ({ layer: index, instance: i })));
+          layerIndex = index;
+          refresh(false);
+        })
+      );
+    }
     tools.append(
+      iconButton(locked.has(index) ? "lock" : "unlock", locked.has(index) ? "Unlock" : "Lock", () => {
+        if (locked.has(index)) locked.delete(index);
+        else {
+          locked.add(index);
+          selection = selection.filter((r) => r.layer !== index);
+        }
+        refresh(false);
+      }),
       iconButton("trash", "Remove this emblem", () => {
         flag.layers.splice(index, 1);
+        // Locks are held by index, so the ones above the hole move down with it.
+        const kept = [...locked].filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
+        locked.clear();
+        for (const i of kept) locked.add(i);
+        selection = [];
         clampSelection();
         refresh();
       })
@@ -843,9 +1106,10 @@ function renderLayerList(): void {
     row.append(tools);
     row.onclick = (e) => {
       if ((e.target as HTMLElement).closest("button")) return;
+      if (locked.has(index)) return;
       layerIndex = index;
       instIndex = 0;
-      picked = { layer: index, instance: 0 };
+      select({ layer: index, instance: 0 }, e.shiftKey);
       refresh(false);
       draw();
     };
@@ -864,7 +1128,10 @@ sortable($("layerList"), {
     const [moved] = flag.layers.splice(order[from], 1);
     flag.layers.splice(order[to], 0, moved);
     layerIndex = order[to];
-    picked = null;
+    // Locks and the selection are held by layer index; a reorder invalidates
+    // both, and there is nothing to be gained by guessing what moved where.
+    locked.clear();
+    selection = [];
     refresh();
   },
 });
@@ -988,11 +1255,11 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
   const count = Math.max(1, layer.instances.length);
   for (let i = 0; i < count; i++) {
     const tile = el("div", "instTile", String(i + 1));
-    tile.dataset.tip = "Click to edit, right-click to remove";
-    if (i === instIndex) tile.setAttribute("aria-selected", "true");
-    tile.onclick = () => {
+    tile.dataset.tip = "Click to edit, shift-click to add to the selection, right-click to remove";
+    if (isSelected({ layer: layerIndex, instance: i })) tile.setAttribute("aria-selected", "true");
+    tile.onclick = (e) => {
       instIndex = i;
-      picked = { layer: layerIndex, instance: i };
+      select({ layer: layerIndex, instance: i }, e.shiftKey);
       refresh(false);
       draw();
     };
@@ -1001,7 +1268,7 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
       if (layer.instances.length <= 1) return;
       layer.instances.splice(i, 1);
       instIndex = 0;
-      picked = null;
+      selection = [];
       refresh();
     };
     grid.append(tile);
@@ -1030,77 +1297,201 @@ function materialize(layer: CoaLayer): void {
   else layer.instances.push({ ...DEFAULT_INSTANCE, scale: [1, 1], position: [0.5, 0.5] });
 }
 
-/** Whether the two axes of the selected instance are kept equal. */
-const matchScale = new Set<string>();
+/**
+ * Whether the two axes of an instance are kept equal. ON unless the modder
+ * turns it off: a coat of arms emblem is a shape, and stretching one axis
+ * alone is the rarer intent by far, so the set holds the EXCEPTIONS.
+ */
+const unmatchedScale = new Set<string>();
 
+const matchKeyOf = (ref: ElementRef): string => `${ref.layer}:${ref.instance}`;
+const scaleMatched = (ref: ElementRef): boolean => !unmatchedScale.has(matchKeyOf(ref));
+
+/** One gesture, one undo step: run `edit` over the whole selection and commit once. */
+function editSelection(edit: (boxes: ElementBox[]) => ElementBox[]): void {
+  if (selection.length === 0) return;
+  writeBoxes(edit(selectedBoxes()));
+  refresh();
+}
+
+/** Move every selected element by the same amount. */
+function nudgeSelection(du: number, dv: number): void {
+  editSelection((boxes) => moveGroup(boxes, du, dv));
+}
+
+/**
+ * Align and distribute the selection. One selected emblem has nothing to line
+ * up against but the arms themselves, so that is the frame it gets; several
+ * line up on the box they share, the way every layout tool does it.
+ */
+function alignSelection(mode: AlignMode): void {
+  editSelection((boxes) => {
+    const frame = boxes.length === 1 ? ARMS_RECT : selectionBounds(boxes);
+    const deltas = alignDeltas(boxes, mode, frame);
+    return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
+  });
+}
+
+function distributeSelection(axis: "x" | "y"): void {
+  editSelection((boxes) => {
+    const deltas = distributeDeltas(boxes, axis);
+    return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
+  });
+}
+
+/** Copy every selected element where it stands; the copies become the selection. */
+function duplicateSelection(): void {
+  if (selection.length === 0) return;
+  const made: ElementRef[] = [];
+  // Highest instance first, so an earlier splice cannot move a later index.
+  for (const ref of [...selection].sort((a, b) => b.layer - a.layer || b.instance - a.instance)) {
+    const layer = flag.layers[ref.layer];
+    materialize(layer);
+    // Split by kind because the two instance shapes are different arrays; the
+    // designer only ever makes colored emblems, but a pasted design can carry
+    // a sub flag and it copies just as well.
+    if (layer.kind === "sub")
+      layer.instances.push(JSON.parse(JSON.stringify(layer.instances[ref.instance])) as CoaSubInstance);
+    else layer.instances.push(JSON.parse(JSON.stringify(layer.instances[ref.instance])) as CoaInstance);
+    made.push({ layer: ref.layer, instance: layer.instances.length - 1 });
+  }
+  selectMany(made.reverse());
+  refresh();
+}
+
+/** The tools that act on the selection rather than on one number. */
+function selectionTools(): HTMLElement {
+  const host = el("div", "selTools");
+  const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
+    const b = button(label, run, "outline", "icon-sm");
+    b.dataset.tip = tip;
+    b.disabled = !enabled;
+    host.append(b);
+  };
+  const many = selection.length >= 2;
+  const against = many ? "the selection" : "the arms";
+  const aligns: [string, AlignMode, string][] = [
+    ["⇤", "left", `Align left edges to ${against}`],
+    ["⇔", "hcenter", `Centre horizontally on ${against}`],
+    ["⇥", "right", `Align right edges to ${against}`],
+    ["⇡", "top", `Align top edges to ${against}`],
+    ["⇕", "vcenter", `Centre vertically on ${against}`],
+    ["⇣", "bottom", `Align bottom edges to ${against}`],
+  ];
+  for (const [label, mode, tip] of aligns) tool(label, tip, true, () => alignSelection(mode));
+  tool("↔", "Distribute horizontally: equal gaps left to right", selection.length >= 3, () =>
+    distributeSelection("x")
+  );
+  tool("↕", "Distribute vertically: equal gaps top to bottom", selection.length >= 3, () =>
+    distributeSelection("y")
+  );
+  tool("⇄", "Mirror horizontally", true, () => editSelection((b) => mirrorGroup(b, "x")));
+  tool("⇅", "Mirror vertically", true, () => editSelection((b) => mirrorGroup(b, "y")));
+  const dup = iconButton("copy", "Duplicate in place", duplicateSelection);
+  dup.dataset.variant = "outline";
+  dup.dataset.size = "icon-sm";
+  host.append(dup);
+  return host;
+}
+
+/**
+ * The numbers of the selection. One element edits its own instance; several
+ * show the PRIMARY's numbers and write the DIFFERENCE into every member, so a
+ * mass edit moves the arrangement instead of stacking it on one spot.
+ */
 function detailEdit(layer: EmblemLayer): HTMLElement {
   const body = el("div", "detail");
   materialize(layer);
-  const inst = layer.instances[Math.min(instIndex, layer.instances.length - 1)] as CoaInstance;
-  const matchKey = `${layerIndex}:${instIndex}`;
-  const matched = matchScale.has(matchKey);
+  const ref = primary() ?? { layer: layerIndex, instance: Math.min(instIndex, layer.instances.length - 1) };
+  const many = selection.length >= 2;
+  const inst = (flag.layers[ref.layer] as EmblemLayer).instances[ref.instance] as CoaInstance;
+  const matched = scaleMatched(ref);
+
+  /** A number that writes its own change into every member of the selection. */
+  const spread = (
+    label: string,
+    value: number,
+    step: number,
+    axis: (box: ElementBox, delta: number) => ElementBox
+  ): HTMLElement => {
+    let last = value;
+    return numberField(label, value, step, (v) => {
+      const delta = v - last;
+      last = v;
+      if (delta === 0) return;
+      writeBoxes(selectedBoxes().map((box) => axis(box, delta)));
+      draw();
+    }).el;
+  };
+
+  if (many) {
+    body.append(el("div", "note", `${selection.length} emblems selected. Numbers move all of them.`));
+    const position = el("div", "pair");
+    position.append(
+      spread("Position X", inst.position[0], 0.01, (b, d) => ({ ...b, cx: b.cx + d })),
+      spread("Position Y", inst.position[1], 0.01, (b, d) => ({ ...b, cy: b.cy + d }))
+    );
+    const scale = el("div", "pair");
+    scale.append(
+      spread("Scale X", inst.scale[0], 0.01, (b, d) => ({ ...b, w: b.w + Math.sign(b.w || 1) * d })),
+      spread("Scale Y", inst.scale[1], 0.01, (b, d) => ({ ...b, h: b.h + Math.sign(b.h || 1) * d }))
+    );
+    const rest = el("div", "pair");
+    rest.append(spread("Rotation", inst.rotation, 1, (b, d) => ({ ...b, rotation: b.rotation + d })));
+    body.append(position, scale, rest, selectionTools());
+    return body;
+  }
 
   const position = el("div", "pair");
   position.append(
-    field(
-      "Position X",
-      numberInput(inst.position[0], 0.01, (v) => {
-        inst.position[0] = v;
-        draw();
-      })
-    ),
-    field(
-      "Position Y",
-      numberInput(inst.position[1], 0.01, (v) => {
-        inst.position[1] = v;
-        draw();
-      })
-    )
+    numberField("Position X", inst.position[0], 0.01, (v) => {
+      inst.position[0] = v;
+      draw();
+    }).el,
+    numberField("Position Y", inst.position[1], 0.01, (v) => {
+      inst.position[1] = v;
+      draw();
+    }).el
   );
 
   const scale = el("div", "pair");
-  const scaleY = numberInput(inst.scale[1], 0.01, (v) => {
+  const y = numberField(matched ? "Scale" : "Scale Y", inst.scale[1], 0.01, (v) => {
     inst.scale[1] = v;
-    if (matchScale.has(matchKey)) inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
+    if (scaleMatched(ref)) inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
     draw();
-    if (matchScale.has(matchKey)) renderPanel();
+    if (scaleMatched(ref)) renderPanel();
   });
-  const scaleX = numberInput(inst.scale[0], 0.01, (v) => {
+  const x = numberField(matched ? "Scale" : "Scale X", inst.scale[0], 0.01, (v) => {
     inst.scale[0] = v;
-    if (matchScale.has(matchKey)) {
+    if (scaleMatched(ref)) {
       inst.scale[1] = Math.sign(inst.scale[1] || 1) * Math.abs(v);
-      scaleY.value = String(inst.scale[1]);
+      y.input.value = String(inst.scale[1]);
     }
     draw();
   });
-  scale.append(field(matched ? "Scale" : "Scale X", scaleX), field(matched ? "Scale" : "Scale Y", scaleY));
+  scale.append(x.el, y.el);
 
   const rest = el("div", "pair");
   rest.append(
-    field(
-      "Rotation",
-      numberInput(inst.rotation, 1, (v) => {
-        inst.rotation = v;
-        draw();
-      })
-    ),
-    field(
-      "Depth",
-      numberInput(inst.depth ?? 0, 0.01, (v) => {
-        // 0 is what an instance with no `depth` means, so writing 0 drops the key.
-        if (v === 0) delete inst.depth;
-        else inst.depth = v;
-      })
-    )
+    numberField("Rotation", inst.rotation, 1, (v) => {
+      inst.rotation = v;
+      draw();
+    }).el,
+    numberField("Depth", inst.depth ?? 0, 0.01, (v) => {
+      // 0 is what an instance with no `depth` means, so writing 0 drops the key.
+      if (v === 0) delete inst.depth;
+      else inst.depth = v;
+    }).el
   );
 
   const checks = el("div", "checks");
   checks.append(
     checkbox("Match X and Y scale", matched, (on) => {
+      const key = matchKeyOf(ref);
       if (on) {
-        matchScale.add(matchKey);
+        unmatchedScale.delete(key);
         inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(inst.scale[1]);
-      } else matchScale.delete(matchKey);
+      } else unmatchedScale.add(key);
       refresh();
     }),
     // A flip is a negative scale on that axis; the game's own checkbox writes
@@ -1115,7 +1506,7 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     })
   );
 
-  body.append(position, scale, rest, checks);
+  body.append(position, scale, rest, checks, selectionTools());
   return body;
 }
 
@@ -1165,8 +1556,9 @@ function setFlag(next: CoaFlag): void {
   $<HTMLInputElement>("name").value = flag.name;
   layerIndex = emblemLayers()[0]?.index ?? -1;
   instIndex = 0;
-  picked = null;
-  matchScale.clear();
+  selection = [];
+  locked.clear();
+  unmatchedScale.clear();
   emblemCategory = "";
   resetHistory();
 }
@@ -1220,7 +1612,8 @@ function randomize(): void {
   mode = "custom";
   layerIndex = emblemLayers()[0]?.index ?? -1;
   instIndex = 0;
-  picked = null;
+  selection = [];
+  locked.clear();
   refresh();
 }
 
@@ -1266,6 +1659,15 @@ function updateToggle(): void {
 function saveTarget(): ModTarget | undefined {
   return mods.find((m) => m.path === uiState.savePath) ?? mods[0];
 }
+
+/**
+ * "Saves to <mod> > common/coat_of_arms/coat_of_arms/<file>", in the top bar
+ * from the moment the panel opens: where a definition lands is not a question
+ * to spring on a modder at save time.
+ */
+const targetLine = saveTargetLine(() => send({ type: "changeTarget" }));
+$("targetLine").append(targetLine.el);
+targetLine.set(null);
 
 const MOD_PATH_CHARS = 62;
 
@@ -1321,6 +1723,55 @@ function openFrameMenu(): void {
       },
     }
   );
+}
+
+/**
+ * The tier picker beside the frame: which cell of a frame sheet is drawn. It
+ * only appears for a frame that HAS tiers, so the title pair (one cell) shows
+ * nothing rather than a control with one choice.
+ */
+function updateTierControl(): void {
+  const host = $("tier");
+  const frame = frameId ? images.get(`frames/${frameId}`) : null;
+  const cells = frame ? frameCells(frame) : 1;
+  host.hidden = cells < 2;
+  if (cells < 2) return;
+  const shown = frameCellIndex(cells) + 1;
+  host.querySelector(".px-truncate")!.textContent = `Tier ${shown}`;
+  host.dataset.tip = `Which of the frame's ${cells} title tiers the preview wears`;
+  (host as HTMLButtonElement).onclick = () =>
+    menu(
+      host,
+      Array.from({ length: cells }, (_, i) => ({ value: String(i + 1), label: `Tier ${i + 1}` })),
+      {
+        value: String(shown),
+        width: 140,
+        onPick: (value) => {
+          frameTier = Number(value);
+          uiState = { ...uiState, frameTier };
+          send({ type: "uiState", state: uiState });
+          draw();
+        },
+      }
+    );
+}
+
+/** The grid toggle and its subdivision, both remembered by the host. */
+function updateGridControls(): void {
+  const toggle = $("gridToggle");
+  toggle.dataset.tip = grid.on ? "Hide the grid (snapping off)" : "Show the grid and snap to it";
+  if (grid.on) toggle.setAttribute("aria-pressed", "true");
+  else toggle.removeAttribute("aria-pressed");
+  const div = $("gridDiv");
+  div.hidden = !grid.on;
+  div.querySelector(".px-truncate")!.textContent = `${grid.div}`;
+}
+
+function saveGrid(): void {
+  uiState = { ...uiState, grid: grid.on, gridDiv: grid.div };
+  send({ type: "uiState", state: uiState });
+  updateGridControls();
+  draw();
 }
 
 /**
@@ -1415,17 +1866,42 @@ function handleTolerance(): [number, number] {
 }
 
 function cornerUnder(u: number, v: number): Corner | null {
-  const layer = picked ? flag.layers[picked.layer] : null;
-  if (!layer) return null;
+  const ref = selection.length === 1 ? selection[0] : null;
+  const layer = ref ? flag.layers[ref.layer] : null;
+  if (!ref || !layer) return null;
   const [tu, tv] = handleTolerance();
-  return cornerAt(boxOf(layer, picked!.instance), u, v, tu, tv);
+  return cornerAt(boxOf(layer, ref.instance), u, v, tu, tv);
 }
 
+/** A corner of the group box, when several elements are selected. */
+function groupCornerUnder(u: number, v: number): Corner | null {
+  if (selection.length < 2) return null;
+  const [tu, tv] = handleTolerance();
+  for (const p of groupCorners(selectionBounds(selectedBoxes()))) {
+    if (Math.abs(u - p.x) <= tu && Math.abs(v - p.y) <= tv) return p.corner;
+  }
+  return null;
+}
+
+function onRotateGrip(u: number, v: number): boolean {
+  if (selection.length < 2) return false;
+  const [tu, tv] = handleTolerance();
+  const [gx, gy] = rotateGrip(selectionBounds(selectedBoxes()));
+  return Math.abs(u - gx) <= tu && Math.abs(v - gy) <= tv;
+}
+
+type GestureKind = "move" | "resize" | "groupMove" | "groupScale" | "groupRotate";
+
 interface Gesture {
-  ref: ElementRef;
+  kind: GestureKind;
   corner: Corner | null;
+  /** The boxes as they stood when the press landed; every frame writes from these. */
+  start: ElementBox[];
+  /** Pointer minus the moved centre, so a drag does not jump to the cursor. */
   grabU: number;
   grabV: number;
+  /** Where the pointer stood on the group's centre, for a rotate. */
+  startAngle: number;
   startX: number;
   startY: number;
   started: boolean;
@@ -1433,56 +1909,118 @@ interface Gesture {
 
 let gesture: Gesture | null = null;
 
+/** The pointer, snapped to the grid when the grid is on. */
+function snapped(u: number, v: number): [number, number] {
+  if (!grid.on) return [u, v];
+  return [snapValue(u, grid.div), snapValue(v, grid.div)];
+}
+
+function angleTo(centre: readonly [number, number], u: number, v: number): number {
+  return (Math.atan2(v - centre[1], u - centre[0]) * 180) / Math.PI;
+}
+
 canvas.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   const [u, v] = unitAt(e);
+  const begin = (kind: GestureKind, corner: Corner | null, grab: [number, number]): void => {
+    const boxes = selectedBoxes();
+    const centre = rectCentre(selectionBounds(boxes));
+    gesture = {
+      kind,
+      corner,
+      start: boxes,
+      grabU: grab[0],
+      grabV: grab[1],
+      startAngle: angleTo(centre, u, v),
+      startX: e.clientX,
+      startY: e.clientY,
+      started: false,
+    };
+    canvas.setPointerCapture(e.pointerId);
+  };
+
+  if (onRotateGrip(u, v)) {
+    e.preventDefault();
+    begin("groupRotate", null, [0, 0]);
+    return;
+  }
+  const groupCorner = groupCornerUnder(u, v);
+  if (groupCorner) {
+    e.preventDefault();
+    begin("groupScale", groupCorner, [0, 0]);
+    return;
+  }
   const corner = cornerUnder(u, v);
-  const ref = corner ? picked! : hitElement(flag.layers, u, v);
+  if (corner) {
+    e.preventDefault();
+    const box = boxOf(flag.layers[selection[0].layer], selection[0].instance);
+    begin("resize", corner, [u - box.cx, v - box.cy]);
+    return;
+  }
+
+  const ref = hitUnlocked(u, v);
   if (!ref) {
-    picked = null;
+    // Shift on empty canvas keeps what is selected: an overshot click while
+    // building a selection must not throw the selection away.
+    if (!e.shiftKey) {
+      selection = [];
+      renderPanel();
+    }
     draw();
     return;
   }
   e.preventDefault();
-  if (!corner) {
-    picked = ref;
-    layerIndex = ref.layer;
-    instIndex = ref.instance;
-    tab = "emblems";
-    renderPanel();
-  }
-  const box = boxOf(flag.layers[ref.layer], ref.instance);
-  gesture = {
-    ref,
-    corner,
-    grabU: u - box.cx,
-    grabV: v - box.cy,
-    startX: e.clientX,
-    startY: e.clientY,
-    started: false,
-  };
-  canvas.setPointerCapture(e.pointerId);
+  // Dragging one member of a selection drags them all; a plain click on
+  // anything else makes that the selection.
+  const inGroup = isSelected(ref) && selection.length >= 2 && !e.shiftKey;
+  if (!inGroup) select(ref, e.shiftKey);
+  layerIndex = ref.layer;
+  instIndex = ref.instance;
+  tab = "emblems";
+  renderPanel();
+  const anchor = rectCentre(selectionBounds(selectedBoxes()));
+  begin(selection.length >= 2 ? "groupMove" : "move", null, [u - anchor[0], v - anchor[1]]);
   draw();
 });
 
 canvas.addEventListener("pointermove", (e) => {
   const [u, v] = unitAt(e);
   if (!gesture) {
-    const corner = cornerUnder(u, v);
-    canvas.style.cursor = corner ? cornerCursor(corner) : hitElement(flag.layers, u, v) ? "move" : "";
+    const corner = groupCornerUnder(u, v) ?? cornerUnder(u, v);
+    canvas.style.cursor = onRotateGrip(u, v)
+      ? "grab"
+      : corner
+        ? cornerCursor(corner)
+        : hitUnlocked(u, v)
+          ? "move"
+          : "";
     return;
   }
   if (!gesture.started) {
     if (Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) < DRAG_THRESHOLD) return;
     gesture.started = true;
-    materialize(flag.layers[gesture.ref.layer]);
+    for (const ref of selection) materialize(flag.layers[ref.layer]);
   }
-  const layer = flag.layers[gesture.ref.layer];
-  const box = boxOf(layer, gesture.ref.instance);
-  const next = gesture.corner
-    ? resizeBox(box, gesture.corner, u, v)
-    : moveBox(box, u - gesture.grabU - box.cx, v - gesture.grabV - box.cy);
-  writeBox(layer, gesture.ref.instance, next);
+  const start = gesture.start;
+  let next: ElementBox[];
+  if (gesture.kind === "groupRotate") {
+    const centre = rectCentre(selectionBounds(start));
+    next = rotateGroup(start, angleTo(centre, u, v) - gesture.startAngle);
+  } else if (gesture.kind === "groupScale") {
+    const [su, sv] = snapped(u, v);
+    next = scaleGroup(start, gesture.corner!, su, sv);
+  } else if (gesture.kind === "resize") {
+    const [su, sv] = snapped(u, v);
+    next = [resizeBox(start[0], gesture.corner!, su, sv)];
+  } else {
+    const centre = rectCentre(selectionBounds(start));
+    next = moveGroup(start, u - gesture.grabU - centre[0], v - gesture.grabV - centre[1]);
+    if (grid.on) {
+      const to = snapDelta(selectionBounds(next), grid.div, snapTolerance(grid.div));
+      next = moveGroup(next, to.du, to.dv);
+    }
+  }
+  writeBoxes(next);
   renderPanel();
   draw();
 });
@@ -1525,6 +2063,25 @@ $("redo").onclick = redo;
 $("mod").onclick = openModMenu;
 $("frame").onclick = openFrameMenu;
 $("togglePanel").onclick = () => panel.toggle();
+$("gridToggle").onclick = () => {
+  grid.on = !grid.on;
+  saveGrid();
+};
+$("gridDiv").onclick = () =>
+  menu(
+    $("gridDiv"),
+    // The subdivisions a coat of arms is actually built on: halves put a line
+    // on the centre, sixteenths are as fine as a 512px preview reads.
+    [2, 4, 8, 16].map((n) => ({ value: String(n), label: `${n} x ${n}` })),
+    {
+      value: String(grid.div),
+      width: 140,
+      onPick: (value) => {
+        grid.div = Number(value);
+        saveGrid();
+      },
+    }
+  );
 $("addEmblem").onclick = () => {
   const cat = designer();
   const empty = cat?.emptyEmblem;
@@ -1554,13 +2111,7 @@ $("save").onclick = () => {
     toast("Give the arms a name first.", "destructive");
     return;
   }
-  send({
-    type: "save",
-    name: flag.name.trim(),
-    script: writeFlag(flag),
-    modPath: target.path,
-    sourceFile: opened?.file,
-  });
+  send({ type: "save", name: flag.name.trim(), script: writeFlag(flag), modPath: target.path });
 };
 $("png").onclick = () => {
   draw(false);
@@ -1589,18 +2140,38 @@ nameInput.oninput = () => {
 };
 nameInput.onchange = commit;
 
+/** One arrow press moves by one grid step; Shift by ten of them. */
+const NUDGE_ARROWS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && picked) {
-    picked = null;
+  const editing = (e.target as HTMLElement).tagName === "INPUT";
+  if (e.key === "Escape" && selection.length) {
+    selection = [];
+    renderPanel();
     draw();
     return;
   }
-  const editing = (e.target as HTMLElement).tagName === "INPUT";
   if ((e.ctrlKey || e.metaKey) && !editing) {
     if (e.key === "z" && !e.shiftKey) undo();
     else if (e.key === "y" || (e.key === "z" && e.shiftKey)) redo();
-    else return;
+    else if (e.key === "a") {
+      selectMany(allElements());
+      renderPanel();
+      draw();
+    } else return;
     e.preventDefault();
+    return;
+  }
+  const arrow = NUDGE_ARROWS[e.key];
+  if (arrow && !editing && selection.length) {
+    e.preventDefault();
+    const step = (e.shiftKey ? 10 : 1) / grid.div;
+    nudgeSelection(arrow[0] * step, arrow[1] * step);
   }
 });
 
@@ -1650,8 +2221,24 @@ $("help").onclick = () =>
             text: "click an emblem to select it, drag to move it, drag a corner to resize it.",
           },
           {
+            lead: "Several at once:",
+            text: "shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
+          },
+          {
+            lead: "The tools under the numbers",
+            text: "align, distribute, mirror and duplicate the selection. One emblem lines up against the arms, several against the box they share.",
+          },
+          {
+            lead: "Lock a row",
+            text: "in the emblem list and nothing on the canvas can select or move it.",
+          },
+          {
+            lead: "The grid",
+            text: "at the bottom left snaps positions and edges to its lines and to the centre, so centring an emblem is one drag.",
+          },
+          {
             lead: "By numbers:",
-            text: "position and scale are fractions of the arms, rotation is degrees. Drag any number sideways to scrub it.",
+            text: "position and scale are fractions of the arms, rotation is degrees. Drag a number's LABEL sideways to scrub it; the box itself is for typing.",
           },
           { lead: "Flip X or Y", text: "mirrors the emblem, which the game writes as a negative scale." },
           {
@@ -1667,14 +2254,24 @@ $("help").onclick = () =>
             lead: "The frame",
             text: "at the bottom left shows the arms the way the game frames a dynasty, a house or a title. It is preview only and never written.",
           },
-          { lead: "Pick the mod", text: "in the toolbar; Save writes into that mod's coat_of_arms folder." },
+          {
+            lead: "The tier",
+            text: "beside it picks which of a frame's six title ranks the preview wears. A house or dynasty frame is one sheet of six; the title frame has one.",
+          },
+          {
+            lead: "The top bar",
+            text: "says which mod and which file the next Save writes into. Click it to write somewhere else.",
+          },
           { lead: "Saving under a vanilla key", text: "overrides those arms; a new key adds new arms." },
         ],
       },
       {
         title: "Keyboard",
         shortcuts: [
-          { keys: ["Esc"], does: "Deselect the emblem" },
+          { keys: ["Shift", "Click"], does: "Add or remove one emblem from the selection" },
+          { keys: ["Ctrl", "A"], does: "Select every unlocked emblem" },
+          { keys: ["Esc"], does: "Clear the selection" },
+          { keys: ["←↑→↓"], does: "Nudge by one grid step (Shift: ten)" },
           { keys: ["Ctrl", "Z"], does: "Undo" },
           { keys: ["Ctrl", "Y"], does: "Redo (Ctrl+Shift+Z too)" },
         ],
@@ -1706,6 +2303,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
           panel.toggle(m.ui.panelCollapsed);
           if (m.ui.tab) tab = m.ui.tab;
           frameId = m.ui.frame ?? "";
+          frameTier = m.ui.frameTier ?? frameTier;
+          grid.on = m.ui.grid ?? grid.on;
+          grid.div = m.ui.gridDiv ?? grid.div;
         }
         updateToggle();
         startFromScratch();
@@ -1714,6 +2314,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       if (m.ui?.frame === undefined) frameId = defaultFrame(m.target?.label);
       updateModPicker();
       updateFramePicker();
+      updateGridControls();
       applyView();
       if (m.target) applyTarget(m.target);
       else refresh(false);
@@ -1721,6 +2322,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     }
     case "textures":
       receiveTextures(m.urls, m.thumbs);
+      return;
+    case "target":
+      targetLine.set(m.target);
       return;
     case "opened":
       openDefinition(m.entry, m.flag);

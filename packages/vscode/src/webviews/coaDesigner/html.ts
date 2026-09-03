@@ -58,6 +58,8 @@ ${uiCss}
   #zoom, #hint { padding: 0 6px; }
   #hint:empty { display: none; }
   #frame { width: auto; min-width: 132px; }
+  #tier, #gridDiv { width: auto; min-width: 0; }
+  #gridToggle[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
 
   /* Tabs sit at the top of the panel body, above the tab's own scroller. */
   #tabsRow { display: flex; padding: 6px 10px 4px; }
@@ -106,6 +108,9 @@ ${uiCss}
   .checks { display: flex; flex-direction: column; gap: 4px; }
   .check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--px-text-sm); }
   #layerList .px-item .px-item-tools { gap: 2px; }
+  #layerList .px-item[data-locked] .px-item-label { color: var(--px-muted-fg); }
+  /* The tools that act on the selection: align, distribute, mirror, duplicate. */
+  .selTools { display: flex; flex-wrap: wrap; gap: 2px; padding-top: 4px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .adjustedNote { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 </style>
@@ -115,6 +120,7 @@ ${uiCss}
   <div id="toolbar">
     <input id="name" class="px-input" placeholder="my_house_coa" spellcheck="false" data-tip="The key the definition is written under" />
     <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
+    <span id="targetLine"></span>
     <div class="px-row" style="gap:2px">
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Start From Scratch">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Adjust Existing Design">${icon("folderOpen")}</button>
@@ -140,6 +146,9 @@ ${uiCss}
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
         <button id="frame" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip="Preview frame (never written into the script)" data-tip-side="top" data-tip-wrap>${icon("squareDashed")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+        <button id="tier" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip-side="top" data-tip-wrap hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
+        <button id="gridToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Show the grid and snap to it" data-tip-side="top" data-tip-wrap>${icon("grid")}</button>
+        <button id="gridDiv" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip="Grid subdivisions" data-tip-side="top" hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
         <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="hint" class="px-muted px-xs"></span>
