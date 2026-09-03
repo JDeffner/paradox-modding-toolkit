@@ -6,6 +6,45 @@
  */
 import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
+
+/**
+ * One tradition, as the game's own files describe it beyond what the definition
+ * index can say. Measured in game/common/culture/traditions/*.txt:
+ * `tradition_winter_warriors = { category = combat layers = { 0 = learning
+ * 1 = western 4 = fight.dds } … }`.
+ */
+export interface TraditionInfo {
+  /** `category = combat`: how the game's own Add Tradition view groups them. */
+  category?: string;
+  /**
+   * The icon layers as game-relative FILES, in the index order the engine
+   * stacks them (the folders come from CULTURE_TRADITION_LAYER_PATHS in
+   * common/defines/00_defines.txt). An index that names a folder rather than a
+   * file is one the game randomizes; the host resolves it to that folder's
+   * first entry so the picture is stable while the form is open.
+   */
+  layers: string[];
+}
+
+/**
+ * What the panel read out of the game and mod folders for the pickers, once
+ * per panel: none of it is in paradox/definitionForm, and all of it is what
+ * turns a list of keys into something a modder can recognize.
+ */
+export interface CultureCatalog {
+  /** Tradition key -> its category and its icon layers. */
+  traditions: Record<string, TraditionInfo>;
+  /**
+   * `<key>_desc` for every pillar and tradition that has one. Measured: the
+   * ethos and martial_custom pillars and every tradition localize a desc,
+   * heritage / language / head_determination do not, so a key missing here is
+   * the normal case and not an error.
+   */
+  descs: Record<string, string>;
+  /** The `requires_dlc_flag` values the game's own cultures write. */
+  dlcFlags: string[];
+}
 
 /** How a save reaches the file. */
 export type SaveMode =
@@ -33,10 +72,14 @@ export interface CultureInit {
    * (game/common/named_colors/culture_colors.txt).
    */
   namedColors: Record<string, [number, number, number]>;
+  /** What the game's own files say about the pillars and traditions offered. */
+  catalog: CultureCatalog;
   /** px.calendar, when the workspace configures one: `created` is checked against it. */
   calendar?: CalendarSetting;
   /** No mod folder in the workspace: nothing can be written yet. */
   noMod: boolean;
+  /** No game folder: the pickers still work, but nothing has a picture. */
+  noGame: boolean;
 }
 
 export type HostToApp =
@@ -46,12 +89,18 @@ export type HostToApp =
   | { type: "saved"; name: string }
   /** The save did not happen (cancelled at the file pick, or refused). */
   | { type: "idle" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** The decoded pictures for the asset paths the app asked about. */
+  | CreatorImagesReply;
 
 export type AppToHost =
   | { type: "ready" }
+  /** Start over on a blank culture (the toolbar's New). */
+  | { type: "new" }
   /** Load this culture into the form (the mod's copy first, else the game's). */
   | { type: "load"; name: string }
+  /** Turn game asset paths into pictures the preview and the pickers can show. */
+  | CreatorImagesRequest
   /** Open the Examples Wiki on a name the form shows. */
   /** Open the Examples Wiki; a culture key is no article, so no target is sent. */
   | { type: "openExamples" }

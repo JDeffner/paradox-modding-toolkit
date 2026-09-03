@@ -12,12 +12,15 @@ import { describe, expect, it } from "vitest";
 import { changedProperties, firstValues, parseBlock } from "../src/webviews/shared/scriptBlock";
 import {
   buildBlock,
+  dlcTraditionStatements,
+  dlcTraditionsOf,
   inlineList,
   multiList,
   numberList,
   numbersOf,
   rgbList,
   rgbOf,
+  sameDlcTraditions,
   tokensOf,
   weightList,
   weightRowsOf,
@@ -28,6 +31,12 @@ const BEDOUIN =
 
 const LEVANTINE =
   "levantine = {\n\tcolor = { 0.3 0.95 0.3 }\n\tcreated = 650.1.1\n\tparents = { bedouin assyrian }\n\t\n\tethos = ethos_spiritual\n\theritage = heritage_arabic\n\tlanguage = language_arabic\n\tmartial_custom = martial_custom_male_only\n\thead_determination = head_determination_domain\n\ttraditions = {\n\t\ttradition_philosopher_culture\n\t\ttradition_medicinal_plants\n\t\ttradition_mubarizuns\n\t\ttradition_dryland_dwellers\n\t\ttradition_ce1_ritual_washing\n\t}\n\t\n\tname_list = name_list_levantine\n\n\tcoa_gfx = { arabic_group_coa_gfx } \n\tbuilding_gfx = { arabic_group_building_gfx mena_building_gfx } \n\tclothing_gfx = { dde_abbasid_clothing_gfx mena_clothing_gfx } \n\tunit_gfx = { mena_unit_gfx } \n\thouse_coa_frame = house_frame_13\n\thouse_coa_mask_offset = { 0.0 -0.03 }\n\thouse_coa_mask_scale = { 0.95 0.95 }\n\n\tethnicities = {\n\t\t100 = arab\n\t}\n}";
+
+// The two `dlc_tradition` statements of game/common/culture/cultures/
+// 00_balto_finnic.txt (estonian), verbatim, in a block trimmed to the keys
+// around them: the one key a culture writes MORE THAN ONCE.
+const ESTONIAN =
+  "estonian = {\n\tcolor = { 0.3 0.7 0.7 }\n\t\n\tethos = ethos_bellicose\n\ttraditions = {\n\t\ttradition_music_theory\n\t}\n\t\n\tdlc_tradition = {\n\t\ttrait = tradition_staunch_traditionalists\n\t\trequires_dlc_flag = hybridize_culture\n\t}\n\n\tdlc_tradition = {\n\t\ttrait = tradition_fp1_coastal_warriors\n\t\trequires_dlc_flag = the_northern_lords\n\t\tfallback = tradition_hird\n\t}\n\t\n\tname_list = name_list_estonian\n}";
 
 /** Every key the form binds, with the value the loaded block gives it. */
 function bindAll(source: string): { values: Map<string, string | null>; keys: string[] } {
@@ -115,6 +124,45 @@ describe("culture block writer", () => {
         "\tethnicities = {\n\t\t100 = arab\n\t}\n" +
         "}"
     );
+  });
+
+  it("reads every dlc_tradition a culture writes, and leaves them alone until one moves", () => {
+    const parsed = parseBlock(ESTONIAN)!;
+    const rows = dlcTraditionsOf(parsed);
+    expect(rows).toEqual([
+      {
+        trait: "tradition_staunch_traditionalists",
+        requires_dlc_flag: "hybridize_culture",
+        fallback: "",
+      },
+      {
+        trait: "tradition_fp1_coastal_warriors",
+        requires_dlc_flag: "the_northern_lords",
+        fallback: "tradition_hird",
+      },
+    ]);
+    // Unchanged rows keep both statements, and the blank line between them.
+    const { values, keys } = bindAll(ESTONIAN);
+    const same = new Map([
+      ["dlc_tradition", { lines: dlcTraditionStatements(rows), changed: !sameDlcTraditions(rows, rows) }],
+    ]);
+    expect(buildBlock("estonian", parsed, values, values, keys, same)).toBe(ESTONIAN);
+
+    // A row that moved rewrites the key: both statements, none of the rest.
+    const next = rows.map((r) => ({ ...r }));
+    next[1].fallback = "tradition_seafaring";
+    const after = buildBlock(
+      "estonian",
+      parsed,
+      values,
+      values,
+      keys,
+      new Map([["dlc_tradition", { lines: dlcTraditionStatements(next), changed: true }]])
+    );
+    expect(after).toContain("\t\tfallback = tradition_seafaring\n");
+    expect(after).toContain("\t\ttrait = tradition_staunch_traditionalists\n");
+    expect(after).not.toContain("tradition_hird");
+    expect(after).toContain("\tname_list = name_list_estonian\n");
   });
 
   it("reads the value shapes the vanilla file writes", () => {
