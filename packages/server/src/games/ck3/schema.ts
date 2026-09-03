@@ -110,8 +110,27 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/court_types", kind: "court_type" },
 
   // --- Culture ---
-  { path: "common/culture/cultures", kind: "culture", requiredLoc: ["$"] },
-  { path: "common/culture/pillars", kind: "culture_pillar" },
+  {
+    path: "common/culture/cultures",
+    kind: "culture",
+    requiredLoc: ["$"],
+    // Every one of the 244 vanilla cultures defines all three keys in
+    // game/localization/english/culture/cultures_l_english.yml (`bedouin`,
+    // `bedouin_prefix`, `bedouin_collective_noun`), measured 244/244 in
+    // 2026-09. requiredLoc keeps only `$` because the diagnostic that hangs
+    // off it is the conservative one; a creator writes the whole set.
+    locPatterns: ["$", "$_prefix", "$_collective_noun"],
+  },
+  {
+    path: "common/culture/pillars",
+    kind: "culture_pillar",
+    // One folder, five families: game/common/culture/pillars/_pillars.info
+    // documents `type = ethos/heritage/language/martial` on top of the common
+    // cultural-trait shape, and the files spell it that way
+    // (00_ethos.txt `type = ethos`, 00_martial_custom.txt `type =
+    // martial_custom`, 00_head_determination.txt `type = head_determination`).
+    groupKey: "type",
+  },
   {
     path: "common/culture/traditions",
     kind: "culture_tradition",

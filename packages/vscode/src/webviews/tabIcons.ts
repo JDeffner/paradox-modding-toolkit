@@ -20,6 +20,7 @@ export type TabIconName =
   | "bbcode-preview"
   | "examples-wiki"
   | "trait-creator"
+  | "culture-creator"
   | "wiki"
   | "credits";
 

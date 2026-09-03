@@ -154,7 +154,7 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
-| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, required loc key patterns and icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind, the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, required loc key patterns and icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
@@ -556,6 +556,20 @@ is the script_docs modifier vocabulary hover already reads; `existing` is the
 `paradox/modOverview` walk for that one kind; and `current` is the block's own
 bytes read off disk. A key with no widget in a client is still in `keys`, so a
 form can show it rather than hide it (AD-5).
+
+Two fields answer questions one flat list cannot. An option carries `group`
+when the schema entry for its kind names a `groupKey`: one folder can hold
+several families of the same kind (CK3 keeps all five culture pillars in
+`common/culture/pillars` and tells them apart with `type = ethos` inside each
+block), and `group` is that value read out of the definition, so a client can
+draw one picker per family. A key carries `sampled` when it names values no
+index can answer (a culture's `clothing_gfx` names an art set, its
+`ethnicities` a portrait ethnicity): the distinct values the indexed
+definitions of the kind actually write for it, most used first, measured from
+the files at request time rather than stored. A key whose value differs in
+every definition has no value SET, so past `DEFINITION_FORM_MAX_SAMPLED` (80)
+the field is absent instead of listing everything; a key with `refKinds` never
+carries it, because `options` already answers it.
 
 `paradox/definitionEdit` is the script sibling of `paradox/guiSourceEdit` and
 follows the same contract: the server never writes, `edits` are

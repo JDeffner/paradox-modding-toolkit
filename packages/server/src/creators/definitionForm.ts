@@ -25,6 +25,7 @@
  */
 import * as fs from "fs";
 import {
+  DEFINITION_FORM_MAX_SAMPLED,
   EVENT_VOCABULARY_MAX_VALUES,
   type DefinitionForm,
   type DefinitionFormKey,
@@ -32,7 +33,7 @@ import {
   type EventVocabularyItem,
   type OverviewDef,
 } from "@px-lsp/protocol/protocol";
-import { decode, parseScript, type Statement } from "../parser";
+import { decode, parseScript, type BlockNode, type ValueNode } from "../parser";
 import type { SchemaData } from "../schema/loader";
 import type { KeySpec } from "../schema/types";
 import type { ServerData } from "../serverData";
@@ -56,22 +57,143 @@ function formKeys(specs: Map<string, KeySpec> | undefined): DefinitionFormKey[] 
 }
 
 /**
- * The `name = { ... }` block of `name` in `file`, verbatim. Read from disk, not
- * from the index: the index records where a definition is, the creator needs
- * the bytes so an edit starts from what the file actually says.
+ * One script file's top-level `name = { ... }` blocks and its text, parsed once
+ * per request. Read from disk, not from the index: the index records where a
+ * definition is, a creator needs the bytes so an edit starts from what the file
+ * actually says, and both the group key and the sampled values are read out of
+ * the same parse.
  */
-function blockSource(file: string, name: string): string | null {
+/** One definition: its parsed body, and its `name = { ... }` source verbatim. */
+interface ParsedDef {
+  block: BlockNode;
+  source: string;
+}
+type FileCache = Map<string, Map<string, ParsedDef>>;
+
+function parsedFile(file: string, cache: FileCache): Map<string, ParsedDef> {
+  const seen = cache.get(file);
+  if (seen) return seen;
+  const defs = new Map<string, ParsedDef>();
+  cache.set(file, defs);
   let text: string;
   try {
     text = decode(fs.readFileSync(file)).text;
   } catch {
-    return null;
+    return defs;
   }
-  const stmt = parseScript(text).root.statements.find(
-    (s): s is Statement & { kind: "assignment" } =>
-      s.kind === "assignment" && s.key.text === name && s.value?.kind === "block"
+  for (const s of parseScript(text).root.statements) {
+    if (s.kind !== "assignment" || s.value?.kind !== "block") continue;
+    defs.set(s.key.text, { block: s.value, source: text.slice(s.key.range.start, s.value.range.end) });
+  }
+  return defs;
+}
+
+/** Every definition of `kind` the index holds, as (name, file) pairs. */
+function definitionFiles(data: ServerData, kind: string): { name: string; file: string }[] {
+  const out: { name: string; file: string }[] = [];
+  for (const def of data.index.allDefinitions()) {
+    if (def.kind === kind) out.push({ name: def.name, file: def.file });
+  }
+  return out;
+}
+
+/** The scalar `key = value` of a block, or null when it has none. */
+function scalarOf(block: BlockNode, key: string): string | null {
+  for (const s of block.statements) {
+    if (s.kind === "assignment" && s.key.text === key && s.value?.kind === "scalar") return s.value.text;
+  }
+  return null;
+}
+
+/**
+ * A value worth offering back: a bare name the game writes for this key. Numbers
+ * are weights and coordinates, quoted text is prose, `scope:`/`@` are script
+ * machinery - none of them is a value set a picker can show.
+ */
+function offerable(text: string): boolean {
+  return text !== "" && !/^-?\d+(\.\d+)?$/.test(text) && !text.includes(":") && !text.startsWith("@");
+}
+
+/** The names a value writes: a scalar, or the entries of a one-level list. */
+function namesIn(value: ValueNode, into: (name: string) => void): void {
+  if (value.kind === "scalar") {
+    if (!value.quoted && offerable(value.text)) into(value.text);
+    return;
+  }
+  if (value.kind !== "block") return;
+  for (const s of value.statements) {
+    // `coa_gfx = { a b }` (bare entries) and `ethnicities = { 100 = arab }`
+    // (weighted entries) both name things; a nested block is script, not a name.
+    const inner = s.kind === "value" ? s.value : s.value;
+    if (inner?.kind === "scalar" && !inner.quoted && offerable(inner.text)) into(inner.text);
+  }
+}
+
+/**
+ * Label each option with the family its definition belongs to, for a kind whose
+ * schema entry names the key that says so: one folder holds all five culture
+ * pillars and only `type = ethos` inside a block tells an ethos from a language,
+ * so a creator drawing five pickers has no other way to split the one list.
+ */
+function groupOptions(
+  data: ServerData,
+  schema: SchemaData,
+  kind: string,
+  items: EventVocabularyItem[],
+  cache: FileCache
+): void {
+  const groupKey = schema.entries.find((e) => e.kind === kind)?.groupKey;
+  if (!groupKey) return;
+  const groups = new Map<string, string>();
+  for (const { name, file } of definitionFiles(data, kind)) {
+    const def = parsedFile(file, cache).get(name);
+    const group = def ? scalarOf(def.block, groupKey) : null;
+    if (group !== null) groups.set(name, group);
+  }
+  for (const item of items) {
+    const group = groups.get(item.value);
+    if (group !== undefined) item.group = group;
+  }
+}
+
+/**
+ * What the game itself writes for the keys no definition index can answer: a
+ * culture's `clothing_gfx` names an art set and `ethnicities` names a portrait
+ * ethnicity, neither of which is an indexed definition, so the only honest
+ * source is the files. Measured here rather than stored, so a game patch or a
+ * dependency mod changes the offer without a release.
+ *
+ * A key whose values are different in every definition (a `desc` loc key) has
+ * no value set at all: past the cap it is dropped rather than offered as a list
+ * of everything.
+ */
+function sampledValues(data: ServerData, kind: string, keys: DefinitionFormKey[], cache: FileCache): void {
+  const wanted = keys.filter(
+    (k) => !k.refKinds?.length && !k.values?.startsWith("enum:") && k.values !== "bool"
   );
-  return stmt ? text.slice(stmt.key.range.start, stmt.value!.range.end) : null;
+  if (wanted.length === 0) return;
+  const counts = new Map<string, Map<string, number>>();
+  for (const key of wanted) counts.set(key.key, new Map());
+  let read = 0;
+  for (const { name, file } of definitionFiles(data, kind)) {
+    if (read >= EVENT_VOCABULARY_MAX_VALUES) break;
+    const def = parsedFile(file, cache).get(name);
+    if (!def) continue;
+    read++;
+    for (const s of def.block.statements) {
+      if (s.kind !== "assignment" || !s.value) continue;
+      const bucket = counts.get(s.key.text);
+      if (!bucket) continue;
+      namesIn(s.value, (v) => bucket.set(v, (bucket.get(v) ?? 0) + 1));
+    }
+  }
+  for (const key of wanted) {
+    const bucket = counts.get(key.key)!;
+    if (bucket.size === 0 || bucket.size > DEFINITION_FORM_MAX_SAMPLED) continue;
+    key.sampled = [...bucket.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([value]) => value);
+  }
 }
 
 export function computeDefinitionForm(
@@ -91,14 +213,22 @@ export function computeDefinitionForm(
     if (name !== "") subBlocks[name] = formKeys(specs);
   }
 
+  const files: FileCache = new Map();
+
   // One list per ref kind any key names, so several keys pointing at the same
   // kind share it instead of shipping the list twice.
   const options: Record<string, EventVocabularyItem[]> = {};
   for (const key of keys) {
     for (const refKind of key.refKinds ?? []) {
-      if (!options[refKind]) options[refKind] = definitionsOfKind(data, refKind, inFocus);
+      if (options[refKind]) continue;
+      options[refKind] = definitionsOfKind(data, refKind, inFocus);
+      groupOptions(data, schema, refKind, options[refKind], files);
     }
   }
+
+  // Keys no index can answer (a culture's clothing_gfx, its ethnicities) get
+  // what the indexed definitions of this kind actually write for them.
+  sampledValues(data, kind, keys, files);
 
   const existing: OverviewDef[] = [];
   for (const def of data.index.allDefinitions()) {
@@ -135,9 +265,9 @@ export function computeDefinitionForm(
     // and the vanilla copy only when the mod has none (last-in-wins order).
     const defs = data.index.lookup(wanted).filter((d) => d.kind === kind);
     const def = defs.find((d) => d.source === "mod" && inFocus(d.file)) ?? defs[0];
-    const text = def ? blockSource(def.file, wanted) : null;
-    if (def && text !== null) {
-      form.current = { file: def.file, line: def.line, source: def.source, text };
+    const parsed = def ? parsedFile(def.file, files).get(wanted) : undefined;
+    if (def && parsed) {
+      form.current = { file: def.file, line: def.line, source: def.source, text: parsed.source };
     }
   }
   return form;

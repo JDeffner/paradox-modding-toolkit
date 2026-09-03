@@ -11,6 +11,21 @@
   keeps its own formatting, its comments and everything no field can stand
   for. Custom image converts a PNG into the mod under the trait's name.
   Project panel > Create > Trait Creator, or "Paradox: Trait Creator".
+- **Culture Creator (CK3).** "Paradox: Culture Creator", and the Create group's
+  Culture Creator row, open a form that composes a culture out of the game's
+  own parts: the five pillars as one picker each (the pillars all live in one
+  folder, so the server labels each with the family its own block declares),
+  the traditions as searchable chips with the game's description on every
+  entry, a name list, the art sets and ethnicities with the values the game
+  itself writes for them, a color as a named color or a picked one, and
+  parents plus a creation date for a hybrid or divergent culture. Every other
+  key the game documents is still there, as raw script, and a statement the
+  form has no widget for is kept exactly as it was. Saving asks which file it
+  goes into, writes the block and its three loc keys, and opens the file
+  beside; editing your own culture rewrites only the lines that changed, and a
+  game culture is duplicated into your mod by default or overridden with a
+  warning. Round-trips two vanilla cultures byte for byte, and ck3-tiger finds
+  no problem in what it writes.
 - **Groundwork for visual content creators.** The Project panel's Create
   group now lists the creators the active game has (CK3: Trait Creator,
   Dynasty Legacy Creator, Culture Creator, Dynasty Tree), and the host side

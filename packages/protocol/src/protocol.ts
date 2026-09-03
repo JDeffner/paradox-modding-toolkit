@@ -1496,10 +1496,24 @@ export interface EventVocabularyItem {
   doc?: string;
   /** Dimmer right-hand label: where the value comes from (mod / vanilla / a kind). */
   hint?: string;
+  /**
+   * The family this definition belongs to, when one folder holds several and
+   * the schema entry names the key that says so (`type = ethos` in
+   * common/culture/pillars). Set by {@link definitionFormRequest} only, so a
+   * creator can draw one picker per family; absent everywhere else.
+   */
+  group?: string;
 }
 /** Caps: an editor lists a page at a time, and these ride on every open. */
 export const EVENT_VOCABULARY_MAX_TOKENS = 600;
 export const EVENT_VOCABULARY_MAX_VALUES = 400;
+
+/**
+ * Most values {@link DefinitionFormKey.sampled} carries, and the point past
+ * which a key is taken to have no value SET at all (a key whose value differs
+ * per definition is a free field, not a list to offer).
+ */
+export const DEFINITION_FORM_MAX_SAMPLED = 80;
 
 /**
  * Request: the value set a VALUE belongs to, resolved through the definition
@@ -1716,6 +1730,16 @@ export interface DefinitionFormKey {
    * keys naming the same kind share one list.
    */
   refKinds?: string[];
+  /**
+   * The values the indexed definitions of this kind actually write for this
+   * key, most used first, for keys no definition index can answer (a culture's
+   * `clothing_gfx` names an art set, not a definition). Measured from the game
+   * and mod files the server has indexed, at request time, so a patch changes
+   * the list without a release; absent when the key has no refKinds-free value
+   * set of at most {@link DEFINITION_FORM_MAX_SAMPLED} entries, which is the
+   * honest answer for a key whose value is different in every definition.
+   */
+  sampled?: string[];
 }
 
 export interface DefinitionForm {

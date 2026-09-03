@@ -419,6 +419,12 @@
         "title": "Dynasty Tree"
       },
       {
+        "command": "px.createCulture",
+        "category": "Paradox",
+        "title": "Culture Creator",
+        "icon": "$(globe)"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report",
@@ -1107,6 +1113,7 @@
         },
         {
           "command": "px.openDynastyTree",
+          "command": "px.createCulture",
           "when": "px.isCk3Workspace"
         },
         {

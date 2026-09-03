@@ -22,6 +22,8 @@ export const TAB_ICONS: Record<string, IconName> = {
   "examples-wiki": "bookOpen",
   // The Create-group row this tab belongs to (games/ck3/meta.ts creators).
   "trait-creator": "sparkles",
+  // The Create-group row's glyph: ck3Meta.creators names "globe" for culture.
+  "culture-creator": "globe",
   wiki: "library",
   credits: "heart",
   workshop: "cloudUpload",

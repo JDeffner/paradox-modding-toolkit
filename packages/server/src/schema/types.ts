@@ -124,6 +124,14 @@ export interface SchemaEntry {
    * name-derived icon and a creator offers no icon picker for it.
    */
   iconFolder?: string;
+  /**
+   * Key inside a definition's body whose value sorts this kind's definitions
+   * into families, when one folder holds several (`type = ethos` in
+   * common/culture/pillars). A creator that draws one picker per family reads
+   * it through paradox/definitionForm; nothing else does. Absent = the kind is
+   * one flat list.
+   */
+  groupKey?: string;
   /** Scope(s) a definition of this type pushes as root in its script blocks (Phase 3). */
   rootScopes?: string[];
   /** Include definitions of this kind in completion lists (default true).
