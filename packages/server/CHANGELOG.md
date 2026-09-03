@@ -8,6 +8,15 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- `paradox/definitionForm`: `existing` lists every definition of the kind
+  (mod first, then the game's and a dependency's, each with its `source`);
+  block keys and stated value sets (`bool`, `enum:`) carry an `example` too, a
+  block body collapsed to one line of at most 120 characters; `conditions`
+  carries the value lists of the triggers a no-code condition builder offers
+  (`has_dlc_feature`, `has_game_rule`, scripted triggers), read from the
+  trigger's own docs and the index. A `Valid …:` doc line is read after its
+  LAST colon: the docs parser keeps its own label in front, which swallowed the
+  first value of every list.
 - `paradox/modifierFormats`: how every modifier prints, read from the game's
   `common/modifier_definition_formats` files, its loc and `gui/texticons.gui`,
   behind the profile (`GameMeta.modifierFormats`, CK3 only). A modifier with no

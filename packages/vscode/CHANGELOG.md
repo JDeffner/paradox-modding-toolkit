@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+- **Every creator says where it saves, and numbers drag on their label.** The
+  top bar of each creator reads `Saves to <mod> › <folder>/<file>` from the
+  moment the form loads, and clicking it changes the target before the save.
+  The generated script is an ordinary section, open by default, copied by a
+  click on it or by the copy button beside Save. A number field drags on its
+  label, so the input is only for typing. The Open menu lists the game's own
+  definitions next to the mod's, marked by source.
+- **Coat of Arms Designer: one door, six tiers, no freeze, many emblems at
+  once.** The dashboard offers the designer once, under Create. House and
+  dynasty frames are sprite sheets of six tiers; the preview draws one cell
+  (tier 2 by default) with a tier picker beside the frame picker. Textures
+  decode on worker threads: opening the designer on a large mod used to stall
+  the extension host for 1.7 s, now the longest stall is 9 ms. Shift-click
+  and Ctrl+A select several emblems, a layer can be locked, a selection moves,
+  scales and rotates as one box, aligns and distributes, mirrors, duplicates
+  and nudges with the arrow keys; a grid with centre lines snaps positions,
+  and X and Y scale stay matched by default.
+- **Trait Creator: the preview prints what the game prints.** The category
+  frame sits under the picture (the frame textures are opaque in the centre),
+  the picture is the tooltip's 52 px, every opinion key prints through the
+  game's own sentences, modifiers the game hides from players (`hidden = yes`
+  in the format files, the `ai_*` family) sit in their own group, and every
+  key `_traits.info` documents has a control, so a loaded vanilla trait round
+  trips with nothing left as raw script. Every field, dropdown and script area
+  shows a real vanilla value as its placeholder.
+- **Culture Creator: pillars, ethos and traditions as the culture window
+  draws them.** Pillar icons are tinted the way `icon_flat_standard` tints
+  them (an additive pass of the game's colour sheet), the ethos is the wide
+  banner behind the rough-edge mask, tradition tiles keep the window's 276:138
+  shape, and the preview panel starts wider. A tradition chip opens the
+  Tradition Creator on that tradition, and New tradition opens it blank.
+- **Tradition Creator.** A creator for `common/culture/traditions`: name and
+  description, category, an icon composed from the game's own layer folders
+  with a picker per layer and a live preview, cost, parameters as switches
+  with their tooltip sentences, modifier blocks with the player's lines,
+  conditions as script with real examples. Keys are written in the order the
+  game writes them; the output passes ck3-tiger clean.
+- **Dynasty Legacy Creator without script.** `is_shown` and a perk's
+  `can_be_picked` are rows over the DLC features, game rules and scripted
+  triggers the game files use; `ai_chance` is a number; a perk's `effect` is
+  built from tooltip lines, modifiers and flags, or copied from a game perk as
+  a starting point, with raw script kept as the advanced fallback that round
+  trips unchanged. The game's own tracks open for Duplicate or Override, both
+  save targets are visible, and Escape closes the perk panel.
 - **The content creators are rebuilt for people who do not script.** Every
   value the toolkit's index knows is a picker (traits, pillars, traditions,
   name lists, modifiers, doctrines, houses, parents), every empty input shows
