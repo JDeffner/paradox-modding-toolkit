@@ -7,6 +7,10 @@
  *    empty;
  *  - a `trigger_event` written inside a scripted_effect body belonged to no
  *    event, so the event that calls that effect looked like it fires nothing.
+ *
+ * The node set is still the namespace's DEFINITIONS. `connectedOnly` (on unless
+ * the request says `false`) then drops the ones no edge touches, so the tests
+ * that care about an edge-less event ask for it with `connectedOnly: false`.
  */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
@@ -137,12 +141,17 @@ afterAll(() => {
 
 describe("event graph node selection", () => {
   it("lists every event of a namespace, including ones no edge touches", () => {
-    const graph = computeEventGraph(data, { namespace: "ns" });
+    const graph = computeEventGraph(data, { namespace: "ns", connectedOnly: false });
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(["ns.1", "ns.2", "ns.9"]);
   });
 
+  it("leaves the edge-less event out by default, so big mods stay cheap", () => {
+    const graph = computeEventGraph(data, { namespace: "ns" });
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual(["ns.1", "ns.2"]);
+  });
+
   it("lists the mod's definitions with no query at all", () => {
-    const ids = computeEventGraph(data, {}).nodes.map((n) => n.id);
+    const ids = computeEventGraph(data, { connectedOnly: false }).nodes.map((n) => n.id);
     expect(ids).toContain("ns.9");
   });
 
