@@ -312,10 +312,9 @@ export function friendlyError(e: unknown, meta: GameMeta): string {
       `Steam must be running and logged in to an account that owns ${meta.name}.`
     );
   }
-  // Steam's EResult phrases are accurate but bare ("limit exceeded"); say
-  // what the phrase usually means for a Workshop upload.
-  const hint = explainSteamError(msg);
-  return hint ? `${msg} (${hint})` : msg;
+  // steamwand names the raw code ("SubmitItemUpdate failed:
+  // k_EResultAccessDenied"); say what it means, code kept for support.
+  return explainSteamError(msg) ?? msg;
 }
 
 export function registerWorkshop(

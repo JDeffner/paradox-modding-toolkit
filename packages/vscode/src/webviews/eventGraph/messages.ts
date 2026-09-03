@@ -27,6 +27,8 @@ export interface UiState {
   titleMode: "raw" | "loc";
   /** Draw the event's theme illustration behind its card. */
   banner: boolean;
+  /** Ask only for definitions that have an edge (the server never reads the rest). */
+  connectedOnly?: boolean;
   /** Where the simulation window was left, in page pixels. */
   simX?: number;
   simY?: number;
