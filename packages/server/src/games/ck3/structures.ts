@@ -838,6 +838,21 @@ const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: stri
     // other cultures (bedouin is the top-level key of the same file).
     traditions: { refKinds: ["culture_tradition"] },
     parents: { refKinds: ["culture"] },
+    // The five pillar keys all name definitions of common/culture/pillars
+    // (00_arabic.txt: `ethos = ethos_stoic heritage = heritage_arabic
+    // language = language_arabic martial_custom = martial_custom_male_only
+    // head_determination = head_determination_domain`, each of them a
+    // top-level key in common/culture/pillars/00_*.txt). One folder, so one
+    // ref kind; the pillar's own `type` sorts the five pickers apart (the
+    // schema entry's groupKey).
+    ethos: { refKinds: ["culture_pillar"] },
+    heritage: { refKinds: ["culture_pillar"] },
+    language: { refKinds: ["culture_pillar"] },
+    martial_custom: { refKinds: ["culture_pillar"] },
+    head_determination: { refKinds: ["culture_pillar"] },
+    // `name_list = name_list_bedouin` (00_arabic.txt) names a top-level key of
+    // common/culture/name_lists (00_arabic.txt line 1 there).
+    name_list: { refKinds: ["name_list"] },
   },
   scheme_type: {
     category: { values: "enum:personal|contract|hostile" },

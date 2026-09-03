@@ -19,6 +19,8 @@ export const TAB_ICONS: Record<string, IconName> = {
   "gui-tree": "listTree",
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
+  // The Create-group row's glyph: ck3Meta.creators names "globe" for culture.
+  "culture-creator": "globe",
   wiki: "library",
   credits: "heart",
   workshop: "cloudUpload",

@@ -52,6 +52,7 @@ import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
@@ -93,6 +94,12 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  definitionEditRequest,
+  definitionFormRequest,
+  type DefinitionEditParams,
+  type DefinitionEditResult,
+  type DefinitionForm,
+  type DefinitionFormParams,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
@@ -981,6 +988,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gameMissing: cfg.gamePath === null,
       });
     }),
+    // A creator row of the Create group. The profile decides which games have
+    // one (GameMeta.creators); a game with no culture folder gets an honest
+    // "nothing to write" from the form request rather than an empty panel.
+    vscode.commands.registerCommand("px.createCulture", (arg?: unknown) => {
+      const active = cfgForActive();
+      if (!metaFor(active.gameId).creators?.some((c) => c.kind === "culture")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the Culture Creator is not built for ${metaFor(active.gameId).name} yet.`
+        );
+        return;
+      }
+      CultureCreatorPanel.show(
+        context,
+        active,
+        {
+          fetchForm: (params: DefinitionFormParams) =>
+            lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          applyEdits: (params: DefinitionEditParams) =>
+            lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          lookupLoc,
+        },
+        creatorName(arg)
+      );
+    }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
     vscode.commands.registerCommand("px.tigerCreateBaseline", async () => {
@@ -1138,6 +1169,16 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
   return scoped(ns ? { namespace: ns[1] } : {});
+}
+
+/** The definition a creator command was asked to open, or nothing. */
+function creatorName(arg: unknown): string | undefined {
+  if (typeof arg === "string" && arg.trim() !== "") return arg.trim();
+  if (arg && typeof arg === "object" && "name" in arg) {
+    const name = (arg as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim() !== "") return name.trim();
+  }
+  return undefined;
 }
 
 /** The article a `px.showExamplesWiki` argument names, or nothing. The argument

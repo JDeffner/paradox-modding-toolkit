@@ -8,6 +8,19 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- `paradox/definitionForm` answers two more things a creator cannot work
+  out for itself, both measured rather than stored. An option carries
+  `group` when the schema entry declares a `groupKey`, read out of the
+  definition's own block: CK3's `culture_pillar` sets it to `type`, which
+  is what splits one folder of 163 pillars into the five families
+  `_pillars.info` documents. A key with no `refKinds` carries `sampled`,
+  the distinct values the indexed definitions of the kind write for it,
+  most used first and dropped past 80 (a key whose value differs per
+  definition is a free field, not a list): this is the only honest source
+  for a culture's art sets and ethnicities, which no index can answer.
+  CK3's schema also gains culture's full loc key set (`$`, `$_prefix`,
+  `$_collective_noun`, all three defined by 244 of 244 vanilla cultures)
+  and the per-kind reference rows for the five pillar keys and `name_list`.
 - `paradox/definitionForm` and `paradox/definitionEdit`: the read and the
   write a visual content creator needs. The form is assembled from the
   schema table, the harvested `_*.info` structures, the definition index

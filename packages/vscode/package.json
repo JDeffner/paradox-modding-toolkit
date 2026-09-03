@@ -403,6 +403,12 @@
         "title": "Open Flag Builder"
       },
       {
+        "command": "px.createCulture",
+        "category": "Paradox",
+        "title": "Culture Creator",
+        "icon": "$(globe)"
+      },
+      {
         "command": "px.modReport",
         "category": "Paradox",
         "title": "Show Mod Report",
@@ -1080,6 +1086,10 @@
         {
           "command": "px.openFlagBuilder",
           "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.createCulture",
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.modReport",

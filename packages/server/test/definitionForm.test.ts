@@ -20,6 +20,37 @@ px_stoic = {
 }
 `;
 
+// Two pillars of different families in ONE file, the way
+// common/culture/pillars keeps them, and two cultures naming them.
+const PILLARS_TXT = `ethos_stoic = {
+	type = ethos
+}
+
+language_arabic = {
+	type = language
+}
+`;
+
+const CULTURES_TXT = `px_bedouin = {
+	ethos = ethos_stoic
+	language = language_arabic
+	clothing_gfx = { mena_clothing_gfx }
+	house_coa_mask_scale = { 0.95 0.95 }
+	ethnicities = {
+		100 = arab
+	}
+}
+
+px_levantine = {
+	ethos = ethos_stoic
+	clothing_gfx = { mena_clothing_gfx dde_abbasid_clothing_gfx }
+	ethnicities = {
+		50 = arab
+		50 = mediterranean
+	}
+}
+`;
+
 let dir: string;
 let traitsFile: string;
 const data = new ServerData();
@@ -29,10 +60,18 @@ beforeAll(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "px-form-"));
   traitsFile = path.join(dir, "px_traits.txt");
   fs.writeFileSync(traitsFile, TRAITS_TXT, "utf8");
+  const pillarsFile = path.join(dir, "px_pillars.txt");
+  fs.writeFileSync(pillarsFile, PILLARS_TXT, "utf8");
+  const culturesFile = path.join(dir, "px_cultures.txt");
+  fs.writeFileSync(culturesFile, CULTURES_TXT, "utf8");
   data.index.addAll([
     { name: "px_stoic", kind: "trait", file: traitsFile, line: 1, source: "mod" },
     { name: "brave", kind: "trait", file: "vanilla.txt", line: 0, source: "vanilla" },
     { name: "craven", kind: "trait", file: "vanilla.txt", line: 5, source: "vanilla" },
+    { name: "ethos_stoic", kind: "culture_pillar", file: pillarsFile, line: 0, source: "mod" },
+    { name: "language_arabic", kind: "culture_pillar", file: pillarsFile, line: 4, source: "mod" },
+    { name: "px_bedouin", kind: "culture", file: culturesFile, line: 0, source: "mod" },
+    { name: "px_levantine", kind: "culture", file: culturesFile, line: 10, source: "mod" },
   ]);
 });
 
@@ -88,6 +127,31 @@ describe("computeDefinitionForm", () => {
     expect(form.folder).toBe("common/culture/cultures");
     expect(form.keys.find((k) => k.key === "traditions")?.refKinds).toEqual(["culture_tradition"]);
     expect(form.keys.find((k) => k.key === "parents")?.refKinds).toEqual(["culture"]);
+  });
+
+  it("labels each pillar option with the family its own block declares", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    // One folder holds all five families; `type = ethos` inside the block is
+    // the only thing that tells them apart (schema groupKey on culture_pillar).
+    expect(form.keys.find((k) => k.key === "ethos")?.refKinds).toEqual(["culture_pillar"]);
+    expect(form.keys.find((k) => k.key === "name_list")?.refKinds).toEqual(["name_list"]);
+    expect(form.options.culture_pillar.map((i) => [i.value, i.group])).toEqual([
+      ["ethos_stoic", "ethos"],
+      ["language_arabic", "language"],
+    ]);
+  });
+
+  it("samples the values the indexed cultures write for keys no index answers", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    const key = (k: string): string[] | undefined => form.keys.find((x) => x.key === k)?.sampled;
+    // Most used first: both cultures write mena, one adds dde_abbasid.
+    expect(key("clothing_gfx")).toEqual(["mena_clothing_gfx", "dde_abbasid_clothing_gfx"]);
+    // Weighted entries name the ethnicity, not the weight.
+    expect(key("ethnicities")).toEqual(["arab", "mediterranean"]);
+    // Numbers are coordinates, not a value set to offer.
+    expect(key("house_coa_mask_scale")).toBeUndefined();
+    // A key the index already answers keeps its option list and samples nothing.
+    expect(key("ethos")).toBeUndefined();
   });
 
   it("answers null for a kind the active game's schema does not have", () => {
