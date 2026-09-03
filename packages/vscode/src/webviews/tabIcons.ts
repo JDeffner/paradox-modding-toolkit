@@ -12,6 +12,7 @@ import * as vscode from "vscode";
 export type TabIconName =
   | "gui-editor"
   | "flag-builder"
+  | "coa-designer"
   | "event-graph"
   | "dynasty-tree"
   | "gui-tree"

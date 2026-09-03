@@ -48,6 +48,15 @@ export function flagBuilderSupported(gameId: string): boolean {
 }
 
 /**
+ * Whether the game's own Coat of Arms designer can be rebuilt for this game.
+ * The profile says the game ships one; the caller still checks that the files
+ * are on disk, since a workspace with no game folder has no catalog to show.
+ */
+export function coaDesignerSupported(gameId: string): boolean {
+  return metaFor(gameId).coaDesigner === true;
+}
+
+/**
  * Whether the game ships `_*.info` format docs inside its own files. Only CK3
  * does; for the other games "format docs" means the vanilla files of the same
  * folder plus a search on the game's modding wiki.

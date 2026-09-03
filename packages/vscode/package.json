@@ -403,6 +403,11 @@
         "title": "Open Flag Builder"
       },
       {
+        "command": "px.openCoaDesigner",
+        "category": "Paradox",
+        "title": "Open Coat of Arms Designer"
+      },
+      {
         "command": "px.createTrait",
         "category": "Paradox",
         "title": "Open Trait Creator",
@@ -1226,6 +1231,10 @@
         {
           "command": "px.openFlagBuilder",
           "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.openCoaDesigner",
+          "when": "px.isCk3Workspace && px.coaDesignerSupported"
         },
         {
           "command": "px.createTrait",
