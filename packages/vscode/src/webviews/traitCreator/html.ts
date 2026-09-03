@@ -70,7 +70,7 @@ ${uiCss}
   .skills { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
   .skill { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .skill > span {
-    font-size: var(--px-text-xs); color: var(--px-muted-fg); overflow-wrap: anywhere; line-height: 1.2;
+    font-size: var(--px-text-xs); color: var(--px-muted-fg); overflow-wrap: break-word; line-height: 1.2;
   }
   .skill > input { width: 100%; }
   /* Two opinion fields per row; one column when the panel is narrow. */

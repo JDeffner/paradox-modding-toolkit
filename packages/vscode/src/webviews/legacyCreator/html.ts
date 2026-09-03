@@ -46,7 +46,7 @@ ${uiCss}
   #problem { margin: 8px 0; }
 
   /* ------------------------------------------------------- the legacy row */
-  #legacyRow { display: flex; align-items: stretch; gap: 12px; }
+  #legacyRow { display: flex; align-items: stretch; gap: 12px; min-width: 0; overflow-x: auto; padding-bottom: 4px; }
   #trackBox {
     flex: 0 0 auto; display: flex; align-items: center; gap: 10px; width: 260px; min-width: 0;
   }

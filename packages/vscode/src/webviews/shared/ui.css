@@ -403,7 +403,9 @@ body.vscode-light .px-textarea {
   gap: 8px;
 }
 .px-field > .px-label {
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: a key wraps at the <wbr> after each underscore
+     (fields.ts) and only splits a word when nothing else fits. */
+  overflow-wrap: break-word;
   line-height: 1.3;
 }
 .px-field > :not(.px-label) {
