@@ -123,10 +123,11 @@ describe("computeModifierFormats", () => {
 
   it("reads the flags out of the format block and defaults the rest", () => {
     const formats = all();
-    expect(formats.diplomacy).toMatchObject({ label: "Diplomacy", decimals: 0, color: "bad" });
+    expect(formats.diplomacy).toMatchObject({ label: "Diplomacy", decimals: 0, color: "good" });
     expect(formats.stress_gain_mult).toMatchObject({ decimals: 0, percent: true, color: "bad" });
     expect(formats.hidden_modifier).toMatchObject({ hidden: true, noSign: true });
-    // _definitions.info: decimals defaults to 2 and color to bad.
+    // _definitions.info: decimals defaults to 2. Color defaults to good, which
+    // the file's own 113 explicit `color = bad` lines show (modifierFormats.ts).
     expect(formats.monthly_income).toMatchObject({ decimals: 2, color: "good" });
     // Only modifiers: an effect token is not one.
     expect(formats.add_gold).toBeUndefined();
