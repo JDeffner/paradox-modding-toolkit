@@ -407,9 +407,6 @@ export class WorkshopPanel {
       case "reload":
         await this.postInfo();
         return;
-      case "openWorkshopSettings":
-        await vscode.commands.executeCommand("workbench.action.openSettings", "px.workshop");
-        return;
       case "notify":
         this.notify(message.message, message.warn ? "warn" : "info");
         return;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **The Workshop panel fits a sidebar-open window.** One column until both
+  columns get real room, two columns from about 1160px, and a centered cap
+  on very wide panes. Labels sit above their fields. The folder-change
+  control is gone; an info tip on Files names the folder and the
+  `px.workshop.dir` setting that moves it.
 - **The Wiki is a hub.** Its front page is a set of cards that lead to the
   Examples Wiki, Format Docs, Image Guidelines, Credits, and two new wiki
   subpages: Diagnostics (every code with its severity) and Mod Report. The

@@ -54,11 +54,15 @@ ${uiCss}
   #bar > div { height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
   #bar.indeterminate > div { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
   #main { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  /* The editor area is usually the window minus the Activity Bar and an open
+     Project sidebar (about 1000 to 1500px). One column until both cards get
+     about 560px (2 * 560 + gap + padding = 1164px); capped and centered when
+     the sidebar is closed. */
   #page {
-    max-width: 1480px; margin: 0 auto; padding: 12px 16px 40px;
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start;
+    max-width: 1400px; margin: 0 auto; padding: 12px 16px 40px;
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start;
   }
-  @media (max-width: 880px) { #page { grid-template-columns: minmax(0, 1fr); } }
+  @media (min-width: 1164px) { #page { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .section {
     display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); background: var(--px-card, transparent);
@@ -89,9 +93,11 @@ ${uiCss}
   #previewInfo:hover, #previewInfo:focus-visible { opacity: 1; background: var(--px-muted); }
   #previewInfo .px-icon { width: 13px; height: 13px; }
   #fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .field-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: center; }
-  .field-row > .px-label { text-align: right; }
-  .field-row .px-input { width: 100%; }
+  /* Stacked label: the label on its own line above the control. */
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .field > .px-label { display: flex; align-items: center; gap: 4px; }
+  .field .px-input { width: 100%; }
+  .field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   #tags { display: flex; flex-wrap: wrap; gap: 4px; }
   #itemMeta { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px; }
@@ -202,39 +208,39 @@ ${BBPREV_CSS}
           <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image, copied into the mod.">${icon("image")} Change…</button>
         </div>
         <div id="fields">
-          <div class="field-row">
+          <div class="field">
             <span class="px-label">Title</span>
             <input id="title" class="px-input" spellcheck="false" data-tip="The item's title, from the descriptor. Editing here writes it." />
           </div>
-          <div class="field-row">
-            <span class="px-label">Mod version</span>
-            <div class="px-row" style="gap:8px;align-items:center">
-              <input id="version" class="px-input" spellcheck="false" style="width:130px" data-tip="Your mod's own version, from the descriptor." data-tip-wrap />
-              <span class="px-grow"></span>
+          <div class="field-pair">
+            <div class="field">
+              <span class="px-label">Mod version</span>
+              <input id="version" class="px-input" spellcheck="false" data-tip="Your mod's own version, from the descriptor." data-tip-wrap />
+            </div>
+            <div class="field">
               <span class="px-label">Game version</span>
-              <input id="supported" class="px-input" spellcheck="false" style="width:130px" data-tip="The game version the mod declares it works with." data-tip-wrap />
+              <input id="supported" class="px-input" spellcheck="false" data-tip="The game version the mod declares it works with." data-tip-wrap />
             </div>
           </div>
-          <div class="field-row">
+          <div class="field">
             <span class="px-label">Visibility</span>
-            <button id="visibility" class="px-btn px-dropdown" data-variant="outline" style="width:auto;min-width:180px"><span></span>${icon("chevronDown")}</button>
+            <button id="visibility" class="px-btn px-dropdown" data-variant="outline" style="width:auto;min-width:180px;align-self:flex-start"><span></span>${icon("chevronDown")}</button>
           </div>
-          <div class="field-row">
+          <div class="field">
             <span class="px-label">Tags</span>
             <div id="tags" style="align-items:center"></div>
           </div>
-          <div class="field-row">
-            <span class="px-label">Files</span>
+          <div class="field">
+            <span class="px-label">Files
+              <button id="filesInfo" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="Where the listing files live" data-tip="The listing lives in .px-toolkit/workshop inside the mod. The px.workshop.dir setting moves it." data-tip-wrap>${icon("info")}</button>
+            </span>
             <div id="filesBox" class="px-row" style="gap:6px;align-items:center;min-width:0"></div>
           </div>
-          <div class="field-row">
+          <div class="field">
             <span class="px-label">Item</span>
             <div id="itemIdBox" class="px-row" style="gap:6px;align-items:center"></div>
           </div>
-          <div class="field-row">
-            <span class="px-label"></span>
-            <div id="itemMeta"></div>
-          </div>
+          <div id="itemMeta"></div>
         </div>
       </div>
       <div id="statsSection" hidden><div id="stats"></div></div>
@@ -255,15 +261,13 @@ ${BBPREV_CSS}
           <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
           <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
         </div>
-        <div class="field-row" style="grid-template-columns: 92px minmax(0,1fr); align-items:start">
-          <span class="px-label" style="margin-top:6px">Changenote</span>
-          <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
-            <textarea id="note" class="px-textarea" spellcheck="false" placeholder="Shown on the item's Change Notes tab"></textarea>
-            <div class="hintline">
-              <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-              <span class="px-grow"></span>
-              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
-            </div>
+        <div class="field" style="margin-top:4px">
+          <span class="px-label">Changenote</span>
+          <textarea id="note" class="px-textarea" spellcheck="false" placeholder="Shown on the item's Change Notes tab"></textarea>
+          <div class="hintline">
+            <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+            <span class="px-grow"></span>
+            <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
           </div>
         </div>
       </div>
@@ -276,7 +280,7 @@ ${BBPREV_CSS}
         <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
         <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
       </div>
-      <div class="field-row" style="margin-top:8px">
+      <div class="field" style="margin-top:8px">
         <span class="px-label">Videos</span>
         <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
       </div>
@@ -287,9 +291,12 @@ ${BBPREV_CSS}
       <div id="dlcBox"></div>
       <div class="px-label" style="margin:10px 0 4px">Required items</div>
       <div id="itemsBox"></div>
-      <div class="hintline" style="margin-top:4px">
-        <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto">${icon("plus")} Add item${icon("chevronDown")}</button>
-        <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link" style="width:220px" />
+      <div class="field" style="margin-top:6px">
+        <span class="px-label">Add a required item</span>
+        <div class="px-row" style="gap:6px;align-items:center">
+          <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link, then Enter" style="flex:1 1 auto;min-width:0;max-width:320px" />
+          <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;flex:0 0 auto" data-tip="Pick an installed Workshop mod">${icon("plus")} Installed${icon("chevronDown")}</button>
+        </div>
       </div>
     </div>
     <div class="section wide">

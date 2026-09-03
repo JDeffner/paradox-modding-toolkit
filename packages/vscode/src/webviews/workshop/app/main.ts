@@ -339,15 +339,7 @@ function renderFilesRow(): void {
     hint.setAttribute("data-tip", info.workshopDir);
   }
   badge.setAttribute("data-tip-wrap", "");
-  const gear = document.createElement("button");
-  gear.className = "px-btn";
-  gear.dataset.variant = "ghost";
-  gear.dataset.size = "icon-xs";
-  gear.setAttribute("data-tip", "Open the settings for the listing folder and the changelog.");
-  gear.setAttribute("data-tip-wrap", "");
-  gear.append(iconEl("settings"));
-  gear.addEventListener("click", () => send({ type: "openWorkshopSettings" }));
-  box.append(badge, hint, gear);
+  box.append(badge, hint);
 }
 
 function renderStats(): void {

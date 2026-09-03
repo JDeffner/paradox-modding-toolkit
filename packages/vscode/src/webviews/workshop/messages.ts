@@ -150,8 +150,6 @@ export type AppToHost =
   | { type: "openListingFile"; lang: string | null }
   /** Re-read everything from disk (the app already dropped its pending save). */
   | { type: "reload" }
-  /** Open the settings UI filtered to px.workshop. */
-  | { type: "openWorkshopSettings" }
   /** Surface a message as a VS Code notification (the app has no UI for it). */
   | { type: "notify"; message: string; warn?: boolean }
   /** Download the chosen parts of the live listing into the workshop folder (confirmed app-side). */
