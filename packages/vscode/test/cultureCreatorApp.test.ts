@@ -110,7 +110,6 @@ function boot(): Booted {
         type: "init",
         init: {
           form,
-          saveMod: "mymod",
           locLanguage: "english",
           prefix: "px",
           namedColors: { bedouin: [26, 191, 26] },

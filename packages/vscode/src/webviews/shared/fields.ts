@@ -813,6 +813,12 @@ export interface LocFieldOptions extends FieldOptions {
   key: string;
   value?: string;
   multiline?: boolean;
+  /**
+   * What the key's own hover says. A creator names the field the key follows
+   * ("the culture key in the top-left field"), because "the name" is only
+   * obvious to whoever wrote the form.
+   */
+  keyTip?: string;
 }
 
 /** A loc pair: the key the game generates, and the text the player reads. */
@@ -829,7 +835,8 @@ export function locField(options: LocFieldOptions): Field<string> {
   if (options.placeholder) input.placeholder = options.placeholder;
   input.addEventListener("change", () => fire(input.value));
   const key = el("code", "px-mono px-xs px-muted", options.key);
-  key.dataset.tip = "The loc key the game looks up. It follows the name, so it is not editable.";
+  key.dataset.tip =
+    options.keyTip ?? "The loc key the game looks up. It follows the name, so it is not editable.";
   key.dataset.tipWrap = "";
   box.append(input, key);
   return {
