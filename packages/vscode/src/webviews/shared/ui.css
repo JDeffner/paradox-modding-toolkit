@@ -1557,3 +1557,10 @@ button.px-swatch:focus-visible {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* The hidden attribute wins over every component's own display rule, so
+   `el.hidden = true` works on a px-badge or a px-toggle-group as it does on a
+   div (a class rule with display:flex would otherwise keep drawing it). */
+[hidden] {
+  display: none !important;
+}
