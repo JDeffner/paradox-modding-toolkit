@@ -51,6 +51,12 @@ export type HostToApp =
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
   | { type: "toast"; message: string };
 
+/** The Flag Builder is a port of Chris Kaiser's PDX Flag Editor (see THIRD-PARTY-NOTICES.md). */
+export const FLAG_EDITOR_CREDIT = {
+  text: "Ported from PDX Flag Editor by Chris Kaiser",
+  url: "https://github.com/kaiser-chris/pdx-flag-builder",
+} as const;
+
 export type AppToHost =
   | { type: "ready" }
   /** `keys` are `<kind>/<file>`; thumbs are small decodes for the browser grid. */
@@ -61,6 +67,8 @@ export type AppToHost =
   | { type: "save"; name: string; script: string; modPath: string; sourceFile?: string }
   | { type: "paste" }
   | { type: "readClipboard" }
+  /** Open the upstream credit link (the host allows only the known URL). */
+  | { type: "openCredit" }
   | { type: "exportPng"; name: string; dataUrl: string };
 
 export const THUMB_DIM = 96;

@@ -5,6 +5,7 @@
  */
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
+import { FLAG_EDITOR_CREDIT } from "./messages";
 
 export interface FlagBuilderHtmlOptions {
   scriptSrc: string;
@@ -48,11 +49,13 @@ ${uiCss}
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #stageTools { left: 8px; }
+  #stageTools { left: 8px; padding-right: 10px; }
   #stageInfo { right: 8px; gap: 8px; }
   #resetName[hidden] { display: none; }
   #origin { padding-left: 8px; }
   #origin:empty { display: none; }
+  #credit { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-decoration: none; padding-left: 8px; cursor: pointer; }
+  #credit:hover { color: var(--px-fg); text-decoration: underline; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 92px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
@@ -114,13 +117,13 @@ ${uiCss}
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="top" data-tip-wrap>${icon("unlock")}</button>
-        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
+        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="hint" class="px-muted px-xs"></span>
+        <span id="origin" class="px-muted px-xs"></span>
       </div>
       <div id="stageInfo">
-        <span id="origin" class="px-muted px-xs"></span>
+        <a id="credit" href="#" data-tip="Open the original project on GitHub" data-tip-side="top" data-tip-wrap>${FLAG_EDITOR_CREDIT.text}</a>
         <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
       </div>
     </div>

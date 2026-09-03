@@ -20,6 +20,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   "event-sim": "flaskConical",
   "examples-wiki": "bookOpen",
   wiki: "library",
+  credits: "heart",
   workshop: "cloudUpload",
   "bbcode-preview": "eye",
 };

@@ -40,12 +40,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           tip: "Graph of what fires what in the focused mod.",
         },
         {
-          label: "Mod Report",
-          command: "px.modReport",
-          icon: "fileText",
-          tip: "Content counts, localization coverage and problems.",
-        },
-        {
           label: "Simulate Event",
           command: "px.simulateEvent",
           icon: "flaskConical",
@@ -82,23 +76,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
     {
-      label: "Share",
-      items: [
-        {
-          label: "Steam Workshop Panel",
-          command: "px.openWorkshopManager",
-          icon: "cloudUpload",
-          tip: "The mod's Workshop listing, and where uploads happen.",
-        },
-        {
-          label: "Open Workshop Page",
-          command: "px.openWorkshopPage",
-          icon: "externalLink",
-          tip: "Open the mod's Workshop page in the browser.",
-        },
-      ],
-    },
-    {
       label: "Create",
       items: [
         {
@@ -112,6 +89,23 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.newContent",
           icon: "plus",
           tip: "Scaffold an event, decision or trait into the right folder.",
+        },
+      ],
+    },
+    {
+      label: "Share",
+      items: [
+        {
+          label: "Steam Workshop Panel",
+          command: "px.openWorkshopManager",
+          icon: "cloudUpload",
+          tip: "The mod's Workshop listing, and where uploads happen.",
+        },
+        {
+          label: "Open Workshop Page",
+          command: "px.openWorkshopPage",
+          icon: "externalLink",
+          tip: "Open the mod's Workshop page in the browser.",
         },
       ],
     },
@@ -131,10 +125,22 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           tip: "The toolkit's reference pages in one searchable place.",
         },
         {
+          label: "Credits",
+          command: "px.openCredits",
+          icon: "heart",
+          tip: "Every project the toolkit builds on, with links.",
+        },
+        {
           label: "Examples Wiki",
           command: "px.showExamplesWiki",
           icon: "bookOpen",
           tip: "Search every trigger, effect and datafunction the game has.",
+        },
+        {
+          label: "Mod Report",
+          command: "px.modReport",
+          icon: "fileText",
+          tip: "Content counts, localization coverage and problems.",
         },
       ],
     },
