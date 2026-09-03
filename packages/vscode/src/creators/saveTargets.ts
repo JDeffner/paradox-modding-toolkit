@@ -26,6 +26,19 @@ export function defaultDefinitionFileName(prefix: string, kind: string): string 
 }
 
 /**
+ * The file a creator saves into when nobody picks another, so the top bar can
+ * name the target from the moment the form loads instead of asking at save
+ * time: the file an edited definition came from, else the default name.
+ *
+ * `sourceFile` is a bare file name of the mod's own folder; anything else (a
+ * vanilla file, a path) is ignored, because a save may not write there.
+ */
+export function defaultTargetFileName(opts: { sourceFile?: string; prefix: string; kind: string }): string {
+  const source = opts.sourceFile?.trim();
+  return source && isPlainScriptFileName(source) ? source : defaultDefinitionFileName(opts.prefix, opts.kind);
+}
+
+/**
  * Why this file name must not be used, or null when it is fine.
  *
  * Script databases are last-in-wins per FILE NAME, not per definition: a mod

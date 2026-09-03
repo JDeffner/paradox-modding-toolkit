@@ -25,7 +25,15 @@ import type {
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
 import { wireImages, type ImageRoot } from "../../creators/images";
-import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
+import {
+  applyDefinitionEdits,
+  defaultSaveTarget,
+  openSaveTarget,
+  pickSaveTargetChoice,
+  samePath,
+  writeLocValues,
+  type SaveTargetChoice,
+} from "../../creators/save";
 import { readModName } from "@px-lsp/protocol/modName";
 import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
@@ -75,6 +83,8 @@ export class TraitCreatorPanel {
   private disposed = false;
   /** The form last answered: the save flow needs its folder and loc patterns. */
   private form: DefinitionForm | null = null;
+  /** The target the modder picked, which outranks the default until reset. */
+  private chosen: SaveTargetChoice | null = null;
 
   private constructor(context: vscode.ExtensionContext, options: TraitCreatorOptions) {
     this.options = options;
@@ -174,13 +184,13 @@ export class TraitCreatorPanel {
       type: "init",
       init: {
         form,
-        modLabel: cfg.modPath ? path.basename(cfg.modPath) : null,
         locLanguage: cfg.locLanguage,
         prefix: scaffoldPrefix(cfg),
         iconKeys: this.iconKeys(form),
         ...(this.problem() ? { problem: this.problem()! } : {}),
       },
     });
+    this.postTarget();
     await this.postModifierFormats();
   }
 
@@ -230,7 +240,11 @@ export class TraitCreatorPanel {
         });
         if (form) {
           this.form = form;
+          // The definition that was opened decides where a save goes, so a
+          // target the modder picked for the previous one does not carry over.
+          this.chosen = null;
           this.post({ type: "form", form });
+          this.postTarget();
         }
         return;
       }
@@ -247,6 +261,13 @@ export class TraitCreatorPanel {
         return;
       case "save":
         await this.save(message.save);
+        return;
+      case "copy":
+        await vscode.env.clipboard.writeText(message.text);
+        this.post({ type: "toast", message: "Script copied to the clipboard." });
+        return;
+      case "changeTarget":
+        await this.changeTarget();
         return;
       case "openFile":
         await openAt(message.file, message.line);
@@ -396,6 +417,44 @@ export class TraitCreatorPanel {
     });
   }
 
+  // -- where it saves ------------------------------------------------------
+
+  /**
+   * Where the next save goes: what the modder picked, else the default the
+   * rules give (the file a mod definition was loaded from, else the mod of
+   * record under the kind's default file name).
+   */
+  private targetChoice(): SaveTargetChoice | null {
+    if (this.chosen) return this.chosen;
+    const current = this.form?.current;
+    return defaultSaveTarget(this.options.cfg, {
+      kind: "trait",
+      ...(current && current.source === "mod" ? { sourcePath: current.file } : {}),
+    });
+  }
+
+  /** Tell the app where it saves, so its top bar can say so. */
+  private postTarget(): void {
+    const choice = this.targetChoice();
+    const folder = this.form?.folder;
+    this.post({
+      type: "target",
+      target: choice && folder ? { modLabel: choice.modLabel, path: `${folder}/${choice.file}` } : null,
+    });
+  }
+
+  /** The target line was clicked: the same picker the save used to open. */
+  private async changeTarget(): Promise<void> {
+    if (!this.form) return;
+    const picked = await pickSaveTargetChoice(this.options.cfg, this.form.folder, {
+      kind: "trait",
+      ...(this.form.current ? { sourceFile: path.basename(this.form.current.file) } : {}),
+    });
+    if (!picked) return;
+    this.chosen = picked;
+    this.postTarget();
+  }
+
   // -- saving --------------------------------------------------------------
 
   private async save(save: TraitSave): Promise<void> {
@@ -403,11 +462,24 @@ export class TraitCreatorPanel {
     if (!this.form) return;
     const folder = this.form.folder;
 
-    // An edit rewrites the mod's own file; everything else asks where to go.
+    // No question here: the target has been on screen since the form loaded.
+    const choice = this.targetChoice();
+    if (!choice) {
+      this.post({ type: "toast", message: "No mod folder to save into.", variant: "destructive" });
+      this.post({ type: "saved", ok: false, name: save.name });
+      return;
+    }
+    const wanted = path.join(choice.modPath, ...folder.split("/"), choice.file);
+    const source =
+      save.mode === "edit" && this.form.current?.source === "mod" ? this.form.current.file : null;
+
+    // Writing back into the file the definition already lives in: the block is
+    // there, so the edit can touch only the lines that moved.
+    const inPlace = source !== null && samePath(wanted, source);
     let abs: string;
     let text: string;
-    if (save.mode === "edit" && this.form.current && this.form.current.source === "mod") {
-      abs = this.form.current.file;
+    if (inPlace) {
+      abs = source!;
       try {
         text = (await vscode.workspace.openTextDocument(abs)).getText();
       } catch (err) {
@@ -416,10 +488,7 @@ export class TraitCreatorPanel {
         return;
       }
     } else {
-      const target = await pickSaveTarget(cfg, folder, {
-        kind: "trait",
-        ...(save.sourceFile ? { sourceFile: save.sourceFile } : {}),
-      });
+      const target = await openSaveTarget(cfg, folder, choice);
       if (!target) {
         this.post({ type: "saved", ok: false, name: save.name });
         return;
@@ -430,7 +499,7 @@ export class TraitCreatorPanel {
 
     const uri = vscode.Uri.file(abs).toString();
     const ops =
-      save.mode === "edit" && save.changed
+      inPlace && save.changed
         ? [{ op: "setProperties" as const, name: save.name, properties: save.changed }]
         : [{ op: "upsertBlock" as const, name: save.name, text: save.block }];
     const result = await actions.editDefinition({ uri, text, ops });

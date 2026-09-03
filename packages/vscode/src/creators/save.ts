@@ -17,15 +17,35 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { GuiTextEdit } from "@px-lsp/protocol/protocol";
 import type { PxConfig } from "../config";
+import { readModName } from "@px-lsp/protocol/modName";
 import { writeLocSmart, type LocLookup } from "../locCommands";
 import { scaffoldPrefix } from "../scaffold/command";
-import { BOM, defaultDefinitionFileName, isPlainScriptFileName, vanillaNameClash } from "./saveTargets";
+import {
+  BOM,
+  defaultDefinitionFileName,
+  defaultTargetFileName,
+  isPlainScriptFileName,
+  vanillaNameClash,
+} from "./saveTargets";
 
 export interface SaveTargetOptions {
   /** Definition kind, for the default file name (`mymod_traits.txt`). */
   kind: string;
   /** The file the definition was loaded from; offered first when it is in the mod. */
   sourceFile?: string;
+}
+
+/**
+ * Where a save will go, before anything is opened or created: a creator SHOWS
+ * this in its top bar from the moment the form loads, so the modder can change
+ * it before saving rather than being asked afterwards.
+ */
+export interface SaveTargetChoice {
+  modPath: string;
+  /** The mod's own name, as its descriptor gives it. */
+  modLabel: string;
+  /** Bare file name inside the kind's folder. */
+  file: string;
 }
 
 export interface SaveTarget {
@@ -86,22 +106,63 @@ function warnNoGame(): void {
     });
 }
 
+/** Whether an absolute file lives under a mod root. */
+function isInside(root: string, file: string): boolean {
+  const rel = path.relative(root, file);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 /**
- * Ask where a definition goes and open the file for editing.
+ * Whether two absolute paths name the same file. `path.relative` compares the
+ * way the platform does, so a Windows path that differs only in case or in
+ * separators still matches.
+ */
+export function samePath(a: string, b: string): boolean {
+  return path.relative(a, b) === "";
+}
+
+/**
+ * Where a definition goes when nobody picks anything, resolved WITHOUT a
+ * prompt, so a creator can show its target from the moment its form loads.
+ *
+ * The rules are the picker's own: a mod definition being edited writes back to
+ * the file it came from, in that file's own mod; everything else goes to the
+ * mod of record under `<prefix>_<kind>s.txt`. The vanilla-name refusal is not
+ * applied here but at save (`openSaveTarget`): a default name never hits it,
+ * and a refusal for something the modder has not chosen yet is only noise.
+ */
+export function defaultSaveTarget(
+  cfg: PxConfig,
+  opts: SaveTargetOptions & { sourcePath?: string }
+): SaveTargetChoice | null {
+  const mods = writableMods(cfg);
+  if (mods.length === 0) return null;
+  const owner = opts.sourcePath ? mods.find((m) => isInside(m, opts.sourcePath!)) : undefined;
+  const modPath = owner ?? mods[0];
+  return {
+    modPath,
+    modLabel: readModName(modPath),
+    file: defaultTargetFileName({
+      ...(owner ? { sourceFile: path.basename(opts.sourcePath!) } : {}),
+      prefix: scaffoldPrefix(cfg),
+      kind: opts.kind,
+    }),
+  };
+}
+
+/**
+ * Ask where a definition goes. Nothing is created or opened, so a modder who
+ * changes a creator's target and then does not save leaves no empty file.
  *
  * `folder` is the schema path the form request answered with, root-relative and
  * already carrying a game's load-stage prefix where it has one (EU5's
  * `in_game/`), so nothing is prepended to it here.
- *
- * A file name that already exists in the GAME's copy of the same folder is
- * refused: script databases are last-in-wins per file name, so it would replace
- * the whole vanilla file instead of adding one entry.
  */
-export async function pickSaveTarget(
+export async function pickSaveTargetChoice(
   cfg: PxConfig,
   folder: string,
   opts: SaveTargetOptions
-): Promise<SaveTarget | null> {
+): Promise<SaveTargetChoice | null> {
   const mods = writableMods(cfg);
   if (mods.length === 0) {
     warnNoMod();
@@ -110,7 +171,7 @@ export async function pickSaveTarget(
   let modPath = mods[0];
   if (mods.length > 1) {
     const picked = await vscode.window.showQuickPick(
-      mods.map((m) => ({ label: path.basename(m), description: m })),
+      mods.map((m) => ({ label: readModName(m), description: m })),
       { placeHolder: "Which mod does this go into?" }
     );
     if (!picked) return null;
@@ -148,22 +209,49 @@ export async function pickSaveTarget(
     if (!typed) return null;
     file = typed.trim();
   }
-  // The list itself can only offer mod files, but a typed name gets the same
-  // guard the input box applied, so no path can slip through either route.
-  if (!isPlainScriptFileName(file)) return null;
-  const clash = vanillaNameClash(file, gameFiles, folder);
+  return { modPath, modLabel: readModName(modPath), file };
+}
+
+/**
+ * Open a chosen target for editing, creating the file when it is new.
+ *
+ * A file name that already exists in the GAME's copy of the same folder is
+ * refused here, at the last step before anything is written: script databases
+ * are last-in-wins per file name, so it would replace the whole vanilla file
+ * instead of adding one entry. The name is checked again too, because a choice
+ * shown in a webview comes back as text from one.
+ */
+export async function openSaveTarget(
+  cfg: PxConfig,
+  folder: string,
+  choice: SaveTargetChoice
+): Promise<SaveTarget | null> {
+  if (!isPlainScriptFileName(choice.file)) return null;
+  const gameFiles = cfg.gamePath ? listTxt(path.join(cfg.gamePath, ...folder.split("/"))) : [];
+  const clash = vanillaNameClash(choice.file, gameFiles, folder);
   if (clash) {
     void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${clash}`);
     return null;
   }
 
-  const abs = path.join(dir, file);
+  const dir = path.join(choice.modPath, ...folder.split("/"));
+  const abs = path.join(dir, choice.file);
   if (!fs.existsSync(abs)) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(abs, BOM, "utf8");
   }
   const doc = await vscode.workspace.openTextDocument(abs);
-  return { modPath, file, abs, text: doc.getText() };
+  return { modPath: choice.modPath, file: choice.file, abs, text: doc.getText() };
+}
+
+/** Ask where a definition goes and open the file for editing. */
+export async function pickSaveTarget(
+  cfg: PxConfig,
+  folder: string,
+  opts: SaveTargetOptions
+): Promise<SaveTarget | null> {
+  const choice = await pickSaveTargetChoice(cfg, folder, opts);
+  return choice ? openSaveTarget(cfg, folder, choice) : null;
 }
 
 /**

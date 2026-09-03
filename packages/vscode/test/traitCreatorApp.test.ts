@@ -46,11 +46,13 @@ const FORM = traitForm as unknown as DefinitionForm;
 
 const INIT: TraitCreatorInit = {
   form: FORM,
-  modLabel: "cultivation",
   locLanguage: "english",
   prefix: "px",
   iconKeys: ["_frame_education.dds", "brave.dds", "craven.dds"],
 };
+
+/** Where the host says the next save goes, shown in the top bar. */
+const TARGET = { modLabel: "cultivation", path: "common/traits/px_traits.txt" };
 
 /**
  * A slice of what `paradox/modifierFormats` answers for CK3: the game prints
@@ -89,6 +91,8 @@ function boot(init: TraitCreatorInit = INIT): Booted {
     window.dispatchEvent(new window.MessageEvent("message", { data: message }));
   };
   send({ type: "init", init });
+  // The host resolves where a save lands and says so as the form loads.
+  send({ type: "target", target: TARGET });
   return {
     window,
     document: window.document,
@@ -105,7 +109,7 @@ function boot(init: TraitCreatorInit = INIT): Booted {
       [...window.document.querySelectorAll("#sections .px-label, #sections .skill > span, .kept > code")].map(
         (l) => l.textContent ?? ""
       ),
-    script: () => window.document.getElementById("script")?.textContent ?? "",
+    script: () => window.document.querySelector(".px-script > pre")?.textContent ?? "",
   };
 }
 
@@ -172,6 +176,7 @@ describe("the Trait Creator boots on the real form", () => {
     const app = boot();
     expect(app.document.querySelector<HTMLInputElement>("#name")!.value).toBe("px_trait");
     expect(app.document.getElementById("target")!.textContent).toContain("cultivation");
+    expect(app.document.getElementById("target")!.textContent).toContain("common/traits/px_traits.txt");
     expect(app.document.getElementById("source")!.textContent).toBe("New");
   });
 

@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultDefinitionFileName,
+  defaultTargetFileName,
   isPlainScriptFileName,
   vanillaNameClash,
 } from "../src/creators/saveTargets";
@@ -16,6 +17,25 @@ describe("defaultDefinitionFileName", () => {
     expect(defaultDefinitionFileName("agot", "culture")).toBe("agot_cultures.txt");
     // `dynastys` is not a word; the one irregular the creators' kinds hit.
     expect(defaultDefinitionFileName("mymod", "dynasty")).toBe("mymod_dynasties.txt");
+  });
+});
+
+describe("defaultTargetFileName", () => {
+  it("writes an edited definition back to the file it came from", () => {
+    expect(defaultTargetFileName({ sourceFile: "10_my_traits.txt", prefix: "px", kind: "trait" })).toBe(
+      "10_my_traits.txt"
+    );
+  });
+
+  it("falls back to the kind's default name when nothing was loaded", () => {
+    expect(defaultTargetFileName({ prefix: "px", kind: "trait" })).toBe("px_traits.txt");
+    expect(defaultTargetFileName({ sourceFile: "  ", prefix: "px", kind: "trait" })).toBe("px_traits.txt");
+  });
+
+  it("ignores a source that is not a bare .txt name: a save may not write there", () => {
+    expect(defaultTargetFileName({ sourceFile: "../game/00_traits.txt", prefix: "px", kind: "trait" })).toBe(
+      "px_traits.txt"
+    );
   });
 });
 

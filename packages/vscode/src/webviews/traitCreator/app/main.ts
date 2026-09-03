@@ -39,6 +39,8 @@ import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 import { menu, toast, confirmDialog, type MenuItem } from "../../shared/overlay";
+import { scriptSection } from "../../shared/scriptSection";
+import { saveTargetLine } from "../../shared/saveTarget";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
@@ -172,11 +174,23 @@ const modeButton = byId<HTMLButtonElement>("mode");
 const saveButton = byId<HTMLButtonElement>("save");
 const revealButton = byId<HTMLButtonElement>("reveal");
 const sectionsBox = byId("sections");
-const targetLabel = byId("target");
 const problemBox = byId("problem");
 const tipBox = byId("tip");
-const scriptBox = byId("script");
 const previewButton = byId<HTMLButtonElement>("togglePreview");
+
+/** Where the next save lands, shown from the moment the form loads. */
+const target = saveTargetLine(() => post({ type: "changeTarget" }));
+target.set(null);
+byId("target").append(target.el);
+
+/** The block a save will write, as a section of the preview panel. */
+const script = scriptSection({
+  note: "This is what your mod file will contain.",
+  onCopy: (text) => post({ type: "copy", text }),
+});
+byId("scriptSlot").replaceWith(script.el);
+byId("scriptCopy").replaceWith(script.copyButton);
+
 /** The name field's own tip, restored when a typed name stops being wrong. */
 const NAME_TIP = nameInput.dataset.tip ?? "";
 
@@ -225,8 +239,18 @@ function paintDropdown(button: HTMLButtonElement, value: string, placeholder: st
   else button.dataset.placeholder = "";
 }
 
-/** A number input that scrubs (px-ui rule 5) and commits on change. */
-function numberInput(value: number | null, placeholder: string, commit: (v: number | null) => void) {
+/**
+ * A number input that commits on change. It scrubs (px-ui rule 5) by its
+ * `handle`: the label or caption the number is drawn under, so typing in the
+ * box never moves the value. A row with no name of its own (a modifier row's
+ * value) passes nothing and drags on the input itself.
+ */
+function numberInput(
+  value: number | null,
+  placeholder: string,
+  commit: (v: number | null) => void,
+  handle?: HTMLElement
+) {
   const input = document.createElement("input");
   input.className = "px-input";
   input.dataset.size = "sm";
@@ -236,7 +260,12 @@ function numberInput(value: number | null, placeholder: string, commit: (v: numb
   input.value = value === null ? "" : String(value);
   const read = (): number | null => (input.value.trim() === "" ? null : Number(input.value));
   input.addEventListener("change", () => commit(read()));
-  scrubbable(input, { step: 1, onChange: () => undefined, onCommit: () => commit(read()) });
+  scrubbable(input, {
+    step: 1,
+    ...(handle ? { handle } : {}),
+    onChange: () => undefined,
+    onCommit: () => commit(read()),
+  });
   return input;
 }
 
@@ -374,17 +403,21 @@ function pickField(spec: TraitFieldSpec, value: string): Field<string> {
   };
 }
 
-/** A plain number row, in the shared `.px-field` grid. */
+/** A plain number row, in the shared `.px-field` grid; the label drags it. */
 function numberField(spec: TraitFieldSpec, value: number | null): Field<number | null> {
   const listeners: ((v: number | null) => void)[] = [];
-  const input = numberInput(value, placeholderFor(spec) ?? "", (v) => listeners.forEach((fn) => fn(v)));
   const row = node("div", "px-field");
   const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
+  const input = numberInput(
+    value,
+    placeholderFor(spec) ?? "",
+    (v) => listeners.forEach((fn) => fn(v)),
+    label
+  );
   const box = node("div", "px-row");
   box.style.maxWidth = "140px";
   box.append(input);
@@ -419,7 +452,9 @@ function skillsRow(list: readonly TraitFieldSpec[]): HTMLElement {
       (value) => {
         state.values[spec.key] = value;
         refreshPreview();
-      }
+      },
+      // The caption over the box is this number's label: it is what drags.
+      caption
     );
     input.setAttribute("aria-label", spec.key);
     input.dataset.key = spec.key;
@@ -590,7 +625,6 @@ function fieldRow(spec: TraitFieldSpec, control: HTMLElement): HTMLElement {
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
   row.append(label, control);
   return row;
@@ -789,7 +823,7 @@ function previewIcon(): string | null {
 }
 
 function refreshPreview(): void {
-  scriptBox.textContent = buildBlock();
+  script.set(buildBlock());
   const category = String(state.values.category ?? "");
   const frame = frameTexture(category);
   if (frame) askForIcons([frame]);
@@ -1037,13 +1071,25 @@ byId("new").onclick = () => {
   applyForm(blank, defaultName());
 };
 
+/** Where a listed definition comes from, in the words the pickers use. */
+const SOURCE_HINT: Record<string, string> = {
+  mod: "this mod",
+  vanilla: "the game",
+  parent: "a dependency",
+};
+
 byId("open").onclick = () => {
   const items = [
-    ...(form?.existing ?? []).map((def) => ({
-      value: def.name,
-      label: def.label || def.name,
-      hint: def.label ? def.name : "this mod",
-    })),
+    // Every trait the index has, the mod's own first: a modder opens a game
+    // trait to duplicate or override it as often as their own to edit it.
+    ...(form?.existing ?? []).map((def) => {
+      const where = SOURCE_HINT[def.source ?? "mod"] ?? def.source ?? "";
+      return {
+        value: def.name,
+        label: def.label || def.name,
+        hint: def.label ? `${def.name} · ${where}` : where,
+      };
+    }),
     ...(form?.options.trait ?? [])
       .filter((item) => !(form?.existing ?? []).some((def) => def.name === item.value))
       .map((item) => ({
@@ -1085,9 +1131,6 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   switch (message.type) {
     case "init": {
       init = message.init;
-      targetLabel.textContent = message.init.modLabel
-        ? `Saving into ${message.init.modLabel} (${message.init.locLanguage})`
-        : "";
       problemBox.hidden = message.init.problem === undefined;
       problemBox.textContent = message.init.problem ?? "";
       applyForm(message.init.form);
@@ -1095,6 +1138,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     }
     case "form":
       applyForm(message.form);
+      break;
+    case "target":
+      target.set(message.target);
       break;
     case "modifierFormats":
       // The formats reach a modifier row's label, so the whole form is redrawn

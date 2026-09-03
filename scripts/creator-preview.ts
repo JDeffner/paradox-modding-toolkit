@@ -285,11 +285,16 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
               type: "init",
               init: {
                 form: f,
-                modLabel: path.basename(modPath),
                 locLanguage: "english",
                 prefix: "cult",
                 iconKeys: iconKeys(f),
               },
+            },
+            // The host resolves where a save lands; here the default name is
+            // enough to show the line the panel draws.
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_traits.txt` },
             },
             { type: "modifierFormats", formats: formats?.formats ?? null },
           ];

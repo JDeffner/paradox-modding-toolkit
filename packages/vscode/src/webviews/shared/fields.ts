@@ -143,17 +143,24 @@ export function keyLabel(text: string): HTMLSpanElement {
   return label;
 }
 
-/** The label + control grid row every field shares. */
-function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
+/** The label + control grid row every field shares, with its label: a number
+ *  field drags on the label, so the builder needs the element back. */
+function labelledRow(
+  options: FieldOptions,
+  control: HTMLElement
+): { row: HTMLElement; label: HTMLSpanElement } {
   const row = el("div", "px-field");
   const label = keyLabel(options.label);
   if (options.doc) {
     label.dataset.tip = options.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
   row.append(label, control);
-  return row;
+  return { row, label };
+}
+
+function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
+  return labelledRow(options, control).row;
 }
 
 function emitter<T>(): { listeners: ((value: T) => void)[]; fire: (value: T) => void } {
@@ -302,7 +309,8 @@ export interface NumberFieldOptions extends FieldOptions {
   step?: number;
 }
 
-/** A number that drags (scrub.ts). Blank is `null`: the key is not written. */
+/** A number whose LABEL drags it (scrub.ts). Blank is `null`: the key is not
+ *  written. */
 export function numberField(options: NumberFieldOptions): Field<number | null> {
   const { listeners, fire } = emitter<number | null>();
   const step = options.step ?? 1;
@@ -315,13 +323,20 @@ export function numberField(options: NumberFieldOptions): Field<number | null> {
   input.value = options.value === null || options.value === undefined ? "" : String(options.value);
   const read = (): number | null => (input.value.trim() === "" ? null : Number(input.value));
   input.addEventListener("change", () => fire(read()));
-  scrubbable(input, { step, onChange: () => undefined, onCommit: () => fire(read()) });
 
   const box = el("div", "px-row");
   box.style.maxWidth = "140px";
   box.append(input);
+  // The label is the drag handle, so the input is only ever typed in.
+  const { row, label } = labelledRow(options, box);
+  scrubbable(input, {
+    step,
+    handle: label,
+    onChange: () => undefined,
+    onCommit: () => fire(read()),
+  });
   return {
-    el: fieldRow(options, box),
+    el: row,
     get: read,
     set: (value) => {
       input.value = value === null ? "" : String(value);
@@ -756,6 +771,7 @@ export function modifierListField(options: ModifierListFieldOptions): Field<Modi
         fire(read());
       };
       value.addEventListener("change", commit);
+      // An inline pair has no label of its own, so the input stays the handle.
       scrubbable(value, { step: 0.1, onChange: () => undefined, onCommit: commit });
       const drop = document.createElement("button");
       drop.className = "px-btn";

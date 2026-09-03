@@ -354,11 +354,25 @@ body.vscode-light .px-textarea {
   font-size: var(--px-text-sm);
   border-radius: var(--px-radius-md);
 }
-.px-input.px-scrub:not(:focus) {
+/* The drag handle of a number (scrub.ts): its label where the field has one,
+   the input itself where it has none. A label that drags says so with the
+   cursor and must not select its own text under the pointer. */
+.px-scrub {
   cursor: ew-resize;
+}
+.px-input.px-scrub:focus {
+  cursor: text;
+}
+.px-label.px-scrub,
+span.px-scrub {
+  user-select: none;
 }
 .px-input[data-scrubbing] {
   border-color: var(--px-ring);
+}
+.px-label[data-scrubbing],
+span.px-scrub[data-scrubbing] {
+  color: var(--px-fg);
 }
 .px-input[type="number"] {
   font-variant-numeric: tabular-nums;
@@ -390,6 +404,14 @@ body.vscode-light .px-textarea {
   font-size: var(--px-text-sm);
   font-weight: 500;
   color: var(--px-muted-fg);
+}
+/* A label carrying the game's own doc explains itself on hover; a label that
+   drags its number (scrub.ts) says that instead. */
+.px-label[data-tip] {
+  cursor: help;
+}
+.px-label.px-scrub {
+  cursor: ew-resize;
 }
 /* Label column, control column. The label column is FIXED so every row in a
    form lines up, and it WRAPS: a definition key is as long as the game made it
@@ -1563,6 +1585,79 @@ button.px-swatch:focus-visible {
 }
 *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* The generated script, as a section of the form rather than a fold
+   (scriptSection.ts). The whole block is one copy target, so it says so on
+   hover and lifts the way a row does. */
+.px-script {
+  display: flex;
+  flex-direction: column;
+  cursor: copy;
+}
+.px-script > .px-panel-title {
+  padding: 0 2px;
+  border-bottom: 1px solid var(--px-border);
+}
+.px-script-hint {
+  font-size: var(--px-text-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0;
+  transition: opacity var(--px-ease);
+}
+.px-script:hover .px-script-hint {
+  opacity: 1;
+}
+.px-script > pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--px-muted);
+  border-radius: var(--px-radius-md);
+  font-family: var(--px-font-mono);
+  font-size: var(--px-text-xs);
+  white-space: pre;
+  color: var(--px-fg);
+}
+.px-script:hover > pre {
+  background: color-mix(in oklch, var(--px-muted), var(--px-fg) 4%);
+}
+.px-script-note {
+  padding: 4px 2px 0;
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-xs);
+}
+
+/* Where the next save lands, in a creator's top bar (saveTarget.ts): a quiet
+   line until it is hovered, because it is a statement first and a button
+   second. */
+.px-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 340px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: none;
+  color: var(--px-muted-fg);
+  font: inherit;
+  font-size: var(--px-text-xs);
+  cursor: pointer;
+  text-align: left;
+}
+.px-target:hover {
+  background: var(--px-muted);
+  color: var(--px-fg);
+}
+.px-target > .px-target-path {
+  font-family: var(--px-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The hidden attribute wins over every component's own display rule, so

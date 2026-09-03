@@ -15,7 +15,9 @@ user's VS Code theme. No framework, no Tailwind.
 | `overlay.ts` | `popover`, `menu` (the `<select>` replacement), `confirmDialog`, `toast`. |
 | `sidePanel.ts` | Resizable, collapsible side panel; owner persists width/collapsed. |
 | `sortable.ts` | Pointer-drag reordering of `.px-item` rows (ghost + FLIP slide). |
-| `scrub.ts` | Press-and-drag on number inputs (pointer lock, Shift x10, Alt x0.1). |
+| `scrub.ts` | Press-and-drag a number: the field's LABEL is the handle, the input where there is none (pointer lock, Shift x10, Alt x0.1). |
+| `scriptSection.ts` | The "Script" section a creator shows its generated block in: click to copy, plus the copy button for the top bar. |
+| `saveTarget.ts` | The top bar's "Saves to <mod> > <folder>/<file>" line; clicking it asks the host to change the target. |
 | `colorPicker.ts` | SV square + hue bar + hex, in a popover. |
 | `tips.ts` | `installTips()`: the one `data-tip` runtime. Call it once per page (an inlined-script page ships it with `tipScript(nonce)`). |
 
@@ -86,7 +88,8 @@ Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
 4. **Dropdowns are menus.** `menu()` with a filter box past 8 items,
    keyboard navigation, swatches or a second description line when the
    label alone is ambiguous. Clicking the trigger again closes it.
-5. **Numbers scrub.** Any numeric field drags horizontally; a click types.
+5. **Numbers scrub.** A numeric field drags horizontally BY ITS LABEL, so the
+   input is only ever typed in; a number with no label drags on the input.
    Undo steps are committed values, not keystrokes.
 6. **Lists reorder by drag** (`sortable()`): a clone follows the pointer,
    the row ghosts in place, neighbours slide. No arrow buttons, no

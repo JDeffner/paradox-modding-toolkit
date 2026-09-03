@@ -38,7 +38,8 @@ ${uiCss}
   #name { width: 200px; font-family: var(--px-font-mono); }
   /* A dropdown fills its field cell by default; in a toolbar it is a button. */
   #mode { width: auto; }
-  #target { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* The save target line (shared/saveTarget.ts) sits in the toolbar. */
+  #target { display: flex; min-width: 0; }
   #body { flex: 1 1 auto; display: flex; min-height: 0; }
   #form { flex: 1 1 auto; overflow-y: auto; min-width: 0; }
   #sections {
@@ -120,18 +121,11 @@ ${uiCss}
   }
   .tip-rel img { width: 20px; height: 20px; object-fit: contain; }
   .tip-note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #script {
-    margin: 0; padding: 8px 10px; overflow: auto; max-height: 260px;
-    background: var(--px-muted); border-radius: var(--px-radius-md);
-    font-family: var(--px-font-mono); font-size: var(--px-text-xs); white-space: pre;
-  }
   #problem {
     margin: 12px 16px; padding: 10px 12px; border: 1px solid var(--px-border);
     border-radius: var(--px-radius-md); background: var(--px-muted);
     font-size: var(--px-text-sm);
   }
-  details > summary { cursor: pointer; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  details[open] > summary { margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -146,6 +140,8 @@ ${uiCss}
       data-tip="Open an existing trait in this form">${icon("folderOpen")}</button>
     <button id="reveal" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden
       data-tip="Open the file this trait comes from">${icon("fileText")}</button>
+    <!-- The script section's copy button lands here (shared/scriptSection.ts). -->
+    <span id="scriptCopy"></span>
     <span class="px-grow"></span>
     <span id="target"></span>
     <button id="mode" class="px-btn px-dropdown" data-variant="outline" data-size="sm" hidden
@@ -166,10 +162,7 @@ ${uiCss}
       <div class="px-sidepanel-body">
         <div id="sideHead">Preview</div>
         <div id="tip"></div>
-        <details id="scriptBox">
-          <summary>What gets written</summary>
-          <pre id="script"></pre>
-        </details>
+        <div id="scriptSlot"></div>
       </div>
     </div>
   </div>
