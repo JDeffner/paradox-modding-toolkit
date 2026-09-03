@@ -161,6 +161,11 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+/* A lone button in a stack keeps its own width: stretched to the column, a
+   ghost "Add" button reads as centered text under the list it belongs to. */
+.px-stack > .px-btn {
+  align-self: flex-start;
+}
 svg.px-icon {
   width: 16px;
   height: 16px;
