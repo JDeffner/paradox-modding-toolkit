@@ -356,7 +356,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const requireFlagBuilder = (): boolean => {
     if (flagBuilderSupported(cfg.gameId)) return true;
     void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${metaFor(cfg.gameId).name}.`
+      `Paradox Modding Toolkit: the Flag Builder has no coat-of-arms format for ${metaFor(cfg.gameId).name} yet.`
     );
     return false;
   };

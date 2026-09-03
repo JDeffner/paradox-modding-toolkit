@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **The Flag Builder opens for Crusader Kings III.** `Paradox: Open Flag
+  Builder` and `Paradox: New Coat of Arms…` now work in a CK3 workspace, which
+  is where the dynasty, house, landed-title and character targets belong.
+  Measured against 1.19.0.6: the parser reads all 2992 vanilla coat-of-arms
+  definitions with no parse errors, and every one of the 7800 texture
+  references and 15327 colors resolves. Instance `depth`, which only CK3
+  writes (387 instances in 234 flags), is not read, so a preview of one of
+  those flags can stack its emblems in file order instead.
 - **New Coat of Arms…** A Create row and a `Paradox: New Coat of Arms…`
   command ask what the arms are for (a dynasty, a house, a landed title, a
   character, or a key you type), list the mod's own definitions of that kind,
