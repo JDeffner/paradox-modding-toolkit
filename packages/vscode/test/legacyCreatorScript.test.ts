@@ -11,7 +11,14 @@ import {
   applyValues,
   changedProperties,
   doctrineOf,
+  effectKeyFor,
   effectLocKey,
+  parseChanceValue,
+  parseConditions,
+  parseEffectLines,
+  writeChanceValue,
+  writeConditions,
+  writeEffectLines,
   modifierRows,
   newDefBlock,
   parseDefBlock,
@@ -256,6 +263,80 @@ describe("legacy creator: reading and writing a definition block", () => {
   it("finds the loc key a perk's effect prints, and nothing else", () => {
     expect(effectLocKey(valueOf(parseDefBlock(PERKS[3])!, "effect")!)).toBe("blood_legacy_4_effect");
     expect(effectLocKey(wrapBlockValue("add_prestige = 100")!)).toBeNull();
+  });
+});
+
+/**
+ * The blocks the no-code builders read and write, against the game's own
+ * (CK3 1.19.0.6): every `is_shown` of common/dynasty_legacies, and the
+ * `can_be_picked` / `effect` / `ai_chance` of common/dynasty_perks.
+ */
+describe("legacy creator: the blocks the builders read", () => {
+  /** ep1_culture_legacy_track, 97_ep1_legacies.txt: the whole is_shown. */
+  const DLC_ONLY = "{ has_dlc_feature = hybridize_culture }";
+  /** The rule pair every gated track opens its OR with (82_tgp_legacies.txt). */
+  const WITH_RULES =
+    "{\n\t\thas_dlc_feature = all_under_heaven\n\t\tOR = {\n" +
+    "\t\t\thas_game_rule = unrestricted_dynasty_legacies_all\n\t\t}\n\t}";
+  /** tgp_china_legacy_track's real is_shown: an OR the rows cannot hold. */
+  const NESTED =
+    "{\n\t\thas_dlc_feature = all_under_heaven\n\t\tOR = {\n" +
+    "\t\t\thas_game_rule = unrestricted_dynasty_legacies_all\n" +
+    "\t\t\tdynasty = {\n\t\t\t\thas_dynasty_perk = tgp_chinese_legacy_1\n\t\t\t}\n\t\t}\n\t}";
+  /** 08_tgp_dynasty_perks.txt: what 44 of the 54 can_be_picked blocks are. */
+  const SCRIPTED = "{ eligible_for_tgp_china_legacy_trigger = yes }";
+
+  it("reads the two shapes a track's is_shown really has", () => {
+    expect(parseConditions(DLC_ONLY)).toEqual([{ kind: "dlc", value: "hybridize_culture" }]);
+    expect(parseConditions(WITH_RULES)).toEqual([
+      { kind: "dlc", value: "all_under_heaven" },
+      { kind: "rules", values: ["unrestricted_dynasty_legacies_all"] },
+    ]);
+    expect(parseConditions(SCRIPTED)).toEqual([
+      { kind: "trigger", name: "eligible_for_tgp_china_legacy_trigger", value: true },
+    ]);
+  });
+
+  it("declines a condition it cannot show instead of dropping half of it", () => {
+    expect(parseConditions(NESTED)).toBeNull();
+    // A comment is content too: the rows have nowhere to put it back.
+    expect(parseConditions("{\n\t\t# only with the DLC\n\t\thas_dlc_feature = legends\n\t}")).toBeNull();
+    expect(parseConditions("")).toBeNull();
+  });
+
+  it("writes the rows back in the game's own shape", () => {
+    expect(writeConditions(parseConditions(WITH_RULES)!)).toBe(WITH_RULES);
+    expect(writeConditions([{ kind: "dlc", value: "legends" }])).toBe(
+      "{\n\t\thas_dlc_feature = legends\n\t}"
+    );
+    expect(writeConditions([])).toBeNull();
+    // A row nobody filled in writes nothing at all.
+    expect(writeConditions([{ kind: "trigger", name: "", value: true }])).toBeNull();
+  });
+
+  it("reads a perk's effect as the sentences it prints", () => {
+    // warfare_legacy_5, 00_dynasty_perks.txt: two tooltip lines, nothing else.
+    const two =
+      "{\n\t\tcustom_description_no_bullet = {\n\t\t\ttext = warfare_legacy_5_unlock_effect\n\t\t}\n" +
+      "\t\tcustom_description_no_bullet = {\n\t\t\ttext = warfare_legacy_5_effect\n\t\t}\n\t}";
+    expect(parseEffectLines(two)).toEqual(["warfare_legacy_5_unlock_effect", "warfare_legacy_5_effect"]);
+    expect(writeEffectLines(parseEffectLines(two)!)).toBe(two);
+    // An effect that does something stays script.
+    expect(parseEffectLines("{\n\t\tadd_prestige = 100\n\t}")).toBeNull();
+    expect(writeEffectLines([])).toBeNull();
+  });
+
+  it("reads a plain ai_chance as a number and leaves a weighted one alone", () => {
+    expect(parseChanceValue("{\n\t\tvalue = 4\n\t}")).toBe(4);
+    expect(writeChanceValue(4)).toBe("{\n\t\tvalue = 4\n\t}");
+    expect(writeChanceValue(null)).toBeNull();
+    // blood_legacy_1's own chance: a number and an if, so it stays script.
+    expect(parseChanceValue(valueOf(parseDefBlock(PERKS[0])!, "ai_chance")!)).toBeNull();
+  });
+
+  it("names a perk's tooltip loc keys the way the game does", () => {
+    expect(effectKeyFor("blood_legacy_4", 0)).toBe("blood_legacy_4_effect");
+    expect(effectKeyFor("blood_legacy_4", 1)).toBe("blood_legacy_4_effect_2");
   });
 });
 

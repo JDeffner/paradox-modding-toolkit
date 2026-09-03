@@ -28,7 +28,14 @@ import type { PxConfig } from "../../config";
 import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
-import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
+import {
+  applyDefinitionEdits,
+  defaultSaveTarget,
+  openSaveTarget,
+  pickSaveTargetChoice,
+  writeLocValues,
+  type SaveTargetChoice,
+} from "../../creators/save";
 import { wireImages } from "../../creators/images";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM } from "../guiEditor/textureCache";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -36,7 +43,7 @@ import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { legacyCreatorHtml } from "./html";
 import { commonPerkCount, perkLinks, perksOfTrack, type PerkLink } from "./perkIndex";
-import type { AppToHost, HostToApp, IconEntry, LoadedPerk, SaveDefinition } from "./messages";
+import type { AppToHost, HostToApp, IconEntry, LoadedPerk, SaveDefinition, TargetKind } from "./messages";
 
 /** The two kinds this panel edits, as the CK3 schema table spells them. */
 const TRACK_KIND = "dynasty_legacy";
@@ -102,6 +109,10 @@ export class LegacyCreatorPanel {
   private iconFiles = new Map<string, string>();
   /** The track the panel should open on, until the app is ready for it. */
   private pending: string | undefined;
+  /** The perks of the loaded track: where a perk save writes back by default. */
+  private loadedPerks: LoadedPerk[] = [];
+  /** The targets the modder picked, which outrank the defaults until a load. */
+  private chosen: Record<TargetKind, SaveTargetChoice | null> = { track: null, perks: null };
 
   private constructor(context: vscode.ExtensionContext, options: LegacyCreatorOptions, name?: string) {
     this.options = options;
@@ -198,7 +209,6 @@ export class LegacyCreatorPanel {
         perk,
         formats: formats?.formats ?? null,
         refIconFolders: await this.refIconFolders(perk, modRoot),
-        modLabel: cfg.modPath ? path.basename(cfg.modPath) : null,
         locLanguage: cfg.locLanguage,
         prefix: scaffoldPrefix(cfg),
         perksPerTrack: cfg.gamePath ? commonPerkCount(this.perkLinksIn(cfg.gamePath, perk.folder)) : null,
@@ -211,9 +221,61 @@ export class LegacyCreatorPanel {
             : "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder.",
       },
     });
+    this.postTargets();
     const target = name ?? this.pending;
     this.pending = undefined;
     if (target) await this.load(target);
+  }
+
+  // -------------------------------------------------------------------------
+  // Where a save goes: resolved up front, shown, and changeable before saving
+  // -------------------------------------------------------------------------
+
+  /**
+   * Where one of the two files lands: what the modder picked, else the default
+   * the rules give (the mod file the definition was loaded from, else the mod
+   * of record under the kind's own file name). A definition that came from the
+   * game or a parent has no writable source, so it falls to the default.
+   */
+  private targetChoice(which: TargetKind): SaveTargetChoice | null {
+    if (this.chosen[which]) return this.chosen[which];
+    const source =
+      which === "track"
+        ? this.legacyForm?.current?.source === "mod"
+          ? this.legacyForm.current.file
+          : undefined
+        : this.loadedPerks.find((perk) => perk.source === "mod")?.file;
+    return defaultSaveTarget(this.options.cfg, {
+      kind: which === "track" ? TRACK_KIND : PERK_KIND,
+      ...(source ? { sourcePath: source } : {}),
+    });
+  }
+
+  /** Tell the app where each file goes, so its top bar can say so. */
+  private postTargets(): void {
+    const line = (which: TargetKind, folder: string | undefined) => {
+      const choice = this.targetChoice(which);
+      return choice && folder ? { modLabel: choice.modLabel, path: `${folder}/${choice.file}` } : null;
+    };
+    this.post({
+      type: "targets",
+      track: line("track", this.legacyForm?.folder),
+      perks: line("perks", this.perkForm?.folder),
+    });
+  }
+
+  /** A target line was clicked: the same picker the save used to open. */
+  private async changeTarget(which: TargetKind): Promise<void> {
+    const form = which === "track" ? this.legacyForm : this.perkForm;
+    if (!form) return;
+    const current = this.targetChoice(which);
+    const picked = await pickSaveTargetChoice(this.options.cfg, form.folder, {
+      kind: which === "track" ? TRACK_KIND : PERK_KIND,
+      ...(current ? { sourceFile: current.file } : {}),
+    });
+    if (!picked) return;
+    this.chosen[which] = picked;
+    this.postTargets();
   }
 
   /**
@@ -321,7 +383,27 @@ export class LegacyCreatorPanel {
       const value = (await actions.lookupLoc(key)).find((entry) => entry.value !== undefined)?.value;
       if (value !== undefined) loc[key] = value;
     }
+    // The track that was opened decides where a save goes, so a target the
+    // modder picked for the previous one does not carry over.
+    this.loadedPerks = perks;
+    this.chosen = { track: null, perks: null };
     this.post({ type: "loaded", track, perks, loc });
+    this.postTargets();
+  }
+
+  /**
+   * One perk's block, for the app's "start from a game perk's effect" picker.
+   * Read through the form request like everything else, so the copy is the
+   * definition the game really loads and not the first file of that name; the
+   * app takes the key it wants out of it.
+   */
+  private async perkTemplate(name: string): Promise<void> {
+    const form = await this.options.actions.fetchForm({
+      kind: PERK_KIND,
+      name,
+      modRoot: this.options.cfg.modPath,
+    });
+    this.post({ type: "perkEffect", name, block: form?.current?.text ?? null });
   }
 
   // -------------------------------------------------------------------------
@@ -359,6 +441,16 @@ export class LegacyCreatorPanel {
         this.post({ type: "locValues", values });
         return;
       }
+      case "copy":
+        await vscode.env.clipboard.writeText(message.text);
+        this.post({ type: "toast", message: "Script copied to the clipboard." });
+        return;
+      case "changeTarget":
+        await this.changeTarget(message.which);
+        return;
+      case "perkEffect":
+        await this.perkTemplate(message.name);
+        return;
       case "save":
         await this.save(message);
         return;
@@ -393,22 +485,19 @@ export class LegacyCreatorPanel {
     const perkForm = this.perkForm;
     if (!legacyForm || !perkForm) return;
 
-    // Both targets before either write: a cancelled second question must not
-    // leave the track written and its perks missing.
-    const trackTarget = await pickSaveTarget(cfg, legacyForm.folder, {
-      kind: TRACK_KIND,
-      ...(message.track.sourceFile ? { sourceFile: message.track.sourceFile } : {}),
-    });
+    // No question here: both targets have been on screen since the form
+    // loaded. Both are opened before either write, so a refused file name
+    // cannot leave the track written and its perks missing.
+    const trackChoice = this.targetChoice("track");
+    const perkChoice = message.perks.length > 0 ? this.targetChoice("perks") : null;
+    if (!trackChoice || (message.perks.length > 0 && !perkChoice)) {
+      this.post({ type: "toast", message: "No mod folder to save into.", variant: "destructive" });
+      return;
+    }
+    const trackTarget = await openSaveTarget(cfg, legacyForm.folder, trackChoice);
     if (!trackTarget) return;
-    const perkSource = message.perks.find((perk) => perk.sourceFile)?.sourceFile;
-    const perkTarget =
-      message.perks.length > 0
-        ? await pickSaveTarget(cfg, perkForm.folder, {
-            kind: PERK_KIND,
-            ...(perkSource ? { sourceFile: perkSource } : {}),
-          })
-        : null;
-    if (message.perks.length > 0 && !perkTarget) return;
+    const perkTarget = perkChoice ? await openSaveTarget(cfg, perkForm.folder, perkChoice) : null;
+    if (perkChoice && !perkTarget) return;
 
     const refused: string[] = [];
     if (perkTarget) {

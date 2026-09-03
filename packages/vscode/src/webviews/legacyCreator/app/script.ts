@@ -362,6 +362,160 @@ export function effectLocKey(effect: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// The blocks a modder should not have to type: conditions, tooltips, chances
+// ---------------------------------------------------------------------------
+
+/**
+ * The three trigger names the builders draw a row for. They are the game's own
+ * words, but nothing here assumes they exist: a row is only offered for a
+ * trigger `DefinitionForm.conditions` answered with a value list, and a block
+ * the grammar below cannot hold stays raw script.
+ *
+ * Measured (CK3 1.19.0.6): all 14 `is_shown` blocks of the game's 21 dynasty
+ * legacy tracks open with `has_dlc_feature`, 10 of them wrapping the rest in
+ * `OR = { has_game_rule = … }`; of the 105 dynasty perks' 54 `can_be_picked`
+ * blocks, 10 are `has_dlc_feature = <feature>` and 44 are
+ * `<scripted trigger> = yes`.
+ */
+export const DLC_TRIGGER = "has_dlc_feature";
+export const RULE_TRIGGER = "has_game_rule";
+export const SCRIPTED_TRIGGERS = "scripted_trigger";
+
+/** One row of a condition builder. */
+export type Condition =
+  /** `has_dlc_feature = <feature>`. */
+  | { kind: "dlc"; value: string }
+  /** `OR = { has_game_rule = a  has_game_rule = b }`: any one of the rules. */
+  | { kind: "rules"; values: string[] }
+  /** `<scripted trigger> = yes|no`. */
+  | { kind: "trigger"; name: string; value: boolean };
+
+/** The statements of a `{ … }` value, or null when it is not a statement list. */
+function bodyOf(value: string): Body | null {
+  const text = value.replace(/\r\n/g, "\n");
+  if (!text.startsWith("{")) return null;
+  const inner = text.slice(1, text.lastIndexOf("}"));
+  return readBody(inner, scanItems(inner));
+}
+
+/** True when a body carries a comment or a stray line no builder can put back. */
+function hasProse(body: Body): boolean {
+  if (body.head !== "") return true;
+  if (body.tail.some((line) => line.trim() !== "")) return true;
+  return body.statements.some((st) => st.after !== "" || st.before.some((l) => l.trim() !== ""));
+}
+
+function conditionOf(st: Statement): Condition | null {
+  if (st.key === DLC_TRIGGER && !st.value.startsWith("{")) return { kind: "dlc", value: st.value };
+  if (st.key === "OR") {
+    const inner = bodyOf(st.value);
+    if (!inner || hasProse(inner) || inner.statements.length === 0) return null;
+    if (inner.statements.some((s) => s.key !== RULE_TRIGGER || s.value.startsWith("{"))) return null;
+    return { kind: "rules", values: inner.statements.map((s) => s.value) };
+  }
+  if (st.value === "yes" || st.value === "no") {
+    return { kind: "trigger", name: st.key, value: st.value === "yes" };
+  }
+  return null;
+}
+
+/**
+ * The rows a trigger block reads as, or null when it holds anything the
+ * builder cannot show. Null is the honest answer, not a failure: the form then
+ * keeps the block as script and says so (AD-5, nothing is hidden or dropped).
+ */
+export function parseConditions(value: string): Condition[] | null {
+  const body = bodyOf(value);
+  if (!body || hasProse(body)) return null;
+  const rows: Condition[] = [];
+  for (const st of body.statements) {
+    const row = conditionOf(st);
+    if (!row) return null;
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** The block source for a condition list, or null when it says nothing. */
+export function writeConditions(rows: readonly Condition[]): string | null {
+  const lines: string[] = [];
+  for (const row of rows) {
+    if (row.kind === "dlc") {
+      if (row.value.trim() === "") continue;
+      lines.push(`${DLC_TRIGGER} = ${row.value.trim()}`);
+    } else if (row.kind === "rules") {
+      const values = row.values.map((v) => v.trim()).filter((v) => v !== "");
+      if (values.length === 0) continue;
+      lines.push("OR = {");
+      for (const value of values) lines.push(`\t${RULE_TRIGGER} = ${value}`);
+      lines.push("}");
+    } else {
+      if (row.name.trim() === "") continue;
+      lines.push(`${row.name.trim()} = ${row.value ? "yes" : "no"}`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return `{\n${lines.map((l) => `\t\t${l}`).join("\n")}\n\t}`;
+}
+
+/**
+ * The wrapper a perk's effect prints its sentence through. Measured over the
+ * game's 105 dynasty perks: 74 of the 82 `effect` blocks are nothing BUT these
+ * (113 of them in all, 110 written exactly `{ text = <loc key> }`), because the
+ * perk's real work happens in an on_action and the effect only says so.
+ */
+export const TOOLTIP_KEY = "custom_description_no_bullet";
+
+/** The loc keys an effect block prints, in order, or null when it does more. */
+export function parseEffectLines(value: string): string[] | null {
+  const body = bodyOf(value);
+  if (!body || hasProse(body)) return null;
+  const keys: string[] = [];
+  for (const st of body.statements) {
+    if (st.key !== TOOLTIP_KEY) return null;
+    const inner = bodyOf(st.value);
+    if (!inner || hasProse(inner) || inner.statements.length !== 1) return null;
+    const only = inner.statements[0];
+    if (only.key !== "text" || only.value.startsWith("{")) return null;
+    keys.push(only.value.replace(/^"|"$/g, ""));
+  }
+  return keys;
+}
+
+/** The block source for a list of tooltip lines, or null when it has none. */
+export function writeEffectLines(keys: readonly string[]): string | null {
+  const wanted = keys.map((key) => key.trim()).filter((key) => key !== "");
+  if (wanted.length === 0) return null;
+  const lines = wanted.flatMap((key) => [`\t\t${TOOLTIP_KEY} = {`, `\t\t\ttext = ${key}`, "\t\t}"]);
+  return `{\n${lines.join("\n")}\n\t}`;
+}
+
+/**
+ * The number a plain `{ value = N }` chance block carries, or null when the
+ * block does more. Measured: 12 of the game's 37 perk `ai_chance` blocks are
+ * exactly that; the other 25 add `if = { limit = … multiply = … }` blocks,
+ * which stay script.
+ */
+export function parseChanceValue(value: string): number | null {
+  const body = bodyOf(value);
+  if (!body || hasProse(body) || body.statements.length !== 1) return null;
+  const only = body.statements[0];
+  if (only.key !== "value") return null;
+  const number = Number(only.value);
+  return only.value !== "" && Number.isFinite(number) ? number : null;
+}
+
+/** The block source for a plain chance, or null when nothing was given. */
+export function writeChanceValue(value: number | null): string | null {
+  return value === null ? null : `{\n\t\tvalue = ${value}\n\t}`;
+}
+
+/** The loc key the nth tooltip line of a perk gets by default. */
+export function effectKeyFor(perk: string, index: number): string {
+  return index === 0 ? `${perk}_effect` : `${perk}_effect_${index + 1}`;
+}
+
+// ---------------------------------------------------------------------------
 // Names
 // ---------------------------------------------------------------------------
 

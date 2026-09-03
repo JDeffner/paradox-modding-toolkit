@@ -110,11 +110,10 @@ ${uiCss}
   #perkEditor .px-label { padding-top: 0; }
   #sideEmpty { padding: 12px; }
 
-  #script {
-    margin: 0; padding: 8px 10px; overflow: auto; max-height: 420px; background: var(--px-muted);
-    border-radius: var(--px-radius-md); font-family: var(--px-font-mono); font-size: var(--px-text-sm);
-    white-space: pre;
-  }
+  /* The save target lines (shared/saveTarget.ts) sit in the toolbar, one per
+     file: the track's and the perks'. */
+  #targets { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+  .px-script > pre { max-height: 420px; }
   details > summary { cursor: pointer; }
 </style>
 </head>
@@ -129,10 +128,14 @@ ${uiCss}
       <button class="px-toggle" data-size="sm" data-mode="override" data-tip="Write the game's own key into your mod. There are no partial overrides: your copy replaces the whole track and stops receiving patch changes." data-tip-wrap>Override</button>
     </div>
     <button id="new" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Start a fresh track. Nothing is written until you save.">${icon("filePlus")}New</button>
-    <button id="open" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open a track this mod already has">${icon("folderOpen")}Open</button>
+    <button id="open" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open a track: one of your own to edit, or one of the game's to duplicate or override" data-tip-wrap>${icon("folderOpen")}Open</button>
     <button id="lookup" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Read what a modifier does, and where the game itself uses it" data-tip-wrap>${icon("bookOpen")}Modifiers</button>
+    <!-- The script section's copy button lands here (shared/scriptSection.ts). -->
+    <span id="scriptCopy"></span>
     <span class="px-grow"></span>
-    <span id="target" class="px-muted px-xs"></span>
+    <!-- One save-target line per file a legacy is written into. -->
+    <span id="targets"></span>
+    <span id="locLang" class="px-muted px-xs"></span>
     <button id="save" class="px-btn" data-variant="default" data-size="sm">${icon("save")}Save</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this view works" data-tip-side="left">${icon("circleHelp")}</button>
   </div>
@@ -160,12 +163,8 @@ ${uiCss}
           <div id="perks"></div>
         </div>
       </section>
-      <section>
-        <details id="scriptFold">
-          <summary class="px-panel-title">Script</summary>
-          <pre id="script"></pre>
-        </details>
-      </section>
+      <!-- The generated script (shared/scriptSection.ts) replaces this. -->
+      <div id="scriptSlot"></div>
     </div>
     <aside id="side" class="px-sidepanel" data-side="right" data-collapsed>
       <div class="px-sidepanel-resizer"></div>
