@@ -574,7 +574,15 @@ with the scalar literal the indexed definitions of the kind write most often
 for it: a real value for a form to show as its input's placeholder. Unlike
 `sampled` it counts numbers and quoted text (quotes stripped) and it survives
 the cap, because a key whose value differs in every definition is exactly the
-one that needs an example.
+one that needs an example. A key whose value is a BLOCK has no scalar literal
+at all, so it carries the body the definitions write most often instead,
+collapsed onto one line, comments dropped, cut with an ellipsis past
+`DEFINITION_FORM_MAX_EXAMPLE` (120): a script field gets a placeholder like
+every other field. A key whose value set is already stated (`bool`, `enum:`)
+carries `example` too, and no `sampled`: measuring a list the schema or the doc
+already gives would only be less complete, but a dropdown showing the value the
+game itself writes still says more than one reading "not set". A key answered by
+the definition index (`refKinds`) has neither: its options are the index's.
 
 Two fields answer questions one flat list cannot. An option carries `group`
 when the schema entry for its kind names a `groupKey`: one folder can hold

@@ -17,6 +17,8 @@ px_stoic = {
 	category = personality
 	opposites = { craven }
 	martial = 2
+	valid_sex = male
+	shown_in_ruler_designer = no
 }
 `;
 
@@ -132,7 +134,7 @@ describe("computeDefinitionForm", () => {
     const form = computeDefinitionForm(data, schema, { kind: "trait", name: "px_stoic" })!;
     expect(form.current?.source).toBe("mod");
     expect(form.current?.line).toBe(1);
-    expect(form.current?.text).toBe(TRAITS_TXT.split("\n").slice(1, 6).join("\n"));
+    expect(form.current?.text).toBe(TRAITS_TXT.split("\n").slice(1, 8).join("\n"));
   });
 
   it("names an unindexed definition without inventing a block", () => {
@@ -226,6 +228,28 @@ describe("computeDefinitionForm", () => {
     expect(trait.keys.find((k) => k.key === "martial")?.example).toBe("2");
     // A key no indexed definition writes has no example to give.
     expect(trait.keys.find((k) => k.key === "desc")?.example).toBeUndefined();
+  });
+
+  it("gives a stated value set an example but no measured list", () => {
+    const trait = computeDefinitionForm(data, schema, { kind: "trait" })!;
+    // `valid_sex = all/male/female` and `shown_in_ruler_designer = yes/no`:
+    // the set is the schema's and the doc's, the example is the file's, so a
+    // dropdown and a tri-state both have something to show when they are empty.
+    const validSex = trait.keys.find((k) => k.key === "valid_sex")!;
+    expect(validSex.example).toBe("male");
+    expect(validSex.sampled).toBeUndefined();
+    const shown = trait.keys.find((k) => k.key === "shown_in_ruler_designer")!;
+    expect(shown.example).toBe("no");
+    expect(shown.sampled).toBeUndefined();
+  });
+
+  it("gives a block key the body the game writes for it, on one line", () => {
+    const culture = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    // Both cultures write `ethnicities = { … }` and nothing else; a script
+    // field has an example to show like every other field.
+    expect(culture.keys.find((k) => k.key === "ethnicities")?.example).toMatch(/^\{ \d+ = \w+/);
+    // A block written differently in each definition still yields one of them.
+    expect(culture.keys.find((k) => k.key === "clothing_gfx")?.example).toContain("mena_clothing_gfx");
   });
 
   it("answers null for a kind the active game's schema does not have", () => {
