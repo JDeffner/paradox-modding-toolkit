@@ -508,6 +508,72 @@
         "icon": "$(add)"
       },
       {
+        "command": "px.dependenciesClear",
+        "category": "Paradox",
+        "title": "Clear the Dependencies View",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "px.dependenciesInfo",
+        "category": "Paradox",
+        "title": "About the Dependencies View",
+        "icon": "$(question)"
+      },
+      {
+        "command": "px.dependenciesForItem",
+        "category": "Paradox",
+        "title": "Show Dependencies of This",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "px.openFromView",
+        "category": "Paradox",
+        "title": "Go to Definition",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.findReferencesFromView",
+        "category": "Paradox",
+        "title": "Find All References",
+        "icon": "$(references)"
+      },
+      {
+        "command": "px.copyNameFromView",
+        "category": "Paradox",
+        "title": "Copy Name",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "px.openProblemsPanel",
+        "category": "Paradox",
+        "title": "Open the Problems Panel",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "px.explainDiagnosticCode",
+        "category": "Paradox",
+        "title": "Explain Code",
+        "icon": "$(book)"
+      },
+      {
+        "command": "px.suppressDiagnosticCode",
+        "category": "Paradox",
+        "title": "Suppress Code",
+        "icon": "$(bell-slash)"
+      },
+      {
+        "command": "px.revealProblemFile",
+        "category": "Paradox",
+        "title": "Reveal in Explorer",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "px.nextProblemInFile",
+        "category": "Paradox",
+        "title": "Next Problem in File",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "px.createDescriptor",
         "category": "Paradox",
         "title": "Create descriptor.mod"
@@ -974,6 +1040,50 @@
           "when": "false"
         },
         {
+          "command": "px.dependenciesForItem",
+          "when": "false"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "false"
+        },
+        {
+          "command": "px.suppressDiagnosticCode",
+          "when": "false"
+        },
+        {
+          "command": "px.revealProblemFile",
+          "when": "false"
+        },
+        {
+          "command": "px.nextProblemInFile",
+          "when": "false"
+        },
+        {
+          "command": "px.dependenciesClear",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.dependenciesInfo",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openProblemsPanel",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.guiTreeToggleParents",
           "when": "activeWebviewPanelId == px.guiTree"
         },
@@ -1219,6 +1329,31 @@
           "group": "1_actions"
         },
         {
+          "command": "px.showDependencies",
+          "when": "view == px.dependencies",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.dependenciesClear",
+          "when": "view == px.dependencies",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.dependenciesInfo",
+          "when": "view == px.dependencies",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.openProblemsPanel",
+          "when": "view == px.problems",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.clearGameProblems",
+          "when": "view == px.problems",
+          "group": "1_actions"
+        },
+        {
           "command": "px.openKeybindings",
           "when": "view == px.tools",
           "group": "navigation@2"
@@ -1244,6 +1379,56 @@
           "command": "px.addLocalizationFromView",
           "when": "view == px.locCoverage && viewItem =~ /^px\\.loc/",
           "group": "1_edit"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "inline"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@2"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@3"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "2_copy"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "view == px.problems && viewItem == px.problemCodeExplain",
+          "group": "inline"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "view == px.problems && viewItem == px.problemCodeExplain",
+          "group": "1_navigate"
+        },
+        {
+          "command": "px.suppressDiagnosticCode",
+          "when": "view == px.problems && viewItem =~ /^px\\.problemCode/",
+          "group": "2_edit"
+        },
+        {
+          "command": "px.revealProblemFile",
+          "when": "view == px.problems && viewItem == px.problemFile",
+          "group": "1_navigate@1"
+        },
+        {
+          "command": "px.nextProblemInFile",
+          "when": "view == px.problems && viewItem == px.problemFile",
+          "group": "1_navigate@2"
         }
       ],
       "editor/context": [

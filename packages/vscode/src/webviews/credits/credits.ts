@@ -16,6 +16,8 @@ export interface CreditEntry {
   license: string;
   /** The credit line the project asks for, or the people behind it. */
   author?: string;
+  /** The author's own page, when the credit names one person we could confirm. */
+  authorUrl?: string;
 }
 
 export interface CreditSection {
@@ -34,6 +36,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
           "The toolkit downloads and runs tiger for the deep validation of your mod, and turns its report into Problems in the editor.",
         license: "GPL-3.0",
         author: "amtep",
+        authorUrl: "https://github.com/amtep",
       },
       {
         name: "CK3 Paradox Wiki, via ck3-modding-wiki",
@@ -49,6 +52,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
         usedFor: "The Europa Universalis V schema table is generated from this project's type declarations.",
         license: "MIT",
         author: "Chris Kaiser",
+        authorUrl: "https://github.com/kaiser-chris",
       },
       {
         name: "cwtools-vic3-config",
@@ -77,6 +81,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
           "The Flag Builder reimplements this application's coat of arms model and recolor rule in TypeScript. Ported from PDX Flag Editor by Chris Kaiser.",
         license: "MIT",
         author: "Chris Kaiser",
+        authorUrl: "https://github.com/kaiser-chris",
       },
       {
         name: "shadcn/ui",
@@ -85,6 +90,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
           "The look of the webviews, its palette, radii, control heights and focus ring, was read off the Nova style and written by hand in plain CSS.",
         license: "MIT",
         author: "shadcn",
+        authorUrl: "https://github.com/shadcn",
       },
       {
         name: "Lucide",
@@ -112,6 +118,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
         usedFor: "The Workshop panel uploads and updates your mod through this Steam binding.",
         license: "MIT",
         author: "Joel Deffner",
+        authorUrl: "https://github.com/JDeffner",
       },
       {
         name: "koffi",
@@ -120,6 +127,7 @@ export const CREDIT_SECTIONS: CreditSection[] = [
           "steamwand.js calls the Steam library through koffi, so the toolkit needs no compiled native addon.",
         license: "MIT",
         author: "Niels Martignène",
+        authorUrl: "https://github.com/Koromix",
       },
     ],
   },

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **The Wiki is a hub.** Its front page is a set of cards that lead to the
+  Examples Wiki, Format Docs, Image Guidelines, Credits, and two new wiki
+  subpages: Diagnostics (every code with its severity) and Mod Report. The
+  Mod Report row leaves the Project panel's Info group; the report itself
+  is unchanged.
+- **Tree views get actions.** Dependencies: Show for Cursor, Clear, an info
+  note, and per row Show Dependencies of This, Find All References and Copy
+  Name. Problems by Type: Open Problems Panel, Clear Game Problems, and per
+  code row Explain Code (opens its wiki page) and Suppress Code (adds it to
+  the ignore setting after a confirm), plus Reveal in Explorer and Next
+  Problem on file rows.
+- **Credits link people too.** An author with a public profile is a link,
+  and long license chips wrap inside their card instead of overflowing it.
+- **Smaller fixes.** The Examples Wiki search tooltip is one short sentence
+  (the full provenance stays below the box, with its stray double period
+  gone), and the Flag Builder's footer padding sits on the text, not the
+  box, so text and icons share one inset.
+
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar

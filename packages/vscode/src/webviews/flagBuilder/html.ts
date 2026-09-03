@@ -49,12 +49,13 @@ ${uiCss}
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
-  #stageTools { left: 8px; padding-right: 10px; }
-  #stageInfo { right: 8px; gap: 8px; }
+  #stageTools { left: 8px; }
+  #stageInfo { right: 8px; }
+  /* Padding sits on the text, not the box, so text and icon buttons keep the same inset. */
+  #zoom, #hint, #origin, #credit { padding: 0 6px; }
   #resetName[hidden] { display: none; }
-  #origin { padding-left: 8px; }
   #origin:empty { display: none; }
-  #credit { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-decoration: none; padding-left: 8px; cursor: pointer; }
+  #credit { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-decoration: none; cursor: pointer; }
   #credit:hover { color: var(--px-fg); text-decoration: underline; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }

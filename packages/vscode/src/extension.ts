@@ -44,7 +44,7 @@ import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
-import { WikiPanel, IMAGE_GUIDELINES_ARTICLE } from "./webviews/wiki/panel";
+import { WikiPanel, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
 import { CreditsPanel } from "./webviews/credits/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
@@ -57,7 +57,7 @@ import { migrateConfigDir } from "@px-lsp/protocol/configDir";
 import type { FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
-import { modReportCommand } from "./modReport";
+import { buildModReport, modReportCommand } from "./modReport";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher } from "./errorLog";
 import { launchGame, registerGameRun } from "./gameRun";
@@ -632,7 +632,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The guidelines are one page of the Wiki now, so the palette entry opens
     // the hub there instead of a panel of its own.
     vscode.commands.registerCommand("px.imageGuidelines", () =>
-      WikiPanel.show(context, metaFor(cfg.gameId), IMAGE_GUIDELINES_ARTICLE)
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), IMAGE_GUIDELINES_ARTICLE)
     ),
     DdsPreviewProvider.register(context)
   );
@@ -645,6 +645,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(errorLog);
   const focus = new FocusMod(context.workspaceState, () => cfg);
   const views = registerPxViews(context, lc, () => cfg, focus);
+  // Hoisted: the Wiki commands above are registered before `views` exists, but
+  // they only call this once the user opens the panel.
+  function wikiDeps(): WikiDeps {
+    return { modReport: () => buildModReport(lc, views.focusRoot()) };
+  }
   registerDashboardView(context, {
     getCfg: () => cfg,
     focus,
@@ -854,8 +859,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.showEventGraph", () => {
       EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
     }),
-    vscode.commands.registerCommand("px.openWiki", () => {
-      WikiPanel.show(context, metaFor(cfg.gameId));
+    // The argument is optional: the palette entry opens the hub, the Problems
+    // view's "Explain Code" names the diagnostic article it wants.
+    vscode.commands.registerCommand("px.openWiki", (arg?: unknown) => {
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), typeof arg === "string" && arg ? arg : null);
     }),
     vscode.commands.registerCommand("px.openCredits", () => {
       CreditsPanel.show();
