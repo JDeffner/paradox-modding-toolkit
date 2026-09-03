@@ -60,6 +60,7 @@ import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert"
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
+import { TraditionCreatorPanel } from "./webviews/traditionCreator/panel";
 import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
 import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
 import { coaTargetArg } from "./webviews/flagBuilder/target";
@@ -1055,6 +1056,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       const named = definitionName(arg);
       TraitCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+        },
+        lookupLoc,
+        ...(named ? { name: named } : {}),
+      });
+    }),
+    // Same shape as px.createTrait: the palette entry and the Project panel
+    // open a blank form, and a caller that means one tradition names it (the
+    // Culture Creator's tradition rows are the caller this is for).
+    vscode.commands.registerCommand("px.createTradition", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      if (!creatorSupported(cfg.gameId, "culture_tradition")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Tradition Creator has been built for ${meta.name} yet.`
+        );
+        return;
+      }
+      const named = definitionName(arg);
+      TraditionCreatorPanel.show(context, {
         cfg: cfgForActive(),
         meta,
         actions: {

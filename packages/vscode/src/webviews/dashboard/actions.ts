@@ -11,6 +11,7 @@ const CREATOR_COMMANDS: Record<string, string> = {
   trait: "px.createTrait",
   dynasty_legacy: "px.createDynastyLegacy",
   culture: "px.createCulture",
+  culture_tradition: "px.createTradition",
   // Not a definition kind: a view over history/characters.
   dynasty_tree: "px.openDynastyTree",
 };

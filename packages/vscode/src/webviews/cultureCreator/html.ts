@@ -108,13 +108,8 @@ ${uiCss}
   .dlchead { display: flex; align-items: center; gap: 6px; }
   .dlchead > span { flex: 1 1 auto; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
 
-  /* The composed tradition icon: the game stacks its layer folders in index
-     order, so the layers are absolutely positioned in DOM order. */
-  .tradicon {
-    position: relative; flex: 0 0 auto; display: block;
-    width: var(--tradicon, 48px); height: var(--tradicon, 48px);
-  }
-  .tradicon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  /* The composed tradition icon is .px-tradicon in the shared stylesheet
+     (shared/traditionIcon.ts), which the Tradition Creator draws too. */
   /* The tradition picker's group heading (the game groups by category). */
   .catgroup {
     padding: 8px 6px 2px; font-size: var(--px-text-xs); font-weight: 600;
@@ -169,10 +164,10 @@ ${uiCss}
      game's own size. */
   #pvTraditions { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
   .pvtrad { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
-  .pvtrad > .tradicon { width: 100%; height: auto; max-width: 276px; aspect-ratio: 276 / 138; }
+  .pvtrad > .px-tradicon { width: 100%; height: auto; max-width: 276px; aspect-ratio: 276 / 138; }
   /* The game's widget_tradition_icon draws every layer at size = { 100% 100% },
      so the tile stretches them rather than letterboxing them. */
-  .pvtrad > .tradicon > img { object-fit: fill; }
+  .pvtrad > .px-tradicon > img { object-fit: fill; }
   .pvtrad > .tname {
     max-width: 80%; font-size: var(--px-text-xs); line-height: 1.25; overflow-wrap: anywhere;
   }

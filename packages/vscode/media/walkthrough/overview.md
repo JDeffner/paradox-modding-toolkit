@@ -5,7 +5,7 @@ Click the Paradox icon in the Activity Bar. The **Project** view at the top show
 - **Workspace Mods** — every detected mod, with a switch to include or exclude it from indexing, and a dot to pin the views below to one mod
 - **Toggles** — the tiger baseline filter, the error.log watcher, vanilla diagnostics and scope inlay hints
 - **Tools** — launchers for content scaffolds, translation, images, reports, and the game itself
-- **Create** lists the visual creators the active game has: Trait, Dynasty Legacy, Culture, Dynasty Tree and the Coat of Arms Designer. Each one is a form over the game's own keys, and it writes the definition and its localization into your mod.
+- **Create** lists the visual creators the active game has: Trait, Dynasty Legacy, Culture, Tradition, Dynasty Tree and the Coat of Arms Designer. Each one is a form over the game's own keys, and it writes the definition and its localization into your mod.
 
 Below it, collapsed until you need them:
 

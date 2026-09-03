@@ -136,6 +136,12 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
     kind: "culture_tradition",
     // def names already carry the `tradition_` prefix; loc key is `<name>_name`.
     requiredLoc: ["$_name"],
+    // All 196 vanilla traditions also define `$_desc`, measured 196/196 in
+    // game/localization/english against common/culture/traditions in 2026-09
+    // (`tradition_winter_warriors_name` / `_desc`). requiredLoc keeps only
+    // `$_name` because the diagnostic that hangs off it is the conservative
+    // one; a creator writes the whole set.
+    locPatterns: ["$_name", "$_desc"],
     rootScopes: ["culture"],
   },
   { path: "common/culture/innovations", kind: "innovation", requiredLoc: ["$"], rootScopes: ["culture"] },

@@ -430,6 +430,12 @@
         "icon": "$(globe)"
       },
       {
+        "command": "px.createTradition",
+        "category": "Paradox",
+        "title": "Open Tradition Creator",
+        "icon": "$(flame)"
+      },
+      {
         "command": "px.createDynastyLegacy",
         "category": "Paradox",
         "title": "Open Dynasty Legacy Creator"
@@ -1251,6 +1257,10 @@
         {
           "command": "px.createCulture",
           "when": "px.isCk3Workspace && px.creator.culture"
+        },
+        {
+          "command": "px.createTradition",
+          "when": "px.isCk3Workspace && px.creator.culture_tradition"
         },
         {
           "command": "px.createDynastyLegacy",

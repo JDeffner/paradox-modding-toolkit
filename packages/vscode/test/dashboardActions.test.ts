@@ -119,6 +119,7 @@ describe("visibleActionGroups", () => {
       "px.createTrait",
       "px.createDynastyLegacy",
       "px.createCulture",
+      "px.createTradition",
       "px.openDynastyTree",
       "px.createCoatOfArms",
     ]);

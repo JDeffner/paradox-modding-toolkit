@@ -25,6 +25,7 @@ import { scriptSection } from "../../shared/scriptSection";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
 import { clampToViewport, installTips } from "../../shared/tips";
+import { traditionIcon as traditionIconEl } from "../../shared/traditionIcon";
 import {
   colorField,
   filterVocabulary,
@@ -229,24 +230,16 @@ function paintImages(): void {
 
 /**
  * A tradition's icon: the game stacks one file per layer folder in index order
- * (CULTURE_TRADITION_LAYER_PATHS), so the layers are drawn on top of each other
- * in the order the host resolved them.
+ * (CULTURE_TRADITION_LAYER_PATHS), which the shared composer draws in the order
+ * the host resolved them.
  */
 function traditionIcon(name: string, size: number): HTMLElement {
-  const box = el("span", "tradicon");
-  box.style.setProperty("--tradicon", `${size}px`);
   const layers = init?.catalog.traditions[name]?.layers ?? [];
-  for (const rel of layers) {
-    const img = document.createElement("img");
-    img.alt = "";
-    img.dataset.rel = rel;
-    const url = imageUrl(rel, TRADITION_DIM);
-    if (url) img.src = url;
-    else img.hidden = true;
-    box.append(img);
-  }
-  box.hidden = layers.length === 0;
-  return box;
+  return traditionIconEl(
+    layers.map((rel) => ({ rel })),
+    size,
+    (rel) => imageUrl(rel, TRADITION_DIM)
+  );
 }
 
 // ---------------------------------------------------------------------------
