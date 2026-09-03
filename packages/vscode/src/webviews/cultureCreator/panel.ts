@@ -1,11 +1,12 @@
 /**
  * The Culture Creator's VS Code host (px.createCulture).
  *
- * It does the three things the app cannot: ask the language server what a
- * culture may contain (paradox/definitionForm), read the named colors out of
- * the game and mod folders, and write the block and its loc through the shared
- * creator flow (creators/save.ts) so a save is one undo step and lands in a
- * file the modder picked.
+ * It does the four things the app cannot: ask the language server what a
+ * culture may contain (paradox/definitionForm), read the named colors and the
+ * tradition catalog out of the game and mod folders, decode the game's own
+ * pillar and tradition art to pictures the webview may load, and write the
+ * block and its loc through the shared creator flow (creators/save.ts) so a
+ * save is one undo step and lands in a file the modder picked.
  *
  * Every path comes from `PxConfig`; this panel adds no setting of its own.
  */
@@ -21,14 +22,17 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import { parseNamedColors } from "@px-lsp/server/coa/coaParse";
 import type { PxConfig } from "../../config";
+import { type ImageRoot, wireImages } from "../../creators/images";
 import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
+import { GuiTextureCache } from "../guiEditor/textureCache";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { buildCatalog } from "./catalog";
 import { cultureCreatorHtml } from "./html";
-import type { AppToHost, CultureInit, HostToApp } from "./messages";
+import type { AppToHost, CultureCatalog, CultureInit, HostToApp } from "./messages";
 
 /** The definition kind this panel edits; the schema table's own spelling. */
 const KIND = "culture";
@@ -40,15 +44,25 @@ export interface CultureCreatorActions {
 }
 
 /**
+ * Every folder a culture's data and art may come from, in LOAD ORDER: the game
+ * first, then dependency mods, then the workspace's own. Last-in-wins is the
+ * game's rule for script databases and for assets alike, so a mod's tradition
+ * and a mod's icon both win over the game's.
+ */
+function loadOrder(cfg: PxConfig): string[] {
+  const roots = [...(cfg.gamePath ? [cfg.gamePath] : []), ...cfg.parentPaths, ...cfg.workspaceMods];
+  if (cfg.modPath) roots.push(cfg.modPath);
+  return roots.filter((root, at) => roots.indexOf(root) === at);
+}
+
+/**
  * The named colors a culture may write instead of three components, in load
  * order with the mod last so a mod's own color wins, the way the game reads
  * `common/named_colors` (the Flag Builder's database.ts does the same).
  */
 function readNamedColors(cfg: PxConfig): Record<string, [number, number, number]> {
   const out: Record<string, [number, number, number]> = {};
-  const roots = [...(cfg.gamePath ? [cfg.gamePath] : []), ...cfg.parentPaths, ...cfg.workspaceMods];
-  if (cfg.modPath) roots.push(cfg.modPath);
-  for (const root of roots) {
+  for (const root of loadOrder(cfg)) {
     const dir = path.join(root, "common", "named_colors");
     let files: string[];
     try {
@@ -76,10 +90,13 @@ export class CultureCreatorPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly actions: CultureCreatorActions;
+  private readonly textures: GuiTextureCache;
   private cfg: PxConfig;
   /** The culture to load on the next `ready` (a deep-linked command argument). */
   private pending: string | undefined;
   private form: DefinitionForm | null = null;
+  /** Read from disk once: it describes the game, not the culture being edited. */
+  private catalog: CultureCatalog | undefined;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
@@ -92,12 +109,21 @@ export class CultureCreatorPanel {
     this.cfg = cfg;
     this.actions = actions;
     this.pending = name;
+    this.textures = new GuiTextureCache(context.globalStorageUri.fsPath, {
+      gamePath: null,
+      modPath: null,
+    });
+    fs.mkdirSync(this.textures.cacheDir, { recursive: true });
     const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       CultureCreatorPanel.viewType,
       "Culture Creator",
       vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [source.root] }
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [source.root, vscode.Uri.file(this.textures.cacheDir)],
+      }
     );
     this.panel.iconPath = tabIcon("culture-creator");
     const render = (): void => {
@@ -180,10 +206,31 @@ export class CultureCreatorPanel {
       locLanguage: this.cfg.locLanguage,
       prefix: scaffoldPrefix(this.cfg),
       namedColors: readNamedColors(this.cfg),
+      catalog: await this.readCatalog(form),
       ...(this.cfg.calendar ? { calendar: this.cfg.calendar } : {}),
       noMod: this.cfg.modPath === null && this.cfg.workspaceMods.length === 0,
+      noGame: this.cfg.gamePath === null,
     };
     this.post({ type: "init", init });
+  }
+
+  /**
+   * The pillar and tradition catalog, read once. It describes the installed
+   * game and the mods, so loading a second culture reuses it rather than
+   * walking the tradition folder and asking for hundreds of loc lines again.
+   */
+  private async readCatalog(form: DefinitionForm): Promise<CultureCatalog> {
+    if (this.catalog) return this.catalog;
+    const describe = [...(form.options.culture_pillar ?? []), ...(form.options.culture_tradition ?? [])].map(
+      (item) => item.value
+    );
+    this.catalog = await buildCatalog(loadOrder(this.cfg), describe, this.actions.lookupLoc);
+    return this.catalog;
+  }
+
+  /** Where a picture may come from, game first: `resolveImage` takes the last. */
+  private imageRoots(): ImageRoot[] {
+    return loadOrder(this.cfg).map((root) => ({ label: path.basename(root), path: root }));
   }
 
   private async onMessage(msg: AppToHost): Promise<void> {
@@ -194,8 +241,14 @@ export class CultureCreatorPanel {
         await this.load(name);
         return;
       }
+      case "new":
+        await this.load();
+        return;
       case "load":
         await this.load(msg.name);
+        return;
+      case "images":
+        wireImages(this.panel, this.imageRoots(), this.textures, msg);
         return;
       case "openExamples":
         // A culture key is no wiki article, so the button opens the index.

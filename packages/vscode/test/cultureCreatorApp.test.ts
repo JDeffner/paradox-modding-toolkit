@@ -47,6 +47,23 @@ function panelHtml(): string {
 // them; the schema's groupKey reads `type` out of the pillar's own block.
 const PILLARS_TXT = "ethos_stoic = {\n\ttype = ethos\n}\n\nheritage_arabic = {\n\ttype = heritage\n}\n";
 
+// What the panel reads out of the game folder (catalog.ts): the shape
+// game/common/culture/traditions/00_combat_traditions.txt writes, with the
+// layer values already resolved to files.
+const CATALOG = {
+  traditions: {
+    tradition_mubarizuns: {
+      category: "combat",
+      layers: [
+        "gfx/interface/icons/culture_tradition/0-background/martial/martial1.dds",
+        "gfx/interface/icons/culture_tradition/4-items/duel.dds",
+      ],
+    },
+  },
+  descs: { ethos_stoic: "This culture endures.", tradition_mubarizuns: "Champions duel before battle." },
+  dlcFlags: ["royal_court"],
+};
+
 let dir: string;
 let form: DefinitionForm;
 
@@ -97,7 +114,9 @@ function boot(): Booted {
           locLanguage: "english",
           prefix: "px",
           namedColors: { bedouin: [26, 191, 26] },
+          catalog: CATALOG,
           noMod: false,
+          noGame: true,
         },
       },
     })
@@ -109,6 +128,33 @@ function boot(): Booted {
 function rowControl(document: Document, label: string): HTMLElement {
   const span = [...document.querySelectorAll(".px-label")].find((s) => s.textContent === label);
   return span!.nextElementSibling as HTMLElement;
+}
+
+/**
+ * The labels of the open menu. The first row of a `refField` menu CLEARS the
+ * field and is labelled with the placeholder, which carries an example value,
+ * so a test must match a row's label exactly and not the text it contains.
+ */
+function menuLabels(document: Document): string[] {
+  return [...document.querySelectorAll(".px-menu .px-menu-item .px-grow")].map((s) => s.textContent ?? "");
+}
+
+/** The menu row that offers exactly `value`, never the placeholder row. */
+function menuRow(document: Document, value: string): HTMLElement {
+  const label = [...document.querySelectorAll(".px-menu .px-menu-item .px-grow")].find(
+    (s) => s.textContent === value
+  );
+  return label!.parentElement as HTMLElement;
+}
+
+/** The chip list's Add button, then the entry for the indexed tradition. */
+function addTradition(document: Document): void {
+  const add = rowControl(document, "Traditions").querySelector("button") as HTMLButtonElement;
+  add.click();
+  const row = [...document.querySelectorAll(".px-picker-results .px-menu-item")].find((i) =>
+    i.textContent?.includes("tradition_mubarizuns")
+  ) as HTMLElement;
+  row.click();
 }
 
 describe("culture creator app", () => {
@@ -127,6 +173,36 @@ describe("culture creator app", () => {
     const { document } = boot();
     const rows = [...document.querySelectorAll("#body-pillars .px-label")].map((s) => s.textContent);
     expect(rows).toEqual(["Ethos", "Heritage", "Language", "Martial custom", "Head determination"]);
+    // The Ethos picker offers the ethos pillar and NOT the heritage one, which
+    // is the whole reason the server labels each option with its `type`.
+    (rowControl(document, "Ethos") as HTMLButtonElement).click();
+    const offered = menuLabels(document);
+    expect(offered).toContain("ethos_stoic");
+    expect(offered).not.toContain("heritage_arabic");
+  });
+
+  it("puts a chosen tradition into the culture window preview", () => {
+    const { document } = boot();
+    expect(document.getElementById("pvCount")!.textContent).toBe("0 traditions");
+    addTradition(document);
+    const tiles = [...document.querySelectorAll("#pvTraditions .pvtrad")];
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0].textContent).toContain("tradition_mubarizuns");
+    expect(document.getElementById("pvCount")!.textContent).toBe("1 tradition");
+    // Both layers the catalog gave are stacked, in index order.
+    const layers = [...tiles[0].querySelectorAll("img")].map((i) => i.getAttribute("data-rel"));
+    expect(layers).toEqual(CATALOG.traditions.tradition_mubarizuns.layers);
+  });
+
+  it("writes a named color when one is picked, not three components", () => {
+    const { document, posted } = boot();
+    const color = rowControl(document, "Color");
+    (color.querySelector('.px-toggle[data-value="named"]') as HTMLButtonElement).click();
+    (color.querySelector(".px-dropdown") as HTMLButtonElement).click();
+    menuRow(document, "bedouin").click();
+    (document.getElementById("save") as HTMLButtonElement).click();
+    const save = posted.at(-1) as { block: string };
+    expect(save.block).toContain("color = bedouin");
   });
 
   it("writes the block a typed name, a pillar and a tradition make", () => {
@@ -137,18 +213,9 @@ describe("culture creator app", () => {
 
     // Pillar: the dropdown's menu, then the entry for the ethos pillar.
     (rowControl(document, "Ethos") as HTMLButtonElement).click();
-    const ethos = [...document.querySelectorAll(".px-menu-item")].find((i) =>
-      i.textContent?.includes("ethos_stoic")
-    ) as HTMLElement;
-    ethos.click();
+    menuRow(document, "ethos_stoic").click();
 
-    // Tradition: the chip list's Add button, then the entry in the picker.
-    const add = rowControl(document, "Traditions").querySelector("button") as HTMLButtonElement;
-    add.click();
-    const tradition = [...document.querySelectorAll(".px-picker-results .px-menu-item")].find((i) =>
-      i.textContent?.includes("tradition_mubarizuns")
-    ) as HTMLElement;
-    tradition.click();
+    addTradition(document);
 
     (document.getElementById("save") as HTMLButtonElement).click();
     const save = posted.at(-1) as { type: string; mode: string; name: string; block: string; loc: unknown };
