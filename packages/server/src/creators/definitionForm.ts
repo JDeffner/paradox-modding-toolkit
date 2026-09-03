@@ -39,7 +39,13 @@ import type { KeySpec } from "../schema/types";
 import type { ServerData } from "../serverData";
 import { definitionsOfKind, short } from "../overview/eventVocabulary";
 
-/** Same cap as the overview's per-kind definition list. */
+/**
+ * Same cap as the overview's per-kind definition list. It holds a whole game's
+ * worth of a creator's kind with room for a mod's own (301 vanilla traits is
+ * the largest of them, measured), and the mod's definitions are listed first,
+ * so a list that did hit the cap would only lose vanilla entries from the end
+ * of the alphabet.
+ */
 const EXISTING_CAP = 500;
 
 function formKeys(specs: Map<string, KeySpec> | undefined): DefinitionFormKey[] {
@@ -289,19 +295,29 @@ export function computeDefinitionForm(
   // what the indexed definitions of this kind actually write for them.
   sampledValues(data, kind, keys, files);
 
-  const existing: OverviewDef[] = [];
+  // What the Open menu offers: everything the index has of this kind, the
+  // mod's own first. A creator opens a vanilla definition to duplicate or
+  // override it, which is most of what a modder does with one, so a list of
+  // only the mod's own definitions could never answer "start from the game's".
+  const byName = new Map<string, OverviewDef>();
   for (const def of data.index.allDefinitions()) {
-    if (def.kind !== kind || def.source !== "mod" || !inFocus(def.file)) continue;
-    if (existing.length >= EXISTING_CAP) continue;
+    if (def.kind !== kind) continue;
+    if (def.source === "mod" && !inFocus(def.file)) continue;
+    const seen = byName.get(def.name);
+    // Last-in-wins: the mod's copy is the one a modder means by the name.
+    if (seen && !(def.source === "mod" && seen.source !== "mod")) continue;
     const label = labelOf(kind, def.name);
-    existing.push({
+    byName.set(def.name, {
       name: def.name,
       file: def.file,
       line: def.line,
+      source: def.source,
       ...(label !== undefined ? { label } : {}),
     });
   }
-  existing.sort((a, b) => a.name.localeCompare(b.name));
+  const existing = [...byName.values()]
+    .sort((a, b) => Number(b.source === "mod") - Number(a.source === "mod") || a.name.localeCompare(b.name))
+    .slice(0, EXISTING_CAP);
 
   // Modifier rows: the same token list hover documents, ranked by the reference
   // index's usage counts so the modifiers a real corpus writes come first.

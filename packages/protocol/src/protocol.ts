@@ -249,6 +249,13 @@ export interface OverviewDef {
    * word for it; absent everywhere else.
    */
   label?: string;
+  /**
+   * Where the definition comes from. Set by {@link definitionFormRequest} only,
+   * whose list includes the game's and a dependency's definitions (a creator
+   * opens one to duplicate or override it) and must say which is which; absent
+   * everywhere else, where every definition listed is the mod's own.
+   */
+  source?: "vanilla" | "parent" | "mod";
 }
 export interface OverviewKind {
   kind: string;

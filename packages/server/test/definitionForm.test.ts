@@ -116,9 +116,15 @@ describe("computeDefinitionForm", () => {
     expect(form.options.trait[0].hint).toBe("this mod");
   });
 
-  it("lists the mod's own definitions of the kind, not vanilla's", () => {
+  it("lists every definition of the kind for the Open menu, the mod's first", () => {
     const form = computeDefinitionForm(data, schema, { kind: "trait" })!;
-    expect(form.existing.map((d) => d.name)).toEqual(["px_stoic"]);
+    // A creator opens a game trait to duplicate or override it, so vanilla is
+    // offered too, behind the mod's own and labelled with where it comes from.
+    expect(form.existing.map((d) => [d.name, d.source])).toEqual([
+      ["px_stoic", "mod"],
+      ["brave", "vanilla"],
+      ["craven", "vanilla"],
+    ]);
     expect(form.existing[0].file).toBe(traitsFile);
   });
 
@@ -204,7 +210,7 @@ describe("computeDefinitionForm", () => {
       ["brave", "Brave"],
       ["craven", undefined],
     ]);
-    expect(trait.existing.map((d) => d.label)).toEqual(["Stoic"]);
+    expect(trait.existing.map((d) => d.label)).toEqual(["Stoic", "Brave", undefined]);
 
     // culture_pillar's schema entry names no loc pattern: $_name, then $.
     const culture = computeDefinitionForm(data, schema, { kind: "culture" })!;

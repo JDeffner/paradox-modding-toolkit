@@ -154,7 +154,7 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
-| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, every indexed definition of the kind with its source, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
 | `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). `null` when the active profile names no formats source or no game folder is configured |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
@@ -555,8 +555,12 @@ its own order (curated keys first, then by vanilla usage count), each with the
 game's one-line documentation, a coarse `values` hint and its `freq`; `options`
 lists every indexed definition of each kind a key names, mod entries first,
 through the same resolver `paradox/eventValueOptions` answers with; `modifiers`
-is the script_docs modifier vocabulary hover already reads; `existing` is the
-`paradox/modOverview` walk for that one kind; and `current` is the block's own
+is the script_docs modifier vocabulary hover already reads; `existing` is every indexed
+definition of the kind, the mod's own first and each side name-sorted (capped
+at 500), each carrying its `source` (`mod` / `vanilla` / `parent`) so a client's
+Open menu can say where one comes from: a creator opens a game definition to
+duplicate or override it, so a list of the mod's own could not answer "start
+from the game's"; and `current` is the block's own
 bytes read off disk. A key with no widget in a client is still in `keys`, so a
 form can show it rather than hide it (AD-5).
 
