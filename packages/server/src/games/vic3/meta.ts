@@ -20,6 +20,9 @@ export const vic3Meta: GameMeta = {
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 529340,
+  // Verified on the live install: a different folder name from CK3's, and only
+  // some DLC have a file there (the rest fall back to their thumbnail.png).
+  dlcIconDir: "gfx/interface/icons/dlc_icons",
   eventNamespaces: true,
   scaffolds: VIC3_SCAFFOLDS,
   // uiFont deliberately absent: this game ships no Gitan (its fonts/ holds

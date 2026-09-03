@@ -694,7 +694,11 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       }
       sources = msg.index.sources;
       needsScriptDocs = msg.index.needsScriptDocs;
-      $("query").setAttribute("data-tip", sources.join(" "));
+      // The tip stays short; the full provenance reads below the box.
+      $("query").setAttribute(
+        "data-tip",
+        "Search the names this toolkit knows. They come from your game files, your logs and bundled tables, listed below."
+      );
       // The provenance belongs where a reader looks first, not only in a tip.
       $("sourceLines").textContent = sources.join(" ");
       renderList();

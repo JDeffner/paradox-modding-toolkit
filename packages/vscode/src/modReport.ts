@@ -1,7 +1,8 @@
 /**
  * `Paradox: Show Mod Report` — a one-page dashboard: content inventory,
  * diagnostics by severity/source, localization coverage, override map.
- * Built as markdown, rendered in the toolkit's document panel.
+ * Built as markdown, rendered in the toolkit's document panel and as a page
+ * of the Wiki.
  */
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
@@ -36,7 +37,8 @@ function diagnosticsSummary(modRoot: string | null): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => `| ${key} | ${n} |`);
 }
 
-export async function modReportCommand(lc: LanguageClient, modRoot: string | null = null): Promise<void> {
+/** The report as markdown: the doc panel and the Wiki's Mod Report page both render it. */
+export async function buildModReport(lc: LanguageClient, modRoot: string | null): Promise<string> {
   const params: ModScopedParams = { modRoot };
   const [stats, overview, coverage, overrides] = await Promise.all([
     lc.sendRequest<IndexStats>(indexStatsRequest),
@@ -96,5 +98,9 @@ export async function modReportCommand(lc: LanguageClient, modRoot: string | nul
   lines.push(`## Index`, "");
   lines.push(`Total indexed (all sources): ${stats.total} definitions in ${stats.files} files.`, "");
 
-  showDocPanel("px.modReport", "Mod Report", lines.join("\n"));
+  return lines.join("\n");
+}
+
+export async function modReportCommand(lc: LanguageClient, modRoot: string | null = null): Promise<void> {
+  showDocPanel("px.modReport", "Mod Report", await buildModReport(lc, modRoot));
 }

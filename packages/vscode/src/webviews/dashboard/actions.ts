@@ -166,7 +166,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Wiki",
           command: "px.openWiki",
           icon: "library",
-          tip: "The toolkit's reference pages in one searchable place.",
+          tip: "The hub: format docs, image guidelines, diagnostics, mod report and the Examples Wiki.",
         },
         {
           label: "Credits",
@@ -179,12 +179,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           command: "px.showExamplesWiki",
           icon: "bookOpen",
           tip: "Search every trigger, effect and datafunction the game has.",
-        },
-        {
-          label: "Mod Report",
-          command: "px.modReport",
-          icon: "fileText",
-          tip: "Content counts, localization coverage and problems.",
         },
       ],
     },

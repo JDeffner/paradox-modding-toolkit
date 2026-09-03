@@ -148,6 +148,16 @@ run included.*
 *Select a card in the event graph: blue is what it fires, orange is what fires
 it, and left to right means "happens after".*
 
+![Examples Wiki](media/screenshots/examples-wiki.png)
+
+*The Examples Wiki searches every trigger, effect and scope the game reported
+about itself, ranked by real usage count.*
+
+![Wiki hub](media/screenshots/wiki-hub.png)
+
+*The wiki hub collects the reference views on one page: Examples Wiki, format
+docs, image guidelines, diagnostics, mod report and credits.*
+
 ## Quick start
 
 1. Install the extension, open your mod folder, and run **Run Setup & Health

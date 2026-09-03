@@ -16,6 +16,8 @@ export const ck3Meta: GameMeta = {
   legacyConfigDirName: ".ck3modding",
   docsFolderName: "Crusader Kings III",
   steamAppId: 1158310,
+  // Verified on the 1.19 install: dlc_001.dds .. dlc_029.dds.
+  dlcIconDir: "gfx/interface/icons/dlc",
   eventNamespaces: true,
   // The engine's own default metrics: they were measured on this game's font,
   // and the layout engine reuses them for games whose probe has not run.

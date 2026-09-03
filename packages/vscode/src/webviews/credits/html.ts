@@ -20,7 +20,12 @@ function escape(text: string): string {
 }
 
 function entryHtml(entry: CreditEntry): string {
-  const author = entry.author ? `<div class="author">${escape(entry.author)}</div>` : "";
+  const authorText = entry.author
+    ? entry.authorUrl
+      ? `<a class="author-link" href="${escape(entry.authorUrl)}">${escape(entry.author)}${icon("externalLink")}</a>`
+      : escape(entry.author)
+    : "";
+  const author = entry.author ? `<div class="author">${authorText}</div>` : "";
   return /* html */ `<div class="entry">
   <div class="head">
     <a class="name" href="${escape(entry.url)}">${escape(entry.name)}${icon("externalLink")}</a>
@@ -70,6 +75,18 @@ ${uiCss}
   .name:hover { text-decoration: underline; }
   .name svg { width: 13px; height: 13px; opacity: 0.7; }
   .author { color: var(--px-muted-fg); font-size: var(--px-text-xs); margin-top: 2px; }
+  .author-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: inherit; text-decoration: none;
+  }
+  .author-link:hover { text-decoration: underline; }
+  .author-link svg { width: 11px; height: 11px; opacity: 0.7; }
+  /* A long license line, such as the Node.js one, wraps inside the card. */
+  .head .px-badge {
+    max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere;
+    height: auto; padding: 2px 8px; line-height: 1.35; text-align: left;
+    border-radius: var(--px-radius-md);
+  }
   .used { margin-top: 6px; }
   #footer { margin-top: 28px; color: var(--px-muted-fg); font-size: var(--px-text-sm); }
 </style>

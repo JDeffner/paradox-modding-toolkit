@@ -6,7 +6,6 @@
  *   <workshopDir>/
  *     item.json                    {"title": "...", "publishedfileid": "..."}
  *     description.bbcode           default-language description
- *     links.json                   links rendered as a block at the end of the description
  *     translations/<steamlang>/title.txt        localized title (optional)
  *     translations/<steamlang>/description.bbcode
  *     previews/                    extra preview images, videos.txt, order.txt
@@ -273,76 +272,6 @@ export function writeVideos(workshopDir: string, ids: string[]): void {
   fs.writeFileSync(file, ids.join("\n") + "\n", "utf8");
 }
 
-// ---------------------------------------------------------------------------
-// Links: Steam has no link field, so they render as a block at the end of the
-// description. The block is recognizable, so an upload replaces it and a pull
-// takes it back apart.
-// ---------------------------------------------------------------------------
-
-export const LINKS_FILE = "links.json";
-const LINKS_HEAD = "[h2]Links[/h2]";
-
-export interface Link {
-  label: string;
-  url: string;
-}
-
-const isHttp = (u: string): boolean => /^https?:\/\/\S+$/i.test(u);
-
-/** `<workshopDir>/links.json`, or none. */
-export function readLinks(workshopDir: string): Link[] {
-  try {
-    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, LINKS_FILE), "utf8")) as unknown;
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((l): l is Link => typeof l?.url === "string" && isHttp(l.url))
-      .map((l) => ({ label: typeof l.label === "string" ? l.label : "", url: l.url }));
-  } catch {
-    return [];
-  }
-}
-
-export function writeLinks(workshopDir: string, links: Link[]): void {
-  const file = path.join(workshopDir, LINKS_FILE);
-  const kept = links.filter((l) => isHttp(l.url));
-  if (kept.length === 0) {
-    fs.rmSync(file, { force: true });
-    return;
-  }
-  fs.mkdirSync(workshopDir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(kept, null, 2) + "\n", "utf8");
-}
-
-/** The description without its trailing links block. */
-export function stripLinksBlock(description: string): string {
-  const at = description.lastIndexOf(LINKS_HEAD);
-  if (at < 0) return description;
-  // Only a block that runs to the end is ours; a heading mid-text is the author's.
-  const tail = description.slice(at + LINKS_HEAD.length);
-  if (!/^\s*\[list\][\s\S]*\[\/list\]\s*$/.test(tail)) return description;
-  return description.slice(0, at).replace(/\s+$/, "");
-}
-
-/** The description with `links` rendered as its trailing block (or none). */
-export function withLinksBlock(description: string, links: Link[]): string {
-  const base = stripLinksBlock(description);
-  const kept = links.filter((l) => isHttp(l.url));
-  if (kept.length === 0) return base;
-  const items = kept.map((l) => `[*] [url=${l.url}]${l.label.trim() || l.url}[/url]`).join("\n");
-  return `${base}${base.trim() === "" ? "" : "\n\n"}${LINKS_HEAD}\n[list]\n${items}\n[/list]`;
-}
-
-/** The links a trailing block carries, so a pulled description round-trips into links.json. */
-export function parseLinksBlock(description: string): Link[] {
-  const at = description.lastIndexOf(LINKS_HEAD);
-  if (at < 0 || stripLinksBlock(description) === description) return [];
-  const out: Link[] = [];
-  for (const m of description.slice(at).matchAll(/\[url=([^\]]+)\]([^[]*)\[\/url\]/g)) {
-    if (isHttp(m[1])) out.push({ label: m[2].trim(), url: m[1] });
-  }
-  return out;
-}
-
 export interface Dependencies {
   /** Required DLC, as Steam app ids. */
   apps: number[];
@@ -376,6 +305,58 @@ export function writeDependencies(workshopDir: string, deps: Dependencies): void
 // ---------------------------------------------------------------------------
 // Changenotes from the changelog
 // ---------------------------------------------------------------------------
+
+/** A changelog the mod already has, offered as the `px.workshop.changelog` source. */
+export interface ChangelogCandidate {
+  /** Absolute path of the file or folder. */
+  path: string;
+  kind: "file" | "folder";
+  /** True when `px.workshop.changelog` already resolves to it. */
+  current: boolean;
+}
+
+/** The names a hand-kept changelog goes by, in the order they are preferred. */
+const CHANGELOG_NAMES = ["changelog", "changelogs", "CHANGELOG.md", "CHANGELOG.txt"];
+
+/**
+ * Changelogs the mod already has: most mods keep none, and the ones that do
+ * keep it at the mod root (`CHANGELOG.md`) rather than where the default
+ * setting looks. Searched in the workshop folder first, then the mod root;
+ * name matching is case-insensitive, since `changelog.md` and `CHANGELOG.md`
+ * are the same file on Windows and different ones on Linux.
+ */
+export function changelogCandidates(
+  modRoot: string,
+  workshopDir: string,
+  resolved: string
+): ChangelogCandidate[] {
+  const key = (p: string): string => path.resolve(p).toLowerCase();
+  const resolvedKey = key(resolved);
+  const out: ChangelogCandidate[] = [];
+  const seen = new Set<string>();
+  for (const dir of [workshopDir, modRoot]) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const want of CHANGELOG_NAMES) {
+      for (const e of entries) {
+        if (e.name.toLowerCase() !== want.toLowerCase()) continue;
+        const full = path.join(dir, e.name);
+        if (seen.has(key(full))) continue;
+        seen.add(key(full));
+        out.push({
+          path: full,
+          kind: e.isDirectory() ? "folder" : "file",
+          current: key(full) === resolvedKey,
+        });
+      }
+    }
+  }
+  return out;
+}
 
 export interface ChangeNote {
   text: string;

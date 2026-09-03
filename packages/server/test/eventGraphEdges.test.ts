@@ -136,13 +136,22 @@ afterAll(() => {
 });
 
 describe("event graph node selection", () => {
-  it("lists every event of a namespace, including ones no edge touches", () => {
-    const graph = computeEventGraph(data, { namespace: "ns" });
+  it("lists every event of a namespace, including ones no edge touches, when not pruning", () => {
+    const graph = computeEventGraph(data, { namespace: "ns", connectedOnly: false });
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(["ns.1", "ns.2", "ns.9"]);
   });
 
+  it("prunes an event no edge touches by default, keeping the queried root", () => {
+    expect(
+      computeEventGraph(data, { namespace: "ns" })
+        .nodes.map((n) => n.id)
+        .sort()
+    ).toEqual(["ns.1", "ns.2"]);
+    expect(computeEventGraph(data, { root: "ns.9" }).nodes.map((n) => n.id)).toContain("ns.9");
+  });
+
   it("lists the mod's definitions with no query at all", () => {
-    const ids = computeEventGraph(data, {}).nodes.map((n) => n.id);
+    const ids = computeEventGraph(data, { connectedOnly: false }).nodes.map((n) => n.id);
     expect(ids).toContain("ns.9");
   });
 

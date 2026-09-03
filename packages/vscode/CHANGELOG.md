@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+- **GUI editor texture cache evicts the right file.** A decoded texture
+  from an earlier session could carry a write time a fraction ahead of the
+  clock the cache starts from, so it was never the oldest and the budget
+  overshot. The clock now starts past every file on disk.
+- **Paradox: Move Mod is back, as a command.** It converts a mod between
+  the game folder layout and the mod projects layout in either direction
+  and carries the Workshop listing with it: `.px-toolkit/workshop` inside
+  the mod becomes the project's sibling `workshop` folder and back, so the
+  panel finds it with no setting change. Copy, verify, swap the workspace
+  folder, then retire the source; a folder Windows will not release is
+  renamed `.moved-<time>` or named in a toast, never lost.
+- **Required DLC comes from the game files.** The Requirements card shows
+  the DLC the install ships (`game/dlc/*/*.dlc`) as a grid of their own
+  icons; hover names one, click requires it. Chapters and the Subscription
+  never appear because the game does not ship them as DLC. Steam is only
+  asked when the game path gives nothing. Required Workshop items that are
+  not installed show their title and id after a Steam lookup.
+- **A changelog system.** The changenote menu finds an existing changelog
+  (a `changelog` folder, `CHANGELOG.md` or `.txt`, in the listing folder or
+  the mod root) and takes it with one click, tells you when there is no
+  entry for the current version, and creates `changelog/<version>.md` for
+  you, seeded from the last commit. Nothing is written on a plain open.
+- **Publish parts are switches.** Mod files, Details, Translations (all,
+  and one per language) and Changenote each have their own toggle; a part
+  that is off is dimmed and marked Not uploaded. Enable all asks first.
+- **Workshop panel polish.** Item stats stay on one row. Upload and
+  download progress sits in the toolbar and never moves the cards. Preview
+  reordering is pointer driven, with the tile lifting and the others
+  sliding aside, no browser ghost image. The Installed picker is wider and
+  leads with titles. The Previews card has help on formats, the 1 MB limit
+  and ordering. Preview images load again when the listing folder sits
+  outside the mod.
+- **The Workshop panel fits a sidebar-open window.** One column until both
+  columns get real room, two columns from about 1160px, and a centered cap
+  on very wide panes. Labels sit above their fields. The folder-change
+  control is gone; an info tip on Files names the folder and the
+  `px.workshop.dir` setting that moves it.
+- **The Wiki is a hub.** Its front page is a set of cards that lead to the
+  Examples Wiki, Format Docs, Image Guidelines, Credits, and two new wiki
+  subpages: Diagnostics (every code with its severity) and Mod Report. The
+  Mod Report row leaves the Project panel's Info group; the report itself
+  is unchanged.
+- **Tree views get actions.** Dependencies: Show for Cursor, Clear, an info
+  note, and per row Show Dependencies of This, Find All References and Copy
+  Name. Problems by Type: Open Problems Panel, Clear Game Problems, and per
+  code row Explain Code (opens its wiki page) and Suppress Code (adds it to
+  the ignore setting after a confirm), plus Reveal in Explorer and Next
+  Problem on file rows.
+- **Credits link people too.** An author with a public profile is a link,
+  and long license chips wrap inside their card instead of overflowing it.
+- **Smaller fixes.** The Examples Wiki search tooltip is one short sentence
+  (the full provenance stays below the box, with its stray double period
+  gone), and the Flag Builder's footer padding sits on the text, not the
+  box, so text and icons share one inset.
 - **Visual content creators (CK3).** The Project panel's Create group lists the
   creators the active game has, and each row opens a form over the game's own
   documented keys instead of a blank file. They share one host side: you pick
@@ -60,8 +114,8 @@
   `{ name, label }` argument, so any panel can hand the builder its target.
 
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
-  Publish first, then Previews and Requirements, then Links; the description
-  and the translations follow at full width. A step strip under the toolbar
+  Publish first, then Previews and Requirements; the description and the
+  translations follow at full width. A step strip under the toolbar
   names each stage of an upload or download and shows the percent of the one
   in flight.
 - **Download picks its parts.** The toolbar's download button now asks which
@@ -70,11 +124,8 @@
   the gallery images and videos, the requirements, the main preview image.
 - **Previews reorder by drag and drop.** The order is saved to
   `previews/order.txt`; files not listed follow by name.
-- **Links.** Steam has no link field, so the panel keeps `links.json` next to
-  the listing and appends a Links block at the end of the description on
-  upload; a download takes the block back apart.
 - **Translations moved into `translations/`.** The listing folder keeps
-  `description.bbcode`, `item.json`, `links.json` and `dependencies.json` at
+  `description.bbcode`, `item.json` and `dependencies.json` at
   its root; each language lives in `translations/<language>/`. Old root
   language folders are still read and move on the next save.
 - **Required DLC and required items in the Workshop panel.** A Requirements

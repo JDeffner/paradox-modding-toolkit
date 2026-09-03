@@ -8,16 +8,12 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
+  changelogCandidates,
   extractVersionSection,
   hasListingFiles,
   mdToBBCode,
   readItemJson,
   moveListing,
-  parseLinksBlock,
-  readLinks,
-  stripLinksBlock,
-  withLinksBlock,
-  writeLinks,
   writePreviewOrder,
   readDependencies,
   readListingFiles,
@@ -126,39 +122,6 @@ describe("preview order and links", () => {
     for (const f of ["a.png", "b.png", "c.png"]) fs.writeFileSync(path.join(previews, f), "");
     writePreviewOrder(dir, ["c.png", "a.png", "gone.png"]);
     expect(readPreviews(dir)!.images.map((p) => path.basename(p))).toEqual(["c.png", "a.png", "b.png"]);
-  });
-
-  it("renders links as a trailing block and takes it apart again", () => {
-    const links = [
-      { label: "Discord", url: "https://discord.gg/x" },
-      { label: "", url: "https://example.com" },
-      { label: "bad", url: "javascript:alert(1)" },
-    ];
-    const text = withLinksBlock("Hello [b]there[/b]", links);
-    expect(text).toBe(
-      "Hello [b]there[/b]\n\n[h2]Links[/h2]\n[list]\n[*] [url=https://discord.gg/x]Discord[/url]\n[*] [url=https://example.com]https://example.com[/url]\n[/list]"
-    );
-    expect(stripLinksBlock(text)).toBe("Hello [b]there[/b]");
-    expect(parseLinksBlock(text)).toEqual([
-      { label: "Discord", url: "https://discord.gg/x" },
-      { label: "https://example.com", url: "https://example.com" },
-    ]);
-    // Replacing keeps one block, and an author's own [h2]Links[/h2] mid-text is left alone.
-    expect(withLinksBlock(text, [links[0]]).match(/\[h2\]Links\[\/h2\]/g)).toHaveLength(1);
-    expect(stripLinksBlock("[h2]Links[/h2]\nsee below\n[b]x[/b]")).toBe(
-      "[h2]Links[/h2]\nsee below\n[b]x[/b]"
-    );
-  });
-
-  it("round-trips links.json and drops non-http urls", () => {
-    const dir = tmp();
-    writeLinks(dir, [
-      { label: "a", url: "https://a" },
-      { label: "b", url: "ftp://b" },
-    ]);
-    expect(readLinks(dir)).toEqual([{ label: "a", url: "https://a" }]);
-    writeLinks(dir, []);
-    expect(fs.existsSync(path.join(dir, "links.json"))).toBe(false);
   });
 });
 
@@ -323,5 +286,27 @@ describe("mdToBBCode", () => {
         "[/code]",
       ].join("\n")
     );
+  });
+});
+
+describe("changelog candidates", () => {
+  it("finds a hand-kept changelog at the mod root and in the workshop folder", () => {
+    const root = tmp();
+    const workshopDir = path.join(root, ".px-toolkit", "workshop");
+    fs.mkdirSync(workshopDir, { recursive: true });
+    fs.writeFileSync(path.join(root, "CHANGELOG.md"), "# 1.0", "utf8");
+    fs.mkdirSync(path.join(workshopDir, "changelog"));
+
+    const found = changelogCandidates(root, workshopDir, path.join(workshopDir, "changelog"));
+    // The workshop folder is searched first, and the resolved setting is flagged.
+    expect(found.map((c) => [path.basename(c.path), c.kind, c.current])).toEqual([
+      ["changelog", "folder", true],
+      ["CHANGELOG.md", "file", false],
+    ]);
+  });
+
+  it("finds nothing for a mod that keeps no changelog", () => {
+    const root = tmp();
+    expect(changelogCandidates(root, path.join(root, "workshop"), path.join(root, "workshop"))).toEqual([]);
   });
 });

@@ -69,6 +69,16 @@ you work in it: tree, layers, canvas, inspector, element library.*
 *The Flag Builder (Victoria 3, EU5) composes a coat of arms exactly as the
 game recolors it, and saves it back as script.*
 
+![Examples Wiki](packages/vscode/media/screenshots/examples-wiki.png)
+
+*The Examples Wiki searches every trigger, effect and scope the game reported
+about itself, ranked by real usage count.*
+
+![Wiki hub](packages/vscode/media/screenshots/wiki-hub.png)
+
+*The wiki hub collects the reference views on one page: Examples Wiki, format
+docs, image guidelines, diagnostics, mod report and credits.*
+
 - **Completion that knows the grammar and the scope.** Key positions offer
   triggers and effects, value positions offer traits, events, on_actions and loc
   keys, and `scope:`, `culture:`, `title:` prefixes complete their referents.

@@ -186,7 +186,10 @@ export function buildExampleWikiIndex(src: ExampleWikiSources): ExampleWikiIndex
   }
   entries.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  const sources = [`Triggers, effects, event targets and modifiers come from ${src.tokenSource}.`];
+  // tokenSource is a sentence tail that may already end in a period.
+  const sources = [
+    `Triggers, effects, event targets and modifiers come from ${src.tokenSource.replace(/\.$/, "")}.`,
+  ];
   sources.push(
     src.dataTypes.source === "data_types.log"
       ? "Datafunctions and data types come from your own DumpDataTypes output."

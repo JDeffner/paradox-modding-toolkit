@@ -23,6 +23,9 @@ export const eu5Meta: GameMeta = {
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 3450310,
+  // dlcIconDir deliberately absent: no live install has been checked, so the
+  // Workshop panel shows this game's DLC (read from `<gameDir>/dlc/`) with the
+  // folder's own thumbnail.png, and falls back to Steam when there is none.
   eventNamespaces: true,
   scaffolds: EU5_SCAFFOLDS,
   // uiFont and guiTextMetrics deliberately absent: neither the font file nor

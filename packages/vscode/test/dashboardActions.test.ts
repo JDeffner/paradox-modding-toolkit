@@ -11,10 +11,10 @@ function commands(groups: ReturnType<typeof actionGroups>): string[] {
 
 describe("visibleActionGroups", () => {
   it("drops the hidden rows and keeps the rest", () => {
-    const groups = visibleActionGroups(ck3Meta, 0, ["px.showEventGraph", "px.modReport"]);
+    const groups = visibleActionGroups(ck3Meta, 0, ["px.showEventGraph", "px.showExamplesWiki"]);
     const ids = commands(groups);
     expect(ids).not.toContain("px.showEventGraph");
-    expect(ids).not.toContain("px.modReport");
+    expect(ids).not.toContain("px.showExamplesWiki");
     expect(ids).toContain("px.simulateEvent");
     expect(ids).toContain("px.convertToDds");
   });
@@ -34,6 +34,8 @@ describe("visibleActionGroups", () => {
     const ids = commands(actionGroups(ck3Meta, 0));
     expect(ids).not.toContain("px.openInfoDocs");
     expect(ids).not.toContain("px.imageGuidelines");
+    // Mod Report is a Wiki subpage now, not an Info row.
+    expect(ids).not.toContain("px.modReport");
     expect(ids).toContain("px.openWiki");
   });
 
@@ -45,7 +47,6 @@ describe("visibleActionGroups", () => {
       "px.openWiki",
       "px.openCredits",
       "px.showExamplesWiki",
-      "px.modReport",
     ]);
     expect(groups.map((g) => g.label)).toEqual(["View", "Create", "Share", "Info", "Test & Troubleshoot"]);
     // The wiki rows moved out of View, they are not listed twice.
@@ -57,11 +58,7 @@ describe("visibleActionGroups", () => {
   it("hides Info rows like any other row", () => {
     const groups = visibleActionGroups(ck3Meta, 0, ["px.openDiscord", "px.openWiki"]);
     const info = groups.find((g) => g.label === "Info");
-    expect(info?.items.map((it) => it.command)).toEqual([
-      "px.openCredits",
-      "px.showExamplesWiki",
-      "px.modReport",
-    ]);
+    expect(info?.items.map((it) => it.command)).toEqual(["px.openCredits", "px.showExamplesWiki"]);
   });
 
   it("offers the coat-of-arms creator right after New Content, per game", () => {
