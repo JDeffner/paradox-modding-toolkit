@@ -72,6 +72,24 @@ export interface WorkshopModInfo {
   dependencies: { apps: number[]; items: string[] } | null;
   /** Installed Workshop mods the required-items picker offers first. */
   dependencyCandidates: { itemId: string; label: string; declared: boolean }[];
+  /** `<workshopDir>/links.json`: rendered as a block at the end of the description on upload. */
+  links: { label: string; url: string }[];
+}
+
+/** What a download from Steam writes into the listing folder; mirrors the publish parts. */
+export interface PullParts {
+  /** item.json: title, tags, visibility, id. */
+  details: boolean;
+  /** description.bbcode (and links.json from its trailing links block). */
+  description: boolean;
+  /** translations/<lang>/ for every language whose text differs from the default. */
+  translations: boolean;
+  /** previews/: the gallery images downloaded, videos.txt, order.txt. */
+  previews: boolean;
+  /** dependencies.json. */
+  requirements: boolean;
+  /** The main preview image, into the mod folder. */
+  thumbnail: boolean;
 }
 
 /** Title/description as Steam serves one language (its fallback included). */
@@ -91,7 +109,16 @@ export type HostToApp =
       /** Steam unreachable or the query failed; disk data stays usable. */
       error: string | null;
     }
-  | { type: "uploadState"; busy: boolean; message?: string }
+  | {
+      type: "uploadState";
+      busy: boolean;
+      message?: string;
+      /** The named steps of the running job, and which one is on (0-based). */
+      steps?: string[];
+      step?: number;
+      /** 0..100 for the running step, null while Steam has no size yet. */
+      percent?: number | null;
+    }
   /** The game's DLC list, or why it could not be read. */
   | { type: "dlc"; list: DlcEntry[]; error: string | null };
 
@@ -129,8 +156,12 @@ export type AppToHost =
   | { type: "openWorkshopSettings" }
   /** Surface a message as a VS Code notification (the app has no UI for it). */
   | { type: "notify"; message: string; warn?: boolean }
-  /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
-  | { type: "pullListing" }
+  /** Download the chosen parts of the live listing into the workshop folder (confirmed app-side). */
+  | { type: "pullListing"; parts: PullParts }
+  /** Write previews/order.txt (bare file names, gallery order). */
+  | { type: "reorderPreviews"; names: string[] }
+  /** Write links.json. */
+  | { type: "setLinks"; links: { label: string; url: string }[] }
   /** Ask the Steam client for the game's DLC list. */
   | { type: "loadDlc" }
   /** Write dependencies.json (required DLC app ids, required Workshop item ids). */

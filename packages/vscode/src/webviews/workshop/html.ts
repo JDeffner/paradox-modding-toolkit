@@ -40,10 +40,31 @@ ${uiCss}
     0% { transform: translateX(-110%); }
     100% { transform: translateX(440%); }
   }
+  /* Step strip under the toolbar while a job runs: names, the one in flight, its percent. */
+  #progress { display: none; flex: 0 0 auto; padding: 4px 12px 6px; border-bottom: 1px solid var(--px-border); gap: 4px; flex-direction: column; }
+  #progress.on { display: flex; }
+  #steps { display: flex; align-items: center; gap: 6px; font-size: var(--px-text-xs); color: var(--px-muted-fg); flex-wrap: wrap; }
+  #steps .st { display: inline-flex; align-items: center; gap: 4px; }
+  #steps .st .px-icon { width: 12px; height: 12px; }
+  #steps .st[data-state="done"] { color: var(--px-fg); }
+  #steps .st[data-state="on"] { color: var(--px-primary); font-weight: 600; }
+  #steps .sep { opacity: 0.5; }
+  #steps .msg { margin-left: auto; color: var(--px-fg); }
+  #bar { height: 3px; border-radius: 2px; background: var(--px-muted); overflow: hidden; }
+  #bar > div { height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
+  #bar.indeterminate > div { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
   #main { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
-  #page { max-width: 760px; margin: 0 auto; padding: 12px 16px 40px; display: flex; flex-direction: column; gap: 10px; }
-  .section { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
-  .section + .section { border-top: 1px solid var(--px-border); }
+  #page {
+    max-width: 1480px; margin: 0 auto; padding: 12px 16px 40px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start;
+  }
+  @media (max-width: 880px) { #page { grid-template-columns: minmax(0, 1fr); } }
+  .section {
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0;
+    border: 1px solid var(--px-border); border-radius: var(--px-radius-md); background: var(--px-card, transparent);
+  }
+  .section.wide, #noDescriptor { grid-column: 1 / -1; }
+  .section[hidden] { display: none; }
   #noDescriptor { display: none; flex-direction: row; align-items: center; gap: 10px; padding: 12px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
   #noDescriptor.on { display: flex; }
@@ -133,6 +154,12 @@ ${BBPREV_CSS}
   .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gallery .tile .rm { position: absolute; top: 2px; right: 2px; }
   .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .gallery .tile[draggable="true"] { cursor: grab; }
+  .gallery .tile.dragging { opacity: 0.4; }
+  .gallery .tile.drop-before { box-shadow: -3px 0 0 var(--px-primary); }
+  .gallery .tile.drop-after { box-shadow: 3px 0 0 var(--px-primary); }
+  .link-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 6px; align-items: center; }
+  .link-row .px-input { width: 100%; }
   .check-row { display: flex; align-items: flex-start; gap: 6px; font-size: var(--px-text-xs); padding: 2px 0; }
   .check-row[data-level="error"] { color: var(--px-destructive); }
   .check-row[data-level="warn"] { color: var(--px-muted-fg); }
@@ -154,6 +181,10 @@ ${BBPREV_CSS}
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
   <div id="busy"><div></div></div>
+  <div id="progress">
+    <div id="steps"></div>
+    <div id="bar"><div></div></div>
+  </div>
   <div id="main"><div id="page">
 
     <div id="noDescriptor">
@@ -208,67 +239,8 @@ ${BBPREV_CSS}
           </div>
         </div>
       </div>
+      <div id="statsSection" hidden><div id="stats"></div></div>
     </div>
-
-    <div class="section" id="statsSection" hidden>
-      <div class="px-panel-title">Statistics</div>
-      <div id="stats"></div>
-    </div>
-
-    <div class="section">
-      <div class="px-panel-title">Description
-        <span class="px-grow"></span>
-        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly as the Workshop page will.">
-          <button data-mode="edit" class="on">Edit</button>
-          <button data-mode="preview">Preview</button>
-        </div>
-      </div>
-      <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
-      <div id="descPreview" class="bbprev" hidden></div>
-      <div class="hintline">
-        <span>Saved locally to the mod's workshop.json as you type; goes to Steam on Upload.</span>
-        <span class="px-grow"></span>
-        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
-        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
-        <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="px-panel-title">${icon("globe")} Translations
-        <span class="px-grow"></span>
-        <button id="addLang" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add language</button>
-      </div>
-      <div class="hintline"><span>Title and description shown to Workshop visitors browsing Steam in that language. The default text above is what everyone else sees.</span></div>
-      <div id="translations"></div>
-    </div>
-
-    <div class="section" id="previewsSection">
-      <div class="px-panel-title">Previews</div>
-      <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
-      <div id="gallery" class="gallery"></div>
-      <div class="hintline" style="margin-top:6px">
-        <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
-        <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
-      </div>
-      <div class="field-row" style="margin-top:8px">
-        <span class="px-label">Videos</span>
-        <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
-      </div>
-    </div>
-
-    <div class="section" id="requirementsSection">
-      <div class="px-panel-title">Requirements</div>
-      <div class="px-label" style="margin-bottom:4px">Required DLC</div>
-      <div id="dlcBox"></div>
-      <div class="px-label" style="margin:10px 0 4px">Required items</div>
-      <div id="itemsBox"></div>
-      <div class="hintline" style="margin-top:4px">
-        <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto">${icon("plus")} Add item${icon("chevronDown")}</button>
-        <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link" style="width:220px" />
-      </div>
-    </div>
-
     <div class="section">
       <div class="px-panel-title">Publish</div>
       <div id="checks" style="margin-bottom:6px"></div>
@@ -298,6 +270,71 @@ ${BBPREV_CSS}
         </div>
       </div>
     </div>
+    <div class="section" id="previewsSection">
+      <div class="px-panel-title">Previews</div>
+      <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
+      <div id="gallery" class="gallery"></div>
+      <div class="hintline" style="margin-top:6px">
+        <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
+        <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
+      </div>
+      <div class="field-row" style="margin-top:8px">
+        <span class="px-label">Videos</span>
+        <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
+      </div>
+    </div>
+    <div class="section" id="requirementsSection">
+      <div class="px-panel-title">Requirements</div>
+      <div class="px-label" style="margin-bottom:4px">Required DLC</div>
+      <div id="dlcBox"></div>
+      <div class="px-label" style="margin:10px 0 4px">Required items</div>
+      <div id="itemsBox"></div>
+      <div class="hintline" style="margin-top:4px">
+        <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto">${icon("plus")} Add item${icon("chevronDown")}</button>
+        <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link" style="width:220px" />
+      </div>
+    </div>
+    <div class="section" id="linksSection">
+      <div class="px-panel-title">Links
+        <span class="px-grow"></span>
+        <button id="addLink" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add link</button>
+      </div>
+      <div id="linksHint" class="px-muted px-xs">Steam has no link field: these render as a "Links" block at the end of the description on upload, and a download takes them back apart.</div>
+      <div id="linksBox" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="section wide">
+      <div class="px-panel-title">Description
+        <span class="px-grow"></span>
+        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly as the Workshop page will.">
+          <button data-mode="edit" class="on">Edit</button>
+          <button data-mode="preview">Preview</button>
+        </div>
+      </div>
+      <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
+      <div id="descPreview" class="bbprev" hidden></div>
+      <div class="hintline">
+        <span>Saved to description.bbcode as you type; goes to Steam on Upload, with the links below appended as a block.</span>
+        <span class="px-grow"></span>
+        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
+        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
+        <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
+      </div>
+    </div>
+    <div class="section wide">
+      <div class="px-panel-title">${icon("globe")} Translations
+        <span class="px-grow"></span>
+        <button id="addLang" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add language</button>
+      </div>
+      <div class="hintline"><span>Title and description shown to Workshop visitors browsing Steam in that language. The default text above is what everyone else sees.</span></div>
+      <div id="translations"></div>
+    </div>
+
+
+
+
+
+
+
 
   </div></div>
 </div>

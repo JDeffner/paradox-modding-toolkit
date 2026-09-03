@@ -6,9 +6,15 @@
  *   <workshopDir>/
  *     item.json                    {"title": "...", "publishedfileid": "..."}
  *     description.bbcode           default-language description
- *     <steamlang>/title.txt        localized title (optional)
- *     <steamlang>/description.bbcode
+ *     links.json                   links rendered as a block at the end of the description
+ *     translations/<steamlang>/title.txt        localized title (optional)
+ *     translations/<steamlang>/description.bbcode
+ *     previews/                    extra preview images, videos.txt, order.txt
+ *     dependencies.json            required DLC and items
  *     changelog/                   changenote sources (see resolveChangeNote)
+ *
+ * Listings written before 0.4.0 keep `<steamlang>/` at the root; reads fall
+ * back to it and the next write moves the language into `translations/`.
  *
  * The folder's location is `px.workshop.dir`, resolved against the mod root.
  * Empty (the default) means `<configDir>/workshop` inside the mod, which a
@@ -25,6 +31,12 @@ import { STEAM_LANGUAGES, type WorkshopTranslation } from "@px-lsp/protocol/work
 
 export const SIBLING_WORKSHOP_DIR = "../workshop";
 export const DEFAULT_CHANGELOG = "changelog";
+export const TRANSLATIONS_DIR = "translations";
+
+/** Where one language's files live: `translations/<lang>/`. */
+export function langDir(workshopDir: string, api: string): string {
+  return path.join(workshopDir, TRANSLATIONS_DIR, api);
+}
 
 /**
  * The workshop folder of `root`: the `px.workshop.dir` setting when set, else
@@ -65,10 +77,16 @@ const read = (file: string): string | null => {
 export function readListingFiles(workshopDir: string): ListingFiles {
   const translations: Record<string, WorkshopTranslation> = {};
   for (const { api } of STEAM_LANGUAGES) {
-    const dir = path.join(workshopDir, api);
-    const title = read(path.join(dir, "title.txt"));
-    const description = read(path.join(dir, "description.bbcode"));
-    if (title === null && description === null) continue;
+    let dir = langDir(workshopDir, api);
+    let title = read(path.join(dir, "title.txt"));
+    let description = read(path.join(dir, "description.bbcode"));
+    if (title === null && description === null) {
+      // Pre-0.4.0 layout: the language folder sits at the root.
+      dir = path.join(workshopDir, api);
+      title = read(path.join(dir, "title.txt"));
+      description = read(path.join(dir, "description.bbcode"));
+      if (title === null && description === null) continue;
+    }
     translations[api] = {
       ...(title !== null ? { title: title.trim() } : {}),
       ...(description !== null ? { description } : {}),
@@ -90,28 +108,34 @@ export function writeListingFiles(
   fs.writeFileSync(path.join(workshopDir, "description.bbcode"), listing.description, "utf8");
   for (const { api } of STEAM_LANGUAGES) {
     const t = listing.translations[api];
-    const dir = path.join(workshopDir, api);
+    const dir = langDir(workshopDir, api);
+    // The pre-0.4.0 root folder is always cleared: its text now lives under translations/.
+    removeLangFiles(path.join(workshopDir, api));
     const title = (t?.title ?? "").trim();
     const description = t?.description ?? "";
     if (title === "" && description.trim() === "") {
-      // Nothing drafted: remove only the two files this store manages.
-      for (const f of ["title.txt", "description.bbcode"]) {
-        try {
-          fs.rmSync(path.join(dir, f));
-        } catch {
-          /* absent */
-        }
-      }
-      try {
-        if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
-      } catch {
-        /* leave a non-empty or locked folder alone */
-      }
+      removeLangFiles(dir);
       continue;
     }
     fs.mkdirSync(dir, { recursive: true });
     writeOrRemove(path.join(dir, "title.txt"), title === "" ? null : title + "\n");
     writeOrRemove(path.join(dir, "description.bbcode"), description.trim() === "" ? null : description);
+  }
+}
+
+/** Remove only the two files this store manages, and the folder once it is empty. */
+function removeLangFiles(dir: string): void {
+  for (const f of ["title.txt", "description.bbcode"]) {
+    try {
+      fs.rmSync(path.join(dir, f));
+    } catch {
+      /* absent */
+    }
+  }
+  try {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+  } catch {
+    /* leave a non-empty or locked folder alone */
   }
 }
 
@@ -130,6 +154,8 @@ function writeOrRemove(file: string, content: string | null): void {
 export interface ItemJson {
   title?: string;
   publishedfileid?: string;
+  tags?: string[];
+  visibility?: number;
 }
 
 /** `<workshopDir>/item.json`, or null when absent/unreadable. */
@@ -184,6 +210,8 @@ export function moveListing(
 
 export const PREVIEWS_DIR = "previews";
 export const VIDEOS_FILE = "videos.txt";
+/** One file name per line: the gallery order. Files not listed follow, by name. */
+export const ORDER_FILE = "order.txt";
 export const DEPENDENCIES_FILE = "dependencies.json";
 const PREVIEW_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif"]);
 
@@ -207,21 +235,31 @@ export function readPreviews(workshopDir: string): Previews | null {
   } catch {
     return null;
   }
-  const images = names
+  const byName = names
     .filter((n) => PREVIEW_EXTS.has(path.extname(n).toLowerCase()))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .map((n) => path.join(dir, n));
-  let videos: string[] = [];
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const order = readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n));
+  const images = [...order, ...byName.filter((n) => !order.includes(n))].map((n) => path.join(dir, n));
+  return { images, videos: readLines(path.join(dir, VIDEOS_FILE)) };
+}
+
+/** Non-empty, non-comment lines of a text file; none when it is absent. */
+function readLines(file: string): string[] {
   try {
-    videos = fs
-      .readFileSync(path.join(dir, VIDEOS_FILE), "utf8")
+    return fs
+      .readFileSync(file, "utf8")
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l !== "" && !l.startsWith("#"));
   } catch {
-    /* no videos file */
+    return [];
   }
-  return { images, videos };
+}
+
+export function writePreviewOrder(workshopDir: string, names: string[]): void {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, ORDER_FILE), names.join("\n") + "\n", "utf8");
 }
 
 export function writeVideos(workshopDir: string, ids: string[]): void {
@@ -233,6 +271,76 @@ export function writeVideos(workshopDir: string, ids: string[]): void {
     return;
   }
   fs.writeFileSync(file, ids.join("\n") + "\n", "utf8");
+}
+
+// ---------------------------------------------------------------------------
+// Links: Steam has no link field, so they render as a block at the end of the
+// description. The block is recognizable, so an upload replaces it and a pull
+// takes it back apart.
+// ---------------------------------------------------------------------------
+
+export const LINKS_FILE = "links.json";
+const LINKS_HEAD = "[h2]Links[/h2]";
+
+export interface Link {
+  label: string;
+  url: string;
+}
+
+const isHttp = (u: string): boolean => /^https?:\/\/\S+$/i.test(u);
+
+/** `<workshopDir>/links.json`, or none. */
+export function readLinks(workshopDir: string): Link[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, LINKS_FILE), "utf8")) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((l): l is Link => typeof l?.url === "string" && isHttp(l.url))
+      .map((l) => ({ label: typeof l.label === "string" ? l.label : "", url: l.url }));
+  } catch {
+    return [];
+  }
+}
+
+export function writeLinks(workshopDir: string, links: Link[]): void {
+  const file = path.join(workshopDir, LINKS_FILE);
+  const kept = links.filter((l) => isHttp(l.url));
+  if (kept.length === 0) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  fs.mkdirSync(workshopDir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(kept, null, 2) + "\n", "utf8");
+}
+
+/** The description without its trailing links block. */
+export function stripLinksBlock(description: string): string {
+  const at = description.lastIndexOf(LINKS_HEAD);
+  if (at < 0) return description;
+  // Only a block that runs to the end is ours; a heading mid-text is the author's.
+  const tail = description.slice(at + LINKS_HEAD.length);
+  if (!/^\s*\[list\][\s\S]*\[\/list\]\s*$/.test(tail)) return description;
+  return description.slice(0, at).replace(/\s+$/, "");
+}
+
+/** The description with `links` rendered as its trailing block (or none). */
+export function withLinksBlock(description: string, links: Link[]): string {
+  const base = stripLinksBlock(description);
+  const kept = links.filter((l) => isHttp(l.url));
+  if (kept.length === 0) return base;
+  const items = kept.map((l) => `[*] [url=${l.url}]${l.label.trim() || l.url}[/url]`).join("\n");
+  return `${base}${base.trim() === "" ? "" : "\n\n"}${LINKS_HEAD}\n[list]\n${items}\n[/list]`;
+}
+
+/** The links a trailing block carries, so a pulled description round-trips into links.json. */
+export function parseLinksBlock(description: string): Link[] {
+  const at = description.lastIndexOf(LINKS_HEAD);
+  if (at < 0 || stripLinksBlock(description) === description) return [];
+  const out: Link[] = [];
+  for (const m of description.slice(at).matchAll(/\[url=([^\]]+)\]([^[]*)\[\/url\]/g)) {
+    if (isHttp(m[1])) out.push({ label: m[2].trim(), url: m[1] });
+  }
+  return out;
 }
 
 export interface Dependencies {
