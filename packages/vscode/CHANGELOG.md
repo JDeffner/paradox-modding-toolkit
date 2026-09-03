@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Credits panel.** A new Credits view lists every upstream project the
+  toolkit builds on, what each one is used for, its license and a link to
+  its home. Open it from the Project panel's Info group or from the command
+  palette ("Paradox: Credits").
+
 - **The Flag Builder credits its origin.** The stage's bottom-right corner
   reads "Ported from PDX Flag Editor by Chris Kaiser" and opens the original
   project on GitHub; the file origin moved to the left, next to the zoom.
@@ -19,11 +24,6 @@
   adoptable by hand, by writing the item id where the game's own tooling
   keeps it: `remote_file_id` in `descriptor.mod` for CK3, `publishedFileId`
   in `workshop.json` for the newer games.
-- **Credits panel.** A new Credits view lists every upstream project the
-  toolkit builds on, what each one is used for, its license and a link to
-  its home. Open it from the Project panel's Info group or from the command
-  palette ("Paradox: Credits").
-
 ## 0.4.0 (beta) - the Steam Workshop release
 
 Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
