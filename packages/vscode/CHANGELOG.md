@@ -46,6 +46,13 @@
   a starting point, with raw script kept as the advanced fallback that round
   trips unchanged. The game's own tracks open for Duplicate or Override, both
   save targets are visible, and Escape closes the perk panel.
+- **Dynasty Tree: dates in the mod's calendar, traits with faces.** Born and
+  Died are era, year, month and day controls driven by `px.calendar` (custom
+  months and eras included; "31 Third Moon 1000 BC" writes `1000.3.31`), and
+  the cards show the display year. The trait picker is wide, shows the
+  player's name with the id as hint, carries the trait's picture, and hovering
+  a trait shows the game's tooltip. A character's DNA has copy and paste, the
+  six skills are editable, and the panel says which history file it writes.
 - **The content creators are rebuilt for people who do not script.** Every
   value the toolkit's index knows is a picker (traits, pillars, traditions,
   name lists, modifiers, doctrines, houses, parents), every empty input shows

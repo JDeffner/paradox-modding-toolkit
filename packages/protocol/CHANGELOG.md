@@ -9,7 +9,8 @@ version (up to 0.3.2); that history is in the extension changelog
 ## Unreleased
 
 - `protocol`: `source` on `OverviewDef`, `conditions` on `DefinitionForm`,
-  `DEFINITION_FORM_MAX_EXAMPLE`.
+  `DEFINITION_FORM_MAX_EXAMPLE`; `dna` and `skills` on `DynastyCharacter`,
+  `DYNASTY_SKILLS`.
 - `protocol`: `paradox/modifierFormats` (`ModifierFormatsParams`,
   `ModifierFormatsResult`, `ModifierFormat`, `FormatPart`); `example` on
   `DefinitionFormKey`, `label` on `EventVocabularyItem` and `OverviewDef`.
