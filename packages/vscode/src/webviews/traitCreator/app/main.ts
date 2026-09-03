@@ -896,6 +896,11 @@ function buildLocFields(name: string): void {
     field.onChange(() => refreshPreview());
     return { key, field };
   });
+  // An existing definition already has words in the workspace: show them
+  // instead of the title-cased key, so an opened trait reads as it does in game.
+  if (form.current && parseName(form.current.text) === name) {
+    post({ type: "loc", keys: locFields.map((entry) => entry.key) });
+  }
 }
 
 /**
@@ -1111,7 +1116,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "loc": {
       const prefix = flagLocPrefix() ?? "";
       for (const [key, value] of Object.entries(message.values)) {
-        if (key.startsWith(prefix)) flagLoc.set(key.slice(prefix.length), value);
+        if (prefix && key.startsWith(prefix)) flagLoc.set(key.slice(prefix.length), value);
+        const entry = locFields.find((e) => e.key === key);
+        if (entry) entry.field.set(value);
       }
       render();
       break;

@@ -18,6 +18,23 @@ import type { ModifierFormat } from "@px-lsp/protocol/protocol";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 
 /** One `name = value` the tooltip prints as a modifier line. */
+/**
+ * Loc text without the game's markup: `#N ... #!` color codes drop to their
+ * text, `[battle|E]` game-concept links to the concept's word. The preview
+ * has no tooltip engine, so this is what a player would read.
+ */
+export function plainLoc(text: string): string {
+  return text
+    .replace(/#[A-Za-z_]+\s+/g, "")
+    .replace(/#!/g, "")
+    .replace(/\[([A-Za-z_]+)\|E\]/g, (_, concept: string) =>
+      concept
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ")
+    );
+}
+
 export interface PreviewModifier {
   name: string;
   value: number | string;
@@ -141,6 +158,6 @@ export function renderTraitTip(input: PreviewInput, deps: PreviewDeps): HTMLElem
     tip.append(row, box);
   }
 
-  for (const flag of input.flags) tip.append(el("div", "tip-note", flag));
+  for (const flag of input.flags) tip.append(el("div", "tip-note", plainLoc(flag)));
   return tip;
 }
