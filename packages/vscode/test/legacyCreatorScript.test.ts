@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyValues,
   changedProperties,
+  doctrineOf,
+  effectLocKey,
   modifierRows,
   newDefBlock,
   parseDefBlock,
@@ -17,6 +19,7 @@ import {
   perkNameFor,
   updateModifierRows,
   valueOf,
+  withDoctrine,
   wrapBlockValue,
   writeDefBlock,
   writeModifierBlock,
@@ -229,6 +232,30 @@ describe("legacy creator: reading and writing a definition block", () => {
   it("prefills a perk name off the track's own key", () => {
     expect(perkNameFor("blood_legacy_track", 0)).toBe("blood_legacy_1");
     expect(perkNameFor("px_mytrack", 4)).toBe("px_mytrack_5");
+  });
+
+  it("lifts the doctrine out of its block and puts it back where it was", () => {
+    // The example _dynasty_perks.info itself documents for the block.
+    const entries = parseModifierBlock(
+      "{\n\t\tdoctrine = doctrine_theocracy_lay_clergy\n\t\tsame_faith_opinion = 3\n\t}"
+    );
+    expect(doctrineOf(entries)).toBe("doctrine_theocracy_lay_clergy");
+    expect(modifierRows(entries)).toEqual([{ name: "same_faith_opinion", value: 3 }]);
+    expect(writeModifierBlock(withDoctrine(entries, "doctrine_theocracy_lay_clergy"))).toBe(
+      "{\n\t\tdoctrine = doctrine_theocracy_lay_clergy\n\t\tsame_faith_opinion = 3\n\t}"
+    );
+    expect(writeModifierBlock(withDoctrine(entries, "doctrine_gender_male_dominated"))).toBe(
+      "{\n\t\tdoctrine = doctrine_gender_male_dominated\n\t\tsame_faith_opinion = 3\n\t}"
+    );
+    expect(writeModifierBlock(withDoctrine(entries, ""))).toBe("{\n\t\tsame_faith_opinion = 3\n\t}");
+    expect(writeModifierBlock(withDoctrine(parseModifierBlock("{\n\t\tprowess = 1\n\t}"), "d_x"))).toBe(
+      "{\n\t\tdoctrine = d_x\n\t\tprowess = 1\n\t}"
+    );
+  });
+
+  it("finds the loc key a perk's effect prints, and nothing else", () => {
+    expect(effectLocKey(valueOf(parseDefBlock(PERKS[3])!, "effect")!)).toBe("blood_legacy_4_effect");
+    expect(effectLocKey(wrapBlockValue("add_prestige = 100")!)).toBeNull();
   });
 });
 

@@ -102,6 +102,21 @@ const PERK_FORM: DefinitionForm = {
   existing: [],
 };
 
+/**
+ * How the game prints the two modifiers the fixtures use, in the shape
+ * `paradox/modifierFormats` answers: `positive_random_genetic_chance` is a
+ * fraction the game shows as a percentage, `prowess` a plain number.
+ */
+const FORMATS: CreatorInit["formats"] = {
+  positive_random_genetic_chance: {
+    label: "Positive Genetic Trait Inheritance Chance",
+    decimals: 0,
+    percent: true,
+    color: "good",
+  },
+  prowess: { label: "Prowess", decimals: 0, color: "good" },
+};
+
 const INIT: CreatorInit = {
   legacy: LEGACY_FORM,
   perk: PERK_FORM,
@@ -111,15 +126,57 @@ const INIT: CreatorInit = {
   // The number the host measured over the game's own perk files.
   perksPerTrack: 5,
   icons: [],
+  formats: FORMATS,
+  refIconFolders: {},
   problem: null,
 };
+
+/**
+ * blood_legacy_1 and blood_legacy_2 verbatim from the game's own
+ * common/dynasty_perks/00_dynasty_perks.txt (CK3 1.19.0.6), which is what a
+ * loaded track really hands the app.
+ */
+const LOADED_PERKS = [
+  {
+    name: "blood_legacy_1",
+    file: "common/dynasty_perks/00_dynasty_perks.txt",
+    source: "vanilla" as const,
+    text:
+      "blood_legacy_1 = { # Noble Veins\n" +
+      "\tlegacy = blood_legacy_track\n" +
+      "\n" +
+      "\tcharacter_modifier = {\n" +
+      "\t\tname = blood_legacy_1_modifier\n" +
+      "\t\tpositive_random_genetic_chance = 0.30\n" +
+      "\t}\n" +
+      "}",
+  },
+  {
+    name: "blood_legacy_2",
+    file: "common/dynasty_perks/00_dynasty_perks.txt",
+    source: "vanilla" as const,
+    text:
+      "blood_legacy_2 = {\n" +
+      "\tlegacy = blood_legacy_track\n" +
+      "\n" +
+      "\teffect = {\n" +
+      "\t\tcustom_description_no_bullet = {\n" +
+      "\t\t\ttext = blood_legacy_2_effect\n" +
+      "\t\t}\n" +
+      "\t}\n" +
+      "}",
+  },
+];
 
 interface Booted {
   window: Window & typeof globalThis;
   posted: Array<Record<string, unknown>>;
   name: HTMLInputElement;
   type(input: HTMLInputElement, text: string): void;
+  /** The perk tiles of the row, without the "Add perk" ghost that ends it. */
   cards(): HTMLElement[];
+  post(message: unknown): void;
+  hover(tile: HTMLElement): HTMLElement;
   save(): { track: SaveDefinition; perks: SaveDefinition[] };
 }
 
@@ -130,21 +187,31 @@ function boot(init: CreatorInit = INIT): Booted {
     beforeParse(window) {
       (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
         postMessage: (msg: Record<string, unknown>) => posted.push(msg),
+        getState: () => null,
+        setState: () => undefined,
       });
     },
   });
   const window = dom.window as unknown as Window & typeof globalThis;
   const document = window.document;
-  window.dispatchEvent(new window.MessageEvent("message", { data: { type: "init", init } }));
+  const post = (message: unknown): void => {
+    window.dispatchEvent(new window.MessageEvent("message", { data: message }));
+  };
+  post({ type: "init", init });
   return {
     window,
     posted,
+    post,
     name: document.getElementById("name") as HTMLInputElement,
     type(input: HTMLInputElement, text: string) {
       input.value = text;
       input.dispatchEvent(new window.Event("change"));
     },
-    cards: () => [...document.querySelectorAll<HTMLElement>(".perk")],
+    cards: () => [...document.querySelectorAll<HTMLElement>(".perktile:not([data-add])")],
+    hover(tile: HTMLElement) {
+      tile.dispatchEvent(new window.Event("pointerenter"));
+      return document.getElementById("perkTip") as HTMLElement;
+    },
     save() {
       (document.getElementById("save") as HTMLButtonElement).click();
       const last = posted.at(-1) as unknown as { track: SaveDefinition; perks: SaveDefinition[] };
@@ -163,7 +230,7 @@ describe("dynasty legacy creator app", () => {
     const app = boot();
     expect(app.name.value).toBe("px_legacy_track");
     expect(app.cards()).toHaveLength(5);
-    expect(app.window.document.getElementById("perkNote")?.textContent).toBe("vanilla tracks have 5 perks");
+    expect(app.window.document.getElementById("perkNote")?.textContent).toBe("(vanilla tracks have 5 perks)");
   });
 
   it("saves a whole track from nothing but the key", () => {
@@ -203,6 +270,70 @@ describe("dynasty legacy creator app", () => {
     app.type(app.name, "Px Legacy!");
     (app.window.document.getElementById("save") as HTMLButtonElement).click();
     expect(app.posted.some((msg) => msg.type === "save")).toBe(false);
+  });
+
+  it("reads a perk's modifiers back as the game prints them", () => {
+    const app = boot();
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: LOADED_PERKS, loc: {} });
+    const tip = app.hover(app.cards()[0]);
+    expect(tip.hidden).toBe(false);
+    const line = tip.querySelector(".px-mod-line");
+    // 0.30 with percent = a fraction the game shows scaled, and `good` is the
+    // direction, so a positive number is the green one.
+    expect(line?.className).toBe("px-mod-line good");
+    expect(line?.textContent).toBe("+30%Positive Genetic Trait Inheritance Chance");
+  });
+
+  it("asks the host for the sentence a perk's effect prints", () => {
+    const app = boot();
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: LOADED_PERKS, loc: {} });
+    app.hover(app.cards()[1]);
+    expect(app.posted).toContainEqual({ type: "loc", keys: ["blood_legacy_2_effect"] });
+    app.post({ type: "locValues", values: { blood_legacy_2_effect: "Your children are born beautiful." } });
+    const tip = app.hover(app.cards()[1]);
+    expect(tip.textContent).toContain("Your children are born beautiful.");
+  });
+
+  it("opens the perk's form in the side panel when its tile is clicked", () => {
+    const app = boot();
+    const document = app.window.document;
+    const side = document.getElementById("side") as HTMLElement;
+    expect(side.hasAttribute("data-collapsed")).toBe(true);
+    app.cards()[2].click();
+    expect(side.hasAttribute("data-collapsed")).toBe(false);
+    expect(document.getElementById("sideTitle")?.textContent).toBe("Perk 3");
+    const key = document.querySelector<HTMLInputElement>("#perkEditor input");
+    expect(key?.value).toBe("px_legacy_3");
+  });
+
+  it("renumbers the track when a tile is dragged to another place", () => {
+    const app = boot();
+    const window = app.window;
+    const list = window.document.getElementById("perks") as HTMLElement;
+    (list as unknown as { setPointerCapture(id: number): void }).setPointerCapture = () => undefined;
+    const first = app.cards()[0];
+    const at = (type: string, clientX: number): Event =>
+      new window.MouseEvent(type, { clientX, bubbles: true, button: 0 });
+    first.dispatchEvent(at("pointerdown", 0));
+    // Every tile measures as an empty box in jsdom, so the pointer lands past
+    // all of them: the drag moves the first perk to the end of the track.
+    list.dispatchEvent(at("pointermove", 400));
+    list.dispatchEvent(at("pointerup", 400));
+
+    expect(app.cards().map((tile) => tile.querySelector(".step")?.textContent)).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+    ]);
+    expect(app.save().perks.map((perk) => perk.name)).toEqual([
+      "px_legacy_2",
+      "px_legacy_3",
+      "px_legacy_4",
+      "px_legacy_5",
+      "px_legacy_1",
+    ]);
   });
 
   it("says so, and writes nothing, when there is no mod to write into", () => {

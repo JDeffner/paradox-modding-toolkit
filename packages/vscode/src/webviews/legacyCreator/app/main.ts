@@ -2,11 +2,14 @@
  * The Dynasty Legacy Creator app: design a legacy track and the perks that
  * hang off it, and hand the host the blocks to write.
  *
- * The shape of the panel is the game's own: a track is a container and its
- * perks are the steps a dynasty unlocks in order (_dynasty_legacies.info,
- * "Dynasty Legacies are containers for perks"), so the perks are a horizontal
- * strip of cards read left to right and `legacy = <track>` is written for the
- * modder instead of being asked for.
+ * The shape of the panel is the game's own legacy window
+ * (gui/window_dynasty_legacy.gui, measured): the track's picture drawn through
+ * the game's frame and mask, its name and description beside it, and the perks
+ * as ONE row of tiles read left to right, which is how a dynasty buys them.
+ * A tile answers "what does this perk do" on hover, in the words the player
+ * reads (`paradox/modifierFormats`), and opens the perk's form on click. The
+ * form is a side panel rather than a card in the row, because five open forms
+ * side by side is what made the first version unreadable.
  *
  * Nothing here knows a key name or a value list: which keys a legacy and a
  * perk may carry, what they mean, which traits exist and which modifiers exist
@@ -14,15 +17,22 @@
  * those keys gets a designed control and which falls through to the raw
  * fields, and every key reaches the modder either way (AD-5).
  */
-import type { DefinitionForm, DefinitionFormKey, EventVocabularyItem } from "@px-lsp/protocol/protocol";
+import type {
+  DefinitionForm,
+  DefinitionFormKey,
+  EventVocabularyItem,
+  ModifierFormat,
+} from "@px-lsp/protocol/protocol";
 import { confirmDialog, menu, toast } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { installTips } from "../../shared/tips";
 import { iconEl } from "../../shared/icons";
+import { sidePanel } from "../../shared/sidePanel";
+import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 import {
   iconField,
   locField,
-  modifierListField,
+  refField,
   scriptField,
   textField,
   titleCaseFromName,
@@ -31,9 +41,12 @@ import {
 } from "../../shared/fields";
 import type { AppToHost, CreatorInit, HostToApp, LoadedPerk, SaveDefinition } from "../messages";
 import { baseName } from "../../shared/scriptBlock";
+import { rowsField } from "./rowsField";
 import {
   applyValues,
   changedProperties,
+  doctrineOf,
+  effectLocKey,
   locKeyFor,
   modifierRows,
   newDefBlock,
@@ -42,6 +55,7 @@ import {
   perkNameFor,
   updateModifierRows,
   valueOf,
+  withDoctrine,
   wrapBlockValue,
   writeDefBlock,
   writeModifierBlock,
@@ -50,7 +64,11 @@ import {
   type ModifierEntry,
 } from "./script";
 
-declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
+declare function acquireVsCodeApi(): {
+  postMessage(message: unknown): void;
+  getState(): unknown;
+  setState(state: unknown): void;
+};
 const vscode = acquireVsCodeApi();
 const send = (m: AppToHost): void => vscode.postMessage(m);
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -62,12 +80,33 @@ const NAME_RE = /^[a-z][a-z0-9_]*$/;
 /**
  * The perk key that names its track. `_dynasty_perks.info`: "legacy = legacy_key
  * # What legacy does this belong to?". The panel writes it and never shows it:
- * a perk card only exists inside a track.
+ * a perk only exists inside a track.
  */
 const LEGACY_KEY = "legacy";
 
-/** Keys a modifier-row control owns, in the harvest's own words. */
-const MODIFIER_KEYS = ["character_modifier", "doctrine_character_modifier", "traits"];
+/** The two blocks whose rows are modifiers, in the harvest's own words. */
+const CHAR_MOD = "character_modifier";
+const DOCTRINE_MOD = "doctrine_character_modifier";
+const TRAITS_KEY = "traits";
+/** The scalar key that hands a perk's holder one fixed trait. */
+const TRAIT_KEY = "trait";
+const SCRIPT_KEYS = ["can_be_picked", "effect", "ai_chance"];
+
+/**
+ * What the game draws the track picture through
+ * (gui/window_dynasty_legacy.gui, measured: two `modify_texture` layers with
+ * blend_mode = alphamultiply over `[DynastyLegacy.GetTrackIcon]`). Both are
+ * asked of the host like any other asset, so a game whose install is not
+ * configured, or whose legacy window uses other textures, simply gets the
+ * plain square instead of a broken picture.
+ */
+const TRACK_FRAME = "gfx/interface/component_tiles/tile_frame_thin_02.dds";
+const TRACK_MASK = "gfx/interface/component_masks/mask_legacy_track.dds";
+
+/** Small enough for a picker row, big enough for a chip: the thumbnails' cap. */
+const THUMB_DIM = 48;
+/** The track picture and the two textures it is drawn through, at row size. */
+const ART_DIM = 192;
 
 let init: CreatorInit | null = null;
 let trackForm: DefinitionForm | null = null;
@@ -77,7 +116,8 @@ let trackOriginal: DefBlock | null = null;
 let trackSource: "mod" | "vanilla" | "parent" | null = null;
 let trackFile: string | null = null;
 let overrideMode = false;
-let cards: PerkCard[] = [];
+let perks: Perk[] = [];
+let selected: Perk | null = null;
 /** The key every prefilled name was derived from, so a rename can follow it. */
 let derivedFrom = "";
 /** Perks the modder took off a saved track; the host names the file that keeps them. */
@@ -90,15 +130,22 @@ let iconDoc = "";
 let trackScripts: Record<string, Field<string>> = {};
 let trackOthers: Record<string, Field<string>> = {};
 
-interface PerkCard {
-  el: HTMLElement;
-  nameInput: HTMLInputElement;
+interface Perk {
+  /** The tile in the row. */
+  tile: HTMLElement;
+  step: HTMLElement;
+  face: HTMLElement;
+  /** The form, built once and parked off-screen until the tile is clicked. */
+  editor: HTMLElement;
+  key: Field<string>;
   original: DefBlock | null;
   source: "mod" | "vanilla" | "parent" | null;
   file: string | null;
   loc: { pattern: string; field: Field<string> }[];
   /** Modifier blocks keep the entries no row can hold, so they survive a save. */
   mods: Record<string, { entries: ModifierEntry[]; field: Field<ModifierRow[]> }>;
+  /** The `doctrine =` line of doctrine_character_modifier, as its own picker. */
+  doctrine: Field<string> | null;
   scripts: Record<string, Field<string>>;
   others: Record<string, Field<string>>;
 }
@@ -116,6 +163,43 @@ function el(tag: string, cls = "", text?: string): HTMLElement {
 
 function trackName(): string {
   return $<HTMLInputElement>("name").value.trim();
+}
+
+function perkName(perk: Perk): string {
+  return perk.key.get().trim();
+}
+
+// ---------------------------------------------------------------------------
+// Pictures and loc the host resolves for us
+// ---------------------------------------------------------------------------
+
+/** Game asset path -> the URL the host decoded, or null when nothing has it. */
+const images = new Map<string, string | null>();
+const imagesAsked = new Set<string>();
+/** Loc key -> the value the workspace has. A key with none stays absent. */
+const locValues = new Map<string, string>();
+const locAsked = new Set<string>();
+
+function askImages(keys: readonly string[], maxDim = THUMB_DIM): void {
+  const wanted = keys.filter((key) => key !== "" && !imagesAsked.has(key));
+  if (wanted.length === 0) return;
+  for (const key of wanted) imagesAsked.add(key);
+  send({ type: "images", keys: wanted, maxDim });
+}
+
+function askLoc(keys: readonly string[]): void {
+  const wanted = keys.filter((key) => key !== "" && !locAsked.has(key));
+  if (wanted.length === 0) return;
+  for (const key of wanted) locAsked.add(key);
+  send({ type: "loc", keys: wanted });
+}
+
+const imageUrl = (key: string): string | null => images.get(key) ?? null;
+
+/** `<the trait folder>/<key>.dds`, or "" when that kind ships no icon folder. */
+function refImage(kind: string, value: string): string {
+  const folder = init?.refIconFolders[kind];
+  return folder && value !== "" ? `${folder}/${value}.dds` : "";
 }
 
 /** Keys of a form that no designed control owns, plus any the block itself has. */
@@ -141,7 +225,12 @@ function otherKeys(
 
 /** A raw control for a key with no designed widget: a block gets a text area. */
 function rawField(spec: DefinitionFormKey, value: string): Field<string> {
-  const options = { label: spec.key, ...(spec.doc ? { doc: spec.doc } : {}), value };
+  const options = {
+    label: spec.key,
+    ...(spec.doc ? { doc: spec.doc } : {}),
+    ...(spec.example ? { placeholder: spec.example } : {}),
+    value,
+  };
   return spec.values === "block" || value.startsWith("{")
     ? scriptField({ ...options, rows: 3, placeholder: "{ … }" })
     : textField(options);
@@ -154,8 +243,8 @@ function rawValue(spec: DefinitionFormKey, field: Field<string>): string | null 
   return spec.values === "block" || text.trim().startsWith("{") ? wrapBlockValue(text) : text.trim();
 }
 
-function vocabulary(items: readonly EventVocabularyItem[]): { name: string; doc?: string }[] {
-  return items.map((item) => ({ name: item.value, ...(item.doc ? { doc: item.doc } : {}) }));
+function vocabulary(items: readonly EventVocabularyItem[]): EventVocabularyItem[] {
+  return items.map((item) => ({ ...item }));
 }
 
 // ---------------------------------------------------------------------------
@@ -197,8 +286,9 @@ function buildTrack(loc: Record<string, string>): void {
       items: init!.icons,
       value: init!.icons.some((i) => i.key === name) ? name : "",
       onCustom: () => send({ type: "customIcon", track: trackName() }),
-      customLabel: "Convert an image…",
+      customLabel: "Custom picture…",
     });
+    trackIcon.onChange(paintRow);
     host.append(trackIcon.el);
   }
 
@@ -209,8 +299,9 @@ function buildTrack(loc: Record<string, string>): void {
       label: isShown.key,
       ...(isShown.doc ? { doc: isShown.doc } : {}),
       value: valueOf(trackOriginal ?? newDefBlock(name), isShown.key) ?? "",
-      rows: 4,
-      placeholder: '{ has_dlc = "…" }',
+      rows: 3,
+      // The literal the game itself writes (99_legacies.txt, measured).
+      placeholder: "{ has_dlc_feature = hybridize_culture }",
     });
     trackScripts[isShown.key] = field;
     host.append(field.el);
@@ -223,7 +314,12 @@ function buildTrack(loc: Record<string, string>): void {
     otherHost.append(field.el);
   }
   $("trackOther").hidden = others.length === 0;
-  for (const { field } of trackLoc) field.onChange(refreshScript);
+  for (const { field } of trackLoc) {
+    field.onChange(() => {
+      paintRow();
+      refreshScript();
+    });
+  }
   for (const field of Object.values(trackScripts)) field.onChange(refreshScript);
   for (const field of Object.values(trackOthers)) field.onChange(refreshScript);
 }
@@ -247,166 +343,300 @@ function trackBlock(): DefBlock {
   );
 }
 
+/** The row's own words and picture: the header fields, as the game shows them. */
+function paintRow(): void {
+  const name = trackName();
+  const words = trackLoc.map(({ pattern, field }) => ({ pattern, value: field.get().trim() }));
+  $("rowName").textContent =
+    words.find((w) => w.pattern.endsWith("_name"))?.value || titleCaseFromName(name) || "Your track";
+  $("rowDesc").textContent = words.find((w) => !w.pattern.endsWith("_name"))?.value ?? "";
+
+  const art = $("trackArt");
+  const picked = trackIcon?.get() || (init?.icons.some((i) => i.key === name) ? name : "");
+  const url = init?.icons.find((i) => i.key === picked)?.url;
+  const frame = imageUrl(TRACK_FRAME);
+  const mask = imageUrl(TRACK_MASK);
+  art.replaceChildren();
+  if (url) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = picked;
+    art.append(img);
+  } else {
+    art.append(iconEl("image"));
+  }
+  if (url && frame && mask) {
+    art.dataset.masked = "";
+    art.style.setProperty("--frame", `url("${frame}")`);
+    art.style.setProperty("--mask", `url("${mask}")`);
+  } else {
+    art.removeAttribute("data-masked");
+  }
+}
+
 // ---------------------------------------------------------------------------
-// The perk cards
+// The perk tiles
 // ---------------------------------------------------------------------------
 
-function addCard(loaded?: LoadedPerk, loc: Record<string, string> = {}): PerkCard {
+/** The picker entries for a ref kind, with the pictures asked for up front. */
+function refItems(kind: string): EventVocabularyItem[] {
+  const items = vocabulary(perkForm?.options[kind] ?? []);
+  askImages(items.map((item) => refImage(kind, item.value)));
+  return items;
+}
+
+function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   const form = perkForm!;
   const original = loaded ? parseDefBlock(loaded.text) : null;
-  const name = loaded?.name ?? perkNameFor(trackName() || "legacy", cards.length);
-  const box = el("div", "perk");
-  const header = el("header");
-  const step = el("span", "step", String(cards.length + 1));
-  const nameInput = document.createElement("input");
-  nameInput.className = "px-input";
-  nameInput.dataset.size = "sm";
-  nameInput.spellcheck = false;
-  nameInput.value = name;
-  nameInput.dataset.tip = "The perk's key. Its loc key follows it.";
+  const name = loaded?.name ?? perkNameFor(trackName() || "legacy", perks.length);
+
+  const tile = el("div", "perktile");
+  tile.tabIndex = 0;
+  tile.setAttribute("role", "button");
+  const step = el("span", "step");
+  const face = el("span", "face");
+  const tools = el("span", "px-item-tools");
   const drop = document.createElement("button");
   drop.className = "px-btn";
   drop.dataset.variant = "ghost";
   drop.dataset.size = "icon-xs";
-  drop.dataset.tip = "Remove this perk";
+  drop.dataset.tip = "Remove this perk from the track";
   drop.append(iconEl("trash"));
-  header.append(step, nameInput, drop);
-  box.append(header);
+  tools.append(drop);
+  tile.append(step, face, tools);
 
-  const card: PerkCard = {
-    el: box,
-    nameInput,
+  const editor = el("div");
+  const key = textField({
+    label: "Key",
+    doc: "The perk's key. Its loc key and its default name follow it.",
+    value: name,
+    placeholder: perkNameFor(trackName() || "legacy", perks.length),
+  });
+  editor.append(key.el);
+
+  const perk: Perk = {
+    tile,
+    step,
+    face,
+    editor,
+    key,
     original,
     source: loaded?.source ?? null,
     file: loaded?.file ?? null,
     loc: [],
     mods: {},
+    doctrine: null,
     scripts: {},
     others: {},
   };
 
   for (const pattern of form.locPatterns) {
-    const key = locKeyFor(pattern, name);
     const field = locField({
       label: "Name",
-      key,
-      value: loc[key] ?? titleCaseFromName(name),
-      placeholder: "What the player sees",
+      key: locKeyFor(pattern, name),
+      value: loc[locKeyFor(pattern, name)] ?? titleCaseFromName(name),
+      placeholder: titleCaseFromName(name) || "What the player sees",
     });
-    card.loc.push({ pattern, field });
-    box.append(field.el);
+    perk.loc.push({ pattern, field });
+    editor.append(field.el);
   }
 
-  for (const key of MODIFIER_KEYS) {
-    const spec = form.keys.find((k) => k.key === key);
-    if (!spec) continue;
-    const entries = parseModifierBlock(original ? (valueOf(original, key) ?? "") : "");
-    const refKind = spec.refKinds?.[0];
-    const items = refKind ? vocabulary(form.options[refKind] ?? []) : form.modifiers;
-    const field = modifierListField({
-      label: key,
+  const modBlock = (blockKey: string): void => {
+    const spec = form.keys.find((k) => k.key === blockKey);
+    if (!spec) return;
+    const entries = parseModifierBlock(original ? (valueOf(original, blockKey) ?? "") : "");
+    const field = rowsField({
+      label: blockKey,
       ...(spec.doc ? { doc: spec.doc } : {}),
-      items,
+      items: (form.modifiers ?? []).map((mod) => ({
+        value: mod.name,
+        ...(mod.doc ? { doc: mod.doc } : {}),
+      })),
       rows: modifierRows(entries),
-      addLabel: refKind ? `Add ${refKind}` : "Add modifier",
+      addLabel: "Add modifier",
+      pickLabel: "pick a modifier",
+      step: 0.1,
+      preview: (row) => gameLine(row.name, row.value),
     });
-    card.mods[key] = { entries, field };
-    box.append(field.el);
+    perk.mods[blockKey] = { entries, field };
+    editor.append(field.el);
+  };
+
+  modBlock(CHAR_MOD);
+
+  // The doctrine block's condition is a key inside it, so it gets its own
+  // picker above the modifiers it applies with.
+  const doctrineSpec = form.keys.find((k) => k.key === DOCTRINE_MOD);
+  if (doctrineSpec) {
+    const entries = parseModifierBlock(original ? (valueOf(original, DOCTRINE_MOD) ?? "") : "");
+    const inner = form.blocks?.[DOCTRINE_MOD]?.find((k) => k.key === "doctrine");
+    const kind = inner?.refKinds?.[0] ?? "doctrine";
+    const options = form.options[kind] ?? [];
+    const value = doctrineOf(entries);
+    perk.doctrine =
+      options.length > 0
+        ? refField({
+            label: "doctrine",
+            ...(inner?.doc ? { doc: inner.doc } : {}),
+            items: refItems(kind),
+            value,
+            thumb: (v) => imageUrl(refImage(kind, v)),
+          })
+        : textField({
+            label: "doctrine",
+            ...(inner?.doc ? { doc: inner.doc } : {}),
+            value,
+            ...(inner?.sampled?.length ? { suggestions: inner.sampled } : {}),
+            ...(inner?.example ? { placeholder: inner.example } : {}),
+          });
+    editor.append(perk.doctrine.el);
+    modBlock(DOCTRINE_MOD);
   }
 
-  for (const key of ["effect", "can_be_picked", "ai_chance"]) {
-    const spec = form.keys.find((k) => k.key === key);
+  const traitsSpec = form.keys.find((k) => k.key === TRAITS_KEY);
+  if (traitsSpec) {
+    const entries = parseModifierBlock(original ? (valueOf(original, TRAITS_KEY) ?? "") : "");
+    const kind = traitsSpec.refKinds?.[0] ?? TRAIT_KEY;
+    const field = rowsField({
+      label: TRAITS_KEY,
+      ...(traitsSpec.doc ? { doc: traitsSpec.doc } : {}),
+      items: refItems(kind),
+      rows: modifierRows(entries),
+      addLabel: "Add trait",
+      pickLabel: "pick a trait",
+      step: 1,
+      // The weight the game's own weighted traits carry most often
+      // (00_dynasty_perks.txt blood_legacy_4, measured).
+      placeholder: "100",
+      image: (v) => imageUrl(refImage(kind, v)),
+    });
+    perk.mods[TRAITS_KEY] = { entries, field };
+    editor.append(field.el);
+  }
+
+  for (const scriptKey of SCRIPT_KEYS) {
+    const spec = form.keys.find((k) => k.key === scriptKey);
     if (!spec) continue;
     const field = scriptField({
-      label: key,
+      label: scriptKey,
       ...(spec.doc ? { doc: spec.doc } : {}),
-      value: original ? (valueOf(original, key) ?? "") : "",
+      value: original ? (valueOf(original, scriptKey) ?? "") : "",
       rows: 3,
-      placeholder: "{ … }",
+      placeholder: spec.example ?? "{ … }",
     });
-    card.scripts[key] = field;
-    box.append(field.el);
+    perk.scripts[scriptKey] = field;
+    editor.append(field.el);
   }
 
-  const owned = [LEGACY_KEY, ...MODIFIER_KEYS, "effect", "can_be_picked", "ai_chance"];
+  const owned = [LEGACY_KEY, CHAR_MOD, DOCTRINE_MOD, TRAITS_KEY, ...SCRIPT_KEYS];
   const others = otherKeys(form, owned, original);
   if (others.length > 0) {
     const fold = document.createElement("details");
-    const summary = el("summary", "note", "Other keys");
-    fold.append(summary);
+    fold.append(el("summary", "note", "Other keys"));
     for (const spec of others) {
       const field = rawField(spec, original ? (valueOf(original, spec.key) ?? "") : "");
-      card.others[spec.key] = field;
+      perk.others[spec.key] = field;
       fold.append(field.el);
     }
-    box.append(fold);
+    editor.append(fold);
   }
 
-  nameInput.addEventListener("change", () => {
-    renameCard(card);
+  key.onChange(() => {
+    renamePerk(perk);
+    paintTile(perk);
     refreshScript();
   });
-  drop.onclick = () => void removeCard(card);
-  for (const { field } of card.loc) field.onChange(refreshScript);
-  for (const { field } of Object.values(card.mods)) field.onChange(refreshScript);
-  for (const field of Object.values(card.scripts)) field.onChange(refreshScript);
-  for (const field of Object.values(card.others)) field.onChange(refreshScript);
+  const touched = (): void => {
+    paintTile(perk);
+    refreshScript();
+  };
+  for (const { field } of perk.loc) field.onChange(touched);
+  for (const { field } of Object.values(perk.mods)) field.onChange(touched);
+  perk.doctrine?.onChange(touched);
+  for (const field of Object.values(perk.scripts)) field.onChange(touched);
+  for (const field of Object.values(perk.others)) field.onChange(touched);
 
-  cards.push(card);
-  $("perks").append(box);
-  return card;
+  tile.onclick = () => selectPerk(perk);
+  tile.onkeydown = (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      selectPerk(perk);
+    }
+  };
+  tile.addEventListener("pointerenter", () => showTip(perk));
+  tile.addEventListener("pointerleave", hideTip);
+  drop.onclick = (ev) => {
+    ev.stopPropagation();
+    void removePerk(perk);
+  };
+
+  perks.push(perk);
+  $("perks").insertBefore(tile, addTile);
+  paintTile(perk);
+  return perk;
+}
+
+/** The tile's face: its place in the track, and the name the player reads. */
+function paintTile(perk: Perk): void {
+  const index = perks.indexOf(perk);
+  perk.step.textContent = String(index + 1);
+  const name = perk.loc[0]?.field.get().trim();
+  perk.face.textContent = name || perkName(perk) || "unnamed perk";
+  if (tipFor === perk) showTip(perk);
 }
 
 /** The loc key follows the name, so a rename repaints the (read-only) keys. */
-function renameCard(card: PerkCard): void {
-  const name = card.nameInput.value.trim();
-  card.loc.forEach(({ pattern, field }) => {
+function renamePerk(perk: Perk): void {
+  const name = perkName(perk);
+  perk.loc.forEach(({ pattern, field }) => {
     const code = field.el.querySelector("code");
     if (code) code.textContent = locKeyFor(pattern, name);
   });
 }
 
-async function removeCard(card: PerkCard): Promise<void> {
-  const name = card.nameInput.value.trim();
-  if (card.source === "mod" && card.file) {
+async function removePerk(perk: Perk): Promise<void> {
+  const name = perkName(perk);
+  if (perk.source === "mod" && perk.file) {
     const ok = await confirmDialog({
       title: `Remove ${name} from the track?`,
       description:
-        "The card goes away and the perk stops being written. Its block stays in the file it already lives in: " +
+        "The tile goes away and the perk stops being written. Its block stays in the file it already lives in: " +
         "the toolkit does not delete definitions for you. Delete it there if you want it gone from the game.",
       confirmLabel: "Remove from the track",
       destructive: true,
     });
     if (!ok) return;
-    dropped.push({ name, file: card.file });
+    dropped.push({ name, file: perk.file });
   }
-  cards = cards.filter((c) => c !== card);
-  card.el.remove();
+  perks = perks.filter((p) => p !== perk);
+  perk.tile.remove();
+  if (selected === perk) selectPerk(null);
+  if (tipFor === perk) hideTip();
   renumber();
   refreshScript();
 }
 
 function renumber(): void {
-  cards.forEach((card, i) => {
-    const step = card.el.querySelector(".step");
-    if (step) step.textContent = String(i + 1);
-  });
+  for (const perk of perks) paintTile(perk);
+  if (selected) $("sideTitle").textContent = `Perk ${perks.indexOf(selected) + 1}`;
 }
 
-function perkBlock(card: PerkCard): DefBlock {
+function perkBlock(perk: Perk): DefBlock {
   const form = perkForm!;
-  const name = card.nameInput.value.trim() || "unnamed_perk";
-  const base = card.original ? { ...card.original, name } : newDefBlock(name);
+  const name = perkName(perk) || "unnamed_perk";
+  const base = perk.original ? { ...perk.original, name } : newDefBlock(name);
   const values: FieldValue[] = [{ key: LEGACY_KEY, value: trackName() || "unnamed_legacy_track" }];
-  for (const [key, mod] of Object.entries(card.mods)) {
-    values.push({ key, value: writeModifierBlock(updateModifierRows(mod.entries, mod.field.get())) });
+  for (const [blockKey, mod] of Object.entries(perk.mods)) {
+    let entries = updateModifierRows(mod.entries, mod.field.get());
+    if (blockKey === DOCTRINE_MOD && perk.doctrine) entries = withDoctrine(entries, perk.doctrine.get());
+    values.push({ key: blockKey, value: writeModifierBlock(entries) });
   }
-  for (const [key, field] of Object.entries(card.scripts)) {
-    values.push({ key, value: wrapBlockValue(field.get()) });
+  for (const [scriptKey, field] of Object.entries(perk.scripts)) {
+    values.push({ key: scriptKey, value: wrapBlockValue(field.get()) });
   }
-  for (const [key, field] of Object.entries(card.others)) {
-    const spec = form.keys.find((k) => k.key === key) ?? { key };
-    values.push({ key, value: rawValue(spec, field) });
+  for (const [otherKey, field] of Object.entries(perk.others)) {
+    const spec = form.keys.find((k) => k.key === otherKey) ?? { key: otherKey };
+    values.push({ key: otherKey, value: rawValue(spec, field) });
   }
   return applyValues(
     base,
@@ -416,12 +646,199 @@ function perkBlock(card: PerkCard): DefBlock {
 }
 
 // ---------------------------------------------------------------------------
+// The tooltip: the perk as the game prints it
+// ---------------------------------------------------------------------------
+
+/** One modifier row, in the player's words, or null when nothing was picked. */
+function gameLine(name: string, value: number): HTMLElement | null {
+  if (name.trim() === "") return null;
+  const fmt: ModifierFormat | undefined = init?.formats?.[name];
+  for (const part of [...(fmt?.prefix ?? []), ...(fmt?.suffix ?? []), ...(fmt?.negativeSuffix ?? [])]) {
+    if ("icon" in part) askImages([part.icon.texture]);
+  }
+  return renderModifierLine(modifierLine(name, value, fmt), imageUrl);
+}
+
+/** The player's word for one entry of a ref kind, or the key when it has none. */
+function refLabel(kind: string, value: string): string {
+  return perkForm?.options[kind]?.find((item) => item.value === value)?.label || value;
+}
+
+/** The tooltip's body: name, what it grants, and what its effect says. */
+function tipBody(perk: Perk): HTMLElement {
+  const box = el("div", "px-game-tip");
+  box.append(el("div", "px-game-tip-title", perk.face.textContent ?? ""));
+
+  for (const blockKey of [CHAR_MOD, DOCTRINE_MOD]) {
+    for (const row of perk.mods[blockKey]?.field.get() ?? []) {
+      const line = gameLine(row.name, row.value);
+      if (line) box.append(line);
+    }
+  }
+
+  const traitKind = perkForm?.keys.find((k) => k.key === TRAITS_KEY)?.refKinds?.[0] ?? TRAIT_KEY;
+  const traits = (perk.mods[TRAITS_KEY]?.field.get() ?? [])
+    .filter((row) => row.name.trim() !== "")
+    .map((row) => refLabel(traitKind, row.name));
+  const fixed = perk.others[TRAIT_KEY]?.get().trim();
+  if (fixed) traits.unshift(refLabel(traitKind, fixed));
+  if (traits.length > 0) {
+    box.append(el("div", "px-game-tip-body", `Grants a trait: ${traits.join(", ")}`));
+  }
+
+  const effect = perk.scripts.effect?.get().trim() ?? "";
+  if (effect !== "") {
+    const key = effectLocKey(effect);
+    const prose = key ? locValues.get(key) : undefined;
+    if (key) askLoc([key]);
+    box.append(
+      el(
+        "div",
+        "px-game-tip-body",
+        prose ??
+          (key
+            ? key
+            : `Scripted effect: ${effect
+                .replace(/^\{\s*/, "")
+                .split("\n")[0]
+                .trim()}`)
+      )
+    );
+  }
+  if (box.children.length === 1) {
+    box.append(el("div", "px-game-tip-body", "This perk does nothing yet."));
+  }
+  return box;
+}
+
+let tipFor: Perk | null = null;
+
+function showTip(perk: Perk): void {
+  tipFor = perk;
+  const tip = $("perkTip");
+  tip.replaceChildren(tipBody(perk));
+  tip.hidden = false;
+  const anchor = perk.tile.getBoundingClientRect();
+  const box = tip.getBoundingClientRect();
+  const left = Math.max(4, Math.min(window.innerWidth - box.width - 4, anchor.left));
+  const below = anchor.bottom + 6;
+  const top = below + box.height > window.innerHeight - 4 ? anchor.top - box.height - 6 : below;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${Math.max(4, top)}px`;
+}
+
+function hideTip(): void {
+  tipFor = null;
+  $("perkTip").hidden = true;
+}
+
+// ---------------------------------------------------------------------------
+// The perk editor, in the side panel
+// ---------------------------------------------------------------------------
+
+interface PanelState {
+  width?: number;
+}
+
+const saved = (vscode.getState() as PanelState | null) ?? {};
+const side = sidePanel($("side"), {
+  ...(saved.width ? { width: saved.width } : {}),
+  collapsed: true,
+  onChange: ({ width }) => vscode.setState({ width }),
+});
+
+function selectPerk(perk: Perk | null): void {
+  selected = perk;
+  for (const other of perks) other.tile.setAttribute("aria-selected", String(other === perk));
+  const host = $("perkEditor");
+  host.replaceChildren();
+  if (!perk) {
+    side.toggle(true);
+    return;
+  }
+  $("sideTitle").textContent = `Perk ${perks.indexOf(perk) + 1}`;
+  host.append(perk.editor);
+  side.toggle(false);
+}
+
+$("closeSide").onclick = () => selectPerk(null);
+
+// ---------------------------------------------------------------------------
+// Dragging a tile to another place in the track
+// ---------------------------------------------------------------------------
+
+/**
+ * `shared/sortable.ts` does this for a VERTICAL list: it hit-tests on clientY
+ * only, so every tile of a row reads as the same place. The row is the game's
+ * own layout and cannot become a column, so the pointer handling lives here
+ * until sortable takes an axis.
+ */
+function enableTileDrag(list: HTMLElement): void {
+  list.addEventListener("pointerdown", (down) => {
+    if (down.button !== 0) return;
+    const tile = (down.target as HTMLElement).closest<HTMLElement>(".perktile");
+    if (!tile || tile.dataset.add !== undefined) return;
+    if ((down.target as HTMLElement).closest("button")) return;
+    const from = perks.findIndex((p) => p.tile === tile);
+    if (from < 0 || perks.length < 2) return;
+
+    const startX = down.clientX;
+    let dragging = false;
+    let to = from;
+
+    const move = (ev: PointerEvent): void => {
+      if (!dragging) {
+        if (Math.abs(ev.clientX - startX) < 4) return;
+        dragging = true;
+        hideTip();
+        list.setPointerCapture(down.pointerId);
+        tile.dataset.dragging = "";
+      }
+      const others = perks.filter((p) => p.tile !== tile);
+      let index = others.length;
+      for (let i = 0; i < others.length; i++) {
+        const box = others[i].tile.getBoundingClientRect();
+        if (ev.clientX < box.left + box.width / 2) {
+          index = i;
+          break;
+        }
+      }
+      if (index === to) return;
+      to = index;
+      list.insertBefore(tile, others[index]?.tile ?? addTile);
+    };
+
+    const end = (): void => {
+      list.removeEventListener("pointermove", move);
+      list.removeEventListener("pointerup", end);
+      list.removeEventListener("pointercancel", end);
+      if (!dragging) return;
+      tile.removeAttribute("data-dragging");
+      // The pointer sequence ends in a click; a drag must not also open the
+      // editor for the tile it just moved.
+      tile.addEventListener("click", (click) => click.stopPropagation(), {
+        capture: true,
+        once: true,
+      });
+      const moved = perks.splice(from, 1)[0];
+      perks.splice(to, 0, moved);
+      renumber();
+      refreshScript();
+    };
+
+    list.addEventListener("pointermove", move);
+    list.addEventListener("pointerup", end);
+    list.addEventListener("pointercancel", end);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Preview and save
 // ---------------------------------------------------------------------------
 
 function refreshScript(): void {
   if (!trackForm) return;
-  const blocks = [trackBlock(), ...cards.map(perkBlock)].map(writeDefBlock);
+  const blocks = [trackBlock(), ...perks.map(perkBlock)].map(writeDefBlock);
   $("script").textContent = blocks.join("\n\n");
 }
 
@@ -481,7 +898,7 @@ function save(): void {
     toast(`Duplicating ${name} needs a key of its own. Change it, or switch to Override.`, "destructive");
     return;
   }
-  const names = cards.map((c) => c.nameInput.value.trim());
+  const names = perks.map(perkName);
   const bad = names.find((n) => !NAME_RE.test(n));
   if (bad !== undefined) {
     toast(`"${bad}" is not a usable perk key: lowercase letters, digits and _.`, "destructive");
@@ -502,13 +919,13 @@ function save(): void {
     locPairs(trackLoc, name),
     trackKeys
   );
-  const perks = cards.map((card) =>
+  const written = perks.map((perk) =>
     definitionFor(
-      perkBlock(card),
-      card.original,
-      card.source,
-      card.file,
-      locPairs(card.loc, card.nameInput.value.trim()),
+      perkBlock(perk),
+      perk.original,
+      perk.source,
+      perk.file,
+      locPairs(perk.loc, perkName(perk)),
       perkKeys
     )
   );
@@ -516,7 +933,7 @@ function save(): void {
   send({
     type: "save",
     track,
-    perks,
+    perks: written,
     dropped: dropped.slice(),
     icon: picked && picked !== name ? picked : null,
   });
@@ -526,10 +943,33 @@ function save(): void {
 // Wiring
 // ---------------------------------------------------------------------------
 
+/** The ghost tile that ends the row: the only way a track grows a perk. */
+const addTile = el("div", "perktile");
+addTile.dataset.add = "";
+addTile.tabIndex = 0;
+addTile.setAttribute("role", "button");
+addTile.dataset.tip = "Add a perk to the end of the track";
+addTile.append(iconEl("plus"), el("span", "", "Add perk"));
+const addPerkClicked = (): void => {
+  const perk = addPerk();
+  refreshScript();
+  selectPerk(perk);
+};
+addTile.onclick = addPerkClicked;
+addTile.onkeydown = (ev) => {
+  if (ev.key === "Enter" || ev.key === " ") {
+    ev.preventDefault();
+    addPerkClicked();
+  }
+};
+
 function reset(loc: Record<string, string> = {}): void {
-  cards = [];
-  $("perks").replaceChildren();
+  perks = [];
+  selectPerk(null);
+  hideTip();
+  $("perks").replaceChildren(addTile);
   buildTrack(loc);
+  paintRow();
   refreshScript();
 }
 
@@ -553,11 +993,12 @@ function applyInit(payload: CreatorInit): void {
   $<HTMLButtonElement>("save").disabled = payload.problem !== null;
   $("perkNote").textContent =
     payload.perksPerTrack === null
-      ? "the game folder is not set, so the usual number of perks could not be read"
-      : `vanilla tracks have ${payload.perksPerTrack} perks`;
+      ? "(the game folder is not set, so the usual number of perks could not be read)"
+      : `(vanilla tracks have ${payload.perksPerTrack} perks)`;
+  askImages([TRACK_FRAME, TRACK_MASK], ART_DIM);
   reset();
   const slots = payload.perksPerTrack ?? 1;
-  for (let i = 0; i < slots; i++) addCard();
+  for (let i = 0; i < slots; i++) addPerk();
   refreshScript();
 }
 
@@ -572,12 +1013,14 @@ function rebuildIcon(select?: string): void {
     items: init.icons,
     value,
     onCustom: () => send({ type: "customIcon", track: trackName() }),
-    customLabel: "Convert an image…",
+    customLabel: "Custom picture…",
   });
+  trackIcon.onChange(paintRow);
   previous.el.replaceWith(trackIcon.el);
+  paintRow();
 }
 
-function applyLoaded(track: DefinitionForm, perks: LoadedPerk[], loc: Record<string, string>): void {
+function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<string, string>): void {
   trackForm = track;
   trackOriginal = track.current ? parseDefBlock(track.current.text) : null;
   trackSource = track.current?.source ?? null;
@@ -593,7 +1036,8 @@ function applyLoaded(track: DefinitionForm, perks: LoadedPerk[], loc: Record<str
     trackSource === "mod" ? "this mod" : trackSource === "vanilla" ? "the game" : "a parent mod";
   $("mode").hidden = trackSource === null || trackSource === "mod";
   reset(loc);
-  for (const perk of perks) addCard(perk, loc);
+  for (const perk of loaded) addPerk(perk, loc);
+  paintRow();
   refreshScript();
 }
 
@@ -610,23 +1054,28 @@ $<HTMLInputElement>("name").addEventListener("change", () => {
     const derived = field.get().trim() === "" || field.get() === titleCaseFromName(was);
     if (pattern.endsWith("_name") && derived) field.set(titleCaseFromName(name));
   });
-  cards.forEach((card, i) => {
-    if (card.original || card.nameInput.value.trim() !== perkNameFor(was, i)) return;
-    const previous = card.nameInput.value;
-    card.nameInput.value = perkNameFor(name, i);
-    renameCard(card);
-    card.loc.forEach(({ field }) => {
+  perks.forEach((perk, i) => {
+    if (perk.original || perkName(perk) !== perkNameFor(was, i)) return;
+    const previous = perkName(perk);
+    perk.key.set(perkNameFor(name, i));
+    renamePerk(perk);
+    perk.loc.forEach(({ field }) => {
       if (field.get().trim() === "" || field.get() === titleCaseFromName(previous)) {
-        field.set(titleCaseFromName(card.nameInput.value));
+        field.set(titleCaseFromName(perkName(perk)));
       }
     });
+    paintTile(perk);
   });
+  paintRow();
   refreshScript();
 });
 
-$("addPerk").onclick = () => {
-  addCard();
-  refreshScript();
+$("new").onclick = () => {
+  if (!init) return;
+  $<HTMLInputElement>("name").value = "";
+  $("source").hidden = true;
+  $("mode").hidden = true;
+  applyInit(init);
 };
 
 $("save").onclick = save;
@@ -656,7 +1105,7 @@ $("open").onclick = () => {
   }
   menu(
     $("open"),
-    existing.map((def) => ({ value: def.name, label: def.name })),
+    existing.map((def) => ({ value: def.name, label: def.label || def.name, hint: def.name })),
     { search: existing.length > 8, width: 280, onPick: (name) => send({ type: "load", name }) }
   );
 };
@@ -680,7 +1129,7 @@ $("helpBtn").onclick = () =>
   helpDialog({
     title: "Dynasty Legacy Creator",
     intro:
-      "A legacy track is a container; the perks are the steps a dynasty buys with prestige. This view designs both at once and writes them into your mod as a track file, a perk file and the localization that goes with them.",
+      "A legacy track is a container; the perks are the steps a dynasty buys with prestige. This view draws the track the way the game's own legacy window does and writes it into your mod as a track file, a perk file and the localization that goes with them.",
     sections: [
       {
         title: "The track",
@@ -691,7 +1140,7 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "The icon is not a script key.",
-            text: "The game builds the picture's path from the track's key, so picking one here copies that picture into your mod under your key. Converting an image does the same through the toolkit's DDS converter.",
+            text: "The game builds the picture's path from the track's key, so picking one here copies that picture into your mod under your key. A custom picture goes through the toolkit's DDS converter.",
           },
         ],
       },
@@ -699,12 +1148,16 @@ $("helpBtn").onclick = () =>
         title: "The perks",
         items: [
           {
-            lead: "legacy = <track> is written for you",
-            text: "on every card, because a perk only exists inside a track.",
+            lead: "Hover a tile",
+            text: "to read the perk as the player will: every modifier in the game's own words, the trait it grants, and what its effect says.",
           },
           {
-            lead: "A modifier row",
-            text: "is one line of a modifier block. Lines a row cannot hold, such as a block's own loc name or a doctrine, are kept exactly where they were.",
+            lead: "Click a tile",
+            text: "to edit that perk on the right. Drag a tile to move it along the track; the numbers follow.",
+          },
+          {
+            lead: "legacy = <track> is written for you",
+            text: "on every perk, because a perk only exists inside a track.",
           },
           {
             lead: "Removing a saved perk",
@@ -728,6 +1181,8 @@ $("helpBtn").onclick = () =>
     ],
   });
 
+enableTileDrag($("perks"));
+
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   const message = event.data;
   switch (message.type) {
@@ -740,6 +1195,15 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "icons":
       if (init) init.icons = message.icons;
       rebuildIcon(message.select);
+      break;
+    case "images":
+      for (const [key, url] of Object.entries(message.urls)) images.set(key, url);
+      paintRow();
+      if (tipFor) showTip(tipFor);
+      break;
+    case "locValues":
+      for (const [key, value] of Object.entries(message.values)) locValues.set(key, value);
+      if (tipFor) showTip(tipFor);
       break;
     case "saved":
       dropped = [];
