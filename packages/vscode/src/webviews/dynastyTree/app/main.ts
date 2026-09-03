@@ -47,6 +47,7 @@ const $banner = el("banner");
 const $back = el<HTMLButtonElement>("back");
 
 interface State {
+  supported: boolean;
   dynasties: DynastySummary[];
   tree: TreeData | null;
   options: OptionSets;
@@ -54,6 +55,7 @@ interface State {
   nextCharacterId: string;
   mods: ModTarget[];
   setupProblem?: string;
+  gameName: string;
   /** The character the inspector shows, or null for the dynasty itself. */
   selected: string | null;
   /** A form being filled: a new character, or an edit of an existing one. */
@@ -64,12 +66,14 @@ interface State {
 }
 
 const state: State = {
+  supported: true,
   dynasties: [],
   tree: null,
   options: { culture: [], religion: [], trait: [] },
   nextDynastyId: "1",
   nextCharacterId: "1",
   mods: [],
+  gameName: "the game",
   selected: null,
   draft: null,
   layout: null,
@@ -228,8 +232,9 @@ function renderPicker(): void {
     });
     $picker.append(row);
   }
-  $pickerNote.textContent =
-    matches.length === 0
+  $pickerNote.textContent = !state.supported
+    ? `${state.gameName} has no dynasties in its files, so there is no family tree to draw.`
+    : matches.length === 0
       ? state.dynasties.length === 0
         ? "No dynasties found. The game path and your mod both feed this list."
         : "Nothing matches that search."
@@ -909,6 +914,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   switch (msg.type) {
     case "init":
       state.mods = msg.mods;
+      state.gameName = msg.gameName;
       state.setupProblem = msg.setupProblem;
       $banner.hidden = !msg.setupProblem;
       if (msg.setupProblem) $banner.textContent = msg.setupProblem;
@@ -917,11 +923,12 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       $pickerNote.textContent = `Reading ${msg.what}…`;
       break;
     case "list":
+      state.supported = msg.supported;
       state.dynasties = msg.dynasties;
       state.nextDynastyId = msg.nextDynastyId;
       state.nextCharacterId = msg.nextCharacterId;
       showPicker();
-      $pickerNote.textContent += ` Read in ${msg.ms} ms.`;
+      if (state.supported) $pickerNote.textContent += ` Read in ${msg.ms} ms.`;
       break;
     case "tree":
       state.tree = msg.tree;

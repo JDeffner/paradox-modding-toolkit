@@ -83,6 +83,8 @@ export type HostToApp =
   | { type: "loading"; what: string }
   | {
       type: "list";
+      /** False when the active game's profile has no `dynasty` kind at all. */
+      supported: boolean;
       dynasties: DynastySummary[];
       nextDynastyId: string;
       nextCharacterId: string;

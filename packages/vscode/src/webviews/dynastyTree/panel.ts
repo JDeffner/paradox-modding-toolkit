@@ -220,11 +220,13 @@ export class DynastyTreePanel {
       const result = await this.actions.fetchTree({ modRoot: this.options.modRoot });
       this.post({
         type: "list",
+        supported: result.supported,
         dynasties: result.dynasties,
         nextDynastyId: result.nextDynastyId ?? "1",
         nextCharacterId: result.nextCharacterId ?? "1",
         ms: Date.now() - started,
       });
+      if (!result.supported) return;
       await this.loadOptions([...result.dynasties.slice(0, 200)].find((d) => d.culture)?.culture);
     } catch (err) {
       this.post({ type: "error", message: message(err) });

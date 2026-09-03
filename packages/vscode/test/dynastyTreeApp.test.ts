@@ -135,13 +135,36 @@ describe("the Dynasty Tree app", () => {
 
   it("lists dynasties and turns a click into an open request", () => {
     const app = boot();
-    app.send({ type: "list", dynasties: [DYNASTY], nextDynastyId: "2", nextCharacterId: "4", ms: 3 });
+    app.send({
+      type: "list",
+      supported: true,
+      dynasties: [DYNASTY],
+      nextDynastyId: "2",
+      nextCharacterId: "4",
+      ms: 3,
+    });
     const rows = app.window.document.querySelectorAll("#picker .px-item");
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain("Smoke");
     expect(rows[0].textContent).toContain("2 characters");
     (rows[0] as HTMLElement).click();
     expect(app.posted).toContainEqual({ type: "open", dynasty: "9000001" });
+  });
+
+  it("says so when the game has no dynasties at all, instead of an empty list", () => {
+    const app = boot();
+    app.send({ type: "init", gameName: "Victoria 3", mods: [] });
+    app.send({
+      type: "list",
+      supported: false,
+      dynasties: [],
+      nextDynastyId: "1",
+      nextCharacterId: "1",
+      ms: 1,
+    });
+    expect(app.window.document.getElementById("pickerNote")!.textContent).toContain(
+      "Victoria 3 has no dynasties"
+    );
   });
 
   it("draws one card per character, vanilla and external ones marked apart", () => {
