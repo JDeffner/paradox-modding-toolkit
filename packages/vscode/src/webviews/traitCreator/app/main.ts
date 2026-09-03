@@ -35,7 +35,7 @@ import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, toast } from "../../shared/overlay";
 import { installTips } from "../../shared/tips";
 import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit } from "../messages";
-import { writeBlock } from "./script";
+import { baseName, writeBlock } from "../../shared/scriptBlock";
 import {
   emptyState,
   fieldLines,
@@ -495,10 +495,6 @@ async function save(): Promise<void> {
       ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
     },
   });
-}
-
-function baseName(file: string): string {
-  return file.split(/[\\/]/).pop() ?? file;
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@
 import type { DefinitionForm, DefinitionFormKey } from "@px-lsp/protocol/protocol";
 import type { ModifierRow } from "../../shared/fields";
 import {
+  locKeyFor,
   parseBlock,
   quoteIfNeeded,
   readNumber,
@@ -27,7 +28,7 @@ import {
   readTokenList,
   type BlockWrite,
   type ParsedBlock,
-} from "./script";
+} from "../../shared/scriptBlock";
 
 export type SectionId = "identity" | "look" | "stats" | "relations" | "ai" | "other";
 
@@ -386,7 +387,7 @@ export function traitWrites(
 
 /** The loc pairs a save writes: `locPatterns` with `$` replaced by the name. */
 export function locKeys(form: DefinitionForm, name: string): string[] {
-  return form.locPatterns.map((pattern) => pattern.replace("$", name));
+  return form.locPatterns.map((pattern) => locKeyFor(pattern, name));
 }
 
 /** The definition key rule: lowercase, digits and `_`, starting with a letter. */

@@ -1,7 +1,8 @@
 /**
- * The block a creator reads and the block it writes back.
+ * The `name = { ... }` definition block a creator reads and the block it writes
+ * back, for every creator panel.
  *
- * A definition is a small piece of script, so the panel reads it itself rather
+ * A definition is a small piece of script, so a panel reads it itself rather
  * than asking the server for a parse: a scanner that knows braces, quotes and
  * comments is enough, and it keeps the round trip inside one pure module the
  * tests can drive.
@@ -14,7 +15,11 @@
  * byte for byte, in place. That is what lets a modder open a vanilla trait,
  * change one number, and get a diff of one line.
  *
- * Browser code, no DOM: the app imports it, the tests import it directly.
+ * What is NOT here: which keys a form models, how a value is shaped for one
+ * game concept, and any writer that re-serializes a whole block. Those live in
+ * each creator's own `app/script.ts`.
+ *
+ * Browser code, no DOM: the apps import it, the tests import it directly.
  */
 
 /** One `key = value` (or one bare token) of a block body, with its span. */
@@ -160,6 +165,18 @@ export function parseBlock(text: string): ParsedBlock | null {
   };
 }
 
+/**
+ * The FIRST value written for each key. A form field binds to one statement,
+ * and the first is the one the reader sees at the top of the file.
+ */
+export function firstValues(block: ParsedBlock): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const item of block.items) {
+    if (item.key !== null && item.op === "=" && !values.has(item.key)) values.set(item.key, item.value);
+  }
+  return values;
+}
+
 /** `{ craven ambitious }` -> the tokens, or null when it is not a plain list. */
 export function readTokenList(blockValue: string): string[] | null {
   const inner = innerOf(blockValue);
@@ -185,7 +202,8 @@ export function readNumberRows(blockValue: string): { name: string; value: numbe
   return rows;
 }
 
-function innerOf(blockValue: string): string | null {
+/** The text between the braces of a `{ … }` value, or null when it is not one. */
+export function innerOf(blockValue: string): string | null {
   const text = blockValue.trim();
   if (!text.startsWith("{") || !text.endsWith("}")) return null;
   return text.slice(1, -1);
@@ -289,4 +307,30 @@ export function writeBlock(
     out = (trimmed.endsWith(eol) || trimmed === "" ? trimmed : trimmed + eol) + added.join(eol) + eol;
   }
   return head + out + source.tail;
+}
+
+/**
+ * The keys whose value moved, as `paradox/definitionEdit`'s `setProperties`
+ * wants them: a `null` value removes the key. Iterating `after` is what makes
+ * a save of an untouched form report nothing at all.
+ */
+export function changedProperties(
+  before: ReadonlyMap<string, string | null>,
+  after: ReadonlyMap<string, string | null>
+): { key: string; value: string | null }[] {
+  const out: { key: string; value: string | null }[] = [];
+  for (const [key, value] of after) {
+    if (value !== (before.get(key) ?? null)) out.push({ key, value });
+  }
+  return out;
+}
+
+/** A loc key pattern (`$_name`) with the definition's own name filled in. */
+export function locKeyFor(pattern: string, name: string): string {
+  return pattern.replace(/\$/g, name);
+}
+
+/** The file name of a workspace path, for the `sourceFile` a save reports. */
+export function baseName(file: string): string {
+  return file.split(/[\\/]/).pop() ?? file;
 }
