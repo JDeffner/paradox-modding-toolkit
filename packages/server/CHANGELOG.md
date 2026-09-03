@@ -8,6 +8,14 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- `paradox/snippets` and skeleton completion items: a new definition's shape
+  per kind, measured over the game's own files at build time
+  (`scripts/build-skeletons.ts --game <id>` writes `data/<id>/skeletons.json`;
+  keys in at least half the definitions, median order, the most written value
+  or number as tabstop text, kinds under ten definitions withheld). Completion
+  adds the items at the top level of a kind's folder and on an empty line
+  inside a definition; existing items and their ranking are byte-identical in
+  rank-eval. Snippet form only for clients declaring `snippetSupport`.
 - `paradox/definitionForm`: `existing` lists every definition of the kind
   (mod first, then the game's and a dependency's, each with its `source`);
   block keys and stated value sets (`bool`, `enum:`) carry an `example` too, a

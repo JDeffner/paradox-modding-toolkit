@@ -8,6 +8,7 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`).
 - `protocol`: `source` on `OverviewDef`, `conditions` on `DefinitionForm`,
   `DEFINITION_FORM_MAX_EXAMPLE`; `dna` and `skills` on `DynastyCharacter`,
   `DYNASTY_SKILLS`.

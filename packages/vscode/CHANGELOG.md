@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Code snippets, measured from the game.** Typing at the top of a script
+  file offers a skeleton of that folder's definition kind (`new event`, `new
+  decision`, 119 kinds for Crusader Kings III, 93 for Victoria 3), and an
+  empty line inside a definition offers its common child blocks (`option
+  block`). Each skeleton is the shape the game's own files write most: keys
+  present in at least half of the vanilla definitions, in their usual order,
+  with the most written value or number pre-filled as a tabstop. `Insert
+  Snippet…` (Ctrl+Alt+I, palette, Project panel) lists the skeletons and the
+  engine's own block examples that fit the cursor. Bare LSP clients get the
+  same items as plain text.
 - **Every creator says where it saves, and numbers drag on their label.** The
   top bar of each creator reads `Saves to <mod> › <folder>/<file>` from the
   moment the form loads, and clicking it changes the target before the save.
