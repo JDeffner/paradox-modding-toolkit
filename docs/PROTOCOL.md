@@ -592,8 +592,10 @@ what the player will READ. A modifier row is not its script. The game prints
 `monthly_income = 0.5` as a gold icon, `+0.50` in green and the words "Monthly
 Income", and every part of that is stated in the game's own files: the flags in
 the profile's format folder (one block per modifier, documented by the
-`_definitions.info` sitting beside them — `decimals` defaults to 2 and `color`
-to `bad`), the words in the loc index (the modifier's own key, else
+`_definitions.info` sitting beside them; `decimals` defaults to 2, and `color`
+defaults to `good` even though the doc says `bad`: the file writes `color =
+bad` 113 times and `color = good` twice across its 667 blocks, and the game
+prints an unmarked `diplomacy = 1` green), the words in the loc index (the modifier's own key, else
 `MOD_<NAME>`, else the name made readable), and the pictures in the profile's
 texticon file, which a `[gold_i]` in a loc value reaches through the concept
 entry `game_concept_gold_i` = `"@gold_icon!"`. A bracket that resolves to
