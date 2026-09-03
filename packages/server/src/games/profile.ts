@@ -131,6 +131,22 @@ export interface GameMeta {
    */
   flagBuilder?: boolean;
   /**
+   * Visual content creators offered for this game, in Create-group order. A
+   * row is a definition kind the schema knows (the panel's command opens that
+   * creator), except `dynasty_tree`, which is a view over history files rather
+   * than one definition. Absent = no creator has been built against this
+   * game's own files, and the Create group shows only the scaffolds.
+   */
+  creators?: {
+    /** Schema kind, or the id of a bespoke creator that owns no single kind. */
+    kind: string;
+    label: string;
+    /** A Lucide icon name present in the client's webviews/shared/icons.ts. */
+    icon: string;
+    /** One-line hint for the panel row. */
+    tip?: string;
+  }[];
+  /**
    * Database entry-mode prefixes legal on top-level definition keys
    * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before
    * treating the rest as the definition name. Absent = no such syntax.

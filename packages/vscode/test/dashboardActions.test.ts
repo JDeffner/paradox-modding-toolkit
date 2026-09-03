@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
+import { PATHS } from "../src/webviews/shared/icons";
 import { actionGroups, visibleActionGroups } from "../src/webviews/dashboard/actions";
 
 /** Every command id the panel offers for a game, groups flattened. */
@@ -84,6 +85,37 @@ describe("visibleActionGroups", () => {
     expect(ids).not.toContain("px.launchGame");
     expect(ids).not.toContain("px.launchMapEditor");
     expect(ids).toContain("px.clearGameProblems");
+  });
+
+  it("lists the game's creators in the Create group, after the two scaffolds", () => {
+    const create = actionGroups(ck3Meta, 0).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).toEqual([
+      "px.createMod",
+      "px.newContent",
+      "px.createTrait",
+      "px.createDynastyLegacy",
+      "px.createCulture",
+      "px.openDynastyTree",
+    ]);
+    expect(create?.items.map((it) => it.label)).toContain("Trait Creator");
+  });
+
+  it("every creator row names an icon the client actually ships", () => {
+    for (const creator of ck3Meta.creators ?? []) {
+      expect(Object.keys(PATHS)).toContain(creator.icon);
+    }
+  });
+
+  it("hides a creator row like any other row", () => {
+    const create = visibleActionGroups(ck3Meta, 0, ["px.createTrait"]).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).not.toContain("px.createTrait");
+    expect(create?.items.map((it) => it.command)).toContain("px.createCulture");
+  });
+
+  it("a game with no creators keeps the Create group it had", () => {
+    expect(eu5Meta.creators).toBeUndefined();
+    const create = actionGroups(eu5Meta, 0).find((g) => g.label === "Create");
+    expect(create?.items.map((it) => it.command)).toEqual(["px.createMod", "px.newContent"]);
   });
 
   it("shows the error.log clear row only while there are problems", () => {

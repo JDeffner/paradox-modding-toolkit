@@ -56,6 +56,10 @@ import {
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  type DefinitionFormParams,
+  type DefinitionEditParams,
   guiTreeRequest,
   locCoverageRequest,
   modOverviewRequest,
@@ -189,6 +193,8 @@ import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
 import { computeEventVocabulary, computeValueOptions } from "./overview/eventVocabulary";
 import { computeEventBanner } from "./overview/eventBanner";
+import { computeDefinitionForm } from "./creators/definitionForm";
+import { computeDefinitionEdits } from "./creators/definitionEdit";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -1604,6 +1610,19 @@ connection.onRequest(eventValueOptionsRequest, (params: EventValueOptionsParams 
 // event_backgrounds hops. Answering "nothing resolved" is a real answer.
 connection.onRequest(eventBannerRequest, (params: EventBannerParams) =>
   computeEventBanner(data, params?.theme ?? "")
+);
+
+// What a visual creator may offer for one definition kind: the schema entry,
+// the harvested structure keys, the index (options and the mod's own
+// definitions) and the modifier tokens. Never a hand-written field list.
+connection.onRequest(definitionFormRequest, (params: DefinitionFormParams | null) =>
+  computeDefinitionForm(data, schema, params ?? { kind: "" }, focusFilter(params?.modRoot))
+);
+
+// The script sibling of guiSourceEdit: the creators' writes as offsets into the
+// text the host handed over, applied there as one WorkspaceEdit.
+connection.onRequest(definitionEditRequest, (params: DefinitionEditParams | null) =>
+  computeDefinitionEdits(params)
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));

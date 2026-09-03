@@ -10,6 +10,7 @@
 // unused-vars analysis does not see.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { IndexStats } from "./types";
+import type { DefSource } from "./types";
 
 /** Resolved extension settings, computed client-side (path validation, Steam
  * detection fallbacks, workspace-folder default) and pushed to the server. */
@@ -1673,4 +1674,118 @@ export interface ScopeAtResult {
    * the file is listed too, matching what completion and hover already offer.
    */
   savedScopes: SavedScopeInfo[];
+}
+
+// ---- content creators --------------------------------------------------------
+
+/**
+ * Request: everything a visual creator needs to draw a form for one definition
+ * kind; {@link DefinitionFormParams} -> {@link DefinitionForm} | null (null =
+ * the active game's schema has no such kind, which is the honest answer for a
+ * client asking about content this game does not have).
+ *
+ * Nothing in the answer is hand-written for the creator: the folder, the loc
+ * key patterns and the icon folder come from the schema table, the keys from
+ * the harvested `_*.info` structures, the option lists from the definition
+ * index (the same resolver {@link eventValueOptionsRequest} answers with) and
+ * `existing` from the same index walk {@link modOverviewRequest} does. A game
+ * patch that adds a key or a value changes the form without a release.
+ */
+export const definitionFormRequest = "paradox/definitionForm";
+export interface DefinitionFormParams {
+  /** Definition kind, as the schema table spells it ("trait"). */
+  kind: string;
+  /** Load this definition into `current` (edit rather than create). */
+  name?: string;
+  /** Restrict mod-side entries to one workspace mod (plus vanilla/parents). */
+  modRoot?: string | null;
+}
+
+/** One key of a definition body, with what is known about the values it takes. */
+export interface DefinitionFormKey {
+  key: string;
+  /** The game's own one-line documentation, capped. Absent when it has none. */
+  doc?: string;
+  /** Coarse value hint from the schema: `loc`, `bool`, `block`, `enum:a|b|c`. */
+  values?: string;
+  /** Vanilla usage count from the harvest, the order the keys arrive in. */
+  freq?: number;
+  /**
+   * Definition kinds this key's value names, when the profile says so. The
+   * lists live in {@link DefinitionForm.options}, keyed by kind, so several
+   * keys naming the same kind share one list.
+   */
+  refKinds?: string[];
+}
+
+export interface DefinitionForm {
+  kind: string;
+  /** Schema path the definition is written into, e.g. `common/traits`. */
+  folder: string;
+  /** Loc keys the game requires; `$` is the definition name (`trait_$_desc`). */
+  locPatterns: string[];
+  /** Where the game looks for this kind's icon, e.g. `gfx/interface/icons/traits`. */
+  iconFolder?: string;
+  /** Top-level keys, harvest order (most used first), curated keys ahead. */
+  keys: DefinitionFormKey[];
+  /** Named sub-blocks with their own keys, when the harvest has them. */
+  blocks?: Record<string, DefinitionFormKey[]>;
+  /** Ref kind -> every indexed definition of it, mod entries first, capped. */
+  options: Record<string, EventVocabularyItem[]>;
+  /** The modifier vocabulary, most used first: what a modifier row may offer. */
+  modifiers: { name: string; doc?: string }[];
+  /** Definitions of this kind the mod already has (modRoot or every workspace mod). */
+  existing: OverviewDef[];
+  /** The definition `params.name` asked for, when it is indexed. */
+  current?: {
+    file: string;
+    /** 0-based. */
+    line: number;
+    source: DefSource;
+    /** The block verbatim, `name = { ... }`, exactly as the file has it. */
+    text: string;
+  };
+}
+
+/**
+ * Request: text edits that write a definition into a script file;
+ * {@link DefinitionEditParams} -> {@link DefinitionEditResult}. The script
+ * sibling of {@link guiSourceEditRequest}, over the same span model, and with
+ * the same division of labour: the server never writes, it returns offsets
+ * into the text it was handed and the host applies them as ONE
+ * `WorkspaceEdit`, which keeps undo and dirty state in the editor.
+ *
+ * Offsets are UTF-16 into `params.text` (the document text, with no BOM, the
+ * way an editor delivers it), computed against that one text and applied
+ * end-first. Every edit is surgical, so a file's other definitions, its
+ * comments, its CRLF and its indentation stay byte-identical.
+ */
+export const definitionEditRequest = "paradox/definitionEdit";
+export interface DefinitionEditParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  /** Authoritative document text every offset refers to. */
+  text: string;
+  /** Computed in order against the one text and answered as one edit set. */
+  ops: DefinitionOp[];
+}
+
+export type DefinitionOp =
+  /**
+   * Set or (with a null value) remove keys on the top-level definition `name`.
+   * `value` is raw script text: `2`, `{ craven }`, `"quoted"`.
+   */
+  | { op: "setProperties"; name: string; properties: { key: string; value: string | null }[] }
+  /**
+   * Write the whole `name = { ... }` block: replaces the top-level block of
+   * that name, or appends it after a blank separator line when the file has
+   * none.
+   */
+  | { op: "upsertBlock"; name: string; text: string };
+
+export interface DefinitionEditResult {
+  /** Every applied op's edits together. Apply the whole set as ONE change. */
+  edits: GuiTextEdit[];
+  /** One verdict per requested op, in request order; `refused` names why it wrote nothing. */
+  ops: { refused?: string }[];
 }

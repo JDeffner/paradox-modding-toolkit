@@ -48,6 +48,13 @@ export interface KeySpec {
    * vocabulary, the completion regression rank-eval caught in 2026-07.
    */
   curated?: boolean;
+  /**
+   * Definition kinds this key's value names, where a global `RefField` would
+   * be wrong because the key means different things in different folders
+   * (`opposites` is a trait list here and a scripted_relation list there).
+   * Per-kind and therefore unambiguous; read by the creators' form request.
+   */
+  refKinds?: string[];
 }
 
 /** The document shape of a definition kind: top-level keys plus named sub-blocks. */
@@ -102,6 +109,21 @@ export interface SchemaEntry {
    * of this kind actually define.
    */
   requiredLoc?: string[];
+  /**
+   * Every loc key the game generates for a definition of this kind, `$` = the
+   * name, as the folder's `_*.info` doc states them. A SUPERSET of
+   * `requiredLoc`, which may only carry the patterns ≥95% of vanilla actually
+   * defines because a diagnostic hangs off it; a creator writes the whole set
+   * and asks the modder for each. Absent = `requiredLoc` is the whole set.
+   */
+  locPatterns?: string[];
+  /**
+   * Where the game looks for a definition's default icon, relative to the
+   * game/mod root, forward slashes, no trailing slash. Only set where the
+   * folder's `_*.info` doc states the path; absent = this kind has no
+   * name-derived icon and a creator offers no icon picker for it.
+   */
+  iconFolder?: string;
   /** Scope(s) a definition of this type pushes as root in its script blocks (Phase 3). */
   rootScopes?: string[];
   /** Include definitions of this kind in completion lists (default true).

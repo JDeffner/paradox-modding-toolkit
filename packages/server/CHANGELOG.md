@@ -6,6 +6,17 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `paradox/definitionForm` and `paradox/definitionEdit`: the read and the
+  write a visual content creator needs. The form is assembled from the
+  schema table, the harvested `_*.info` structures, the definition index
+  and the modifier tokens, so no field list is written for it; the edit is
+  the GUI editor's span writer applied to plain script through a new
+  dialect parameter on the source model. CK3's schema gains the trait icon
+  folder, the trait and dynasty-legacy loc key patterns, and the per-kind
+  reference rows for `opposites`, `traditions` and `parents`.
+
 ## 0.3.0
 
 Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.

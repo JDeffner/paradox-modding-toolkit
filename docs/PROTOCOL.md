@@ -153,6 +153,8 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, required loc key patterns and icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind, the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
 | `paradox/guiWidgetInfo` | request | `GuiWidgetInfoParams` → `GuiWidgetInfo \| null` — one widget's effective properties with the template/type each came from, its textures, and (on request) why its rect is where it is |
@@ -517,6 +519,38 @@ from it (one axis writes and sets `warning` naming the other); a `type`
 definition is not restructured through one instance's preview; the only root
 widget is not deleted; and a document that does not parse is not edited at all.
 Render the string.
+
+`paradox/definitionForm` and `paradox/definitionEdit` are the creators' pair:
+the read that lets a client draw a form for a definition kind, and the write
+that puts one into a file. Nothing in the form is written for the creator. The
+folder, the `locPatterns` (`$` is the definition name, so `trait_$_desc` is
+`trait_brave_desc`) and the `iconFolder` are the schema table's row for the
+kind; `keys` and `blocks` are the harvest of the game's own `_*.info` docs, in
+its own order (curated keys first, then by vanilla usage count), each with the
+game's one-line documentation, a coarse `values` hint and its `freq`; `options`
+lists every indexed definition of each kind a key names, mod entries first,
+through the same resolver `paradox/eventValueOptions` answers with; `modifiers`
+is the script_docs modifier vocabulary hover already reads; `existing` is the
+`paradox/modOverview` walk for that one kind; and `current` is the block's own
+bytes read off disk. A key with no widget in a client is still in `keys`, so a
+form can show it rather than hide it (AD-5).
+
+`paradox/definitionEdit` is the script sibling of `paradox/guiSourceEdit` and
+follows the same contract: the server never writes, `edits` are
+`{ start, end, newText }` offsets into the text of the REQUEST (the document
+text, BOM excluded, the way an editor delivers it), computed against that one
+text and applied end-first as ONE change and one undo step. Every edit is
+surgical, so other definitions, comments, CRLF and indentation survive byte for
+byte. `ops` answers one verdict per requested op in request order: a `refused`
+string names why that op wrote nothing and skips only it, and an op the file
+already satisfies has neither `refused` nor edits. `setProperties` rewrites the
+LAST entry for a key (the engine's last-in-wins order) and adds the keys the
+block lacks in one insert; a `null` value removes a key; a file with no
+top-level block of that name is refused with a reason instead of being
+appended to. `upsertBlock` replaces the top-level block of that name, or
+appends it after one blank separator line in the file's own newline style; an
+empty file gets the block alone. A file that does not parse refuses every op:
+no offset in it can be trusted.
 
 Full payload shapes: see `packages/protocol/src/protocol.ts` — every
 interface there is part of this contract.

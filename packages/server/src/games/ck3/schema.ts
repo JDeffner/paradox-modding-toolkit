@@ -29,7 +29,20 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "localization", kind: "loc_key", ext: ".yml", extraction: "loc-key" },
 
   // --- Characters, traits, interactions ---
-  { path: "common/traits", kind: "trait", requiredLoc: ["trait_$"], rootScopes: ["character"] },
+  // locPatterns and iconFolder verbatim from common/traits/_traits.info
+  // ("== Loc/icon ==": "the name key is trait_<key>, and the desc key is
+  // trait_<key>_desc", "The default icon path is
+  // gfx/interface/icons/traits/<trait>.dds"). trait_$_desc stays OUT of
+  // requiredLoc: schemaVanilla.test.ts measures it at 90.4% of vanilla traits,
+  // under the 95% bar a missing-loc diagnostic needs.
+  {
+    path: "common/traits",
+    kind: "trait",
+    requiredLoc: ["trait_$"],
+    locPatterns: ["trait_$", "trait_$_desc"],
+    iconFolder: "gfx/interface/icons/traits",
+    rootScopes: ["character"],
+  },
   {
     path: "common/character_interactions",
     kind: "character_interaction",
@@ -125,7 +138,9 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   // dynasties top-level keys are numeric ids; huge and never typed → not completable.
   { path: "common/dynasties", kind: "dynasty", completable: false },
   { path: "common/dynasty_houses", kind: "dynasty_house", completable: false },
-  { path: "common/dynasty_legacies", kind: "dynasty_legacy" },
+  // _dynasty_legacies.info, "Generated loc keys: key + "_name"". All 21 vanilla
+  // legacies define it (measured 2026-09-03), so it clears the requiredLoc bar.
+  { path: "common/dynasty_legacies", kind: "dynasty_legacy", requiredLoc: ["$_name"] },
   { path: "common/dynasty_perks", kind: "dynasty_perk" },
 
   // --- Activities & schemes ---

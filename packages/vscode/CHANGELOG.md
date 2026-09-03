@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Groundwork for visual content creators.** The Project panel's Create
+  group now lists the creators the active game has (CK3: Trait Creator,
+  Dynasty Legacy Creator, Culture Creator, Dynasty Tree), and the host side
+  they share is in place: pick a mod and a file, refuse a file name that
+  would replace a whole game file, apply the server's edits as one undo
+  step, write the loc through the normal loc writer. The panels themselves
+  come next; the rows open nothing yet.
 - **The Workshop panel uses the width it has.** Two columns of cards: Item and
   Publish first, then Previews and Requirements, then Links; the description
   and the translations follow at full width. A step strip under the toolbar

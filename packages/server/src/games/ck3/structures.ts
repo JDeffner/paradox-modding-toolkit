@@ -824,6 +824,20 @@ const CURATED: Record<string, StructureSpec> = {
 const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: string }>> = {
   trait: {
     valid_sex: { values: "enum:all|male|female", doc: "Which sex can have the trait. Default: all." },
+    // `opposites = { chaste }` in game/common/traits/00_traits.txt: the entries
+    // are trait names. Deliberately NOT a global REF_FIELD - scripted_relations
+    // spells the same key over relation names (00_scripted_relations.txt,
+    // `friend = { opposites = { rival ... } }`), and a global row would
+    // mis-resolve there.
+    opposites: { refKinds: ["trait"] },
+  },
+  culture: {
+    // game/common/culture/cultures/00_arabic.txt: `traditions = {
+    // tradition_tribe_unity ... }` names definitions of
+    // common/culture/traditions, and `parents = { bedouin assyrian }` names
+    // other cultures (bedouin is the top-level key of the same file).
+    traditions: { refKinds: ["culture_tradition"] },
+    parents: { refKinds: ["culture"] },
   },
   scheme_type: {
     category: { values: "enum:personal|contract|hostile" },

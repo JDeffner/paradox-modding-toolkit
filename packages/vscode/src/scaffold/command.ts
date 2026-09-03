@@ -61,9 +61,17 @@ async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate
 
 const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
 
+/**
+ * The mod prefix this workspace writes with: what the user last typed in this
+ * session, else the mod folder's own name. The creators name their files with
+ * it too, so both commands produce one naming scheme instead of two.
+ */
+export function scaffoldPrefix(cfg: PxConfig): string {
+  return lastPrefix ?? (cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod");
+}
+
 async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
-  const fallback = cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod";
-  const value = lastPrefix ?? fallback;
+  const value = scaffoldPrefix(cfg);
   const prefix = await vscode.window.showInputBox({
     title: "New Content — mod prefix",
     prompt: "Mod prefix for filenames and the event namespace (lowercase, letters/digits/_).",
