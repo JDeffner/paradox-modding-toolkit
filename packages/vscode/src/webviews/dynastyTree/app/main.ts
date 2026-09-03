@@ -159,9 +159,14 @@ function picker(
   value: string,
   items: PickItem[],
   onPick: (v: string) => void,
-  disabled = false
+  disabled = false,
+  placeholder?: string
 ): HTMLElement {
-  if (items.length === 0) return textInput(value, onPick, disabled);
+  if (items.length === 0) {
+    const input = textInput(value, onPick, disabled);
+    if (placeholder) input.placeholder = placeholder;
+    return input;
+  }
   const btn = document.createElement("button");
   btn.className = "px-btn pick";
   btn.dataset.variant = "outline";
@@ -559,8 +564,16 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
   line("Died", char.death);
   line("Culture", char.culture);
   line("Faith", char.religion);
-  line("Father", char.father);
-  line("Mother", char.mother);
+  // A parent reads as a person, not as the id the file writes.
+  const person = (id: string | undefined): string | undefined => {
+    if (!id) return undefined;
+    const other = state.tree?.characters.find((c) => c.id === id);
+    return other ? `${other.name} (${id})` : id;
+  };
+  line("Father", person(char.father));
+  line("Mother", person(char.mother));
+  if (char.spouses.length > 0)
+    line(char.spouses.length === 1 ? "Spouse" : "Spouses", char.spouses.map(person).join(", "));
   if (char.traits.length > 0) {
     const chips = node("div", "chips");
     for (const trait of char.traits) chips.append(chip(trait));
@@ -712,13 +725,25 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   body.append(
     field(
       "Culture",
-      picker(form.culture ?? "", state.options.culture, (v) => (form.culture = v || undefined))
+      picker(
+        form.culture ?? "",
+        state.options.culture,
+        (v) => (form.culture = v || undefined),
+        false,
+        tree?.characters.find((c) => c.culture)?.culture
+      )
     )
   );
   body.append(
     field(
       "Faith",
-      picker(form.religion ?? "", state.options.religion, (v) => (form.religion = v || undefined))
+      picker(
+        form.religion ?? "",
+        state.options.religion,
+        (v) => (form.religion = v || undefined),
+        false,
+        tree?.characters.find((c) => c.religion)?.religion
+      )
     )
   );
 
