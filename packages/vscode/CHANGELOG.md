@@ -38,6 +38,8 @@
   `descriptor.mod` and `.metadata/` always do. A one-time message says why the
   exclusions only hold for toolkit uploads: the Paradox launcher ships the
   whole folder.
+- **New Content uses the toolkit's kind glyphs.** The picker draws each kind
+  with the same icon hovers, completion and the tree use for it.
 - **Workshop errors and the upload result open as dialogs**, so the full Steam
   advice is readable instead of folded into a toast. The upload dialog links
   the item page, in the Steam client (`steam://`) or the browser.
