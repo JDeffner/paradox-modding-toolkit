@@ -43,6 +43,8 @@ import {
   guiWidgetEditRequest,
   guiWidgetInfoRequest,
   scopeAtRequest,
+  snippetsRequest,
+  type SnippetsResult,
   statusNotification,
   type DependenciesResult,
   type GuiDependenciesResult,
@@ -983,6 +985,31 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(form!.current?.text).toBe(TRAITS_TXT.trimEnd());
     // A kind this game's schema has no folder for is null, not an invented shape.
     expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
+  });
+
+  it("paradox/snippets answers with the measured event skeleton and its blocks", async () => {
+    const result = (await conn.sendRequest(snippetsRequest, {
+      uri: eventsUri,
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    const definition = result.snippets.find((s) => s.form === "definition")!;
+    expect(definition.id).toBe("event");
+    expect(definition.label).toBe("new event");
+    expect(definition.detail).toMatch(/^skeleton measured over [\d,]+ vanilla definitions$/);
+    // The document declares `namespace = smoke`, so the insert reuses it and
+    // writes no second header line.
+    expect(definition.snippet).toContain("smoke.${1:1} = {");
+    expect(definition.snippet).not.toContain("namespace =");
+    expect(definition.plain).not.toContain("${");
+    // The kind's child blocks, measured over the game's own option blocks.
+    expect(result.snippets.some((s) => s.form === "block" && s.id === "event.option")).toBe(true);
+
+    // A document the server does not have open is an empty list, not an error.
+    const none = (await conn.sendRequest(snippetsRequest, {
+      uri: toUri(path.join(modDir, "events", "never_opened.txt")),
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    expect(none.snippets).toEqual([]);
   });
 
   it("paradox/modifierFormats needs the game's own format files to answer", async () => {

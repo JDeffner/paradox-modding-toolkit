@@ -97,6 +97,9 @@ import {
   type DependenciesParams,
   scopeAtRequest,
   type ScopeAtParams,
+  snippetsRequest,
+  type SnippetsParams,
+  type SnippetsResult,
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
@@ -189,6 +192,7 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
+import { buildSnippetList } from "./features/snippetList";
 import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
@@ -1806,6 +1810,26 @@ connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | nu
     entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
     entry
   );
+});
+
+connection.onRequest(snippetsRequest, (params: SnippetsParams): SnippetsResult => {
+  // Open script documents only; anything else is an empty list, not an error:
+  // a host that offers an "Insert Snippet" command asks from wherever the user
+  // happens to be.
+  const doc = params?.uri ? documents.get(params.uri) : undefined;
+  if (!doc || !isScriptLanguage(doc.languageId) || !params.position) return { snippets: [] };
+  const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+  const { result } = getParse(doc);
+  return {
+    snippets: buildSnippetList(
+      result,
+      doc.offsetAt(params.position),
+      entry?.kind ?? null,
+      activeProfile().skeletons,
+      data.tokens,
+      freqs.tokens
+    ),
+  };
 });
 
 connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] => {

@@ -517,6 +517,11 @@
         "title": "New Content (event, decision, …)"
       },
       {
+        "command": "px.insertSnippet",
+        "category": "Paradox",
+        "title": "Insert Snippet (definition skeleton, block)"
+      },
+      {
         "command": "px.createMod",
         "category": "Paradox",
         "title": "New Mod (project folder + launcher link)"
@@ -724,11 +729,12 @@
           {
             "id": "px.step.explore",
             "title": "Try it",
-            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Show Index Statistics](command:px.dumpIndexStats)",
+            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)",
             "media": {
               "markdown": "media/walkthrough/explore.md"
             },
             "completionEvents": [
+              "onCommand:px.insertSnippet",
               "onCommand:px.dumpIndexStats"
             ]
           },
@@ -1321,6 +1327,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.insertSnippet",
+          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
+        },
+        {
           "command": "px.convertToDds",
           "when": "px.isCk3Workspace"
         },
@@ -1755,6 +1765,11 @@
         "command": "px.modReport",
         "key": "ctrl+alt+r",
         "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.insertSnippet",
+        "key": "ctrl+alt+i",
+        "when": "editorTextFocus && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
       }
     ]
   },

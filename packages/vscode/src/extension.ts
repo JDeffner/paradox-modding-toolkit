@@ -82,6 +82,7 @@ import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
+import { insertSnippetCommand } from "./insertSnippet";
 import { createModCommand, moveModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
@@ -666,6 +667,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       output.show(true);
     }),
     vscode.commands.registerCommand("px.runTiger", () => tiger.run(true)),
+    vscode.commands.registerCommand("px.insertSnippet", () =>
+      insertSnippetCommand((method, params) => lc.sendRequest(method, params))
+    ),
     // Target of the "N references" hover link: open the references peek for
     // the hovered site (the LSP reference provider supplies the locations).
     vscode.commands.registerCommand(
