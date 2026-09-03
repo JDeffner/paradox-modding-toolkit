@@ -396,14 +396,39 @@ function translationRow(lang: string): HTMLElement {
 
   const head = document.createElement("div");
   head.className = "head";
+  const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
+  const off = langsOff.has(lang);
+  if (off) row.dataset.off = "";
+  // The upload switch sits on the language's own row, left of its editor.
+  const sw = document.createElement("label");
+  sw.className = "px-switch";
+  sw.setAttribute(
+    "data-tip",
+    off
+      ? "Not uploaded. Switch on to send this language."
+      : "Uploaded with the translations. Switch off to skip it."
+  );
+  sw.setAttribute("data-tip-wrap", "");
+  sw.addEventListener("click", (e) => e.stopPropagation());
+  const swInput = document.createElement("input");
+  swInput.type = "checkbox";
+  swInput.checked = !off;
+  swInput.disabled = !hasText;
+  swInput.addEventListener("change", () => {
+    if (swInput.checked) langsOff.delete(lang);
+    else langsOff.add(lang);
+    renderTranslations();
+    renderPublish();
+  });
+  sw.append(swInput, document.createElement("span"));
   const caret = iconEl("chevronDown");
   caret.classList.add("caret");
   const name = document.createElement("span");
+  name.className = "name";
   name.textContent = langLabel(lang);
   const state = document.createElement("span");
   state.className = "state px-grow";
-  const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
-  state.textContent = hasText ? "" : "empty - will not upload";
+  state.textContent = !hasText ? "empty - will not upload" : off ? "not uploaded" : "";
   const seg = document.createElement("div");
   seg.className = "seg";
   seg.addEventListener("click", (e) => e.stopPropagation());
@@ -458,7 +483,7 @@ function translationRow(lang: string): HTMLElement {
         renderPublish();
       })()
   );
-  head.append(caret, name, state, seg, ...(open ? [open] : []), remove);
+  head.append(sw, caret, name, state, seg, ...(open ? [open] : []), remove);
   head.addEventListener("click", () => {
     if (collapsed.has(lang)) collapsed.delete(lang);
     else collapsed.add(lang);
@@ -877,35 +902,6 @@ function renderPublish(): void {
       ? `Upload all ${langs.length}`
       : `Upload ${on.length} of ${langs.length}`;
 
-  const rows = $("langRows");
-  rows.replaceChildren();
-  for (const lang of langs) {
-    const row = document.createElement("div");
-    row.className = "lang-row";
-    if (langsOff.has(lang)) row.dataset.off = "";
-    const sw = document.createElement("label");
-    sw.className = "px-switch";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = !langsOff.has(lang);
-    input.addEventListener("change", () => {
-      if (input.checked) langsOff.delete(lang);
-      else langsOff.add(lang);
-      renderPublish();
-    });
-    sw.append(input, document.createElement("span"));
-    const name = document.createElement("span");
-    name.textContent = langLabel(lang);
-    row.append(sw, name);
-    if (langsOff.has(lang)) {
-      const chip = document.createElement("span");
-      chip.className = "px-muted px-xs";
-      chip.textContent = "not uploaded";
-      row.append(chip);
-    }
-    rows.append(row);
-  }
-
   // Each switch owns the card it sits in; the summary says what an upload sends.
   const owned: [string, string][] = [
     ["incContent", "modFilesSection"],
@@ -938,13 +934,7 @@ $<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 for (const id of ["incContent", "incDetails", "incPreviews", "incLangs", "incNote"]) {
   $(id).addEventListener("change", renderPublish);
 }
-// The per-language switches fold away: nine rows is the exception you open,
-// not the default view of the card.
-$("langsToggle").addEventListener("click", () => {
-  const rows = $("langRows");
-  rows.hidden = !rows.hidden;
-  $("langsToggle").setAttribute("aria-expanded", String(!rows.hidden));
-});
+
 $("enableAll").addEventListener("click", () => {
   $("enableAllConfirm").hidden = false;
   $<HTMLButtonElement>("enableAll").disabled = true;
@@ -1137,13 +1127,23 @@ $("pullDesc").addEventListener(
 $("addLang").addEventListener("click", () => {
   if (!info) return;
   const present = new Set(Object.keys(draftTranslations));
-  const suggested = info.suggestedLanguages.filter((l) => !present.has(l));
-  const rest = info.steamLanguages.filter((l) => !present.has(l.api) && !suggested.includes(l.api));
+  // The game's own languages lead, marked: those are the ones players read
+  // the game in. Within them, the ones this mod already localizes come first.
+  const suggested = new Set(info.suggestedLanguages);
+  const gameLangs = new Set(info.gameLanguages);
+  const game = [...gameLangs]
+    .filter((l) => !present.has(l))
+    .sort(
+      (a, b) =>
+        Number(suggested.has(b)) - Number(suggested.has(a)) || langLabel(a).localeCompare(langLabel(b))
+    );
+  const rest = info.steamLanguages.filter((l) => !present.has(l.api) && !gameLangs.has(l.api));
   const items: MenuItem[] = [
-    ...suggested.map<MenuItem>((api) => ({
+    ...game.map<MenuItem>((api) => ({
       value: api,
       label: langLabel(api),
-      hint: "in this mod's localization",
+      hint: suggested.has(api) ? "game language, in this mod" : "game language",
+      accent: true,
     })),
     ...rest.map<MenuItem>((l) => ({ value: l.api, label: l.label })),
   ];

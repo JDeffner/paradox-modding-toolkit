@@ -310,6 +310,7 @@ export class WorkshopPanel {
       filesPresent: hasListingFiles(workshopDir),
       steamLanguages: [...STEAM_LANGUAGES],
       suggestedLanguages: suggestedLanguages(root, this.options.meta),
+      gameLanguages: gameLanguages(),
       checks: info
         ? preflight({
             name: info.name,
@@ -1138,6 +1139,16 @@ async function download(url: string): Promise<Buffer> {
  * english (the item's default text IS the english one). What the panel offers
  * first when adding a translation.
  */
+/** The game's own localization languages as Steam names, english excluded. */
+function gameLanguages(): string[] {
+  const langs = new Set<string>();
+  for (const loc of LOC_LANGUAGES) {
+    const steam = steamLanguageForLoc(loc);
+    if (steam && steam !== "english") langs.add(steam);
+  }
+  return [...langs];
+}
+
 function suggestedLanguages(root: string, meta: GameMeta): string[] {
   const dirs = [
     path.join(root, "localization"),

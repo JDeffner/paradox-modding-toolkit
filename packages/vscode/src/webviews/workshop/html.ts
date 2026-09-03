@@ -101,6 +101,7 @@ ${uiCss}
   .field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   #tags { display: flex; flex-wrap: wrap; gap: 4px; }
   #itemMeta { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  #itemIdent { align-self: stretch; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-width: 168px; }
   /* One row, always: the tiles shrink and their labels truncate before anything wraps. */
   #stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
   .stat {
@@ -140,10 +141,8 @@ ${uiCss}
   .section[data-off] .px-panel-title .off-chip { display: inline-flex; }
   /* Off means "not uploaded", not locked: the body dims but stays editable. */
   .section[data-off] > :not(.px-panel-title) { opacity: 0.55; }
-  #langsToggle .px-icon { transition: transform 120ms; }
-  #langsToggle[aria-expanded="true"] .px-icon { transform: rotate(180deg); }
-  #langRows { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--px-border); }
-  #langRows[hidden] { display: none; }
+  .lang > .head .px-switch { transform: scale(0.85); margin-right: 2px; }
+  .lang[data-off] > .body, .lang[data-off] > .head > .caret, .lang[data-off] > .head > .name { opacity: 0.55; }
   #publishSummary { font-size: var(--px-text-sm); }
   #publishSummary .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   #modRoot { font-family: var(--vscode-editor-font-family, monospace); font-size: var(--px-text-xs); }
@@ -255,6 +254,11 @@ ${BBPREV_CSS}
           <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
           <span id="previewName" class="px-muted px-xs px-truncate"></span>
           <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image, copied into the mod.">${icon("image")} Change…</button>
+          <div id="itemIdent">
+            <span class="px-label">ID</span>
+            <div id="itemIdBox" class="px-row" style="gap:6px;align-items:center"></div>
+            <div id="itemMeta"></div>
+          </div>
         </div>
         <div id="fields">
           <div class="field">
@@ -285,11 +289,6 @@ ${BBPREV_CSS}
             </span>
             <div id="filesBox" class="px-row" style="gap:6px;align-items:center;min-width:0"></div>
           </div>
-          <div class="field">
-            <span class="px-label">Item</span>
-            <div id="itemIdBox" class="px-row" style="gap:6px;align-items:center"></div>
-          </div>
-          <div id="itemMeta"></div>
         </div>
       </div>
       <div id="statsSection" hidden><div id="stats"></div></div>
@@ -386,10 +385,8 @@ ${BBPREV_CSS}
         <span class="px-grow"></span>
         <button id="addLang" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Add language</button>
         <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Upload the drafted translations. The chevron picks languages one by one." data-tip-wrap data-tip-side="left"><span id="langCount"></span> <span class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></span></label>
-        <button id="langsToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Choose which languages go up" data-tip-side="left" aria-expanded="false">${icon("chevronDown")}</button>
+        <label class="hdr-switch" data-tip="Upload the drafted translations. Each language has its own switch on its row." data-tip-wrap data-tip-side="left"><span id="langCount"></span> <span class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></span></label>
       </div>
-      <div id="langRows" hidden></div>
       <div class="hintline"><span>Title and description shown to Workshop visitors browsing Steam in that language. The default text above is what everyone else sees.</span></div>
       <div id="translations"></div>
     </div>

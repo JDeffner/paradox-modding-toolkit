@@ -93,6 +93,8 @@ export interface WorkshopModInfo {
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];
+  /** Steam names of the languages the game itself ships localization for (english excluded). */
+  gameLanguages: string[];
   /** What would go wrong on upload, from the local files alone. */
   checks: PreflightCheck[];
   /** Extra previews from `<workshopDir>/previews/` (null = no such folder, Steam's gallery is left alone). */
