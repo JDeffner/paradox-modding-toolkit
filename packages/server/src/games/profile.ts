@@ -207,6 +207,25 @@ export interface GameMeta {
   cacheSuffix: string;
 }
 
+/**
+ * Where a creator's condition builder gets the values of one trigger
+ * (`DefinitionForm.conditions`). Each source is something the server already
+ * holds, so a game patch changes the list without a release:
+ *
+ *   docList     the trigger's own script_docs entry enumerates them on its
+ *               metadata line ("has_dlc_feature … Traits: Valid Features: a,
+ *               b, and c", CK3 triggers.log 1.19)
+ *   kind        every indexed definition of a definition kind
+ *   innerKeys   the inner block keys of every definition of a kind, minus
+ *               `except` (a CK3 game rule's settings ARE its inner blocks;
+ *               the other two keys are `categories` and `default`, per
+ *               common/game_rules/_game_rules.info)
+ */
+export type ConditionValueSource =
+  | { from: "docList" }
+  | { from: "kind"; kind: string }
+  | { from: "innerKeys"; kind: string; except?: string[] };
+
 /** A game's full knowledge bundle: meta plus the tables the engine consumes. */
 export interface GameProfile extends GameMeta {
   /** Folder→definition-kind table (see schema/types.ts). */
@@ -234,6 +253,13 @@ export interface GameProfile extends GameMeta {
   defRootKeys?: Record<string, DefRootKey>;
   /** Templated-modifier placeholder table (data/modifierTemplates.ts). */
   modifierPlaceholders: Record<string, PlaceholderSpec>;
+  /**
+   * Triggers a creator's condition builder may offer a value list for, keyed
+   * by trigger name (`paradox/definitionForm`'s `conditions`). Absent = the
+   * creators offer no picker for this game and fall back to free input, which
+   * is the honest answer for a game whose sources have not been measured.
+   */
+  conditionValues?: Record<string, ConditionValueSource>;
   /**
    * Bundled `[ ... ]` data-function tables (data/<id>/dataTypes.json), when the
    * game ships one. Shape is data/dataTypes.ts's bundled-JSON shape; typed

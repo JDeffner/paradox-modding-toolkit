@@ -390,13 +390,19 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
                 perk,
                 formats: formats?.formats ?? null,
                 refIconFolders: await refIconFolders(perk),
-                modLabel: path.basename(modPath),
                 locLanguage: "english",
                 prefix: "cult",
                 perksPerTrack: commonPerkCount(allPerkLinks(perk.folder)),
                 icons: iconEntries(legacy.iconFolder),
                 problem: null,
               },
+            },
+            // The host resolves both files a legacy is written into; here the
+            // default names are enough to show the two lines the panel draws.
+            {
+              type: "targets",
+              track: { modLabel: path.basename(modPath), path: `${legacy.folder}/cult_legacies.txt` },
+              perks: { modLabel: path.basename(modPath), path: `${perk.folder}/cult_dynasty_perks.txt` },
             },
           ];
         }
@@ -421,8 +427,17 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
         case "loc":
           return [{ type: "locValues", values: await lookup(m.keys as string[]) }];
+        // A read like any other: the block of the perk whose effect is being
+        // copied, so the "start from a game perk's effect" picker works here.
+        case "perkEffect": {
+          const name = String(m.name);
+          const f = await form("dynasty_perk", name);
+          return [{ type: "perkEffect", name, block: f?.current?.text ?? null }];
+        }
         default:
-          return String(m.type) === "save" || String(m.type) === "customIcon" ? [refuse(String(m.type))] : [];
+          return ["save", "customIcon", "copy", "changeTarget"].includes(String(m.type))
+            ? [refuse(String(m.type))]
+            : [];
       }
     },
   },

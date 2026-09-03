@@ -29,6 +29,8 @@ import { installTips } from "../../shared/tips";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
+import { saveTargetLine } from "../../shared/saveTarget";
+import { scriptSection } from "../../shared/scriptSection";
 import {
   iconField,
   locField,
@@ -39,6 +41,7 @@ import {
   type Field,
   type ModifierRow,
 } from "../../shared/fields";
+import { chanceField, conditionField, effectField, type BlockField, type EffectField } from "./builders";
 import type { AppToHost, CreatorInit, HostToApp, LoadedPerk, SaveDefinition } from "../messages";
 import { baseName } from "../../shared/scriptBlock";
 import { rowsField } from "./rowsField";
@@ -90,7 +93,31 @@ const DOCTRINE_MOD = "doctrine_character_modifier";
 const TRAITS_KEY = "traits";
 /** The scalar key that hands a perk's holder one fixed trait. */
 const TRAIT_KEY = "trait";
-const SCRIPT_KEYS = ["can_be_picked", "effect", "ai_chance"];
+/**
+ * The three perk keys with a builder of their own (app/builders.ts), and the
+ * one track key. Each one still reaches the modder as script when its block is
+ * more than the builder can show, and a key the harvest does not carry is not
+ * drawn at all.
+ */
+const SHOWN_KEY = "is_shown";
+const PICKED_KEY = "can_be_picked";
+const EFFECT_KEY = "effect";
+const CHANCE_KEY = "ai_chance";
+const BUILT_KEYS = [PICKED_KEY, EFFECT_KEY, CHANCE_KEY];
+
+/**
+ * Blocks the game itself writes, shown while a field is empty. Measured in
+ * game/common/dynasty_legacies/97_ep1_legacies.txt (ep1_culture_legacy_track),
+ * common/dynasty_perks/05_ce1_dynasty_perks.txt (10 perks gate on that one
+ * feature), 00_dynasty_perks.txt (blood_legacy_4's effect, blood_legacy_1's
+ * chance).
+ */
+const EXAMPLE = {
+  isShown: "{ has_dlc_feature = hybridize_culture }",
+  canBePicked: "{ has_dlc_feature = legends_of_the_dead }",
+  effect: "{ custom_description_no_bullet = { text = blood_legacy_4_effect } }",
+  chance: "11",
+};
 
 /**
  * What the game draws the track picture through
@@ -127,7 +154,7 @@ let dropped: { name: string; file: string }[] = [];
 let trackLoc: { pattern: string; field: Field<string> }[] = [];
 let trackIcon: Field<string> | null = null;
 let iconDoc = "";
-let trackScripts: Record<string, Field<string>> = {};
+let trackShown: BlockField | null = null;
 let trackOthers: Record<string, Field<string>> = {};
 
 interface Perk {
@@ -138,6 +165,8 @@ interface Perk {
   /** The form, built once and parked off-screen until the tile is clicked. */
   editor: HTMLElement;
   key: Field<string>;
+  /** The key as it stood last, so a rename can move what was derived from it. */
+  lastKey: string;
   original: DefBlock | null;
   source: "mod" | "vanilla" | "parent" | null;
   file: string | null;
@@ -146,7 +175,10 @@ interface Perk {
   mods: Record<string, { entries: ModifierEntry[]; field: Field<ModifierRow[]> }>;
   /** The `doctrine =` line of doctrine_character_modifier, as its own picker. */
   doctrine: Field<string> | null;
-  scripts: Record<string, Field<string>>;
+  /** The three blocks with a builder: can_be_picked, effect, ai_chance. */
+  blocks: Record<string, BlockField>;
+  /** The effect builder again, for the loc and the keys only it knows. */
+  effect: EffectField | null;
   others: Record<string, Field<string>>;
 }
 
@@ -258,7 +290,7 @@ function buildTrack(loc: Record<string, string>): void {
   host.replaceChildren();
   otherHost.replaceChildren();
   trackLoc = [];
-  trackScripts = {};
+  trackShown = null;
   trackOthers = {};
 
   const name = trackName();
@@ -292,19 +324,18 @@ function buildTrack(loc: Record<string, string>): void {
     host.append(trackIcon.el);
   }
 
-  const owned = ["is_shown"];
-  const isShown = form.keys.find((k) => k.key === "is_shown");
+  const owned = [SHOWN_KEY];
+  const isShown = form.keys.find((k) => k.key === SHOWN_KEY);
   if (isShown) {
-    const field = scriptField({
+    trackShown = conditionField({
       label: isShown.key,
       ...(isShown.doc ? { doc: isShown.doc } : {}),
+      conditions: form.conditions ?? {},
       value: valueOf(trackOriginal ?? newDefBlock(name), isShown.key) ?? "",
-      rows: 3,
-      // The literal the game itself writes (99_legacies.txt, measured).
-      placeholder: "{ has_dlc_feature = hybridize_culture }",
+      placeholder: EXAMPLE.isShown,
     });
-    trackScripts[isShown.key] = field;
-    host.append(field.el);
+    trackShown.onChange(refreshScript);
+    host.append(trackShown.el);
   }
 
   const others = otherKeys(form, owned, trackOriginal);
@@ -320,7 +351,6 @@ function buildTrack(loc: Record<string, string>): void {
       refreshScript();
     });
   }
-  for (const field of Object.values(trackScripts)) field.onChange(refreshScript);
   for (const field of Object.values(trackOthers)) field.onChange(refreshScript);
 }
 
@@ -329,9 +359,7 @@ function trackBlock(): DefBlock {
   const name = trackName() || "unnamed_legacy_track";
   const base = trackOriginal ? { ...trackOriginal, name } : newDefBlock(name);
   const values: FieldValue[] = [];
-  for (const [key, field] of Object.entries(trackScripts)) {
-    values.push({ key, value: wrapBlockValue(field.get()) });
-  }
+  if (trackShown) values.push({ key: SHOWN_KEY, value: trackShown.get() });
   for (const [key, field] of Object.entries(trackOthers)) {
     const spec = form.keys.find((k) => k.key === key) ?? { key };
     values.push({ key, value: rawValue(spec, field) });
@@ -420,13 +448,15 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     face,
     editor,
     key,
+    lastKey: name,
     original,
     source: loaded?.source ?? null,
     file: loaded?.file ?? null,
     loc: [],
     mods: {},
     doctrine: null,
-    scripts: {},
+    blocks: {},
+    effect: null,
     others: {},
   };
 
@@ -514,21 +544,58 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     editor.append(field.el);
   }
 
-  for (const scriptKey of SCRIPT_KEYS) {
-    const spec = form.keys.find((k) => k.key === scriptKey);
-    if (!spec) continue;
-    const field = scriptField({
-      label: scriptKey,
-      ...(spec.doc ? { doc: spec.doc } : {}),
-      value: original ? (valueOf(original, scriptKey) ?? "") : "",
-      rows: 3,
-      placeholder: spec.example ?? "{ … }",
-    });
-    perk.scripts[scriptKey] = field;
+  // The three blocks with a builder. Each is drawn only when the harvest says
+  // the kind has the key, and each keeps the whole block as script when the
+  // builder cannot show it (app/builders.ts).
+  const blockValue = (key: string): string => (original ? (valueOf(original, key) ?? "") : "");
+  const docOf = (key: string): { doc?: string } => {
+    const doc = form.keys.find((k) => k.key === key)?.doc;
+    return doc ? { doc } : {};
+  };
+  const has = (key: string): boolean => form.keys.some((k) => k.key === key);
+  const addBlock = (key: string, field: BlockField): void => {
+    perk.blocks[key] = field;
     editor.append(field.el);
+  };
+
+  if (has(PICKED_KEY)) {
+    addBlock(
+      PICKED_KEY,
+      conditionField({
+        label: PICKED_KEY,
+        ...docOf(PICKED_KEY),
+        conditions: form.conditions ?? {},
+        value: blockValue(PICKED_KEY),
+        placeholder: EXAMPLE.canBePicked,
+      })
+    );
+  }
+  if (has(EFFECT_KEY)) {
+    perk.effect = effectField({
+      label: EFFECT_KEY,
+      ...docOf(EFFECT_KEY),
+      value: blockValue(EFFECT_KEY),
+      name,
+      placeholder: EXAMPLE.effect,
+      locOf: (key) => locValues.get(key),
+      onTemplate: (anchor) => pickTemplate(perk, anchor),
+    });
+    addBlock(EFFECT_KEY, perk.effect);
+    askLoc(perk.effect.keys());
+  }
+  if (has(CHANCE_KEY)) {
+    addBlock(
+      CHANCE_KEY,
+      chanceField({
+        label: CHANCE_KEY,
+        ...docOf(CHANCE_KEY),
+        value: blockValue(CHANCE_KEY),
+        placeholder: EXAMPLE.chance,
+      })
+    );
   }
 
-  const owned = [LEGACY_KEY, CHAR_MOD, DOCTRINE_MOD, TRAITS_KEY, ...SCRIPT_KEYS];
+  const owned = [LEGACY_KEY, CHAR_MOD, DOCTRINE_MOD, TRAITS_KEY, ...BUILT_KEYS];
   const others = otherKeys(form, owned, original);
   if (others.length > 0) {
     const fold = document.createElement("details");
@@ -546,6 +613,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     paintTile(perk);
     refreshScript();
   });
+  perk.effect?.onChange(() => askLoc(perk.effect?.keys() ?? []));
   const touched = (): void => {
     paintTile(perk);
     refreshScript();
@@ -553,7 +621,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   for (const { field } of perk.loc) field.onChange(touched);
   for (const { field } of Object.values(perk.mods)) field.onChange(touched);
   perk.doctrine?.onChange(touched);
-  for (const field of Object.values(perk.scripts)) field.onChange(touched);
+  for (const field of Object.values(perk.blocks)) field.onChange(touched);
   for (const field of Object.values(perk.others)) field.onChange(touched);
 
   tile.onclick = () => selectPerk(perk);
@@ -576,6 +644,43 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   return perk;
 }
 
+/** Where a listed definition comes from, in the words the pickers use. */
+const SOURCE_WORD: Record<string, string> = {
+  mod: "this mod",
+  vanilla: "the game",
+  parent: "a dependency",
+};
+
+/** The perk whose effect the template picker is filling, until the host answers. */
+let templateFor: Perk | null = null;
+
+/**
+ * Start a perk's effect from one the game already writes. The blocks live on
+ * disk, so the app names the perk and the host hands back its effect.
+ */
+function pickTemplate(perk: Perk, anchor: HTMLElement): void {
+  const items = (perkForm?.existing ?? [])
+    .filter((def) => def.name !== perkName(perk))
+    .map((def) => {
+      const where = SOURCE_WORD[def.source ?? "mod"] ?? def.source ?? "";
+      return {
+        value: def.name,
+        label: def.label || def.name,
+        hint: def.label ? `${def.name} · ${where}` : where,
+      };
+    });
+  if (items.length === 0) {
+    toast("No perk to copy an effect from yet.");
+    return;
+  }
+  templateFor = perk;
+  menu(anchor, items, {
+    search: true,
+    width: 340,
+    onPick: (name) => send({ type: "perkEffect", name }),
+  });
+}
+
 /** The tile's face: its place in the track, and the name the player reads. */
 function paintTile(perk: Perk): void {
   const index = perks.indexOf(perk);
@@ -588,10 +693,16 @@ function paintTile(perk: Perk): void {
 /** The loc key follows the name, so a rename repaints the (read-only) keys. */
 function renamePerk(perk: Perk): void {
   const name = perkName(perk);
+  const was = perk.lastKey;
+  perk.lastKey = name;
   perk.loc.forEach(({ pattern, field }) => {
     const code = field.el.querySelector("code");
     if (code) code.textContent = locKeyFor(pattern, name);
   });
+  // The tooltip lines' loc keys follow it too, for every line whose key was
+  // the one derived from the old name.
+  perk.effect?.rename(was, name);
+  askLoc(perk.effect?.keys() ?? []);
 }
 
 async function removePerk(perk: Perk): Promise<void> {
@@ -631,8 +742,8 @@ function perkBlock(perk: Perk): DefBlock {
     if (blockKey === DOCTRINE_MOD && perk.doctrine) entries = withDoctrine(entries, perk.doctrine.get());
     values.push({ key: blockKey, value: writeModifierBlock(entries) });
   }
-  for (const [scriptKey, field] of Object.entries(perk.scripts)) {
-    values.push({ key: scriptKey, value: wrapBlockValue(field.get()) });
+  for (const [blockKey, field] of Object.entries(perk.blocks)) {
+    values.push({ key: blockKey, value: field.get() });
   }
   for (const [otherKey, field] of Object.entries(perk.others)) {
     const spec = form.keys.find((k) => k.key === otherKey) ?? { key: otherKey };
@@ -686,10 +797,13 @@ function tipBody(perk: Perk): HTMLElement {
     box.append(el("div", "px-game-tip-body", `Grants a trait: ${traits.join(", ")}`));
   }
 
-  const effect = perk.scripts.effect?.get().trim() ?? "";
+  const effect = perk.blocks[EFFECT_KEY]?.get()?.trim() ?? "";
   if (effect !== "") {
     const key = effectLocKey(effect);
-    const prose = key ? locValues.get(key) : undefined;
+    // The sentence the modder just typed outranks the one the workspace has:
+    // the tooltip has to show what this perk will say, not what it said.
+    const typed = new Map((perk.effect?.loc() ?? []).map((pair) => [pair.key, pair.value]));
+    const prose = key ? (typed.get(key) ?? locValues.get(key)) : undefined;
     if (key) askLoc([key]);
     box.append(
       el(
@@ -762,6 +876,15 @@ function selectPerk(perk: Perk | null): void {
 }
 
 $("closeSide").onclick = () => selectPerk(null);
+
+// Escape closes the perk editor. The overlays (menu, popover, confirm dialog)
+// listen in the CAPTURE phase and stop the event there, so an open menu takes
+// its own Escape and this only ever sees the ones nothing else wanted.
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || selected === null) return;
+  ev.preventDefault();
+  selectPerk(null);
+});
 
 // ---------------------------------------------------------------------------
 // Dragging a tile to another place in the track
@@ -836,10 +959,27 @@ function enableTileDrag(list: HTMLElement): void {
 // Preview and save
 // ---------------------------------------------------------------------------
 
+/** The two files a save writes, shown from the moment the form loads. */
+const targets = {
+  track: saveTargetLine(() => send({ type: "changeTarget", which: "track" })),
+  perks: saveTargetLine(() => send({ type: "changeTarget", which: "perks" })),
+};
+targets.track.set(null);
+targets.perks.set(null);
+$("targets").append(targets.track.el, targets.perks.el);
+
+/** What the mod's two files will contain, as a section of the form. */
+const script = scriptSection({
+  note: "The track goes into one file and its perks into another; the save target lines say which.",
+  onCopy: (text) => send({ type: "copy", text }),
+});
+$("scriptSlot").replaceWith(script.el);
+$("scriptCopy").replaceWith(script.copyButton);
+
 function refreshScript(): void {
   if (!trackForm) return;
   const blocks = [trackBlock(), ...perks.map(perkBlock)].map(writeDefBlock);
-  $("script").textContent = blocks.join("\n\n");
+  script.set(blocks.join("\n\n"));
 }
 
 /** `create`, `edit` or `override`, from where the loaded definition came from. */
@@ -925,7 +1065,9 @@ function save(): void {
       perk.original,
       perk.source,
       perk.file,
-      locPairs(perk.loc, perkName(perk)),
+      // The tooltip lines of the effect builder are loc too: the block writes
+      // the key and the sentence has to exist for the player to read it.
+      [...locPairs(perk.loc, perkName(perk)), ...(perk.effect?.loc() ?? [])],
       perkKeys
     )
   );
@@ -984,9 +1126,9 @@ function applyInit(payload: CreatorInit): void {
   const nameInput = $<HTMLInputElement>("name");
   if (nameInput.value.trim() === "") nameInput.value = `${payload.prefix}_legacy_track`;
   derivedFrom = nameInput.value.trim();
-  $("target").textContent = payload.modLabel
-    ? `${payload.modLabel} · ${payload.locLanguage}`
-    : payload.locLanguage;
+  // The mod is named on the two save-target lines; this says which language
+  // the loc lands in, which no target line can.
+  $("locLang").textContent = payload.locLanguage;
   const problem = $("problem");
   problem.hidden = payload.problem === null;
   problem.textContent = payload.problem ?? "";
@@ -1041,10 +1183,14 @@ function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<st
   refreshScript();
 }
 
-$<HTMLInputElement>("name").addEventListener("change", () => {
-  // Everything the modder never has to type follows the track's key: a value
-  // that is still the one derived from the OLD key follows the new one, and a
-  // value they typed themselves is left alone.
+/**
+ * Everything the modder never has to type follows the track's key: a value
+ * that is still the one derived from the OLD key follows the new one, and a
+ * value they typed themselves is left alone. A perk loaded from the game
+ * follows too, because duplicating a track under a new key that kept the
+ * game's perk keys would override those perks instead of copying them.
+ */
+function renameFromTrackKey(): void {
   const name = trackName();
   const was = derivedFrom;
   derivedFrom = name;
@@ -1055,7 +1201,7 @@ $<HTMLInputElement>("name").addEventListener("change", () => {
     if (pattern.endsWith("_name") && derived) field.set(titleCaseFromName(name));
   });
   perks.forEach((perk, i) => {
-    if (perk.original || perkName(perk) !== perkNameFor(was, i)) return;
+    if (perkName(perk) !== perkNameFor(was, i)) return;
     const previous = perkName(perk);
     perk.key.set(perkNameFor(name, i));
     renamePerk(perk);
@@ -1068,7 +1214,9 @@ $<HTMLInputElement>("name").addEventListener("change", () => {
   });
   paintRow();
   refreshScript();
-});
+}
+
+$<HTMLInputElement>("name").addEventListener("change", renameFromTrackKey);
 
 $("new").onclick = () => {
   if (!init) return;
@@ -1098,15 +1246,25 @@ $("lookup").onclick = () => {
 };
 
 $("open").onclick = () => {
+  // Every track the index has, the mod's own first: a modder opens one of the
+  // game's tracks to duplicate or override it as often as their own to edit
+  // it, so each entry says where it comes from.
   const existing = trackForm?.existing ?? [];
   if (existing.length === 0) {
-    toast("This mod has no dynasty legacy track yet.");
+    toast("No dynasty legacy track is indexed yet. Wait for the index, or just make a new one.");
     return;
   }
   menu(
     $("open"),
-    existing.map((def) => ({ value: def.name, label: def.label || def.name, hint: def.name })),
-    { search: existing.length > 8, width: 280, onPick: (name) => send({ type: "load", name }) }
+    existing.map((def) => {
+      const where = SOURCE_WORD[def.source ?? "mod"] ?? def.source ?? "";
+      return {
+        value: def.name,
+        label: def.label || def.name,
+        hint: def.label ? `${def.name} · ${where}` : where,
+      };
+    }),
+    { search: true, width: 320, onPick: (name) => send({ type: "load", name }) }
   );
 };
 
@@ -1121,6 +1279,18 @@ function paintMode(): void {
 for (const button of modeButtons) {
   button.onclick = () => {
     overrideMode = button.dataset.mode === "override";
+    // A duplicate needs keys of its own; an override IS the game's own key.
+    // The perks follow the track's, which is what makes a whole game track
+    // duplicable in one move.
+    const original = trackOriginal?.name;
+    const input = $<HTMLInputElement>("name");
+    if (original && overrideMode && trackName() !== original) {
+      input.value = original;
+      renameFromTrackKey();
+    } else if (original && !overrideMode && trackName() === original) {
+      input.value = `${init?.prefix ?? "px"}_${original}`;
+      renameFromTrackKey();
+    }
     paintMode();
   };
 }
@@ -1203,8 +1373,30 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     case "locValues":
       for (const [key, value] of Object.entries(message.values)) locValues.set(key, value);
+      // A tooltip line the modder has not typed shows the sentence the
+      // workspace already has for its key.
+      for (const perk of perks) perk.effect?.fillLoc();
       if (tipFor) showTip(tipFor);
       break;
+    case "targets":
+      targets.track.set(message.track);
+      targets.perks.set(message.perks);
+      break;
+    case "perkEffect": {
+      const perk = templateFor;
+      templateFor = null;
+      if (!perk) break;
+      const block = message.block ? parseDefBlock(message.block) : null;
+      const effect = block ? valueOf(block, EFFECT_KEY) : null;
+      if (effect === null) {
+        toast(`${message.name} has no ${EFFECT_KEY} block to copy.`);
+        break;
+      }
+      perk.effect?.useBlock(effect);
+      paintTile(perk);
+      refreshScript();
+      break;
+    }
     case "saved":
       dropped = [];
       break;

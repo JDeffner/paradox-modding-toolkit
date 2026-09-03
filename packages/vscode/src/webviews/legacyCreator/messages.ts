@@ -6,7 +6,7 @@
  * edits and write the loc.
  */
 import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
-import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
+import type { CreatorImagesReply, CreatorImagesRequest, CreatorSaveTarget } from "../shared/creatorMessages";
 
 /** One picture of the legacy icon folder, already decoded to a webview URL. */
 export interface IconEntry {
@@ -22,8 +22,6 @@ export interface CreatorInit {
   legacy: DefinitionForm;
   /** The `dynasty_perk` form: the seven documented keys and the vocabularies. */
   perk: DefinitionForm;
-  /** The mod a save goes into by default, for the header badge. */
-  modLabel: string | null;
   /** `px.locLanguage`: which loc file the values land in. */
   locLanguage: string;
   /** `scaffoldPrefix(cfg)`: what a fresh track's name is prefilled from. */
@@ -82,6 +80,9 @@ export interface DroppedPerk {
   file: string;
 }
 
+/** The two files a legacy is written into. */
+export type TargetKind = "track" | "perks";
+
 export type AppToHost =
   | { type: "ready" }
   /** Load an existing track and its perks into the form. */
@@ -98,6 +99,18 @@ export type AppToHost =
    * has to print the sentence, not the key.
    */
   | { type: "loc"; keys: string[] }
+  /** Put the generated script on the clipboard (a webview cannot reach it). */
+  | { type: "copy"; text: string }
+  /**
+   * The modder clicked one of the two save-target lines. A legacy is two files
+   * (the track's and the perks'), so which one is being changed travels with it.
+   */
+  | { type: "changeTarget"; which: TargetKind }
+  /**
+   * Hand back the `effect` block of an existing perk, so a new perk can start
+   * from what the game itself writes.
+   */
+  | { type: "perkEffect"; name: string }
   | {
       type: "save";
       track: SaveDefinition;
@@ -124,5 +137,16 @@ export type HostToApp =
   | CreatorImagesReply
   /** One entry per key the app asked for; a key with no loc is simply absent. */
   | { type: "locValues"; values: Record<string, string> }
+  /**
+   * Where each of the two files a save writes will land, resolved without
+   * asking, so the top bar can SHOW it from the moment the form loads. Null =
+   * there is no mod to write that file into.
+   */
+  | { type: "targets"; track: CreatorSaveTarget | null; perks: CreatorSaveTarget | null }
+  /**
+   * The block of the perk the modder picked as a template, verbatim, or null
+   * when nothing is indexed under that name. The app takes the key it wants.
+   */
+  | { type: "perkEffect"; name: string; block: string | null }
   | { type: "saved" }
   | { type: "toast"; message: string; variant?: "default" | "destructive" };

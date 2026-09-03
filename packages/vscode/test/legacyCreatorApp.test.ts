@@ -59,6 +59,14 @@ const LEGACY_FORM: DefinitionForm = {
     },
   ],
   options: {},
+  // The three lists `computeDefinitionForm` answers for CK3 (the profile's own
+  // condition table): the features triggers.log enumerates, the settings of
+  // common/game_rules, and the indexed scripted triggers.
+  conditions: {
+    has_dlc_feature: [{ value: "hybridize_culture" }, { value: "legends" }],
+    has_game_rule: [{ value: "unrestricted_dynasty_legacies_all" }],
+    scripted_trigger: [{ value: "eligible_for_fp1_dynasty_legacies_trigger" }],
+  },
   modifiers: [],
   existing: [],
 };
@@ -98,8 +106,15 @@ const PERK_FORM: DefinitionForm = {
     },
   ],
   options: { trait: [] },
+  conditions: {
+    has_dlc_feature: [{ value: "hybridize_culture" }, { value: "legends" }],
+    has_game_rule: [{ value: "unrestricted_dynasty_legacies_all" }],
+    scripted_trigger: [{ value: "eligible_for_fp1_dynasty_legacies_trigger" }],
+  },
   modifiers: [{ name: "prowess", doc: "Prowess" }],
-  existing: [],
+  existing: [
+    { name: "blood_legacy_2", file: "common/dynasty_perks/00_dynasty_perks.txt", line: 0, source: "vanilla" },
+  ],
 };
 
 /**
@@ -120,7 +135,6 @@ const FORMATS: CreatorInit["formats"] = {
 const INIT: CreatorInit = {
   legacy: LEGACY_FORM,
   perk: PERK_FORM,
-  modLabel: "mymod",
   locLanguage: "english",
   prefix: "px",
   // The number the host measured over the game's own perk files.
@@ -168,6 +182,30 @@ const LOADED_PERKS = [
   },
 ];
 
+/**
+ * blood_legacy_track as 99_legacies.txt has it, loaded the way the host loads
+ * a track that belongs to the GAME: the mode toggle appears and a save has to
+ * choose between duplicating it and overriding it.
+ */
+const VANILLA_TRACK: DefinitionForm = {
+  ...LEGACY_FORM,
+  current: {
+    file: "common/dynasty_legacies/99_legacies.txt",
+    line: 0,
+    source: "vanilla",
+    text: "blood_legacy_track = {\n\t\n}",
+  },
+};
+
+/** The first button whose face contains `text`, the way a modder finds it. */
+function buttonWith(root: ParentNode, text: string): HTMLButtonElement {
+  const found = [...root.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    (button.textContent ?? "").includes(text)
+  );
+  if (!found) throw new Error(`no button reading "${text}"`);
+  return found;
+}
+
 interface Booted {
   window: Window & typeof globalThis;
   posted: Array<Record<string, unknown>>;
@@ -177,6 +215,8 @@ interface Booted {
   cards(): HTMLElement[];
   post(message: unknown): void;
   hover(tile: HTMLElement): HTMLElement;
+  /** Choose the entry of the open menu whose label says `label`. */
+  pick(label: string): void;
   save(): { track: SaveDefinition; perks: SaveDefinition[] };
 }
 
@@ -190,6 +230,9 @@ function boot(init: CreatorInit = INIT): Booted {
         getState: () => null,
         setState: () => undefined,
       });
+      // jsdom implements no scrolling, and the menu keeps its active row in
+      // view. Without this every picker throws on open.
+      window.Element.prototype.scrollIntoView = () => undefined;
     },
   });
   const window = dom.window as unknown as Window & typeof globalThis;
@@ -211,6 +254,13 @@ function boot(init: CreatorInit = INIT): Booted {
     hover(tile: HTMLElement) {
       tile.dispatchEvent(new window.Event("pointerenter"));
       return document.getElementById("perkTip") as HTMLElement;
+    },
+    pick(label: string) {
+      const row = [...document.querySelectorAll<HTMLElement>(".px-menu-item")].find((item) =>
+        (item.textContent ?? "").includes(label)
+      );
+      if (!row) throw new Error(`no menu entry reading "${label}"`);
+      row.click();
     },
     save() {
       (document.getElementById("save") as HTMLButtonElement).click();
@@ -260,7 +310,7 @@ describe("dynasty legacy creator app", () => {
   it("shows the same blocks in the script preview that it would write", () => {
     const app = boot();
     app.type(app.name, "px_iron_legacy_track");
-    const preview = app.window.document.getElementById("script")!.textContent;
+    const preview = app.window.document.querySelector(".px-script pre")!.textContent;
     const { track, perks } = app.save();
     expect(preview).toBe([track.block, ...perks.map((perk) => perk.block)].join("\n\n"));
   });
@@ -336,8 +386,115 @@ describe("dynasty legacy creator app", () => {
     ]);
   });
 
+  it("closes the perk editor on Escape", () => {
+    const app = boot();
+    const document = app.window.document;
+    const side = document.getElementById("side") as HTMLElement;
+    app.cards()[1].click();
+    expect(side.hasAttribute("data-collapsed")).toBe(false);
+    document.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(side.hasAttribute("data-collapsed")).toBe(true);
+  });
+
+  it("builds a track's is_shown out of a picked DLC feature, with nothing typed", () => {
+    const app = boot();
+    const fields = app.window.document.getElementById("trackFields") as HTMLElement;
+    buttonWith(fields, "Add condition").click();
+    app.pick("Needs a DLC feature");
+    buttonWith(fields, "pick a feature").click();
+    app.pick("legends");
+    expect(app.save().track.block).toBe(
+      "px_legacy_track = {\n\tis_shown = {\n\t\thas_dlc_feature = legends\n\t}\n}"
+    );
+  });
+
+  it("writes a perk's tooltip line and the sentence the player reads", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.cards()[0].click();
+    const editor = document.getElementById("perkEditor") as HTMLElement;
+    buttonWith(editor, "Add a tooltip line").click();
+    const sentence = editor.querySelector<HTMLInputElement>('input[placeholder^="What this perk does"]')!;
+    sentence.value = "Your heirs are born strong.";
+    sentence.dispatchEvent(new app.window.Event("change"));
+
+    const perk = app.save().perks[0];
+    expect(perk.block).toBe(
+      "px_legacy_1 = {\n\tlegacy = px_legacy_track\n\teffect = {\n" +
+        "\t\tcustom_description_no_bullet = {\n\t\t\ttext = px_legacy_1_effect\n\t\t}\n\t}\n}"
+    );
+    expect(perk.loc).toContainEqual({ key: "px_legacy_1_effect", value: "Your heirs are born strong." });
+  });
+
+  it("starts an effect from a game perk's, under this perk's own loc key", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.cards()[0].click();
+    const editor = document.getElementById("perkEditor") as HTMLElement;
+    buttonWith(editor, "Start from a game perk's effect").click();
+    app.pick("blood_legacy_2");
+    expect(app.posted).toContainEqual({ type: "perkEffect", name: "blood_legacy_2" });
+
+    app.post({ type: "perkEffect", name: "blood_legacy_2", block: LOADED_PERKS[1].text });
+    // The words come from the perk the effect was copied off.
+    app.post({ type: "locValues", values: { blood_legacy_2_effect: "Your bloodline runs true." } });
+    const perk = app.save().perks[0];
+    // The key the block prints is this perk's own: writing the game's key
+    // would override the sentence of every perk that prints it.
+    expect(perk.block).toContain("text = px_legacy_1_effect");
+    expect(perk.loc).toContainEqual({ key: "px_legacy_1_effect", value: "Your bloodline runs true." });
+  });
+
+  it("leaves a loaded perk's own effect exactly as the file has it", () => {
+    const app = boot();
+    app.post({ type: "loaded", track: VANILLA_TRACK, perks: LOADED_PERKS, loc: {} });
+    const preview = app.window.document.querySelector(".px-script pre")!.textContent ?? "";
+    expect(preview).toContain(LOADED_PERKS[1].text);
+  });
+
+  it("duplicating a game track gives its perks keys of their own", () => {
+    const app = boot();
+    app.post({ type: "loaded", track: VANILLA_TRACK, perks: LOADED_PERKS, loc: {} });
+    const duplicate = app.window.document.querySelector<HTMLButtonElement>('#mode [data-mode="duplicate"]')!;
+    duplicate.click();
+    expect(app.name.value).toBe("px_blood_legacy_track");
+    const { track, perks } = app.save();
+    expect(track.name).toBe("px_blood_legacy_track");
+    expect(perks.map((perk) => perk.name)).toEqual(["px_blood_legacy_1", "px_blood_legacy_2"]);
+    // A renamed definition is a new one, so nothing writes back into the game.
+    expect(perks.every((perk) => perk.mode === "create")).toBe(true);
+    expect(perks.every((perk) => perk.sourceFile === undefined)).toBe(true);
+  });
+
+  it("says where each of the two files goes, and asks to change one", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.post({
+      type: "targets",
+      track: { modLabel: "mymod", path: "common/dynasty_legacies/px_legacies.txt" },
+      perks: { modLabel: "mymod", path: "common/dynasty_perks/px_dynasty_perks.txt" },
+    });
+    const lines = [...document.querySelectorAll<HTMLButtonElement>(".px-target")];
+    expect(lines).toHaveLength(2);
+    expect(lines[0].textContent).toContain("common/dynasty_legacies/px_legacies.txt");
+    expect(lines[1].textContent).toContain("common/dynasty_perks/px_dynasty_perks.txt");
+    lines[1].click();
+    expect(app.posted).toContainEqual({ type: "changeTarget", which: "perks" });
+  });
+
+  it("copies the script through the host, which owns the clipboard", () => {
+    const app = boot();
+    const copy = app.window.document.querySelector<HTMLButtonElement>(
+      '#toolbar [data-tip^="Copy the script"]'
+    )!;
+    copy.click();
+    const sent = app.posted.at(-1) as { type: string; text: string };
+    expect(sent.type).toBe("copy");
+    expect(sent.text).toContain("px_legacy_track = {");
+  });
+
   it("says so, and writes nothing, when there is no mod to write into", () => {
-    const app = boot({ ...INIT, modLabel: null, problem: "No mod folder found." });
+    const app = boot({ ...INIT, problem: "No mod folder found." });
     expect((app.window.document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
     expect(app.window.document.getElementById("problem")?.textContent).toBe("No mod folder found.");
   });

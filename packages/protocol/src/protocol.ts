@@ -1806,6 +1806,17 @@ export interface DefinitionForm {
   blocks?: Record<string, DefinitionFormKey[]>;
   /** Ref kind -> every indexed definition of it, mod entries first, capped. */
   options: Record<string, EventVocabularyItem[]>;
+  /**
+   * Trigger name -> the values that trigger accepts, for the handful of
+   * triggers a no-code condition builder offers rows for (`has_dlc_feature`,
+   * `has_game_rule`, `scripted_trigger`). Which triggers those are, and where
+   * each list comes from, is the game profile's own table; the values
+   * themselves are read from what the server already holds (the trigger's own
+   * script_docs entry, the definition index), never written for the creator.
+   * A trigger with no resolvable list is ABSENT rather than empty, so a client
+   * offers a free input instead of a picker with nothing in it.
+   */
+  conditions?: Record<string, EventVocabularyItem[]>;
   /** The modifier vocabulary, most used first: what a modifier row may offer. */
   modifiers: { name: string; doc?: string }[];
   /** Definitions of this kind the mod already has (modRoot or every workspace mod). */

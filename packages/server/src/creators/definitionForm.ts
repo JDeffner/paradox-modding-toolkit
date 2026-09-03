@@ -12,6 +12,9 @@
  *                                       docs with the curated specs on top
  *   options                             the definition index, through the SAME
  *                                       resolver paradox/eventValueOptions uses
+ *   conditions                          the profile's condition table, resolved
+ *                                       against the script_docs trigger entries
+ *                                       and the same definition index
  *   modifiers                           the script_docs modifier tokens hover
  *                                       and completion already read
  *   existing                            the index walk paradox/modOverview does
@@ -39,6 +42,8 @@ import type { SchemaData } from "../schema/loader";
 import type { KeySpec } from "../schema/types";
 import type { ServerData } from "../serverData";
 import { definitionsOfKind, short } from "../overview/eventVocabulary";
+import { activeProfile } from "../games/active";
+import type { ConditionValueSource } from "../games/profile";
 
 /**
  * Same cap as the overview's per-kind definition list. It holds a whole game's
@@ -264,6 +269,70 @@ function oneLineBody(text: string): string {
 }
 
 /**
+ * The values a `Valid …:` metadata line of a script_docs entry enumerates.
+ *
+ * The line is stored with its own label in front of it, because the docs
+ * parser keeps the label it matched ("Traits: Valid Features: a, b, and c",
+ * measured on the trigger dump of the profile that names one). A value never
+ * holds a colon, so the list is what follows the LAST one; the last entry
+ * carries the prose "and". A token whose traits hold several metadata lines is
+ * read line by line, and the first line that enumerates anything wins.
+ */
+function docListValues(traits: string): string[] {
+  for (const line of traits.split("\n")) {
+    const names = line
+      .slice(line.lastIndexOf(":") + 1)
+      .split(",")
+      .map((part) =>
+        part
+          .trim()
+          .replace(/^and\s+/i, "")
+          .replace(/\.$/, "")
+      )
+      .filter((name) => /^[A-Za-z][A-Za-z0-9_]*$/.test(name));
+    if (names.length > 0) return [...new Set(names)];
+  }
+  return [];
+}
+
+/** The inner block keys of every definition of a kind (a game rule's settings). */
+function innerKeysOf(data: ServerData, kind: string, except: readonly string[], cache: FileCache): string[] {
+  const skip = new Set(except);
+  const names: string[] = [];
+  for (const { name, file } of definitionFiles(data, kind)) {
+    const def = parsedFile(file, cache).get(name);
+    if (!def) continue;
+    for (const s of def.block.statements) {
+      if (s.kind !== "assignment" || s.value?.kind !== "block") continue;
+      if (skip.has(s.key.text) || names.includes(s.key.text)) continue;
+      names.push(s.key.text);
+    }
+  }
+  return names;
+}
+
+/**
+ * The value list one trigger of the profile's condition table resolves to, or
+ * an empty list when this workspace has no source for it (no script_docs dump,
+ * no game folder): the answer is then the trigger's ABSENCE from `conditions`,
+ * which a creator draws as a free input rather than an empty picker.
+ */
+function conditionItems(
+  data: ServerData,
+  source: ConditionValueSource,
+  trigger: string,
+  inFocus: (file: string) => boolean,
+  cache: FileCache
+): EventVocabularyItem[] {
+  if (source.from === "kind") return definitionsOfKind(data, source.kind, inFocus);
+  const values =
+    source.from === "docList"
+      ? docListValues(data.tokenMap.get(trigger)?.find((token) => token.traits)?.traits ?? "")
+      : innerKeysOf(data, source.kind, source.except ?? [], cache);
+  return values.slice(0, EVENT_VOCABULARY_MAX_VALUES).map((value) => ({ value }));
+}
+
+/**
  * The name the PLAYER reads for a definition. The loc key is the schema's own
  * pattern for the kind with `$` replaced by the name; a kind whose entry names
  * none gets the two shapes the games write for a bare definition, and a name
@@ -339,6 +408,15 @@ export function computeDefinitionForm(
   // what the indexed definitions of this kind actually write for them.
   sampledValues(data, kind, keys, files);
 
+  // The trigger value lists a no-code condition builder needs. The profile
+  // names the triggers and their sources; a trigger nothing resolves for stays
+  // out, so a client can tell "no list" from "an empty list".
+  const conditions: Record<string, EventVocabularyItem[]> = {};
+  for (const [trigger, source] of Object.entries(activeProfile().conditionValues ?? {})) {
+    const items = conditionItems(data, source, trigger, inFocus, files);
+    if (items.length > 0) conditions[trigger] = items;
+  }
+
   // What the Open menu offers: everything the index has of this kind, the
   // mod's own first. A creator opens a vanilla definition to duplicate or
   // override it, which is most of what a modder does with one, so a list of
@@ -381,6 +459,7 @@ export function computeDefinitionForm(
     keys,
     ...(Object.keys(subBlocks).length > 0 ? { blocks: subBlocks } : {}),
     options,
+    ...(Object.keys(conditions).length > 0 ? { conditions } : {}),
     modifiers,
     existing,
   };
