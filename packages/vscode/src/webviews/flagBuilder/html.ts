@@ -54,7 +54,7 @@ ${uiCss}
   /* Padding sits on the text, not the box, so text and icon buttons keep the same inset. */
   #zoom, #hint, #origin, #credit { padding: 0 6px; }
   #resetName[hidden] { display: none; }
-  #origin:empty { display: none; }
+  #hint:empty, #origin:empty { display: none; }
   #credit { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-decoration: none; cursor: pointer; }
   #credit:hover { color: var(--px-fg); text-decoration: underline; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **Required DLC comes from the game files.** The Requirements card shows
+  the DLC the install ships (`game/dlc/*/*.dlc`) as a grid of their own
+  icons; hover names one, click requires it. Chapters and the Subscription
+  never appear because the game does not ship them as DLC. Steam is only
+  asked when the game path gives nothing. Required Workshop items that are
+  not installed show their title and id after a Steam lookup.
+- **A changelog system.** The changenote menu finds an existing changelog
+  (a `changelog` folder, `CHANGELOG.md` or `.txt`, in the listing folder or
+  the mod root) and takes it with one click, tells you when there is no
+  entry for the current version, and creates `changelog/<version>.md` for
+  you, seeded from the last commit. Nothing is written on a plain open.
+- **Publish parts are switches.** Mod files, Details, Translations (all,
+  and one per language) and Changenote each have their own toggle; a part
+  that is off is dimmed and marked Not uploaded. Enable all asks first.
+- **Workshop panel polish.** Item stats stay on one row. Upload and
+  download progress sits in the toolbar and never moves the cards. Preview
+  reordering is pointer driven, with the tile lifting and the others
+  sliding aside, no browser ghost image. The Installed picker is wider and
+  leads with titles. The Previews card has help on formats, the 1 MB limit
+  and ordering. Preview images load again when the listing folder sits
+  outside the mod.
 - **The Workshop panel fits a sidebar-open window.** One column until both
   columns get real room, two columns from about 1160px, and a centered cap
   on very wide panes. Labels sit above their fields. The folder-change

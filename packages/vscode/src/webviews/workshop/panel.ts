@@ -35,10 +35,11 @@ import {
   writeVideos,
 } from "../../steam/workshopFiles";
 import { preflight } from "../../steam/preflight";
+import { readGameDlc } from "../../steam/gameDlc";
 import { detectGameVersion } from "../../descriptorMod";
 import { findSteamLibraries } from "../../steamDetect";
 import { declaredDependencies, dependencyCandidates } from "../../dependencyScan";
-import { DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
+import { changelogCandidates, DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
 import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
   changelogNoteFor,
@@ -59,8 +60,17 @@ import {
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
+import { decodeDds, downscale, encodePng } from "@px-lsp/server/dds";
 import { workshopHtml } from "./html";
-import type { AppToHost, HostToApp, ModChoice, PullParts, WorkshopModInfo } from "./messages";
+import type {
+  AppToHost,
+  DlcChoice,
+  HostToApp,
+  ModChoice,
+  ProgressJob,
+  PullParts,
+  WorkshopModInfo,
+} from "./messages";
 
 export interface WorkshopPanelOptions {
   meta: GameMeta;
@@ -84,6 +94,10 @@ export class WorkshopPanel {
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
   private uploading = false;
+  /** Folders the webview may load files from; grows when one turns up outside them. */
+  private resourceRoots: vscode.Uri[];
+  /** Titles of required items looked up on Steam, so a re-render never re-asks. */
+  private readonly itemTitles = new Map<string, string | null>();
 
   private constructor(context: vscode.ExtensionContext, options: WorkshopPanelOptions) {
     this.context = context;
@@ -91,6 +105,16 @@ export class WorkshopPanel {
     this.active = options.active ?? options.mods[0]?.path ?? null;
 
     const source = webviewSource(context);
+    // Every folder a webview <img> may point at. The mod holds the preview
+    // image; the listing folder (previews/) can sit OUTSIDE the mod when
+    // px.workshop.dir is a sibling or an absolute path, and globalStorage
+    // holds the decoded DLC icons.
+    this.resourceRoots = [
+      source.root,
+      context.globalStorageUri,
+      ...options.mods.map((m) => vscode.Uri.file(m.path)),
+      ...options.mods.map((m) => vscode.Uri.file(workshopDirFor(m.path, options.meta))),
+    ];
     this.panel = vscode.window.createWebviewPanel(
       WorkshopPanel.viewType,
       "Steam Workshop",
@@ -98,11 +122,7 @@ export class WorkshopPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          source.root,
-          // The preview image lives inside the mod; every manageable mod is a root.
-          ...options.mods.map((m) => vscode.Uri.file(m.path)),
-        ],
+        localResourceRoots: this.resourceRoots,
       }
     );
     this.panel.iconPath = tabIcon("workshop");
@@ -162,6 +182,39 @@ export class WorkshopPanel {
 
   private post(message: HostToApp): void {
     if (!this.disposed) void this.panel.webview.postMessage(message);
+  }
+
+  /**
+   * A webview URI for a local file, with the file's mtime as the query so a
+   * replaced image is not served from the webview's cache. `Uri.with` rather
+   * than string concatenation: `asWebviewUri` may already carry a query, and
+   * appending a second `?` produced a URI the webview could not resolve.
+   *
+   * Also makes sure the file's folder is a localResourceRoot. Without one the
+   * webview blocks the request and the image silently stays blank, which is
+   * what happened to `previews/` for every mod whose px.workshop.dir points
+   * outside the mod folder.
+   */
+  private fileUri(file: string): string {
+    this.ensureResourceRoot(path.dirname(file));
+    const stamp = (() => {
+      try {
+        return Math.floor(fs.statSync(file).mtimeMs);
+      } catch {
+        return 0;
+      }
+    })();
+    return this.panel.webview
+      .asWebviewUri(vscode.Uri.file(file))
+      .with({ query: `v=${stamp}` })
+      .toString();
+  }
+
+  private ensureResourceRoot(dir: string): void {
+    if (this.disposed) return;
+    if (this.resourceRoots.some((r) => isInsideDir(r.fsPath, dir))) return;
+    this.resourceRoots = [...this.resourceRoots, vscode.Uri.file(dir)];
+    this.panel.webview.options = { ...this.panel.webview.options, localResourceRoots: this.resourceRoots };
   }
 
   // All user feedback goes through VS Code notifications plus the output
@@ -230,16 +283,16 @@ export class WorkshopPanel {
     const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
-    let previewStamp = 0;
     try {
-      if (previewPath) {
-        const stat = fs.statSync(previewPath);
-        previewTooLarge = stat.size >= PREVIEW_MAX_BYTES;
-        previewStamp = Math.floor(stat.mtimeMs);
-      }
+      if (previewPath) previewTooLarge = fs.statSync(previewPath).size >= PREVIEW_MAX_BYTES;
     } catch {
       /* unreadable preview = none */
     }
+    const changelogPath = path.resolve(
+      workshopDir,
+      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
+        DEFAULT_CHANGELOG
+    );
     return {
       root,
       gameName: meta.name,
@@ -250,19 +303,14 @@ export class WorkshopPanel {
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
-      // The mtime query defeats the webview's image cache after a swap.
-      previewUri: previewPath
-        ? `${this.panel.webview.asWebviewUri(vscode.Uri.file(previewPath)).toString()}?v=${previewStamp}`
-        : null,
+      previewUri: previewPath ? this.fileUri(previewPath) : null,
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
-      changelogPath: path.resolve(
-        workshopDir,
-        (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
-          DEFAULT_CHANGELOG
-      ),
+      changelogPath,
+      changelogPresent: fs.existsSync(changelogPath),
+      changelogCandidates: changelogCandidates(root, workshopDir, changelogPath),
       version: info?.version ?? null,
       supportedVersion: info?.supportedVersion ?? null,
       workshopDir,
@@ -286,9 +334,14 @@ export class WorkshopPanel {
     };
   }
 
-  /** One line of the progress strip: the step list, the current one, and its percent. */
-  private progress(steps: string[], step: number, message: string, percent: number | null = null): void {
-    this.post({ type: "uploadState", busy: true, message, steps, step, percent });
+  /** One step of a running job. `step: null` (see `endProgress`) ends it. */
+  private progress(job: ProgressJob, step: string, done: number, total: number): void {
+    this.post({ type: "progress", job, step, done, total });
+  }
+
+  private endProgress(job: ProgressJob): void {
+    this.post({ type: "progress", job, step: null, done: 0, total: 0 });
+    this.post({ type: "uploadState", busy: false });
   }
 
   private previewsInfo(workshopDir: string): WorkshopModInfo["previews"] {
@@ -296,10 +349,7 @@ export class WorkshopPanel {
     if (!previews) return null;
     return {
       dir: path.join(workshopDir, PREVIEWS_DIR),
-      images: previews.images.map((p) => ({
-        name: path.basename(p),
-        uri: `${this.panel.webview.asWebviewUri(vscode.Uri.file(p)).toString()}?v=${Math.floor(fs.statSync(p).mtimeMs)}`,
-      })),
+      images: previews.images.map((p) => ({ name: path.basename(p), uri: this.fileUri(p) })),
       videos: previews.videos,
     };
   }
@@ -410,19 +460,18 @@ export class WorkshopPanel {
       case "notify":
         this.notify(message.message, message.warn ? "warn" : "info");
         return;
-      case "loadDlc": {
-        try {
-          const done = await runBridge(
-            this.context,
-            { action: "dlc", appId: meta.steamAppId },
-            this.options.log
-          );
-          this.post({ type: "dlc", list: done.action === "dlc" ? done.dlc : [], error: null });
-        } catch (e) {
-          this.post({ type: "dlc", list: [], error: friendlyError(e, meta) });
-        }
+      case "loadDlc":
+        await this.loadDlc(message.allowSteam);
         return;
-      }
+      case "resolveItems":
+        await this.resolveItems(message.ids);
+        return;
+      case "setChangelogSource":
+        await this.setChangelogSource(message.path);
+        return;
+      case "createChangelog":
+        await this.createChangelog();
+        return;
       case "setDependencies": {
         if (!root) return;
         writeDependencies(workshopDirFor(root, meta), {
@@ -469,6 +518,146 @@ export class WorkshopPanel {
         return;
       }
     }
+  }
+
+  /**
+   * The DLC the requirement grid offers. Read from the install, which lists
+   * exactly the DLC a mod can require: Steam's list for the same app also
+   * carries Chapter bundles and the Subscription, and those have no folder in
+   * the game. Steam is the fallback for when the game path is unknown.
+   */
+  private async loadDlc(allowSteam: boolean): Promise<void> {
+    const { meta, gamePath } = this.options;
+    if (gamePath) {
+      const list = readGameDlc(gamePath, meta.dlcIconDir).map<DlcChoice>((d) => ({
+        steamId: d.steamId,
+        name: d.name,
+        iconUri: d.iconPath ? this.dlcIconUri(d.iconPath) : null,
+      }));
+      if (list.length) {
+        this.post({ type: "dlc", list, source: "game", error: null });
+        return;
+      }
+    }
+    if (!allowSteam) {
+      this.post({ type: "dlc", list: [], source: "none", error: null });
+      return;
+    }
+    try {
+      const done = await runBridge(this.context, { action: "dlc", appId: meta.steamAppId }, this.options.log);
+      const dlc = done.action === "dlc" ? done.dlc : [];
+      this.post({
+        type: "dlc",
+        list: dlc.map<DlcChoice>((d) => ({ steamId: d.appId, name: d.name, iconUri: null })),
+        source: "steam",
+        error: null,
+      });
+    } catch (e) {
+      this.post({ type: "dlc", list: [], source: "none", error: friendlyError(e, meta) });
+    }
+  }
+
+  /**
+   * A webview URI for one DLC icon. The game ships them as .dds, which no
+   * browser decodes, so they are decoded to PNG once and cached under
+   * globalStorage; the source file's mtime is in the cache file's name, so a
+   * game patch invalidates the entry without a staleness check.
+   */
+  private dlcIconUri(iconPath: string): string | null {
+    try {
+      const stamp = Math.floor(fs.statSync(iconPath).mtimeMs);
+      if (path.extname(iconPath).toLowerCase() !== ".dds") return this.fileUri(iconPath);
+      const dir = path.join(this.context.globalStorageUri.fsPath, "dlcIcons");
+      const cached = path.join(
+        dir,
+        `${this.options.meta.id}-${path.basename(iconPath, ".dds")}-${stamp}.png`
+      );
+      if (!fs.existsSync(cached)) {
+        const img = downscale(decodeDds(fs.readFileSync(iconPath)), DLC_ICON_MAX_DIM);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(cached, encodePng(img.width, img.height, img.pixels));
+      }
+      return this.fileUri(cached);
+    } catch (e) {
+      this.options.log(`workshop: DLC icon ${iconPath} could not be decoded: ${String(e)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Titles of required Workshop items that are not installed mods, so the list
+   * reads as names rather than bare ids. Answers with null for an id Steam
+   * does not know, which is the state worth showing.
+   */
+  private async resolveItems(ids: string[]): Promise<void> {
+    const wanted = ids.filter((id) => /^\d+$/.test(id) && !this.itemTitles.has(id)).slice(0, 20);
+    if (!wanted.length) return;
+    for (const id of wanted) {
+      const item = await this.queryItem(id);
+      this.itemTitles.set(id, item?.title || null);
+    }
+    this.post({
+      type: "itemTitles",
+      titles: Object.fromEntries(wanted.map((id) => [id, this.itemTitles.get(id) ?? null])),
+    });
+  }
+
+  /** Point px.workshop.changelog at a changelog the mod already has. */
+  private async setChangelogSource(target: string): Promise<void> {
+    const root = this.active;
+    if (!root || !path.isAbsolute(target) || !fs.existsSync(target)) return;
+    const workshopDir = workshopDirFor(root, this.options.meta);
+    // A relative value travels with the repo; an absolute one only works here.
+    const rel = path.relative(workshopDir, target).split(path.sep).join("/");
+    const value = rel !== "" && !rel.startsWith("..") ? rel : target;
+    try {
+      await vscode.workspace
+        .getConfiguration("px", vscode.Uri.file(root))
+        .update("workshop.changelog", value, vscode.ConfigurationTarget.WorkspaceFolder);
+      this.notify(`Changenotes now come from ${target}.`);
+    } catch (e) {
+      this.notifyError(`Setting px.workshop.changelog failed - ${String(e)}`, e);
+    }
+    await this.postInfo();
+  }
+
+  /**
+   * Create the entry for the current version and open it. The folder is made
+   * on demand (nothing is written on a plain panel open), and the file is
+   * seeded with a heading plus the last commit subject so it is not empty.
+   */
+  private async createChangelog(): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const version = readPublishInfo(root, meta)?.version;
+    if (!version) {
+      this.notify("The mod has no version yet; set one before creating a changelog entry.", "warn");
+      return;
+    }
+    const workshopDir = workshopDirFor(root, meta);
+    const dir = path.resolve(
+      workshopDir,
+      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
+        DEFAULT_CHANGELOG
+    );
+    if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) {
+      await vscode.window.showTextDocument(vscode.Uri.file(dir), { preview: false });
+      return;
+    }
+    if (!fs.existsSync(dir) && !(await this.confirmWorkshopDirPlacement(dir))) return;
+    const file = path.join(dir, `${version}.md`);
+    try {
+      if (!fs.existsSync(file)) {
+        const commit = await lastCommitSubject(root);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(file, `# ${version}\n\n${commit ? `- ${commit}\n` : ""}`, "utf8");
+      }
+      await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
+    } catch (e) {
+      this.notifyError(`Creating the changelog entry failed - ${String(e)}`, e);
+    }
+    await this.postInfo();
   }
 
   /**
@@ -639,7 +828,10 @@ export class WorkshopPanel {
     if (parts.details || parts.description || parts.translations) steps.push("Text");
     if (parts.previews || parts.thumbnail) steps.push("Images");
     if (parts.requirements) steps.push("Requirements");
-    this.progress(steps, 0, "asking Steam…");
+    const step = (name: string, detail: string): void =>
+      this.progress("download", `${name}: ${detail}`, Math.max(0, steps.indexOf(name)), steps.length);
+    this.post({ type: "uploadState", busy: true });
+    step("Ask Steam", "asking Steam…");
     try {
       const languages = parts.translations ? STEAM_LANGUAGES.map((l) => l.api) : [];
       const done = await runBridge(
@@ -652,7 +844,7 @@ export class WorkshopPanel {
       const wrote: string[] = [];
 
       if (parts.details || parts.description || parts.translations) {
-        this.progress(steps, steps.indexOf("Text"), "writing text…");
+        step("Text", "writing text…");
       }
       if (parts.details) {
         upsertItemJson(dir, {
@@ -688,8 +880,7 @@ export class WorkshopPanel {
         writeListingFiles(dir, { description, translations });
       }
 
-      if (parts.previews || parts.thumbnail)
-        this.progress(steps, steps.indexOf("Images"), "downloading images…");
+      if (parts.previews || parts.thumbnail) step("Images", "downloading images…");
       if (parts.previews) {
         const previewsDir = path.join(dir, PREVIEWS_DIR);
         fs.mkdirSync(previewsDir, { recursive: true });
@@ -701,12 +892,7 @@ export class WorkshopPanel {
           const base =
             path.basename(p.originalFileName || "", ext) || `steam-${String(i + 1).padStart(2, "0")}`;
           const name = `${base}${ext}`;
-          this.progress(
-            steps,
-            steps.indexOf("Images"),
-            `downloading ${name}…`,
-            Math.round((i / images.length) * 100)
-          );
+          step("Images", `downloading ${name} (${i + 1}/${images.length})…`);
           fs.writeFileSync(path.join(previewsDir, name), await download(p.urlOrVideoId));
           names.push(name);
         }
@@ -724,7 +910,7 @@ export class WorkshopPanel {
       }
 
       if (parts.requirements) {
-        this.progress(steps, steps.indexOf("Requirements"), "writing requirements…");
+        step("Requirements", "writing requirements…");
         writeDependencies(dir, { apps: item.appDependencies, items: item.children });
         wrote.push("dependencies.json");
       }
@@ -734,7 +920,7 @@ export class WorkshopPanel {
     } catch (e) {
       this.notifyError(`Pulling the listing failed - ${friendlyError(e, meta)}`, e);
     } finally {
-      this.post({ type: "uploadState", busy: false });
+      this.endProgress("download");
     }
     await this.postInfo();
   }
@@ -785,13 +971,16 @@ export class WorkshopPanel {
     if (message.details) steps.push("Details");
     if (message.languages.length) steps.push("Translations");
     const stepOf = (name: string): number => Math.max(0, steps.indexOf(name));
-    this.progress(steps, 0, "starting…");
+    const step = (name: string, detail: string): void =>
+      this.progress("upload", `${name}: ${detail}`, stepOf(name), steps.length);
+    this.post({ type: "uploadState", busy: true });
+    step(steps[0] ?? "Upload", "starting…");
     let staging: string | null = null;
     try {
       let needsAgreement = false;
       const createdNow = !itemId;
       if (!itemId) {
-        this.progress(steps, stepOf("Create item"), "creating the Workshop item…");
+        step("Create item", "creating the Workshop item…");
         const created = await runBridge(this.context, { action: "create", appId: meta.steamAppId }, log);
         if (created.action !== "create") throw new Error("unexpected bridge reply");
         itemId = created.itemId;
@@ -856,7 +1045,7 @@ export class WorkshopPanel {
           }
         }
         if (message.content) {
-          this.progress(steps, stepOf("Mod files"), "preparing files…");
+          step("Mod files", "preparing files…");
           if (ensurePxIgnore(root)) this.explainPxIgnore(root);
           staging = makeStagingDir();
           stageContent(root, staging, [workshopDirFor(root, meta)]);
@@ -885,8 +1074,8 @@ export class WorkshopPanel {
           const name =
             submit > 1 ? "Translations" : onFiles ? "Mod files" : message.details ? "Details" : "Mod files";
           const pct = total > 0 ? Math.round((uploaded / total) * 100) : null;
-          const step = count > 1 && submit > 1 ? ` (${submit - 1}/${count - 1})` : "";
-          this.progress(steps, stepOf(name), `${status.toLowerCase()}${step}`, pct);
+          const which = count > 1 && submit > 1 ? ` (${submit - 1}/${count - 1})` : "";
+          step(name, `${status.toLowerCase()}${which}${pct === null ? "" : ` ${pct}%`}`);
         }
       );
       if (done.action !== "publish") throw new Error("unexpected bridge reply");
@@ -911,7 +1100,7 @@ export class WorkshopPanel {
           removeItems: liveItems.filter((i) => !deps.items.includes(i)),
         };
         if (job.addApps.length || job.removeApps.length || job.addItems.length || job.removeItems.length) {
-          this.progress(steps, stepOf("Requirements"), "updating requirements…");
+          step("Requirements", "updating requirements…");
           await runBridge(this.context, job, log);
           log(`workshop: requirements of ${itemId} updated`);
         }
@@ -935,10 +1124,13 @@ export class WorkshopPanel {
     } finally {
       if (staging) fs.rmSync(staging, { recursive: true, force: true });
       this.uploading = false;
-      this.post({ type: "uploadState", busy: false });
+      this.endProgress("upload");
     }
   }
 }
+
+/** DLC icons render as a small grid tile; the game ships them far bigger. */
+const DLC_ICON_MAX_DIM = 96;
 
 /** One http(s) resource as bytes; Steam serves preview images from its CDN. */
 async function download(url: string): Promise<Buffer> {

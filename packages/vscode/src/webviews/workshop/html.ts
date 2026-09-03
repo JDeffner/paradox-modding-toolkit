@@ -40,19 +40,15 @@ ${uiCss}
     0% { transform: translateX(-110%); }
     100% { transform: translateX(440%); }
   }
-  /* Step strip under the toolbar while a job runs: names, the one in flight, its percent. */
-  #progress { display: none; flex: 0 0 auto; padding: 4px 12px 6px; border-bottom: 1px solid var(--px-border); gap: 4px; flex-direction: column; }
-  #progress.on { display: flex; }
-  #steps { display: flex; align-items: center; gap: 6px; font-size: var(--px-text-xs); color: var(--px-muted-fg); flex-wrap: wrap; }
-  #steps .st { display: inline-flex; align-items: center; gap: 4px; }
-  #steps .st .px-icon { width: 12px; height: 12px; }
-  #steps .st[data-state="done"] { color: var(--px-fg); }
-  #steps .st[data-state="on"] { color: var(--px-primary); font-weight: 600; }
-  #steps .sep { opacity: 0.5; }
-  #steps .msg { margin-left: auto; color: var(--px-fg); }
-  #bar { height: 3px; border-radius: 2px; background: var(--px-muted); overflow: hidden; }
-  #bar > div { height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
-  #bar.indeterminate > div { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
+  /* Inline job progress in the toolbar: the step in flight and a slim bar.
+     Fixed height (the toolbar's line) so nothing below moves. */
+  #jobProgress { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 380px; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  #jobProgress[hidden] { display: none; }
+  #jobProgress .step { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #jobProgress .count { flex: 0 0 auto; color: var(--px-fg); }
+  #jobProgress .bar { flex: 0 0 120px; height: 3px; border-radius: 2px; background: var(--px-muted); overflow: hidden; }
+  #jobProgress .bar > span { display: block; height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
+  #jobProgress .bar[data-indeterminate] > span { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
   #main { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
   /* The editor area is usually the window minus the Activity Bar and an open
      Project sidebar (about 1000 to 1500px). One column until both cards get
@@ -100,14 +96,16 @@ ${uiCss}
   .field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   #tags { display: flex; flex-wrap: wrap; gap: 4px; }
   #itemMeta { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px; }
+  /* One row, always: the tiles shrink and their labels truncate before anything wraps. */
+  #stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
   .stat {
-    display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 1px; padding: 5px 7px; min-width: 0;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
   }
-  .stat .v { font-size: 16px; font-weight: 600; }
-  .stat .k { display: flex; align-items: center; gap: 4px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .stat .k .px-icon { width: 12px; height: 12px; }
+  .stat .v { font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .k { display: flex; align-items: center; gap: 3px; color: var(--px-muted-fg); font-size: var(--px-text-xs); min-width: 0; }
+  .stat .k .px-icon { width: 11px; height: 11px; flex: 0 0 auto; }
+  .stat .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #desc { min-height: 170px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
   .hintline { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .hintline .px-grow { flex: 1 1 auto; }
@@ -129,6 +127,20 @@ ${uiCss}
   .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .pub-row .lbl { min-width: 0; }
   .pub-row .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* A publish part: its switch row, then the part's body; off = dimmed + "Not uploaded". */
+  .pub-part { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
+  .pub-part > .pub-row .lbl { font-weight: 500; }
+  .pub-part .off-chip { display: none; margin-left: auto; flex: 0 0 auto; }
+  .pub-part[data-off] .off-chip { display: inline-flex; }
+  .pub-part[data-off] > .pub-row .lbl, .pub-part[data-off] > .pub-body { opacity: 0.45; }
+  .pub-part[data-off] > .pub-body { pointer-events: none; }
+  .pub-body { display: flex; flex-direction: column; gap: 4px; }
+  .lang-row { display: flex; align-items: center; gap: 8px; padding-left: 26px; min-height: 22px; font-size: var(--px-text-sm); }
+  .lang-row[data-off] { opacity: 0.55; }
+  .lang-row .px-switch { transform: scale(0.85); transform-origin: left center; }
+  #enableAllBox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #enableAllConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-left: 3px solid var(--px-destructive); font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  #enableAllConfirm[hidden] { display: none; }
   #note { width: 100%; min-height: 56px; resize: vertical; }
   .section > .px-panel-title { padding: 0; }
   /* Edit | Preview segmented toggle (description and translations). */
@@ -160,16 +172,40 @@ ${BBPREV_CSS}
   .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gallery .tile .rm { position: absolute; top: 2px; right: 2px; }
   .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .gallery .tile[draggable="true"] { cursor: grab; }
-  .gallery .tile.dragging { opacity: 0.4; }
-  .gallery .tile.drop-before { box-shadow: -3px 0 0 var(--px-primary); }
-  .gallery .tile.drop-after { box-shadow: 3px 0 0 var(--px-primary); }
+  /* Pointer-driven reorder: the lifted tile follows the pointer above the
+     rest, its slot stays as a dashed placeholder, the others slide (FLIP). */
+  .gallery .tile[data-name] { cursor: grab; touch-action: none; }
+  .gallery .tile.slide { transition: transform 160ms cubic-bezier(0.2, 0, 0, 1); }
+  .gallery .tile.lift {
+    position: fixed; z-index: 20; margin: 0; cursor: grabbing; pointer-events: none;
+    transform: scale(1.03); box-shadow: var(--px-shadow-md); transition: none;
+  }
+  .gallery .tile.placeholder { border-style: dashed; background: transparent; }
+  .gallery .tile.placeholder > * { visibility: hidden; }
   .check-row { display: flex; align-items: flex-start; gap: 6px; font-size: var(--px-text-xs); padding: 2px 0; }
   .check-row[data-level="error"] { color: var(--px-destructive); }
   .check-row[data-level="warn"] { color: var(--px-muted-fg); }
-  .dlc-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: var(--px-text-sm); }
-  .dlc-row .own { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .req-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--px-text-sm); }
+  .dlc-grid { display: grid; grid-template-columns: repeat(auto-fill, 64px); gap: 6px; margin-bottom: 6px; }
+  .dlc-tile {
+    position: relative; width: 64px; height: 64px; padding: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--px-border); border-radius: var(--px-radius-md); background: var(--px-muted);
+    cursor: pointer; opacity: 0.5; overflow: hidden; color: var(--px-muted-fg);
+    transition: opacity var(--px-ease), box-shadow var(--px-ease), border-color var(--px-ease);
+  }
+  .dlc-tile:hover, .dlc-tile:focus-visible { opacity: 0.85; }
+  .dlc-tile[data-on="1"] { opacity: 1; border-color: var(--px-primary); box-shadow: 0 0 0 2px var(--px-primary); }
+  .dlc-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dlc-tile .cap { font-size: 10px; line-height: 1.2; text-align: center; padding: 3px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .dlc-tile .mark {
+    position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    background: var(--px-primary); color: var(--px-primary-fg);
+  }
+  .dlc-tile .mark .px-icon { width: 11px; height: 11px; }
+  .dlc-tile[data-on="1"] .mark { display: flex; }
+  .req-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--px-text-sm); min-width: 0; }
+  .req-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .req-item .id { color: var(--px-muted-fg); font-size: var(--px-text-xs); flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -179,16 +215,13 @@ ${BBPREV_CSS}
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Fetch the item's live state from Steam">${icon("rotate")}</button>
     <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder as files." data-tip-wrap>${icon("download")}</button>
     <span id="liveState" class="px-muted px-xs"></span>
+    <span id="jobProgress" hidden><span class="step"></span><span class="count"></span><span class="bar"><span></span></span></span>
     <span class="px-grow"></span>
     <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
     <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
   <div id="busy"><div></div></div>
-  <div id="progress">
-    <div id="steps"></div>
-    <div id="bar"><div></div></div>
-  </div>
   <div id="main"><div id="page">
 
     <div id="noDescriptor">
@@ -249,31 +282,58 @@ ${BBPREV_CSS}
       <div class="px-panel-title">Publish</div>
       <div id="checks" style="margin-bottom:6px"></div>
       <div id="publishRows">
-        <div class="pub-row">
-          <label class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></label>
-          <span class="lbl">Mod files <span class="sub">- upload the mod's content</span></span>
+        <div class="pub-part" data-part="content">
+          <div class="pub-row">
+            <label class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></label>
+            <span class="lbl">Mod files <span class="sub">- upload the mod's content</span></span>
+            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          </div>
         </div>
-        <div class="pub-row">
-          <label class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></label>
-          <span class="lbl">Details <span class="sub">- title, description, visibility, tags, preview image</span></span>
+        <div class="pub-part" data-part="details">
+          <div class="pub-row">
+            <label class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></label>
+            <span class="lbl">Details <span class="sub">- title, description, visibility, tags, preview image</span></span>
+            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          </div>
         </div>
-        <div class="pub-row">
-          <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
-          <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
+        <div class="pub-part" data-part="translations">
+          <div class="pub-row">
+            <label class="px-switch"><input id="incLangs" type="checkbox" checked /><span></span></label>
+            <span class="lbl">Translations <span id="langCount" class="sub"></span></span>
+            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          </div>
+          <div id="langRows" class="pub-body"></div>
         </div>
-        <div class="field" style="margin-top:4px">
-          <span class="px-label">Changenote</span>
-          <textarea id="note" class="px-textarea" spellcheck="false" placeholder="Shown on the item's Change Notes tab"></textarea>
-          <div class="hintline">
-            <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-            <span class="px-grow"></span>
-            <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
+        <div class="pub-part" data-part="note">
+          <div class="pub-row">
+            <label class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></label>
+            <span class="lbl">Changenote <span class="sub">- shown on the item's Change Notes tab</span></span>
+            <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          </div>
+          <div class="pub-body">
+            <textarea id="note" class="px-textarea" spellcheck="false" placeholder="What changed in this update"></textarea>
+            <div class="hintline">
+              <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+              <span class="px-grow"></span>
+              <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
+            </div>
+          </div>
+        </div>
+        <div id="enableAllBox">
+          <button id="enableAll" class="px-btn" data-variant="outline" data-size="sm" data-tip="Switch every part on, translations included">${icon("check")} Enable all</button>
+          <div id="enableAllConfirm" hidden>
+            <span>This uploads every part, including translations and the changenote. Continue?</span>
+            <button id="enableAllYes" class="px-btn" data-variant="default" data-size="sm">Yes</button>
+            <button id="enableAllNo" class="px-btn" data-variant="ghost" data-size="sm">Cancel</button>
           </div>
         </div>
       </div>
     </div>
     <div class="section" id="previewsSection">
-      <div class="px-panel-title">Previews</div>
+      <div class="px-panel-title">Previews
+        <span class="px-grow"></span>
+        <button id="previewsHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How previews work" data-tip="How previews work" data-tip-side="left">${icon("circleHelp")}</button>
+      </div>
       <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
       <div id="gallery" class="gallery"></div>
       <div class="hintline" style="margin-top:6px">
@@ -294,7 +354,7 @@ ${BBPREV_CSS}
       <div class="field" style="margin-top:6px">
         <span class="px-label">Add a required item</span>
         <div class="px-row" style="gap:6px;align-items:center">
-          <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link, then Enter" style="flex:1 1 auto;min-width:0;max-width:320px" />
+          <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link, then Enter" style="flex:1 1 auto;min-width:0;max-width:360px" />
           <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;flex:0 0 auto" data-tip="Pick an installed Workshop mod">${icon("plus")} Installed${icon("chevronDown")}</button>
         </div>
       </div>

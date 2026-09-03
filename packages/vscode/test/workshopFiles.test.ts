@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
+  changelogCandidates,
   extractVersionSection,
   hasListingFiles,
   mdToBBCode,
@@ -285,5 +286,27 @@ describe("mdToBBCode", () => {
         "[/code]",
       ].join("\n")
     );
+  });
+});
+
+describe("changelog candidates", () => {
+  it("finds a hand-kept changelog at the mod root and in the workshop folder", () => {
+    const root = tmp();
+    const workshopDir = path.join(root, ".px-toolkit", "workshop");
+    fs.mkdirSync(workshopDir, { recursive: true });
+    fs.writeFileSync(path.join(root, "CHANGELOG.md"), "# 1.0", "utf8");
+    fs.mkdirSync(path.join(workshopDir, "changelog"));
+
+    const found = changelogCandidates(root, workshopDir, path.join(workshopDir, "changelog"));
+    // The workshop folder is searched first, and the resolved setting is flagged.
+    expect(found.map((c) => [path.basename(c.path), c.kind, c.current])).toEqual([
+      ["changelog", "folder", true],
+      ["CHANGELOG.md", "file", false],
+    ]);
+  });
+
+  it("finds nothing for a mod that keeps no changelog", () => {
+    const root = tmp();
+    expect(changelogCandidates(root, path.join(root, "workshop"), path.join(root, "workshop"))).toEqual([]);
   });
 });

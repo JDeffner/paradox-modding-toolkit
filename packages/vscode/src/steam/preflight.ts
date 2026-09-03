@@ -8,10 +8,8 @@
  * No vscode imports: unit-tested in plain Node.
  */
 
-export interface PreflightCheck {
-  level: "error" | "warn";
-  message: string;
-}
+import type { PreflightCheck } from "../webviews/workshop/messages";
+export type { PreflightCheck };
 
 export const TITLE_MAX_BYTES = 128;
 export const DESCRIPTION_MAX_BYTES = 8000;

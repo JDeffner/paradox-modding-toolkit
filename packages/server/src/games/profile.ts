@@ -89,6 +89,12 @@ export interface GameMeta {
    */
   dataTypesCommand?: string;
   steamAppId: number;
+  /**
+   * Folder under the game data dir holding one icon per DLC, named after the
+   * DLC folder's number (`dlc_003.dds` or `dlc003.dds`). Absent = the install
+   * ships no such folder and the DLC's own `thumbnail.png` is used instead.
+   */
+  dlcIconDir?: string;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
   /**

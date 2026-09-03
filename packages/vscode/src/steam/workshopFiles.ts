@@ -306,6 +306,58 @@ export function writeDependencies(workshopDir: string, deps: Dependencies): void
 // Changenotes from the changelog
 // ---------------------------------------------------------------------------
 
+/** A changelog the mod already has, offered as the `px.workshop.changelog` source. */
+export interface ChangelogCandidate {
+  /** Absolute path of the file or folder. */
+  path: string;
+  kind: "file" | "folder";
+  /** True when `px.workshop.changelog` already resolves to it. */
+  current: boolean;
+}
+
+/** The names a hand-kept changelog goes by, in the order they are preferred. */
+const CHANGELOG_NAMES = ["changelog", "changelogs", "CHANGELOG.md", "CHANGELOG.txt"];
+
+/**
+ * Changelogs the mod already has: most mods keep none, and the ones that do
+ * keep it at the mod root (`CHANGELOG.md`) rather than where the default
+ * setting looks. Searched in the workshop folder first, then the mod root;
+ * name matching is case-insensitive, since `changelog.md` and `CHANGELOG.md`
+ * are the same file on Windows and different ones on Linux.
+ */
+export function changelogCandidates(
+  modRoot: string,
+  workshopDir: string,
+  resolved: string
+): ChangelogCandidate[] {
+  const key = (p: string): string => path.resolve(p).toLowerCase();
+  const resolvedKey = key(resolved);
+  const out: ChangelogCandidate[] = [];
+  const seen = new Set<string>();
+  for (const dir of [workshopDir, modRoot]) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const want of CHANGELOG_NAMES) {
+      for (const e of entries) {
+        if (e.name.toLowerCase() !== want.toLowerCase()) continue;
+        const full = path.join(dir, e.name);
+        if (seen.has(key(full))) continue;
+        seen.add(key(full));
+        out.push({
+          path: full,
+          kind: e.isDirectory() ? "folder" : "file",
+          current: key(full) === resolvedKey,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 export interface ChangeNote {
   text: string;
   /** Where the text came from, for display ("changelog/1.2.md"). */
