@@ -1760,7 +1760,7 @@
   },
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs && node ../../scripts/copy-docs.mjs",
-    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
+    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18 && esbuild src/webviews/guiEditor/decodeWorker.ts --bundle --outfile=dist/ddsWorker.js --format=cjs --platform=node --target=node18",
     "compile:webview": "node ../../scripts/compile-webviews.mjs",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
