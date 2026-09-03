@@ -20,6 +20,8 @@ import type {
   DefinitionForm,
   DefinitionFormParams,
   DefinitionOp,
+  ModifierFormatsParams,
+  ModifierFormatsResult,
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
@@ -27,6 +29,7 @@ import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
+import { wireImages } from "../../creators/images";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM } from "../guiEditor/textureCache";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { makeNonce } from "../nonce";
@@ -45,6 +48,8 @@ const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "dds"];
 export interface LegacyCreatorActions {
   fetchForm(params: DefinitionFormParams): Promise<DefinitionForm | null>;
   applyEdits(params: DefinitionEditParams): Promise<DefinitionEditResult>;
+  /** How the game prints each modifier; null when the profile has no source. */
+  fetchModifierFormats(params: ModifierFormatsParams): Promise<ModifierFormatsResult | null>;
   lookupLoc: LocLookup;
 }
 
@@ -171,9 +176,10 @@ export class LegacyCreatorPanel {
   private async postInit(name?: string): Promise<void> {
     const { cfg, actions } = this.options;
     const modRoot = cfg.modPath;
-    const [legacy, perk] = await Promise.all([
+    const [legacy, perk, formats] = await Promise.all([
       actions.fetchForm({ kind: TRACK_KIND, modRoot }),
       actions.fetchForm({ kind: PERK_KIND, modRoot }),
+      actions.fetchModifierFormats({ modRoot }),
     ]);
     if (!legacy || !perk) {
       void vscode.window.showInformationMessage(
@@ -190,6 +196,8 @@ export class LegacyCreatorPanel {
       init: {
         legacy,
         perk,
+        formats: formats?.formats ?? null,
+        refIconFolders: await this.refIconFolders(perk, modRoot),
         modLabel: cfg.modPath ? path.basename(cfg.modPath) : null,
         locLanguage: cfg.locLanguage,
         prefix: scaffoldPrefix(cfg),
@@ -206,6 +214,26 @@ export class LegacyCreatorPanel {
     const target = name ?? this.pending;
     this.pending = undefined;
     if (target) await this.load(target);
+  }
+
+  /**
+   * Where the icon of every kind a perk key REFERS to lives (`traits` names
+   * `trait`, whose form carries `gfx/interface/icons/traits`). Asked of that
+   * kind's own form rather than written here, so a picture in the trait picker
+   * costs no game knowledge in this panel and a game without the kind simply
+   * gets no entry.
+   */
+  private async refIconFolders(
+    perk: DefinitionForm,
+    modRoot: string | null
+  ): Promise<Record<string, string>> {
+    const kinds = [...new Set(perk.keys.flatMap((key) => key.refKinds ?? []))];
+    const folders: Record<string, string> = {};
+    for (const kind of kinds) {
+      const form = await this.options.actions.fetchForm({ kind, modRoot });
+      if (form?.iconFolder) folders[kind] = form.iconFolder;
+    }
+    return folders;
   }
 
   /** The `name -> legacy` links of every perk file under one root. */
@@ -317,6 +345,20 @@ export class LegacyCreatorPanel {
       case "customIcon":
         await this.convertIcon(message.track);
         return;
+      case "images":
+        wireImages(this.panel, roots(this.options.cfg), this.textures, message);
+        return;
+      case "loc": {
+        const values: Record<string, string> = {};
+        for (const key of message.keys) {
+          const value = (await this.options.actions.lookupLoc(key)).find(
+            (entry) => entry.value !== undefined
+          )?.value;
+          if (value !== undefined) values[key] = value;
+        }
+        this.post({ type: "locValues", values });
+        return;
+      }
       case "save":
         await this.save(message);
         return;

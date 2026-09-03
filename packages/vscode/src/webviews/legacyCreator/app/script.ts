@@ -309,6 +309,59 @@ export function wrapBlockValue(text: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// The two lines a modifier block carries that are not modifiers
+// ---------------------------------------------------------------------------
+
+/**
+ * `_dynasty_perks.info`: a `doctrine_character_modifier` block opens with
+ * `doctrine = doctrine_theocracy_lay_clergy`, which is the CONDITION and not a
+ * modifier. It comes out of the entry list so the form can offer it as its own
+ * picker, and goes back into the same place on save.
+ */
+export function doctrineOf(entries: readonly ModifierEntry[]): string {
+  for (const entry of entries) {
+    if (entry.kind !== "raw") continue;
+    const match = /^doctrine\s*=\s*([^\s#]+)/.exec(entry.text);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+/** The entries with their `doctrine =` line set, added at the top, or removed. */
+export function withDoctrine(entries: readonly ModifierEntry[], value: string): ModifierEntry[] {
+  const trimmed = value.trim();
+  const out: ModifierEntry[] = [];
+  let replaced = false;
+  for (const entry of entries) {
+    const isDoctrine = entry.kind === "raw" && /^doctrine\s*=/.test(entry.text);
+    if (!isDoctrine) {
+      out.push(entry);
+      continue;
+    }
+    if (trimmed !== "" && !replaced) {
+      out.push({ kind: "raw", text: `doctrine = ${trimmed}` });
+      replaced = true;
+    }
+  }
+  if (trimmed !== "" && !replaced) out.unshift({ kind: "raw", text: `doctrine = ${trimmed}` });
+  return out;
+}
+
+/**
+ * The loc key a perk's `effect` block prints, when it writes one.
+ *
+ * Measured in 00_dynasty_perks.txt: blood_legacy_4's effect is nothing but
+ * `custom_description_no_bullet = { text = blood_legacy_4_effect }`, and that
+ * loc value IS the sentence the game shows on the perk. Any
+ * `custom_description*` wrapper reads the same way, so the prefix is matched
+ * rather than the one name.
+ */
+export function effectLocKey(effect: string): string | null {
+  const match = /custom_description[a-z_]*\s*=\s*\{[^{}]*?\btext\s*=\s*"?([A-Za-z0-9_.]+)"?/.exec(effect);
+  return match ? match[1] : null;
+}
+
+// ---------------------------------------------------------------------------
 // Names
 // ---------------------------------------------------------------------------
 

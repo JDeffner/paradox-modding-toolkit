@@ -109,6 +109,9 @@ import {
   eventGraphRequest,
   definitionEditRequest,
   definitionFormRequest,
+  modifierFormatsRequest,
+  type ModifierFormatsParams,
+  type ModifierFormatsResult,
   type DefinitionEditParams,
   type DefinitionEditResult,
   type DefinitionForm,
@@ -1175,6 +1178,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
             applyEdits: (params: DefinitionEditParams) =>
               lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+            fetchModifierFormats: (params: ModifierFormatsParams) =>
+              lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
             lookupLoc,
           },
         },
