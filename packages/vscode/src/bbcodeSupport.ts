@@ -401,8 +401,8 @@ async function convertActive(to: "md" | "bbcode"): Promise<void> {
     !listing
       ? `Wrote ${path.basename(target)}.`
       : to === "md"
-        ? "description.md is now what the Workshop listing reads. Delete description.bbcode once you are happy with it."
-        : "Wrote description.bbcode, but the listing still reads description.md first. Delete the .md to go back to BBCode."
+        ? "Wrote description.md. The Workshop listing reads BBCode, so the panel converts this file back to description.bbcode the next time it reads the folder."
+        : "Wrote description.bbcode, the format the Workshop listing reads. The panel removes description.md the next time it reads the folder."
   );
 }
 

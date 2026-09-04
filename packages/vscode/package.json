@@ -885,7 +885,7 @@
             "default": [],
             "order": 3,
             "scope": "machine-overridable",
-            "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.ck3modding/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
+            "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.px-toolkit/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
           },
           "px.excludedMods": {
             "type": "array",
@@ -1046,7 +1046,7 @@
             "type": "string",
             "default": "",
             "order": 4,
-            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.md`, `<language>/title.txt` + `<language>/description.md` per translation, `item.json`. A folder that already keeps `description.bbcode` stays on BBCode; either way Steam is sent BBCode."
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.bbcode`, `translations/<language>/title.txt` + `translations/<language>/description.bbcode` per translation, `item.json`, `previews/`, `dependencies.json`, `changelog/`. A `description.md` left from an earlier version is converted to BBCode once, the first time the panel reads the folder."
           },
           "px.workshop.changelog": {
             "type": "string",
