@@ -126,7 +126,8 @@ jobs:
             packages/vscode/*.vsix
             px-lsp-server-*.tar.gz
             px-lsp-win-x64-*.zip
-          prerelease: true
+          # The pre-release phase ended with 0.3.6; 0.4.0 on is a normal release.
+          prerelease: false
           body_path: ${{ steps.notes.outputs.found == 'true' && 'release-body.md' || '' }}
           generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
 

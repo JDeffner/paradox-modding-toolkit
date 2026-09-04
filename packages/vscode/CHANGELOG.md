@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (beta) - the visual creators release
+
+Everything the 0.3.5 and 0.3.6 pre-releases carried is now a normal release:
+Steam Workshop publishing, the mod projects layout and the Examples Wiki.
+On top of that, 0.4.0 adds six visual content creators that write CK3 script
+you never have to type, a wiki page listing the other modding tools for your
+game, and a Workshop panel rebuilt around what actually leaves your machine.
 
 - **The Coat of Arms Designer's controls say what they are and fit their
   row.** A frame's label carried every heritage that wears it, which spilled
@@ -531,9 +537,30 @@
   whole folder.
 - **New Content uses the toolkit's kind glyphs.** The picker draws each kind
   with the same icon hovers, completion and the tree use for it.
-- **Workshop errors and the upload result open as dialogs**, so the full Steam
-  advice is readable instead of folded into a toast. The upload dialog links
-  the item page, in the Steam client (`steam://`) or the browser.
+- **Workshop errors and the upload result are notifications with buttons.**
+  Seven prompts (the upload result, Workshop errors, the two overwrite
+  confirms, Suppress Code, unsaved event-graph changes, the Workshop folder
+  placement) were modal dialogs that took the whole window for one sentence.
+  They are bottom-right notifications now, carrying the same buttons; the
+  upload one links the item page, in the Steam client (`steam://`) or the
+  browser. A card whose switch is off dims but still takes clicks: with no
+  language drafted the Translations switch is off, and that used to lock the
+  very editor you needed to draft one.
+- **A failed Workshop upload says what to do about it again.** The advice
+  table was keyed on the prose the old steamworks-rs binding produced, and the
+  steamwand bridge throws EResult enum names instead
+  (`SubmitItemUpdate failed: k_EResultAccessDenied`), so since that move not
+  one of the 13 patterns matched: every Workshop failure came back as raw
+  Steamworks jargon with no advice at all. The table is keyed on the EResult
+  name now, covers 32 codes an upload can hit, and words each one from the
+  per-call result lists Valve documents for `CreateItem` and
+  `SubmitItemUpdate` rather than the generic enum text, which often means
+  something else. On an upload `LimitExceeded` is a preview image over 1 MB or
+  a full Steam Cloud, not a description over 8000 characters, and
+  `ServiceReadOnly` is the account's upload hold after a password or email
+  change, which no amount of waiting for Steam clears. The failure is
+  rewritten in place, so the sentence reads first and the call and code sit in
+  parentheses for a support thread.
 - **Move Workshop Listing** (command palette) moves the listing folder between
   the two layouts, `<project>/workshop` and `<mod>/.px-toolkit/workshop`, in
   either direction. A mod that only has `workshop.json` drafts gets its
@@ -618,10 +645,10 @@
   adoptable by hand, by writing the item id where the game's own tooling
   keeps it: `remote_file_id` in `descriptor.mod` for CK3, `publishedFileId`
   in `workshop.json` for the newer games.
-## 0.4.0 (beta) - the Steam Workshop release
 
-Everything below ships early in the 0.3.5 pre-release; 0.4.0 is the
-release these notes belong to.
+## 0.3.5 (beta, pre-release) - the Steam Workshop release
+
+v0.3.5 shipped everything below as a pre-release of 0.4.0.
 
 - **One hover card design, with a wiki link on every card.** All hover types
   (script tokens, keywords, scope words, datafunctions, GUI, localization

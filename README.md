@@ -97,6 +97,15 @@ docs, image guidelines, diagnostics, mod report and credits.*
   engine would ignore instead of writing a line the game drops.
 - **A Flag Builder** (Vic3, EU5). Compose coats of arms from the game's and
   your mods' patterns and emblems, drag them on the canvas, and save script.
+- **A Coat of Arms Designer** (CK3). The same job, built the way the game's
+  own designer works: Background, Layout and Emblems tabs, several emblems
+  aligned and distributed at once, a snapping grid, the dynasty, house and
+  title frames at any of their six tiers, and a library outside any mod.
+- **Visual content creators** (CK3). A trait, a dynasty legacy track, a
+  culture, a tradition or a whole dynasty tree as a form over the keys the
+  game documents, previewed with the game's own art and text. Reopening
+  something you already have rewrites only the lines you changed, so your
+  comments and formatting survive.
 - **Event tooling.** An event graph whose x axis is time, with a structured
   inspector that edits events as words rather than script; a simulator that
   walks a whole chain; and a mod report you can read top to bottom.
@@ -107,8 +116,18 @@ docs, image guidelines, diagnostics, mod report and credits.*
 - **Steam Workshop publishing.** Create or update your mod's Workshop item
   through the running Steam client, no Paradox launcher involved. New items
   start private and the id is written back into `descriptor.mod`. A Workshop
-  panel edits the item's description, visibility and per-language translated
-  title/description, shows its statistics, and uploads each part selectively.
+  panel edits the item's description, visibility, required DLC and items, the
+  preview gallery and the per-language translated title and description, shows
+  its statistics, and uploads each part selectively. The listing lives as
+  files beside the mod's content, and a `.pxignore` decides what an upload
+  leaves out.
+- **Custom calendars.** A total-conversion mod declares its era system in
+  `<mod>/.px-toolkit/calendar.json`, committed with the mod, and every script
+  date shows its in-game form: `3000.1.1` reads `1000 BC` on hover and as an
+  inlay hint.
+- **A wiki that lists the other tools.** A Modding Tools page per game
+  collects the validators, translators and editors other modders built, with
+  the ones the toolkit replaces left out.
 - **Large workspaces are the design case.** A game install plus five Workshop
   mods, all indexed, opens in 61 s cold where it used to take 143, and one
   command stops VS Code itself crawling the game's textures and audio.

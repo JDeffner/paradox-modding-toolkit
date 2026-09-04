@@ -75,9 +75,11 @@ bottom says exactly where they stop.
   sizes vanilla actually uses.
 - **Localization workflow**: inline loc as inlay hints, BOM-correct quick-fix
   editing, a coverage view, and scaffolds for whole translation mods.
-- **Custom calendars**: total-conversion mods declare their era system once
-  (`px.calendar`, with custom month names and lengths if the mod has them)
-  and every script date shows its in-game form: `3000.1.1` reads `1000 BC`
+- **Custom calendars**: total-conversion mods declare their era system once in
+  the mod itself (`<mod>/.px-toolkit/calendar.json`, written by **Declare
+  Calendar**, or the `px.calendar` setting; custom month names and lengths if
+  the mod has them), so it is committed with the mod and read by bare LSP
+  clients too, and every script date shows its in-game form: `3000.1.1` reads `1000 BC`
   as an inlay hint and on hover, and **Insert Date** converts "1000 BC
   March 15" into the `3000.3.15` the game logic needs.
 - **Content scaffolds**: **New Content** generates events, decisions,
@@ -93,8 +95,10 @@ bottom says exactly where they stop.
   preview image, versions, translated titles and descriptions per Steam
   language, live statistics, and confirmed selective uploads (details without
   re-uploading content). The whole listing can live as diffable files in a
-  `workshop` folder next to the mod, one download button away, with
-  changenotes read from your changelog by version.
+  `.px-toolkit/workshop` folder inside the mod or a `workshop` folder next to
+  it, one download button away, with changenotes read from your changelog by
+  version. A `.pxignore` at the mod root decides what a toolkit upload leaves
+  out, and required DLC and Workshop items are part of the listing.
 - **GUI and data types** in `.gui` files: completion, hover, widget tree, and
   `[Character.GetFather...]` data-type chains that resolve through return types.
 - **GUI editor** (**Open GUI Editor**, Ctrl+Alt+P): a pixel-accurate rendering
@@ -110,6 +114,22 @@ bottom says exactly where they stop.
   of arms from the game's and your mods' patterns and emblems, recolored
   exactly as the game does it, drag and scale emblems on the canvas, and save
   it back as script into the mod you choose.
+- **Coat of Arms Designer** (Crusader Kings III): the same job, built the way
+  the game's own designer works. Background, Layout and Emblems tabs over the
+  designer's data files, several emblems selected and aligned, distributed,
+  mirrored or nudged at once, a snapping grid, and the dynasty, house and
+  title frames drawn around the arms at any of their six tiers. Designs you
+  want to keep go to a library folder outside any mod.
+- **Visual content creators** (Crusader Kings III): the Project panel's Create
+  group opens a form for a trait, a dynasty legacy track, a culture, a
+  tradition or a whole dynasty tree, over the keys the game documents, with
+  the game's own art and text as the preview. Every indexed value is a picker,
+  the localization is written for you, and reopening something you already
+  have rewrites only the lines you changed.
+- **The wiki lists the other tools too**: a **Modding Tools** page per game
+  collects the validators, translators, map and history editors other modders
+  built, curated from that game's own wiki list, with the ones the toolkit
+  replaces left out.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
 - **Built for the big workspaces**: a game install plus five Workshop mods,
