@@ -58,6 +58,7 @@ import {
 import {
   emptyState,
   fieldLines,
+  fieldStatements,
   loadTrait,
   locKeys,
   nameProblem,
@@ -598,8 +599,8 @@ function skillsRow(list: readonly TraitFieldSpec[]): HTMLElement {
   return box;
 }
 
-/** The picker entries for a modifier: the player's word, the key as the hint. */
-function modifierItems(): MenuItem[] {
+/** Every modifier the game knows: the player's word, the key as the hint. */
+function allModifierItems(): MenuItem[] {
   return (form?.modifiers ?? []).map((item) => {
     const label = formats?.[item.name]?.label;
     return {
@@ -609,6 +610,21 @@ function modifierItems(): MenuItem[] {
       ...(item.doc ? { description: item.doc } : {}),
     };
   });
+}
+
+/**
+ * The same list MINUS every name this form already draws a field for.
+ *
+ * `_traits.info` reads an unknown property as a modifier, so the six skills and
+ * the `ai_*` family are modifiers AND documented keys: the Skills row and the
+ * Advanced section already write them. Offered in the Modifiers picker too, a
+ * modder could add `martial` a second time, and the game would read the two
+ * statements as one key written twice. A file that HAS such a statement still
+ * round-trips: `loadTrait` puts it in the designed field, never in a row.
+ */
+function modifierItems(): MenuItem[] {
+  const drawn = new Set(specs.map((spec) => spec.key));
+  return allModifierItems().filter((item) => !drawn.has(item.value));
 }
 
 /** The picker entries for a trait: the player's word, the key as the hint. */
@@ -792,8 +808,10 @@ function examplesRow(): HTMLElement {
   button.dataset.variant = "link";
   button.dataset.size = "xs";
   button.textContent = "Look a modifier up in the Examples Wiki";
+  // Every modifier, not the picker's list: looking `martial` up is a fair
+  // question even though the Skills row is where a trait writes it.
   button.onclick = () =>
-    menu(button, modifierItems(), {
+    menu(button, allModifierItems(), {
       search: true,
       width: 340,
       onPick: (name) => post({ type: "openExamples", name }),
@@ -1126,11 +1144,14 @@ function changedProperties(): { key: string; value: string | null }[] | null {
   if (!baseline) return null;
   const out: { key: string; value: string | null }[] = [];
   for (const spec of specs) {
-    const lines = fieldLines(spec, state.values[spec.key]);
-    const was = fieldLines(spec, baseline.values[spec.key]);
-    if (lines.join("\n") === was.join("\n")) continue;
-    if (lines.length > 1) return null;
-    out.push({ key: spec.key, value: lines.length === 0 ? null : lines[0].slice(spec.key.length + 3) });
+    // Statements, not lines: a `compatibility` block is one property written
+    // over three lines, where two `flag` lines are two statements and no single
+    // property can stand for them.
+    const now = fieldStatements(spec, state.values[spec.key]);
+    const was = fieldStatements(spec, baseline.values[spec.key]);
+    if (now.join("\n") === was.join("\n")) continue;
+    if (now.length > 1) return null;
+    out.push({ key: spec.key, value: now.length === 0 ? null : now[0].slice(spec.key.length + 3) });
   }
   const before = new Map(baseline.modifiers.map((row) => [row.name, row.value]));
   for (const row of state.modifiers) {

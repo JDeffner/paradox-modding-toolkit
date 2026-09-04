@@ -242,6 +242,23 @@ describe("every list is a picker over what the game has", () => {
     expect(offered(app)).toContain("Dynasty Opinion | dynasty_opinion");
   });
 
+  it("leaves the keys the form already draws out of the modifier picker", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS });
+    const add = [...app.document.querySelectorAll("#sections .px-btn")].find(
+      (b) => b.textContent === "Add modifier"
+    ) as HTMLButtonElement;
+    add.click();
+    (app.document.querySelector("#sections .modrow > .px-dropdown") as HTMLButtonElement).click();
+    const offers = offered(app);
+    // `martial` and `health` are modifiers AND documented trait keys: the
+    // Skills row and the Advanced section already write them, so offering them
+    // here would let one trait write the same key twice.
+    expect(offers).not.toContain("Martial | martial");
+    expect(offers).not.toContain("health");
+    expect(offers).toContain("Dynasty Opinion | dynasty_opinion");
+  });
+
   it("shows the body the game writes as a script field's placeholder", () => {
     const example = "{ parameter = mountain_trait_bonuses mountains_max_combat_roll = 3 }";
     const app = boot({

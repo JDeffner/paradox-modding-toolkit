@@ -247,6 +247,33 @@ export interface BlockWrite {
 }
 
 /**
+ * One statement whose value spans lines, as the LINES a `BlockWrite` carries.
+ *
+ * `writeBlock` indents every line of a write with the statement's own lead, so
+ * a multi-line value handed over as ONE string kept only its first line
+ * indented: `compatibility = { … }` came out with its rows and its closing
+ * brace at column 0. Splitting it, and stripping the indentation its
+ * continuation lines already share, lets the writer put them all back one
+ * level in, in whatever the file itself indents with.
+ */
+export function statementLines(text: string): string[] {
+  const lines = text.split(/\r?\n/);
+  const rest = lines.slice(1).filter((line) => line.trim() !== "");
+  if (rest.length === 0) return lines;
+  const leadOf = (line: string): string => /^[ \t]*/.exec(line)![0];
+  const common = rest.reduce(
+    (least, line) => (leadOf(line).length < least.length ? leadOf(line) : least),
+    leadOf(rest[0])
+  );
+  return [
+    lines[0],
+    ...lines
+      .slice(1)
+      .map((line) => (line.startsWith(common) ? line.slice(common.length) : line.trimStart())),
+  ];
+}
+
+/**
  * Rebuild the definition. With a `source`, every span the writes do not claim
  * is copied verbatim and the order of the file is kept; without one, the
  * writes are laid out in the order they were given (the harvest's key order).
