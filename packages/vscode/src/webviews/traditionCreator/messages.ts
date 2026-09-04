@@ -122,7 +122,18 @@ export type HostToApp =
   /** Pictures for the game-relative texture paths the app asked for. */
   | CreatorImagesReply
   /** Loc values for the keys asked for; a key nothing resolves is absent. */
-  | { type: "loc"; values: Record<string, string> }
+  | {
+      type: "loc";
+      /** The value verbatim: what a loc field edits and what a save writes. */
+      values: Record<string, string>;
+      /**
+       * The same values as the player READS them (paradox/locText): markup
+       * stripped, the game's `[GetTrait('x').GetName( … )]` chains resolved
+       * through the loc, definition and schema tables. Absent for a key the
+       * server could not render, and for a server that predates the request.
+       */
+      texts?: Record<string, string>;
+    }
   | { type: "toast"; message: string; variant?: "default" | "destructive" };
 
 export type AppToHost =
