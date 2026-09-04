@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Trait, Tradition and Culture Creators: the localization lands where you
+  look for it, and every picture says what it has to be.** New loc keys go to
+  `localization/<lang>/<the script file's name>_l_<lang>.yml` of the mod the
+  definition was written to, instead of the mod's largest loc file, and every
+  toast names the files by name. The name and the description are both
+  prefilled, so a save always writes the pair rather than leaving the game to
+  print the raw key. Each picture field has an (i) with the size, the format,
+  the path the game builds and what has to be transparent, all read out of the
+  installed game (trait icons 120x120, tradition layers 545x285, culture
+  pillars 120x120 with the ethos banners at 1200x260). A custom trait picture
+  takes any image format, asks which folder of your mod it goes into, and
+  writes the DDS. Every script box carries "No completion or highlighting
+  here. Edit in the file", which saves the definition and opens it in the
+  editor at its block. The Modifiers picker no longer lists the six skills and
+  the other keys the form already draws a field for, and a rewritten
+  `compatibility` block is indented like the rest of the block instead of
+  landing at column 0.
 - **Code snippets, measured from the game.** Typing at the top of a script
   file offers a skeleton of that folder's definition kind (`new event`, `new
   decision`, 119 kinds for Crusader Kings III, 93 for Victoria 3), and an
