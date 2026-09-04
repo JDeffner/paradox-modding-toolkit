@@ -34,6 +34,7 @@ import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
 import {
   editLocalizationCommand,
+  locTargetFile,
   openLocalizationSideBySide,
   replaceLocLineValue,
   upsertNewModLoc,
@@ -1159,6 +1160,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+          locTarget: (key) => locTargetFile(cfg, lookupLoc, key),
           fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
           fetchModifierFormats: (params) =>
             lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),

@@ -48,8 +48,10 @@ import { resolveImage, type ImageRoot } from "../../creators/images";
 import type { LocLookup } from "../../locCommands";
 import { characterBlock, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
 import { dynastyTreeHtml } from "./html";
-import type { AppToHost, HostToApp, ModTarget, OptionSets, TraitTip } from "./messages";
-import { frameTexture, plainLoc, type PreviewModifier } from "../traitCreator/app/preview";
+import { WriteJournal } from "./journal";
+import { dnaPasteBlock, parseDnaPaste, scanBlocks, uniqueKey, type ScriptBlock } from "./scan";
+import type { AppToHost, HostToApp, ModTarget, OptionSets, TraitStats, TraitTip } from "./messages";
+import { plainLoc, type PreviewModifier } from "../traitCreator/app/preview";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
@@ -76,6 +78,10 @@ const REINDEX_GRACE_MS = 800;
 const TRAIT_THUMB_DIM = 48;
 /** The picture inside a hovered trait's tooltip, at the size preview.ts draws. */
 const TRAIT_TIP_DIM = 128;
+/** How many of a trait's lines a picker ROW carries; the tooltip carries all. */
+const TRAIT_ROW_LINES = 3;
+/** Where CK3 keeps portrait DNA. Not indexed, and deliberately so: read on demand. */
+const DNA_FOLDER = "common/dna_data";
 
 export interface DynastyTreeActions {
   fetchTree(params: DynastyTreeParams): Promise<DynastyTreeResult>;
@@ -84,6 +90,12 @@ export interface DynastyTreeActions {
   editDefinition(params: DefinitionEditParams): Promise<DefinitionEditResult>;
   /** writeLocSmart: the one entry point for a loc value (locCommands.ts). */
   writeLoc(key: string, value: string): Promise<string>;
+  /**
+   * Where `writeLoc` WOULD write a key, resolved without writing, so the
+   * panel can keep the file's pre-image for undo. Optional: a client that
+   * cannot answer it simply has no undo for loc writes.
+   */
+  locTarget?(key: string): Promise<string | null>;
   /**
    * paradox/definitionForm. Optional so a client whose server predates it
    * still gets a working panel: the trait pictures and tooltips are then
@@ -132,6 +144,14 @@ export class DynastyTreePanel {
   /** Both caches live for the panel's life; a decode is never paid twice. */
   private readonly traitIcons = new Map<string, string | null>();
   private readonly traitTips = new Map<string, TraitTip | null>();
+  /** Script files read for their blocks, keyed by path, kept while the mtime holds. */
+  private readonly files = new Map<string, { mtimeMs: number; blocks: Map<string, ScriptBlock> }>();
+  /** Every write this panel made, newest last: what undo puts back. */
+  private readonly journal = new WriteJournal({
+    read: (file) => this.docText(file),
+    write: (file, text) => this.replaceDocument(file, text),
+    refuse: (message) => this.post({ type: "toast", message, variant: "destructive" }),
+  });
 
   private constructor(
     context: vscode.ExtensionContext,
@@ -220,6 +240,7 @@ export class DynastyTreePanel {
           setupProblem: this.options.setupProblem,
         });
         this.postTarget();
+        this.postJournal();
         await this.loadList();
         if (this.pending) {
           const dynasty = this.pending;
@@ -245,6 +266,22 @@ export class DynastyTreePanel {
       case "traitTip":
         await this.sendTraitTip(msg.name);
         return;
+      case "traitStats":
+        await this.sendTraitStats(msg.names);
+        return;
+      case "undo":
+      case "redo":
+        await this.stepJournal(msg.type);
+        return;
+      case "dnaOpen":
+        await this.openDna(msg.key);
+        return;
+      case "dnaCopy":
+        await this.copyDna(msg.key);
+        return;
+      case "dnaPaste":
+        await this.pasteDna(msg.character);
+        return;
       case "target":
         // A different character is being edited, so the file it already lives
         // in decides the default again: an old pick must not follow it.
@@ -254,13 +291,6 @@ export class DynastyTreePanel {
         return;
       case "changeTarget":
         await this.changeTarget();
-        return;
-      case "copy":
-        await vscode.env.clipboard.writeText(msg.text);
-        this.post({ type: "toast", message: "Copied to the clipboard." });
-        return;
-      case "paste":
-        this.post({ type: "pasted", field: msg.field, text: (await vscode.env.clipboard.readText()).trim() });
         return;
       case "saveCharacter": {
         if (this.refuseQuote(msg.form)) return;
@@ -414,8 +444,14 @@ export class DynastyTreePanel {
   }
 
   /**
-   * The trait kind's own form, asked ONCE. It carries the icon folder and the
-   * modifier vocabulary, so no folder and no modifier name is written here.
+   * The trait kind's own form, asked ONCE. It carries the icon folder, the
+   * documented trait keys and the modifier vocabulary, so no folder and no key
+   * name is written here.
+   *
+   * `modRoot` is the panel's own focus (the same one the tree request uses),
+   * NOT `cfg.modPath`: with no focus mod that is null, which is the server's
+   * "every workspace mod", so a trait defined by any mod in the workspace gets
+   * its name and its stats rather than only the mod of record's.
    *
    * The PROMISE is what is remembered, not its answer: several icon batches
    * arrive in the same frame, and a second one must wait for the first request
@@ -425,7 +461,7 @@ export class DynastyTreePanel {
     this.traitForm ??= (async () => {
       if (!this.actions.fetchForm) return null;
       try {
-        return await this.actions.fetchForm({ kind: "trait", modRoot: this.options.cfg.modPath });
+        return await this.actions.fetchForm({ kind: "trait", modRoot: this.options.modRoot });
       } catch {
         // A game with no trait database, or a server that cannot answer: the
         // panel keeps its picker, without pictures.
@@ -473,7 +509,7 @@ export class DynastyTreePanel {
     this.formats ??= (async () => {
       if (!this.actions.fetchModifierFormats) return {};
       try {
-        const result = await this.actions.fetchModifierFormats({ modRoot: this.options.cfg.modPath });
+        const result = await this.actions.fetchModifierFormats({ modRoot: this.options.modRoot });
         return result?.formats ?? {};
       } catch {
         // An unformatted tooltip is a smaller failure than none at all.
@@ -512,17 +548,102 @@ export class DynastyTreePanel {
     if (!this.disposed) this.post({ type: "traitTip", name, tip });
   }
 
-  private async buildTraitTip(name: string): Promise<TraitTip | null> {
-    const form = await this.traitDefinitionForm();
-    if (!form || !this.actions.fetchForm) return null;
-    let one: DefinitionForm | null = null;
+  /**
+   * The blocks of one script file, parsed once and kept while its mtime holds.
+   * Every trait of a vanilla file comes out of ONE read, which is why a picker
+   * row can show what a trait does without a request per row.
+   */
+  private fileBlocks(file: string): Map<string, ScriptBlock> {
+    let mtimeMs: number;
     try {
-      one = await this.actions.fetchForm({ kind: "trait", name, modRoot: this.options.cfg.modPath });
+      mtimeMs = fs.statSync(file).mtimeMs;
+    } catch {
+      return new Map();
+    }
+    const seen = this.files.get(file);
+    if (seen && seen.mtimeMs === mtimeMs) return seen.blocks;
+    let blocks = new Map<string, ScriptBlock>();
+    try {
+      blocks = scanBlocks(fs.readFileSync(file, "utf8"));
+    } catch {
+      /* an unreadable file has no blocks, which is what the caller draws */
+    }
+    this.files.set(file, { mtimeMs, blocks });
+    return blocks;
+  }
+
+  /**
+   * One trait's block, verbatim. The file the form already named is read
+   * first (one read serves every trait in it); a trait the form's capped
+   * `existing` list does not carry falls back to asking the server for that
+   * one definition.
+   */
+  private async traitBlock(name: string): Promise<{ text: string; source: string } | null> {
+    const form = await this.traitDefinitionForm();
+    const def = form?.existing.find((d) => d.name === name);
+    if (def) {
+      const block = this.fileBlocks(def.file).get(name);
+      if (block) return { text: block.text, source: def.source ?? "" };
+    }
+    if (!this.actions.fetchForm) return null;
+    try {
+      const one = await this.actions.fetchForm({ kind: "trait", name, modRoot: this.options.modRoot });
+      return one?.current ? { text: one.current.text, source: one.current.source } : null;
     } catch {
       return null;
     }
-    const known = new Set(form.modifiers.map((m) => m.name));
-    const read = one?.current ? readTraitBlock(one.current.text, known) : null;
+  }
+
+  /**
+   * Which `key = number` rows of a trait block are modifiers. `_traits.info`
+   * says an undocumented property IS one, but the harvested key list is not
+   * only rules: it carries the modifiers the doc uses as EXAMPLES (`diplomacy`,
+   * `martial`, `attraction_opinion` and six more are in it, measured against
+   * data/ck3/structures.json), so "not documented" alone would drop the lines
+   * a trait most often carries. A key the game itself prints a modifier for
+   * therefore counts as one whatever the doc says.
+   */
+  private async modifierTest(): Promise<(key: string) => boolean> {
+    const form = await this.traitDefinitionForm();
+    const formats = await this.modifierFormats();
+    const vocabulary = new Set(form?.modifiers.map((m) => m.name) ?? []);
+    const documented = new Set(form?.keys.map((k) => k.key) ?? []);
+    // hasOwnProperty, not `in`: `formats` is parsed JSON, and `in` would call
+    // every trait's `constructor` a modifier.
+    const printed = (key: string): boolean => Object.prototype.hasOwnProperty.call(formats, key);
+    return (key) => printed(key) || vocabulary.has(key) || !documented.has(key);
+  }
+
+  /** What the rows on screen do, read out of the traits' own blocks. */
+  private async sendTraitStats(names: string[]): Promise<void> {
+    const isModifier = await this.modifierTest();
+    const formats = await this.modifierFormats();
+    const rows: Record<string, TraitStats | null> = {};
+    for (const name of names) {
+      const block = await this.traitBlock(name);
+      if (!block) {
+        rows[name] = null;
+        continue;
+      }
+      const modifiers = readTraitBlock(block.text, isModifier).modifiers.slice(0, TRAIT_ROW_LINES);
+      rows[name] = {
+        modifiers,
+        formats: Object.fromEntries(
+          modifiers.map((row) => [row.name, formats[row.name]]).filter(([, f]) => f !== undefined)
+        ) as Record<string, ModifierFormat>,
+        images: this.texticonUrls(modifiers.map((row) => formats[row.name])),
+        mod: block.source === "mod",
+      };
+    }
+    if (!this.disposed) this.post({ type: "traitStats", rows });
+  }
+
+  private async buildTraitTip(name: string): Promise<TraitTip | null> {
+    const form = await this.traitDefinitionForm();
+    if (!form) return null;
+    const isModifier = await this.modifierTest();
+    const block = await this.traitBlock(name);
+    const read = block ? readTraitBlock(block.text, isModifier) : null;
     const formats = await this.modifierFormats();
 
     const nameKey = form.locPatterns.find((p) => !p.includes("desc"));
@@ -533,7 +654,6 @@ export class DynastyTreePanel {
     ]);
 
     const folder = form.iconFolder;
-    const frame = read?.category ? frameTexture(read.category) : null;
     const modifiers = read?.modifiers ?? [];
     return {
       tip: {
@@ -541,7 +661,10 @@ export class DynastyTreePanel {
         name: label ? plainLoc(label) : name,
         desc: desc ? plainLoc(desc) : "",
         iconUrl: folder ? this.traitIconUrl(read?.icon || name, folder, TRAIT_TIP_DIM) : null,
-        frameUrl: folder && frame ? this.traitIconUrl(frame, folder, TRAIT_TIP_DIM) : null,
+        // No frame. The game's own trait tooltip draws the trait's picture at
+        // 52px and nothing behind it; the category frame belongs to the
+        // character sheet, and over a tooltip it only made the picture smaller.
+        frameUrl: null,
         modifiers,
         opposites: [],
         flags: [],
@@ -568,6 +691,131 @@ export class DynastyTreePanel {
       }
     }
     return urls;
+  }
+
+  // ---- portrait DNA ----------------------------------------------------------
+
+  /**
+   * Where portrait DNA lives, with the game's load stage where it has one.
+   * The folder is NOT indexed (games/ck3/schema.ts leaves it out on purpose:
+   * the files are large and nothing else asks about them), so everything here
+   * reads it on demand and caches per file mtime.
+   */
+  private dnaFolder(): string {
+    const stage = this.options.meta.stageRoots?.[0];
+    return stage ? `${stage}/${DNA_FOLDER}` : DNA_FOLDER;
+  }
+
+  private dnaDir(root: string): string {
+    return path.join(root, ...this.dnaFolder().split("/"));
+  }
+
+  /** Every DNA file the workspace can see, the mods' own first (they win). */
+  private dnaFiles(): string[] {
+    const roots = this.options.mods.map((m) => m.path);
+    if (this.options.cfg.gamePath) roots.push(this.options.cfg.gamePath);
+    return roots.flatMap((root) => listScripts(this.dnaDir(root)));
+  }
+
+  private findDna(key: string): { file: string; block: ScriptBlock } | null {
+    for (const file of this.dnaFiles()) {
+      const block = this.fileBlocks(file).get(key);
+      if (block) return { file, block };
+    }
+    return null;
+  }
+
+  private async openDna(key: string): Promise<void> {
+    const found = this.findDna(key);
+    if (!found) {
+      this.post({ type: "toast", message: `No ${key} in ${this.dnaFolder()}.`, variant: "destructive" });
+      return;
+    }
+    await this.openDocument(found.file, await this.blockLine(found.file, key));
+  }
+
+  /**
+   * The whole block, so it can be pasted into another mod or another
+   * character. A name nothing defines still copies as a name: that is what the
+   * field holds, and refusing to copy it would help nobody.
+   */
+  private async copyDna(key: string): Promise<void> {
+    const found = this.findDna(key);
+    await vscode.env.clipboard.writeText(found ? found.block.text : key);
+    this.post({
+      type: "toast",
+      message: found
+        ? `Copied ${key} from ${path.basename(found.file)}.`
+        : `No ${key} in ${this.dnaFolder()}, so only the name was copied.`,
+    });
+  }
+
+  /**
+   * A DNA off the clipboard. The game's portrait editor copies a whole
+   * `<key> = { portrait_info = { … } }`; an in-file copy is often the
+   * `portrait_info` half alone, which is written under the character's own
+   * name. An existing key is never replaced: it is somebody's portrait, so the
+   * paste takes the next free `_2`, `_3`.
+   */
+  private async pasteDna(character: string): Promise<void> {
+    const paste = parseDnaPaste(await vscode.env.clipboard.readText());
+    if (!paste) {
+      this.post({
+        type: "toast",
+        message: "The clipboard holds neither a DNA name nor a portrait block.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (paste.kind === "name") {
+      this.post({ type: "pasted", field: "dna", text: paste.name });
+      return;
+    }
+    const modPath = this.options.mods[0]?.path ?? this.options.cfg.modPath;
+    if (!modPath) {
+      this.post({ type: "toast", message: "No mod to write the DNA into.", variant: "destructive" });
+      return;
+    }
+
+    const dir = this.dnaDir(modPath);
+    const mine = listScripts(dir);
+    const taken = new Set<string>();
+    for (const file of mine) for (const key of this.fileBlocks(file).keys()) taken.add(key);
+    const key = uniqueKey(paste.kind === "block" ? paste.key : `${character}_dna`, taken);
+    const script = dnaPasteBlock(key, paste);
+    if (!script) return;
+
+    // The file holding its siblings, else one named after the mod.
+    const target =
+      mine.map((file) => ({ file, count: this.fileBlocks(file).size })).sort((a, b) => b.count - a.count)[0]
+        ?.file ?? path.join(dir, `${sanitizeFileName(path.basename(modPath))}_dna.txt`);
+    try {
+      if (!fs.existsSync(target)) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        // Script `.txt` is UTF-8 WITH BOM; the game reads a headerless file
+        // wrong and says nothing about it.
+        fs.writeFileSync(target, "﻿", "utf8");
+      }
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
+      const text = doc.getText();
+      const result = await this.actions.editDefinition({
+        uri: doc.uri.toString(),
+        text,
+        ops: [{ op: "upsertBlock", name: key, text: script }],
+      });
+      const refused = result.ops.find((op) => op.refused)?.refused;
+      if (refused) {
+        this.post({ type: "toast", message: refused, variant: "destructive" });
+        return;
+      }
+      if (!(await applyDefinitionEdits(target, text, result.edits, { reveal: false }))) return;
+      await this.remember(target, text);
+    } catch (err) {
+      this.post({ type: "toast", message: message(err), variant: "destructive" });
+      return;
+    }
+    this.post({ type: "pasted", field: "dna", text: key });
+    this.post({ type: "toast", message: `Wrote ${key} to ${path.basename(target)}.` });
   }
 
   // ---- where a character saves ----------------------------------------------
@@ -680,16 +928,66 @@ export class DynastyTreePanel {
       this.post({ type: "toast", message: refused, variant: "destructive" });
       return false;
     }
-    if (!(await applyDefinitionEdits(abs, text, result.edits))) return false;
+    // `reveal: false`: a panel that saves on every field change must not throw
+    // an editor over the tree each time. The inspector says what was written
+    // and offers the link instead.
+    if (!(await applyDefinitionEdits(abs, text, result.edits, { reveal: false }))) return false;
+    await this.remember(abs, text);
 
-    await this.openDocument(abs, await this.blockLine(abs, name));
-    this.post({ type: "toast", message: `Saved ${name} to ${path.basename(abs)}.` });
-    // The written file reaches the index through the client's watcher.
+    this.post({ type: "saved", name, file: abs, line: await this.blockLine(abs, name) });
+    this.reloadSoon();
+    return true;
+  }
+
+  /** Journal one write: `text` was there before, whatever is there now is after. */
+  private async remember(abs: string, text: string): Promise<void> {
+    const after = await this.docText(abs);
+    if (after !== null) this.journal.record({ file: abs, before: text, after });
+    this.postJournal();
+  }
+
+  /** The written file reaches the index through the client's watcher. */
+  private reloadSoon(): void {
     setTimeout(() => {
       if (this.current) void this.loadTree(this.current);
       else void this.loadList();
     }, REINDEX_GRACE_MS);
-    return true;
+  }
+
+  // ---- undo ------------------------------------------------------------------
+
+  private postJournal(): void {
+    this.post({ type: "journal", ...this.journal.depth });
+  }
+
+  /** The file's text as the EDITOR has it, which is what undo compares against. */
+  private async docText(file: string): Promise<string | null> {
+    try {
+      return (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
+    } catch {
+      return null;
+    }
+  }
+
+  /** Put a whole file back, as one edit, the way every other write here lands. */
+  private async replaceDocument(file: string, text: string): Promise<boolean> {
+    try {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(doc.uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), text);
+      if (!(await vscode.workspace.applyEdit(edit))) return false;
+      await doc.save();
+      return true;
+    } catch (err) {
+      this.post({ type: "toast", message: message(err), variant: "destructive" });
+      return false;
+    }
+  }
+
+  private async stepJournal(which: "undo" | "redo"): Promise<void> {
+    const moved = which === "undo" ? await this.journal.undo() : await this.journal.redo();
+    this.postJournal();
+    if (moved) this.reloadSoon();
   }
 
   /**
@@ -754,11 +1052,26 @@ export class DynastyTreePanel {
     return true;
   }
 
-  /** The display name of a dynasty or house: a loc key, written through writeLocSmart. */
+  /**
+   * The display name of a dynasty or house: a loc key, written through
+   * writeLocSmart. The loc writer picks the file itself, so its pre-image is
+   * taken from the file it SAYS it will write (`locTarget`); a write that then
+   * lands somewhere else, or in a file that did not exist, is not journalled
+   * rather than journalled wrongly.
+   */
   private async writeName(key: string, value: string): Promise<void> {
     if (!key || !value) return;
+    let predicted: string | null = null;
+    let before: string | null = null;
+    try {
+      predicted = (await this.actions.locTarget?.(key)) ?? null;
+      if (predicted) before = await this.docText(predicted);
+    } catch {
+      /* an unpredictable target only costs this write its undo */
+    }
     try {
       const file = await this.actions.writeLoc(key, value);
+      if (predicted && before !== null && samePath(predicted, file)) await this.remember(file, before);
       this.post({ type: "toast", message: `Wrote ${key} to ${path.basename(file)}.` });
     } catch (err) {
       this.post({
@@ -789,14 +1102,15 @@ export class DynastyTreePanel {
 }
 
 /**
- * What a hovered trait's tooltip needs out of its own block: the picture it
- * names, the category that decides its frame, and every statement the modifier
- * vocabulary knows (`_traits.info`: "any other unknown property is read in as a
- * modifier applied to anyone who holds the trait").
+ * What a trait's tooltip and its picker row need out of its own block: the
+ * picture it names and every `key = number` that is a modifier
+ * (`_traits.info`: "any other unknown property is read in as a modifier
+ * applied to anyone who holds the trait"). `isModifier` is the panel's test,
+ * built from what the game prints; nothing is decided here.
  */
-function readTraitBlock(
+export function readTraitBlock(
   text: string,
-  modifierNames: ReadonlySet<string>
+  isModifier: (key: string) => boolean
 ): { icon?: string; category?: string; modifiers: PreviewModifier[] } {
   const out: { icon?: string; category?: string; modifiers: PreviewModifier[] } = { modifiers: [] };
   const { root } = parseScript(text);
@@ -809,11 +1123,34 @@ function readTraitBlock(
     const value = stmt.value.text;
     if (key === "icon") out.icon = value;
     else if (key === "category") out.category = value;
-    else if (modifierNames.has(key) && Number.isFinite(Number(value))) {
+    else if (value.trim() !== "" && Number.isFinite(Number(value)) && isModifier(key)) {
       out.modifiers.push({ name: key, value: Number(value) });
     }
   }
   return out;
+}
+
+/** The `.txt` files of one folder, sorted, or none when it is not there. */
+function listScripts(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((name) => name.toLowerCase().endsWith(".txt"))
+      .sort()
+      .map((name) => path.join(dir, name));
+  } catch {
+    return [];
+  }
+}
+
+/** A mod folder's name as a file name may spell it. */
+function sanitizeFileName(raw: string): string {
+  return (
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "mod"
+  );
 }
 
 function isInside(root: string, file: string): boolean {

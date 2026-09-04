@@ -23,11 +23,13 @@ import type {
   HostToApp,
   ModTarget,
   OptionSets,
+  TraitStats,
   TraitTip,
   TreeData,
 } from "../messages";
 import { iconEl, type IconName } from "../../shared/icons";
 import { fieldRow, numberField } from "../../shared/fields";
+import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 import { confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
@@ -62,8 +64,12 @@ const CHILD_OFFSET = 20;
  * would otherwise be a request the modder never sees the answer to.
  */
 const TIP_DELAY_MS = 150;
-/** Rows of the trait picker that fit its 300px results box at 26px a row. */
-const FIRST_SCREEN = 12;
+/**
+ * Rows of the trait picker that fit its 300px results box. A row is its 28px
+ * picture plus up to three stat lines, so about 60px: five of them fill the
+ * box, and the rest wait for the scroll to reach them.
+ */
+const FIRST_SCREEN = 5;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -107,6 +113,10 @@ interface State {
   traitIcons: Map<string, string | null>;
   /** Trait name -> its game tooltip, or null when nothing is indexed for it. */
   traitTips: Map<string, TraitTip | null>;
+  /** Trait name -> the lines its picker row shows, or null when it has none. */
+  traitStats: Map<string, TraitStats | null>;
+  /** The last write the panel made, said in the inspector instead of an editor. */
+  saved?: { name: string; file: string; line: number };
 }
 
 const state: State = {
@@ -123,6 +133,7 @@ const state: State = {
   layout: null,
   traitIcons: new Map(),
   traitTips: new Map(),
+  traitStats: new Map(),
 };
 
 /** Where the next character save lands, said from the moment the panel opens. */
@@ -489,16 +500,63 @@ function paintTraitIcons(): void {
   }
 }
 
-/** The 20px picture tile of a trait row or chip, filled in when it arrives. */
-function traitThumb(name: string): HTMLImageElement {
+/** The picture tile of a trait row or chip, filled in when it arrives. */
+function traitThumb(name: string, className = "px-chip-thumb"): HTMLImageElement {
   const img = document.createElement("img");
-  img.className = "px-chip-thumb";
+  img.className = className;
   img.alt = "";
   img.dataset.trait = name;
   const url = state.traitIcons.get(name);
   if (url) img.src = url;
   else img.hidden = true;
   return img;
+}
+
+/** Names whose stats have been asked for; the same one-message batching. */
+const statsAsked = new Set<string>();
+let statsBatch: string[] = [];
+
+/**
+ * What a trait DOES, for the rows on screen. Batched like the pictures, and
+ * for the same reason: a picker of 400 traits must cost a handful of messages.
+ */
+function askForStats(name: string): void {
+  if (statsAsked.has(name)) return;
+  statsAsked.add(name);
+  if (statsBatch.length === 0) {
+    setTimeout(() => {
+      const names = statsBatch;
+      statsBatch = [];
+      if (names.length > 0) post({ type: "traitStats", names });
+    }, 0);
+  }
+  statsBatch.push(name);
+}
+
+/**
+ * The muted stat lines under a picker row's name: the trait's first modifiers,
+ * printed by the game's own rules, so the row answers "what does this do"
+ * without a hover. A trait whose stats have not arrived keeps an empty box
+ * that fills itself in.
+ */
+function paintTraitStats(): void {
+  for (const box of document.querySelectorAll<HTMLElement>("[data-stats]")) {
+    const stats = state.traitStats.get(box.dataset.stats!);
+    if (stats === undefined) continue;
+    box.replaceChildren();
+    if (!stats) continue;
+    for (const mod of stats.modifiers) {
+      box.append(
+        renderModifierLine(modifierLine(mod.name, mod.value, stats.formats[mod.name]), (texture) =>
+          stats ? (stats.images[texture] ?? null) : null
+        )
+      );
+    }
+    const row = box.closest<HTMLElement>(".px-menu-item");
+    if (stats.mod && row && !row.querySelector(".tmod")) {
+      row.querySelector(".thead")?.append(node("span", "tmod", "mod"));
+    }
+  }
 }
 
 let tipBox: HTMLElement | null = null;
@@ -593,7 +651,9 @@ function traitPicker(anchor: HTMLElement, taken: readonly string[], onPick: (val
   const seen = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
-      askForIcon((entry.target as HTMLElement).dataset.value!);
+      const name = (entry.target as HTMLElement).dataset.value!;
+      askForIcon(name);
+      askForStats(name);
       seen.unobserve(entry.target);
     }
   });
@@ -610,8 +670,14 @@ function traitPicker(anchor: HTMLElement, taken: readonly string[], onPick: (val
       const row = node("div", "px-menu-item");
       row.setAttribute("role", "option");
       row.dataset.value = item.value;
-      row.append(traitThumb(item.value), node("span", "px-grow", item.label || item.value));
-      if (item.label) row.append(node("span", "tid", item.value));
+      const head = node("div", "thead");
+      head.append(node("span", "tname", item.label || item.value));
+      if (item.label) head.append(node("span", "tid", item.value));
+      const stats = node("div", "tstats");
+      stats.dataset.stats = item.value;
+      const text = node("div", "tbody");
+      text.append(head, stats);
+      row.append(traitThumb(item.value, "tthumb"), text);
       row.addEventListener("click", () => {
         hideTraitTip();
         close();
@@ -625,7 +691,11 @@ function traitPicker(anchor: HTMLElement, taken: readonly string[], onPick: (val
     // The observer's first delivery is a frame away, which would leave the
     // rows the modder is already looking at blank; a screenful fits the
     // 300px results box. Everything past it waits for the scroll.
-    for (const item of matches.slice(0, FIRST_SCREEN)) askForIcon(item.value);
+    for (const item of matches.slice(0, FIRST_SCREEN)) {
+      askForIcon(item.value);
+      askForStats(item.value);
+    }
+    paintTraitStats();
   };
 
   // Filled BEFORE it opens, so the popover is measured at its real height and
@@ -897,9 +967,26 @@ function renderInspector(): void {
   }
   const tree = state.tree;
   if (!tree) return;
+  if (state.saved) $sideBody.append(savedLine(state.saved));
   const char = state.selected ? tree.characters.find((c) => c.id === state.selected) : undefined;
   if (char) renderCharacter($sideBody, char);
   else renderDynasty($sideBody, tree);
+}
+
+/** What the last write did, with the file one click away rather than open. */
+function savedLine(saved: { name: string; file: string; line: number }): HTMLElement {
+  const row = node("div", "saved");
+  row.append(node("span", undefined, `Saved ${saved.name} to ${fileName(saved.file)}.`));
+  const open = button("Open file", "folderOpen", "ghost");
+  open.dataset.size = "sm";
+  open.addEventListener("click", () => post({ type: "reveal", file: saved.file, line: saved.line }));
+  row.append(open);
+  return row;
+}
+
+/** The last segment of a path, on either separator. */
+function fileName(file: string): string {
+  return file.split(/[\\/]/).pop() || file;
 }
 
 function renderDynasty(root: HTMLElement, tree: TreeData): void {
@@ -1230,21 +1317,44 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   );
 
   // DNA is a name of the portrait editor's export, not something a form can
-  // build: it is carried, copied and pasted, and never invented here.
+  // build. The field carries the NAME, the buttons carry the look: the block
+  // it points at is opened, copied whole, or written into the mod from the
+  // clipboard, because "dna = eadgar_dna" without that block is a portrait
+  // nobody else can see.
   const dnaRow = node("div", "px-row");
   const dna = textInput(form.dna ?? "", (v) => (form.dna = v.trim() || undefined));
   dna.placeholder = "from the portrait editor";
-  const copyDna = button("", "copy", "ghost");
-  copyDna.dataset.size = "icon-sm";
-  copyDna.dataset.tip = "Copy this DNA";
-  copyDna.addEventListener("click", () => {
-    if (dna.value.trim()) post({ type: "copy", text: dna.value.trim() });
-  });
-  const pasteDna = button("", "paste", "ghost");
-  pasteDna.dataset.size = "icon-sm";
-  pasteDna.dataset.tip = "Paste a DNA from the clipboard";
-  pasteDna.addEventListener("click", () => post({ type: "paste", field: "dna" }));
-  dnaRow.append(dna, copyDna, pasteDna);
+  const dnaButton = (label: string, glyph: IconName, tip: string, run: () => void): HTMLButtonElement => {
+    const btn = button("", glyph, "ghost");
+    btn.dataset.size = "icon-sm";
+    btn.dataset.tip = tip;
+    btn.setAttribute("aria-label", label);
+    btn.addEventListener("click", run);
+    return btn;
+  };
+  const named = (run: (key: string) => void) => (): void => {
+    const key = dna.value.trim();
+    if (key) run(key);
+    else toast("This character has no DNA name yet.");
+  };
+  dnaRow.append(
+    dna,
+    dnaButton(
+      "Open DNA",
+      "folderOpen",
+      "Open this DNA's block",
+      named((key) => post({ type: "dnaOpen", key }))
+    ),
+    dnaButton(
+      "Copy DNA",
+      "copy",
+      "Copy this DNA's whole block",
+      named((key) => post({ type: "dnaCopy", key }))
+    ),
+    dnaButton("Paste DNA", "paste", "Take a DNA off the clipboard", () =>
+      post({ type: "dnaPaste", character: form.id })
+    )
+  );
   body.append(field("DNA", dnaRow));
 
   // The six skills as one row across the WHOLE panel: six numbers do not fit
@@ -1320,8 +1430,11 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
         toast("There is nobody else in this tree to marry.");
         return;
       }
+      // A width of its own: a menu takes its anchor's, and the anchor is a
+      // 60px "Add" button, which is not a list of "Name (1000123)" rows.
       menu(add, items, {
         search: true,
+        width: 320,
         onPick: (value) => {
           form.spouses.push(value);
           drawSpouses();
@@ -1434,6 +1547,7 @@ function showPicker(): void {
   state.selected = null;
   state.draft = null;
   state.layout = null;
+  state.saved = undefined;
   $pickerPane.hidden = false;
   $canvasWrap.hidden = true;
   $side.hidden = true;
@@ -1461,6 +1575,33 @@ $back.addEventListener("click", () => {
 el("refresh").addEventListener("click", () => {
   if (state.tree) post({ type: "open", dynasty: state.tree.dynasty.id });
   else post({ type: "list" });
+});
+el("undo").addEventListener("click", () => post({ type: "undo" }));
+el("redo").addEventListener("click", () => post({ type: "redo" }));
+/**
+ * Ctrl+Z and Ctrl+Y undo the PANEL's writes, not the text in a field: inside
+ * an input the browser's own undo is what the modder means, so the shortcut
+ * only reaches the journal when the focus is somewhere else.
+ */
+window.addEventListener("keydown", (ev) => {
+  if (!ev.ctrlKey && !ev.metaKey) return;
+  const focus = document.activeElement;
+  if (focus instanceof HTMLInputElement || focus instanceof HTMLTextAreaElement) return;
+  if (focus instanceof HTMLElement && focus.isContentEditable) return;
+  const key = ev.key.toLowerCase();
+  const kind =
+    key === "z" && !ev.shiftKey ? "undo" : key === "y" || (key === "z" && ev.shiftKey) ? "redo" : null;
+  if (!kind) return;
+  ev.preventDefault();
+  post({ type: kind });
+});
+/** Escape closes the inspector's form; the tree and its toolbar stay put. */
+window.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || !state.draft) return;
+  ev.preventDefault();
+  state.draft = null;
+  state.draftFile = undefined;
+  renderInspector();
 });
 el("fit").addEventListener("click", fit);
 const centre = (): { x: number; y: number } => {
@@ -1534,6 +1675,18 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       // The pointer may have moved on while the host was answering; only the
       // trait it is still on gets drawn.
       if (tipFor === msg.name) showTraitTip();
+      break;
+    case "traitStats":
+      for (const [name, stats] of Object.entries(msg.rows)) state.traitStats.set(name, stats);
+      paintTraitStats();
+      break;
+    case "journal":
+      el<HTMLButtonElement>("undo").disabled = msg.undo === 0;
+      el<HTMLButtonElement>("redo").disabled = msg.redo === 0;
+      break;
+    case "saved":
+      state.saved = { name: msg.name, file: msg.file, line: msg.line };
+      if (!state.draft) renderInspector();
       break;
     case "pasted":
       if (state.draft) {

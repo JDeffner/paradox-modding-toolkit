@@ -86,6 +86,12 @@ ${uiCss}
   #side .sec { display: flex; flex-direction: column; gap: 6px; }
   #side .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   #side .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* What the last write did, where the modder is looking. The file opens on
+     request now, instead of throwing an editor over the tree on every save. */
+  #side .saved {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    color: var(--px-muted-fg); font-size: var(--px-text-xs);
+  }
   #side .actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .pick { justify-content: space-between; width: 100%; }
   .pick > .val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -115,15 +121,33 @@ ${uiCss}
   .skills .px-input { padding-left: 5px; padding-right: 2px; }
   /* A trait chip carries the same 16px picture the menu rows do. */
   .px-badge > img { width: 16px; height: 16px; object-fit: contain; }
-  /* The trait picker and the tooltip a hovered trait opens. */
+  /* The trait picker and the tooltip a hovered trait opens. A row answers
+     "what does this trait do" on its own: the picture at the size the list can
+     read, the name with its key, and the first stat lines under it. */
   .tpicker { width: 320px; }
-  .tpicker .px-menu-item { cursor: pointer; }
-  .tpicker .tid { color: var(--px-muted-fg); font-family: var(--px-font-mono); font-size: var(--px-text-xs); }
+  .tpicker .px-menu-item { cursor: pointer; align-items: flex-start; padding-top: 5px; padding-bottom: 5px; }
+  .tpicker .tthumb { width: 28px; height: 28px; flex: 0 0 auto; object-fit: contain; }
+  .tpicker .tbody { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+  .tpicker .thead { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .tpicker .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tpicker .tid { flex: 1 1 auto; min-width: 0; color: var(--px-muted-fg); font-family: var(--px-font-mono);
+    font-size: var(--px-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Which traits are the modder's own: a word, not a coloured edge. */
+  .tpicker .tmod {
+    flex: 0 0 auto; padding: 0 4px; border: 1px solid var(--px-border); border-radius: var(--px-radius-sm);
+    color: var(--px-muted-fg); font-size: var(--px-text-xs);
+  }
+  /* The row's stat lines read as a hint, so the game's own good/bad colours
+     step back to muted here; the tooltip is where they are the point. */
+  .tpicker .tstats { display: flex; flex-direction: column; }
+  .tpicker .tstats .px-mod-line { font-size: var(--px-text-xs); line-height: 1.35; }
+  .tpicker .tstats .px-mod-line > * { color: var(--px-muted-fg); font-weight: 400; }
   .ttip { position: fixed; z-index: 60; max-width: 320px; pointer-events: none; }
   .tip-head { display: flex; align-items: center; gap: 8px; }
-  .tip-icon { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
-  .tip-icon > img { position: absolute; inset: 8px; width: 48px; height: 48px; object-fit: contain; }
-  .tip-icon > img.frame { inset: 0; width: 64px; height: 64px; }
+  /* The game's own trait tooltip draws the picture at 52px with nothing behind
+     it (gui/shared/cooltip.gui, character_trait_tooltip). */
+  .tip-icon { position: relative; width: 52px; height: 52px; flex: 0 0 auto; }
+  .tip-icon > img { position: absolute; inset: 0; width: 52px; height: 52px; object-fit: contain; }
   .tip-icon > .noicon {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 2px; border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
@@ -151,6 +175,8 @@ ${uiCss}
     <button id="newDynasty" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")}Dynasty</button>
     <button id="newHouse" class="px-btn" data-variant="outline" data-size="sm" hidden>${icon("plus")}House</button>
     <button id="newCharacter" class="px-btn" data-variant="outline" data-size="sm" hidden>${icon("plus")}Character</button>
+    <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Undo the panel's last write (Ctrl+Z)">${icon("undo")}</button>
+    <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Write it again (Ctrl+Y)">${icon("redo")}</button>
     <button id="fit" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Fit the whole tree">${icon("maximize")}</button>
     <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Zoom out">${icon("zoomOut")}</button>
     <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Zoom in">${icon("zoomIn")}</button>

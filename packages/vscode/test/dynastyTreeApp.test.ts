@@ -393,7 +393,7 @@ describe("the Dynasty Tree app", () => {
     ).click();
 
     const rows = (): Element[] => [...app.window.document.querySelectorAll(".tpicker .px-menu-item")];
-    expect(rows().map((r) => r.querySelector(".px-grow")?.textContent)).toEqual(["Brave", "Craven"]);
+    expect(rows().map((r) => r.querySelector(".tname")?.textContent)).toEqual(["Brave", "Craven"]);
     expect(rows().map((r) => r.querySelector(".tid")?.textContent)).toEqual(["brave", "craven"]);
     // Every row has its picture tile from the start, hidden until the host
     // answers with a URL for it; a trait with no file resolved stays hidden.
@@ -407,9 +407,28 @@ describe("the Dynasty Tree app", () => {
     expect(thumb(rows()[0]).getAttribute("src")).toBe("brave.png");
     expect(thumb(rows()[1]).hidden).toBe(true);
 
+    // A row also says what the trait DOES, printed by the game's own rules,
+    // and marks the traits a workspace mod defines.
+    app.send({
+      type: "traitStats",
+      rows: {
+        brave: {
+          modifiers: [{ name: "prowess", value: 3 }],
+          formats: { prowess: { label: "Prowess", decimals: 0, color: "good" } },
+          images: {},
+          mod: true,
+        },
+        craven: null,
+      },
+    });
+    expect(rows()[0].querySelector(".tstats")!.textContent).toBe("+3Prowess");
+    expect(rows()[0].querySelector(".tmod")).not.toBeNull();
+    expect(rows()[1].querySelector(".tstats")!.textContent).toBe("");
+    expect(rows()[1].querySelector(".tmod")).toBeNull();
+
     // The search matches the player's word and the key alike.
     const search = app.window.document.querySelector(".tpicker input.px-input") as HTMLInputElement;
-    const shown = (): (string | undefined)[] => rows().map((r) => r.querySelector(".px-grow")?.textContent);
+    const shown = (): (string | undefined)[] => rows().map((r) => r.querySelector(".tname")?.textContent);
     search.value = "brav";
     search.dispatchEvent(new app.window.Event("input"));
     expect(shown()).toEqual(["Brave"]);
