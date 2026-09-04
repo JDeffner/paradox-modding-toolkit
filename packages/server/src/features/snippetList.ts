@@ -67,6 +67,17 @@ export function buildSnippetList(
       snippet: template.snippet,
       plain: template.plain,
     });
+    // An example that marks fields `# optional` offers both: the required
+    // fields, and the whole thing. The pair costs one cap slot, not two.
+    if (template.full)
+      out.push({
+        id: `${token.name}.full`,
+        label: `${token.name} (all fields)`,
+        detail: `${token.kind} block with its optional fields, from the game's own usage example`,
+        form: "token",
+        snippet: template.full.snippet,
+        plain: template.full.plain,
+      });
   }
   return out;
 }

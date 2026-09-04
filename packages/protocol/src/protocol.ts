@@ -1724,7 +1724,9 @@ export interface SnippetsParams {
 export interface SnippetItem {
   /**
    * Stable id: the definition kind (`event`), the kind and its child block
-   * (`event.option`), or the engine token (`if`). Suitable as a picker key.
+   * (`event.option`), or the engine token (`if`) — plus `<token>.full` when the
+   * token's example marks fields optional and an all-fields form follows it.
+   * Suitable as a picker key.
    */
   id: string;
   /** Reads as what it inserts: "new event", "option block", "if". */

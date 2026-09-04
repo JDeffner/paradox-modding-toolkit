@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- **The Workshop panel's Requirements card has its own upload switch.** The
+  required DLC and items rode along with Details, so sending a corrected title
+  also rewrote what the item declares on Steam, and there was no way to send
+  the requirements alone. Requirements is now a part like the others: its own
+  switch, its own "Not uploaded" chip, its own line in the Publish summary
+  and in the upload confirmation.
+
+- **Description and translations are previews now; the text is edited in its
+  file.** The panel had a textarea per description, which invited edits that
+  were saved from two places at once and shown out of the editor's reach. It
+  shows only the rendered BBCode, with an Edit file button that opens
+  `description.bbcode` (a language's own file for a translation row), creating
+  the listing folder from your drafts when there is none yet. Saving the file
+  updates the preview: the panel watches the listing's text files.
+
+- **A listing folder keeps its description as BBCode, the format Steam
+  serves.** New folders got `description.md`, so the panel and the download
+  both showed Markdown that the Workshop page never renders that way. New
+  folders now get `description.bbcode`, and a download from Steam writes
+  BBCode, removing a `description.md` it replaces. A listing that still holds
+  a `description.md` is converted to `description.bbcode` once, the first
+  time the panel reads it, with a notice; the text is the BBCode the upload
+  sent Steam anyway. A `.bbcode` file still opens as Markdown through Edit as
+  Markdown.
+
+- **An engine effect whose example marks fields `# optional` now offers a
+  block to insert, and offers it twice: the required fields, and every field.**
+  Until now any `#` in a dumped `usage:` example dropped the whole template,
+  because "# or:" comments enumerate forms that cannot be collapsed into one
+  block. Comments that only say a field is optional are a different thing and
+  are now read as one: the snippet list shows `create_holy_order` and
+  `create_holy_order (all fields)` side by side. Every other comment still
+  drops the example. Two things in front of that rule moved with it: an example
+  that has no `usage:` header is now followed over its whole block instead of
+  being cut after its first line (378 of the CK3 effects.log examples run over
+  several lines), and an example that shows the scope the effect must run in
+  (`<founding character> = { create_cadet_branch = { … } }`) is unwrapped, so
+  the block starts where the modder types. Over the shipped dumps that is 679
+  CK3 templates before and 718 after, 8 of them with an all-fields form; Vic3
+  stays at 265, its dump needing neither fix. Hover shows the same examples, so
+  they are fuller there too.
+
 - **Coat of Arms Designer: the House China and House Japan frames show the
   arms, every frame sits where the game puts it, and frames have names.** Those
   two masks are 160x160 of pure black at alpha 255, so reading a mask as

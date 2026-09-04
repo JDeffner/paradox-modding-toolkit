@@ -10,18 +10,25 @@
  *
  *  - the example's leading identifier must be the token's own name (dumps
  *    routinely paste a sibling's example: `add_title_law_effects` shows
- *    `add_title_law = …`);
+ *    `add_title_law = …`). A `<scope> = { name = { … } }` wrapper around a
+ *    single such block is peeled off first; any other placeholder key rejects;
  *  - the example must open a block and its braces must balance (truncated
  *    dumps that never close are dropped);
  *  - every key must be a plain lowercase identifier, or a `a/b/c` alternation
  *    of them (this drops pseudo-key weight lists, `X1 = { … } X2 = { … } …`);
- *  - a `#` comment means the example enumerates alternatives ("# or:") that
- *    cannot be collapsed into one template;
+ *  - a `#` comment is read ONLY when it says the field is optional
+ *    (`#Optional`, `# optional way to …`); every other comment means the
+ *    example enumerates alternatives ("# or:") or explains something we cannot
+ *    turn into script, and rejects the example;
  *  - `(optional)` and `...` truncate the body at that point;
  *  - `<name>` placeholders become tabstops, concrete example values become
  *    pre-filled tabstops.
  *
- * Both forms are produced at once: `snippet` for clients that declared
+ * An example that marks fields optional yields TWO templates rather than none:
+ * `snippet`/`plain` carry the required fields only, `full` carries every field
+ * the example shows.
+ *
+ * Both text forms are produced at once: `snippet` for clients that declared
  * snippetSupport, `plain` (no `${`, insertable as literal text) for the rest.
  */
 import type { TokenData } from "@px-lsp/protocol/types";
@@ -31,6 +38,12 @@ export interface BlockTemplate {
   snippet: string;
   /** Plain-text skeleton, free of `${`. */
   plain: string;
+  /**
+   * The same block with the fields the example marked `# optional` put back.
+   * Present only when the example marked at least one, so `full` never repeats
+   * what `snippet`/`plain` already say. Tabstops are numbered per form.
+   */
+  full?: { snippet: string; plain: string };
 }
 
 /** Keyed on the token object, so a reload or a game switch cannot serve a stale
@@ -54,6 +67,14 @@ const KEY = /^[a-z_][a-z0-9_]*$/;
 /** Everything from here on is optional or elided; the body stops. */
 const TRUNCATE = ["(optional)", "..."];
 
+/** A comment the dumps use to mark a field as not required: `#Optional`,
+ * `# optional way to get a reference`, `# Optional; if set, …`. Anything else
+ * after a `#` is prose or an alternation and rejects the example. */
+const OPTIONAL_COMMENT = /^#[ \t]*optional/i;
+
+/** A `<placeholder> = {` scope wrapper around the example. */
+const WRAPPER_HEAD = /^\s*<[^>]+>\s*=\s*\{/;
+
 interface Leaf {
   /** Raw text as written in the example. */
   text: string;
@@ -63,7 +84,10 @@ interface Leaf {
   alts: string[] | null;
 }
 
-type Item = { key: Leaf; value: Leaf | Body } | { key: null; value: Leaf };
+type Item = ({ key: Leaf; value: Leaf | Body } | { key: null; value: Leaf }) & {
+  /** The example's own `# optional` comment ended this item's line. */
+  optional: boolean;
+};
 
 interface Body {
   items: Item[];
@@ -74,11 +98,23 @@ interface Body {
 /** Pure extractor (exported for the accept/reject table in the tests). */
 export function extractBlockTemplate(name: string, usage: string | undefined): BlockTemplate | null {
   if (!usage) return null;
-  const text = usage.replace(/\r/g, "");
-  // "# or:" style comments enumerate mutually exclusive forms: not one template.
-  if (text.includes("#")) return null;
+  const stripped = stripOptionalComments(usage.replace(/\r/g, ""));
+  if (!stripped) return null;
+  let { text } = stripped;
+  const { optionalLines } = stripped;
 
-  const head = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{/.exec(text);
+  // Some `usage:` blocks wrap the effect in the scope it has to run in
+  // (`<founding character> = { create_cadet_branch = { … } }`; 5 effects in the
+  // 1.19 dumps). The template is the inner block: the modder types it inside the
+  // scope they already mean. Blanking rather than slicing keeps line numbers,
+  // which the `# optional` marks are keyed on. The guards below then do the
+  // rest of the work: the wrapper is unwrapped only when its ONE item is a
+  // block named after the token.
+  const wrapper = WRAPPER_HEAD.test(text) ? unwrap(text) : text;
+  if (wrapper === null) return null;
+  text = wrapper;
+
+  const head = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{/.exec(text);
   if (!head || head[1] !== name) return null;
 
   const open = text.indexOf("{");
@@ -86,10 +122,75 @@ export function extractBlockTemplate(name: string, usage: string | undefined): B
   // Unbalanced, or something follows the block: not a template we can trust.
   if (close < 0 || text.slice(close + 1).trim() !== "") return null;
 
-  const body = new BodyParser(text, open + 1).parseBody();
+  const parser = new BodyParser(text, open + 1, optionalLines);
+  const body = parser.parseBody();
   if (body === null) return null;
+  // Every accepted "optional" comment must have landed on an item. One that did
+  // not (a lone `# optional effects…` line, or a comment on the line that only
+  // OPENS a nested block) says something about the example we cannot express.
+  for (const line of optionalLines) if (!parser.markedLines.has(line)) return null;
 
-  return { snippet: render(name, body, true), plain: render(name, body, false) };
+  const minimal = { snippet: render(name, body, true, false), plain: render(name, body, false, false) };
+  if (!hasOptional(body)) return minimal;
+  return {
+    ...minimal,
+    full: { snippet: render(name, body, true, true), plain: render(name, body, false, true) },
+  };
+}
+
+/**
+ * Drops the `# optional` comments and reports which lines carried one; returns
+ * null when any OTHER `#` comment appears, which still rejects the example.
+ *
+ * A comment runs to the end of its line, and a following line whose first
+ * non-space character is `#` wraps the same comment (the dumps wrap long
+ * `# Optional, …` notes over three lines) and is dropped with it. Dropped
+ * lines are kept as empty lines so line numbers still address the example.
+ */
+function stripOptionalComments(text: string): { text: string; optionalLines: Set<number> } | null {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  const optionalLines = new Set<number>();
+  let wrapping = false;
+  for (let i = 0; i < lines.length; i++) {
+    const hash = lines[i].indexOf("#");
+    if (hash < 0) {
+      out.push(lines[i]);
+      wrapping = false;
+      continue;
+    }
+    const before = lines[i].slice(0, hash);
+    // A continuation of the optional comment above.
+    if (wrapping && before.trim() === "") {
+      out.push("");
+      continue;
+    }
+    if (!OPTIONAL_COMMENT.test(lines[i].slice(hash))) return null;
+    // A comment on its own line marks no item.
+    if (before.trim() === "") return null;
+    out.push(before.trimEnd());
+    optionalLines.add(i);
+    wrapping = true;
+  }
+  return { text: out.join("\n"), optionalLines };
+}
+
+/** True when the block, at any depth, has a field the example marked optional. */
+function hasOptional(body: Body): boolean {
+  return body.items.some((item) => item.optional || ("items" in item.value && hasOptional(item.value)));
+}
+
+/**
+ * Blanks everything outside the wrapper's braces (newlines kept, so line
+ * numbers still address the example). Null when the wrapper never closes or
+ * something follows it.
+ */
+function unwrap(text: string): string | null {
+  const open = text.indexOf("{");
+  const close = matchingBrace(text, open);
+  if (close < 0 || text.slice(close + 1).trim() !== "") return null;
+  const blank = (s: string) => s.replace(/[^\n]/g, " ");
+  return blank(text.slice(0, open + 1)) + text.slice(open + 1, close) + blank(text.slice(close));
 }
 
 /** Index of the `}` closing the `{` at `open`, or -1 when it never closes. */
@@ -103,14 +204,35 @@ function matchingBrace(text: string, open: number): number {
 }
 
 class BodyParser {
+  /** Lines of `optionalLines` an item actually ended on. */
+  readonly markedLines = new Set<number>();
+  /** Line number per character offset, so an item can be tied to its comment. */
+  private readonly lineAt: number[];
+
   constructor(
     private readonly text: string,
-    private i: number
-  ) {}
+    private i: number,
+    private readonly optionalLines: Set<number> = new Set()
+  ) {
+    this.lineAt = new Array<number>(text.length);
+    let line = 0;
+    for (let n = 0; n < text.length; n++) {
+      this.lineAt[n] = line;
+      if (text[n] === "\n") line++;
+    }
+  }
 
   /** Items of the block whose `{` was just consumed; null rejects the example. */
   parseBody(): Body | null {
     const items: Item[] = [];
+    const push = (item: Omit<Item, "optional">, end = this.i): void => {
+      // A comment (already stripped) on the line the item ENDS on marked it
+      // optional, so measure the end before any trailing whitespace is skipped.
+      const line = this.lineAt[end - 1] ?? 0;
+      const optional = this.optionalLines.has(line);
+      if (optional) this.markedLines.add(line);
+      items.push({ ...item, optional } as Item);
+    };
     for (;;) {
       this.skipSpace();
       if (this.i >= this.text.length) return null;
@@ -126,11 +248,12 @@ class BodyParser {
       }
       const first = this.readLeaf();
       if (!first) return null;
+      const firstEnd = this.i;
       this.skipSpace();
       if (this.text[this.i] !== "=") {
         // A bare word only makes sense as a `<effects>`-style placeholder.
         if (!first.placeholder) return null;
-        items.push({ key: null, value: first });
+        push({ key: null, value: first }, firstEnd);
         continue;
       }
       if (first.placeholder) return null; // a key we cannot name is not a key
@@ -141,12 +264,12 @@ class BodyParser {
         this.i++;
         const nested = this.parseBody();
         if (nested === null) return null;
-        items.push({ key: first, value: nested });
+        push({ key: first, value: nested });
         continue;
       }
       const value = this.readLeaf();
       if (!value) return null;
-      items.push({ key: first, value });
+      push({ key: first, value });
     }
   }
 
@@ -183,13 +306,21 @@ class BodyParser {
 
 // ---- rendering -------------------------------------------------------------
 
-function render(name: string, body: Body, snippet: boolean): string {
-  return `${name} = {\n${renderBody(body, "\t", snippet, { n: 0 }).join("")}}`;
+/** `all` = the "all fields" form; false drops what the example called optional. */
+function render(name: string, body: Body, snippet: boolean, all: boolean): string {
+  return `${name} = {\n${renderBody(body, "\t", snippet, { n: 0 }, all).join("")}}`;
 }
 
-function renderBody(body: Body, indent: string, snippet: boolean, counter: { n: number }): string[] {
+function renderBody(
+  body: Body,
+  indent: string,
+  snippet: boolean,
+  counter: { n: number },
+  all: boolean
+): string[] {
   const lines: string[] = [];
   for (const item of body.items) {
+    if (item.optional && !all) continue;
     if (item.key === null) {
       lines.push(`${indent}${leaf(item.value, snippet, counter)}\n`);
       continue;
@@ -198,7 +329,7 @@ function renderBody(body: Body, indent: string, snippet: boolean, counter: { n: 
     const key = item.key.alts ? leaf(item.key, snippet, counter) : item.key.text;
     if ("items" in item.value) {
       lines.push(`${indent}${key} = {\n`);
-      lines.push(...renderBody(item.value, indent + "\t", snippet, counter));
+      lines.push(...renderBody(item.value, indent + "\t", snippet, counter, all));
       lines.push(`${indent}}\n`);
       continue;
     }

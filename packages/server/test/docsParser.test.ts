@@ -82,6 +82,53 @@ describe("parseLog", () => {
     expect(t.scopes).toEqual(["character"]);
   });
 
+  it("follows a header-less example until its braces balance", () => {
+    // Verbatim out of the shipped CK3 effects.log (1.19), mixed tabs and
+    // spaces included: the entry has no `usage:` header, so the block used to
+    // be cut after its first line and the rest read as prose.
+    const log =
+      "----\n" +
+      "create_holy_order - Create a new holy order\n" +
+      "create_holy_order = {\n" +
+      "    leader = scope:a_character\n" +
+      "    capital = scope:a_barony_title\n" +
+      "\t  name = <name> #Optional\n" +
+      "\t  coat_of_arms = <coa_name> #Optional\n" +
+      "    save_scope_as/save_temporary_scope_as = new_holy_order # optional way to get a reference to the new holy order\n" +
+      "}\n" +
+      "Supported Scopes: none\n" +
+      "----\n";
+    const [t] = parseLog(log, "effect");
+    expect(t.usage).toBe(
+      "create_holy_order = {\n" +
+        "    leader = scope:a_character\n" +
+        "    capital = scope:a_barony_title\n" +
+        "\t  name = <name> #Optional\n" +
+        "\t  coat_of_arms = <coa_name> #Optional\n" +
+        "    save_scope_as/save_temporary_scope_as = new_holy_order # optional way to get a reference to the new holy order\n" +
+        "}"
+    );
+    expect(t.doc).toBe("Create a new holy order");
+    expect(t.scopes).toEqual(["none"]);
+  });
+
+  it("a metadata line ends an example that never closes its block", () => {
+    const log =
+      "----\n" +
+      "switch - Switch on a value\n" +
+      "switch = {\n" +
+      "\ttrigger = simple_assign_trigger\n" +
+      "\tcase_1 = { <effects> }\n" +
+      "Supported Scopes: none\n" +
+      "some more prose\n" +
+      "----\n";
+    const [t] = parseLog(log, "effect");
+    expect(t.usage).toBe("switch = {\n\ttrigger = simple_assign_trigger\n\tcase_1 = { <effects> }");
+    expect(t.scopes).toEqual(["none"]);
+    // The capture is over, so what follows the metadata line is prose again.
+    expect(t.doc).toBe("Switch on a value\nsome more prose");
+  });
+
   it("captures a multi-line `usage:` block verbatim, dropping the header", () => {
     const log =
       "----\n" +

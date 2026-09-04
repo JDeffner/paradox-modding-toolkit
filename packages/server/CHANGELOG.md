@@ -8,6 +8,25 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Block templates: a `usage:` example whose `#` comments only mark fields
+  optional now produces TWO templates instead of none. `snippet`/`plain` carry
+  the required fields, the new `BlockTemplate.full` carries every field, and
+  `paradox/snippets` emits it as a second item, `<token>.full` / "<token> (all
+  fields)", under the same cap slot as the first. Any other `#` comment still
+  rejects the example, and a comment that marks no field (a line of its own, or
+  the line that only opens a nested block) rejects it too: a wrong template
+  teaches a shape the engine refuses. Two gates in front of the extractor moved
+  with it: the classic dump parser now follows a header-less `name = { …` example
+  over the following lines until its braces balance (378 of the CK3 effects.log
+  examples run over several lines, and every one of them used to be cut after
+  its first line), and an example wrapped in the scope it must run in
+  (`<founding character> = { create_cadet_branch = { … } }`) is unwrapped when
+  that wrapper holds nothing but the token's own block. Measured over the
+  shipped dumps: CK3 679 templates before, 718 after, 8 of them carrying
+  `full`; Vic3 unchanged at 265 (its markdown dialect already followed
+  multi-line examples and its dump carries no scope wrappers). Longer examples
+  reach hover too, which shows `usage` under its own line cap.
+
 - `paradox/locText`: a loc value as the PLAYER reads it, the reading half of
   `paradox/lookupLoc`. Markup dropped, `$key$` substituted one level, concept
   links and icon tags resolved, and any `Get<Something>('name')` chain ending
