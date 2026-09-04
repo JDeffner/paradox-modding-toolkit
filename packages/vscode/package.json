@@ -682,10 +682,21 @@
         "icon": "$(go-to-file)"
       },
       {
-        "command": "px.convertBBCodeToMarkdown",
+        "command": "px.editBBCodeAsMarkdown",
         "category": "Paradox",
         "title": "Edit as Markdown",
         "icon": "$(markdown)"
+      },
+      {
+        "command": "px.backToBBCode",
+        "category": "Paradox",
+        "title": "Back to BBCode",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.convertBBCodeToMarkdown",
+        "category": "Paradox",
+        "title": "Convert to Markdown File"
       },
       {
         "command": "px.convertMarkdownToBBCode",
@@ -1406,11 +1417,19 @@
         },
         {
           "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode"
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
         },
         {
           "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode"
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd"
         },
         {
           "command": "px.openBBCodeSource",
@@ -1418,7 +1437,7 @@
         },
         {
           "command": "px.convertBBCodeToMarkdown",
-          "when": "editorLangId == bbcode"
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
         },
         {
           "command": "px.convertMarkdownToBBCode",
@@ -1599,13 +1618,18 @@
       "editor/title": [
         {
           "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
           "group": "navigation@1"
         },
         {
-          "command": "px.convertBBCodeToMarkdown",
-          "when": "editorLangId == bbcode",
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
           "group": "navigation@2"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd",
+          "group": "navigation@1"
         },
         {
           "command": "px.convertMarkdownToBBCode",
@@ -1789,12 +1813,12 @@
       {
         "command": "px.openBBCodePreview",
         "key": "ctrl+shift+v",
-        "when": "editorTextFocus && editorLangId == bbcode"
+        "when": "editorTextFocus && (editorLangId == bbcode || resourceExtname == .bbcode)"
       },
       {
         "command": "px.openBBCodePreviewSide",
         "key": "ctrl+k v",
-        "when": "editorTextFocus && editorLangId == bbcode"
+        "when": "editorTextFocus && (editorLangId == bbcode || resourceExtname == .bbcode)"
       },
       {
         "command": "px.editLocalization",

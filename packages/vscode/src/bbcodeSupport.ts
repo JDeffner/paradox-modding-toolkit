@@ -4,9 +4,12 @@
  * (px.openBBCodePreview) that renders the same way the Workshop panel's
  * preview does - both share webviews/workshop/bbcode.ts and its styles.
  *
- * Plus the two conversion commands, since the listing keeps its description
- * in Markdown by default (steam/workshopFiles.ts `descriptionFile`): a
- * `.bbcode` file becomes the `.md` the listing then reads, and back.
+ * Plus Markdown in two shapes. "Edit as Markdown" opens the SAME file as
+ * Markdown through the `pxmd` file system below: the editor shows the BBCode
+ * converted, a save converts it back and writes the .bbcode, and no second
+ * file appears. The two conversion commands write a real file for a listing
+ * that should switch format (steam/workshopFiles.ts `descriptionFile` reads
+ * `.md` first).
  */
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -160,7 +163,7 @@ class BBCodePreview {
       }),
       // Like the markdown preview, follow whichever .bbcode file is active.
       vscode.window.onDidChangeActiveTextEditor((ed) => {
-        if (ed && ed.document.languageId === "bbcode") this.retarget(ed.document);
+        if (ed && isBBCode(ed.document)) this.retarget(ed.document);
       })
     );
     this.panel.onDidDispose(() => {
@@ -229,9 +232,116 @@ window.addEventListener("message", (ev) => {
 </html>`;
 }
 
+/**
+ * A .bbcode file, whichever language id the editor gave it: another
+ * extension that claims the extension would otherwise hide every button.
+ */
+function isBBCode(document: vscode.TextDocument): boolean {
+  return document.languageId === "bbcode" || document.uri.path.toLowerCase().endsWith(".bbcode");
+}
+
+// ---------------------------------------------------------------------------
+// The same file as Markdown: pxmd:/<path>.bbcode.md
+// ---------------------------------------------------------------------------
+
+const MIRROR_SCHEME = "pxmd";
+
+/** The Markdown face of a .bbcode file. The .md suffix is what makes it Markdown. */
+function mirrorUri(file: vscode.Uri): vscode.Uri {
+  return file.with({ scheme: MIRROR_SCHEME, path: file.path + ".md" });
+}
+
+/** The .bbcode file behind a mirror uri. */
+function sourceUri(mirror: vscode.Uri): vscode.Uri {
+  return mirror.with({ scheme: "file", path: mirror.path.replace(/\.md$/, "") });
+}
+
+/**
+ * Reads a .bbcode file as Markdown and writes Markdown back as BBCode. The
+ * open .bbcode editor, if any, is the source of truth for a read (unsaved
+ * edits included); a write goes through the workspace so that editor
+ * follows the save rather than reporting the file changed under it.
+ */
+class MarkdownMirror implements vscode.FileSystemProvider {
+  private readonly emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+  readonly onDidChangeFile = this.emitter.event;
+
+  watch(uri: vscode.Uri): vscode.Disposable {
+    const source = sourceUri(uri);
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(source, "*"));
+    const changed = (): void => this.emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+    const onDoc = vscode.workspace.onDidSaveTextDocument((d) => {
+      if (d.uri.toString() === source.toString()) changed();
+    });
+    return vscode.Disposable.from(watcher, watcher.onDidChange(changed), onDoc);
+  }
+
+  async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
+    const real = await vscode.workspace.fs.stat(sourceUri(uri));
+    return { ...real, type: vscode.FileType.File, size: (await this.readFile(uri)).byteLength };
+  }
+
+  async readFile(uri: vscode.Uri): Promise<Uint8Array> {
+    const source = sourceUri(uri);
+    const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === source.toString());
+    const text = open
+      ? open.getText()
+      : Buffer.from(await vscode.workspace.fs.readFile(source)).toString("utf8");
+    return Buffer.from(bbcodeToMarkdown(text), "utf8");
+  }
+
+  async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+    const source = sourceUri(uri);
+    const bbcode = markdownToBBCode(Buffer.from(content).toString("utf8"));
+    const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === source.toString());
+    if (open) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(source, new vscode.Range(0, 0, open.lineCount, 0), bbcode);
+      await vscode.workspace.applyEdit(edit);
+      await open.save();
+    } else {
+      await vscode.workspace.fs.writeFile(source, Buffer.from(bbcode, "utf8"));
+    }
+    this.emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+  }
+
+  readDirectory(): [string, vscode.FileType][] {
+    return [];
+  }
+  createDirectory(): void {
+    throw vscode.FileSystemError.NoPermissions();
+  }
+  delete(): void {
+    throw vscode.FileSystemError.NoPermissions();
+  }
+  rename(): void {
+    throw vscode.FileSystemError.NoPermissions();
+  }
+}
+
+/** "Edit as Markdown": the active .bbcode file, as Markdown, beside it. */
+async function editAsMarkdown(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !isBBCode(editor.document) || editor.document.uri.scheme !== "file") {
+    void vscode.window.showInformationMessage(
+      "Paradox Modding Toolkit: open a saved .bbcode file to edit it as Markdown."
+    );
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(mirrorUri(editor.document.uri));
+  await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+}
+
+/** From the Markdown face back to the .bbcode file it edits. */
+async function backToBBCode(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.uri.scheme !== MIRROR_SCHEME) return;
+  await vscode.window.showTextDocument(sourceUri(editor.document.uri), { preview: false });
+}
+
 function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): void {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== "bbcode") {
+  if (!editor || !isBBCode(editor.document)) {
     void vscode.window.showInformationMessage("Paradox Modding Toolkit: open a .bbcode file to preview it.");
     return;
   }
@@ -245,11 +355,12 @@ function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): voi
  * `.bbcode` is the modder's call.
  */
 async function convertActive(to: "md" | "bbcode"): Promise<void> {
-  const fromLang = to === "md" ? "bbcode" : "markdown";
   const editor = vscode.window.activeTextEditor;
+  const isFrom =
+    editor && (to === "md" ? isBBCode(editor.document) : editor.document.languageId === "markdown");
   // A file on disk, since the converted copy is written next to it: an
   // untitled buffer has no folder to be next to.
-  if (!editor || editor.document.languageId !== fromLang || editor.document.uri.scheme !== "file") {
+  if (!editor || !isFrom || editor.document.uri.scheme !== "file") {
     void vscode.window.showInformationMessage(
       `Paradox Modding Toolkit: open a saved ${to === "md" ? ".bbcode" : "Markdown"} file to convert it.`
     );
@@ -288,6 +399,11 @@ export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("px.openBBCodePreviewSide", () => openPreview(context, true)),
     vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource()),
     vscode.commands.registerCommand("px.convertBBCodeToMarkdown", () => convertActive("md")),
-    vscode.commands.registerCommand("px.convertMarkdownToBBCode", () => convertActive("bbcode"))
+    vscode.commands.registerCommand("px.convertMarkdownToBBCode", () => convertActive("bbcode")),
+    vscode.workspace.registerFileSystemProvider(MIRROR_SCHEME, new MarkdownMirror(), {
+      isCaseSensitive: false,
+    }),
+    vscode.commands.registerCommand("px.editBBCodeAsMarkdown", editAsMarkdown),
+    vscode.commands.registerCommand("px.backToBBCode", backToBBCode)
   );
 }

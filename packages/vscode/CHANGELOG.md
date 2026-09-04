@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **A .bbcode file is edited as Markdown in place.** "Edit as Markdown" in a
+  `.bbcode` file's title bar opens the same file as Markdown (a `pxmd`
+  document named `<file>.bbcode.md`): what you see is the BBCode converted,
+  a save converts it back and writes the `.bbcode`, and no second file
+  appears. VS Code's own Markdown preview and buttons work on it, and Back
+  to BBCode returns to the file. The buttons and keys of a `.bbcode` file
+  now also show when another extension owns the `.bbcode` language. The
+  command that writes a real Markdown file stays in the palette as Convert
+  to Markdown File.
 - **Wiki: Home, Credits and Steam Error Codes inside it, a sidebar that keeps
   its width, severity as a symbol.** The front page is reached by a Home row
   and crumb. Credits is a wiki page now (the Project panel's Info row still
