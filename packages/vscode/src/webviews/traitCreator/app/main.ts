@@ -45,7 +45,7 @@ import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
 import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit, TraitSave } from "../messages";
-import { baseName, writeBlock } from "../../shared/scriptBlock";
+import { baseName, statementLines, writeBlock } from "../../shared/scriptBlock";
 import {
   fillTraitLoc,
   frameTexture,
@@ -1163,6 +1163,22 @@ function refreshPreview(): void {
 }
 
 /**
+ * One statement's value, as `setProperties` wants it: the server drops it into
+ * the file over the old value's span, at the statement's own position, so a
+ * block value has to bring the indentation of its own lines with it. Without
+ * that the body and the closing brace land at column 0 while the statement
+ * sits a tab in, which is the same defect `statementLines` fixes on the
+ * whole-block path.
+ */
+function propertyValue(key: string, statement: string): string {
+  const eol = loaded?.block.eol ?? "\n";
+  const indent = loaded?.block.indent ?? "\t";
+  return statementLines(statement)
+    .join(eol + indent)
+    .slice(key.length + 3);
+}
+
+/**
  * Edit mode sends only what moved, as raw script text, so a save rewrites the
  * lines the modder touched and leaves their file alone. Null when one of the
  * changes cannot be one property (a key written twice, like `flag`): the whole
@@ -1179,7 +1195,10 @@ function changedProperties(): { key: string; value: string | null }[] | null {
     const was = fieldStatements(spec, baseline.values[spec.key]);
     if (now.join("\n") === was.join("\n")) continue;
     if (now.length > 1) return null;
-    out.push({ key: spec.key, value: now.length === 0 ? null : now[0].slice(spec.key.length + 3) });
+    out.push({
+      key: spec.key,
+      value: now.length === 0 ? null : propertyValue(spec.key, now[0]),
+    });
   }
   const before = new Map(baseline.modifiers.map((row) => [row.name, row.value]));
   for (const row of state.modifiers) {

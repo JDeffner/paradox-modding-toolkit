@@ -1201,13 +1201,19 @@ function refreshPreview(): void {
  */
 function changedProperties(): { key: string; value: string | null }[] | null {
   if (!baseline) return null;
+  // The server drops a value into the file over the old one's span, at the
+  // statement's own position, so a block value carries the indentation of its
+  // own lines; joined with a bare newline its body and closing brace landed at
+  // column 0 while the statement sat a tab in.
+  const eol = loaded?.block.eol ?? "\n";
+  const indent = loaded?.block.indent ?? "\t";
   const out: { key: string; value: string | null }[] = [];
   for (const spec of specs) {
     if (loaded?.verbatim.has(spec.key)) continue;
     const lines = fieldLines(spec, state.values[spec.key]);
     const was = fieldLines(spec, baseline.values[spec.key]);
     if (lines.join("\n") === was.join("\n")) continue;
-    const text = lines.join("\n");
+    const text = lines.join(eol + indent);
     out.push({ key: spec.key, value: text === "" ? null : text.slice(spec.key.length + 3) });
   }
   return out;

@@ -496,6 +496,19 @@ describe("editing a trait the mod already has", () => {
     expect(app.save()!.block).toBe(text);
   });
 
+  it("keeps a rewritten block value indented when only that key is sent", () => {
+    const text = "px_stoic = {\n\tcompatibility = {\n\t\talbino = 6\n\t}\n}";
+    const app = boot();
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const value = control(app, "compatibility").querySelector("input")!;
+    value.value = "7";
+    value.dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    app.document.querySelector<HTMLButtonElement>("#save")!.click();
+    // The server drops the value over the old one at the statement's own
+    // place, so the block's own lines have to arrive indented.
+    expect(app.save()!.changed).toEqual([{ key: "compatibility", value: "{\n\t\talbino = 7\n\t}" }]);
+  });
+
   it("a script box says it has no completion and offers the file, with the save on it", () => {
     const text = "px_stoic = {\n\ttriggered_opinion = {\n\t\topinion_modifier = a\n\t}\n}";
     const app = boot();
