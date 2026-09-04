@@ -224,4 +224,6 @@ export type AppToHost =
   /** Write previews/videos.txt. */
   | { type: "setVideos"; ids: string[] }
   /** Reveal the previews folder in the OS file manager, creating it first. */
-  | { type: "openPreviewsFolder" };
+  | { type: "openPreviewsFolder" }
+  /** Open the wiki's BBCode page: which tags Steam renders in a description. */
+  | { type: "bbcodeHelp" };

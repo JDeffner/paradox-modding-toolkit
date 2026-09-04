@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **Description previews are a window on the text, not the whole of it.** A
+  long description pushed everything under it off the page, and a wide table
+  or code block inside one scrolled the whole panel sideways. Every preview
+  now starts at a fixed height, scrolls its own content on both axes, and has
+  a drag grip on its bottom edge for as much of the text as you want to see.
+
+- **Every description row carries the same three buttons.** The default
+  description had Edit file, Reload and Fetch from Steam; a translation row
+  had Edit file and a bare arrow next to a line of Steam's text. Each
+  translation now gets the identical row, with what Steam serves for that
+  language in the Fetch button's tooltip, and each preview carries an edit
+  button in its top left corner.
+
+- **BBCode formatting help, in the wiki and one click from where you write
+  it.** The tags Steam renders were only discoverable through completion. The
+  wiki has a Steam BBCode page, the editor title bar of a `.bbcode` file (and
+  of its Markdown face) has a question-mark button that opens it, and the
+  Workshop panel's description hint links to it.
+
+- **Edit file opens beside the Workshop panel.** The file took over the
+  panel's own editor group, so the panel vanished behind the text it
+  previews. It opens in the next group instead, and the preview follows every
+  save. The preview button also works from the Markdown face of a `.bbcode`
+  file: it renders the file behind it.
+
 - **The Workshop panel's Requirements card has its own upload switch.** The
   required DLC and items rode along with Details, so sending a corrected title
   also rewrote what the item declares on Steam, and there was no way to send

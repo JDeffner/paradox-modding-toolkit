@@ -682,6 +682,12 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "px.openBBCodeHelp",
+        "category": "Paradox",
+        "title": "BBCode Formatting Help",
+        "icon": "$(question)"
+      },
+      {
         "command": "px.editBBCodeAsMarkdown",
         "category": "Paradox",
         "title": "Edit as Markdown",
@@ -1436,6 +1442,10 @@
           "when": "activeWebviewPanelId == px.bbcodePreview"
         },
         {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
           "command": "px.convertBBCodeToMarkdown",
           "when": "editorLangId == bbcode || resourceExtname == .bbcode"
         },
@@ -1630,6 +1640,16 @@
           "command": "px.backToBBCode",
           "when": "resourceScheme == pxmd",
           "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "resourceScheme == pxmd",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
+          "group": "navigation@3"
         },
         {
           "command": "px.convertMarkdownToBBCode",

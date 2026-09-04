@@ -96,6 +96,14 @@ function flushSave(): void {
   send({ type: "saveLocal", description: draftDescription, translations: draftTranslations });
 }
 
+/** Re-read every description from disk. One action, offered on every row. */
+function reloadLocalFiles(): void {
+  // Drop the pending autosave so the reload cannot be overwritten mid-flight.
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  send({ type: "reload" });
+}
+
 /** The languages worth asking Steam about: drafted plus suggested. */
 function languagesOfInterest(): string[] {
   const langs = new Set<string>(Object.keys(draftTranslations));
@@ -389,6 +397,79 @@ function renderDescription(): void {
   fillPreview($("descPreview"), draftDescription, "", "No description yet. Edit file writes one.");
 }
 
+/**
+ * A preview with the edit button pinned over its top left corner. The button
+ * sits beside the scroll box, not in it, so it stays put as the text scrolls.
+ */
+function previewBox(editTip: string, onEdit: () => void): { box: HTMLElement; preview: HTMLElement } {
+  const box = document.createElement("div");
+  box.className = "bbprev-box";
+  const preview = document.createElement("div");
+  preview.className = "bbprev";
+  const edit = document.createElement("button");
+  edit.className = "px-btn bbprev-edit";
+  edit.dataset.variant = "ghost";
+  edit.dataset.size = "icon-xs";
+  edit.setAttribute("aria-label", editTip);
+  edit.setAttribute("data-tip", editTip);
+  edit.setAttribute("data-tip-wrap", "");
+  edit.append(iconEl("pencil"));
+  edit.addEventListener("click", onEdit);
+  box.append(preview, edit);
+  return { box, preview };
+}
+
+/**
+ * The row under a description preview: what the file is, then Edit file,
+ * Reload and Fetch from Steam. The default description carries the same three
+ * in html.ts, in the same order and sizes.
+ */
+function fileActionsRow(opts: {
+  hint: string;
+  editTip: string;
+  onEdit: () => void;
+  fetchTip: string;
+  fetchDisabled: boolean;
+  onFetch: () => void;
+}): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "hintline";
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = opts.hint;
+  const grow = document.createElement("span");
+  grow.className = "px-grow";
+  const button = (
+    variant: string,
+    icon: Parameters<typeof iconEl>[0],
+    label: string,
+    tip: string,
+    onClick: () => void
+  ): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.className = "px-btn";
+    b.dataset.variant = variant;
+    b.dataset.size = "sm";
+    b.setAttribute("data-tip", tip);
+    b.setAttribute("data-tip-wrap", "");
+    b.append(iconEl(icon), document.createTextNode(` ${label}`));
+    b.addEventListener("click", onClick);
+    return b;
+  };
+  const edit = button("outline", "pencil", "Edit file", opts.editTip, opts.onEdit);
+  const reload = button(
+    "ghost",
+    "rotate",
+    "Reload",
+    "Re-read the description and translations from the local files",
+    reloadLocalFiles
+  );
+  const fetch = button("ghost", "arrowDown", "Fetch from Steam", opts.fetchTip, opts.onFetch);
+  fetch.disabled = opts.fetchDisabled;
+  row.append(hint, grow, edit, reload, fetch);
+  return row;
+}
+
 /** One BBCode preview box, or the muted line that stands in for empty text. */
 function fillPreview(box: HTMLElement, text: string, lang: string, empty: string): void {
   const blank = text.trim() === "";
@@ -485,58 +566,41 @@ function translationRow(lang: string): HTMLElement {
     queueSave();
     renderPublish();
   });
-  const prev = document.createElement("div");
-  prev.className = "bbprev";
+  const prev = previewBox(`Edit the ${langLabel(lang)} description`, () =>
+    send({ type: "openListingFile", lang })
+  );
   fillPreview(
-    prev,
+    prev.preview,
     draft.description ?? "",
     lang,
     `No ${langLabel(lang)} description yet. Edit file writes one.`
   );
-  // The description is edited in its own file, like the default one.
-  const fileRow = document.createElement("div");
-  fileRow.className = "hintline";
-  const grow = document.createElement("span");
-  grow.className = "px-grow";
-  const open = document.createElement("button");
-  open.className = "px-btn";
-  open.dataset.variant = "outline";
-  open.dataset.size = "sm";
-  open.setAttribute("data-tip", `Open translations/${lang}/description.bbcode in the editor`);
-  open.setAttribute("data-tip-wrap", "");
-  open.append(iconEl("pencil"), document.createTextNode(" Edit file"));
-  open.addEventListener("click", (e) => {
-    e.stopPropagation();
-    send({ type: "openListingFile", lang });
-  });
-  fileRow.append(grow, open);
-  body.append(title, prev, fileRow);
 
+  // The same row as the default description's, so the two read as one design.
   const liveT = liveTranslations[lang];
-  if (liveT) {
-    const hint = document.createElement("div");
-    hint.className = "livehint";
-    const label = document.createElement("span");
-    label.textContent = "on Steam:";
-    const text = document.createElement("span");
-    text.className = "text";
-    text.textContent = `${liveT.title} - ${liveT.description.slice(0, 160) || "(no description)"}`;
-    text.setAttribute("data-tip", "What Steam serves for this language right now.");
-    const pull = document.createElement("button");
-    pull.className = "px-btn";
-    pull.dataset.variant = "ghost";
-    pull.dataset.size = "icon-xs";
-    pull.setAttribute("data-tip", "Replace the drafts with what Steam serves for this language");
-    pull.append(iconEl("arrowDown"));
-    pull.addEventListener("click", () => {
+  const hasLive = !!liveT && (liveT.title.trim() !== "" || liveT.description.trim() !== "");
+  const fetchTip = !liveT
+    ? "Steam has not answered for this language yet."
+    : !hasLive
+      ? "Steam serves no text for this language."
+      : `Replace the drafts with what Steam serves: ${liveT.title} - ${
+          liveT.description.slice(0, 160) || "(no description)"
+        }`;
+  const fileRow = fileActionsRow({
+    hint: `Edit translations/${lang}/description.bbcode in the editor.`,
+    editTip: `Open translations/${lang}/description.bbcode in the editor`,
+    onEdit: () => send({ type: "openListingFile", lang }),
+    fetchTip,
+    fetchDisabled: !hasLive,
+    onFetch: () => {
+      if (!liveT) return;
       draftTranslations[lang] = { title: liveT.title, description: liveT.description };
       queueSave();
       renderTranslations();
       renderPublish();
-    });
-    hint.append(label, text, pull);
-    body.append(hint);
-  }
+    },
+  });
+  body.append(title, prev.box, fileRow);
 
   row.append(head, body);
   return row;
@@ -1556,12 +1620,9 @@ $("openPreviews").addEventListener("click", () => send({ type: "openPreviewsFold
   });
 }
 $("openDescFile").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
-$("reloadLocal").addEventListener("click", () => {
-  // Drop the pending autosave so the reload cannot be overwritten mid-flight.
-  clearTimeout(saveTimer);
-  saveTimer = undefined;
-  send({ type: "reload" });
-});
+$("descPreviewEdit").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
+$("reloadLocal").addEventListener("click", reloadLocalFiles);
+$("bbcodeHelp").addEventListener("click", () => send({ type: "bbcodeHelp" }));
 $("previewEmpty").style.cursor = "pointer";
 $("previewEmpty").setAttribute("data-tip", "Pick an image to use as the Workshop preview");
 $("previewEmpty").addEventListener("click", () => send({ type: "pickPreview" }));

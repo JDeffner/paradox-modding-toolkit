@@ -189,6 +189,12 @@ function hub(): WikiHubEntry[] {
       target: { page: STEAM_ERRORS_ARTICLE },
     },
     {
+      label: "Steam BBCode",
+      icon: "fileText",
+      tip: "Every tag Steam renders in a description, changenote or translation, with the syntax.",
+      target: { page: STEAM_BBCODE_ARTICLE },
+    },
+    {
       label: "Modding Tools",
       icon: "wrench",
       tip: "Tools other modders built for the game you mod: map editors, translators, audio, history converters, with links.",
@@ -205,6 +211,7 @@ function hub(): WikiHubEntry[] {
 
 /** The pages that are not diagnostics and not the image guidelines. */
 export const STEAM_ERRORS_ARTICLE = "steam-error-codes";
+export const STEAM_BBCODE_ARTICLE = "steam-bbcode";
 export const CREDITS_ARTICLE = "credits";
 /** One page per game shares this id; the game switch picks which one shows. */
 export const MODDING_TOOLS_ARTICLE = "modding-tools";
@@ -241,6 +248,15 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       title: "Steam Error Codes",
       section: "Steam Workshop",
       markdown: steam,
+    });
+  }
+  const bbcode = read(context.asAbsolutePath("media/steam-bbcode.md"));
+  if (bbcode) {
+    articles.push({
+      id: STEAM_BBCODE_ARTICLE,
+      title: "Steam BBCode",
+      section: "Steam Workshop",
+      markdown: bbcode,
     });
   }
   articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", markdown: creditsMarkdown() });

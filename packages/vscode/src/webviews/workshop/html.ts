@@ -49,7 +49,10 @@ ${uiCss}
   #jobProgress .bar { flex: 0 0 120px; height: 3px; border-radius: 2px; background: var(--px-muted); overflow: hidden; }
   #jobProgress .bar > span { display: block; height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
   #jobProgress .bar[data-indeterminate] > span { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
-  #main { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  /* Vertical only: overflow-y auto alone would make the x axis auto too,
+     so anything too wide for the pane would scroll the whole page sideways.
+     Every wide thing (preview tables, code blocks) scrolls in its own box. */
+  #main { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
   /* The editor area is usually the window minus the Activity Bar and an open
      Project sidebar (about 1000 to 1500px). One column until both cards get
      about 560px (2 * 560 + gap + padding = 1164px); capped and centered when
@@ -112,8 +115,11 @@ ${uiCss}
   .stat .k { display: flex; align-items: center; gap: 3px; color: var(--px-muted-fg); font-size: var(--px-text-xs); min-width: 0; }
   .stat .k .px-icon { width: 11px; height: 11px; flex: 0 0 auto; }
   .stat .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hintline { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .hintline .px-grow { flex: 1 1 auto; }
+  /* Wraps: the buttons never shrink (nowrap), so a narrow pane has to move
+     them to their own line rather than push the card past the page. */
+  .hintline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .hintline .px-grow { flex: 1 1 auto; min-width: 0; }
+  .hintline .hint { min-width: 0; }
   #translations { display: flex; flex-direction: column; gap: 6px; }
   .lang { border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
   .lang > .head {
@@ -125,8 +131,6 @@ ${uiCss}
   .lang > .body { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; }
   .lang[data-collapsed] > .body { display: none; }
   .lang .px-input { width: 100%; }
-  .lang .livehint { display: flex; align-items: baseline; gap: 6px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .lang .livehint .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   #publishRows { display: flex; flex-direction: column; gap: 8px; }
   .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .pub-row .lbl { min-width: 0; }
@@ -159,7 +163,11 @@ ${uiCss}
   .tag-chip button .px-icon { width: 11px; height: 11px; }
   #tagAdd input { width: 130px; }
 ${BBPREV_CSS}
-  .lang .bbprev { min-height: 90px; }
+  /* A starting height, not the final one: the reader drags the bottom edge
+     down for more. The description gets the taller start, a language row the
+     shorter one, and each can be dragged back to its min-height. */
+  #descPreview { height: 220px; }
+  .lang .bbprev { min-height: 90px; height: 160px; }
   /* The description files are edited in the editor: an empty one says so. */
   .bbprev.empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Upload confirmation modal rows. */
@@ -358,9 +366,13 @@ ${BBPREV_CSS}
     </div>
     <div class="section wide">
       <div class="px-panel-title">Description</div>
-      <div id="descPreview" class="bbprev"></div>
+      <div class="bbprev-box">
+        <div id="descPreview" class="bbprev"></div>
+        <button id="descPreviewEdit" class="px-btn bbprev-edit" data-variant="ghost" data-size="icon-xs" aria-label="Edit description.bbcode" data-tip="Edit description.bbcode">${icon("pencil")}</button>
+      </div>
       <div class="hintline">
-        <span>Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
+        <span class="hint">Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
+        <button id="bbcodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
         <span class="px-grow"></span>
         <button id="openDescFile" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Edit file</button>
         <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>

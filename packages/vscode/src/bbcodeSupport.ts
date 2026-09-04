@@ -18,6 +18,7 @@ import { bbcodeToMarkdown, markdownToBBCode } from "./steam/bbcodeMarkdown";
 import { bbcodeToHtml } from "./webviews/workshop/bbcode";
 import { BBPREV_CSS } from "./webviews/workshop/bbcodeCss";
 import { makeNonce } from "./webviews/nonce";
+import { STEAM_BBCODE_ARTICLE } from "./webviews/wiki/panel";
 import { tabIcon } from "./webviews/tabIcons";
 import uiCss from "./webviews/shared/ui.css";
 
@@ -124,14 +125,14 @@ class BBCodePreview {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
-  static show(context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean): void {
+  static show(context: vscode.ExtensionContext, document: vscode.TextDocument, sideBySide: boolean): void {
     const existing = BBCodePreview.instance;
     if (existing) {
-      existing.retarget(editor.document);
+      existing.retarget(document);
       existing.panel.reveal(sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, sideBySide);
       return;
     }
-    BBCodePreview.instance = new BBCodePreview(context, editor, sideBySide);
+    BBCodePreview.instance = new BBCodePreview(context, document, sideBySide);
   }
 
   /** The preview's source, back in a text editor (the title-bar button). */
@@ -144,11 +145,11 @@ class BBCodePreview {
     });
   }
 
-  private constructor(_context: vscode.ExtensionContext, editor: vscode.TextEditor, sideBySide: boolean) {
-    this.uri = editor.document.uri;
+  private constructor(_context: vscode.ExtensionContext, document: vscode.TextDocument, sideBySide: boolean) {
+    this.uri = document.uri;
     this.panel = vscode.window.createWebviewPanel(
       "px.bbcodePreview",
-      previewTitle(editor.document),
+      previewTitle(document),
       {
         viewColumn: sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
         preserveFocus: sideBySide,
@@ -171,7 +172,7 @@ class BBCodePreview {
       for (const d of this.disposables.splice(0)) d.dispose();
       BBCodePreview.instance = undefined;
     });
-    this.update(editor.document);
+    this.update(document);
   }
 
   private retarget(document: vscode.TextDocument): void {
@@ -217,7 +218,11 @@ ${uiCss}
 ${BBPREV_CSS}
   body { padding: 0; }
   #page { max-width: 760px; margin: 0 auto; padding: 14px 16px 40px; }
-  #page .bbprev { border: none; background: none; padding: 0; }
+  /* The whole file, not a capped box: this page IS the preview, so it scrolls. */
+  #page .bbprev {
+    border: none; background: none; padding: 0;
+    height: auto; min-height: 0; resize: none; overflow: visible;
+  }
 </style>
 </head>
 <body>
@@ -339,13 +344,22 @@ async function backToBBCode(): Promise<void> {
   await vscode.window.showTextDocument(sourceUri(editor.document.uri), { preview: false });
 }
 
-function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): void {
+/**
+ * The rendered text of the active .bbcode file. The Markdown face of that
+ * file (the pxmd mirror) previews the file behind it, so the button works on
+ * both editors of the one document.
+ */
+async function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): Promise<void> {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || !isBBCode(editor.document)) {
+  const document =
+    editor && editor.document.uri.scheme === MIRROR_SCHEME
+      ? await vscode.workspace.openTextDocument(sourceUri(editor.document.uri))
+      : editor?.document;
+  if (!document || !isBBCode(document)) {
     void vscode.window.showInformationMessage("Paradox Modding Toolkit: open a .bbcode file to preview it.");
     return;
   }
-  BBCodePreview.show(context, editor, sideBySide);
+  BBCodePreview.show(context, document, sideBySide);
 }
 
 /**
@@ -395,8 +409,12 @@ async function convertActive(to: "md" | "bbcode"): Promise<void> {
 export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider("bbcode", completionProvider, "[", "/"),
-    vscode.commands.registerCommand("px.openBBCodePreview", () => openPreview(context, false)),
-    vscode.commands.registerCommand("px.openBBCodePreviewSide", () => openPreview(context, true)),
+    vscode.commands.registerCommand("px.openBBCodePreview", () => void openPreview(context, false)),
+    vscode.commands.registerCommand("px.openBBCodePreviewSide", () => void openPreview(context, true)),
+    vscode.commands.registerCommand(
+      "px.openBBCodeHelp",
+      () => void vscode.commands.executeCommand("px.openWiki", STEAM_BBCODE_ARTICLE)
+    ),
     vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource()),
     vscode.commands.registerCommand("px.convertBBCodeToMarkdown", () => convertActive("md")),
     vscode.commands.registerCommand("px.convertMarkdownToBBCode", () => convertActive("bbcode")),

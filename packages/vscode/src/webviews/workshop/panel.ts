@@ -571,6 +571,9 @@ export class WorkshopPanel {
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
         return;
       }
+      case "bbcodeHelp":
+        await vscode.commands.executeCommand("px.openBBCodeHelp");
+        return;
     }
   }
 
@@ -784,7 +787,12 @@ export class WorkshopPanel {
       fs.mkdirSync(path.dirname(chosen.file), { recursive: true });
       fs.writeFileSync(chosen.file, seed, "utf8");
     }
-    await vscode.window.showTextDocument(vscode.Uri.file(chosen.file), { preview: false });
+    // Beside, not in this column: the panel stays visible, so its watcher-fed
+    // preview updates as the file is saved.
+    await vscode.window.showTextDocument(vscode.Uri.file(chosen.file), {
+      viewColumn: vscode.ViewColumn.Beside,
+      preview: false,
+    });
   }
 
   /** Write one descriptor/metadata scalar; empty input leaves the file alone. */
