@@ -3,11 +3,11 @@
 ## Unreleased
 
 - **Coat of Arms Designer: the arms stay inside the shield, the catalog runs
-  to the bottom, one lock for the scale.** A house or dynasty frame now insets
-  the arms the way the game's own widgets do (the coat_of_arms_icon is 28 px
-  in a 40 px house widget and 44 in a 56 px dynasty widget, measured in
-  gui/shared/coat_of_arms.gui), so the pattern no longer sticks out past the
-  frame's shield. The pattern and layout catalogs fill the panel down to the
+  to the bottom, one lock for the scale.** A house or dynasty frame now fits
+  the arms into the hole in its own cell, measured off the texture (the
+  masks of these sheets are the full 160 px of the cell, so they said nothing
+  about the inset, and the pattern filled the cell and stuck out past the
+  frame's shield). The pattern and layout catalogs fill the panel down to the
   bottom edge and scroll without a bar of their own. Scale X and Scale Y sit
   either side of a lock button that ties them together; the flip checkboxes
   are gone, because the mirror tools under the numbers already do that, and

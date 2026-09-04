@@ -403,28 +403,70 @@ function armsRect(): { x: number; y: number; w: number; h: number } {
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
   const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
-  const ratio =
-    frameInset(frameId) ?? (mask && frame && cell > mask.naturalWidth ? mask.naturalWidth / cell : 1);
-  const w = canvas.width * ratio;
-  const h = canvas.height * ratio;
-  return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+  // A mask smaller than the cell says how far the arms sit in (the title
+  // pair); a mask the size of the cell says nothing, and the frame's own
+  // interior is measured instead (every house and dynasty sheet).
+  if (frame && mask && cell > mask.naturalWidth) {
+    const ratio = mask.naturalWidth / cell;
+    const w = canvas.width * ratio;
+    const h = canvas.height * ratio;
+    return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+  }
+  const inside = frame ? frameInterior(frame) : null;
+  if (!inside) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  return {
+    x: inside.x * canvas.width,
+    y: inside.y * canvas.height,
+    w: inside.w * canvas.width,
+    h: inside.h * canvas.height,
+  };
 }
 
 /**
- * How far a house or dynasty frame pulls the arms in. Their masks are the
- * full 160 px of the cell, so the mask ratio says nothing; the inset is the
- * widgets' own (gui/shared/coat_of_arms.gui, measured on 1.19): coa_house_widget
- * is 40 px around a 28 px coat_of_arms_icon, coa_dynasty_widget 56 around 44.
- * Without it the arms filled the whole cell and stuck out past the shield.
+ * The hole in a frame cell, as fractions of the cell: how far from the centre
+ * the frame's own paint starts, along the middle row and the middle column.
+ *
+ * The house and dynasty masks are the full 160 px of their cell (a shield
+ * whose top is row 0 and whose point is the last row), while the frame cell
+ * paints a border with a transparent middle (house_frame_22 cell 2: rows 8
+ * to 152, columns 8 to 150, measured on 1.19). The game fits the masked arms
+ * into that hole; drawing them at the cell size put the pattern's corners
+ * outside the shield. Measured once per frame and tier, off the texture the
+ * preview draws.
  */
-const FRAME_INSET: readonly [prefix: string, ratio: number][] = [
-  ["dynasty", 44 / 56],
-  ["house", 28 / 40],
-];
+const interiors = new Map<string, { x: number; y: number; w: number; h: number } | null>();
 
-function frameInset(id: string): number | null {
-  const hit = FRAME_INSET.find(([prefix]) => id.startsWith(prefix) || id.includes("_" + prefix));
-  return hit ? hit[1] : null;
+function frameInterior(frame: HTMLImageElement): { x: number; y: number; w: number; h: number } | null {
+  const cells = frameCells(frame);
+  const index = frameCellIndex(cells);
+  const key = `${frameId}:${index}`;
+  const hit = interiors.get(key);
+  if (hit !== undefined) return hit;
+  const cell = Math.round(frame.naturalWidth / cells);
+  const size = frame.naturalHeight;
+  const c = document.createElement("canvas");
+  c.width = cell;
+  c.height = size;
+  const cctx = c.getContext("2d", { willReadFrequently: true })!;
+  cctx.drawImage(frame, index * cell, 0, cell, size, 0, 0, cell, size);
+  const alpha = cctx.getImageData(0, 0, cell, size).data;
+  const opaque = (x: number, y: number): boolean => alpha[(y * cell + x) * 4 + 3] >= 128;
+  const midX = Math.floor(cell / 2);
+  const midY = Math.floor(size / 2);
+  let out: { x: number; y: number; w: number; h: number } | null = null;
+  if (!opaque(midX, midY)) {
+    let left = midX;
+    while (left > 0 && !opaque(left - 1, midY)) left--;
+    let right = midX;
+    while (right < cell - 1 && !opaque(right + 1, midY)) right++;
+    let top = midY;
+    while (top > 0 && !opaque(midX, top - 1)) top--;
+    let bottom = midY;
+    while (bottom < size - 1 && !opaque(midX, bottom + 1)) bottom++;
+    out = { x: left / cell, y: top / size, w: (right - left + 1) / cell, h: (bottom - top + 1) / size };
+  }
+  interiors.set(key, out);
+  return out;
 }
 
 /**
