@@ -1557,7 +1557,7 @@ function selectionTools(): HTMLElement {
   group("Mirror");
   tool("⇄", "Mirror horizontally", true, () => editSelection((b) => mirrorGroup(b, "x")));
   tool("⇅", "Mirror vertically", true, () => editSelection((b) => mirrorGroup(b, "y")));
-  group("Copy");
+  group("Duplicate");
   const dup = iconButton("copy", "Duplicate in place", duplicateSelection);
   dup.dataset.variant = "outline";
   dup.dataset.size = "icon-sm";
