@@ -32,6 +32,7 @@ import {
   configChangedNotification,
   indexChangedNotification,
   indexStatsRequest,
+  locTextRequest,
   lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
@@ -41,6 +42,7 @@ import {
   type ParadoxSettings,
   type StatusPayload,
   type LocEntryInfo,
+  type LocTextParams,
   type LookupLocParams,
   type ModFileChangeParams,
   type ModScopedParams,
@@ -205,6 +207,7 @@ import { computeEventBanner } from "./overview/eventBanner";
 import { computeDefinitionForm } from "./creators/definitionForm";
 import { computeDefinitionEdits } from "./creators/definitionEdit";
 import { computeModifierFormats } from "./creators/modifierFormats";
+import { computeLocText, type LocTextDeps } from "./features/locText";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -1838,6 +1841,39 @@ connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[]
     .filter((d) => d.kind === "loc_key")
     .map((d) => ({ file: d.file, line: d.line, source: d.source, value: d.value }));
 });
+
+/**
+ * What paradox/locText resolves a value with: the loc index for the words, the
+ * definition index for the kind a `Get<Something>('name')` chain names, and the
+ * active profile's schema for the loc key that kind's names take. A kind the
+ * schema states nothing for falls back to the bare name inside locText.ts, so
+ * every game answers from its own table with no per-game branch here.
+ */
+function locTextDeps(): LocTextDeps {
+  return {
+    loc: locValue,
+    kindsOf: (name) => [
+      ...new Set(
+        data.index
+          .lookup(name)
+          .filter((d) => d.kind !== "loc_key")
+          .map((d) => d.kind)
+      ),
+    ],
+    patternsOf: (kind) => {
+      const entry = schema.entries.find((e) => e.kind === kind);
+      // The conservative `requiredLoc` first (the pattern nearly every
+      // definition of the kind defines), then the full `locPatterns` set.
+      return [entry?.requiredLoc?.[0], entry?.locPatterns?.[0]].filter((p): p is string => !!p);
+    },
+  };
+}
+
+// A loc value as the PLAYER reads it: markup stripped and the game's own
+// datafunctions resolved through the loc, definition and schema tables.
+connection.onRequest(locTextRequest, (params: LocTextParams | null) =>
+  computeLocText(params?.keys ?? [], locTextDeps())
+);
 
 // ---- language features ----------------------------------------------------------
 

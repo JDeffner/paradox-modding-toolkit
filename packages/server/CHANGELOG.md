@@ -8,6 +8,16 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- `paradox/locText`: a loc value as the PLAYER reads it, the reading half of
+  `paradox/lookupLoc`. Markup dropped, `$key$` substituted one level, concept
+  links and icon tags resolved, and any `Get<Something>('name')` chain ending
+  in `GetName` / `GetTypeName` / `GetNameNoTooltip` rendered through the loc
+  key its kind states. No table of function names: the kind comes from the
+  definition index and the key pattern from the active profile's schema, so
+  every game answers from its own table. Measured over one game's 609
+  `culture_parameter_*` values (280 carry a real call): 242 of the 280 render
+  completely, and an expression only the running game can finish keeps the
+  chain's last word with `resolved: false`.
 - `paradox/snippets` and skeleton completion items: a new definition's shape
   per kind, measured over the game's own files at build time
   (`scripts/build-skeletons.ts --game <id>` writes `data/<id>/skeletons.json`;

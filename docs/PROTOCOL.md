@@ -141,6 +141,7 @@ instead.
 | `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number }` — re-parse script_docs logs |
 | `paradox/indexStats` | request | `null` → `IndexStats` (definition counts by kind/source) |
 | `paradox/lookupLoc` | request | `{ key: string }` → `LocEntryInfo[]` — localization entries for a key, mod first |
+| `paradox/locText` | request | `LocTextParams` → `LocTextResult` — the same values as the PLAYER reads them: `{ raw, text, resolved }` per key, with the game's markup stripped and its `[ … ]` datafunctions resolved. A key the loc index cannot find is absent from `values` |
 | `paradox/modOverview` | request | `ModScopedParams` → `ModOverview` — content inventory by kind |
 | `paradox/locCoverage` | request | `ModScopedParams` → `LocCoverage[]` — per-language missing/orphaned/untranslated keys |
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
@@ -653,6 +654,45 @@ direction in words ("5 days faster"). `lines` runs any loc key through the same
 chain: CK3 prints a tradition's cost as `PRESTIGE_COST` = `"[prestige_i]
 $VALUE|0$"`, and a client that asks for that key gets the prestige icon and the
 `$VALUE|0$` slot back as parts, with the number's decimals in the slot.
+
+`paradox/locText` is the reading half of `paradox/lookupLoc`. `lookupLoc`
+answers a loc value VERBATIM, which is what an editor needs; a panel that shows
+the value needs the sentence. CK3 words a culture parameter as `"The
+[GetTrait('rough_terrain_expert').GetName( GetNullCharacter )] Commander Trait
+is more common"` (145 of the 280 `culture_parameter_*` values that carry a real
+call take that one shape, measured over the 609 english values), and a form
+that prints it verbatim shows the modder brackets. Each answered key carries
+`raw` (byte for byte what `lookupLoc` gives), `text`, and `resolved`, which is
+false when any part of the value stayed a word for something the server could
+not finish. A key the loc index does not have is ABSENT from `values`, so a
+client shows the key itself rather than a defined blank.
+
+The rules `text` follows, in order: the game's `#tag … #!`, `§Y … §!` and
+`@icon!` markup is dropped; a nested `$key$` is substituted one level from the
+loc index (an unfilled slot such as `$VALUE|0$` stays verbatim and sets
+`resolved: false`); `[culture|E]` concept links and `Concept('x', … )` become
+that concept's own word; `[prestige_i]` icon tags are dropped with the space
+they leave; `Localize('k')` becomes its value; `SelectLocalization( cond, 'a',
+'b' )` becomes the value of `'a'`, the branch a player with the DLC reads; and
+any `Get<Something>('name')` chain ending in `GetName`, `GetTypeName` or
+`GetNameNoTooltip` becomes that definition's own name. Every other expression
+falls back to the chain's last word (`ScriptValue`) with `resolved: false`,
+never an invented value. What the value a resolved call lands on holds is
+rendered one level further, so a key that IS a call (`court_physician` =
+`"[GetCourtPositionType('court_physician_court_position').GetName()]"`) reads
+as words.
+
+Nothing in that chain is written per game. The words come from the loc index
+(mod entries shadow the game's), the KIND a `Get<Something>('name')` names
+comes from the definition index, and the loc key that kind's names take comes
+from the active profile's schema entry (`requiredLoc` first, then
+`locPatterns`, then the bare name): CK3's `trait` states `trait_$`, so
+`GetTrait('brave')` reads `trait_brave`, while `men_at_arms` states `$` and
+`GetMaA('bowmen')` reads `bowmen`. Where a name carries several kinds, the one
+whose PascalCase spelling the function name contains wins
+(`GetCourtPositionType` → `court_position`). A game whose schema states no
+pattern for a kind still resolves whatever the bare name localizes, and answers
+the name itself when nothing does.
 
 `paradox/definitionEdit` is the script sibling of `paradox/guiSourceEdit` and
 follows the same contract: the server never writes, `edits` are
