@@ -29,12 +29,11 @@ import { installTips } from "../../shared/tips";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
-import { saveTargetLine } from "../../shared/saveTarget";
+import { saveTargetLine, shortPath } from "../../shared/saveTarget";
 import { scriptSection } from "../../shared/scriptSection";
 import {
   iconField,
   locField,
-  refField,
   scriptField,
   textField,
   titleCaseFromName,
@@ -42,13 +41,23 @@ import {
   type ModifierRow,
 } from "../../shared/fields";
 import { chanceField, conditionField, effectField, type BlockField, type EffectField } from "./builders";
-import type { AppToHost, CreatorInit, HostToApp, LoadedPerk, SaveDefinition } from "../messages";
+import type {
+  AppToHost,
+  CreatorInit,
+  HostToApp,
+  IconEntry,
+  LoadedPerk,
+  SaveDefinition,
+  TargetKind,
+} from "../messages";
+import type { CreatorSaveTarget } from "../../shared/creatorMessages";
 import { baseName } from "../../shared/scriptBlock";
 import { rowsField } from "./rowsField";
+import { doctrineField, type DoctrineField } from "./doctrineField";
 import {
+  applyRepeated,
   applyValues,
   changedProperties,
-  doctrineOf,
   effectLocKey,
   locKeyFor,
   modifierRows,
@@ -58,7 +67,7 @@ import {
   perkNameFor,
   updateModifierRows,
   valueOf,
-  withDoctrine,
+  valuesOf,
   wrapBlockValue,
   writeDefBlock,
   writeModifierBlock,
@@ -91,6 +100,11 @@ const LEGACY_KEY = "legacy";
 const CHAR_MOD = "character_modifier";
 const DOCTRINE_MOD = "doctrine_character_modifier";
 const TRAITS_KEY = "traits";
+/**
+ * The line inside a doctrine modifier block that is the CONDITION and not a
+ * modifier, per `_dynasty_perks.info`: `doctrine = doctrine_theocracy_lay_clergy`.
+ */
+const DOCTRINE_KEY = "doctrine";
 /** The scalar key that hands a perk's holder one fixed trait. */
 const TRAIT_KEY = "trait";
 /**
@@ -132,8 +146,13 @@ const TRACK_MASK = "gfx/interface/component_masks/mask_legacy_track.dds";
 
 /** Small enough for a picker row, big enough for a chip: the thumbnails' cap. */
 const THUMB_DIM = 48;
-/** The track picture and the two textures it is drawn through, at row size. */
-const ART_DIM = 192;
+/**
+ * The strip's own decodes: the illustration and the two textures it is drawn
+ * through. The illustration is 4216 x 368 (measured over the game's 21 files),
+ * far the largest texture any creator loads, and the strip is a few hundred
+ * pixels wide, so the decode is capped rather than paid in full.
+ */
+const STRIP_DIM = 1024;
 
 let init: CreatorInit | null = null;
 let trackForm: DefinitionForm | null = null;
@@ -153,7 +172,7 @@ let dropped: { name: string; file: string }[] = [];
 // --- the track's own controls ------------------------------------------------
 let trackLoc: { pattern: string; field: Field<string> }[] = [];
 let trackIcon: Field<string> | null = null;
-let iconDoc = "";
+let trackIllustration: Field<string> | null = null;
 let trackShown: BlockField | null = null;
 let trackOthers: Record<string, Field<string>> = {};
 
@@ -173,8 +192,8 @@ interface Perk {
   loc: { pattern: string; field: Field<string> }[];
   /** Modifier blocks keep the entries no row can hold, so they survive a save. */
   mods: Record<string, { entries: ModifierEntry[]; field: Field<ModifierRow[]> }>;
-  /** The `doctrine =` line of doctrine_character_modifier, as its own picker. */
-  doctrine: Field<string> | null;
+  /** `doctrine_character_modifier` as the 0..n blocks a perk really writes. */
+  doctrines: DoctrineField | null;
   /** The three blocks with a builder: can_be_picked, effect, ai_chance. */
   blocks: Record<string, BlockField>;
   /** The effect builder again, for the loc and the keys only it knows. */
@@ -195,6 +214,44 @@ function el(tag: string, cls = "", text?: string): HTMLElement {
 
 function trackName(): string {
   return $<HTMLInputElement>("name").value.trim();
+}
+
+/**
+ * A folding section with a one-line lede: the Tradition Creator's own section
+ * chrome, so a modder who learned one creator has learned this one. The head
+ * is what names a key here, which is why the controls inside are drawn `bare`.
+ */
+interface Fold {
+  el: HTMLElement;
+  body: HTMLElement;
+  title: HTMLElement;
+  open(next: boolean): void;
+}
+
+function fold(title: string, lede: string | undefined, isOpen: boolean): Fold {
+  const box = el("section", "fold");
+  if (isOpen) box.dataset.open = "";
+  const head = document.createElement("button");
+  head.className = "fold-head";
+  head.type = "button";
+  const caption = el("span", "fold-title", title);
+  head.append(iconEl("chevronRight"), caption);
+  head.onclick = () => {
+    if (box.hasAttribute("data-open")) box.removeAttribute("data-open");
+    else box.dataset.open = "";
+  };
+  const body = el("div", "fold-body");
+  if (lede) body.append(el("div", "lede", lede));
+  box.append(head, body);
+  return {
+    el: box,
+    body,
+    title: caption,
+    open: (next) => {
+      if (next) box.dataset.open = "";
+      else box.removeAttribute("data-open");
+    },
+  };
 }
 
 function perkName(perk: Perk): string {
@@ -280,20 +337,126 @@ function vocabulary(items: readonly EventVocabularyItem[]): EventVocabularyItem[
 }
 
 // ---------------------------------------------------------------------------
-// The track section
+// The row the game draws: the icon, the words, the illustration, the perks
 // ---------------------------------------------------------------------------
+
+/**
+ * The legacy window's own row, built once and moved into its section on every
+ * rebuild (`window_dynasty_legacy.gui`, measured): the 80 x 80 icon beside the
+ * track's name and description, and under them the illustration with the perk
+ * tiles laid across it.
+ *
+ * The illustration is ONE picture behind the whole row, not one per perk: the
+ * game's two `background` widgets fill the box the perk items define, so the
+ * 4216 x 368 file is stretched over the tiles and drawn twice, each pass
+ * multiplied by the frame and the mask. Two stacked layers here compose the
+ * same way a second pass does in the game.
+ */
+function buildDrawn(): {
+  el: HTMLElement;
+  note: HTMLElement;
+  perks: HTMLElement;
+  add: HTMLElement;
+} {
+  const row = el("div");
+  row.id = "legacyRow";
+
+  const box = el("div");
+  box.id = "trackBox";
+  const art = el("div");
+  art.id = "trackArt";
+  art.dataset.tip = "The game builds this picture's path from the track's key.";
+  art.dataset.tipWrap = "";
+  art.append(iconEl("image"));
+  const words = el("div");
+  words.id = "trackWords";
+  const rowName = el("div");
+  rowName.id = "rowName";
+  const rowDesc = el("div");
+  rowDesc.id = "rowDesc";
+  words.append(rowName, rowDesc);
+  box.append(art, words);
+
+  const stripRow = el("div");
+  stripRow.id = "stripRow";
+  const strip = el("div");
+  strip.id = "strip";
+  const stripArt = el("div");
+  stripArt.id = "stripArt";
+  stripArt.dataset.empty = "";
+  stripArt.dataset.tip =
+    "The illustration, stretched behind every perk of the track. The game builds its path from the track's key.";
+  stripArt.dataset.tipWrap = "";
+  const perksHost = el("div");
+  perksHost.id = "perks";
+  strip.append(stripArt, perksHost);
+
+  const add = el("div", "perktile");
+  add.id = "addPerk";
+  add.dataset.add = "";
+  add.tabIndex = 0;
+  add.setAttribute("role", "button");
+  add.dataset.tip = "Add a perk to the end of the track";
+  add.append(iconEl("plus"), el("span", "", "Add perk"));
+  stripRow.append(strip, add);
+
+  const note = el("div", "lede");
+  note.id = "perkNote";
+  row.append(box, stripRow);
+  return { el: row, note, perks: perksHost, add };
+}
+
+const drawn = buildDrawn();
+
+// ---------------------------------------------------------------------------
+// The track's sections
+// ---------------------------------------------------------------------------
+
+/**
+ * What the game reads each picture from, and what it expects to find there.
+ * Both paths are built from the track's key and neither is written into the
+ * block, so a pick is a file copy and never a script line. The sizes are the
+ * game's own files, measured over its 21 tracks (2026-09-04).
+ */
+const ART_NOTES = {
+  icon: {
+    size: "140 x 140 px, the game shows it at 80 x 80.",
+    doc: "There is no icon path to write into the block, so picking a picture here copies it into your mod under your track's key.",
+  },
+  illustration: {
+    size: "4216 x 368 px, drawn twice behind the perks, each pass masked to 2108 x 184.",
+    doc: "The window's wide picture, stretched under the whole row of perks. Picking one copies it into your mod under your track's key.",
+  },
+};
+
+/** One picture picker and the line that says what the game expects of it. */
+function artRow(field: Field<string>, folder: string, note: { size: string; doc: string }): HTMLElement[] {
+  const line = el("div", "artnote");
+  line.append(document.createTextNode(`${note.size} `));
+  const code = document.createElement("code");
+  code.textContent = `${folder}/<track key>.dds`;
+  line.append(code);
+  return [field.el, line];
+}
 
 function buildTrack(loc: Record<string, string>): void {
   const form = trackForm!;
-  const host = $("trackFields");
-  const otherHost = $("trackOtherFields");
+  const host = $("sections");
   host.replaceChildren();
-  otherHost.replaceChildren();
   trackLoc = [];
+  trackIcon = null;
+  trackIllustration = null;
   trackShown = null;
   trackOthers = {};
 
   const name = trackName();
+
+  // --- Identity ------------------------------------------------------------
+  const identity = fold(
+    "Identity",
+    "The key is the only thing you must type. The names, the perk keys and both pictures follow it.",
+    true
+  );
   for (const pattern of form.locPatterns) {
     const key = locKeyFor(pattern, name);
     const isName = pattern.endsWith("_name");
@@ -305,49 +468,86 @@ function buildTrack(loc: Record<string, string>): void {
       placeholder: isName ? "What the player sees" : "One line under the track's name",
     });
     trackLoc.push({ pattern, field });
-    host.append(field.el);
+    identity.body.append(field.el);
   }
+  host.append(identity.el);
 
+  // --- Art -----------------------------------------------------------------
+  const art = fold(
+    "Art",
+    "Two pictures, both found by the track's key and neither written into the block.",
+    true
+  );
+  const block = el("div", "artblock");
+  const pickers = el("div", "px-stack");
   if (form.iconFolder) {
-    iconDoc =
-      `The game reads ${form.iconFolder}/<track key>.dds and there is no icon path to write into the block, ` +
-      `so picking a picture here copies it into your mod under your track's key.`;
     trackIcon = iconField({
       label: "Icon",
-      doc: iconDoc,
+      doc: `${ART_NOTES.icon.size} ${ART_NOTES.icon.doc}`,
       items: init!.icons,
       value: init!.icons.some((i) => i.key === name) ? name : "",
-      onCustom: () => send({ type: "customIcon", track: trackName() }),
+      onCustom: () => send({ type: "customIcon", track: trackName(), which: "icon" }),
       customLabel: "Custom picture…",
     });
-    trackIcon.onChange(paintRow);
-    host.append(trackIcon.el);
+    trackIcon.onChange(paintArt);
+    pickers.append(...artRow(trackIcon, form.iconFolder, ART_NOTES.icon));
   }
+  if (init?.illustrationFolder) {
+    trackIllustration = iconField({
+      label: "Illustration",
+      doc: `${ART_NOTES.illustration.size} ${ART_NOTES.illustration.doc}`,
+      items: init.illustrations,
+      value: init.illustrations.some((i) => i.key === name) ? name : "",
+      onCustom: () => send({ type: "customIcon", track: trackName(), which: "illustration" }),
+      customLabel: "Custom picture…",
+    });
+    trackIllustration.onChange(paintArt);
+    pickers.append(...artRow(trackIllustration, init.illustrationFolder, ART_NOTES.illustration));
+  }
+  block.append(pickers);
+  art.body.append(block);
+  if (form.iconFolder || init?.illustrationFolder) host.append(art.el);
 
-  const owned = [SHOWN_KEY];
+  // --- Shown when ----------------------------------------------------------
   const isShown = form.keys.find((k) => k.key === SHOWN_KEY);
   if (isShown) {
+    const shown = fold("Shown when", isShown.doc ?? "When the game offers this track at all.", false);
     trackShown = conditionField({
       label: isShown.key,
-      ...(isShown.doc ? { doc: isShown.doc } : {}),
+      bare: true,
       conditions: form.conditions ?? {},
       value: valueOf(trackOriginal ?? newDefBlock(name), isShown.key) ?? "",
       placeholder: EXAMPLE.isShown,
     });
     trackShown.onChange(refreshScript);
-    host.append(trackShown.el);
+    shown.body.append(trackShown.el);
+    host.append(shown.el);
   }
 
-  const others = otherKeys(form, owned, trackOriginal);
-  for (const spec of others) {
-    const field = rawField(spec, valueOf(trackOriginal ?? newDefBlock(name), spec.key) ?? "");
-    trackOthers[spec.key] = field;
-    otherHost.append(field.el);
+  // --- Other keys ----------------------------------------------------------
+  const others = otherKeys(form, [SHOWN_KEY], trackOriginal);
+  if (others.length > 0) {
+    const rest = fold(
+      "Other keys the game documents for a legacy",
+      "Everything the harvest reports that no control above stands for.",
+      false
+    );
+    for (const spec of others) {
+      const field = rawField(spec, valueOf(trackOriginal ?? newDefBlock(name), spec.key) ?? "");
+      trackOthers[spec.key] = field;
+      rest.body.append(field.el);
+    }
+    host.append(rest.el);
   }
-  $("trackOther").hidden = others.length === 0;
+
+  // --- The row the game draws ---------------------------------------------
+  const shape = fold("The track as the game draws it", undefined, true);
+  shape.body.append(drawn.note, drawn.el);
+  host.append(shape.el);
+
   for (const { field } of trackLoc) {
     field.onChange(() => {
-      paintRow();
+      paintArt();
       refreshScript();
     });
   }
@@ -371,34 +571,78 @@ function trackBlock(): DefBlock {
   );
 }
 
-/** The row's own words and picture: the header fields, as the game shows them. */
-function paintRow(): void {
+/** The picture the modder picked, falling back to the one the key would find. */
+function pickedArt(field: Field<string> | null, items: readonly IconEntry[]): string {
+  const name = trackName();
+  return field?.get() || (items.some((i) => i.key === name) ? name : "");
+}
+
+/** Put the frame and the mask on a picture, when the host resolved both. */
+function maskWith(box: HTMLElement, on: boolean): void {
+  const frame = imageUrl(TRACK_FRAME);
+  const mask = imageUrl(TRACK_MASK);
+  if (on && frame && mask) {
+    box.dataset.masked = "";
+    box.classList.add("masked");
+    box.style.setProperty("--frame", `url("${frame}")`);
+    box.style.setProperty("--mask", `url("${mask}")`);
+  } else {
+    box.removeAttribute("data-masked");
+    box.classList.remove("masked");
+  }
+}
+
+/** The row's own words and pictures: the header fields, as the game shows them. */
+function paintArt(): void {
   const name = trackName();
   const words = trackLoc.map(({ pattern, field }) => ({ pattern, value: field.get().trim() }));
   $("rowName").textContent =
     words.find((w) => w.pattern.endsWith("_name"))?.value || titleCaseFromName(name) || "Your track";
   $("rowDesc").textContent = words.find((w) => !w.pattern.endsWith("_name"))?.value ?? "";
 
-  const art = $("trackArt");
-  const picked = trackIcon?.get() || (init?.icons.some((i) => i.key === name) ? name : "");
-  const url = init?.icons.find((i) => i.key === picked)?.url;
-  const frame = imageUrl(TRACK_FRAME);
-  const mask = imageUrl(TRACK_MASK);
-  art.replaceChildren();
-  if (url) {
+  const icon = $("trackArt");
+  const pickedIcon = pickedArt(trackIcon, init?.icons ?? []);
+  const iconUrl = init?.icons.find((i) => i.key === pickedIcon)?.url;
+  icon.replaceChildren();
+  if (iconUrl) {
     const img = document.createElement("img");
-    img.src = url;
-    img.alt = picked;
-    art.append(img);
+    img.src = iconUrl;
+    img.alt = pickedIcon;
+    icon.append(img);
   } else {
-    art.append(iconEl("image"));
+    icon.append(iconEl("image"));
   }
-  if (url && frame && mask) {
-    art.dataset.masked = "";
-    art.style.setProperty("--frame", `url("${frame}")`);
-    art.style.setProperty("--mask", `url("${mask}")`);
+  maskWith(icon, iconUrl !== undefined);
+
+  paintStrip();
+}
+
+/**
+ * The illustration under the perks. It is asked for at the strip's own cap and
+ * not at the thumbnail cap: the file is the widest texture any creator loads,
+ * and a 256 px decode of it is 22 px tall.
+ */
+function paintStrip(): void {
+  const strip = $("stripArt");
+  const picked = pickedArt(trackIllustration, init?.illustrations ?? []);
+  const folder = init?.illustrationFolder;
+  const path = folder && picked ? `${folder}/${picked}.dds` : "";
+  if (path) askImages([path], STRIP_DIM);
+  const url = path ? imageUrl(path) : null;
+  strip.replaceChildren();
+  if (url) {
+    // Two passes, exactly as the window draws it: the second multiplies the
+    // frame and the mask into the picture a second time.
+    for (let i = 0; i < 2; i++) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = i === 0 ? picked : "";
+      maskWith(img, true);
+      strip.append(img);
+    }
+    strip.removeAttribute("data-empty");
   } else {
-    art.removeAttribute("data-masked");
+    strip.dataset.empty = "";
   }
 }
 
@@ -413,6 +657,12 @@ function refItems(kind: string): EventVocabularyItem[] {
   return items;
 }
 
+/**
+ * The perk's form, section by section. Every title is the prose the key means
+ * and every lede is the harvest's own sentence about it, so the raw key is
+ * only ever a tooltip; the controls inside are drawn `bare` because the
+ * section head already names them.
+ */
 function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   const form = perkForm!;
   const original = loaded ? parseDefBlock(loaded.text) : null;
@@ -434,13 +684,15 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   tile.append(step, face, tools);
 
   const editor = el("div");
+  const identity = fold("Identity", "The key the game reads, and the name the player sees.", true);
   const key = textField({
     label: "Key",
     doc: "The perk's key. Its loc key and its default name follow it.",
     value: name,
     placeholder: perkNameFor(trackName() || "legacy", perks.length),
   });
-  editor.append(key.el);
+  identity.body.append(key.el);
+  editor.append(identity.el);
 
   const perk: Perk = {
     tile,
@@ -454,7 +706,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     file: loaded?.file ?? null,
     loc: [],
     mods: {},
-    doctrine: null,
+    doctrines: null,
     blocks: {},
     effect: null,
     others: {},
@@ -468,20 +720,25 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
       placeholder: titleCaseFromName(name) || "What the player sees",
     });
     perk.loc.push({ pattern, field });
-    editor.append(field.el);
+    identity.body.append(field.el);
   }
 
-  const modBlock = (blockKey: string): void => {
+  const modifiers = (form.modifiers ?? []).map((mod) => ({
+    value: mod.name,
+    ...(mod.doc ? { doc: mod.doc } : {}),
+  }));
+
+  /** One `name = number` block of the perk, in a section of its own. */
+  const modBlock = (blockKey: string, title: string, isOpen: boolean): void => {
     const spec = form.keys.find((k) => k.key === blockKey);
     if (!spec) return;
     const entries = parseModifierBlock(original ? (valueOf(original, blockKey) ?? "") : "");
+    const section = fold(title, spec.doc, isOpen || entries.length > 0);
+    section.title.dataset.tip = blockKey;
     const field = rowsField({
       label: blockKey,
-      ...(spec.doc ? { doc: spec.doc } : {}),
-      items: (form.modifiers ?? []).map((mod) => ({
-        value: mod.name,
-        ...(mod.doc ? { doc: mod.doc } : {}),
-      })),
+      bare: true,
+      items: modifiers,
       rows: modifierRows(entries),
       addLabel: "Add modifier",
       pickLabel: "pick a modifier",
@@ -489,47 +746,46 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
       preview: (row) => gameLine(row.name, row.value),
     });
     perk.mods[blockKey] = { entries, field };
-    editor.append(field.el);
+    section.body.append(field.el);
+    editor.append(section.el);
   };
 
-  modBlock(CHAR_MOD);
+  modBlock(CHAR_MOD, "Modifiers for every dynasty member", true);
 
-  // The doctrine block's condition is a key inside it, so it gets its own
-  // picker above the modifiers it applies with.
+  // A perk writes ONE `doctrine_character_modifier` per doctrine, and the
+  // game's own erudition_legacy_4 writes three, so the form holds a list.
   const doctrineSpec = form.keys.find((k) => k.key === DOCTRINE_MOD);
   if (doctrineSpec) {
-    const entries = parseModifierBlock(original ? (valueOf(original, DOCTRINE_MOD) ?? "") : "");
+    const values = original ? valuesOf(original, DOCTRINE_MOD) : [];
+    const section = fold("Doctrine modifiers", doctrineSpec.doc, values.length > 0);
+    section.title.dataset.tip = DOCTRINE_MOD;
     const inner = form.blocks?.[DOCTRINE_MOD]?.find((k) => k.key === "doctrine");
-    const kind = inner?.refKinds?.[0] ?? "doctrine";
-    const options = form.options[kind] ?? [];
-    const value = doctrineOf(entries);
-    perk.doctrine =
-      options.length > 0
-        ? refField({
-            label: "doctrine",
-            ...(inner?.doc ? { doc: inner.doc } : {}),
-            items: refItems(kind),
-            value,
-            thumb: (v) => imageUrl(refImage(kind, v)),
-          })
-        : textField({
-            label: "doctrine",
-            ...(inner?.doc ? { doc: inner.doc } : {}),
-            value,
-            ...(inner?.sampled?.length ? { suggestions: inner.sampled } : {}),
-            ...(inner?.example ? { placeholder: inner.example } : {}),
-          });
-    editor.append(perk.doctrine.el);
-    modBlock(DOCTRINE_MOD);
+    const kind = inner?.refKinds?.[0] ?? DOCTRINE_KEY;
+    const doctrines = form.options[kind] ?? [];
+    perk.doctrines = doctrineField({
+      values,
+      perk: name,
+      doctrines: doctrines.length > 0 ? refItems(kind) : [],
+      ...(inner?.doc ? { doctrineDoc: inner.doc } : {}),
+      thumb: (v) => imageUrl(refImage(kind, v)),
+      modifiers,
+      preview: (row) => gameLine(row.name, row.value),
+      locOf: (locKey) => locValues.get(locKey),
+    });
+    askLoc(perk.doctrines.keys());
+    section.body.append(perk.doctrines.el);
+    editor.append(section.el);
   }
 
   const traitsSpec = form.keys.find((k) => k.key === TRAITS_KEY);
   if (traitsSpec) {
     const entries = parseModifierBlock(original ? (valueOf(original, TRAITS_KEY) ?? "") : "");
     const kind = traitsSpec.refKinds?.[0] ?? TRAIT_KEY;
+    const section = fold("Traits granted", traitsSpec.doc, entries.length > 0);
+    section.title.dataset.tip = TRAITS_KEY;
     const field = rowsField({
       label: TRAITS_KEY,
-      ...(traitsSpec.doc ? { doc: traitsSpec.doc } : {}),
+      bare: true,
       items: refItems(kind),
       rows: modifierRows(entries),
       addLabel: "Add trait",
@@ -541,29 +797,31 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
       image: (v) => imageUrl(refImage(kind, v)),
     });
     perk.mods[TRAITS_KEY] = { entries, field };
-    editor.append(field.el);
+    section.body.append(field.el);
+    editor.append(section.el);
   }
 
   // The three blocks with a builder. Each is drawn only when the harvest says
   // the kind has the key, and each keeps the whole block as script when the
   // builder cannot show it (app/builders.ts).
-  const blockValue = (key: string): string => (original ? (valueOf(original, key) ?? "") : "");
-  const docOf = (key: string): { doc?: string } => {
-    const doc = form.keys.find((k) => k.key === key)?.doc;
-    return doc ? { doc } : {};
-  };
-  const has = (key: string): boolean => form.keys.some((k) => k.key === key);
-  const addBlock = (key: string, field: BlockField): void => {
-    perk.blocks[key] = field;
-    editor.append(field.el);
+  const blockValue = (blockKey: string): string => (original ? (valueOf(original, blockKey) ?? "") : "");
+  const docOf = (blockKey: string): string | undefined => form.keys.find((k) => k.key === blockKey)?.doc;
+  const has = (blockKey: string): boolean => form.keys.some((k) => k.key === blockKey);
+  const addBlock = (blockKey: string, section: Fold, field: BlockField): void => {
+    perk.blocks[blockKey] = field;
+    section.title.dataset.tip = blockKey;
+    section.body.append(field.el);
+    editor.append(section.el);
   };
 
   if (has(PICKED_KEY)) {
+    const section = fold("Can be picked when", docOf(PICKED_KEY), blockValue(PICKED_KEY) !== "");
     addBlock(
       PICKED_KEY,
+      section,
       conditionField({
         label: PICKED_KEY,
-        ...docOf(PICKED_KEY),
+        bare: true,
         conditions: form.conditions ?? {},
         value: blockValue(PICKED_KEY),
         placeholder: EXAMPLE.canBePicked,
@@ -571,24 +829,28 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     );
   }
   if (has(EFFECT_KEY)) {
+    const section = fold("On pick", docOf(EFFECT_KEY), true);
     perk.effect = effectField({
       label: EFFECT_KEY,
-      ...docOf(EFFECT_KEY),
+      bare: true,
       value: blockValue(EFFECT_KEY),
       name,
       placeholder: EXAMPLE.effect,
-      locOf: (key) => locValues.get(key),
+      locOf: (locKey) => locValues.get(locKey),
       onTemplate: (anchor) => pickTemplate(perk, anchor),
     });
-    addBlock(EFFECT_KEY, perk.effect);
+    addBlock(EFFECT_KEY, section, perk.effect);
     askLoc(perk.effect.keys());
   }
   if (has(CHANCE_KEY)) {
+    const section = fold("AI weight", docOf(CHANCE_KEY), blockValue(CHANCE_KEY) !== "");
     addBlock(
       CHANCE_KEY,
+      section,
       chanceField({
         label: CHANCE_KEY,
-        ...docOf(CHANCE_KEY),
+        bare: true,
+        handle: section.title,
         value: blockValue(CHANCE_KEY),
         placeholder: EXAMPLE.chance,
       })
@@ -598,14 +860,17 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   const owned = [LEGACY_KEY, CHAR_MOD, DOCTRINE_MOD, TRAITS_KEY, ...BUILT_KEYS];
   const others = otherKeys(form, owned, original);
   if (others.length > 0) {
-    const fold = document.createElement("details");
-    fold.append(el("summary", "note", "Other keys"));
+    const section = fold(
+      "Other keys",
+      "Everything the harvest reports that no section above stands for.",
+      false
+    );
     for (const spec of others) {
       const field = rawField(spec, original ? (valueOf(original, spec.key) ?? "") : "");
       perk.others[spec.key] = field;
-      fold.append(field.el);
+      section.body.append(field.el);
     }
-    editor.append(fold);
+    editor.append(section.el);
   }
 
   key.onChange(() => {
@@ -620,7 +885,10 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   };
   for (const { field } of perk.loc) field.onChange(touched);
   for (const { field } of Object.values(perk.mods)) field.onChange(touched);
-  perk.doctrine?.onChange(touched);
+  perk.doctrines?.onChange(() => {
+    askLoc(perk.doctrines?.keys() ?? []);
+    touched();
+  });
   for (const field of Object.values(perk.blocks)) field.onChange(touched);
   for (const field of Object.values(perk.others)) field.onChange(touched);
 
@@ -639,7 +907,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   };
 
   perks.push(perk);
-  $("perks").insertBefore(tile, addTile);
+  drawn.perks.append(tile);
   paintTile(perk);
   return perk;
 }
@@ -700,9 +968,10 @@ function renamePerk(perk: Perk): void {
     if (code) code.textContent = locKeyFor(pattern, name);
   });
   // The tooltip lines' loc keys follow it too, for every line whose key was
-  // the one derived from the old name.
+  // the one derived from the old name, and so do the doctrine blocks' names.
   perk.effect?.rename(was, name);
-  askLoc(perk.effect?.keys() ?? []);
+  perk.doctrines?.rename(was, name);
+  askLoc([...(perk.effect?.keys() ?? []), ...(perk.doctrines?.keys() ?? [])]);
 }
 
 async function removePerk(perk: Perk): Promise<void> {
@@ -729,18 +998,20 @@ async function removePerk(perk: Perk): Promise<void> {
 
 function renumber(): void {
   for (const perk of perks) paintTile(perk);
-  if (selected) $("sideTitle").textContent = `Perk ${perks.indexOf(selected) + 1}`;
+  paintSideHead();
 }
 
 function perkBlock(perk: Perk): DefBlock {
   const form = perkForm!;
   const name = perkName(perk) || "unnamed_perk";
   const base = perk.original ? { ...perk.original, name } : newDefBlock(name);
+  const order = form.keys.map((k) => k.key);
   const values: FieldValue[] = [{ key: LEGACY_KEY, value: trackName() || "unnamed_legacy_track" }];
   for (const [blockKey, mod] of Object.entries(perk.mods)) {
-    let entries = updateModifierRows(mod.entries, mod.field.get());
-    if (blockKey === DOCTRINE_MOD && perk.doctrine) entries = withDoctrine(entries, perk.doctrine.get());
-    values.push({ key: blockKey, value: writeModifierBlock(entries) });
+    values.push({
+      key: blockKey,
+      value: writeModifierBlock(updateModifierRows(mod.entries, mod.field.get())),
+    });
   }
   for (const [blockKey, field] of Object.entries(perk.blocks)) {
     values.push({ key: blockKey, value: field.get() });
@@ -749,11 +1020,22 @@ function perkBlock(perk: Perk): DefBlock {
     const spec = form.keys.find((k) => k.key === otherKey) ?? { key: otherKey };
     values.push({ key: otherKey, value: rawValue(spec, field) });
   }
-  return applyValues(
-    base,
-    values,
-    form.keys.map((k) => k.key)
-  );
+  const block = applyValues(base, values, order);
+  // The one key a perk may write more than once, so it is set as a list and
+  // not as a value (script.ts `applyRepeated`).
+  return perk.doctrines ? applyRepeated(block, DOCTRINE_MOD, perk.doctrines.blocks(), order) : block;
+}
+
+/**
+ * True when the perk's doctrine blocks are not the ones the file has. A key
+ * written several times cannot go through `setProperties`, which rewrites the
+ * LAST entry for a key and would leave the others behind, so a perk whose list
+ * moved is written as a whole block.
+ */
+function doctrineMoved(perk: Perk): boolean {
+  const was = perk.original ? valuesOf(perk.original, DOCTRINE_MOD) : [];
+  const now = perk.doctrines?.blocks() ?? [];
+  return was.length !== now.length || was.some((value, i) => value !== now[i]);
 }
 
 // ---------------------------------------------------------------------------
@@ -780,11 +1062,9 @@ function tipBody(perk: Perk): HTMLElement {
   const box = el("div", "px-game-tip");
   box.append(el("div", "px-game-tip-title", perk.face.textContent ?? ""));
 
-  for (const blockKey of [CHAR_MOD, DOCTRINE_MOD]) {
-    for (const row of perk.mods[blockKey]?.field.get() ?? []) {
-      const line = gameLine(row.name, row.value);
-      if (line) box.append(line);
-    }
+  for (const row of [...(perk.mods[CHAR_MOD]?.field.get() ?? []), ...(perk.doctrines?.rows() ?? [])]) {
+    const line = gameLine(row.name, row.value);
+    if (line) box.append(line);
   }
 
   const traitKind = perkForm?.keys.find((k) => k.key === TRAITS_KEY)?.refKinds?.[0] ?? TRAIT_KEY;
@@ -861,6 +1141,16 @@ const side = sidePanel($("side"), {
   onChange: ({ width }) => vscode.setState({ width }),
 });
 
+/** The panel's head: the perk it is showing, and where it sits on the track. */
+function paintSideHead(): void {
+  const at = selected ? perks.indexOf(selected) : -1;
+  const title = $("sideTitle");
+  title.textContent = selected ? selected.face.textContent || perkName(selected) || "Perk" : "Perk";
+  title.dataset.tip = at >= 0 ? `Perk ${at + 1} of ${perks.length}` : "";
+  $<HTMLButtonElement>("prevPerk").disabled = at <= 0;
+  $<HTMLButtonElement>("nextPerk").disabled = at < 0 || at >= perks.length - 1;
+}
+
 function selectPerk(perk: Perk | null): void {
   selected = perk;
   for (const other of perks) other.tile.setAttribute("aria-selected", String(other === perk));
@@ -868,14 +1158,33 @@ function selectPerk(perk: Perk | null): void {
   host.replaceChildren();
   if (!perk) {
     side.toggle(true);
+    paintSideHead();
     return;
   }
-  $("sideTitle").textContent = `Perk ${perks.indexOf(perk) + 1}`;
   host.append(perk.editor);
   side.toggle(false);
+  paintSideHead();
+}
+
+/** The perk one step along the track, when there is one. */
+function stepPerk(by: number): void {
+  const at = selected ? perks.indexOf(selected) : -1;
+  const next = perks[at + by];
+  if (next) selectPerk(next);
 }
 
 $("closeSide").onclick = () => selectPerk(null);
+$("prevPerk").onclick = () => stepPerk(-1);
+$("nextPerk").onclick = () => stepPerk(1);
+$("togglePerk").onclick = () => {
+  if (!side.collapsed) {
+    selectPerk(null);
+    return;
+  }
+  // Opening on nothing would show an empty panel; the track always starts
+  // at its first perk.
+  selectPerk(selected ?? perks[0] ?? null);
+};
 
 // Escape closes the perk editor. The overlays (menu, popover, confirm dialog)
 // listen in the CAPTURE phase and stop the event there, so an open menu takes
@@ -928,7 +1237,7 @@ function enableTileDrag(list: HTMLElement): void {
       }
       if (index === to) return;
       to = index;
-      list.insertBefore(tile, others[index]?.tile ?? addTile);
+      list.insertBefore(tile, others[index]?.tile ?? null);
     };
 
     const end = (): void => {
@@ -959,18 +1268,42 @@ function enableTileDrag(list: HTMLElement): void {
 // Preview and save
 // ---------------------------------------------------------------------------
 
-/** The two files a save writes, shown from the moment the form loads. */
-const targets = {
-  track: saveTargetLine(() => send({ type: "changeTarget", which: "track" })),
-  perks: saveTargetLine(() => send({ type: "changeTarget", which: "perks" })),
-};
-targets.track.set(null);
-targets.perks.set(null);
-$("targets").append(targets.track.el, targets.perks.el);
+/**
+ * Where the save goes. A legacy is two files, but it is ONE save into one mod,
+ * so the top bar carries one line: it names the mod and the track's file, its
+ * tooltip names both files, and clicking it asks which of the two to move
+ * before handing that question to the host's own picker.
+ */
+const targetFiles: Record<TargetKind, CreatorSaveTarget | null> = { track: null, perks: null };
+const target = saveTargetLine(() => pickTargetFile());
+target.set(null);
+$("target").append(target.el);
+
+function paintTargets(): void {
+  target.set(targetFiles.track);
+  if (!targetFiles.track) return;
+  const perksPath = targetFiles.perks ? shortPath(targetFiles.perks.path) : "nowhere yet";
+  target.el.dataset.tip =
+    `The track goes to ${shortPath(targetFiles.track.path)} and its perks to ${perksPath}, ` +
+    `both in ${targetFiles.track.modLabel}. Click to move one of them.`;
+  target.el.dataset.tipWrap = "";
+}
+
+function pickTargetFile(): void {
+  const line = (which: TargetKind, label: string): { value: string; label: string; hint: string } => ({
+    value: which,
+    label,
+    hint: targetFiles[which] ? shortPath(targetFiles[which]!.path) : "not chosen yet",
+  });
+  menu(target.el, [line("track", "The track's file"), line("perks", "The perks' file")], {
+    width: 320,
+    onPick: (which) => send({ type: "changeTarget", which: which as TargetKind }),
+  });
+}
 
 /** What the mod's two files will contain, as a section of the form. */
 const script = scriptSection({
-  note: "The track goes into one file and its perks into another; the save target lines say which.",
+  note: "The track goes into one file and its perks into another; the save line says which.",
   onCopy: (text) => send({ type: "copy", text }),
 });
 $("scriptSlot").replaceWith(script.el);
@@ -1007,14 +1340,16 @@ function definitionFor(
   source: "mod" | "vanilla" | "parent" | null,
   file: string | null,
   loc: { key: string; value: string }[],
-  keys: readonly string[]
+  keys: readonly string[],
+  /** Rewrite the whole block, even on an edit: a repeated key moved. */
+  whole = false
 ): SaveDefinition {
   // A renamed definition is a new one: there is no `<new name> = { … }` in the
   // file to set properties on, so the whole block has to be written.
   const renamed = original !== null && original.name !== block.name;
   const mode = renamed ? "create" : modeFor(source);
   const changed =
-    mode === "edit" && original
+    mode === "edit" && original && !whole
       ? changedProperties(original, block, [...new Set([...keys, ...original.statements.map((s) => s.key)])])
       : undefined;
   return {
@@ -1065,19 +1400,27 @@ function save(): void {
       perk.original,
       perk.source,
       perk.file,
-      // The tooltip lines of the effect builder are loc too: the block writes
-      // the key and the sentence has to exist for the player to read it.
-      [...locPairs(perk.loc, perkName(perk)), ...(perk.effect?.loc() ?? [])],
-      perkKeys
+      // The tooltip lines of the effect builder and the names of the doctrine
+      // blocks are loc too: the block writes the key and the sentence has to
+      // exist for the player to read it.
+      [
+        ...locPairs(perk.loc, perkName(perk)),
+        ...(perk.effect?.loc() ?? []),
+        ...(perk.doctrines?.loc() ?? []),
+      ],
+      perkKeys,
+      doctrineMoved(perk)
     )
   );
-  const picked = trackIcon?.get() ?? "";
+  const icon = trackIcon?.get() ?? "";
+  const illustration = trackIllustration?.get() ?? "";
   send({
     type: "save",
     track,
     perks: written,
     dropped: dropped.slice(),
-    icon: picked && picked !== name ? picked : null,
+    icon: icon && icon !== name ? icon : null,
+    illustration: illustration && illustration !== name ? illustration : null,
   });
 }
 
@@ -1085,13 +1428,12 @@ function save(): void {
 // Wiring
 // ---------------------------------------------------------------------------
 
-/** The ghost tile that ends the row: the only way a track grows a perk. */
-const addTile = el("div", "perktile");
-addTile.dataset.add = "";
-addTile.tabIndex = 0;
-addTile.setAttribute("role", "button");
-addTile.dataset.tip = "Add a perk to the end of the track";
-addTile.append(iconEl("plus"), el("span", "", "Add perk"));
+/**
+ * The tile that ends the row: the only way a track grows a perk. It stands
+ * BESIDE the illustration and not on it, because the strip is exactly the box
+ * the game's own perks define and a sixth tile would stretch the picture.
+ */
+const addTile = drawn.add;
 const addPerkClicked = (): void => {
   const perk = addPerk();
   refreshScript();
@@ -1109,9 +1451,9 @@ function reset(loc: Record<string, string> = {}): void {
   perks = [];
   selectPerk(null);
   hideTip();
-  $("perks").replaceChildren(addTile);
+  drawn.perks.replaceChildren();
   buildTrack(loc);
-  paintRow();
+  paintArt();
   refreshScript();
 }
 
@@ -1126,40 +1468,46 @@ function applyInit(payload: CreatorInit): void {
   const nameInput = $<HTMLInputElement>("name");
   if (nameInput.value.trim() === "") nameInput.value = `${payload.prefix}_legacy_track`;
   derivedFrom = nameInput.value.trim();
-  // The mod is named on the two save-target lines; this says which language
-  // the loc lands in, which no target line can.
+  // The mod is named on the save line; this says which language the loc lands
+  // in, which no target line can.
   $("locLang").textContent = payload.locLanguage;
   const problem = $("problem");
   problem.hidden = payload.problem === null;
   problem.textContent = payload.problem ?? "";
   $<HTMLButtonElement>("save").disabled = payload.problem !== null;
-  $("perkNote").textContent =
+  drawn.note.textContent =
     payload.perksPerTrack === null
-      ? "(the game folder is not set, so the usual number of perks could not be read)"
-      : `(vanilla tracks have ${payload.perksPerTrack} perks)`;
-  askImages([TRACK_FRAME, TRACK_MASK], ART_DIM);
+      ? "The illustration is one picture stretched behind every perk. (The game folder is not set, so the usual number of perks could not be read.)"
+      : `The illustration is one picture stretched behind every perk. (Vanilla tracks have ${payload.perksPerTrack} perks.)`;
+  askImages([TRACK_FRAME, TRACK_MASK], STRIP_DIM);
   reset();
   const slots = payload.perksPerTrack ?? 1;
   for (let i = 0; i < slots; i++) addPerk();
   refreshScript();
 }
 
-/** Swap the icon control for one over the folder as it now stands. */
-function rebuildIcon(select?: string): void {
-  if (!trackIcon || !init) return;
-  const previous = trackIcon;
-  const value = select ?? previous.get();
-  trackIcon = iconField({
-    label: "Icon",
-    doc: iconDoc,
-    items: init.icons,
-    value,
-    onCustom: () => send({ type: "customIcon", track: trackName() }),
+/**
+ * Swap one picture control for one over the folder as it now stands: the host
+ * wrote into that folder, so its list changed under the open picker.
+ */
+function rebuildArt(which: "icon" | "illustration", select?: string): void {
+  const previous = which === "icon" ? trackIcon : trackIllustration;
+  if (!previous || !init) return;
+  const isIcon = which === "icon";
+  const note = isIcon ? ART_NOTES.icon : ART_NOTES.illustration;
+  const rebuilt = iconField({
+    label: isIcon ? "Icon" : "Illustration",
+    doc: `${note.size} ${note.doc}`,
+    items: isIcon ? init.icons : init.illustrations,
+    value: select ?? previous.get(),
+    onCustom: () => send({ type: "customIcon", track: trackName(), which }),
     customLabel: "Custom picture…",
   });
-  trackIcon.onChange(paintRow);
-  previous.el.replaceWith(trackIcon.el);
-  paintRow();
+  rebuilt.onChange(paintArt);
+  previous.el.replaceWith(rebuilt.el);
+  if (isIcon) trackIcon = rebuilt;
+  else trackIllustration = rebuilt;
+  paintArt();
 }
 
 function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<string, string>): void {
@@ -1179,8 +1527,11 @@ function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<st
   $("mode").hidden = trackSource === null || trackSource === "mod";
   reset(loc);
   for (const perk of loaded) addPerk(perk, loc);
-  paintRow();
+  paintArt();
   refreshScript();
+  // A loaded track opens on its first perk: the panel's whole subject is the
+  // perks, and an empty side panel next to five filled tiles says nothing.
+  if (perks.length > 0) selectPerk(perks[0]);
 }
 
 /**
@@ -1212,7 +1563,7 @@ function renameFromTrackKey(): void {
     });
     paintTile(perk);
   });
-  paintRow();
+  paintArt();
   refreshScript();
 }
 
@@ -1309,8 +1660,12 @@ $("helpBtn").onclick = () =>
             text: "The loc keys, the perk keys, the perk names and the icon path all follow it, and every one of them stays editable.",
           },
           {
-            lead: "The icon is not a script key.",
-            text: "The game builds the picture's path from the track's key, so picking one here copies that picture into your mod under your key. A custom picture goes through the toolkit's DDS converter.",
+            lead: "Neither picture is a script key.",
+            text: "The game builds both paths from the track's key, so picking one here copies that picture into your mod under your key. A custom picture goes through the toolkit's DDS converter.",
+          },
+          {
+            lead: "The illustration is one picture, not five.",
+            text: "It is stretched behind the whole row of perks and drawn twice, each pass through the window's frame and mask, which is why the row shows it under all the tiles at once.",
           },
         ],
       },
@@ -1323,7 +1678,11 @@ $("helpBtn").onclick = () =>
           },
           {
             lead: "Click a tile",
-            text: "to edit that perk on the right. Drag a tile to move it along the track; the numbers follow.",
+            text: "to edit that perk on the right, one perk at a time; the panel's arrows walk the track. Drag a tile to move it along the track; the numbers follow.",
+          },
+          {
+            lead: "Doctrine modifiers are a list.",
+            text: "A perk applies one block per doctrine, and the game's own erudition legacy writes three of them, so add as many as the perk needs.",
           },
           {
             lead: "legacy = <track> is written for you",
@@ -1339,8 +1698,8 @@ $("helpBtn").onclick = () =>
         title: "Saving",
         items: [
           {
-            lead: "Two files, two steps:",
-            text: "you pick where the track goes and where the perks go. A file name the game itself uses is refused, because a mod file of that name replaces the whole game file.",
+            lead: "One line, two files:",
+            text: "the save line names the mod and the track's file; clicking it asks which of the two files to move. A file name the game itself uses is refused, because a mod file of that name replaces the whole game file.",
           },
           {
             lead: "Editing a track your mod already has",
@@ -1351,7 +1710,7 @@ $("helpBtn").onclick = () =>
     ],
   });
 
-enableTileDrag($("perks"));
+enableTileDrag(drawn.perks);
 
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   const message = event.data;
@@ -1363,24 +1722,31 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       applyLoaded(message.track, message.perks, message.loc);
       break;
     case "icons":
-      if (init) init.icons = message.icons;
-      rebuildIcon(message.select);
+      if (init) {
+        if (message.which === "illustration") init.illustrations = message.icons;
+        else init.icons = message.icons;
+      }
+      rebuildArt(message.which ?? "icon", message.select);
       break;
     case "images":
       for (const [key, url] of Object.entries(message.urls)) images.set(key, url);
-      paintRow();
+      paintArt();
       if (tipFor) showTip(tipFor);
       break;
     case "locValues":
       for (const [key, value] of Object.entries(message.values)) locValues.set(key, value);
       // A tooltip line the modder has not typed shows the sentence the
-      // workspace already has for its key.
-      for (const perk of perks) perk.effect?.fillLoc();
+      // workspace already has for its key; so does a doctrine block's name.
+      for (const perk of perks) {
+        perk.effect?.fillLoc();
+        perk.doctrines?.fillLoc();
+      }
       if (tipFor) showTip(tipFor);
       break;
     case "targets":
-      targets.track.set(message.track);
-      targets.perks.set(message.perks);
+      targetFiles.track = message.track;
+      targetFiles.perks = message.perks;
+      paintTargets();
       break;
     case "perkEffect": {
       const perk = templateFor;
