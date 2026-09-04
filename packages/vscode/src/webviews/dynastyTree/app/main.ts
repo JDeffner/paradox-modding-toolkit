@@ -1083,7 +1083,24 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
   dateLine("Died", char.death);
   line("Culture", char.culture);
   line("Faith", char.religion);
-  line("DNA", char.dna);
+  // DNA is the one fact with a way out of the panel: the name points at a
+  // block in common/dna_data, which the buttons open or copy whole. A line
+  // that only printed the name left the modder asking where the DNA was.
+  const dnaRow = node("div", "px-row");
+  if (char.dna) {
+    const key = char.dna;
+    dnaRow.append(node("code", "px-mono px-sm", key));
+    const open = button("Open", "folderOpen", "ghost");
+    open.dataset.tip = "Open this DNA's block in common/dna_data";
+    open.addEventListener("click", () => post({ type: "dnaOpen", key }));
+    const copy = button("Copy", "copy", "ghost");
+    copy.dataset.tip = "Copy the whole DNA block, to paste into another character";
+    copy.addEventListener("click", () => post({ type: "dnaCopy", key }));
+    dnaRow.append(open, copy);
+  } else {
+    dnaRow.append(node("span", "px-sm px-muted", "none; Edit pastes one from the portrait editor"));
+  }
+  facts.append(field("DNA", dnaRow));
   // A parent reads as a person, not as the id the file writes.
   const person = (id: string | undefined): string | undefined => {
     if (!id) return undefined;
