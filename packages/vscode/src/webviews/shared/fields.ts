@@ -271,10 +271,15 @@ function searchPopover(
   root.append(group);
   if (opts.action) root.append(opts.action);
   root.append(body);
-  const close = popover(anchor, root);
-  const fill = (): void => render(search.value, body, close);
+  // Filled BEFORE it is placed: the popover measures its content to pick a
+  // side and a height, and a picker measured empty (44px of search box) was
+  // put right under a control at the bottom of the page, then grew its 300px
+  // of results down past the viewport edge.
+  let close: () => void = () => undefined;
+  const fill = (): void => render(search.value, body, () => close());
   search.oninput = fill;
   fill();
+  close = popover(anchor, root);
   search.focus();
 }
 

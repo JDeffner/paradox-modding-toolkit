@@ -838,6 +838,9 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* overlay.ts caps the height to the room beside the anchor; content that
+     still does not fit scrolls inside the box rather than past the screen. */
+  overflow: hidden auto;
   min-width: 200px;
   max-width: min(480px, calc(100vw - 16px));
   padding: 10px;
