@@ -13,6 +13,8 @@ import {
   bodyOf,
   changedProperties,
   doctrineOf,
+  freePerkName,
+  modifierBlockValue,
   modifierNameOf,
   readChanceValue,
   readConditions,
@@ -247,6 +249,65 @@ describe("legacy creator: reading and writing a definition block", () => {
   it("prefills a perk name off the track's own key", () => {
     expect(perkNameFor("blood_legacy_track", 0)).toBe("blood_legacy_1");
     expect(perkNameFor("px_mytrack", 4)).toBe("px_mytrack_5");
+  });
+
+  it("names a new perk after the first number the track does not use", () => {
+    // The bug: with the third of five removed, counting the perks named the
+    // new one `px_mytrack_5`, which the track already had.
+    const track = "px_mytrack";
+    const kept = ["px_mytrack_1", "px_mytrack_2", "px_mytrack_4", "px_mytrack_5"];
+    expect(freePerkName(track, kept)).toBe("px_mytrack_3");
+    expect(freePerkName(track, [])).toBe("px_mytrack_1");
+    expect(freePerkName(track, [...kept, "px_mytrack_3"])).toBe("px_mytrack_6");
+    // A key the modder typed is not in the series, so it takes no number.
+    expect(freePerkName(track, ["hand_written"])).toBe("px_mytrack_1");
+  });
+
+  it("does not report a block the builder only reindented as changed", () => {
+    // ep1_culture_legacy_track writes its trigger on one line
+    // (99_legacies.txt); the condition builder writes it back over three.
+    const original = parseDefBlock(
+      "ep1_culture_legacy_track = {\n\tis_shown = { has_dlc_feature = hybridize_culture }\n}"
+    )!;
+    const rewritten = applyValues(
+      original,
+      [{ key: "is_shown", value: "{\n\t\thas_dlc_feature = hybridize_culture\n\t}" }],
+      ["is_shown"]
+    );
+    expect(changedProperties(original, rewritten, ["is_shown"])).toEqual([]);
+    // A different feature is still a change.
+    const moved = applyValues(
+      original,
+      [{ key: "is_shown", value: "{\n\t\thas_dlc_feature = legends_of_the_dead\n\t}" }],
+      ["is_shown"]
+    );
+    expect(changedProperties(original, moved, ["is_shown"]).map((c) => c.key)).toEqual(["is_shown"]);
+  });
+
+  it("keeps an empty character_modifier the file already has", () => {
+    // tgp_chinese_legacy_3 and tgp_chinese_legacy_4 both carry one
+    // (08_tgp_dynasty_perks.txt, measured 2026-09-04).
+    const block = parseDefBlock(
+      "tgp_chinese_legacy_3 = {\n\tlegacy = tgp_china_legacy_track\n\tcharacter_modifier = {\n\t\t\n\t}\n}"
+    )!;
+    const previous = valueOf(block, "character_modifier");
+    const entries = parseModifierBlock(previous ?? "");
+    expect(modifierRows(entries)).toEqual([]);
+    // No rows to write, so the block the file has is what goes back.
+    expect(modifierBlockValue(entries, [], previous)).toBe(previous);
+    expect(
+      changedProperties(
+        block,
+        applyValues(
+          block,
+          [{ key: "character_modifier", value: modifierBlockValue(entries, [], previous) }],
+          PERK_KEYS
+        ),
+        PERK_KEYS
+      )
+    ).toEqual([]);
+    // A perk that never had the key still writes nothing for it.
+    expect(modifierBlockValue([], [], null)).toBeNull();
   });
 
   it("lifts the doctrine out of its block and puts it back where it was", () => {

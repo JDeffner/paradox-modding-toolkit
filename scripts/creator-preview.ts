@@ -154,6 +154,13 @@ async function lookup(keys: string[]): Promise<Record<string, string>> {
   }
   return out;
 }
+/**
+ * The legacy window's wide picture. A schema entry carries one icon folder, so
+ * the panel names this one itself (legacyCreator/panel.ts
+ * ILLUSTRATION_FOLDER, which imports vscode and cannot be read from here).
+ */
+const LEGACY_ILLUSTRATIONS = "gfx/interface/illustrations/legacy_tracks";
+
 function iconEntries(folder: string | undefined): { key: string; url: string; source: string }[] {
   if (!folder) return [];
   const found = new Map<string, { key: string; url: string; source: string }>();
@@ -457,6 +464,8 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
                 prefix: "cult",
                 perksPerTrack: commonPerkCount(allPerkLinks(perk.folder)),
                 icons: iconEntries(legacy.iconFolder),
+                illustrations: iconEntries(LEGACY_ILLUSTRATIONS),
+                illustrationFolder: LEGACY_ILLUSTRATIONS,
                 problem: null,
               },
             },

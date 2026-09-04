@@ -38,8 +38,16 @@ ${uiCss}
   }
   #name { width: 220px; font-family: var(--px-font-mono); }
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
-  #body { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px 40px; min-width: 0; }
+  #body { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px 40px; min-width: 0; container-type: inline-size; }
   #sections { max-width: 860px; display: flex; flex-direction: column; gap: 4px; }
+  /* Under the width a label column and a control both need, the track's
+     fields stack the way the perk editor's always do; a label beside a 200px
+     control clipped the input and the loc key under it. A container query and
+     not a media one: how wide the form is depends on the side panel too. */
+  @container (max-width: 520px) {
+    #sections .px-field { grid-template-columns: 1fr; gap: 2px; }
+    #sections .px-field > .px-label { padding-top: 0; }
+  }
   /* A class rule beats the browser's own display:none for [hidden], so a
      px-badge or a px-toggle-group marked hidden would still draw. */
   [hidden] { display: none !important; }
@@ -49,14 +57,18 @@ ${uiCss}
   /* --------------------------------- a folding section (px-ui rule 7) */
   .fold { display: flex; flex-direction: column; border-bottom: 1px solid var(--px-border); }
   .fold:last-of-type { border-bottom: 0; }
+  /* The head is a row: the fold's own button, and the ? that explains the
+     section beside it (a button inside a button is not markup a browser
+     keeps). */
+  .fold-head-row { display: flex; align-items: center; gap: 2px; }
   .fold-head {
-    display: flex; align-items: center; gap: 6px; width: 100%;
+    display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0;
     padding: 8px 2px; border: 0; background: none; cursor: pointer; text-align: left;
     color: var(--px-fg); font: inherit;
   }
   .fold-head:hover { background: var(--px-muted); }
   .fold-head > svg { flex: 0 0 auto; transition: transform var(--px-ease); }
-  .fold[data-open] > .fold-head > svg { transform: rotate(90deg); }
+  .fold[data-open] .fold-head > svg { transform: rotate(90deg); }
   .fold-title {
     font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
     font-weight: 600; color: var(--px-muted-fg);
@@ -66,10 +78,20 @@ ${uiCss}
   .lede { color: var(--px-muted-fg); font-size: var(--px-text-xs); margin: -2px 0 2px; }
 
   /* --------------------------------------------------- the two pictures */
-  /* The pickers on the left, the icon at the size the game draws it on the
-     right, so a pick is seen where it is made. */
-  .artblock { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px 12px; align-items: start; }
-  .artnote { color: var(--px-muted-fg); font-size: var(--px-text-xs); padding-left: 2px; }
+  /* One column: the illustration picker's strip is 160px of picture on its own
+     and a second grid column only took width away from it at narrow panel
+     sizes. What a pick looks like is shown in the row the game draws, below. */
+  .artblock { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  /* The illustration's preview is a 160px strip and the shared tile does not
+     shrink, so a narrow panel pushed Choose… and Clear out of the row instead
+     of shrinking the picture with it. */
+  .artblock .px-icontile { flex: 0 1 auto; min-width: 0; }
+  /* A path has no spaces to break at, so it is told it may break anywhere:
+     at a narrow panel it ran past the column instead of wrapping. */
+  .artnote {
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); padding-left: 2px;
+    overflow-wrap: anywhere;
+  }
   .artnote > code { font-family: var(--px-font-mono); color: var(--px-fg); }
   /* The game draws both pictures through a frame and a mask, both with
      blend_mode = alphamultiply, so the final alpha is picture x frame x mask:
@@ -109,18 +131,22 @@ ${uiCss}
      here is that box: the tiles set its width and height, the picture covers
      it. */
   #stripRow { display: flex; align-items: stretch; gap: 8px; min-width: 0; overflow-x: auto; padding-bottom: 4px; }
-  #strip { position: relative; flex: 1 1 auto; min-width: 0; }
+  /* min-content, not 0: the tiles have a width floor and the illustration is
+     positioned against THIS box, so a strip allowed to shrink past them left
+     the picture ending in the middle of the row. The row scrolls instead. */
+  #strip { position: relative; flex: 1 1 auto; min-width: min-content; }
   #stripArt { position: absolute; inset: 0; overflow: hidden; }
   #stripArt > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
   #stripArt[data-empty] {
     border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
   }
   #perks { position: relative; display: flex; gap: 0; min-width: 0; }
-  /* The game's own tile is 296 x 128. The min-height is the one departure: at
-     the narrow end the ratio alone leaves no room for a two-line name, and a
-     clipped name is worse than a strip a few pixels taller than the game's. */
+  /* The game's own tile is 296 x 128, and the tiles keep that ratio at every
+     width: the floor is 125px, which is where 296:128 gives the 54px a
+     two-line name needs (54 x 296 / 128 = 124.9). Below that the row scrolls
+     rather than the tiles going out of shape. */
   .perktile {
-    position: relative; flex: 1 1 0; min-width: 96px; aspect-ratio: 296 / 128; min-height: 54px;
+    position: relative; flex: 1 1 0; min-width: 125px; aspect-ratio: 296 / 128; min-height: 54px;
     box-sizing: border-box;
     display: flex; flex-direction: column; justify-content: flex-end;
     padding: 4px 6px; cursor: pointer; overflow: hidden;
