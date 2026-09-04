@@ -1,11 +1,14 @@
 /**
  * The Coat of Arms Designer page: markup and page-specific styles on top of
- * the shared px-ui stylesheet, no host API. The app (app/) fills the three
- * tabs, the instance list and the preview at runtime.
+ * the shared px-ui stylesheet, no host API. The app (app/) fills the tabs, the
+ * instance list and the preview at runtime.
  *
- * The shape follows the game's own designer (gui/shared/coa_designer.gui):
- * the arms on the left with the frame and zoom controls at the bottom of the
- * canvas, and Background / Layout / Emblems as tabs on the right.
+ * Two panels around one stage. What a design IS (its pattern, its layout, its
+ * emblems: the game's own three tabs, gui/shared/coa_designer.gui) is on the
+ * right; what the editor DOES to it (the library, the preview frame, the grid,
+ * the numbers of the selection) is on the left, so the arms stay between the
+ * catalog and the tools instead of scrolling past the placement fields. The
+ * canvas keeps only the view controls.
  */
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
@@ -57,9 +60,20 @@ ${uiCss}
   #stageInfo { right: 8px; }
   #zoom, #hint { padding: 0 6px; }
   #hint:empty { display: none; }
-  #frame { width: auto; min-width: 132px; }
-  #tier, #gridDiv { width: auto; min-width: 0; }
+  #frame, #tier, #gridDiv { width: auto; min-width: 0; }
   #gridToggle[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
+
+  /* The left panel's own body: same rhythm as a tab body on the right. */
+  #leftBody { display: flex; flex-direction: column; gap: 10px; padding: 4px 10px 14px; }
+  #leftBody .px-panel-title { padding: 0; }
+  .toolRow { display: flex; align-items: center; gap: 4px; }
+  .toolRow > .px-btn { flex: 1 1 auto; min-width: 0; }
+  .toolRow > .px-btn[data-size="icon-sm"] { flex: 0 0 auto; }
+  #placement { display: flex; flex-direction: column; gap: 8px; }
+  /* Two number fields per row in a column that can be dragged narrow: the
+     shared field's 112px label track leaves nothing for the box, so the label
+     goes above its input here. */
+  #placement .px-field { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 
   /* Tabs sit at the top of the panel body, above the tab's own scroller. */
   #tabsRow { display: flex; padding: 6px 10px 4px; }
@@ -109,6 +123,18 @@ ${uiCss}
   .check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--px-text-sm); }
   #layerList .px-item .px-item-tools { gap: 2px; }
   #layerList .px-item[data-locked] .px-item-label { color: var(--px-muted-fg); }
+
+  /* The library overlay: the stored designs, name under each. */
+  #libGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; max-height: 56vh; overflow: auto; padding: 2px; }
+  .libItem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .libItem .px-label { text-align: center; overflow-wrap: anywhere; line-height: 1.25; }
+  .libBroken {
+    display: flex; align-items: center; justify-content: center; aspect-ratio: 1 / 1; padding: 4px;
+    border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: center;
+  }
+  .libEmpty { display: flex; flex-direction: column; gap: 6px; }
+  .libPath { overflow-wrap: anywhere; font-family: var(--px-mono, monospace); }
   /* The tools that act on the selection: align, distribute, mirror, duplicate. */
   .selTools { display: flex; flex-wrap: wrap; gap: 2px; padding-top: 4px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
@@ -118,6 +144,7 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="toolbar">
+    <button id="toggleLeft" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
     <input id="name" class="px-input" placeholder="my_house_coa" spellcheck="false" data-tip="The key the definition is written under" />
     <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
     <span id="targetLine"></span>
@@ -126,7 +153,6 @@ ${uiCss}
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Adjust Existing Design">${icon("folderOpen")}</button>
       <button id="paste" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Paste from Clipboard">${icon("paste")}</button>
       <button id="copy" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Copy to Clipboard">${icon("copy")}</button>
-      <button id="random" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Randomize">${icon("sparkles")}</button>
     </div>
     <div class="px-separator" data-orientation="vertical"></div>
     <div class="px-row" style="gap:2px">
@@ -139,16 +165,36 @@ ${uiCss}
     <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="help" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How the designer works" data-tip-side="left">${icon("circleHelp")}</button>
-    <button id="togglePanel" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide the panel" data-tip-side="left">${icon("panelRightClose")}</button>
+    <button id="toggleRight" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide the catalog" data-tip-side="left">${icon("panelRightClose")}</button>
   </div>
   <div id="main">
+    <div id="left" class="px-sidepanel" data-side="left">
+      <div class="px-sidepanel-resizer"></div>
+      <div class="px-sidepanel-body">
+        <div id="leftBody">
+          <div class="px-panel-title">Library</div>
+          <div class="toolRow">
+            <button id="libImport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Load a design you stored earlier" data-tip-wrap>${icon("folderOpen")} Import…</button>
+            <button id="libExport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Store this design as a script file outside any mod" data-tip-wrap>${icon("download")} Export</button>
+          </div>
+          <div class="px-panel-title">Frame</div>
+          <div class="toolRow">
+            <button id="frame" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Preview frame (never written into the script)" data-tip-wrap>${icon("squareDashed")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+            <button id="tier" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip-wrap hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
+          </div>
+          <div class="px-panel-title">Grid</div>
+          <div class="toolRow">
+            <button id="gridToggle" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Show the grid and snap to it" data-tip-wrap>${icon("grid")}</button>
+            <button id="gridDiv" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Grid subdivisions" hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
+          </div>
+          <div class="px-panel-title">Placement</div>
+          <div id="placement"></div>
+        </div>
+      </div>
+    </div>
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="frame" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip="Preview frame (never written into the script)" data-tip-side="top" data-tip-wrap>${icon("squareDashed")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-        <button id="tier" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip-side="top" data-tip-wrap hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
-        <button id="gridToggle" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Show the grid and snap to it" data-tip-side="top" data-tip-wrap>${icon("grid")}</button>
-        <button id="gridDiv" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" data-tip="Grid subdivisions" data-tip-side="top" hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
         <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="hint" class="px-muted px-xs"></span>

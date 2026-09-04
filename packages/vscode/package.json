@@ -1000,6 +1000,13 @@
             "order": 5,
             "markdownDescription": "Where the Workshop panel looks for changenotes, resolved against the workshop folder (`px.workshop.dir`; absolute paths work too).\n\n- **A folder** (the default `changelog`): the file named after the descriptor's version is used - `1.2.md`, `v1.2.bbcode`, `1.2.txt`.\n- **A single file with headlines**: the section under the headline containing the version is used (`## 1.2.0` in Markdown, `[h2]1.2.0[/h2]` in BBCode).\n- **A single file without headlines**: the whole file.\n\nMarkdown is converted to Steam BBCode on the way.\n\nThe Workshop panel's changenote dropdown offers any changelog the mod already keeps (a `CHANGELOG.md` at the mod root, for instance) and writes this setting for you."
           },
+          "px.coaLibraryDir": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "scope": "machine-overridable",
+            "markdownDescription": "Folder where the Coat of Arms Designer stores coats of arms as script files. Empty: `Documents/Paradox Interactive/<game folder>/px-toolkit/coat_of_arms`.\n\nThe library is outside any mod, so a design survives the mod it was drawn for. Each file holds one `NAME = { … }` definition, the same text the designer's Copy button puts on the clipboard, so a stored design can also be pasted into a mod by hand. The folder is created on the first export."
+          },
           "px.trace.server": {
             "type": "string",
             "enum": [

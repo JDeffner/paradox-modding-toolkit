@@ -24,9 +24,10 @@ import {
 } from "../flagBuilder/database";
 import { writeFlagFile } from "../flagBuilder/save";
 import type { FlagDatabase, FlagTarget, TextureKind } from "../flagBuilder/messages";
-import type { PxConfig } from "../../config";
+import { coaLibraryDir, type PxConfig } from "../../config";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { defaultTargetFileName, isPlainScriptFileName, vanillaNameClash } from "../../creators/saveTargets";
+import { libraryFileName, libraryHas, readLibrary, writeLibraryFile } from "./library";
 import { coaDesignerHtml } from "./html";
 import { THUMB_DIM, type AppToHost, type DesignerUiState, type HostToApp } from "./messages";
 
@@ -352,10 +353,44 @@ export class CoaDesignerPanel {
       case "open":
         await this.openExisting();
         return;
+      case "libraryList": {
+        const dir = coaLibraryDir(this.options.meta);
+        this.post({ type: "library", dir: dir ?? "", items: dir ? readLibrary(dir) : [] });
+        return;
+      }
+      case "libraryExport":
+        await this.exportToLibrary(message.name, message.script);
+        return;
       case "exportPng":
         await this.exportPng(message.name, message.dataUrl);
         return;
     }
+  }
+
+  /**
+   * Store the design in the library folder, creating it on the way. Replacing
+   * a file that is already there is asked with a notification and a button
+   * rather than a modal: the panel stays usable while the question stands.
+   */
+  private async exportToLibrary(name: string, script: string): Promise<void> {
+    const dir = coaLibraryDir(this.options.meta);
+    if (!dir) {
+      this.post({ type: "toast", message: "No library folder. Set px.coaLibraryDir." });
+      return;
+    }
+    const file = libraryFileName(name);
+    if (libraryHas(dir, name)) {
+      const OVERWRITE = "Overwrite";
+      const answer = await vscode.window.showWarningMessage(`${file} is already in ${dir}.`, OVERWRITE);
+      if (answer !== OVERWRITE) return;
+    }
+    try {
+      writeLibraryFile(dir, name, script);
+    } catch (e) {
+      this.post({ type: "toast", message: `Could not write ${file}: ${(e as Error).message}` });
+      return;
+    }
+    this.post({ type: "toast", message: `Exported ${file} to the library.` });
   }
 
   private async exportPng(name: string, dataUrl: string): Promise<void> {

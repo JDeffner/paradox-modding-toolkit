@@ -12,12 +12,16 @@ import {
   alignDeltas,
   ARMS_RECT,
   boxBounds,
+  DEFAULT_GRID_DIVISION,
   distributeDeltas,
+  GRID_DIVISIONS,
   mirrorGroup,
   moveGroup,
+  nudgeStep,
   rotateGroup,
   scaleGroup,
   selectionBounds,
+  validGridDivision,
   snapDelta,
   snapValue,
 } from "../src/webviews/coaDesigner/app/groups";
@@ -188,5 +192,38 @@ describe("the grid", () => {
 
   it("nothing snaps when nothing is close", () => {
     expect(snapDelta({ x: 0.13, y: 0.13, w: 0.11, h: 0.11 }, 8, 0.005)).toEqual({ du: 0, dv: 0 });
+  });
+
+  it("every subdivision on offer puts a line on the arms' centre", () => {
+    for (const div of GRID_DIVISIONS) expect(snapValue(0.5, div)).toBe(0.5);
+    expect(GRID_DIVISIONS).toContain(DEFAULT_GRID_DIVISION);
+  });
+
+  it("a remembered subdivision the picker dropped falls back to the default", () => {
+    expect(validGridDivision(32)).toBe(32);
+    expect(validGridDivision(2)).toBe(DEFAULT_GRID_DIVISION);
+    expect(validGridDivision(undefined)).toBe(DEFAULT_GRID_DIVISION);
+  });
+});
+
+describe("an arrow key moves by", () => {
+  it("one grid cell, and four with Shift, while the grid is on", () => {
+    expect(nudgeStep(true, 16, false)).toBe(1 / 16);
+    expect(nudgeStep(true, 16, true)).toBe(4 / 16);
+    expect(nudgeStep(true, 64, false)).toBe(1 / 64);
+  });
+
+  it("a fixed fraction of the arms while the grid is off", () => {
+    // Not a quarter of the arms, which is what dividing by the hidden grid
+    // used to give: no grid means no cell to follow.
+    expect(nudgeStep(false, 4, false)).toBe(1 / 256);
+    expect(nudgeStep(false, 4, true)).toBe(1 / 32);
+    expect(nudgeStep(false, 64, false)).toBe(1 / 256);
+  });
+
+  it("a step that lands ON a line when it starts on one", () => {
+    let at = 0.5;
+    for (let i = 0; i < 4; i++) at += nudgeStep(true, 8, false);
+    expect(snapValue(at, 8)).toBeCloseTo(at, 10);
   });
 });

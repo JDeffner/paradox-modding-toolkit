@@ -132,6 +132,8 @@ interface Booted {
   current(): CoaFlag;
   click(selector: string): void;
   tab(name: "background" | "layout" | "emblems"): void;
+  /** Send the app a host message, as the host would. */
+  push(message: HostToApp): void;
   /** Anything the page threw. jsdom swallows handler errors into its console. */
   errors: string[];
 }
@@ -183,6 +185,7 @@ function boot(): Booted {
     posted,
     errors,
     click,
+    push,
     tab: (name) => click(`.px-tab[data-tab="${name}"]`),
     current: () => {
       click("#copy");
@@ -243,7 +246,7 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
   it("Flip X Axis writes a negative scale on that axis alone", () => {
     const app = boot();
     app.tab("emblems");
-    const flip = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .check")].find((l) =>
+    const flip = [...app.document.querySelectorAll<HTMLElement>("#placement .check")].find((l) =>
       l.textContent?.includes("Flip X Axis")
     );
     if (!flip) throw new Error("no Flip X Axis checkbox");
@@ -258,12 +261,12 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
   it("Match X and Y scale is on before anyone touches it", () => {
     const app = boot();
     app.tab("emblems");
-    const match = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .check")].find((l) =>
+    const match = [...app.document.querySelectorAll<HTMLElement>("#placement .check")].find((l) =>
       l.textContent?.includes("Match X and Y scale")
     );
     expect(match?.querySelector<HTMLInputElement>("input")?.checked).toBe(true);
     // And it bites: one axis pulls the other with it.
-    const scaleY = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .px-field")].find((f) =>
+    const scaleY = [...app.document.querySelectorAll<HTMLElement>("#placement .px-field")].find((f) =>
       f.querySelector(".px-label")?.textContent?.startsWith("Scale")
     );
     const input = scaleY!.querySelector<HTMLInputElement>("input")!;
@@ -286,7 +289,7 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     if (!selectAll) throw new Error("no select-all-instances action");
     selectAll.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
 
-    const centre = [...app.document.querySelectorAll<HTMLElement>("#emblemBody .selTools button")].find(
+    const centre = [...app.document.querySelectorAll<HTMLElement>("#placement .selTools button")].find(
       (b) => b.dataset.tip === "Centre horizontally on the selection"
     );
     if (!centre) throw new Error("no align tool for a multi-selection");
@@ -301,15 +304,54 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(layer.instances.map((i) => i.position[1])).toEqual([0.3, 0.7]);
   });
 
-  it("draws all three tabs and a randomize without throwing", () => {
+  it("draws all three tabs without throwing, and keeps placement on screen", () => {
     const app = boot();
     for (const name of ["background", "layout", "emblems", "background"] as const) app.tab(name);
-    app.click("#random");
     app.click("#addEmblem");
     expect(app.errors).toEqual([]);
-    // Randomize keeps a design that still writes: a pattern and one emblem.
     const flag = app.current();
     expect(flag.pattern).not.toBe("");
     expect(flag.layers.length).toBeGreaterThan(0);
+    // Placement lives in the LEFT panel, so it survives a tab that is not Emblems.
+    app.tab("background");
+    expect(app.document.querySelectorAll("#placement .px-field").length).toBeGreaterThan(0);
+    expect(app.document.querySelector("#emblemBody .px-field")).toBeNull();
+  });
+
+  it("the library overlay shows a stored design, and a file it cannot read", async () => {
+    const app = boot();
+    // Import asks about unsaved work first, so the request is one tick out.
+    app.click("#libImport");
+    await Promise.resolve();
+    expect(app.posted.some((m) => m.type === "libraryList")).toBe(true);
+    app.push({
+      type: "library",
+      dir: "C:/docs/px-toolkit/coat_of_arms",
+      items: [
+        { name: "stored_coa", file: "stored_coa.txt", flag: { ...TEMPLATE, name: "stored_coa" } },
+        { name: "notes", file: "notes.txt", flag: null },
+      ],
+    });
+    const names = [...app.document.querySelectorAll("#libGrid .libItem .px-label")].map((n) => n.textContent);
+    expect(names).toEqual(["stored_coa", "notes"]);
+    expect(app.document.querySelectorAll("#libGrid .libBroken")).toHaveLength(1);
+
+    // Picking one loads it under the name the library kept.
+    app.document
+      .querySelector<HTMLElement>("#libGrid .tile")!
+      .dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+    expect(app.document.querySelector(".px-dialog-backdrop")).toBeNull();
+    expect(app.current().name).toBe("stored_coa");
+    expect(app.errors).toEqual([]);
+  });
+
+  it("an empty library names the folder instead of showing nothing", async () => {
+    const app = boot();
+    app.click("#libImport");
+    await Promise.resolve();
+    app.push({ type: "library", dir: "C:/docs/px-toolkit/coat_of_arms", items: [] });
+    const text = app.document.querySelector(".px-dialog")?.textContent ?? "";
+    expect(text).toContain("Nothing here yet");
+    expect(text).toContain("C:/docs/px-toolkit/coat_of_arms");
   });
 });
