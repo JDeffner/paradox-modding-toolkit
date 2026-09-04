@@ -96,6 +96,7 @@ import {
   configChangedNotification,
   indexStatsRequest,
   locTextRequest,
+  type LocTextParams,
   type LocTextResult,
   lookupLocRequest,
   modFileChangedNotification,
@@ -433,6 +434,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       gameMissing: cfg.gamePath === null,
     };
   };
+  /** The Coat of Arms Designer names its preview frames after heritages. */
+  const coaFrameLocText = (params: LocTextParams): Promise<LocTextResult> =>
+    lc.sendRequest<LocTextResult>(locTextRequest, params);
   const coaDesignerAvailable = (roots: FlagRoot[]): boolean =>
     coaDesignerSupported(cfg.gameId) && hasDesignerFiles(roots, metaFor(cfg.gameId).stageRoots);
 
@@ -1117,7 +1121,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
       if (!requireFlagBuilder()) return;
       const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
-      if (coaDesignerAvailable(options.roots)) CoaDesignerPanel.show(context, options);
+      if (coaDesignerAvailable(options.roots))
+        CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
       else FlagBuilderPanel.show(context, options);
     }),
     // The designer by name, for a keybinding or another extension that wants
@@ -1130,7 +1135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
         return;
       }
-      CoaDesignerPanel.show(context, options);
+      CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
     }),
     vscode.commands.registerCommand("px.createCoatOfArms", () => {
       if (!requireFlagBuilder()) return;

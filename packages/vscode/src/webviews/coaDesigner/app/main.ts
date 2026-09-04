@@ -368,52 +368,42 @@ function renderContext(): Parameters<typeof renderFlag>[3] {
 }
 
 /**
- * The game's mask textures carry the shape in their color channels (white =
- * arms, black = frame), not in alpha, so a mask decoded to PNG is opaque
- * everywhere and `destination-in` would keep every pixel. This turns its
- * brightness into alpha once per mask.
+ * How much of a frame CELL the arms fill, per gui type. The game draws the
+ * arms as the `coat_of_arms_icon` beside the frame inside one widget, so the
+ * share is the icon's size over the frame's own drawn size (measured on 1.19,
+ * gui/shared/coat_of_arms.gui: coa_house_huge draws coa_house_frame at
+ * size 156 over a 120 icon, coa_dynasty_huge draws coa_dynasty_frame at
+ * size 172 over the same 120; both sheets are framesize 160). The frame fills
+ * the preview, so the arms are that share of it.
  */
-const alphaMasks = new Map<string, HTMLCanvasElement>();
-function alphaMask(key: string, img: HTMLImageElement): HTMLCanvasElement {
-  const hit = alphaMasks.get(key);
-  if (hit) return hit;
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const cctx = c.getContext("2d", { willReadFrequently: true })!;
-  cctx.drawImage(img, 0, 0);
-  const data = cctx.getImageData(0, 0, c.width, c.height);
-  const d = data.data;
-  for (let o = 0; o < d.length; o += 4) {
-    d[o + 3] = Math.round((Math.max(d[o], d[o + 1], d[o + 2]) * d[o + 3]) / 255);
-  }
-  cctx.putImageData(data, 0, 0);
-  alphaMasks.set(key, c);
-  return c;
-}
+const ARMS_IN_FRAME: Record<string, number> = { house: 120 / 156, dynasty: 120 / 172 };
 
 /**
- * Where the arms sit on the canvas. The game insets the arms inside a frame
- * by the ratio of the two textures (title_mask.dds is 88 px, title_86.dds is
- * 96 px, measured on 1.19), so a frame whose mask is smaller than itself
- * pulls the arms in by that ratio; every mapping between pointer, selection
+ * Where the arms sit on the canvas. Every mapping between pointer, selection
  * outline and pixels goes through this one rect.
  */
 type Box = { x: number; y: number; w: number; h: number };
 
+/** A square share of the canvas, centred: how the game anchors both halves. */
+function centredBox(ratio: number): Box {
+  const w = canvas.width * ratio;
+  const h = canvas.height * ratio;
+  return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+}
+
 function armsRect(): Box {
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
+  // The gui sizes the frames the cultures name, which is all of them but the
+  // two engine defaults: family comes from `house_coa_frame` in
+  // common/culture/cultures (flagBuilder/database.ts).
+  const family = frameId ? designer()?.frames.find((f) => f.id === frameId)?.family : undefined;
+  if (family && ARMS_IN_FRAME[family]) return centredBox(ARMS_IN_FRAME[family]);
   const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
   // A mask smaller than the cell says how far the arms sit in (the title
-  // pair); a mask the size of the cell says nothing, and the frame's own
-  // hole is measured instead (every house and dynasty sheet).
-  if (frame && mask && cell > mask.naturalWidth) {
-    const ratio = mask.naturalWidth / cell;
-    const w = canvas.width * ratio;
-    const h = canvas.height * ratio;
-    return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
-  }
+  // pair, title_mask.dds 88 px inside title_86.dds 96 px); a mask the size of
+  // the cell says nothing, and the frame's own hole is measured instead.
+  if (frame && mask && cell > mask.naturalWidth) return centredBox(mask.naturalWidth / cell);
   const hole = frame ? frameHole(frame) : null;
   const shape = mask ? maskShape(`masks/${frameId}`, mask) : null;
   if (!hole || !shape) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
@@ -504,10 +494,14 @@ const shapes = new Map<string, Box>();
 function maskShape(key: string, mask: HTMLImageElement): Box {
   const hit = shapes.get(key);
   if (hit) return hit;
-  const c = alphaMask(key, mask);
-  const w = c.width,
-    h = c.height;
-  const alpha = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+  const w = mask.naturalWidth,
+    h = mask.naturalHeight;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const cctx = c.getContext("2d", { willReadFrequently: true })!;
+  cctx.drawImage(mask, 0, 0);
+  const alpha = cctx.getImageData(0, 0, w, h).data;
   let left = w,
     right = -1,
     top = h,
@@ -561,16 +555,18 @@ function draw(overlay = true): void {
   let complete: boolean;
   if (frameId && mask) {
     // The game masks the arms with `<frame>_mask.dds` and draws `<frame>.dds`
-    // over them (gui/shared/coat_of_arms.gui). Both cover the whole preview:
-    // the few pixels the frame overhangs by in game are not worth moving the
-    // arms out from under the pointer for.
+    // over them (gui/shared/coat_of_arms.gui). The mask's shape is its ALPHA,
+    // which is what `destination-in` reads: house_china_mask.dds and
+    // house_japan_mask.dds are 160x160 of pure black at alpha 255 (measured on
+    // 1.19), so a mask read as brightness leaves those two frames empty, and
+    // title_mask.dds is the mirror case, pure white with the shape in alpha.
     scratch.width = canvas.width;
     scratch.height = canvas.height;
     const sctx = scratch.getContext("2d")!;
     sctx.clearRect(0, 0, scratch.width, scratch.height);
     complete = renderFlag(sctx, flag, rect, renderContext());
     sctx.globalCompositeOperation = "destination-in";
-    sctx.drawImage(alphaMask(`masks/${frameId}`, mask), rect.x, rect.y, rect.w, rect.h);
+    sctx.drawImage(mask, rect.x, rect.y, rect.w, rect.h);
     sctx.globalCompositeOperation = "source-over";
     ctx.drawImage(scratch, 0, 0);
     if (frame) drawFrame(ctx, frame);
@@ -1993,7 +1989,8 @@ function openFrameMenu(): void {
     [{ value: "", label: "No frame" }, ...cat.frames.map((f) => ({ value: f.id, label: f.label }))],
     {
       value: frameId,
-      width: 220,
+      // Wide enough for the heritages a frame is named after.
+      width: 320,
       onPick: (value) => {
         frameId = value;
         uiState = { ...uiState, frame: value };
@@ -2629,6 +2626,10 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     }
     case "textures":
       receiveTextures(m.urls, m.thumbs);
+      return;
+    case "frames":
+      if (db?.designer) db.designer.frames = m.frames;
+      updateFramePicker();
       return;
     case "target":
       targetLine.set(m.target);

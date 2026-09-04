@@ -16,8 +16,10 @@ import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseCoaFile } from "@px-lsp/server/coa/coaParse";
 import { GuiTextureCache } from "../guiEditor/textureCache";
+import type { LocTextParams, LocTextResult } from "@px-lsp/protocol/protocol";
 import {
   buildFlagDatabase,
+  frameLabel,
   locateDesignerFrame,
   locateTexture,
   type FlagRoot,
@@ -56,6 +58,11 @@ export interface CoaDesignerOptions {
   gameMissing: boolean;
   /** What the arms are for. Absent = the panel opens on the blank template. */
   target?: FlagTarget;
+  /**
+   * paradox/locText, for the frame names. Optional: without it the frames keep
+   * the plain ids the folder gives them.
+   */
+  fetchLocText?(params: LocTextParams): Promise<LocTextResult>;
 }
 
 export class CoaDesignerPanel {
@@ -142,8 +149,39 @@ export class CoaDesignerPanel {
   private postInit(): void {
     const { meta, roots, gameMissing, mods, target } = this.options;
     this.db = buildFlagDatabase(meta.name, roots, meta.stageRoots, gameMissing, true);
-    this.post({ type: "init", db: this.db, mods, ui: this.state.get<DesignerUiState>(UI_KEY), target });
+    const db = this.db;
+    // The frame names need the loc index, which the arms themselves do not:
+    // the panel opens on the plain labels and they are renamed once the server
+    // answers, rather than the whole designer waiting on a request.
+    void this.nameFrames(db).then(() => {
+      if (this.db === db) this.post({ type: "frames", frames: db.designer?.frames ?? [] });
+    });
+    this.post({ type: "init", db, mods, ui: this.state.get<DesignerUiState>(UI_KEY), target });
     this.postTarget();
+  }
+
+  /**
+   * Name the frames after the heritages that wear them. The game names no
+   * frame, but every culture states the one its houses use, so the heritage of
+   * each such culture is the frame's own word for itself; the names come from
+   * `<heritage>_name` (localization/.../cultural_heritages_l_<lang>.yml).
+   */
+  private async nameFrames(db: FlagDatabase): Promise<void> {
+    const frames = db.designer?.frames ?? [];
+    const keys = [...new Set(frames.flatMap((f) => f.heritages ?? []))].map((h) => `${h}_name`);
+    if (!keys.length || !this.options.fetchLocText) return;
+    let values: LocTextResult["values"];
+    try {
+      values = (await this.options.fetchLocText({ keys })).values;
+    } catch {
+      return;
+    }
+    for (const frame of frames) {
+      const names = (frame.heritages ?? [])
+        .map((h) => values[`${h}_name`]?.text)
+        .filter((name): name is string => Boolean(name));
+      if (names.length) frame.label = frameLabel(frame.id, names);
+    }
   }
 
   // -- where it saves ------------------------------------------------------

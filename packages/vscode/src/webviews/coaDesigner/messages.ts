@@ -8,7 +8,7 @@
  * a `frames/<id>` texture drawn over the arms masked by `masks/<id>`, and it
  * is decoration for the preview only, never written into the script.
  */
-import type { FlagDatabase, FlagEntry, FlagTarget, ModTarget } from "../flagBuilder/messages";
+import type { DesignerFrame, FlagDatabase, FlagEntry, FlagTarget, ModTarget } from "../flagBuilder/messages";
 import type { CoaFlag } from "@px-lsp/server/coa/coa";
 import type { CreatorSaveTarget } from "../shared/creatorMessages";
 
@@ -62,6 +62,12 @@ export type HostToApp =
   /** "Adjust Existing Design": what the modder picked out of the host's list. */
   | { type: "opened"; entry: FlagEntry; flag: CoaFlag }
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
+  /**
+   * The same frames the `init` database carried, relabelled once the loc index
+   * has answered: a frame's words are the heritages that wear it, and those
+   * names arrive after the panel is already usable.
+   */
+  | { type: "frames"; frames: DesignerFrame[] }
   /** Where the next save lands, for the top bar to SHOW (shared/saveTarget.ts). */
   | { type: "target"; target: CreatorSaveTarget | null }
   /** What the library folder holds, for the Import overlay. `dir` is shown when it is empty. */
