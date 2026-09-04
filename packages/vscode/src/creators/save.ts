@@ -255,15 +255,16 @@ export async function pickSaveTarget(
 }
 
 /**
- * Apply the server's edits as ONE `WorkspaceEdit`, save, and show the file
- * beside without stealing focus. `text` is the text the edits were computed
- * against; a document that has moved on since is left alone rather than
- * written at stale offsets.
+ * Apply the server's edits as ONE `WorkspaceEdit`, save, and (unless
+ * `reveal: false`) show the file beside without stealing focus. `text` is the
+ * text the edits were computed against; a document that has moved on since is
+ * left alone rather than written at stale offsets.
  */
 export async function applyDefinitionEdits(
   abs: string,
   text: string,
-  edits: readonly GuiTextEdit[]
+  edits: readonly GuiTextEdit[],
+  opts: { reveal?: boolean } = {}
 ): Promise<boolean> {
   const doc = await vscode.workspace.openTextDocument(abs);
   if (doc.getText() !== text) {
@@ -280,10 +281,12 @@ export async function applyDefinitionEdits(
     if (!(await vscode.workspace.applyEdit(edit))) return false;
     await doc.save();
   }
-  await vscode.window.showTextDocument(doc, {
-    viewColumn: vscode.ViewColumn.Beside,
-    preserveFocus: true,
-  });
+  if (opts.reveal !== false) {
+    await vscode.window.showTextDocument(doc, {
+      viewColumn: vscode.ViewColumn.Beside,
+      preserveFocus: true,
+    });
+  }
   return true;
 }
 
