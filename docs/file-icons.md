@@ -17,6 +17,7 @@ Each of the contributed languages in `package.json` has a file icon via the `ico
 | `paradox-info` | Paradox Format Docs | circled "i" | `#58A6FF` / `#2361A8` |
 | `paradox-mod` | Paradox Mod Descriptor | jigsaw puzzle piece | `#E8925A` / `#BC5A18` |
 | `dds` | DDS Texture | picture frame with mountain and sun | `#DD6FA8` / `#A83A78` |
+| `pxignore` | Paradox Toolkit Ignore (`.pxignore`) | slashed circle | `#9AA4B2` / `#5B6470` |
 
 The `dds` language entry exists only to carry the file icon (`.dds` files open in the `px.ddsPreview` custom editor); its static `extensions` association means the icon shows in the explorer without opening files, unlike the dynamically-detected script languages.
 

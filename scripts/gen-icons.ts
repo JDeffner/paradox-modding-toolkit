@@ -1,5 +1,5 @@
 /**
- * Generates the file-type icons (7 glyphs x light/dark) into
+ * Generates the file-type icons (8 glyphs x light/dark) into
  * packages/vscode/media/fileicons/ (see docs/file-icons.md).
  *
  * Run: npx esbuild scripts/gen-icons.ts --bundle --platform=node \
@@ -131,6 +131,15 @@ const icons: Record<string, IconDef> = {
   <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.6" fill="none" stroke="${c}" stroke-width="1.5"/>
   <circle fill="${c}" cx="10.4" cy="5.9" r="1.2"/>
   <path fill="${c}" d="M3.3 11.5 6.3 6.9l2.2 3.2 1.3-1.7 2.6 3.1Z"/>`,
+  },
+  // Toolkit ignore list (.pxignore): a slashed circle, the "leave this out"
+  // sign. Neutral slate, since the file is about what is NOT content.
+  pxignore: {
+    dark: "#9AA4B2",
+    light: "#5B6470",
+    body: (c) => `
+  <circle cx="8" cy="8" r="5.85" fill="none" stroke="${c}" stroke-width="1.5"/>
+  <line x1="4.1" y1="4.1" x2="11.9" y2="11.9" stroke="${c}" stroke-width="1.5"/>`,
   },
   // Mod Descriptor: jigsaw puzzle piece with top and right knobs. The same
   // shape as before, scaled and re-centred so the whole piece (knob apexes

@@ -9,10 +9,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import { readCalendarFile } from "@px-lsp/protocol/calendarFile";
+import type { ConfigDirNames } from "@px-lsp/protocol/configDir";
 
 export interface StrayCalendar {
   /** The ignored settings file that declares px.calendar. */
   file: string;
+  /** The mod the declaration belongs to: where `.px-toolkit/calendar.json` would go. */
+  modRoot: string;
   /** The declared calendar, when it parses and sanitizes; undefined when the
    * declaration is present but not usable (still worth telling the user). */
   calendar: CalendarSetting | undefined;
@@ -57,7 +61,7 @@ export function jsoncToJson(text: string): string {
 }
 
 /** The px.calendar value of one settings file, or null when absent/unreadable. */
-function calendarDeclaredIn(file: string): StrayCalendar | null {
+function calendarDeclaredIn(file: string): Omit<StrayCalendar, "modRoot"> | null {
   let text: string;
   try {
     text = fs.readFileSync(file, "utf8");
@@ -81,19 +85,26 @@ function calendarDeclaredIn(file: string): StrayCalendar | null {
  * each mod root and its parent (the mod-project folder in the projects
  * layout). Files under an effective root (an opened workspace folder, whose
  * settings VS Code does read) are skipped: a calendar there is not stray,
- * just absent or invalid, and other messages own that case.
+ * just absent or invalid, and other messages own that case. A mod that already
+ * declares its calendar in its own `.px-toolkit/calendar.json` is skipped too:
+ * that file is read wherever the mod is opened, so nothing is stray there.
  */
-export function findStrayCalendar(modRoots: string[], effectiveRoots: string[]): StrayCalendar | null {
+export function findStrayCalendar(
+  modRoots: string[],
+  effectiveRoots: string[],
+  names?: ConfigDirNames
+): StrayCalendar | null {
   const effective = new Set(effectiveRoots.map((r) => path.resolve(r).toLowerCase()));
   const seen = new Set<string>();
   for (const root of modRoots) {
     const resolved = path.resolve(root);
+    if (names && readCalendarFile(resolved, names)?.calendar) continue;
     for (const dir of [resolved, path.dirname(resolved)]) {
       const key = dir.toLowerCase();
       if (seen.has(key) || effective.has(key)) continue;
       seen.add(key);
       const hit = calendarDeclaredIn(path.join(dir, ".vscode", "settings.json"));
-      if (hit) return hit;
+      if (hit) return { ...hit, modRoot: resolved };
     }
   }
   return null;

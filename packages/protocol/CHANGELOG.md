@@ -8,6 +8,10 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- `calendarFile`: `readCalendarFile` / `writeCalendarFile` / `isCalendarFile`
+  / `calendarFilePath` for the per-mod display calendar at
+  `<mod>/.px-toolkit/calendar.json` (the JSON form of `CalendarSetting`,
+  sanitized on read; an unusable file is told apart from a missing one).
 - `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
   `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
   name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path

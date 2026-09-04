@@ -6,6 +6,13 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- Date inlay hints and hover read the owning mod's
+  `<mod>/.px-toolkit/calendar.json` before the `calendar` setting, cached per
+  mod root and dropped when the file changes (the server's own watcher now
+  covers `**/calendar.json`). The hover's rule line names the source.
+
 ## 0.3.0
 
 Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.

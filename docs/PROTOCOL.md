@@ -83,7 +83,9 @@ interface ParadoxSettings {
   locLanguage: string;         // "english", ...
   scopeInlayHints: boolean;
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
-  calendar?: CalendarSetting;  // custom era calendar for date display (inlay hints + hover); absent = off
+  calendar?: CalendarSetting;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
+                               //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
+                               //   that mod; the server reads it itself and re-reads it when the file changes
                                //   { epoch: number; after: string; before?: string;
                                //     months?: { name: string; days: number }[] }
                                //   script year >= epoch displays as (year-epoch+1) <after>,
