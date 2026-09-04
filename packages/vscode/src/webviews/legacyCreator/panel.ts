@@ -43,11 +43,33 @@ import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { legacyCreatorHtml } from "./html";
 import { commonPerkCount, perkLinks, perksOfTrack, type PerkLink } from "./perkIndex";
-import type { AppToHost, HostToApp, IconEntry, LoadedPerk, SaveDefinition, TargetKind } from "./messages";
+import type {
+  AppToHost,
+  ArtKind,
+  HostToApp,
+  IconEntry,
+  LoadedPerk,
+  SaveDefinition,
+  TargetKind,
+} from "./messages";
 
 /** The two kinds this panel edits, as the CK3 schema table spells them. */
 const TRACK_KIND = "dynasty_legacy";
 const PERK_KIND = "dynasty_perk";
+
+/**
+ * The SECOND picture a legacy track reads by name: the wide illustration the
+ * legacy window draws behind the row of perks, `[DynastyLegacy.GetTrackIcon]`
+ * in gui/window_dynasty_legacy.gui. It resolves to
+ * gfx/interface/illustrations/legacy_tracks/<track key>.dds, 21 files of
+ * 4216 x 368 for the 21 vanilla tracks (measured 2026-09-04).
+ *
+ * A schema entry carries one `iconFolder` and that one is the 140 x 140 icon,
+ * so this path is named here, beside the frame and mask the same window draws
+ * both pictures through. Nothing is written into the block either way: both
+ * paths are built from the track's key, which is why a pick is a file copy.
+ */
+const ILLUSTRATION_FOLDER = "gfx/interface/illustrations/legacy_tracks";
 
 /** Images the DDS converter reads, plus the format the game itself wants. */
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "dds"];
@@ -107,6 +129,8 @@ export class LegacyCreatorPanel {
   private perkForm: DefinitionForm | null = null;
   /** Icon key -> the file it was found in, latest root wins (the game's order). */
   private iconFiles = new Map<string, string>();
+  /** The same for the window's illustration, which is its own folder. */
+  private illustrationFiles = new Map<string, string>();
   /** The track the panel should open on, until the app is ready for it. */
   private pending: string | undefined;
   /** The perks of the loaded track: where a perk save writes back by default. */
@@ -201,7 +225,7 @@ export class LegacyCreatorPanel {
     }
     this.legacyForm = legacy;
     this.perkForm = perk;
-    const icons = this.resolveIcons(legacy.iconFolder);
+    const icons = this.resolveIcons(legacy.iconFolder, this.iconFiles);
     this.post({
       type: "init",
       init: {
@@ -213,6 +237,8 @@ export class LegacyCreatorPanel {
         prefix: scaffoldPrefix(cfg),
         perksPerTrack: cfg.gamePath ? commonPerkCount(this.perkLinksIn(cfg.gamePath, perk.folder)) : null,
         icons,
+        illustrations: this.resolveIcons(ILLUSTRATION_FOLDER, this.illustrationFiles),
+        illustrationFolder: ILLUSTRATION_FOLDER,
         // Any mod of the workspace can be written into (writableMods in
         // creators/save.ts), not only a focus mod.
         problem:
@@ -318,8 +344,8 @@ export class LegacyCreatorPanel {
    * thumbnails. The key is the file's base name, which is exactly what the
    * game derives the path from, so the grid shows what a track key would find.
    */
-  private resolveIcons(folder: string | undefined): IconEntry[] {
-    this.iconFiles.clear();
+  private resolveIcons(folder: string | undefined, into: Map<string, string>): IconEntry[] {
+    into.clear();
     if (!folder) return [];
     const found = new Map<string, IconEntry>();
     for (const root of roots(this.options.cfg)) {
@@ -329,7 +355,7 @@ export class LegacyCreatorPanel {
           const png = this.textures.resolveFile(abs, THUMBNAIL_MAX_DIM);
           if (!png) continue;
           const key = file.slice(0, -4);
-          this.iconFiles.set(key, abs);
+          into.set(key, abs);
           found.set(key, {
             key,
             url: this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString(),
@@ -425,7 +451,7 @@ export class LegacyCreatorPanel {
         });
         return;
       case "customIcon":
-        await this.convertIcon(message.track);
+        await this.convertIcon(message.track, message.which);
         return;
       case "images":
         wireImages(this.panel, roots(this.options.cfg), this.textures, message);
@@ -548,7 +574,10 @@ export class LegacyCreatorPanel {
     }
 
     let iconNote = "";
-    if (message.icon) iconNote = this.copyIcon(message.icon, message.track.name, trackTarget.modPath);
+    if (message.icon) iconNote += this.copyArt("icon", message.icon, message.track.name, trackTarget.modPath);
+    if (message.illustration) {
+      iconNote += this.copyArt("illustration", message.illustration, message.track.name, trackTarget.modPath);
+    }
 
     this.post({ type: "saved" });
     const written = [
@@ -566,13 +595,21 @@ export class LegacyCreatorPanel {
     }
   }
 
+  /** Which folder and which cache one of the two pictures lives in. */
+  private artOf(which: ArtKind): { folder: string | undefined; files: Map<string, string> } {
+    return which === "illustration"
+      ? { folder: ILLUSTRATION_FOLDER, files: this.illustrationFiles }
+      : { folder: this.legacyForm?.iconFolder, files: this.iconFiles };
+  }
+
   /**
    * Put the picked picture under the track's own key, which is the only way to
-   * choose an icon for a name-derived path. Returns the sentence for the toast.
+   * choose a picture for a name-derived path. Returns the sentence for the toast.
    */
-  private copyIcon(key: string, track: string, modPath: string): string {
-    const folder = this.legacyForm?.iconFolder;
-    const from = this.iconFiles.get(key);
+  private copyArt(which: ArtKind, key: string, track: string, modPath: string): string {
+    const { folder, files } = this.artOf(which);
+    const from = files.get(key);
+    const word = which === "illustration" ? "Illustration" : "Icon";
     if (!folder || !from) return "";
     const dir = path.join(modPath, ...folder.split("/"));
     const to = path.join(dir, `${track}.dds`);
@@ -581,10 +618,10 @@ export class LegacyCreatorPanel {
       fs.mkdirSync(dir, { recursive: true });
       fs.copyFileSync(from, to);
     } catch (err) {
-      return ` The icon could not be copied: ${err instanceof Error ? err.message : String(err)}`;
+      return ` The ${word.toLowerCase()} could not be copied: ${err instanceof Error ? err.message : String(err)}`;
     }
-    this.post({ type: "icons", icons: this.resolveIcons(folder), select: track });
-    return ` Icon copied to ${folder}/${track}.dds.`;
+    this.post({ type: "icons", icons: this.resolveIcons(folder, files), select: track, which });
+    return ` ${word} copied to ${folder}/${track}.dds.`;
   }
 
   /**
@@ -593,9 +630,9 @@ export class LegacyCreatorPanel {
    * creator already knows the format question's answer and the target path,
    * so nothing is asked and nothing is announced twice.
    */
-  private async convertIcon(track: string): Promise<void> {
+  private async convertIcon(track: string, which: ArtKind): Promise<void> {
     const { cfg } = this.options;
-    const folder = this.legacyForm?.iconFolder;
+    const { folder, files } = this.artOf(which);
     const modPath = cfg.modPath ?? cfg.workspaceMods[0];
     if (!folder || !modPath) return;
     if (!/^[a-z][a-z0-9_]*$/.test(track)) {
@@ -630,8 +667,8 @@ export class LegacyCreatorPanel {
       this.post({ type: "toast", message: "No picture was written." });
       return;
     }
-    this.post({ type: "icons", icons: this.resolveIcons(folder), select: track });
-    this.post({ type: "toast", message: `Icon written to ${folder}/${track}.dds.` });
+    this.post({ type: "icons", icons: this.resolveIcons(folder, files), select: track, which });
+    this.post({ type: "toast", message: `Picture written to ${folder}/${track}.dds.` });
   }
 }
 

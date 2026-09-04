@@ -8,9 +8,17 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyRepeated,
   applyValues,
+  bodyOf,
   changedProperties,
   doctrineOf,
+  modifierNameOf,
+  readChanceValue,
+  readConditions,
+  readEffectLines,
+  valuesOf,
+  withModifierName,
   effectKeyFor,
   effectLocKey,
   parseChanceValue,
@@ -301,7 +309,7 @@ describe("legacy creator: the blocks the builders read", () => {
     expect(parseConditions(NESTED)).toBeNull();
     // A comment is content too: the rows have nowhere to put it back.
     expect(parseConditions("{\n\t\t# only with the DLC\n\t\thas_dlc_feature = legends\n\t}")).toBeNull();
-    expect(parseConditions("")).toBeNull();
+    // Empty is NOT "cannot be shown": see the empty-script-area test below.
   });
 
   it("writes the rows back in the game's own shape", () => {
@@ -332,6 +340,141 @@ describe("legacy creator: the blocks the builders read", () => {
     expect(writeChanceValue(null)).toBeNull();
     // blood_legacy_1's own chance: a number and an if, so it stays script.
     expect(parseChanceValue(valueOf(parseDefBlock(PERKS[0])!, "ai_chance")!)).toBeNull();
+  });
+
+  /**
+   * erudition_legacy_4 verbatim from game/common/dynasty_perks/00_dynasty_perks.txt
+   * (CK3 1.19.0.6): the perk that writes `doctrine_character_modifier` THREE
+   * times, each with its own doctrine and the same name key.
+   */
+  const THREE_DOCTRINES =
+    "erudition_legacy_4 = { # True Believers\n" +
+    "\tlegacy = erudition_legacy_track\n" +
+    "\n" +
+    "\tcharacter_modifier = {\n" +
+    "\t\tfaith_creation_piety_cost_mult = -0.2\n" +
+    "\t}\n" +
+    "\n" +
+    "\tdoctrine_character_modifier = {\n" +
+    "\t\tname = erudition_legacy_4_modifier_name\n" +
+    "\t\tdoctrine = doctrine_no_head\n" +
+    "\t\tdomain_tax_same_faith_mult = 0.05\n" +
+    "\t}\n" +
+    "\tdoctrine_character_modifier = {\n" +
+    "\t\tname = erudition_legacy_4_modifier_name\n" +
+    "\t\tdoctrine = doctrine_spiritual_head\n" +
+    "\t\treligious_head_opinion = 15\n" +
+    "\t}\n" +
+    "\tdoctrine_character_modifier = {\n" +
+    "\t\tname = erudition_legacy_4_modifier_name\n" +
+    "\t\tdoctrine = doctrine_temporal_head\n" +
+    "\t\ttolerance_advantage_mod = 5\n" +
+    "\t}\n" +
+    "}";
+
+  it("reads every doctrine modifier a perk writes, not just the last", () => {
+    const block = parseDefBlock(THREE_DOCTRINES)!;
+    const values = valuesOf(block, "doctrine_character_modifier");
+    expect(values).toHaveLength(3);
+    expect(values.map((value) => doctrineOf(parseModifierBlock(value)))).toEqual([
+      "doctrine_no_head",
+      "doctrine_spiritual_head",
+      "doctrine_temporal_head",
+    ]);
+    // The name line is the loc key the group is headed with, on all three.
+    expect(values.map((value) => modifierNameOf(parseModifierBlock(value)))).toEqual([
+      "erudition_legacy_4_modifier_name",
+      "erudition_legacy_4_modifier_name",
+      "erudition_legacy_4_modifier_name",
+    ]);
+    // `valueOf` is last-in-wins, which is exactly what a list must not use.
+    expect(doctrineOf(parseModifierBlock(valueOf(block, "doctrine_character_modifier")!))).toBe(
+      "doctrine_temporal_head"
+    );
+  });
+
+  it("writes a doctrine list back where it was, added to and taken from", () => {
+    const block = parseDefBlock(THREE_DOCTRINES)!;
+    const order = ["legacy", "character_modifier", "doctrine_character_modifier"];
+    const values = valuesOf(block, "doctrine_character_modifier");
+
+    // Untouched: byte for byte the file's own text.
+    expect(writeDefBlock(applyRepeated(block, "doctrine_character_modifier", values, order))).toBe(
+      THREE_DOCTRINES
+    );
+
+    // One fewer: the other two keep their place and their blank line.
+    const two = writeDefBlock(applyRepeated(block, "doctrine_character_modifier", values.slice(0, 2), order));
+    expect(two).toContain("doctrine = doctrine_spiritual_head");
+    expect(two).not.toContain("doctrine = doctrine_temporal_head");
+    expect(two.match(/doctrine_character_modifier = \{/g)).toHaveLength(2);
+
+    // One more, with a name and a doctrine put in by the form.
+    const fresh = writeModifierBlock(
+      withModifierName(
+        withDoctrine(parseModifierBlock("{\n\t\tprowess = 1\n\t}"), "doctrine_pluralism_pluralist"),
+        "erudition_legacy_4_modifier_name"
+      )
+    )!;
+    const four = writeDefBlock(
+      applyRepeated(block, "doctrine_character_modifier", [...values, fresh], order)
+    );
+    expect(four.match(/doctrine_character_modifier = \{/g)).toHaveLength(4);
+    expect(four).toContain(
+      "\tdoctrine_character_modifier = {\n" +
+        "\t\tname = erudition_legacy_4_modifier_name\n" +
+        "\t\tdoctrine = doctrine_pluralism_pluralist\n" +
+        "\t\tprowess = 1\n" +
+        "\t}"
+    );
+
+    // A perk with none of them yet gets the key where its order puts it.
+    const bare = parseDefBlock("px_perk_1 = {\n\tlegacy = px_track\n}")!;
+    expect(writeDefBlock(applyRepeated(bare, "doctrine_character_modifier", [fresh], order))).toBe(
+      "px_perk_1 = {\n\tlegacy = px_track\n" +
+        "\tdoctrine_character_modifier = {\n" +
+        "\t\tname = erudition_legacy_4_modifier_name\n" +
+        "\t\tdoctrine = doctrine_pluralism_pluralist\n" +
+        "\t\tprowess = 1\n" +
+        "\t}\n}"
+    );
+  });
+
+  it("reads an empty script area as an empty block, so a builder can go back", () => {
+    // The bug this pins: `bodyOf` refused any text without a `{`, so the
+    // "Advanced: script" toggle of an untouched field could never return.
+    expect(bodyOf("")).toEqual({ head: "", statements: [], tail: [] });
+    expect(bodyOf("   \n\t\n")).toEqual({ head: "", statements: [], tail: [] });
+    expect(bodyOf("has_trait = brave")).toBeNull();
+    expect(parseConditions("")).toEqual([]);
+    expect(parseEffectLines("")).toEqual([]);
+    expect(readChanceValue("")).toEqual({ ok: true, value: null });
+  });
+
+  it("names the line it stopped on when a block cannot become rows", () => {
+    // A trigger the rows cannot hold: the note has to say which line.
+    expect(readConditions("{\n\thas_trait = brave\n}")).toEqual({
+      ok: false,
+      line: "has_trait = brave",
+    });
+    // A comment is prose no row can put back, and it is named too.
+    expect(readConditions("{\n\t# only with the DLC\n\thas_dlc_feature = legends\n}")).toEqual({
+      ok: false,
+      line: "# only with the DLC",
+    });
+    expect(readEffectLines("{\n\tadd_prestige = 100\n}")).toEqual({
+      ok: false,
+      line: "add_prestige = 100",
+    });
+    expect(readChanceValue("{\n\tvalue = 11\n\tmultiply = 0\n}")).toEqual({
+      ok: false,
+      line: "multiply = 0",
+    });
+    // And a text that is not a block at all names its first line.
+    expect(readConditions("has_dlc_feature = legends")).toEqual({
+      ok: false,
+      line: "has_dlc_feature = legends",
+    });
   });
 
   it("names a perk's tooltip loc keys the way the game does", () => {

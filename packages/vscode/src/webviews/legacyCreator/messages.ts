@@ -8,6 +8,9 @@
 import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
 import type { CreatorImagesReply, CreatorImagesRequest, CreatorSaveTarget } from "../shared/creatorMessages";
 
+/** Which of the two name-derived pictures a track reads. */
+export type ArtKind = "icon" | "illustration";
+
 /** One picture of the legacy icon folder, already decoded to a webview URL. */
 export interface IconEntry {
   /** File name without the extension: the track key the game derives it from. */
@@ -32,6 +35,17 @@ export interface CreatorInit {
    */
   perksPerTrack: number | null;
   icons: IconEntry[];
+  /**
+   * The wide picture the legacy window draws behind the perks, one file per
+   * track, already decoded. Empty when no root holds the folder.
+   */
+  illustrations: IconEntry[];
+  /**
+   * Where that picture is read from, mod-relative, or null when this game
+   * draws no such illustration. The app builds `<folder>/<track key>.dds`
+   * from it and never names a path itself.
+   */
+  illustrationFolder: string | null;
   /**
    * How the GAME prints each modifier (`paradox/modifierFormats`), so a perk
    * tile's tooltip reads "+0.30 Positive Genetic Chance" and not the script.
@@ -89,8 +103,8 @@ export type AppToHost =
   | { type: "load"; name: string }
   /** Deep link into the Examples Wiki for a name the modder asked about. */
   | { type: "openExamples"; name: string }
-  /** Pick a picture and convert it into the mod's icon folder under `track`. */
-  | { type: "customIcon"; track: string }
+  /** Pick a picture and convert it into the mod's folder for `which`, under `track`. */
+  | { type: "customIcon"; track: string; which: ArtKind }
   /** Decode game assets (a trait icon, the track frame) into webview URLs. */
   | CreatorImagesRequest
   /**
@@ -121,6 +135,8 @@ export type AppToHost =
        * track's own picture: the host copies it to <iconFolder>/<track>.dds.
        */
       icon: string | null;
+      /** The same for the window's illustration, under its own folder. */
+      illustration: string | null;
     };
 
 export type HostToApp =
@@ -132,8 +148,11 @@ export type HostToApp =
       /** The loc the workspace already has for those keys, so the form shows it. */
       loc: Record<string, string>;
     }
-  /** The icon folder was written into; `select` is the key to show as chosen. */
-  | { type: "icons"; icons: IconEntry[]; select?: string }
+  /**
+   * One of the two picture folders was written into; `select` is the key to
+   * show as chosen. `which` says which folder, and defaults to the icon's.
+   */
+  | { type: "icons"; icons: IconEntry[]; select?: string; which?: ArtKind }
   | CreatorImagesReply
   /** One entry per key the app asked for; a key with no loc is simply absent. */
   | { type: "locValues"; values: Record<string, string> }

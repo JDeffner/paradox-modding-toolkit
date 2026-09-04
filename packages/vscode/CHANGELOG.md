@@ -316,6 +316,22 @@
   `Documents/Paradox Interactive/<game>/px-toolkit/coat_of_arms` by default)
   holding exactly what Copy puts on the clipboard; Import shows what is stored
   as pictures and loads the one you pick. Randomize is gone.
+- **Dynasty Legacy Creator: doctrine modifiers as a list, the illustration
+  the game draws, and sections that read as prose.** A perk applies one
+  `doctrine_character_modifier` per doctrine and the game's own erudition
+  legacy writes three, so the form holds as many as the perk needs, each with
+  its doctrine, its optional name and its own modifiers; a loaded perk no
+  longer comes back with only the last of them. The track's Art section names
+  what the game expects of each picture (the icon at 140 x 140, shown at
+  80 x 80; the illustration at 4216 x 368) and the row below draws the
+  illustration the way the window does, one picture stretched behind every
+  perk and drawn twice through the frame and the mask. "Advanced: script"
+  always has a way back: an empty area returns without a word, a readable one
+  returns as rows, and one the reader stopped on names the line and offers to
+  drop the script. The save is one line naming the mod, whose menu moves
+  either of the two files, and the perk editor is titled with the perk, walks
+  the track with its own arrows and opens on the first perk of a loaded
+  track.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 

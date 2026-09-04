@@ -105,7 +105,13 @@ const PERK_FORM: DefinitionForm = {
       refKinds: ["trait"],
     },
   ],
-  options: { trait: [] },
+  options: {
+    trait: [],
+    doctrine: [{ value: "doctrine_no_head" }, { value: "doctrine_spiritual_head" }],
+  },
+  blocks: {
+    doctrine_character_modifier: [{ key: "doctrine", refKinds: ["doctrine"] }],
+  },
   conditions: {
     has_dlc_feature: [{ value: "hybridize_culture" }, { value: "legends" }],
     has_game_rule: [{ value: "unrestricted_dynasty_legacies_all" }],
@@ -140,6 +146,8 @@ const INIT: CreatorInit = {
   // The number the host measured over the game's own perk files.
   perksPerTrack: 5,
   icons: [],
+  illustrations: [],
+  illustrationFolder: "gfx/interface/illustrations/legacy_tracks",
   formats: FORMATS,
   refIconFolders: {},
   problem: null,
@@ -280,7 +288,9 @@ describe("dynasty legacy creator app", () => {
     const app = boot();
     expect(app.name.value).toBe("px_legacy_track");
     expect(app.cards()).toHaveLength(5);
-    expect(app.window.document.getElementById("perkNote")?.textContent).toBe("(vanilla tracks have 5 perks)");
+    expect(app.window.document.getElementById("perkNote")?.textContent).toContain(
+      "Vanilla tracks have 5 perks"
+    );
   });
 
   it("saves a whole track from nothing but the key", () => {
@@ -351,7 +361,9 @@ describe("dynasty legacy creator app", () => {
     expect(side.hasAttribute("data-collapsed")).toBe(true);
     app.cards()[2].click();
     expect(side.hasAttribute("data-collapsed")).toBe(false);
-    expect(document.getElementById("sideTitle")?.textContent).toBe("Perk 3");
+    // The panel is titled with the perk itself, not with its number.
+    expect(document.getElementById("sideTitle")?.textContent).toBe("Px Legacy 3");
+    expect(document.getElementById("sideTitle")?.dataset.tip).toBe("Perk 3 of 5");
     const key = document.querySelector<HTMLInputElement>("#perkEditor input");
     expect(key?.value).toBe("px_legacy_3");
   });
@@ -398,7 +410,7 @@ describe("dynasty legacy creator app", () => {
 
   it("builds a track's is_shown out of a picked DLC feature, with nothing typed", () => {
     const app = boot();
-    const fields = app.window.document.getElementById("trackFields") as HTMLElement;
+    const fields = app.window.document.getElementById("sections") as HTMLElement;
     buttonWith(fields, "Add condition").click();
     app.pick("Needs a DLC feature");
     buttonWith(fields, "pick a feature").click();
@@ -466,7 +478,7 @@ describe("dynasty legacy creator app", () => {
     expect(perks.every((perk) => perk.sourceFile === undefined)).toBe(true);
   });
 
-  it("says where each of the two files goes, and asks to change one", () => {
+  it("names the save on one line, and its menu moves either of the two files", () => {
     const app = boot();
     const document = app.window.document;
     app.post({
@@ -475,11 +487,165 @@ describe("dynasty legacy creator app", () => {
       perks: { modLabel: "mymod", path: "common/dynasty_perks/px_dynasty_perks.txt" },
     });
     const lines = [...document.querySelectorAll<HTMLButtonElement>(".px-target")];
-    expect(lines).toHaveLength(2);
-    expect(lines[0].textContent).toContain("common/dynasty_legacies/px_legacies.txt");
-    expect(lines[1].textContent).toContain("common/dynasty_perks/px_dynasty_perks.txt");
-    lines[1].click();
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toContain("dynasty_legacies/px_legacies.txt");
+    // One line, but the tooltip owes the modder both files.
+    expect(lines[0].dataset.tip).toContain("dynasty_perks/px_dynasty_perks.txt");
+    lines[0].click();
+    app.pick("The perks' file");
     expect(app.posted).toContainEqual({ type: "changeTarget", which: "perks" });
+  });
+
+  /**
+   * erudition_legacy_4 verbatim from the game's own 00_dynasty_perks.txt: the
+   * perk that writes three doctrine modifiers, which a form modelling one key
+   * as one block used to reduce to the last of them.
+   */
+  const THREE_DOCTRINES = {
+    name: "erudition_legacy_4",
+    file: "common/dynasty_perks/00_dynasty_perks.txt",
+    source: "vanilla" as const,
+    text:
+      "erudition_legacy_4 = {\n" +
+      "\tlegacy = erudition_legacy_track\n" +
+      "\tdoctrine_character_modifier = {\n" +
+      "\t\tname = erudition_legacy_4_modifier_name\n" +
+      "\t\tdoctrine = doctrine_no_head\n" +
+      "\t\tdomain_tax_same_faith_mult = 0.05\n" +
+      "\t}\n" +
+      "\tdoctrine_character_modifier = {\n" +
+      "\t\tname = erudition_legacy_4_modifier_name\n" +
+      "\t\tdoctrine = doctrine_spiritual_head\n" +
+      "\t\treligious_head_opinion = 15\n" +
+      "\t}\n" +
+      "}",
+  };
+
+  it("shows every doctrine modifier a loaded perk has, and writes them all back", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: [THREE_DOCTRINES], loc: {} });
+    app.cards()[0].click();
+    const editor = document.getElementById("perkEditor") as HTMLElement;
+    expect(editor.querySelectorAll(".doctrineblock")).toHaveLength(2);
+
+    // Untouched, the two blocks come out exactly as the file has them (the
+    // one line that moves is the link, which always follows the open track).
+    expect(app.save().perks[0].block).toBe(
+      THREE_DOCTRINES.text.replace("legacy = erudition_legacy_track", "legacy = px_legacy_track")
+    );
+
+    // A third block is added with its own doctrine and its name line.
+    buttonWith(editor, "Add a doctrine modifier").click();
+    const cards = [...editor.querySelectorAll<HTMLElement>(".doctrineblock")];
+    expect(cards).toHaveLength(3);
+    buttonWith(cards[2], "not set").click();
+    app.pick("doctrine_spiritual_head");
+    const written = app.save().perks[0];
+    expect(written.block.match(/doctrine_character_modifier = \{/g)).toHaveLength(3);
+    // A repeated key cannot go through setProperties, which rewrites the last
+    // entry only, so a moved list is written as the whole block.
+    expect(written.changed).toBeUndefined();
+  });
+
+  it("takes an empty script area back to its builder", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.cards()[0].click();
+    const editor = document.getElementById("perkEditor") as HTMLElement;
+    const toggle = buttonWith(editor, "Advanced: script");
+    const area = toggle.parentElement!.querySelector("textarea") as HTMLTextAreaElement;
+    toggle.click();
+    expect(area.hidden).toBe(false);
+    // Nothing was typed, so going back says nothing and shows the rows again.
+    area.value = "   ";
+    buttonWith(editor, "Back to the").click();
+    expect(area.hidden).toBe(true);
+    expect(toggle.parentElement!.querySelector<HTMLElement>(".note")!.hidden).toBe(true);
+  });
+
+  it("says which line kept a script from becoming rows, and offers to drop it", () => {
+    const app = boot();
+    const document = app.window.document;
+    const fields = document.getElementById("sections") as HTMLElement;
+    // A condition the builder can show, so the rows have something to restore.
+    buttonWith(fields, "Add condition").click();
+    app.pick("Needs a DLC feature");
+    buttonWith(fields, "pick a feature").click();
+    app.pick("legends");
+
+    const toggle = buttonWith(fields, "Advanced: script");
+    toggle.click();
+    const area = toggle.parentElement!.querySelector("textarea") as HTMLTextAreaElement;
+    // Opening the area seeds it with what the builder writes, so the block is
+    // not lost to an empty box.
+    expect(area.value).toContain("has_dlc_feature = legends");
+
+    area.value = "{\n\thas_trait = brave\n}";
+    buttonWith(fields, "Back to the").click();
+    const note = toggle.parentElement!.querySelector<HTMLElement>(".note")!;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toContain("has_trait = brave");
+    expect(area.hidden).toBe(false);
+
+    buttonWith(note, "Discard the script and go back").click();
+    expect(area.hidden).toBe(true);
+    expect(app.save().track.block).toBe(
+      "px_legacy_track = {\n\tis_shown = {\n\t\thas_dlc_feature = legends\n\t}\n}"
+    );
+  });
+
+  it("walks the track from the perk panel's own header", () => {
+    const app = boot();
+    const document = app.window.document;
+    app.cards()[0].click();
+    expect((document.getElementById("prevPerk") as HTMLButtonElement).disabled).toBe(true);
+    (document.getElementById("nextPerk") as HTMLButtonElement).click();
+    expect(document.getElementById("sideTitle")?.textContent).toBe("Px Legacy 2");
+    expect((document.getElementById("prevPerk") as HTMLButtonElement).disabled).toBe(false);
+    // The toolbar's own toggle closes it and opens it again on the same perk.
+    (document.getElementById("togglePerk") as HTMLButtonElement).click();
+    expect((document.getElementById("side") as HTMLElement).hasAttribute("data-collapsed")).toBe(true);
+    (document.getElementById("togglePerk") as HTMLButtonElement).click();
+    expect((document.getElementById("side") as HTMLElement).hasAttribute("data-collapsed")).toBe(false);
+    expect(document.getElementById("sideTitle")?.textContent).toBe("Px Legacy 1");
+  });
+
+  it("opens a loaded track on its first perk", () => {
+    const app = boot();
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: LOADED_PERKS, loc: {} });
+    const document = app.window.document;
+    expect((document.getElementById("side") as HTMLElement).hasAttribute("data-collapsed")).toBe(false);
+    expect(document.getElementById("sideTitle")?.textContent).toBe("Blood Legacy 1");
+  });
+
+  it("draws the illustration behind the perks, twice, at a capped decode", () => {
+    const app = boot({
+      ...INIT,
+      illustrations: [{ key: "px_legacy_track", url: "vscode://thumb.png", source: "mymod" }],
+    });
+    const document = app.window.document;
+    // The strip's picture is asked for at its own cap, not the thumbnail's:
+    // the file is 4216 px wide.
+    expect(app.posted).toContainEqual({
+      type: "images",
+      keys: ["gfx/interface/illustrations/legacy_tracks/px_legacy_track.dds"],
+      maxDim: 1024,
+    });
+    app.post({
+      type: "images",
+      urls: {
+        "gfx/interface/illustrations/legacy_tracks/px_legacy_track.dds": "vscode://strip.png",
+        "gfx/interface/component_tiles/tile_frame_thin_02.dds": "vscode://frame.png",
+        "gfx/interface/component_masks/mask_legacy_track.dds": "vscode://mask.png",
+      },
+    });
+    const strip = document.getElementById("stripArt") as HTMLElement;
+    // One picture, drawn twice: the window's two background widgets both fill
+    // the box the perks define.
+    expect(strip.querySelectorAll("img")).toHaveLength(2);
+    expect(strip.hasAttribute("data-empty")).toBe(false);
+    expect([...strip.querySelectorAll("img")].every((img) => img.classList.contains("masked"))).toBe(true);
   });
 
   it("copies the script through the host, which owns the clipboard", () => {

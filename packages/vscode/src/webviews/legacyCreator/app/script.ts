@@ -138,6 +138,70 @@ export function valueOf(def: DefBlock, key: string): string | null {
 }
 
 /**
+ * EVERY value written for `key`, in file order.
+ *
+ * Most keys are last-in-wins, but a few are a list the engine reads whole:
+ * `doctrine_character_modifier` is written once per doctrine, and the game's
+ * own erudition_legacy_4 carries three of them
+ * (00_dynasty_perks.txt, measured). `valueOf` would show a modder one.
+ */
+export function valuesOf(def: DefBlock, key: string): string[] {
+  return def.statements.filter((st) => st.key === key).map((st) => st.value);
+}
+
+/**
+ * Put a repeated key's whole list back. The occurrences the block already has
+ * keep their place and their comments; extra ones are appended right after the
+ * last of them (or at `order`'s rank when the block had none), and occurrences
+ * the form no longer has are removed the way `applyValues` removes a key.
+ */
+export function applyRepeated(
+  def: DefBlock,
+  key: string,
+  values: readonly string[],
+  order: readonly string[]
+): DefBlock {
+  const statements = def.statements.map((st) => ({ ...st, before: [...st.before] }));
+  let tail = [...def.tail];
+  const at = statements.flatMap((st, i) => (st.key === key ? [i] : []));
+
+  // The ones the block already has, rewritten in place.
+  const kept = Math.min(at.length, values.length);
+  for (let i = 0; i < kept; i++) statements[at[i]] = { ...statements[at[i]], value: values[i] };
+
+  // The ones it no longer has, removed from the back so the indexes hold.
+  for (let i = at.length - 1; i >= kept; i--) {
+    const index = at[i];
+    const orphan = statements[index].before;
+    statements.splice(index, 1);
+    if (orphan.length > 0) {
+      if (index < statements.length) statements[index].before = [...orphan, ...statements[index].before];
+      else tail = [...orphan, ...tail];
+    }
+  }
+
+  // The new ones, after the last that was kept, else where the key belongs.
+  if (values.length > kept) {
+    const rank = (k: string): number => {
+      const found = order.indexOf(k);
+      return found < 0 ? order.length : found;
+    };
+    let insert = kept > 0 ? at[kept - 1] + 1 : statements.length;
+    if (kept === 0) {
+      for (let i = 0; i < statements.length; i++) {
+        if (rank(statements[i].key) > rank(key)) {
+          insert = i;
+          break;
+        }
+      }
+    }
+    const fresh = values.slice(kept).map((value) => ({ before: [], key, value, after: "" }));
+    statements.splice(insert, 0, ...fresh);
+  }
+  return { ...def, statements, tail };
+}
+
+/**
  * Put the form's answers into a block. A key the block already has keeps its
  * place, its comments and its trailing comment; a key it does not have is
  * inserted where `order` (the harvest's own key order) puts it; a `null` value
@@ -329,21 +393,46 @@ export function doctrineOf(entries: readonly ModifierEntry[]): string {
 
 /** The entries with their `doctrine =` line set, added at the top, or removed. */
 export function withDoctrine(entries: readonly ModifierEntry[], value: string): ModifierEntry[] {
+  return withLine(entries, "doctrine", value);
+}
+
+/**
+ * The other line a modifier block carries that is not a modifier: `name =`,
+ * the loc key the game heads the modifier group with. Measured in
+ * 00_dynasty_perks.txt: erudition_legacy_2 and erudition_legacy_4 write
+ * `name = <perk>_modifier_name` on every one of their doctrine blocks.
+ */
+export function modifierNameOf(entries: readonly ModifierEntry[]): string {
+  for (const entry of entries) {
+    if (entry.kind !== "raw") continue;
+    const match = /^name\s*=\s*([^\s#]+)/.exec(entry.text);
+    if (match) return match[1].replace(/^"|"$/g, "");
+  }
+  return "";
+}
+
+/** The entries with their `name =` line set, added at the top, or removed. */
+export function withModifierName(entries: readonly ModifierEntry[], value: string): ModifierEntry[] {
+  return withLine(entries, "name", value);
+}
+
+/** One `key = value` line of a modifier block, replaced where it is or put first. */
+function withLine(entries: readonly ModifierEntry[], key: string, value: string): ModifierEntry[] {
   const trimmed = value.trim();
+  const test = new RegExp(`^${key}\\s*=`);
   const out: ModifierEntry[] = [];
   let replaced = false;
   for (const entry of entries) {
-    const isDoctrine = entry.kind === "raw" && /^doctrine\s*=/.test(entry.text);
-    if (!isDoctrine) {
+    if (!(entry.kind === "raw" && test.test(entry.text))) {
       out.push(entry);
       continue;
     }
     if (trimmed !== "" && !replaced) {
-      out.push({ kind: "raw", text: `doctrine = ${trimmed}` });
+      out.push({ kind: "raw", text: `${key} = ${trimmed}` });
       replaced = true;
     }
   }
-  if (trimmed !== "" && !replaced) out.unshift({ kind: "raw", text: `doctrine = ${trimmed}` });
+  if (trimmed !== "" && !replaced) out.unshift({ kind: "raw", text: `${key} = ${trimmed}` });
   return out;
 }
 
@@ -390,12 +479,56 @@ export type Condition =
   /** `<scripted trigger> = yes|no`. */
   | { kind: "trigger"; name: string; value: boolean };
 
-/** The statements of a `{ … }` value, or null when it is not a statement list. */
-function bodyOf(value: string): Body | null {
+/**
+ * The statements of a `{ … }` value, or null when it is not a statement list.
+ *
+ * Empty is not "not a block": a field the modder never filled in, and a script
+ * area they cleared, both read as a body with no statements. Without that an
+ * empty "Advanced: script" area could never go back to its builder, since
+ * every builder asks this first.
+ */
+export function bodyOf(value: string): Body | null {
   const text = value.replace(/\r\n/g, "\n");
+  if (text.trim() === "") return { head: "", statements: [], tail: [] };
   if (!text.startsWith("{")) return null;
   const inner = text.slice(1, text.lastIndexOf("}"));
   return readBody(inner, scanItems(inner));
+}
+
+/**
+ * What a builder's reader answers: the rows, or the first source line it could
+ * not read. The line is what the note under the script area shows, because
+ * "this block does more than the rows can show" without naming the line leaves
+ * a modder hunting through their own script.
+ */
+export type ReadResult<T> = { ok: true; value: T } | { ok: false; line: string };
+
+/** The first line of a text that says something, trimmed, for a note. */
+function firstLine(text: string): string {
+  return (
+    text
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line !== "") ?? ""
+  );
+}
+
+/** One statement as a note shows it: its own line, never the whole block. */
+function statementLine(st: Statement): string {
+  const value = firstLine(st.value);
+  return `${st.key} = ${st.value.includes("\n") ? `${value} …` : value}`;
+}
+
+/** The first line of a body that carries prose no builder can put back. */
+function proseLine(body: Body): string {
+  if (body.head !== "") return body.head;
+  for (const st of body.statements) {
+    const before = st.before.find((line) => line.trim() !== "");
+    if (before) return before.trim();
+    if (st.after !== "") return `${st.key} = ${firstLine(st.value)} ${st.after}`;
+  }
+  return body.tail.find((line) => line.trim() !== "")?.trim() ?? "";
 }
 
 /** True when a body carries a comment or a stray line no builder can put back. */
@@ -425,15 +558,22 @@ function conditionOf(st: Statement): Condition | null {
  * keeps the block as script and says so (AD-5, nothing is hidden or dropped).
  */
 export function parseConditions(value: string): Condition[] | null {
+  const read = readConditions(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseConditions` with the line it stopped on, for the note under the area. */
+export function readConditions(value: string): ReadResult<Condition[]> {
   const body = bodyOf(value);
-  if (!body || hasProse(body)) return null;
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
   const rows: Condition[] = [];
   for (const st of body.statements) {
     const row = conditionOf(st);
-    if (!row) return null;
+    if (!row) return { ok: false, line: statementLine(st) };
     rows.push(row);
   }
-  return rows;
+  return { ok: true, value: rows };
 }
 
 /** The block source for a condition list, or null when it says nothing. */
@@ -468,18 +608,29 @@ export const TOOLTIP_KEY = "custom_description_no_bullet";
 
 /** The loc keys an effect block prints, in order, or null when it does more. */
 export function parseEffectLines(value: string): string[] | null {
+  const read = readEffectLines(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseEffectLines` with the line it stopped on. */
+export function readEffectLines(value: string): ReadResult<string[]> {
   const body = bodyOf(value);
-  if (!body || hasProse(body)) return null;
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
   const keys: string[] = [];
   for (const st of body.statements) {
-    if (st.key !== TOOLTIP_KEY) return null;
+    if (st.key !== TOOLTIP_KEY) return { ok: false, line: statementLine(st) };
     const inner = bodyOf(st.value);
-    if (!inner || hasProse(inner) || inner.statements.length !== 1) return null;
+    if (!inner || hasProse(inner) || inner.statements.length !== 1) {
+      return { ok: false, line: statementLine(st) };
+    }
     const only = inner.statements[0];
-    if (only.key !== "text" || only.value.startsWith("{")) return null;
+    if (only.key !== "text" || only.value.startsWith("{")) {
+      return { ok: false, line: statementLine(only) };
+    }
     keys.push(only.value.replace(/^"|"$/g, ""));
   }
-  return keys;
+  return { ok: true, value: keys };
 }
 
 /** The block source for a list of tooltip lines, or null when it has none. */
@@ -497,12 +648,23 @@ export function writeEffectLines(keys: readonly string[]): string | null {
  * which stay script.
  */
 export function parseChanceValue(value: string): number | null {
+  const read = readChanceValue(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseChanceValue` with the line it stopped on. */
+export function readChanceValue(value: string): ReadResult<number | null> {
   const body = bodyOf(value);
-  if (!body || hasProse(body) || body.statements.length !== 1) return null;
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
+  if (body.statements.length === 0) return { ok: true, value: null };
+  if (body.statements.length > 1) return { ok: false, line: statementLine(body.statements[1]) };
   const only = body.statements[0];
-  if (only.key !== "value") return null;
   const number = Number(only.value);
-  return only.value !== "" && Number.isFinite(number) ? number : null;
+  if (only.key !== "value" || only.value === "" || !Number.isFinite(number)) {
+    return { ok: false, line: statementLine(only) };
+  }
+  return { ok: true, value: number };
 }
 
 /** The block source for a plain chance, or null when nothing was given. */
