@@ -127,6 +127,11 @@ ${uiCss}
   #scaleLock { margin-bottom: 2px; }
   #scaleLock[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
   .detail .px-input { width: 100%; min-width: 0; }
+  /* The layers stay in view: the emblem body takes the rest of the tab and
+     the texture grid scrolls inside it, so the wheel never moves the panel. */
+  #layerList { flex: 0 0 auto; max-height: 40%; overflow: hidden auto; }
+  #emblemBody { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; }
+  #emblemBody .gridScroll { margin-top: 2px; }
   #layerList .px-item .px-item-tools { gap: 2px; }
   #layerList .px-item[data-locked] .px-item-label { color: var(--px-muted-fg); }
 
@@ -142,7 +147,11 @@ ${uiCss}
   .libEmpty { display: flex; flex-direction: column; gap: 6px; }
   .libPath { overflow-wrap: anywhere; font-family: var(--px-mono, monospace); }
   /* The tools that act on the selection: align, distribute, mirror, duplicate. */
-  .selTools { display: flex; flex-wrap: wrap; gap: 2px; padding-top: 4px; }
+  /* Captioned groups of tools: the caption names what the row does. */
+  .selTools { display: flex; flex-wrap: wrap; gap: 8px 12px; padding-top: 4px; }
+  .toolGroup { display: flex; flex-direction: column; gap: 2px; }
+  .toolGroup > .cap { font-size: var(--px-text-xs); color: var(--px-muted-fg); white-space: nowrap; }
+  .toolGroup > .toolRow { display: flex; gap: 2px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .adjustedNote { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 </style>

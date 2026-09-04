@@ -1455,37 +1455,55 @@ function duplicateSelection(): void {
 }
 
 /** The tools that act on the selection rather than on one number. */
+/**
+ * The tools under the numbers, in captioned groups: a row of twelve arrow
+ * glyphs with nothing but hovers to tell them apart read as a puzzle. Each
+ * group names what its buttons do to the selection (or to the shown emblem).
+ */
 function selectionTools(): HTMLElement {
   const host = el("div", "selTools");
+  let row: HTMLElement = host;
+  const group = (caption: string): void => {
+    const box = el("div", "toolGroup");
+    box.append(el("span", "cap", caption));
+    row = el("div", "toolRow");
+    box.append(row);
+    host.append(box);
+  };
   const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
     const b = button(label, run, "outline", "icon-sm");
     b.dataset.tip = tip;
     b.disabled = !enabled;
-    host.append(b);
+    row.append(b);
   };
   const many = selection.length >= 2;
   const against = many ? "the selection" : "the arms";
+  group(`Align to ${against}`);
   const aligns: [string, AlignMode, string][] = [
-    ["⇤", "left", `Align left edges to ${against}`],
-    ["⇔", "hcenter", `Centre horizontally on ${against}`],
-    ["⇥", "right", `Align right edges to ${against}`],
-    ["⇡", "top", `Align top edges to ${against}`],
-    ["⇕", "vcenter", `Centre vertically on ${against}`],
-    ["⇣", "bottom", `Align bottom edges to ${against}`],
+    ["⇤", "left", "Left edges"],
+    ["⇔", "hcenter", "Centre horizontally"],
+    ["⇥", "right", "Right edges"],
+    ["⇡", "top", "Top edges"],
+    ["⇕", "vcenter", "Centre vertically"],
+    ["⇣", "bottom", "Bottom edges"],
   ];
-  for (const [label, mode, tip] of aligns) tool(label, tip, true, () => alignSelection(mode));
-  tool("↔", "Distribute horizontally: equal gaps left to right", selection.length >= 3, () =>
+  for (const [label, mode, tip] of aligns)
+    tool(label, `${tip}, to ${against}`, true, () => alignSelection(mode));
+  group("Distribute");
+  tool("↔", "Equal gaps left to right (three or more selected)", selection.length >= 3, () =>
     distributeSelection("x")
   );
-  tool("↕", "Distribute vertically: equal gaps top to bottom", selection.length >= 3, () =>
+  tool("↕", "Equal gaps top to bottom (three or more selected)", selection.length >= 3, () =>
     distributeSelection("y")
   );
+  group("Mirror");
   tool("⇄", "Mirror horizontally", true, () => editSelection((b) => mirrorGroup(b, "x")));
   tool("⇅", "Mirror vertically", true, () => editSelection((b) => mirrorGroup(b, "y")));
+  group("Copy");
   const dup = iconButton("copy", "Duplicate in place", duplicateSelection);
   dup.dataset.variant = "outline";
   dup.dataset.size = "icon-sm";
-  host.append(dup);
+  row.append(dup);
   return host;
 }
 
@@ -2225,7 +2243,11 @@ canvas.addEventListener("pointermove", (e) => {
     }
   }
   writeBoxes(next);
-  renderPanel();
+  // Only the numbers follow the pointer. Rebuilding the whole panel on every
+  // move redrew the catalog grid (a hundred tiles) per pixel, which read as
+  // the selector reloading and made the drag lag; the panel is rebuilt once
+  // when the gesture ends.
+  renderPlacement();
   draw();
 });
 
@@ -2234,7 +2256,10 @@ const endGesture = (e: PointerEvent): void => {
   const moved = gesture.started;
   gesture = null;
   canvas.releasePointerCapture(e.pointerId);
-  if (moved) commit();
+  if (moved) {
+    commit();
+    renderPanel();
+  }
 };
 canvas.addEventListener("pointerup", endGesture);
 canvas.addEventListener("pointercancel", endGesture);

@@ -291,7 +291,7 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     selectAll.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
 
     const centre = [...app.document.querySelectorAll<HTMLElement>("#placement .selTools button")].find(
-      (b) => b.dataset.tip === "Centre horizontally on the selection"
+      (b) => b.dataset.tip === "Centre horizontally, to the selection"
     );
     if (!centre) throw new Error("no align tool for a multi-selection");
     centre.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));

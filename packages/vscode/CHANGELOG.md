@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Coat of Arms Designer: a smooth drag, a catalog that scrolls on its own,
+  captioned tools.** Dragging an emblem rebuilt the whole side panel on
+  every pointer move, which redrew the catalog grid per pixel and made the
+  drag lag; only the placement numbers follow the pointer now and the panel
+  is rebuilt once the drag ends. In the Emblems tab the texture grid scrolls
+  inside the tab, so the layer list stays in view, and the category picker
+  has room above the grid. The tools under the numbers sit in captioned
+  groups (Align, Distribute, Mirror, Copy) instead of one row of arrows.
+- **The Project panel no longer lists Insert Snippet.** The command stays in
+  the palette and on Ctrl+Alt+I; the row was one more thing in Create that
+  did not create a file.
 - **Dynasty Tree: Edit on every card, and a click on empty canvas goes back
   to the dynasty.** A game character's card and inspector carry Edit again;
   saving writes a full copy under the same id into your mod, as an override,

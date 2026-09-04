@@ -128,16 +128,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-        // Last in the group: the same intent as New Content one step smaller
-        // (that one writes a file, this one writes into the file already open),
-        // and keeping it behind the creators leaves the Flag Builder door
-        // directly after the scaffolds for a game with no creators.
-        {
-          label: "Insert Snippet…",
-          command: "px.insertSnippet",
-          icon: "layoutTemplate",
-          tip: "Insert a definition skeleton measured over the game's own files.",
-        },
       ],
     },
     {
