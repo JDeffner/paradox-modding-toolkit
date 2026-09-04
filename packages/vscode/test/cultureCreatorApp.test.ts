@@ -157,7 +157,7 @@ function addTradition(document: Document): void {
 }
 
 describe("culture creator app", () => {
-  it("asks for a culture with only the name typed, and boots ready to save", () => {
+  it("asks for a culture with only the name typed, and splits the one pillar folder into a picker per family", () => {
     const { document, posted } = boot();
     expect(posted[0]).toEqual({ type: "ready" });
     expect((document.getElementById("name") as HTMLInputElement).value).toBe("px_culture");
@@ -166,10 +166,7 @@ describe("culture creator app", () => {
     expect(keys).toEqual(["px_culture", "px_culture_prefix", "px_culture_collective_noun"]);
     // Nothing is required of the modder before saving; the empty pillars are named.
     expect(document.getElementById("saveNote")!.textContent).toContain("ethos");
-  });
 
-  it("splits the one pillar folder into a picker per family", () => {
-    const { document } = boot();
     const rows = [...document.querySelectorAll("#body-pillars .px-label")].map((s) => s.textContent);
     expect(rows).toEqual(["Ethos", "Heritage", "Language", "Martial custom", "Head determination"]);
     // The Ethos picker offers the ethos pillar and NOT the heritage one, which
@@ -180,8 +177,8 @@ describe("culture creator app", () => {
     expect(offered).not.toContain("heritage_arabic");
   });
 
-  it("puts a chosen tradition into the culture window preview", () => {
-    const { document } = boot();
+  it("puts a chosen tradition into the culture window preview, and hands it to the Tradition Creator", () => {
+    const { document, posted } = boot();
     expect(document.getElementById("pvCount")!.textContent).toBe("0 traditions");
     addTradition(document);
     const tiles = [...document.querySelectorAll("#pvTraditions .pvtrad")];
@@ -191,11 +188,8 @@ describe("culture creator app", () => {
     // Both layers the catalog gave are stacked, in index order.
     const layers = [...tiles[0].querySelectorAll("img")].map((i) => i.getAttribute("data-rel"));
     expect(layers).toEqual(CATALOG.traditions.tradition_mubarizuns.layers);
-  });
 
-  it("hands a tradition chip to the Tradition Creator, and a blank form for a new one", () => {
-    const { document, posted } = boot();
-    addTradition(document);
+    // The chip's own button opens the tradition, and "New tradition" a blank form.
     const edit = document.querySelector<HTMLButtonElement>('.px-chip button[data-tip*="Tradition Creator"]');
     expect(edit, document.querySelector(".px-chip")?.outerHTML).not.toBeNull();
     edit!.click();
