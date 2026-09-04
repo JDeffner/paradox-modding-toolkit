@@ -214,3 +214,37 @@ export function snapDelta(bounds: Rect, div: number, tol: number): Delta {
 export function snapTolerance(div: number): number {
   return Math.min(0.02, 0.4 / div);
 }
+
+// ---------------------------------------------------------------------------
+// The grid the keyboard steps over
+// ---------------------------------------------------------------------------
+
+/**
+ * The subdivisions the grid offers, cells per axis. Every one is even, so the
+ * arms' own centre line is always a grid line; the fine end matters because
+ * emblem positions are written with three decimals, and a quarter of the arms
+ * is far coarser than the numbers a real design uses.
+ */
+export const GRID_DIVISIONS = [4, 8, 16, 32, 64] as const;
+
+/** The grid a fresh panel starts on: fine enough to place against, coarse enough to read. */
+export const DEFAULT_GRID_DIVISION = 16;
+
+/** A remembered subdivision the picker no longer offers falls back to the default. */
+export function validGridDivision(div: number | undefined): number {
+  return (GRID_DIVISIONS as readonly number[]).includes(div ?? 0) ? div! : DEFAULT_GRID_DIVISION;
+}
+
+/**
+ * How far one arrow press moves the selection, in arms fractions.
+ *
+ * With the grid ON an arrow is one CELL and Shift is four of them, so the
+ * keyboard lands on the same lines a drag snaps to. With the grid off there is
+ * no cell to follow, so the step is a fixed fraction of the arms: 1/256 is half
+ * a pixel of the 512px preview, the smallest move worth making, and Shift's
+ * 1/32 crosses the whole arms in 32 presses.
+ */
+export function nudgeStep(gridOn: boolean, div: number, shift: boolean): number {
+  if (!gridOn) return shift ? 1 / 32 : 1 / 256;
+  return (shift ? 4 : 1) / div;
+}
