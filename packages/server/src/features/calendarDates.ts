@@ -72,11 +72,14 @@ export function calendarHints(cal: CalendarSetting, document: TextDocument, rang
   return hints;
 }
 
-/** Hover on a date token: the display form plus the calendar rule in force. */
+/** Hover on a date token: the display form plus the calendar rule in force,
+ * labelled with where the rule came from (`.px-toolkit/calendar.json` or the
+ * `px.calendar` setting). */
 export function provideDateHover(
   cal: CalendarSetting | undefined,
   document: TextDocument,
-  position: Position
+  position: Position,
+  source = "px.calendar"
 ): Hover | null {
   if (!cal || !isScriptLanguage(document.languageId)) return null;
   const lineText = getLineText(document, position.line);
@@ -90,7 +93,7 @@ export function provideDateHover(
   const eras = cal.before ? `${cal.before} / ${cal.after}` : cal.after;
   const value =
     `\`${script}\` → **${display}**\n\n` +
-    `*px.calendar: epoch ${cal.epoch} (${eras}), ${monthsOf(cal).length} months*`;
+    `*${source}: epoch ${cal.epoch} (${eras}), ${monthsOf(cal).length} months*`;
   return {
     contents: { kind: MarkupKind.Markdown, value },
     range: {
