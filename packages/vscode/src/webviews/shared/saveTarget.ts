@@ -1,6 +1,8 @@
 /**
- * "Saves to <mod> > common/traits/mymod_traits.txt": the line a creator's top
- * bar shows from the moment the form loads.
+ * "<mod> > traits/mymod_traits.txt": the line a creator's top bar shows from
+ * the moment the form loads. The mod name carries the message; the path drops
+ * its `common/` lead because every creator folder has one, and the full
+ * mod-relative path stays in the tooltip.
  *
  * Where a definition lands used to be a question asked at save time, which
  * means a modder only found out after committing to the save. The host resolves
@@ -21,6 +23,11 @@ export interface SaveTargetLine {
   set(target: CreatorSaveTarget | null): void;
 }
 
+/** `common/traits/x.txt` -> `traits/x.txt`; other roots (`gfx/…`) stay as they are. */
+export function shortPath(path: string): string {
+  return path.replace(/^common\//, "");
+}
+
 export function saveTargetLine(onChange: () => void): SaveTargetLine {
   const button = document.createElement("button");
   button.className = "px-target";
@@ -37,8 +44,8 @@ export function saveTargetLine(onChange: () => void): SaveTargetLine {
     set: (target) => {
       button.hidden = target === null;
       if (!target) return;
-      mod.textContent = `Saves to ${target.modLabel}`;
-      path.textContent = `› ${target.path}`;
+      mod.textContent = target.modLabel;
+      path.textContent = `› ${shortPath(target.path)}`;
       button.dataset.tip = `${target.path} in ${target.modLabel}. Click to save somewhere else.`;
       button.dataset.tipWrap = "";
     },
