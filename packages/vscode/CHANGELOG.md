@@ -281,6 +281,18 @@
   event nothing fires and that fires nothing. The server drops them before it
   reads their cards, so a mod with hundreds of standalone events opens faster.
   Turn it off to see the whole namespace; the queried event always stays.
+- **Coat of Arms Designer: two panels, a finer grid and a library of your own
+  designs.** What a design is (pattern, layout, emblems) stays on the right;
+  what you do to it (the library, the preview frame, the grid and the whole
+  placement section) moved to a new left panel, so the numbers stay on screen
+  whichever tab is up and neither column can squeeze the arms under 320 px.
+  The grid is on at 16 x 16 out of the box and goes to 64; an arrow key now
+  moves one grid cell and Shift four, or 1/256 and 1/32 of the arms with the
+  grid off, instead of a quarter of the arms. Export stores the design as a
+  script file in a library folder outside any mod (`px.coaLibraryDir`,
+  `Documents/Paradox Interactive/<game>/px-toolkit/coat_of_arms` by default)
+  holding exactly what Copy puts on the clipboard; Import shows what is stored
+  as pictures and loads the one you pick. Randomize is gone.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
