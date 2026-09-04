@@ -8,6 +8,9 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- `protocol`: `paradox/locText` (`LocTextParams`, `LocTextResult`,
+  `LocTextValue`) — a localization value rendered to plain text, with `raw`,
+  `text` and `resolved` per key; a key the loc index cannot find is absent.
 - `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`);
   `lines` on `ModifierFormatsParams` / `ModifierFormatsResult` (loc keys
   answered as the same word-or-texticon parts a prefix is).

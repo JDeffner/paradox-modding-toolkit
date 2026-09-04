@@ -58,7 +58,6 @@ import {
 import {
   categoryLocKey,
   parameterLocKey,
-  plainLoc,
   renderTraditionTip,
   type PreviewCost,
   type PreviewModifierBlock,
@@ -238,9 +237,20 @@ const fullAsked = new Set<string>();
 let openLayerMenu: { items: MenuItem[]; rels: Map<string, string> } | null = null;
 /** Controls that draw a texticon and redraw themselves when it arrives; reset by `render()`. */
 let latePainters: (() => void)[] = [];
-/** Loc key -> the player's word, for the category headers. */
+/** Loc key -> the value verbatim, which is what a loc field edits and a save writes. */
 const locValues = new Map<string, string>();
+/**
+ * Loc key -> the same value as the PLAYER reads it (paradox/locText): markup
+ * stripped and the game's own datafunction chains resolved. What every place
+ * that SHOWS a value uses; `locValues` stays the editable text.
+ */
+const locTexts = new Map<string, string>();
 const locAsked = new Set<string>();
+
+/** The sentence to show for a loc key: the rendered one, else the raw value. */
+function locWord(key: string): string | undefined {
+  return locTexts.get(key) ?? locValues.get(key);
+}
 
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const nameInput = byId<HTMLInputElement>("name");
@@ -574,7 +584,7 @@ function pickField(spec: TraditionFieldSpec, value: string): Field<string> {
           label: v,
           // The category's own word, the way the Add Tradition view heads its
           // group of tiles (`tradition_group_<category>` in the game's loc).
-          ...(locValues.get(categoryLocKey(v)) ? { hint: locValues.get(categoryLocKey(v))! } : {}),
+          ...(locWord(categoryLocKey(v)) ? { hint: locWord(categoryLocKey(v))! } : {}),
         })),
       ],
       {
@@ -779,7 +789,7 @@ function costField(spec: TraditionFieldSpec, values: CostValues): Field<CostValu
 function parametersField(spec: TraditionFieldSpec, values: string[]): Field<string[]> {
   const items: EventVocabularyItem[] = (init?.catalog.parameters ?? []).map((name) => ({
     value: name,
-    ...(locValues.get(parameterLocKey(name)) ? { label: locValues.get(parameterLocKey(name))! } : {}),
+    ...(parameterSentence(name) ? { label: parameterSentence(name)! } : {}),
     hint: "the game's own",
   }));
   return multiRefField({
@@ -798,6 +808,20 @@ function currentParameters(): string[] {
 }
 
 /**
+ * What the player reads for a parameter. The server renders the sentence
+ * (`[GetTrait('rough_terrain_expert').GetName( … )]` becomes "Rough Terrain
+ * Expert"); a value that still shows a bracket or an unfilled `$slot$` after
+ * that is one only the running game can finish, and the parameter's own key
+ * says more than half-resolved markup does. Undefined = nothing to show, so
+ * the caller falls back to the key.
+ */
+function parameterSentence(name: string): string | undefined {
+  const value = locWord(parameterLocKey(name));
+  if (value === undefined || value === "") return undefined;
+  return /[[\]$]/.test(value) ? undefined : value;
+}
+
+/**
  * The sentence the tooltip reads for each parameter this tradition sets. A
  * parameter the workspace already words (513 of the game's own 515 do) needs
  * nothing; a new one gets a field, because a parameter with no
@@ -808,13 +832,12 @@ function parameterLocRows(): HTMLElement[] {
   const rows: HTMLElement[] = [];
   for (const name of currentParameters()) {
     const key = parameterLocKey(name);
-    const known = locValues.get(key);
-    if (known) {
+    if (locValues.has(key)) {
       const row = node("div", "kept");
       row.append(iconEl("check"));
       const code = document.createElement("code");
       code.textContent = name;
-      row.append(code, document.createTextNode(` already reads "${plainLoc(known)}".`));
+      row.append(code, document.createTextNode(` already reads "${parameterSentence(name) ?? name}".`));
       rows.push(row);
       continue;
     }
@@ -1120,7 +1143,7 @@ function refreshPreview(): void {
         key: currentName(),
         name: locFields[0]?.field.get().trim() || titleCaseFromName(currentName()),
         desc: locFields[1]?.field.get().trim() ?? "",
-        category: category ? (locValues.get(categoryLocKey(category)) ?? category) : "",
+        category: category ? (locWord(categoryLocKey(category)) ?? category) : "",
         layers,
         blocks: previewBlocks(),
         cost: previewCost(),
@@ -1128,7 +1151,7 @@ function refreshPreview(): void {
         // else the one being typed for it, else the bare key.
         parameters: currentParameters().map(
           (name) =>
-            locValues.get(parameterLocKey(name)) ||
+            parameterSentence(name) ||
             paramLocFields
               .find((entry) => entry.key === parameterLocKey(name))
               ?.field.get()
@@ -1427,6 +1450,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
         const entry = locFields.find((e) => e.key === key);
         if (entry) entry.field.set(value);
       }
+      for (const [key, text] of Object.entries(message.texts ?? {})) locTexts.set(key, text);
       render();
       break;
     }

@@ -94,6 +94,8 @@ import {
   allClientCommandIds,
   configChangedNotification,
   indexStatsRequest,
+  locTextRequest,
+  type LocTextResult,
   lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
@@ -1092,6 +1094,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           fetchModifierFormats: (params) =>
             lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
         },
         lookupLoc,
         ...(named ? { name: named } : {}),

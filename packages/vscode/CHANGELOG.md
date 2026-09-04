@@ -281,6 +281,15 @@
   event nothing fires and that fires nothing. The server drops them before it
   reads their cards, so a mod with hundreds of standalone events opens faster.
   Turn it off to see the whole namespace; the queried event always stays.
+- **Tradition Creator: parameter sentences read like the game.** A parameter
+  the game already words used to be quoted with its markup showing (`already
+  reads "The [GetTrait('rough_terrain_expert').GetName( GetNullCharacter )]
+  Commander Trait is more common"`). The picker chip, the helper line and the
+  tooltip now read "The Rough Terrain Expert Commander Traits is more common":
+  the server resolves the game's own text functions through its loc,
+  definition and schema tables. 242 of the 280 parameter sentences that carry
+  such a call resolve completely; one that does not falls back to the
+  parameter's key instead of showing brackets.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 

@@ -20,6 +20,8 @@ import type {
   DefinitionEditResult,
   DefinitionForm,
   DefinitionFormParams,
+  LocTextParams,
+  LocTextResult,
   ModifierFormatsParams,
   ModifierFormatsResult,
 } from "@px-lsp/protocol/protocol";
@@ -67,6 +69,12 @@ export interface TraditionCreatorActions {
    * preview then title-cases the names instead of quoting the game.
    */
   fetchModifierFormats?(params: ModifierFormatsParams): Promise<ModifierFormatsResult | null>;
+  /**
+   * A loc value as the player reads it, for the parameter sentences. Optional
+   * for the same reason: without it the panel shows the value verbatim, which
+   * is what it did before the request existed.
+   */
+  fetchLocText?(params: LocTextParams): Promise<LocTextResult>;
 }
 
 export interface TraditionCreatorOptions {
@@ -293,10 +301,16 @@ export class TraditionCreatorPanel {
   /**
    * The player's word for a loc key, for the preview. Mod first: a key the mod
    * redefines reads the way the mod defines it, the way the game reads it.
+   *
+   * Two answers per key, because the panel needs both: the value VERBATIM (a
+   * loc field edits it, a save writes it) and the value as the player READS it
+   * (paradox/locText resolves the game's own `[GetTrait('x').GetName( … )]`
+   * chains, which 145 of the 280 parameter sentences with a call take).
    */
   private async sendLoc(keys: string[]): Promise<void> {
+    const asked = keys.slice(0, LOC_CHUNK);
     const values: Record<string, string> = {};
-    for (const key of keys.slice(0, LOC_CHUNK)) {
+    for (const key of asked) {
       let entries;
       try {
         entries = await this.options.lookupLoc(key);
@@ -306,7 +320,22 @@ export class TraditionCreatorPanel {
       const value = (entries.find((e) => e.source === "mod") ?? entries[0])?.value;
       if (value) values[key] = value;
     }
-    if (Object.keys(values).length > 0) this.post({ type: "loc", values });
+    if (Object.keys(values).length === 0) return;
+    const texts = await this.locTexts(asked);
+    this.post({ type: "loc", values, ...(texts ? { texts } : {}) });
+  }
+
+  /** The rendered sentences, or undefined when the server does not serve them. */
+  private async locTexts(keys: string[]): Promise<Record<string, string> | undefined> {
+    if (!this.options.actions.fetchLocText) return undefined;
+    try {
+      const result = await this.options.actions.fetchLocText({ keys, modRoot: this.options.cfg.modPath });
+      const texts: Record<string, string> = {};
+      for (const [key, value] of Object.entries(result.values)) texts[key] = value.text;
+      return texts;
+    } catch {
+      return undefined; // the index is not up yet; the app shows the raw value
+    }
   }
 
   // -- where it saves ------------------------------------------------------

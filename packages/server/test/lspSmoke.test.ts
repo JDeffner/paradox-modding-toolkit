@@ -36,6 +36,8 @@ import {
   guiTreeRequest,
   definitionFormRequest,
   definitionEditRequest,
+  locTextRequest,
+  type LocTextResult,
   modifierFormatsRequest,
   type DefinitionForm,
   type DefinitionEditResult,
@@ -267,7 +269,11 @@ const LOC_YML =
   ' smoke.1.t:0 "Smoke"\n' +
   ' smoke.1.a:0 "OK"\n' +
   " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n" +
-  ' smoke.1.macro:0 "[PxSmokeParentMac"\n';
+  ' smoke.1.macro:0 "[PxSmokeParentMac"\n' +
+  // paradox/locText's subject: a value shaped like the games' own parameter
+  // sentences. Appended, because two tests above index LOC_YML by line.
+  ' trait_px_smoke_bold:0 "Bold"\n' +
+  " smoke.param:0 \"The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common\"\n";
 
 function toUri(p: string): string {
   return "file:///" + p.replace(/\\/g, "/").replace(/^\//, "");
@@ -1025,6 +1031,24 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     // the smoke fast), and the print rules live in the game folder. Null is the
     // answer, not an invented label per modifier.
     expect(await conn.sendRequest(modifierFormatsRequest, {})).toBeNull();
+  });
+
+  it("paradox/locText renders a value the way the player reads it", async () => {
+    // The mod's own trait and its loc key are all the chain needs: the schema
+    // says a trait's name lives under `trait_$`, the index says
+    // `px_smoke_bold` IS a trait, and the loc index has the word.
+    const result = (await conn.sendRequest(locTextRequest, {
+      keys: ["smoke.param", "smoke.1.t", "px_absent"],
+    })) as LocTextResult;
+    expect(result.values["smoke.param"]).toEqual({
+      raw: "The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common",
+      text: "The Bold trait is more common",
+      resolved: true,
+    });
+    // A value with nothing to resolve comes back as itself, and a key the loc
+    // index does not have is absent rather than an empty string.
+    expect(result.values["smoke.1.t"].text).toBe("Smoke");
+    expect(result.values.px_absent).toBeUndefined();
   });
 
   it("paradox/definitionEdit round-trips a property change and an appended block", async () => {

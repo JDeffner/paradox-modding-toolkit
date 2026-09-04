@@ -192,6 +192,40 @@ export interface LocEntryInfo {
   value?: string;
 }
 
+/**
+ * Request: a localization value as the PLAYER reads it;
+ * {@link LocTextParams} -> {@link LocTextResult}.
+ *
+ * {@link lookupLocRequest} answers the value verbatim, which is what an editor
+ * needs. A panel that SHOWS the value needs the sentence: the games write a
+ * culture parameter as `"The [GetTrait('rough_terrain_expert').GetName(
+ * GetNullCharacter )] Commander Trait is more common"` (145 of the 280
+ * parameter values with a real call take that one shape), and a modder reading
+ * a form must not be shown the brackets.
+ *
+ * Everything the renderer knows is DERIVED: the words come from the loc index
+ * (mod entries shadow the game's), the kind a `Get<Something>('name')` chain
+ * names comes from the definition index, and the loc key that kind's names take
+ * comes from the active profile's schema. No table of function names, so a
+ * workspace of any of the games gets the same behavior from its own schema.
+ */
+export const locTextRequest = "paradox/locText";
+export interface LocTextParams extends ModScopedParams {
+  keys: string[];
+}
+export interface LocTextValue {
+  /** The value verbatim, exactly as {@link lookupLocRequest} answers it. */
+  raw: string;
+  /** The same value as plain text: markup stripped, datafunctions resolved. */
+  text: string;
+  /** False when any part of the value stayed a word for something unresolved. */
+  resolved: boolean;
+}
+export interface LocTextResult {
+  /** Loc key -> its rendering. A key the loc index cannot find is ABSENT. */
+  values: Record<string, LocTextValue>;
+}
+
 // ---- server -> client ------------------------------------------------------
 
 /** Notification: data health for the status bar; payload {@link StatusPayload}. */
