@@ -241,10 +241,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void context.globalState.update(betaKey, true);
     void vscode.window
       .showInformationMessage(
-        `Paradox Modding Toolkit ${minor} is a beta. The content creators (traits, legacies, cultures, ` +
-          "dynasties, coats of arms, traditions) and the Steam Workshop upload are new: check what they " +
-          "write before you rely on it, and keep your mod in git. Feedback of every kind helps; " +
-          "please join the Discord and tell me what broke or what you miss.",
+        "Paradox Modding Toolkit is currently in beta. The content creators (traits, legacies, cultures, " +
+          "dynasties, coats of arms, traditions) and the Steam Workshop upload are new this update. " +
+          "Check what they write before you rely on it, and use git versioning! Feedback of every kind helps!",
         "Join the Discord"
       )
       .then((choice) => {
@@ -782,7 +781,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The toolkit's community server: the Project panel's Info group and the
     // palette both land here. Permanent invite, so it never needs a refresh.
     vscode.commands.registerCommand("px.openDiscord", () =>
-      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/ESstwqycug"))
+      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/DfEJ2H9hj4"))
     ),
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")

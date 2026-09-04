@@ -367,7 +367,7 @@ export function moddingToolsMarkdown(gameId: string, gameName: string): string |
     "",
     "## Add a tool",
     "",
-    "Built something that does what the toolkit does not? Tell me on [Discord](https://discord.gg/ESstwqycug) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues). I add the tools that fill a gap."
+    "Built something that does what the toolkit does not? Tell me on [Discord](https://discord.gg/DfEJ2H9hj4) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues). I add the tools that fill a gap."
   );
   return out.join("\n");
 }

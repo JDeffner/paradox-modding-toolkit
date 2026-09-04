@@ -213,7 +213,7 @@ are built and how to add one.
   community-editable, so adding a folder kind is a good first contribution.
 - **Fork it and take what is useful.** It is GPL-3.0-or-later, so keep
   distributed derivatives open.
-- **[Discord](https://discord.gg/ESstwqycug)** for release notes, quick
+- **[Discord](https://discord.gg/DfEJ2H9hj4)** for release notes, quick
   questions and modding help.
 
 ## License
