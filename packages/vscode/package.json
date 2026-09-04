@@ -682,6 +682,18 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "px.convertBBCodeToMarkdown",
+        "category": "Paradox",
+        "title": "Edit as Markdown",
+        "icon": "$(markdown)"
+      },
+      {
+        "command": "px.convertMarkdownToBBCode",
+        "category": "Paradox",
+        "title": "Convert to BBCode",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "px.customizeSidebar",
         "category": "Paradox",
         "title": "Customize Project Panel Rows",
@@ -1017,7 +1029,7 @@
             "type": "string",
             "default": "",
             "order": 4,
-            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`."
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.md`, `<language>/title.txt` + `<language>/description.md` per translation, `item.json`. A folder that already keeps `description.bbcode` stays on BBCode; either way Steam is sent BBCode."
           },
           "px.workshop.changelog": {
             "type": "string",
@@ -1405,6 +1417,14 @@
           "when": "activeWebviewPanelId == px.bbcodePreview"
         },
         {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "editorLangId == bbcode"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown"
+        },
+        {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
         },
@@ -1583,9 +1603,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "px.openBBCodePreview",
+          "command": "px.convertBBCodeToMarkdown",
           "when": "editorLangId == bbcode",
           "group": "navigation@2"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "resourceFilename == description.md",
+          "group": "navigation@1"
         },
         {
           "command": "px.openBBCodeSource",

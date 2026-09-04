@@ -395,11 +395,15 @@ function splitCells(line: string): string[] {
 const row = (cells: string[], cell: "th" | "td"): string =>
   ["[tr]", ...cells.map((c) => `[${cell}]${inlineMd(c)}[/${cell}]`), "[/tr]"].join("\n");
 
-/** Inline Markdown of one line. Code spans are lifted out first, so their content stays literal. */
+/**
+ * Inline Markdown of one line. Code spans are lifted out first, behind a
+ * private-use character no description holds, so their content is never read
+ * as markup.
+ */
 function inlineMd(s: string): string {
   const spans: string[] = [];
   return s
-    .replace(/`([^`]*)`/g, (_m, code: string) => `\u0000${spans.push(code) - 1}\u0000`)
+    .replace(/`([^`]*)`/g, (_m, code: string) => `\uE000${spans.push(code) - 1}\uE000`)
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, "[img]$2[/img]")
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "[url=$2]$1[/url]")
     .replace(/<(https?:\/\/[^>\s]+)>/g, "[url]$1[/url]")
@@ -409,5 +413,5 @@ function inlineMd(s: string): string {
     .replace(/(^|\W)\*([^*\s][^*]*)\*/g, "$1[i]$2[/i]")
     .replace(/(^|\W)_([^_\s][^_]*)_(?=\W|$)/g, "$1[i]$2[/i]")
     .replace(/~~([^~]+)~~/g, "[strike]$1[/strike]")
-    .replace(/\u0000(\d+)\u0000/g, (_m, i: string) => `[noparse]${spans[Number(i)]}[/noparse]`);
+    .replace(/\uE000(\d+)\uE000/g, (_m, i: string) => `[noparse]${spans[Number(i)]}[/noparse]`);
 }

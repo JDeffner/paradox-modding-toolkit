@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Steam Workshop descriptions are Markdown now, converted to BBCode for
+  Steam.** The listing folder keeps `description.md` (and
+  `translations/<language>/description.md`), so the description edits with
+  the Markdown highlighting, preview and tooling you already have. The
+  conversion runs where Steam is touched: Markdown becomes BBCode on upload,
+  BBCode becomes Markdown on download, and the panel's preview converts
+  first, so it shows what Steam will show. Every tag Steam documents maps
+  both ways, including tables, quotes, spoilers and code; anything else
+  crosses as plain text, so nothing is ever lost. The file rule: `.md` wins
+  when both exist, a folder with neither gets `.md`, and a folder that
+  already holds `description.bbcode` stays on BBCode, so nobody is migrated
+  behind their back. A `.bbcode` file's title bar has **Edit as Markdown**,
+  which writes the `.md` next to it and opens it; a `description.md` has
+  **Convert to BBCode** the other way. A `.bbcode` title bar now carries one
+  preview button, **Open BBCode Preview to the Side**, which opens beside the
+  file and keeps the cursor where it was, like Markdown's does.
+
 - **Coat of Arms Designer: a smooth drag, a catalog that scrolls on its own,
   captioned tools.** Dragging an emblem rebuilt the whole side panel on
   every pointer move, which redrew the catalog grid per pixel and made the

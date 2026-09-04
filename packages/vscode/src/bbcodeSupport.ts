@@ -3,8 +3,15 @@
  * tag completion in `.bbcode` documents and a live side-by-side preview
  * (px.openBBCodePreview) that renders the same way the Workshop panel's
  * preview does - both share webviews/workshop/bbcode.ts and its styles.
+ *
+ * Plus the two conversion commands, since the listing keeps its description
+ * in Markdown by default (steam/workshopFiles.ts `descriptionFile`): a
+ * `.bbcode` file becomes the `.md` the listing then reads, and back.
  */
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import { bbcodeToMarkdown, markdownToBBCode } from "./steam/bbcodeMarkdown";
 import { bbcodeToHtml } from "./webviews/workshop/bbcode";
 import { BBPREV_CSS } from "./webviews/workshop/bbcodeCss";
 import { makeNonce } from "./webviews/nonce";
@@ -231,11 +238,54 @@ function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): voi
   BBCodePreview.show(context, editor, sideBySide);
 }
 
+/**
+ * Convert the active document to the other format, next to it, and open it
+ * beside. The old file is left alone: `descriptionFile` reads `.md` first, so
+ * writing the `.md` is what switches a listing over, and deleting the
+ * `.bbcode` is the modder's call.
+ */
+async function convertActive(to: "md" | "bbcode"): Promise<void> {
+  const fromLang = to === "md" ? "bbcode" : "markdown";
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== fromLang) {
+    void vscode.window.showInformationMessage(
+      `Paradox Modding Toolkit: open a ${to === "md" ? ".bbcode" : "Markdown"} file to convert it.`
+    );
+    return;
+  }
+  const source = editor.document.uri.fsPath;
+  const target = source.slice(0, source.length - path.extname(source).length) + `.${to}`;
+  if (fs.existsSync(target)) {
+    const answer = await vscode.window.showWarningMessage(
+      `${path.basename(target)} already exists. Overwrite it?`,
+      "Overwrite",
+      "Cancel"
+    );
+    if (answer !== "Overwrite") return;
+  }
+  const text = editor.document.getText();
+  fs.writeFileSync(target, to === "md" ? bbcodeToMarkdown(text) : markdownToBBCode(text), "utf8");
+  await vscode.window.showTextDocument(vscode.Uri.file(target), {
+    viewColumn: vscode.ViewColumn.Beside,
+    preview: false,
+  });
+  const listing = path.basename(source).toLowerCase() === `description.${to === "md" ? "bbcode" : "md"}`;
+  void vscode.window.showInformationMessage(
+    !listing
+      ? `Wrote ${path.basename(target)}.`
+      : to === "md"
+        ? "description.md is now what the Workshop listing reads. Delete description.bbcode once you are happy with it."
+        : "Wrote description.bbcode, but the listing still reads description.md first. Delete the .md to go back to BBCode."
+  );
+}
+
 export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider("bbcode", completionProvider, "[", "/"),
     vscode.commands.registerCommand("px.openBBCodePreview", () => openPreview(context, false)),
     vscode.commands.registerCommand("px.openBBCodePreviewSide", () => openPreview(context, true)),
-    vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource())
+    vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource()),
+    vscode.commands.registerCommand("px.convertBBCodeToMarkdown", () => convertActive("md")),
+    vscode.commands.registerCommand("px.convertMarkdownToBBCode", () => convertActive("bbcode"))
   );
 }
