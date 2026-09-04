@@ -247,9 +247,11 @@ function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): voi
 async function convertActive(to: "md" | "bbcode"): Promise<void> {
   const fromLang = to === "md" ? "bbcode" : "markdown";
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== fromLang) {
+  // A file on disk, since the converted copy is written next to it: an
+  // untitled buffer has no folder to be next to.
+  if (!editor || editor.document.languageId !== fromLang || editor.document.uri.scheme !== "file") {
     void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: open a ${to === "md" ? ".bbcode" : "Markdown"} file to convert it.`
+      `Paradox Modding Toolkit: open a saved ${to === "md" ? ".bbcode" : "Markdown"} file to convert it.`
     );
     return;
   }
