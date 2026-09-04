@@ -11,6 +11,7 @@ import type {
   CreatorCopyRequest,
   CreatorImagesReply,
   CreatorImagesRequest,
+  CreatorOpenFileRequest,
   CreatorTargetReply,
 } from "../shared/creatorMessages";
 
@@ -118,13 +119,22 @@ export type AppToHost =
   | CreatorCopyRequest
   /** The target line was clicked: ask where the next save should go. */
   | CreatorChangeTargetRequest
-  | {
-      type: "save";
-      name: string;
-      mode: SaveMode;
-      /** The whole `name = { … }` block, for create / duplicate / override. */
-      block: string;
-      /** Only the keys that changed, for an edit. */
-      changed?: { key: string; value: string | null }[];
-      loc: { key: string; value: string }[];
-    };
+  | CultureSave
+  /**
+   * A script box's "Edit in the file": save the culture, then open it in the
+   * editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: CultureSave });
+
+export interface CultureSave {
+  type: "save";
+  name: string;
+  mode: SaveMode;
+  /** The whole `name = { … }` block, for create / duplicate / override. */
+  block: string;
+  /** Only the keys that changed, for an edit. */
+  changed?: { key: string; value: string | null }[];
+  loc: { key: string; value: string }[];
+}

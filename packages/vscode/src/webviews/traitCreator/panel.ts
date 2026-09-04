@@ -24,18 +24,18 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
-import { wireImages, type ImageRoot } from "../../creators/images";
+import { importPicture, wireImages, type ImageRoot } from "../../creators/images";
 import {
   applyDefinitionEdits,
   defaultSaveTarget,
   openSaveTarget,
   pickSaveTargetChoice,
+  revealDefinition,
   samePath,
   writeLocValues,
   type SaveTargetChoice,
 } from "../../creators/save";
 import { readModName } from "@px-lsp/protocol/modName";
-import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -269,8 +269,11 @@ export class TraitCreatorPanel {
       case "changeTarget":
         await this.changeTarget();
         return;
-      case "openFile":
+      case "revealSource":
         await openAt(message.file, message.line);
+        return;
+      case "openFile":
+        await this.openInFile(message.name, message.save);
         return;
       case "openExamples":
         // The only names the panel links out with are modifier rows.
@@ -375,14 +378,20 @@ export class TraitCreatorPanel {
   }
 
   /**
-   * Convert a picked image into the mod's icon folder under the trait's own
-   * name. That is the path the engine derives from the key, so the block needs
-   * no `icon` line at all and the trait keeps working if it is renamed by hand.
+   * A picture of the modder's own, into the mod the definition is saved to.
+   *
+   * The shared `importPicture` owns the whole flow: it takes any format the
+   * toolkit can decode (every Chromium format plus TGA and DDS), asks WHERE the
+   * file goes with the game's own folder as the default, and writes the DDS.
+   * The default is `<icon folder>/<key>.dds`, which is the path the engine
+   * derives from the key, so the block needs no `icon` line at all and the
+   * trait keeps working if it is renamed by hand. Somewhere else in the mod is
+   * allowed and said out loud: the game will not find it by name there.
    */
   private async convertIcon(name: string): Promise<void> {
-    const { cfg } = this.options;
-    const modPath = cfg.modPath ?? cfg.workspaceMods[0];
-    if (!modPath || !this.form?.iconFolder) {
+    const choice = this.targetChoice();
+    const folder = this.form?.iconFolder;
+    if (!choice || !folder) {
       this.post({ type: "toast", message: "No mod folder to write the icon into.", variant: "destructive" });
       return;
     }
@@ -390,30 +399,33 @@ export class TraitCreatorPanel {
       this.post({ type: "toast", message: "Name the trait first: the icon is named after it." });
       return;
     }
-    const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { Images: ["png", "jpg", "jpeg", "webp"] },
-      title: `Image for ${name}`,
-    });
-    if (!picked?.length) return;
-    const dir = path.join(modPath, ...this.form.iconFolder.split("/"));
-    fs.mkdirSync(dir, { recursive: true });
-    const target = vscode.Uri.file(path.join(dir, `${name}.dds`));
+    let written;
     try {
-      await convertImageToDds(picked[0], target);
+      written = await importPicture({
+        modPath: choice.modPath,
+        folder,
+        name,
+        title: `Picture for ${name}`,
+        textures: this.textures,
+      });
     } catch (err) {
-      this.post({ type: "toast", message: `Conversion failed: ${messageOf(err)}`, variant: "destructive" });
+      this.post({ type: "toast", message: `Picture: ${messageOf(err)}`, variant: "destructive" });
       return;
     }
-    const png = this.textures.resolveFile(target.fsPath, THUMB_DIM);
+    if (!written) return; // the modder cancelled at one of the two dialogs
+    const png = this.textures.resolveFile(written.abs, THUMB_DIM);
     this.post({
       type: "iconWritten",
       key: `${name}.dds`,
       url: png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null,
+      inPlace: written.inPlace,
     });
     this.post({
       type: "toast",
-      message: `Wrote ${name}.dds into ${this.form.iconFolder}. The game finds it by the trait's name.`,
+      message: written.inPlace
+        ? `Wrote ${written.rel}. The game finds it by the trait's name.`
+        : `Wrote ${written.rel}. The game will not find it by the trait's name there: move it into ${folder}, or point a gfx entry at it yourself.`,
+      ...(written.inPlace ? {} : { variant: "destructive" as const }),
     });
   }
 
@@ -457,9 +469,22 @@ export class TraitCreatorPanel {
 
   // -- saving --------------------------------------------------------------
 
-  private async save(save: TraitSave): Promise<void> {
+  /**
+   * A script box's way out: write the definition, then put the cursor on its
+   * block in the editor. It saves first every time rather than only when the
+   * block is missing, because the point is to hand the modder the file with
+   * what the form says in it; a save that changes nothing writes nothing
+   * (`applyDefinitionEdits` with no edits only opens the document).
+   */
+  private async openInFile(name: string, save: TraitSave): Promise<void> {
+    const abs = await this.save(save);
+    if (abs) await revealDefinition(abs, name);
+  }
+
+  /** The file that was written, or null when nothing was. */
+  private async save(save: TraitSave): Promise<string | null> {
     const { cfg, actions, lookupLoc } = this.options;
-    if (!this.form) return;
+    if (!this.form) return null;
     const folder = this.form.folder;
 
     // No question here: the target has been on screen since the form loaded.
@@ -467,7 +492,7 @@ export class TraitCreatorPanel {
     if (!choice) {
       this.post({ type: "toast", message: "No mod folder to save into.", variant: "destructive" });
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
     const wanted = path.join(choice.modPath, ...folder.split("/"), choice.file);
     const source =
@@ -485,13 +510,13 @@ export class TraitCreatorPanel {
       } catch (err) {
         void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${messageOf(err)}`);
         this.post({ type: "saved", ok: false, name: save.name });
-        return;
+        return null;
       }
     } else {
       const target = await openSaveTarget(cfg, folder, choice);
       if (!target) {
         this.post({ type: "saved", ok: false, name: save.name });
-        return;
+        return null;
       }
       abs = target.abs;
       text = target.text;
@@ -507,16 +532,19 @@ export class TraitCreatorPanel {
     if (refused) {
       void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${refused}`);
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
     if (!(await applyDefinitionEdits(abs, text, result.edits))) {
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
 
     let locFiles: string[];
     try {
-      locFiles = await writeLocValues(cfg, lookupLoc, save.loc);
+      // The target, so a NEW key lands in the loc file named after the script
+      // file it belongs to. Without it the writer put a trait's name into the
+      // mod's largest loc file, which for one mod was a calendar file.
+      locFiles = await writeLocValues(cfg, lookupLoc, save.loc, choice);
     } catch (err) {
       // The block is written; only the loc failed. The app is told the save is
       // over either way, or its Save button stays disabled until it reopens.
@@ -526,11 +554,15 @@ export class TraitCreatorPanel {
         variant: "destructive",
       });
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      // The block IS on disk, so the caller may still open it.
+      return abs;
     }
-    const written = [path.basename(abs), ...locFiles.map((file) => path.basename(file))];
+    // Deduplicated: the name and the description land in the same loc file, and
+    // a toast that says its name twice reads as two files.
+    const written = [...new Set([path.basename(abs), ...locFiles.map((file) => path.basename(file))])];
     this.post({ type: "toast", message: `Saved ${save.name} into ${written.join(", ")}.` });
     this.post({ type: "saved", ok: true, name: save.name });
+    return abs;
   }
 }
 

@@ -28,6 +28,7 @@ import { clampToViewport, installTips } from "../../shared/tips";
 import { traditionIcon as traditionIconEl } from "../../shared/traditionIcon";
 import {
   colorField,
+  enumField,
   filterVocabulary,
   locField,
   multiRefField,
@@ -37,7 +38,7 @@ import {
   titleCaseFromName,
   type Field,
 } from "../../shared/fields";
-import type { AppToHost, CultureInit, HostToApp, SaveMode } from "../messages";
+import type { AppToHost, CultureInit, CultureSave, HostToApp, SaveMode } from "../messages";
 import {
   changedProperties,
   firstValues,
@@ -215,6 +216,23 @@ function pillarIcons(value: string, family: string): string[] {
 /** A pillar's picture at the size its family is drawn at. */
 function pillarImage(value: string, family: string): string | null {
   return firstImage(pillarIcons(value, family), family === ETHOS ? ETHOS_DIM : PILLAR_DIM);
+}
+
+/**
+ * What a pillar's own picture has to be, behind the (i) on its row. A pillar
+ * is picked here rather than drawn, but a modder who writes one needs the file
+ * that goes with it.
+ *
+ * Measured in game/gfx/interface/icons/culture_pillars: the seven ethos files
+ * are 1200 x 260 and the other eight are 120 x 120, all 32-bit with an alpha
+ * channel. The boxes they are drawn in are the culture window's
+ * (window_culture.gui: 400 x 100 for the ethos banner, 44 x 44 for an icon).
+ */
+function pillarArtInfo(family: string): string {
+  const where = `The game reads ${PILLAR_ICONS}/<the pillar's key>.dds, and falls back to ${PILLAR_ICONS}/${family}.dds. DDS, and any picture format converts to one.`;
+  return family === ETHOS
+    ? `1200 x 260 pixels: the size all seven of the game's ethos banners are, measured. The culture window stretches it into a 400 x 100 box and cuts it out with a rough-edge mask, so paint to the edges and let the mask do the shaping. Transparency is kept. ${where}`
+    : `120 x 120 pixels: the size the game's other eight pillar icons are, measured. The window draws it at 44 x 44 and tints the silhouette through its own color table, so give it a transparent background and a solid shape. ${where}`;
 }
 
 /** Fill in every placeholder whose picture has since arrived. */
@@ -901,6 +919,7 @@ function render(): void {
     const field = refField({
       label: label(key),
       doc: docOf(key),
+      info: pillarArtInfo(key),
       items,
       value: raw(key) ?? "",
       placeholder: pickerPlaceholder(exampleOf(key) ?? items[0]?.value),
@@ -942,7 +961,7 @@ function render(): void {
   nameList.onChange(refresh);
   bind("name_list", () => nameList.get() || null);
   names.append(nameList.el);
-  names.append(simpleText("name_order_convention", raw("name_order_convention")));
+  names.append(pickOne("name_order_convention", raw("name_order_convention")));
   const ethnicities = weightRowsField(
     "Ethnicities",
     docOf("ethnicities"),
@@ -1022,6 +1041,9 @@ function render(): void {
         value: raw(key.key) ?? "",
         placeholder: "{ … }",
         rows: 3,
+        // A textarea has no completion, no hover and no highlighting; the note
+        // under it says so and offers the editor, which has all three.
+        onOpenFile: openInFile,
       });
       field.onChange(refresh);
       bind(key.key, () => field.get().trim() || null);
@@ -1034,6 +1056,31 @@ function render(): void {
   // The baseline every "did this change?" question is asked against.
   loaded = values();
   refresh();
+}
+
+/**
+ * A key whose whole vocabulary the game writes out: a picker, not a text box.
+ * `name_order_convention` is two values in the entire game
+ * (`dynasty_always_first` 22x, `japanese` 4x, measured in
+ * game/common/culture/cultures), and the engine reads no others, so a free-text
+ * field there only invites a typo the game fails silently on. The file's own
+ * value is always in the list (AD-5: annotate, never hide), and a workspace
+ * whose index has answered nothing yet falls back to the text field rather
+ * than to an empty picker.
+ */
+function pickOne(key: string, value: string | undefined): HTMLElement {
+  const sampled = keyOf(key)?.sampled ?? [];
+  if (sampled.length === 0) return simpleText(key, value);
+  const field = enumField({
+    label: label(key),
+    doc: docOf(key),
+    values: value && !sampled.includes(value) ? [...sampled, value] : sampled,
+    value: value ?? "",
+    ...(exampleOf(key) ? { placeholder: exampleOf(key)! } : {}),
+  });
+  field.onChange(refresh);
+  bind(key, () => field.get() || null);
+  return field.el;
 }
 
 /** A plain key: free text, with the values the game itself writes behind the chevron. */
@@ -1365,14 +1412,19 @@ $("mode").onclick = () =>
 
 $("wiki").onclick = () => send({ type: "openExamples" });
 
-$("save").onclick = () => {
+/**
+ * Everything a save says, or null when the key is not one the engine reads.
+ * Both the Save button and a script box's "Edit in the file" go through it: the
+ * file a modder is sent to has to hold what the form says.
+ */
+function savePayload(): CultureSave | null {
   const name = currentName();
   if (!NAME_RE.test(name)) {
     toast(
       "A culture key is lowercase letters, digits and underscores, starting with a letter.",
       "destructive"
     );
-    return;
+    return null;
   }
   const now = values();
   // `setProperties` rewrites ONE statement per key, and a culture may write
@@ -1383,14 +1435,25 @@ $("save").onclick = () => {
   const loc = locRows
     .map((row) => ({ key: locKeyFor(row.pattern, name), value: row.field.get() }))
     .filter((pair) => pair.value.trim() !== "");
-  send({
+  return {
     type: "save",
     name,
     mode,
     block: block(name),
     ...(mode === "edit" && !dlcMoved ? { changed: changedProperties(loaded, now) } : {}),
     loc,
-  });
+  };
+}
+
+$("save").onclick = () => {
+  const payload = savePayload();
+  if (payload) send(payload);
 };
+
+/** The way out of every script box: save, then open the block in the editor. */
+function openInFile(): void {
+  const payload = savePayload();
+  if (payload) send({ type: "openFile", name: payload.name, save: payload });
+}
 
 send({ type: "ready" });

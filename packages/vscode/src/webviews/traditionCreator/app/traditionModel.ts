@@ -29,6 +29,7 @@ import {
   readNumberRows,
   readQuoted,
   scanItems,
+  statementLines,
   type BlockWrite,
   type ParsedBlock,
 } from "../../shared/scriptBlock";
@@ -358,10 +359,12 @@ export function fieldLines(spec: TraditionFieldSpec, value: FieldValue): string[
       return nestedBlock(spec.key, rows);
     }
     case "script": {
-      // One statement, newlines and all: a script block keeps the indentation
-      // the modder typed rather than being re-indented line by line.
+      // One statement over several lines. Handed to `writeBlock` as one string
+      // it kept only its first line indented, so the body and the closing brace
+      // landed at column 0; `statementLines` gives the writer the lines to
+      // indent while keeping the shape the modder typed.
       const text = String(value).trim();
-      return text === "" ? [] : [`${spec.key} = ${text}`];
+      return text === "" ? [] : statementLines(`${spec.key} = ${text}`);
     }
     default: {
       const text = String(value).trim();

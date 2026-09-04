@@ -27,6 +27,7 @@ import {
   iconField,
   locField,
   multiRefField,
+  scriptFoot,
   textField,
   titleCaseFromName,
   type Field,
@@ -43,8 +44,8 @@ import { saveTargetLine } from "../../shared/saveTarget";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
-import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit } from "../messages";
-import { baseName, writeBlock } from "../../shared/scriptBlock";
+import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit, TraitSave } from "../messages";
+import { baseName, statementLines, writeBlock } from "../../shared/scriptBlock";
 import {
   fillTraitLoc,
   frameTexture,
@@ -58,6 +59,7 @@ import {
 import {
   emptyState,
   fieldLines,
+  fieldStatements,
   loadTrait,
   locKeys,
   nameProblem,
@@ -119,7 +121,7 @@ const HELP = {
         },
         {
           lead: "Identity.",
-          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom image converts a PNG into the mod under the trait's name.",
+          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom picture takes any image format, asks which folder of your mod it goes into, and writes the DDS under the trait's name.",
         },
         {
           lead: "Modifiers.",
@@ -322,6 +324,26 @@ function placeholderFor(spec: TraitFieldSpec): string | undefined {
   return spec.example ?? spec.sampled?.[0];
 }
 
+/**
+ * What the game expects of a trait's picture, behind the (i) on the icon row.
+ *
+ * Measured in game/gfx/interface/icons/traits: 375 of its 409 .dds files are
+ * exactly 120 x 120, and every one of them is 32-bit with an alpha channel.
+ * The frame under the icon shares that canvas (preview.ts), and the tooltip
+ * draws the pair at 52 x 52 (gui/shared/cooltip.gui). The folder is the form's,
+ * never spelled here.
+ */
+function iconInfo(): string {
+  const folder = form?.iconFolder ?? "the game's trait icon folder";
+  return (
+    "120 x 120 pixels: the size 375 of the game's 409 trait icons are, measured. " +
+    "Transparency matters. The category frame is drawn under the icon on the same canvas, " +
+    "so everything around the emblem has to be see-through. " +
+    "Custom picture… takes PNG, JPEG, WebP, GIF, BMP, TGA or DDS and writes the DDS for you. " +
+    `The game reads ${folder}/<the trait's key>.dds and the tooltip draws it at 52 x 52.`
+  );
+}
+
 function optionsFor(spec: TraitFieldSpec): EventVocabularyItem[] {
   return spec.refKind ? (form?.options[spec.refKind] ?? []) : [];
 }
@@ -397,6 +419,7 @@ function buildField(spec: TraitFieldSpec): Field<FieldValue> {
     case "icon":
       return iconField({
         ...shared,
+        info: iconInfo(),
         items: iconItems,
         value: String(value),
         onCustom: () => post({ type: "convertIcon", name: nameInput.value.trim() }),
@@ -481,7 +504,13 @@ function scriptListField(spec: TraitFieldSpec, values: string[]): Field<string[]
   };
   paint();
   add.style.alignSelf = "flex-start";
-  box.append(list, add);
+  // A textarea has no completion, no hover and no highlighting: the note under
+  // the boxes says so and offers the editor, which has all three.
+  box.append(
+    list,
+    add,
+    scriptFoot(() => void openInFile())
+  );
   return {
     el: fieldRow(spec, box),
     get: () => [...current],
@@ -598,8 +627,8 @@ function skillsRow(list: readonly TraitFieldSpec[]): HTMLElement {
   return box;
 }
 
-/** The picker entries for a modifier: the player's word, the key as the hint. */
-function modifierItems(): MenuItem[] {
+/** Every modifier the game knows: the player's word, the key as the hint. */
+function allModifierItems(): MenuItem[] {
   return (form?.modifiers ?? []).map((item) => {
     const label = formats?.[item.name]?.label;
     return {
@@ -609,6 +638,21 @@ function modifierItems(): MenuItem[] {
       ...(item.doc ? { description: item.doc } : {}),
     };
   });
+}
+
+/**
+ * The same list MINUS every name this form already draws a field for.
+ *
+ * `_traits.info` reads an unknown property as a modifier, so the six skills and
+ * the `ai_*` family are modifiers AND documented keys: the Skills row and the
+ * Advanced section already write them. Offered in the Modifiers picker too, a
+ * modder could add `martial` a second time, and the game would read the two
+ * statements as one key written twice. A file that HAS such a statement still
+ * round-trips: `loadTrait` puts it in the designed field, never in a row.
+ */
+function modifierItems(): MenuItem[] {
+  const drawn = new Set(specs.map((spec) => spec.key));
+  return allModifierItems().filter((item) => !drawn.has(item.value));
 }
 
 /** The picker entries for a trait: the player's word, the key as the hint. */
@@ -792,8 +836,10 @@ function examplesRow(): HTMLElement {
   button.dataset.variant = "link";
   button.dataset.size = "xs";
   button.textContent = "Look a modifier up in the Examples Wiki";
+  // Every modifier, not the picker's list: looking `martial` up is a fair
+  // question even though the Skills row is where a trait writes it.
   button.onclick = () =>
-    menu(button, modifierItems(), {
+    menu(button, allModifierItems(), {
       search: true,
       width: 340,
       onPick: (name) => post({ type: "openExamples", name }),
@@ -1117,6 +1163,22 @@ function refreshPreview(): void {
 }
 
 /**
+ * One statement's value, as `setProperties` wants it: the server drops it into
+ * the file over the old value's span, at the statement's own position, so a
+ * block value has to bring the indentation of its own lines with it. Without
+ * that the body and the closing brace land at column 0 while the statement
+ * sits a tab in, which is the same defect `statementLines` fixes on the
+ * whole-block path.
+ */
+function propertyValue(key: string, statement: string): string {
+  const eol = loaded?.block.eol ?? "\n";
+  const indent = loaded?.block.indent ?? "\t";
+  return statementLines(statement)
+    .join(eol + indent)
+    .slice(key.length + 3);
+}
+
+/**
  * Edit mode sends only what moved, as raw script text, so a save rewrites the
  * lines the modder touched and leaves their file alone. Null when one of the
  * changes cannot be one property (a key written twice, like `flag`): the whole
@@ -1126,11 +1188,17 @@ function changedProperties(): { key: string; value: string | null }[] | null {
   if (!baseline) return null;
   const out: { key: string; value: string | null }[] = [];
   for (const spec of specs) {
-    const lines = fieldLines(spec, state.values[spec.key]);
-    const was = fieldLines(spec, baseline.values[spec.key]);
-    if (lines.join("\n") === was.join("\n")) continue;
-    if (lines.length > 1) return null;
-    out.push({ key: spec.key, value: lines.length === 0 ? null : lines[0].slice(spec.key.length + 3) });
+    // Statements, not lines: a `compatibility` block is one property written
+    // over three lines, where two `flag` lines are two statements and no single
+    // property can stand for them.
+    const now = fieldStatements(spec, state.values[spec.key]);
+    const was = fieldStatements(spec, baseline.values[spec.key]);
+    if (now.join("\n") === was.join("\n")) continue;
+    if (now.length > 1) return null;
+    out.push({
+      key: spec.key,
+      value: now.length === 0 ? null : propertyValue(spec.key, now[0]),
+    });
   }
   const before = new Map(baseline.modifiers.map((row) => [row.name, row.value]));
   for (const row of state.modifiers) {
@@ -1198,7 +1266,10 @@ function buildLocFields(name: string): void {
         ? "What the tooltip says about the trait. Written into your mod's localization."
         : "What the player sees. Written into your mod's localization.",
     });
-    if (isDesc) field.set("");
+    // BOTH keys start filled, with the name made readable. A save only writes
+    // the keys that have a value, so an empty description used to write no
+    // `trait_<key>_desc` at all and the game printed the raw key where the
+    // sentence should be. A prefilled one is text to replace, not a hole.
     field.onChange(() => refreshPreview());
     return { key, field };
   });
@@ -1252,39 +1323,58 @@ function askForIcons(keys: string[]): void {
 // Saving
 // ---------------------------------------------------------------------------
 
-async function save(): Promise<void> {
-  if (!form) return;
+/**
+ * Everything a save says, or null when the form is not saveable yet (a name the
+ * engine cannot read). Both the Save button and a script box's "Edit in the
+ * file" go through it: the file a modder is sent to has to hold what the form
+ * says.
+ */
+function savePayload(): TraitSave | null {
+  if (!form) return null;
   const name = currentName();
   const problem = nameProblem(name);
   if (problem) {
     toast(problem, "destructive");
-    return;
-  }
-  if (mode === "override") {
-    const ok = await confirmDialog({
-      title: `Override the game's ${name}?`,
-      description:
-        "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
-        "changes from every future game patch. Partial overrides do not exist.",
-      confirmLabel: "Override",
-      destructive: true,
-    });
-    if (!ok) return;
+    return null;
   }
   const changed = mode === "edit" ? changedProperties() : null;
-  post({
-    type: "save",
-    save: {
-      name,
-      mode,
-      block: buildBlock(),
-      ...(changed ? { changed } : {}),
-      loc: locFields
-        .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
-        .filter((pair) => pair.value !== ""),
-      ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
-    },
+  return {
+    name,
+    mode,
+    block: buildBlock(),
+    ...(changed ? { changed } : {}),
+    loc: locFields
+      .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
+      .filter((pair) => pair.value !== ""),
+    ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
+  };
+}
+
+/** The override warning, asked once wherever a write is about to happen. */
+function confirmOverride(name: string): Promise<boolean> {
+  return confirmDialog({
+    title: `Override the game's ${name}?`,
+    description:
+      "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
+      "changes from every future game patch. Partial overrides do not exist.",
+    confirmLabel: "Override",
+    destructive: true,
   });
+}
+
+async function save(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "save", save: payload });
+}
+
+/** The way out of every script box: save, then open the block in the editor. */
+async function openInFile(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "openFile", name: payload.name, save: payload });
 }
 
 // ---------------------------------------------------------------------------
@@ -1375,7 +1465,7 @@ byId("open").onclick = () => {
 };
 
 revealButton.onclick = () => {
-  if (form?.current) post({ type: "openFile", file: form.current.file, line: form.current.line });
+  if (form?.current) post({ type: "revealSource", file: form.current.file, line: form.current.line });
 };
 
 function paintPreviewButton(): void {
@@ -1443,10 +1533,14 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     }
     case "iconWritten": {
+      // A picture the modder sent to a folder of their own is not in the icon
+      // folder, so it is not one of the grid's entries and it is not what the
+      // game will draw for this key: the host has already said so.
+      if (!message.inPlace) break;
       const field = fields.get("icon");
       if (message.url) iconItems.push({ key: message.key, url: message.url });
-      // A custom image lands under the trait's own name, which is exactly the
-      // path the game derives from the key: the block writes no `icon` line.
+      // In place, the picture lands under the trait's own name, which is
+      // exactly the path the game derives from the key: no `icon` line at all.
       if (field) field.set("");
       state.values.icon = "";
       refreshPreview();

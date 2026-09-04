@@ -27,6 +27,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import {
   boolField,
+  infoIcon,
   keyLabel,
   locField,
   multiRefField,
@@ -54,6 +55,7 @@ import {
   type SaveMode,
   type TraditionCreatorInit,
   type TraditionLayerFolder,
+  type TraditionSave,
 } from "../messages";
 import {
   categoryLocKey,
@@ -354,17 +356,35 @@ function numberInput(
   return input;
 }
 
-/** The shared label + control grid row. */
-function fieldRow(spec: TraditionFieldSpec, control: HTMLElement): HTMLElement {
+/** The shared label + control grid row, with the input's guideline when it has one. */
+function fieldRow(spec: TraditionFieldSpec, control: HTMLElement, info?: string): HTMLElement {
   const row = node("div", "px-field");
   const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
   }
+  if (info) label.append(infoIcon(info));
   row.append(label, control);
   return row;
 }
+
+/**
+ * What the game expects of a layer picture, behind the (i) on the Icon row.
+ *
+ * Measured in game/gfx/interface/icons/culture_tradition: every file of every
+ * layer folder and subfolder is 545 x 285 and 32-bit with an alpha channel
+ * (73 of the 81 items are exactly that, the other 8 within three pixels), which
+ * is the size of the tile the Add Tradition view draws.
+ */
+const LAYER_INFO =
+  "545 x 285 pixels: the size every layer file of the game's own tradition art is, measured. " +
+  "Transparency is what makes the stack work. The layers are drawn on top of each other, " +
+  "so everything but this layer's own paint has to be see-through. " +
+  "DDS, and any picture format converts to one. " +
+  "Each folder below is one layer, and a value is either a file in it or a subfolder " +
+  "the game picks a file out of at random. To add your own, put the DDS in that folder " +
+  "of your mod under the same path and it shows up in this picker.";
 
 /** A folding section (px-ui rule 7), open unless the caller says otherwise. */
 function sectionEl(title: string, lede: string | undefined, open: boolean): HTMLElement {
@@ -511,6 +531,9 @@ function buildField(spec: TraditionFieldSpec): Field<FieldValue> {
         ...shared,
         value: String(value),
         rows: 5,
+        // A textarea has no completion, no hover and no highlighting; the note
+        // under it says so and offers the editor, which has all three.
+        onOpenFile: () => void openInFile(),
         // The shortest body the game itself writes for the key: an example a
         // modder can read at a glance beats "not set".
         ...(init?.catalog.examples[spec.key]
@@ -712,7 +735,7 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
   };
 
   paint();
-  const row = fieldRow(spec, block);
+  const row = fieldRow(spec, block, LAYER_INFO);
   row.dataset.rows = "";
   return {
     el: row,
@@ -1178,13 +1201,19 @@ function refreshPreview(): void {
  */
 function changedProperties(): { key: string; value: string | null }[] | null {
   if (!baseline) return null;
+  // The server drops a value into the file over the old one's span, at the
+  // statement's own position, so a block value carries the indentation of its
+  // own lines; joined with a bare newline its body and closing brace landed at
+  // column 0 while the statement sat a tab in.
+  const eol = loaded?.block.eol ?? "\n";
+  const indent = loaded?.block.indent ?? "\t";
   const out: { key: string; value: string | null }[] = [];
   for (const spec of specs) {
     if (loaded?.verbatim.has(spec.key)) continue;
     const lines = fieldLines(spec, state.values[spec.key]);
     const was = fieldLines(spec, baseline.values[spec.key]);
     if (lines.join("\n") === was.join("\n")) continue;
-    const text = lines.join("\n");
+    const text = lines.join(eol + indent);
     out.push({ key: spec.key, value: text === "" ? null : text.slice(spec.key.length + 3) });
   }
   return out;
@@ -1246,7 +1275,9 @@ function buildLocFields(name: string): void {
         ? "What the tooltip says about the tradition. Written into your mod's localization."
         : "What the player sees. Written into your mod's localization.",
     });
-    if (isDesc) field.set("");
+    // BOTH keys start filled, with the name made readable. A save only writes
+    // the keys that have a value, so an empty description used to write no
+    // `<key>_desc` at all and the game printed the raw key in its place.
     field.onChange(() => refreshPreview());
     return { key, field };
   });
@@ -1277,41 +1308,60 @@ function renameLoc(): void {
 // Saving
 // ---------------------------------------------------------------------------
 
-async function save(): Promise<void> {
-  if (!form) return;
+/**
+ * Everything a save says, or null when the form is not saveable yet (a name the
+ * engine cannot read). Both the Save button and a script box's "Edit in the
+ * file" go through it: the file a modder is sent to has to hold what the form
+ * says.
+ */
+function savePayload(): TraditionSave | null {
+  if (!form) return null;
   const name = currentName();
   const problem = nameProblem(name);
   if (problem) {
     toast(problem, "destructive");
-    return;
-  }
-  if (mode === "override") {
-    const ok = await confirmDialog({
-      title: `Override the game's ${name}?`,
-      description:
-        "A mod definition with the same key replaces the game's whole tradition, so it stops receiving " +
-        "changes from every future game patch. Partial overrides do not exist.",
-      confirmLabel: "Override",
-      destructive: true,
-    });
-    if (!ok) return;
+    return null;
   }
   const changed = mode === "edit" ? changedProperties() : null;
-  post({
-    type: "save",
-    save: {
-      name,
-      mode,
-      block: buildBlock(),
-      ...(changed ? { changed } : {}),
-      // The tradition's own two keys, plus a sentence for each parameter the
-      // workspace does not already word.
-      loc: [...locFields, ...paramLocFields]
-        .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
-        .filter((pair) => pair.value !== ""),
-      ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
-    },
+  return {
+    name,
+    mode,
+    block: buildBlock(),
+    ...(changed ? { changed } : {}),
+    // The tradition's own two keys, plus a sentence for each parameter the
+    // workspace does not already word.
+    loc: [...locFields, ...paramLocFields]
+      .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
+      .filter((pair) => pair.value !== ""),
+    ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
+  };
+}
+
+/** The override warning, asked once wherever a write is about to happen. */
+function confirmOverride(name: string): Promise<boolean> {
+  return confirmDialog({
+    title: `Override the game's ${name}?`,
+    description:
+      "A mod definition with the same key replaces the game's whole tradition, so it stops receiving " +
+      "changes from every future game patch. Partial overrides do not exist.",
+    confirmLabel: "Override",
+    destructive: true,
   });
+}
+
+async function save(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "save", save: payload });
+}
+
+/** The way out of every script box: save, then open the block in the editor. */
+async function openInFile(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "openFile", name: payload.name, save: payload });
 }
 
 // ---------------------------------------------------------------------------
@@ -1390,7 +1440,7 @@ byId("open").onclick = () => {
 };
 
 revealButton.onclick = () => {
-  if (form?.current) post({ type: "openFile", file: form.current.file, line: form.current.line });
+  if (form?.current) post({ type: "revealSource", file: form.current.file, line: form.current.line });
 };
 
 function paintPreviewButton(): void {

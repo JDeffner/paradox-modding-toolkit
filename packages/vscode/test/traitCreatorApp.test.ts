@@ -242,6 +242,23 @@ describe("every list is a picker over what the game has", () => {
     expect(offered(app)).toContain("Dynasty Opinion | dynasty_opinion");
   });
 
+  it("leaves the keys the form already draws out of the modifier picker", () => {
+    const app = boot();
+    app.send({ type: "modifierFormats", formats: FORMATS });
+    const add = [...app.document.querySelectorAll("#sections .px-btn")].find(
+      (b) => b.textContent === "Add modifier"
+    ) as HTMLButtonElement;
+    add.click();
+    (app.document.querySelector("#sections .modrow > .px-dropdown") as HTMLButtonElement).click();
+    const offers = offered(app);
+    // `martial` and `health` are modifiers AND documented trait keys: the
+    // Skills row and the Advanced section already write them, so offering them
+    // here would let one trait write the same key twice.
+    expect(offers).not.toContain("Martial | martial");
+    expect(offers).not.toContain("health");
+    expect(offers).toContain("Dynasty Opinion | dynasty_opinion");
+  });
+
   it("shows the body the game writes as a script field's placeholder", () => {
     const example = "{ parameter = mountain_trait_bonuses mountains_max_combat_roll = 3 }";
     const app = boot({
@@ -419,14 +436,22 @@ describe("a new trait saves with a name and one stat", () => {
     expect(save.block).toBe("px_stoic = {\n\tcategory = personality\n\tmartial = 3\n}");
     // The script panel is the same text, so what a modder reads is what is written.
     expect(app.script()).toBe(save.block);
-    expect(save.loc).toEqual([{ key: "trait_px_stoic", value: "Px Stoic" }]);
+    // BOTH keys, always: a description nobody typed used to write no key at
+    // all, and the game printed `trait_px_stoic_desc` at the player.
+    expect(save.loc).toEqual([
+      { key: "trait_px_stoic", value: "Px Stoic" },
+      { key: "trait_px_stoic_desc", value: "Px Stoic" },
+    ]);
   });
 
   it("renaming moves the loc keys with the name", () => {
     const app = boot();
     type(app, "#name", "px_iron_willed");
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
-    expect(app.save()!.loc).toEqual([{ key: "trait_px_iron_willed", value: "Px Iron Willed" }]);
+    expect(app.save()!.loc).toEqual([
+      { key: "trait_px_iron_willed", value: "Px Iron Willed" },
+      { key: "trait_px_iron_willed_desc", value: "Px Iron Willed" },
+    ]);
   });
 });
 
@@ -469,6 +494,33 @@ describe("editing a trait the mod already has", () => {
     expect(areas[1].value).toContain("opinion_modifier = b");
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
     expect(app.save()!.block).toBe(text);
+  });
+
+  it("keeps a rewritten block value indented when only that key is sent", () => {
+    const text = "px_stoic = {\n\tcompatibility = {\n\t\talbino = 6\n\t}\n}";
+    const app = boot();
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const value = control(app, "compatibility").querySelector("input")!;
+    value.value = "7";
+    value.dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    app.document.querySelector<HTMLButtonElement>("#save")!.click();
+    // The server drops the value over the old one at the statement's own
+    // place, so the block's own lines have to arrive indented.
+    expect(app.save()!.changed).toEqual([{ key: "compatibility", value: "{\n\t\talbino = 7\n\t}" }]);
+  });
+
+  it("a script box says it has no completion and offers the file, with the save on it", () => {
+    const text = "px_stoic = {\n\ttriggered_opinion = {\n\t\topinion_modifier = a\n\t}\n}";
+    const app = boot();
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const foot = control(app, "triggered_opinion").querySelector(".px-script-foot")!;
+    expect(foot.textContent).toContain("No completion or highlighting here.");
+    (foot.querySelector("button") as HTMLButtonElement).click();
+    // The host writes the definition before it opens it, so the whole save
+    // rides along rather than only the name.
+    const open = app.posted.filter((m) => m.type === "openFile").at(-1)!;
+    expect(open).toMatchObject({ type: "openFile", name: "px_stoic" });
+    expect((open as { save: TraitSave }).save.block).toBe(text);
   });
 
   it("a game trait opens as a duplicate under the mod's prefix", () => {

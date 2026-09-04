@@ -28,6 +28,7 @@ import {
   readQuoted,
   readTokenList,
   scanItems,
+  statementLines,
   type BlockWrite,
   type ParsedBlock,
 } from "../../shared/scriptBlock";
@@ -335,8 +336,13 @@ export function loadTrait(
   return { block, specs: ownSpecs, state };
 }
 
-/** The statement(s) one field's value becomes, or [] when it writes nothing. */
-export function fieldLines(spec: TraitFieldSpec, value: FieldValue): string[] {
+/**
+ * The STATEMENTS one field's value becomes, one string each, or [] when it
+ * writes nothing. A block value is one statement over several lines, which is
+ * what tells "`compatibility` changed" apart from "`flag` is written twice":
+ * the first is still one property, the second is not.
+ */
+export function fieldStatements(spec: TraitFieldSpec, value: FieldValue): string[] {
   switch (spec.widget) {
     case "number":
       return value === null || value === "" ? [] : [`${spec.key} = ${value}`];
@@ -371,6 +377,16 @@ export function fieldLines(spec: TraitFieldSpec, value: FieldValue): string[] {
       return text === "" ? [] : [`${spec.key} = ${quoteIfNeeded(text)}`];
     }
   }
+}
+
+/**
+ * The same, as the lines `writeBlock` indents. A block value's body and its
+ * closing brace are lines of the statement, not text that rides along inside
+ * one: written as one string they landed at column 0 while the rest of the
+ * block sat a tab in.
+ */
+export function fieldLines(spec: TraitFieldSpec, value: FieldValue): string[] {
+  return fieldStatements(spec, value).flatMap(statementLines);
 }
 
 function sameValue(a: FieldValue, b: FieldValue): boolean {

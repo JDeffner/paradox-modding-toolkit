@@ -14,6 +14,7 @@ import type {
   CreatorCopyRequest,
   CreatorImagesReply,
   CreatorImagesRequest,
+  CreatorOpenFileRequest,
   CreatorTargetReply,
 } from "../shared/creatorMessages";
 
@@ -40,8 +41,13 @@ export type HostToApp =
   | { type: "icons"; urls: Record<string, string | null> }
   /** Where the next save lands, sent as the form loads and after every change. */
   | CreatorTargetReply
-  /** A converted custom image is now the trait's icon under this file name. */
-  | { type: "iconWritten"; key: string; url: string | null }
+  /**
+   * A picture of the modder's own was written. `inPlace` is false when they
+   * sent it somewhere other than the icon folder: the game cannot find it by
+   * the trait's name there, so it is neither offered in the grid nor treated
+   * as the trait's icon.
+   */
+  | { type: "iconWritten"; key: string; url: string | null; inPlace: boolean }
   /** A save finished. `ok` false leaves the form exactly as it was. */
   | { type: "saved"; ok: boolean; name: string }
   /**
@@ -63,7 +69,15 @@ export type AppToHost =
   /** Decode these icon file names to PNG and answer with webview URLs. */
   | { type: "icons"; keys: string[] }
   | { type: "save"; save: TraitSave }
-  | { type: "openFile"; file: string; line: number }
+  /** The toolbar's "open the file this came from", at the block's own line. */
+  | { type: "revealSource"; file: string; line: number }
+  /**
+   * A script box's "Edit in the file": save the definition, then open it in
+   * the editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: TraitSave })
   /** Deep link into the Examples Wiki for a trigger, effect or modifier name. */
   | { type: "openExamples"; name: string }
   /** The script section was clicked, or its copy button. */

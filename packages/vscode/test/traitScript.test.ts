@@ -371,6 +371,36 @@ describe("one changed field is one changed line", () => {
   });
 });
 
+describe("a block value sits one level in, like the rest of the block", () => {
+  /**
+   * The shape a saved trait came out as before `statementLines`: the nested
+   * block's rows and its closing brace at column 0, while every statement
+   * around them sat a tab in.
+   */
+  const NESTED =
+    "mod_trait = {\n" +
+    "\ticon = bastard_founder.dds\n" +
+    "\tcompatibility = {\n" +
+    "\t\talbino = 6\n" +
+    "\t}\n" +
+    "\tlearning = 16\n" +
+    "}\n";
+
+  it("indents a rewritten compatibility block, not just its first line", () => {
+    const out = roundTrip(NESTED, (_specs, loaded) => {
+      loaded.state.values.compatibility = [{ name: "albino", value: 6.5 }];
+    });
+    expect(out).toBe(NESTED.replace("\t\talbino = 6\n", "\t\talbino = 6.5\n"));
+  });
+
+  it("indents an appended script block the same way", () => {
+    const out = roundTrip(NESTED, (_specs, loaded) => {
+      loaded.state.values.triggered_opinion = ["{\n\topinion_modifier = px_liked\n}"];
+    });
+    expect(out).toContain("\ttriggered_opinion = {\n\t\topinion_modifier = px_liked\n\t}");
+  });
+});
+
 describe("a new trait", () => {
   it("writes the fields that have a value, in the section order, and nothing else", () => {
     const state = emptyState(SPECS);

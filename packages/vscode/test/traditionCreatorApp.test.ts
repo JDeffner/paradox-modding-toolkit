@@ -453,7 +453,12 @@ describe("a new tradition saves with a name, a category and a layer", () => {
     );
     // The script panel is the same text, so what a modder reads is what is written.
     expect(app.script()).toBe(save.block);
-    expect(save.loc).toEqual([{ key: "tradition_px_seafarers_name", value: "Tradition Px Seafarers" }]);
+    // BOTH keys, always: a description nobody typed used to write no key at
+    // all, and the game printed `tradition_px_seafarers_desc` at the player.
+    expect(save.loc).toEqual([
+      { key: "tradition_px_seafarers_name", value: "Tradition Px Seafarers" },
+      { key: "tradition_px_seafarers_desc", value: "Tradition Px Seafarers" },
+    ]);
   });
 
   it("writes the parameters block as the switches the game reads", () => {
@@ -537,7 +542,9 @@ describe("editing a tradition the mod already has", () => {
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
     const save = app.save()!;
     expect(save.mode).toBe("edit");
-    expect(save.changed).toEqual([{ key: "cost", value: "{\n\tprestige = 500\n}" }]);
+    // The server drops the value over the old one at the statement's own
+    // place, so the block's own lines have to arrive indented.
+    expect(save.changed).toEqual([{ key: "cost", value: "{\n\t\tprestige = 500\n\t}" }]);
     expect(save.sourceFile).toBe("px_culture_traditions.txt");
     // The whole block travels too, byte-identical apart from the one value.
     expect(save.block).toBe(CURRENT.text.replace("prestige = 300", "prestige = 500"));
