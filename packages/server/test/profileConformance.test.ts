@@ -41,7 +41,7 @@ describe.each(allProfiles().map((p) => [p.id, p] as const))("profile %s", (_id, 
     expect(profile.shortName.length).toBeGreaterThan(0);
     expect(["jomini", "clausewitz-classic"]).toContain(profile.engine);
     expect(["mod", "metadata"]).toContain(profile.descriptor);
-    expect(profile.configDirName).toMatch(/^\.[a-z0-9]+$/);
+    expect(profile.configDirName).toMatch(/^\.[a-z0-9-]+$/);
     expect(profile.docsFolderName.length).toBeGreaterThan(0);
     expect(profile.steamAppId).toBeGreaterThan(0);
     // Non-default profiles must namespace their caches (shared storageDir).

@@ -1,6 +1,6 @@
 {
   "name": "px-lsp",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {
@@ -14,6 +14,7 @@
     "package:test": "node scripts/package-test.mjs",
     "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
     "watch:webviews": "node scripts/compile-webviews.mjs --watch",
+    "preview:creators": "esbuild scripts/creator-preview.ts --bundle --platform=node --external:esbuild --loader:.css=text --outfile=dist/creator-preview.cjs --log-level=warning && node dist/creator-preview.cjs",
     "preview:webviews": "esbuild scripts/webview-preview.ts --bundle --platform=node --external:esbuild --loader:.css=text --outfile=dist/webview-preview.cjs --log-level=warning && node dist/webview-preview.cjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
@@ -45,18 +46,5 @@
     "vscode-jsonrpc": "^9.0.1",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12"
-  },
-  "pnpm": {
-    "overrides": {
-      "brace-expansion@<5.0.8": ">=5.0.8"
-    },
-    "onlyBuiltDependencies": [
-      "@vscode/vsce-sign",
-      "esbuild",
-      "keytar"
-    ],
-    "ignoredBuiltDependencies": [
-      "koffi"
-    ]
   }
 }

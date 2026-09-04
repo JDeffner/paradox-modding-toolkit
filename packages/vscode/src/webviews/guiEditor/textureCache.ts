@@ -21,14 +21,19 @@
  * Recency is in-session; across sessions the order is write time, because
  * touching a file on every cache hit is a syscall per texture per re-layout and
  * a wrong eviction costs exactly one re-decode.
+ *
+ * `resolveFileAsync` is the same cache with the DECODE on a worker thread
+ * (decodePool.ts). Everything that keeps the folder consistent stays here on
+ * the one thread that owns it; only the read, the decode and the write move.
+ * Use it wherever a panel answers a batch of texture requests: a big mod asks
+ * for hundreds at once and the synchronous path spends all of that in the
+ * extension host, where nothing else in VS Code can run.
  */
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
-import { decodeDds, decodeTga, downscale, encodePng, type DecodedImage } from "@px-lsp/server/dds";
-
-/** Skip textures beyond this pixel count (loading screens, atlases). */
-const MAX_TEXTURE_PIXELS = 4096 * 4096;
+import { convertImage } from "./decodeImage";
+import { decodeOffThread, decodePoolAvailable } from "./decodePool";
 
 /**
  * Longest edge of a thumbnail decode: the cap the plan sets for tree and
@@ -64,6 +69,8 @@ export class GuiTextureCache {
   private readonly resolved = new Map<string, string | null>();
   /** cache key -> its file, for every PNG in the folder. Read from disk once. */
   private entries: Map<string, CacheEntry> | null = null;
+  /** cache key -> the worker decode already running for it. */
+  private readonly decoding = new Map<string, Promise<string | null>>();
   private bytes = 0;
   private clock = 0;
 
@@ -105,6 +112,51 @@ export class GuiTextureCache {
     return this.resolveSource(source, maxDim);
   }
 
+  /**
+   * `resolveFile` with the decode on a worker thread. A cache hit answers
+   * without ever leaving this thread, and two callers asking for the same key
+   * at once share the one decode rather than racing to write the same file.
+   */
+  async resolveFileAsync(abs: string, maxDim = 0): Promise<string | null> {
+    const source = this.keyFor(abs, maxDim);
+    if (!source) return null;
+    if (!decodePoolAvailable()) return this.resolveSource(source, maxDim);
+
+    const cached = this.resolved.get(source.key);
+    if (cached !== undefined) {
+      this.touch(source.key);
+      return cached;
+    }
+    const running = this.decoding.get(source.key);
+    if (running) return running;
+
+    this.index();
+    const out = this.fileFor(source.key);
+    if (this.entries!.has(source.key) && fs.existsSync(out)) {
+      this.touch(source.key);
+      this.resolved.set(source.key, out);
+      return out;
+    }
+    fs.mkdirSync(this.dir, { recursive: true });
+    const job = decodeOffThread(source.abs, maxDim, out).then((size) => {
+      this.decoding.delete(source.key);
+      if (size === null) {
+        // The pool answers null for a decode it could not run at all (a worker
+        // that died mid-job), which is not the same as a texture that cannot
+        // be decoded. Deciding that here would cache a wrong null for the
+        // session, so the one thread that can tell the difference decides:
+        // decode it here, slowly, and cache what that says.
+        return this.resolveSource(source, maxDim);
+      }
+      this.record(source.key, size);
+      this.resolved.set(source.key, out);
+      this.evict();
+      return out;
+    });
+    this.decoding.set(source.key, job);
+    return job;
+  }
+
   private resolveSource(source: { abs: string; key: string }, maxDim: number): string | null {
     const cached = this.resolved.get(source.key);
     if (cached !== undefined) {
@@ -118,7 +170,7 @@ export class GuiTextureCache {
       this.resolved.set(source.key, out);
       return out;
     }
-    const png = this.convert(source.abs, maxDim);
+    const png = convertImage(source.abs, maxDim);
     if (!png) {
       this.resolved.set(source.key, null);
       return null;
@@ -171,26 +223,6 @@ export class GuiTextureCache {
     return { abs, key };
   }
 
-  private convert(abs: string, maxDim: number): Uint8Array | null {
-    // Extension gate BEFORE the read: a path that is not an image never has
-    // its bytes pulled into memory (readFileSync on a huge or special file is
-    // the expensive part, not the decode).
-    if (!/\.(png|dds|tga)$/i.test(abs)) return null;
-    try {
-      const bytes = fs.readFileSync(abs);
-      if (/\.png$/i.test(abs)) return new Uint8Array(bytes);
-      let decoded: DecodedImage;
-      if (/\.dds$/i.test(abs)) decoded = decodeDds(new Uint8Array(bytes));
-      else if (/\.tga$/i.test(abs)) decoded = decodeTga(new Uint8Array(bytes));
-      else return null;
-      if (decoded.width * decoded.height > MAX_TEXTURE_PIXELS) return null;
-      const img = maxDim > 0 ? downscale(decoded, maxDim) : decoded;
-      return encodePng(img.width, img.height, img.pixels);
-    } catch {
-      return null;
-    }
-  }
-
   /** What the folder already holds, read once per panel: name, size, write time. */
   private index(): void {
     if (this.entries) return;
@@ -211,7 +243,13 @@ export class GuiTextureCache {
         /* raced with another window's eviction */
       }
     }
-    this.clock = Date.now();
+    // The clock starts past every mtime on disk, not at Date.now(): a file
+    // written moments ago can carry an mtime a fraction ahead of the wall
+    // clock (NTFS rounds), and a new decode stamped below it would never
+    // evict it. Measured as a flaky "earlier session" test under load.
+    let latest = 0;
+    for (const e of this.entries.values()) if (e.used > latest) latest = e.used;
+    this.clock = Math.max(Date.now(), Math.ceil(latest));
   }
 
   private record(key: string, size: number): void {

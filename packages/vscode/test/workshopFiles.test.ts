@@ -1,23 +1,32 @@
 /**
  * The workshop folder as the listing's file store (steam/workshopFiles.ts):
- * the CI-repo layout round-trips, changenotes resolve from the changelog
- * folder or a big changelog file, and Markdown converts to Steam BBCode.
+ * the CI-repo layout round-trips, the description file is BBCode unless the
+ * folder still holds an older description.md, and changenotes resolve from
+ * the changelog folder or a big changelog file.
  */
 import { describe, expect, it, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
+  changelogCandidates,
   extractVersionSection,
   hasListingFiles,
-  mdToBBCode,
-  preferListingFiles,
+  descriptionFile,
   readItemJson,
+  migrateMarkdownListing,
+  moveListing,
+  writePreviewOrder,
+  readDependencies,
   readListingFiles,
+  readPreviews,
   resolveChangeNote,
   resolveWorkshopDir,
   upsertItemJson,
+  writeDependencies,
   writeListingFiles,
+  writeSteamDescription,
+  writeVideos,
 } from "../src/steam/workshopFiles";
 
 const tmps: string[] = [];
@@ -34,34 +43,25 @@ describe("workshop dir resolution", () => {
   // path.resolve, so the roots are absolute on the platform running the test:
   // users are on Windows, CI is Linux, and a drive letter is relative there.
   const root = path.resolve(path.join("Projets", "My Mod", "mod"));
+  const configDir = path.join(root, ".px-toolkit");
 
-  it("defaults to the sibling workshop folder (mod/ + workshop/ layout)", () => {
-    const sibling = path.join(path.dirname(root), "workshop");
-    expect(resolveWorkshopDir(root, undefined)).toBe(sibling);
-    expect(resolveWorkshopDir(root, "")).toBe(sibling);
+  it("defaults to the in-mod config dir", () => {
+    expect(resolveWorkshopDir(root, undefined, configDir)).toBe(path.join(configDir, "workshop"));
+    expect(resolveWorkshopDir(root, "", configDir)).toBe(path.join(configDir, "workshop"));
+  });
+
+  it("keeps an existing sibling workshop folder (mod/ + workshop/ layout)", () => {
+    const project = tmp();
+    const mod = path.join(project, "mod");
+    fs.mkdirSync(mod);
+    fs.mkdirSync(path.join(project, "workshop"));
+    expect(resolveWorkshopDir(mod, "", path.join(mod, ".px-toolkit"))).toBe(path.join(project, "workshop"));
   });
 
   it("accepts relative and absolute overrides", () => {
-    expect(resolveWorkshopDir(root, "listing")).toBe(path.join(root, "listing"));
+    expect(resolveWorkshopDir(root, "listing", configDir)).toBe(path.join(root, "listing"));
     const abs = path.resolve(path.join("somewhere", "else"));
-    expect(resolveWorkshopDir(root, abs)).toBe(abs);
-  });
-
-  it("prefers the folder store for a projects-layout mod before the folder exists", () => {
-    // <project>/mod with the default sibling workshop dir: writes must go to
-    // the folder, never create <mod>/<configDir>/workshop.json in the upload.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, undefined))).toBe(true);
-    // A mod living directly in the launcher's mod directory keeps the in-mod
-    // fallback until the user creates the folder.
-    const flat = path.resolve(path.join("Documents", "mod", "my_mod"));
-    expect(preferListingFiles(flat, resolveWorkshopDir(flat, undefined))).toBe(false);
-    // A workshop-dir override pointing elsewhere is not the projects layout.
-    expect(preferListingFiles(root, resolveWorkshopDir(root, path.resolve("elsewhere")))).toBe(false);
-  });
-
-  it("prefers the folder store whenever the folder already exists", () => {
-    const dir = tmp();
-    expect(preferListingFiles(path.resolve(path.join("any", "where")), dir)).toBe(true);
+    expect(resolveWorkshopDir(root, abs, configDir)).toBe(abs);
   });
 });
 
@@ -76,13 +76,14 @@ describe("listing files", () => {
       },
     });
     expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toBe("[h1]Hello[/h1]");
-    expect(fs.readFileSync(path.join(dir, "german", "title.txt"), "utf8")).toBe("Hallo\n");
-    expect(fs.existsSync(path.join(dir, "french", "title.txt"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "title.txt"), "utf8")).toBe("Hallo\n");
+    expect(fs.existsSync(path.join(dir, "translations", "french", "title.txt"))).toBe(false);
 
     const back = readListingFiles(dir);
     expect(back.description).toBe("[h1]Hello[/h1]");
     expect(back.translations.german).toEqual({ title: "Hallo", description: "[b]Deutsch[/b]" });
     expect(back.translations.french).toEqual({ description: "Français" });
+    expect(back.markdown).toEqual([]);
   });
 
   it("removes the files of a language whose draft went empty", () => {
@@ -92,7 +93,7 @@ describe("listing files", () => {
       translations: { german: { title: "Hallo", description: "x" } },
     });
     writeListingFiles(dir, { description: "d", translations: {} });
-    expect(fs.existsSync(path.join(dir, "german"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, "translations", "german"))).toBe(false);
     expect(hasListingFiles(dir)).toBe(true);
   });
 
@@ -101,6 +102,84 @@ describe("listing files", () => {
     fs.writeFileSync(path.join(dir, "item.json"), JSON.stringify({ custom: 1, title: "Old" }), "utf8");
     upsertItemJson(dir, { title: "New", publishedfileid: "42" });
     expect(readItemJson(dir)).toEqual({ custom: 1, title: "New", publishedfileid: "42" });
+  });
+});
+
+describe("translations folder", () => {
+  it("writes languages under translations/ and clears the pre-0.4.0 root folder", () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, "german"));
+    fs.writeFileSync(path.join(dir, "german", "title.txt"), "Alt\n");
+    expect(readListingFiles(dir).translations.german).toEqual({ title: "Alt" });
+    writeListingFiles(dir, { description: "d", translations: { german: { title: "Neu" } } });
+    expect(fs.existsSync(path.join(dir, "german"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "title.txt"), "utf8")).toBe("Neu\n");
+    expect(readListingFiles(dir).translations.german).toEqual({ title: "Neu" });
+  });
+});
+
+describe("preview order and links", () => {
+  it("orders previews by order.txt, then by name", () => {
+    const dir = tmp();
+    const previews = path.join(dir, "previews");
+    fs.mkdirSync(previews);
+    for (const f of ["a.png", "b.png", "c.png"]) fs.writeFileSync(path.join(previews, f), "");
+    writePreviewOrder(dir, ["c.png", "a.png", "gone.png"]);
+    expect(readPreviews(dir)!.images.map((p) => path.basename(p))).toEqual(["c.png", "a.png", "b.png"]);
+  });
+});
+
+describe("moveListing", () => {
+  it("moves an existing folder and refuses to overwrite", () => {
+    const project = tmp();
+    const from = path.join(project, "workshop");
+    writeListingFiles(from, { description: "d", translations: { german: { title: "t" } } });
+    const to = path.join(project, "mod", ".px-toolkit", "workshop");
+    moveListing(from, to, { description: "", translations: {} });
+    expect(hasListingFiles(from)).toBe(false);
+    expect(readListingFiles(to).translations.german).toEqual({ title: "t" });
+    expect(() => moveListing(to, to, { description: "", translations: {} })).toThrow(/already exists/);
+  });
+
+  it("creates the target from the drafts when no folder exists yet", () => {
+    const project = tmp();
+    const to = path.join(project, "workshop");
+    moveListing(path.join(project, "nowhere"), to, { description: "from json", translations: {} });
+    expect(readListingFiles(to).description).toBe("from json");
+  });
+});
+
+describe("previews and dependencies", () => {
+  it("reads the previews folder in file-name order, or null without one", () => {
+    const dir = tmp();
+    expect(readPreviews(dir)).toBeNull();
+    const previews = path.join(dir, "previews");
+    fs.mkdirSync(previews);
+    for (const f of ["10.png", "2.jpg", "notes.txt", "x.PNG"]) fs.writeFileSync(path.join(previews, f), "");
+    fs.writeFileSync(path.join(previews, "videos.txt"), "# comment\nabc123def\n\nxyz789ghi\n");
+    const got = readPreviews(dir)!;
+    expect(got.images.map((p) => path.basename(p))).toEqual(["2.jpg", "10.png", "x.PNG"]);
+    expect(got.videos).toEqual(["abc123def", "xyz789ghi"]);
+  });
+
+  it("writes and clears videos.txt", () => {
+    const dir = tmp();
+    writeVideos(dir, ["abc123def"]);
+    expect(readPreviews(dir)!.videos).toEqual(["abc123def"]);
+    writeVideos(dir, []);
+    expect(fs.existsSync(path.join(dir, "previews", "videos.txt"))).toBe(false);
+  });
+
+  it("round-trips dependencies.json and drops malformed entries", () => {
+    const dir = tmp();
+    expect(readDependencies(dir)).toBeNull();
+    writeDependencies(dir, { apps: [1158310], items: ["123"] });
+    expect(readDependencies(dir)).toEqual({ apps: [1158310], items: ["123"] });
+    fs.writeFileSync(
+      path.join(dir, "dependencies.json"),
+      JSON.stringify({ apps: [1, "x"], items: ["9", "no"] })
+    );
+    expect(readDependencies(dir)).toEqual({ apps: [1], items: ["9"] });
   });
 });
 
@@ -181,35 +260,72 @@ describe("extractVersionSection", () => {
   });
 });
 
-describe("mdToBBCode", () => {
-  it("converts the changenote staples", () => {
-    const md = [
-      "# Big",
-      "Some *emphasis* and **bold** and ~~gone~~ and `code`.",
-      "- one",
-      "- [link](https://example.com)",
-      "1. first",
-      "---",
-      "```",
-      "raw **stays**",
-      "```",
-    ].join("\n");
-    expect(mdToBBCode(md)).toBe(
-      [
-        "[h1]Big[/h1]",
-        "Some [i]emphasis[/i] and [b]bold[/b] and [strike]gone[/strike] and code.",
-        "[list]",
-        "[*] one",
-        "[*] [url=https://example.com]link[/url]",
-        "[/list]",
-        "[olist]",
-        "[*] first",
-        "[/olist]",
-        "[hr][/hr]",
-        "[code]",
-        "raw **stays**",
-        "[/code]",
-      ].join("\n")
+describe("description file choice", () => {
+  it("writes BBCode into a folder that has neither file", () => {
+    const dir = tmp();
+    expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.bbcode"), markdown: false });
+    // The format is the folder's: an empty folder already reports BBCode.
+    expect(readListingFiles(dir).markdown).toEqual([]);
+    writeListingFiles(dir, { description: "[h1]Hi[/h1]", translations: {} });
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+  });
+
+  it("still reads a listing that holds a description.md, and migrates it to .bbcode once", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.md"), "# Hi", "utf8");
+    fs.mkdirSync(path.join(dir, "translations", "german"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "translations", "german", "description.md"), "**fett**", "utf8");
+    expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.md"), markdown: true });
+    expect(readListingFiles(dir).markdown).toEqual(["german", ""]);
+    expect(migrateMarkdownListing(dir).sort()).toEqual([".", path.join("translations", "german")]);
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toContain("[h1]Hi[/h1]");
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "description.bbcode"), "utf8")).toBe(
+      "[b]fett[/b]"
     );
+    const listing = readListingFiles(dir);
+    expect(listing.markdown).toEqual([]);
+    expect(migrateMarkdownListing(dir)).toEqual([]);
+  });
+
+  it("replaces a legacy .md with the BBCode a download served", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.md"), "# Old", "utf8");
+    writeSteamDescription(dir, "[h1]From Steam[/h1]");
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+    const listing = readListingFiles(dir);
+    expect(listing.description).toBe("[h1]From Steam[/h1]");
+    expect(listing.markdown).toEqual([]);
+  });
+
+  it("prefers .md when a folder has both", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.bbcode"), "[h1]Old[/h1]", "utf8");
+    fs.writeFileSync(path.join(dir, "description.md"), "# New", "utf8");
+    const listing = readListingFiles(dir);
+    expect(listing.description).toBe("# New");
+    expect(listing.markdown).toEqual([""]);
+  });
+});
+
+describe("changelog candidates", () => {
+  it("finds a hand-kept changelog at the mod root and in the workshop folder", () => {
+    const root = tmp();
+    const workshopDir = path.join(root, ".px-toolkit", "workshop");
+    fs.mkdirSync(workshopDir, { recursive: true });
+    fs.writeFileSync(path.join(root, "CHANGELOG.md"), "# 1.0", "utf8");
+    fs.mkdirSync(path.join(workshopDir, "changelog"));
+
+    const found = changelogCandidates(root, workshopDir, path.join(workshopDir, "changelog"));
+    // The workshop folder is searched first, and the resolved setting is flagged.
+    expect(found.map((c) => [path.basename(c.path), c.kind, c.current])).toEqual([
+      ["changelog", "folder", true],
+      ["CHANGELOG.md", "file", false],
+    ]);
+  });
+
+  it("finds nothing for a mod that keeps no changelog", () => {
+    const root = tmp();
+    expect(changelogCandidates(root, path.join(root, "workshop"), path.join(root, "workshop"))).toEqual([]);
   });
 });

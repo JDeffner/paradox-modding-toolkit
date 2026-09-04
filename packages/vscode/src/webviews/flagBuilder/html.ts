@@ -5,6 +5,7 @@
  */
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
+import { FLAG_EDITOR_CREDIT } from "./messages";
 
 export interface FlagBuilderHtmlOptions {
   scriptSrc: string;
@@ -29,6 +30,9 @@ ${uiCss}
   }
   #toolbar .px-grow { flex: 1 1 auto; }
   #name { width: 170px; font-weight: 600; }
+  /* What the arms are for, when the panel was opened on a target. */
+  #target { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  #target:empty { display: none; }
   #toolbar .px-separator { height: 20px; align-self: center; }
   #main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
   #stage {
@@ -49,10 +53,13 @@ ${uiCss}
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
   #stageTools { left: 8px; }
-  #stageInfo { right: 8px; gap: 8px; }
+  #stageInfo { right: 8px; }
+  /* Padding sits on the text, not the box, so text and icon buttons keep the same inset. */
+  #zoom, #hint, #origin, #credit { padding: 0 6px; }
   #resetName[hidden] { display: none; }
-  #origin { padding-left: 8px; }
-  #origin:empty { display: none; }
+  #hint:empty, #origin:empty { display: none; }
+  #credit { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-decoration: none; cursor: pointer; }
+  #credit:hover { color: var(--px-fg); text-decoration: underline; }
   #inspector { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 8px; }
   .colors { display: flex; flex-direction: column; gap: 4px; }
   .color-row { display: grid; grid-template-columns: 44px 92px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
@@ -91,6 +98,7 @@ ${uiCss}
   <div id="toolbar">
     <input id="name" class="px-input" placeholder="flag_name" spellcheck="false" data-tip="Flag name (the key in the coa file)" />
     <button id="resetName" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Reset the name to the opened flag's name" hidden>${icon("rotate")}</button>
+    <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
     <div class="px-row" style="gap:2px">
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="New flag">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open a flag from the game or a mod">${icon("folderOpen")}</button>
@@ -114,13 +122,13 @@ ${uiCss}
     <div id="stage">
       <div id="viewport"><canvas id="canvas" width="768" height="512"></canvas></div>
       <div id="stageTools">
-        <button id="lock" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Freeze the canvas zoom and pan" data-tip-side="top" data-tip-wrap>${icon("unlock")}</button>
-        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="zoom" class="px-muted px-xs"></span>
+        <button id="recenter" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Recenter the canvas (default position and zoom)" data-tip-side="top" data-tip-wrap>${icon("maximize")}</button>
         <span id="hint" class="px-muted px-xs"></span>
+        <span id="origin" class="px-muted px-xs"></span>
       </div>
       <div id="stageInfo">
-        <span id="origin" class="px-muted px-xs"></span>
+        <a id="credit" href="#" data-tip="Open the original project on GitHub" data-tip-side="top" data-tip-wrap>${FLAG_EDITOR_CREDIT.text}</a>
         <button id="info" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="" data-tip-side="top" data-tip-align="right" data-tip-wrap>${icon("info")}</button>
       </div>
     </div>

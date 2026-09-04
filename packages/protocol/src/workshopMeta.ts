@@ -31,15 +31,10 @@ export interface WorkshopMeta {
   translations?: Record<string, WorkshopTranslation>;
 }
 
-/** Mod-root-relative path of the record, forward slashes. */
-export function workshopMetaRelPath(configDirName: string): string {
-  return `${configDirName}/workshop.json`;
-}
-
-/** The parsed `<dir>/<configDir>/workshop.json`, or null when absent/unreadable. */
-export function readWorkshopMeta(dir: string, configDirName: string): WorkshopMeta | null {
+/** The parsed `<configDir>/workshop.json`, or null when absent/unreadable. */
+export function readWorkshopMeta(configDir: string): WorkshopMeta | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(dir, configDirName, "workshop.json"), "utf8")) as Record<
+    const raw = JSON.parse(fs.readFileSync(path.join(configDir, "workshop.json"), "utf8")) as Record<
       string,
       unknown
     >;
@@ -55,9 +50,9 @@ export function readWorkshopMeta(dir: string, configDirName: string): WorkshopMe
  * survive; a patch key set to `undefined` is left as it was. `translations`
  * replaces as a whole (the caller edits the full map).
  */
-export function upsertWorkshopMeta(dir: string, configDirName: string, patch: WorkshopMeta): void {
-  const file = path.join(dir, configDirName, "workshop.json");
-  const current = (readWorkshopMeta(dir, configDirName) ?? {}) as Record<string, unknown>;
+export function upsertWorkshopMeta(configDir: string, patch: WorkshopMeta): void {
+  const file = path.join(configDir, "workshop.json");
+  const current = (readWorkshopMeta(configDir) ?? {}) as Record<string, unknown>;
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined) current[key] = value;
   }

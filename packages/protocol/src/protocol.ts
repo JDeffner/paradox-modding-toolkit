@@ -10,6 +10,7 @@
 // unused-vars analysis does not see.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { IndexStats } from "./types";
+import type { DefSource } from "./types";
 
 /** Resolved extension settings, computed client-side (path validation, Steam
  * detection fallbacks, workspace-folder default) and pushed to the server. */
@@ -191,6 +192,40 @@ export interface LocEntryInfo {
   value?: string;
 }
 
+/**
+ * Request: a localization value as the PLAYER reads it;
+ * {@link LocTextParams} -> {@link LocTextResult}.
+ *
+ * {@link lookupLocRequest} answers the value verbatim, which is what an editor
+ * needs. A panel that SHOWS the value needs the sentence: the games write a
+ * culture parameter as `"The [GetTrait('rough_terrain_expert').GetName(
+ * GetNullCharacter )] Commander Trait is more common"` (145 of the 280
+ * parameter values with a real call take that one shape), and a modder reading
+ * a form must not be shown the brackets.
+ *
+ * Everything the renderer knows is DERIVED: the words come from the loc index
+ * (mod entries shadow the game's), the kind a `Get<Something>('name')` chain
+ * names comes from the definition index, and the loc key that kind's names take
+ * comes from the active profile's schema. No table of function names, so a
+ * workspace of any of the games gets the same behavior from its own schema.
+ */
+export const locTextRequest = "paradox/locText";
+export interface LocTextParams extends ModScopedParams {
+  keys: string[];
+}
+export interface LocTextValue {
+  /** The value verbatim, exactly as {@link lookupLocRequest} answers it. */
+  raw: string;
+  /** The same value as plain text: markup stripped, datafunctions resolved. */
+  text: string;
+  /** False when any part of the value stayed a word for something unresolved. */
+  resolved: boolean;
+}
+export interface LocTextResult {
+  /** Loc key -> its rendering. A key the loc index cannot find is ABSENT. */
+  values: Record<string, LocTextValue>;
+}
+
 // ---- server -> client ------------------------------------------------------
 
 /** Notification: data health for the status bar; payload {@link StatusPayload}. */
@@ -241,6 +276,20 @@ export interface OverviewDef {
   name: string;
   file: string;
   line: number;
+  /**
+   * The loc-resolved display name, when the kind's loc pattern resolves to one
+   * ({@link EventVocabularyItem.label}). Set by {@link definitionFormRequest}
+   * only, so a creator listing what the mod already has can show the player's
+   * word for it; absent everywhere else.
+   */
+  label?: string;
+  /**
+   * Where the definition comes from. Set by {@link definitionFormRequest} only,
+   * whose list includes the game's and a dependency's definitions (a creator
+   * opens one to duplicate or override it) and must say which is which; absent
+   * everywhere else, where every definition listed is the mod's own.
+   */
+  source?: "vanilla" | "parent" | "mod";
 }
 export interface OverviewKind {
   kind: string;
@@ -1364,6 +1413,13 @@ export interface EventGraphParams {
   /** Also read each mod event's `theme`. Off by default: it costs one parse per
    *  event file, and only a client that draws the theme's art needs it. */
   themes?: boolean;
+  /**
+   * Leave out every definition that has no edge in the answer. ON by default
+   * (absent = true): the pruned definitions are dropped before their cards
+   * are read, so a mod with hundreds of standalone events stays cheap. `root`
+   * is always kept. Send `false` to see the whole namespace, edges or not.
+   */
+  connectedOnly?: boolean;
 }
 /**
  * One row of a mod event's card, in EXECUTION order (immediate, then the
@@ -1488,10 +1544,40 @@ export interface EventVocabularyItem {
   doc?: string;
   /** Dimmer right-hand label: where the value comes from (mod / vanilla / a kind). */
   hint?: string;
+  /**
+   * The name the PLAYER reads: the loc value of the kind's first loc pattern
+   * with `$` replaced by the definition name (`trait_$` -> `trait_brave` ->
+   * "Brave"). Set by {@link definitionFormRequest} only, and absent when
+   * nothing resolves, so a client shows the key rather than an invented word.
+   */
+  label?: string;
+  /**
+   * The family this definition belongs to, when one folder holds several and
+   * the schema entry names the key that says so (`type = ethos` in
+   * common/culture/pillars). Set by {@link definitionFormRequest} only, so a
+   * creator can draw one picker per family; absent everywhere else.
+   */
+  group?: string;
 }
 /** Caps: an editor lists a page at a time, and these ride on every open. */
 export const EVENT_VOCABULARY_MAX_TOKENS = 600;
 export const EVENT_VOCABULARY_MAX_VALUES = 400;
+
+/**
+ * Most values {@link DefinitionFormKey.sampled} carries, and the point past
+ * which a key is taken to have no value SET at all (a key whose value differs
+ * per definition is a free field, not a list to offer).
+ */
+export const DEFINITION_FORM_MAX_SAMPLED = 80;
+
+/**
+ * How long a block body {@link DefinitionFormKey.example} may be. A placeholder
+ * is read at a glance, and the shortest bodies a game writes for a block key
+ * (a trait's `triggered_opinion`, a culture's `parameters`) fit well inside
+ * this; a longer one is cut with an ellipsis rather than dropped, because half
+ * a real body still says what the key wants.
+ */
+export const DEFINITION_FORM_MAX_EXAMPLE = 120;
 
 /**
  * Request: the value set a VALUE belongs to, resolved through the definition
@@ -1612,6 +1698,59 @@ export interface GuiUseSite {
 }
 
 /**
+ * Request: the code snippets a host can offer for one open script document;
+ * {@link SnippetsParams} -> {@link SnippetsResult}. Answers for OPEN script
+ * documents only (the server reads the client's text, not the disk); a document
+ * it does not know answers with an EMPTY list, never an error.
+ *
+ * Two sources, neither hand-written. The definition and child-block skeletons
+ * are the measured shape of the document folder's own definition kind (at least
+ * half of the game's definitions of that kind carry each key, in the median
+ * order they hold there). The token entries are the block form of the `usage:`
+ * example the game's own script_docs dump ships for an engine trigger or effect,
+ * filtered to the block the cursor sits in.
+ *
+ * Every entry carries BOTH insert forms, exactly like completion does: `snippet`
+ * for a host that expands `${1:…}` tabstops, `plain` for one that does not.
+ */
+export const snippetsRequest = "paradox/snippets";
+export interface SnippetsParams {
+  uri: string;
+  /** 0-based, as in LSP. Decides which engine block templates fit. */
+  position: { line: number; character: number };
+}
+
+/** One offer, ready to insert at the cursor. */
+export interface SnippetItem {
+  /**
+   * Stable id: the definition kind (`event`), the kind and its child block
+   * (`event.option`), or the engine token (`if`) — plus `<token>.full` when the
+   * token's example marks fields optional and an all-fields form follows it.
+   * Suitable as a picker key.
+   */
+  id: string;
+  /** Reads as what it inserts: "new event", "option block", "if". */
+  label: string;
+  /** Provenance, with the measurement behind it. */
+  detail: string;
+  /**
+   * `definition` = a whole definition of the document's kind, including the
+   * file header line when the document declares none; `block` = one child block
+   * of that kind; `token` = an engine trigger/effect's own dumped example.
+   */
+  form: "definition" | "block" | "token";
+  /** `${1:…}` tabstop form. */
+  snippet: string;
+  /** The same shape free of `${`, for hosts without snippet expansion. */
+  plain: string;
+}
+
+export interface SnippetsResult {
+  /** Skeletons first (definition, then its child blocks), then engine tokens. */
+  snippets: SnippetItem[];
+}
+
+/**
  * Request: the inferred scope chain at a cursor position;
  * {@link ScopeAtParams} -> {@link ScopeAtResult} | null. Answers for OPEN
  * script documents only (the server reads the client's text, not the disk);
@@ -1666,4 +1805,352 @@ export interface ScopeAtResult {
    * the file is listed too, matching what completion and hover already offer.
    */
   savedScopes: SavedScopeInfo[];
+}
+
+// ---- content creators --------------------------------------------------------
+
+/**
+ * Request: everything a visual creator needs to draw a form for one definition
+ * kind; {@link DefinitionFormParams} -> {@link DefinitionForm} | null (null =
+ * the active game's schema has no such kind, which is the honest answer for a
+ * client asking about content this game does not have).
+ *
+ * Nothing in the answer is hand-written for the creator: the folder, the loc
+ * key patterns and the icon folder come from the schema table, the keys from
+ * the harvested `_*.info` structures, the option lists from the definition
+ * index (the same resolver {@link eventValueOptionsRequest} answers with) and
+ * `existing` from the same index walk {@link modOverviewRequest} does. A game
+ * patch that adds a key or a value changes the form without a release.
+ */
+export const definitionFormRequest = "paradox/definitionForm";
+export interface DefinitionFormParams {
+  /** Definition kind, as the schema table spells it ("trait"). */
+  kind: string;
+  /** Load this definition into `current` (edit rather than create). */
+  name?: string;
+  /** Restrict mod-side entries to one workspace mod (plus vanilla/parents). */
+  modRoot?: string | null;
+}
+
+/** One key of a definition body, with what is known about the values it takes. */
+export interface DefinitionFormKey {
+  key: string;
+  /** The game's own one-line documentation, capped. Absent when it has none. */
+  doc?: string;
+  /** Coarse value hint from the schema: `loc`, `bool`, `block`, `enum:a|b|c`. */
+  values?: string;
+  /** Vanilla usage count from the harvest, the order the keys arrive in. */
+  freq?: number;
+  /**
+   * Definition kinds this key's value names, when the profile says so. The
+   * lists live in {@link DefinitionForm.options}, keyed by kind, so several
+   * keys naming the same kind share one list.
+   */
+  refKinds?: string[];
+  /**
+   * The values the indexed definitions of this kind actually write for this
+   * key, most used first, for keys no definition index can answer (a culture's
+   * `clothing_gfx` names an art set, not a definition). Measured from the game
+   * and mod files the server has indexed, at request time, so a patch changes
+   * the list without a release; absent when the key has no refKinds-free value
+   * set of at most {@link DEFINITION_FORM_MAX_SAMPLED} entries, which is the
+   * honest answer for a key whose value is different in every definition.
+   */
+  sampled?: string[];
+  /**
+   * The literal the indexed definitions of this kind write most often for this
+   * key: a real value, so a form can show it as the input's placeholder
+   * instead of inventing one. Unlike {@link sampled} it counts numbers and
+   * quoted text too (quotes stripped), and it survives the cap, so a key whose
+   * value differs in every definition still has an example.
+   *
+   * A key whose value is a BLOCK gets the most written body instead, collapsed
+   * onto one line and capped at {@link DEFINITION_FORM_MAX_EXAMPLE}
+   * characters, so a script field has a placeholder too.
+   *
+   * A key whose value set is already stated (`bool`, `enum:`) carries an
+   * example as well, though no {@link sampled}: a dropdown showing the value
+   * the game itself writes says more than one reading "not set".
+   */
+  example?: string;
+}
+
+export interface DefinitionForm {
+  kind: string;
+  /** Schema path the definition is written into, e.g. `common/traits`. */
+  folder: string;
+  /**
+   * Every loc key the game reads for this kind, `$` being the definition name
+   * (`trait_$_desc`). The full set a form should offer, not the conservative
+   * `requiredLoc` subset a diagnostic is allowed to demand.
+   */
+  locPatterns: string[];
+  /** Where the game looks for this kind's icon, e.g. `gfx/interface/icons/traits`. */
+  iconFolder?: string;
+  /** Top-level keys, harvest order (most used first), curated keys ahead. */
+  keys: DefinitionFormKey[];
+  /** Named sub-blocks with their own keys, when the harvest has them. */
+  blocks?: Record<string, DefinitionFormKey[]>;
+  /** Ref kind -> every indexed definition of it, mod entries first, capped. */
+  options: Record<string, EventVocabularyItem[]>;
+  /**
+   * Trigger name -> the values that trigger accepts, for the handful of
+   * triggers a no-code condition builder offers rows for (`has_dlc_feature`,
+   * `has_game_rule`, `scripted_trigger`). Which triggers those are, and where
+   * each list comes from, is the game profile's own table; the values
+   * themselves are read from what the server already holds (the trigger's own
+   * script_docs entry, the definition index), never written for the creator.
+   * A trigger with no resolvable list is ABSENT rather than empty, so a client
+   * offers a free input instead of a picker with nothing in it.
+   */
+  conditions?: Record<string, EventVocabularyItem[]>;
+  /** The modifier vocabulary, most used first: what a modifier row may offer. */
+  modifiers: { name: string; doc?: string }[];
+  /** Definitions of this kind the mod already has (modRoot or every workspace mod). */
+  existing: OverviewDef[];
+  /** The definition `params.name` asked for, when it is indexed. */
+  current?: {
+    file: string;
+    /** 0-based. */
+    line: number;
+    source: DefSource;
+    /** The block verbatim, `name = { ... }`, exactly as the file has it. */
+    text: string;
+  };
+}
+
+/**
+ * Request: text edits that write a definition into a script file;
+ * {@link DefinitionEditParams} -> {@link DefinitionEditResult}. The script
+ * sibling of {@link guiSourceEditRequest}, over the same span model, and with
+ * the same division of labour: the server never writes, it returns offsets
+ * into the text it was handed and the host applies them as ONE
+ * `WorkspaceEdit`, which keeps undo and dirty state in the editor.
+ *
+ * Offsets are UTF-16 into `params.text` (the document text, with no BOM, the
+ * way an editor delivers it), computed against that one text and applied
+ * end-first. Every edit is surgical, so a file's other definitions, its
+ * comments, its CRLF and its indentation stay byte-identical.
+ */
+export const definitionEditRequest = "paradox/definitionEdit";
+export interface DefinitionEditParams {
+  /** For display only; the text is authoritative. */
+  uri: string;
+  /** Authoritative document text every offset refers to. */
+  text: string;
+  /** Computed in order against the one text and answered as one edit set. */
+  ops: DefinitionOp[];
+}
+
+export type DefinitionOp =
+  /**
+   * Set or (with a null value) remove keys on the top-level definition `name`.
+   * `value` is raw script text: `2`, `{ craven }`, `"quoted"`.
+   */
+  | { op: "setProperties"; name: string; properties: { key: string; value: string | null }[] }
+  /**
+   * Write the whole `name = { ... }` block: replaces the top-level block of
+   * that name, or appends it after a blank separator line when the file has
+   * none.
+   */
+  | { op: "upsertBlock"; name: string; text: string };
+
+export interface DefinitionEditResult {
+  /** Every applied op's edits together. Apply the whole set as ONE change. */
+  edits: GuiTextEdit[];
+  /** One verdict per requested op, in request order; `refused` names why it wrote nothing. */
+  ops: { refused?: string }[];
+}
+
+/**
+ * Request: how the GAME prints each modifier; {@link ModifierFormatsParams} ->
+ * {@link ModifierFormatsResult} | null (null = the active profile names no
+ * formats source, or the game folder is not configured).
+ *
+ * A creator that lets a modder add `monthly_income = 0.5` has to show what the
+ * player will see, and the player sees "[gold_i] +0.50 Monthly Income" in
+ * green. None of that is written here: the flags come from the game's own
+ * `common/modifier_definition_formats/` (documented by `_definitions.info`
+ * there), every word comes from the loc index, and every icon comes from the
+ * `texticon` blocks of the game's `gui/texticons.gui`. A modifier no format
+ * block names gets the file's documented defaults, so the answer covers every
+ * modifier token the server knows rather than only the formatted ones.
+ */
+export const modifierFormatsRequest = "paradox/modifierFormats";
+export interface ModifierFormatsParams extends ModScopedParams {
+  /**
+   * Loc keys to render as parts too, through the same texticon chain the
+   * prefixes take. A client that prints a line of the game's own UI (a cost
+   * line such as `"[prestige_i] $VALUE|0$"`) asks for the key and gets its
+   * icon and text back; a key the loc index cannot resolve is absent.
+   */
+  lines?: string[];
+}
+
+/**
+ * One piece of a prefix or suffix: a word, or a texticon. `[gold_i]` in a loc
+ * value resolves through `game_concept_gold_i` = `"@gold_icon!"` to the
+ * `texticon` block naming the sprite, which is what an icon part carries.
+ */
+export type FormatPart =
+  { text: string } | { icon: { texture: string; uv?: [number, number, number, number] } };
+
+/** How one modifier is printed, straight out of the game's own format files. */
+export interface ModifierFormat {
+  /** The player's word for the modifier, loc-resolved; the key title-cased when it has none. */
+  label: string;
+  /** Digits after the point. The file's documented default is 2. */
+  decimals: number;
+  /** Scale the value by 100 and print a `%`. */
+  percent?: boolean;
+  /** Print a `%` without scaling: the value already is one. */
+  alreadyPercent?: boolean;
+  /** Which direction is good for the player. The file's documented default is `bad`. */
+  color: "good" | "neutral" | "bad";
+  /** `no_difference_sign`: print the number without a leading `+`/`-`. */
+  noSign?: boolean;
+  /** The game does not show this modifier at all. */
+  hidden?: boolean;
+  /** Drawn before the number (`[gold_i]`). */
+  prefix?: FormatPart[];
+  /** Drawn after the number (`/month`). */
+  suffix?: FormatPart[];
+  /** Used in place of `suffix` for negative values, when the game defines one. */
+  negativeSuffix?: FormatPart[];
+}
+
+export interface ModifierFormatsResult {
+  /** Modifier name -> its format. Every modifier token the server knows. */
+  formats: Record<string, ModifierFormat>;
+  /** Loc key -> its parts, for each `lines` entry the loc index resolved. */
+  lines?: Record<string, FormatPart[]>;
+}
+
+/**
+ * Request: a dynasty as a family tree; {@link DynastyTreeParams} ->
+ * {@link DynastyTreeResult}.
+ *
+ * Two answers behind one method. Without `dynasty` the result is the picker
+ * list: every dynasty the index knows, mod entries first. With `dynasty` it is
+ * that dynasty's houses and members, read out of the game's own
+ * `history/characters` files.
+ *
+ * Everything is DERIVED: the folders come from the active profile's schema
+ * (`dynasty`, `dynasty_house`, `character` kinds), the members from the
+ * character blocks themselves, the display names from the loc index. A profile
+ * whose schema has no `dynasty` kind answers `supported: false` and empty
+ * lists, which is what a client shows instead of an empty tree.
+ */
+export const dynastyTreeRequest = "paradox/dynastyTree";
+export interface DynastyTreeParams extends ModScopedParams {
+  /** A dynasty id: answer that dynasty's houses and members instead of the list. */
+  dynasty?: string;
+}
+
+/** One dynasty, as the picker lists it. */
+export interface DynastySummary {
+  /** The block's own key, which is what a character's `dynasty = ` names. */
+  id: string;
+  /** The `name = ` value, a loc key (`dynn_Karling`). */
+  nameKey: string;
+  /** The loc text when the server can resolve it, else `nameKey` itself. */
+  name: string;
+  culture?: string;
+  source: DefSource;
+  file: string;
+  /** 0-based. */
+  line: number;
+  /** Characters whose `dynasty`, or whose house's dynasty, is this one. */
+  characterCount: number;
+  houseCount: number;
+}
+
+/** One house of a dynasty (`house_karling = { name = … dynasty = 25061 }`). */
+export interface DynastyHouse {
+  id: string;
+  nameKey: string;
+  name: string;
+  /** The dynasty id the house belongs to. */
+  dynasty: string;
+  source: DefSource;
+  file: string;
+  /** 0-based. */
+  line: number;
+}
+
+/**
+ * The character-level skill keys, in the order a client shows them. MEASURED
+ * over the vanilla `history/characters` corpus (2026-09-03): stewardship 8 964,
+ * martial 8 940, diplomacy 8 908, intrigue 8 892, learning 495, prowess 150.
+ */
+export const DYNASTY_SKILLS = [
+  "diplomacy",
+  "martial",
+  "stewardship",
+  "intrigue",
+  "learning",
+  "prowess",
+] as const;
+
+/**
+ * One character of `history/characters`. Dates are the game's own
+ * `Y.M.D` strings, taken from the dated block that carries the `birth`/`death`
+ * statement.
+ */
+export interface DynastyCharacter {
+  /** The block's own key: numeric in vanilla, but `han_1234` shapes exist too. */
+  id: string;
+  /** The `name = ` value, a plain string in history, not a loc key. */
+  name: string;
+  female: boolean;
+  dynasty?: string;
+  /** `dynasty_house = `; a character carries the house OR the dynasty, not both. */
+  house?: string;
+  father?: string;
+  mother?: string;
+  culture?: string;
+  religion?: string;
+  /** `Y.M.D` of the dated block holding `birth`. */
+  birth?: string;
+  death?: string;
+  /**
+   * `dna = `, the portrait DNA name, without the quotes the file may put
+   * around it (350 of 438 vanilla statements write it bare).
+   */
+  dna?: string;
+  /**
+   * The skills the block sets, keyed by {@link DYNASTY_SKILLS}. A skill the
+   * block does not name is absent, which is not the same as zero: the game
+   * rolls one it was not given.
+   */
+  skills?: Record<string, number>;
+  traits: string[];
+  /** Ids this character is married to (`add_spouse`), in file order. */
+  spouses: string[];
+  /**
+   * Set when the character belongs to ANOTHER dynasty and is only in the
+   * answer because a member names them as a parent or a spouse. A client draws
+   * them, but the tree is not theirs.
+   */
+  external?: true;
+  source: DefSource;
+  file: string;
+  /** 0-based. */
+  line: number;
+}
+
+export interface DynastyTreeResult {
+  /** False when the active profile's schema has no `dynasty` kind. */
+  supported: boolean;
+  /** The picker list. Empty when `params.dynasty` asked for one dynasty. */
+  dynasties: DynastySummary[];
+  /** Present exactly when `params.dynasty` named a dynasty the index knows. */
+  dynasty?: DynastySummary;
+  houses?: DynastyHouse[];
+  /** Members plus the external parents and spouses they name. */
+  characters?: DynastyCharacter[];
+  /** Largest numeric character id across game and mods, plus one. */
+  nextCharacterId?: string;
+  /** Largest numeric dynasty id across game and mods, plus one. */
+  nextDynastyId?: string;
 }

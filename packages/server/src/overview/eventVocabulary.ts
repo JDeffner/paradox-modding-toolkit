@@ -31,7 +31,7 @@ import type { KeySpec } from "../schema/types";
 /** One line is what a menu row shows; the rest is noise at that size. */
 const MAX_DOC = 220;
 
-function short(doc: string | undefined): string | undefined {
+export function short(doc: string | undefined): string | undefined {
   if (!doc) return undefined;
   const oneLine = doc.replace(/\s+/g, " ").trim();
   if (oneLine === "") return undefined;
@@ -56,6 +56,36 @@ function keyItems(specs: Map<string, KeySpec> | undefined): EventVocabularyItem[
   }));
 }
 
+/**
+ * Every indexed definition of one kind as offerable values, mod entries first
+ * and each side name-sorted, capped. The ONE place a dropdown's option list
+ * comes from: the event vocabulary, `paradox/eventValueOptions` and the
+ * creators' `paradox/definitionForm` all list a kind through this, so they can
+ * never disagree about what the index holds.
+ */
+export function definitionsOfKind(
+  data: ServerData,
+  kind: string,
+  inFocus: (file: string) => boolean = () => true
+): EventVocabularyItem[] {
+  const seen = new Set<string>();
+  const mod: EventVocabularyItem[] = [];
+  const rest: EventVocabularyItem[] = [];
+  for (const def of data.index.allDefinitions()) {
+    if (def.kind !== kind || seen.has(def.name)) continue;
+    if (def.source === "mod" && !inFocus(def.file)) continue;
+    seen.add(def.name);
+    (def.source === "mod" ? mod : rest).push({
+      value: def.name,
+      doc: short(def.doc),
+      hint: def.source === "mod" ? "this mod" : def.source,
+    });
+  }
+  mod.sort((a, b) => a.value.localeCompare(b.value));
+  rest.sort((a, b) => a.value.localeCompare(b.value));
+  return [...mod, ...rest].slice(0, EVENT_VOCABULARY_MAX_VALUES);
+}
+
 export function computeEventVocabulary(
   data: ServerData,
   schema: SchemaData,
@@ -73,22 +103,7 @@ export function computeEventVocabulary(
   const definitionsOf = (kind: string): EventVocabularyItem[] => {
     let cached = byKind.get(kind);
     if (cached) return cached;
-    const seen = new Set<string>();
-    const mod: EventVocabularyItem[] = [];
-    const rest: EventVocabularyItem[] = [];
-    for (const def of data.index.allDefinitions()) {
-      if (def.kind !== kind || seen.has(def.name)) continue;
-      if (def.source === "mod" && !inFocus(def.file)) continue;
-      seen.add(def.name);
-      (def.source === "mod" ? mod : rest).push({
-        value: def.name,
-        doc: short(def.doc),
-        hint: def.source === "mod" ? "this mod" : def.source,
-      });
-    }
-    mod.sort((a, b) => a.value.localeCompare(b.value));
-    rest.sort((a, b) => a.value.localeCompare(b.value));
-    cached = [...mod, ...rest].slice(0, EVENT_VOCABULARY_MAX_VALUES);
+    cached = definitionsOfKind(data, kind, inFocus);
     byKind.set(kind, cached);
     return cached;
   };
@@ -193,22 +208,7 @@ export function computeValueOptions(
   if (/^-?[\d.]+$/.test(name) || name.includes(":") || name.includes(".")) return null;
   const def = data.index.lookup(name).find((d) => !VALUE_KIND_SKIP.has(d.kind));
   if (!def) return null;
-  const seen = new Set<string>();
-  const mod: EventVocabularyItem[] = [];
-  const rest: EventVocabularyItem[] = [];
-  for (const d of data.index.allDefinitions()) {
-    if (d.kind !== def.kind || seen.has(d.name)) continue;
-    if (d.source === "mod" && !inFocus(d.file)) continue;
-    seen.add(d.name);
-    (d.source === "mod" ? mod : rest).push({
-      value: d.name,
-      doc: short(d.doc),
-      hint: d.source === "mod" ? "this mod" : d.source,
-    });
-  }
-  mod.sort((a, b) => a.value.localeCompare(b.value));
-  rest.sort((a, b) => a.value.localeCompare(b.value));
-  const items = [...mod, ...rest].slice(0, EVENT_VOCABULARY_MAX_VALUES);
+  const items = definitionsOfKind(data, def.kind, inFocus);
   // A single entry (the value itself) enumerates nothing worth a menu.
   return items.length > 1 ? { kind: def.kind, items } : null;
 }

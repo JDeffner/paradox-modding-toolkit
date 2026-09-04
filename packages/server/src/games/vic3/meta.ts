@@ -12,13 +12,17 @@ export const vic3Meta: GameMeta = {
   engine: "jomini",
   // Vic3 mods carry .metadata/metadata.json instead of a launcher .mod file.
   descriptor: "metadata",
-  configDirName: ".vic3modding",
+  configDirName: ".px-toolkit",
+  legacyConfigDirName: ".vic3modding",
   docsFolderName: "Victoria 3",
   // Vic3's `script_docs` writes to Documents/.../docs (like EU5), while
   // `dump_data_types` writes to logs/data_types — verified on a live install.
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 529340,
+  // Verified on the live install: a different folder name from CK3's, and only
+  // some DLC have a file there (the rest fall back to their thumbnail.png).
+  dlcIconDir: "gfx/interface/icons/dlc_icons",
   eventNamespaces: true,
   scaffolds: VIC3_SCAFFOLDS,
   // uiFont deliberately absent: this game ships no Gitan (its fonts/ holds

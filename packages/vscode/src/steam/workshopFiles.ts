@@ -6,28 +6,100 @@
  *   <workshopDir>/
  *     item.json                    {"title": "...", "publishedfileid": "..."}
  *     description.bbcode           default-language description
- *     <steamlang>/title.txt        localized title (optional)
- *     <steamlang>/description.bbcode
+ *     translations/<steamlang>/title.txt        localized title (optional)
+ *     translations/<steamlang>/description.bbcode
+ *     previews/                    extra preview images, videos.txt, order.txt
+ *     dependencies.json            required DLC and items
  *     changelog/                   changenote sources (see resolveChangeNote)
  *
- * The folder's location is `px.workshop.dir`, resolved against the mod root
- * (default `../workshop`: the mod's content lives in `<project>/mod`, the
- * listing next to it in `<project>/workshop`). While the folder exists it is
- * the canonical store for the description and the translations; without it
- * everything stays in `<configDir>/workshop.json` as before.
+ * Listings written before 0.4.0 keep `<steamlang>/` at the root; reads fall
+ * back to it and the next write moves the language into `translations/`.
+ * Descriptions are BBCode, the format Steam serves and takes. A folder that
+ * still holds a `description.md` from an earlier version is converted once
+ * when the panel reads it (`migrateMarkdownListing`); until then it reads as
+ * Markdown, and nothing writes a new one.
+ *
+ * The folder's location is `px.workshop.dir`, resolved against the mod root.
+ * Empty (the default) means `<configDir>/workshop` inside the mod, which a
+ * toolkit upload leaves out (see pxignore.ts); a mod-projects layout with a
+ * `workshop` folder next to the mod (`<project>/mod` + `<project>/workshop`)
+ * keeps using that. The folder is the canonical store for the description
+ * and the translations; `workshop.json` keeps only ids and pre-0.4.0 drafts.
  *
  * No vscode imports: unit-tested in plain Node.
  */
 import * as fs from "fs";
 import * as path from "path";
 import { STEAM_LANGUAGES, type WorkshopTranslation } from "@px-lsp/protocol/workshopMeta";
+import { markdownToBBCode } from "./bbcodeMarkdown";
 
-export const DEFAULT_WORKSHOP_DIR = "../workshop";
+export const SIBLING_WORKSHOP_DIR = "../workshop";
 export const DEFAULT_CHANGELOG = "changelog";
+export const TRANSLATIONS_DIR = "translations";
 
-/** The workshop folder of `root`, from the `px.workshop.dir` setting. */
-export function resolveWorkshopDir(root: string, setting: string | undefined): string {
-  return path.resolve(root, (setting ?? "").trim() || DEFAULT_WORKSHOP_DIR);
+export const DESCRIPTION_MD = "description.md";
+export const DESCRIPTION_BBCODE = "description.bbcode";
+
+/**
+ * The description file of one folder, and whether it is Markdown.
+ *
+ * `.md` wins when both exist, so a listing written before 0.4.0 keeps reading
+ * the file its author edits; a folder with neither gets `.bbcode`, the format
+ * Steam serves. Reads and writes both go through this, so the choice cannot
+ * drift between them.
+ */
+export function descriptionFile(dir: string): { file: string; markdown: boolean } {
+  const md = path.join(dir, DESCRIPTION_MD);
+  if (fs.existsSync(md)) return { file: md, markdown: true };
+  return { file: path.join(dir, DESCRIPTION_BBCODE), markdown: false };
+}
+
+/**
+ * Write one folder's description as the BBCode Steam served (the download
+ * path). A legacy `description.md` beside it is removed: `.md` wins on read,
+ * so leaving it would shadow the text just downloaded.
+ */
+export function writeSteamDescription(dir: string, bbcode: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, DESCRIPTION_BBCODE), bbcode, "utf8");
+  fs.rmSync(path.join(dir, DESCRIPTION_MD), { force: true });
+}
+
+/**
+ * Move a listing written before 0.4.1 off Markdown: every `description.md`
+ * (the root, `translations/<lang>/`, and the pre-0.4.0 `<lang>/` at the root)
+ * becomes `description.bbcode` holding the BBCode the upload sent Steam
+ * anyway, and the `.md` goes. Done once, when the panel reads the folder,
+ * so no later write has to know which format a draft is in. Returns the
+ * folders migrated, relative to `workshopDir`, for the one-time notice.
+ */
+export function migrateMarkdownListing(workshopDir: string): string[] {
+  const moved: string[] = [];
+  const dirs = [workshopDir];
+  for (const { api } of STEAM_LANGUAGES) dirs.push(langDir(workshopDir, api), path.join(workshopDir, api));
+  for (const dir of dirs) {
+    const md = path.join(dir, DESCRIPTION_MD);
+    if (!fs.existsSync(md)) continue;
+    writeSteamDescription(dir, markdownToBBCode(fs.readFileSync(md, "utf8")));
+    moved.push(path.relative(workshopDir, dir) || ".");
+  }
+  return moved;
+}
+
+/** Where one language's files live: `translations/<lang>/`. */
+export function langDir(workshopDir: string, api: string): string {
+  return path.join(workshopDir, TRANSLATIONS_DIR, api);
+}
+
+/**
+ * The workshop folder of `root`: the `px.workshop.dir` setting when set, else
+ * the existing `../workshop` sibling, else `<configDir>/workshop`.
+ */
+export function resolveWorkshopDir(root: string, setting: string | undefined, configDir: string): string {
+  const explicit = (setting ?? "").trim();
+  if (explicit) return path.resolve(root, explicit);
+  const sibling = path.resolve(root, SIBLING_WORKSHOP_DIR);
+  return hasListingFiles(sibling) ? sibling : path.join(configDir, "workshop");
 }
 
 /** True when the mod tracks its listing as files (the folder exists). */
@@ -39,30 +111,21 @@ export function hasListingFiles(workshopDir: string): boolean {
   }
 }
 
-/**
- * True when listing writes should go to the workshop folder even though it
- * does not exist yet. The mod-projects layout keeps everything that is not
- * the upload next to the mod (`<project>/mod` + `<project>/workshop`), so
- * falling back to the in-mod `<configDir>/workshop.json` there would create a
- * toolkit file inside the uploadable content for no reason. The layout is the
- * signal: the mod root is a folder literally named `mod`, and the workshop
- * dir resolves to a sibling of it (the default `../workshop`).
- */
-export function preferListingFiles(root: string, workshopDir: string): boolean {
-  if (hasListingFiles(workshopDir)) return true;
-  const resolved = path.resolve(root);
-  return (
-    path.basename(resolved).toLowerCase() === "mod" &&
-    path.dirname(path.resolve(workshopDir)).toLowerCase() === path.dirname(resolved).toLowerCase()
-  );
-}
-
 export interface ListingFiles {
-  /** description.bbcode, or null when the file is absent. */
+  /** The default description, or null when the file is absent. */
   description: string | null;
   /** Per Steam language code: what the `<lang>/` folder holds. */
   translations: Record<string, WorkshopTranslation>;
+  /**
+   * Which descriptions came from a `.md` file: `""` for the default one,
+   * else the Steam language code. They convert to BBCode on upload and in
+   * the panel's preview; on disk they stay what the modder edits.
+   */
+  markdown: string[];
 }
+
+/** The `markdown` key of the default description. */
+export const DEFAULT_LANGUAGE = "";
 
 const read = (file: string): string | null => {
   try {
@@ -75,17 +138,32 @@ const read = (file: string): string | null => {
 /** The listing the workshop folder currently holds. */
 export function readListingFiles(workshopDir: string): ListingFiles {
   const translations: Record<string, WorkshopTranslation> = {};
+  const markdown: string[] = [];
   for (const { api } of STEAM_LANGUAGES) {
-    const dir = path.join(workshopDir, api);
-    const title = read(path.join(dir, "title.txt"));
-    const description = read(path.join(dir, "description.bbcode"));
-    if (title === null && description === null) continue;
+    let dir = langDir(workshopDir, api);
+    let chosen = descriptionFile(dir);
+    let title = read(path.join(dir, "title.txt"));
+    let description = read(chosen.file);
+    if (title === null && description === null) {
+      // Pre-0.4.0 layout: the language folder sits at the root.
+      dir = path.join(workshopDir, api);
+      chosen = descriptionFile(dir);
+      title = read(path.join(dir, "title.txt"));
+      description = read(chosen.file);
+      if (title === null && description === null) continue;
+    }
+    if (chosen.markdown) markdown.push(api);
     translations[api] = {
       ...(title !== null ? { title: title.trim() } : {}),
       ...(description !== null ? { description } : {}),
     };
   }
-  return { description: read(path.join(workshopDir, "description.bbcode")), translations };
+  const chosen = descriptionFile(workshopDir);
+  const description = read(chosen.file);
+  // The format is the folder's, not the file's: only a folder that still
+  // holds a description.md reads (and writes) as Markdown.
+  if (chosen.markdown) markdown.push(DEFAULT_LANGUAGE);
+  return { description, translations, markdown };
 }
 
 /**
@@ -98,31 +176,37 @@ export function writeListingFiles(
   listing: { description: string; translations: Record<string, WorkshopTranslation> }
 ): void {
   fs.mkdirSync(workshopDir, { recursive: true });
-  fs.writeFileSync(path.join(workshopDir, "description.bbcode"), listing.description, "utf8");
+  fs.writeFileSync(descriptionFile(workshopDir).file, listing.description, "utf8");
   for (const { api } of STEAM_LANGUAGES) {
     const t = listing.translations[api];
-    const dir = path.join(workshopDir, api);
+    const dir = langDir(workshopDir, api);
+    // The pre-0.4.0 root folder is always cleared: its text now lives under translations/.
+    removeLangFiles(path.join(workshopDir, api));
     const title = (t?.title ?? "").trim();
     const description = t?.description ?? "";
     if (title === "" && description.trim() === "") {
-      // Nothing drafted: remove only the two files this store manages.
-      for (const f of ["title.txt", "description.bbcode"]) {
-        try {
-          fs.rmSync(path.join(dir, f));
-        } catch {
-          /* absent */
-        }
-      }
-      try {
-        if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
-      } catch {
-        /* leave a non-empty or locked folder alone */
-      }
+      removeLangFiles(dir);
       continue;
     }
     fs.mkdirSync(dir, { recursive: true });
     writeOrRemove(path.join(dir, "title.txt"), title === "" ? null : title + "\n");
-    writeOrRemove(path.join(dir, "description.bbcode"), description.trim() === "" ? null : description);
+    writeOrRemove(descriptionFile(dir).file, description.trim() === "" ? null : description);
+  }
+}
+
+/** Remove only the two files this store manages, and the folder once it is empty. */
+function removeLangFiles(dir: string): void {
+  for (const f of ["title.txt", DESCRIPTION_BBCODE, DESCRIPTION_MD]) {
+    try {
+      fs.rmSync(path.join(dir, f));
+    } catch {
+      /* absent */
+    }
+  }
+  try {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+  } catch {
+    /* leave a non-empty or locked folder alone */
   }
 }
 
@@ -141,6 +225,8 @@ function writeOrRemove(file: string, content: string | null): void {
 export interface ItemJson {
   title?: string;
   publishedfileid?: string;
+  tags?: string[];
+  visibility?: number;
 }
 
 /** `<workshopDir>/item.json`, or null when absent/unreadable. */
@@ -163,9 +249,186 @@ export function upsertItemJson(workshopDir: string, patch: ItemJson): void {
   fs.writeFileSync(path.join(workshopDir, "item.json"), JSON.stringify(current, null, 2) + "\n", "utf8");
 }
 
+/**
+ * Move the listing folder from one location to the other (project layout
+ * `<project>/workshop` <-> in-mod `<configDir>/workshop`). A missing source
+ * folder is not an error: the listing then gets created at the target from
+ * `drafts` (what workshop.json still holds), so nothing is lost either way.
+ * Refuses to overwrite an existing target.
+ */
+export function moveListing(
+  from: string,
+  to: string,
+  drafts: { description: string; translations: Record<string, WorkshopTranslation> }
+): void {
+  if (hasListingFiles(to)) throw new Error(`a listing folder already exists at ${to}`);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (!hasListingFiles(from)) {
+    writeListingFiles(to, drafts);
+    return;
+  }
+  try {
+    fs.renameSync(from, to);
+  } catch {
+    fs.cpSync(from, to, { recursive: true });
+    fs.rmSync(from, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Extra previews and dependencies
+// ---------------------------------------------------------------------------
+
+export const PREVIEWS_DIR = "previews";
+export const VIDEOS_FILE = "videos.txt";
+/** One file name per line: the gallery order. Files not listed follow, by name. */
+export const ORDER_FILE = "order.txt";
+export const DEPENDENCIES_FILE = "dependencies.json";
+const PREVIEW_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif"]);
+
+export interface Previews {
+  /** Absolute image paths, in file-name order: the order of Steam's gallery. */
+  images: string[];
+  /** YouTube video ids, one per line of videos.txt. */
+  videos: string[];
+}
+
+/**
+ * `<workshopDir>/previews/`: the item's extra preview images plus
+ * `videos.txt`. Null when the folder does not exist, which means the toolkit
+ * leaves the item's gallery on Steam alone.
+ */
+export function readPreviews(workshopDir: string): Previews | null {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const byName = names
+    .filter((n) => PREVIEW_EXTS.has(path.extname(n).toLowerCase()))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const order = readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n));
+  const images = [...order, ...byName.filter((n) => !order.includes(n))].map((n) => path.join(dir, n));
+  return { images, videos: readLines(path.join(dir, VIDEOS_FILE)) };
+}
+
+/** Non-empty, non-comment lines of a text file; none when it is absent. */
+function readLines(file: string): string[] {
+  try {
+    return fs
+      .readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l !== "" && !l.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+export function writePreviewOrder(workshopDir: string, names: string[]): void {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, ORDER_FILE), names.join("\n") + "\n", "utf8");
+}
+
+export function writeVideos(workshopDir: string, ids: string[]): void {
+  const dir = path.join(workshopDir, PREVIEWS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, VIDEOS_FILE);
+  if (ids.length === 0) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  fs.writeFileSync(file, ids.join("\n") + "\n", "utf8");
+}
+
+export interface Dependencies {
+  /** Required DLC, as Steam app ids. */
+  apps: number[];
+  /** Required Workshop items, as decimal id strings. */
+  items: string[];
+}
+
+/** `<workshopDir>/dependencies.json`, or null when absent (Steam's are then left alone). */
+export function readDependencies(workshopDir: string): Dependencies | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, DEPENDENCIES_FILE), "utf8")) as {
+      apps?: unknown;
+      items?: unknown;
+    };
+    return {
+      apps: Array.isArray(raw.apps) ? raw.apps.filter((a): a is number => Number.isInteger(a)) : [],
+      items: Array.isArray(raw.items)
+        ? raw.items.filter((i): i is string => typeof i === "string" && /^\d+$/.test(i))
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeDependencies(workshopDir: string, deps: Dependencies): void {
+  fs.mkdirSync(workshopDir, { recursive: true });
+  fs.writeFileSync(path.join(workshopDir, DEPENDENCIES_FILE), JSON.stringify(deps, null, 2) + "\n", "utf8");
+}
+
 // ---------------------------------------------------------------------------
 // Changenotes from the changelog
 // ---------------------------------------------------------------------------
+
+/** A changelog the mod already has, offered as the `px.workshop.changelog` source. */
+export interface ChangelogCandidate {
+  /** Absolute path of the file or folder. */
+  path: string;
+  kind: "file" | "folder";
+  /** True when `px.workshop.changelog` already resolves to it. */
+  current: boolean;
+}
+
+/** The names a hand-kept changelog goes by, in the order they are preferred. */
+const CHANGELOG_NAMES = ["changelog", "changelogs", "CHANGELOG.md", "CHANGELOG.txt"];
+
+/**
+ * Changelogs the mod already has: most mods keep none, and the ones that do
+ * keep it at the mod root (`CHANGELOG.md`) rather than where the default
+ * setting looks. Searched in the workshop folder first, then the mod root;
+ * name matching is case-insensitive, since `changelog.md` and `CHANGELOG.md`
+ * are the same file on Windows and different ones on Linux.
+ */
+export function changelogCandidates(
+  modRoot: string,
+  workshopDir: string,
+  resolved: string
+): ChangelogCandidate[] {
+  const key = (p: string): string => path.resolve(p).toLowerCase();
+  const resolvedKey = key(resolved);
+  const out: ChangelogCandidate[] = [];
+  const seen = new Set<string>();
+  for (const dir of [workshopDir, modRoot]) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const want of CHANGELOG_NAMES) {
+      for (const e of entries) {
+        if (e.name.toLowerCase() !== want.toLowerCase()) continue;
+        const full = path.join(dir, e.name);
+        if (seen.has(key(full))) continue;
+        seen.add(key(full));
+        out.push({
+          path: full,
+          kind: e.isDirectory() ? "folder" : "file",
+          current: key(full) === resolvedKey,
+        });
+      }
+    }
+  }
+  return out;
+}
 
 export interface ChangeNote {
   text: string;
@@ -269,80 +532,11 @@ export function extractVersionSection(text: string, version: string): string | n
 }
 
 function finishNote(text: string, file: string): string {
-  const note = /\.md$/i.test(file) ? mdToBBCode(text) : text;
+  const note = /\.md$/i.test(file) ? markdownToBBCode(text) : text;
   return note.trim();
 }
 
 function displaySource(workshopDir: string, file: string): string {
   const rel = path.relative(workshopDir, file);
   return rel.startsWith("..") ? file : rel.replace(/\\/g, "/");
-}
-
-/**
- * A modest Markdown -> Steam BBCode conversion for changenotes: headings,
- * emphasis, strikethrough, links, images, lists, hr, fenced code. Inline code
- * loses its backticks (Steam's [code] is a block). Anything else passes
- * through - Steam shows unknown markup as text, never breaks.
- */
-export function mdToBBCode(text: string): string {
-  const out: string[] = [];
-  const lines = text.split(/\r?\n/);
-  let listOpen: "list" | "olist" | null = null;
-  let codeOpen = false;
-  const closeList = (): void => {
-    if (listOpen) out.push(`[/${listOpen}]`);
-    listOpen = null;
-  };
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      closeList();
-      out.push(codeOpen ? "[/code]" : "[code]");
-      codeOpen = !codeOpen;
-      continue;
-    }
-    if (codeOpen) {
-      out.push(line);
-      continue;
-    }
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (h) {
-      closeList();
-      const level = Math.min(h[1].length, 3);
-      out.push(`[h${level}]${inlineMd(h[2])}[/h${level}]`);
-      continue;
-    }
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      closeList();
-      out.push("[hr][/hr]");
-      continue;
-    }
-    const li = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/.exec(line);
-    if (li) {
-      const kind = li[1] ? "list" : "olist";
-      if (listOpen !== kind) {
-        closeList();
-        out.push(`[${kind}]`);
-        listOpen = kind;
-      }
-      out.push(`[*] ${inlineMd(li[3])}`);
-      continue;
-    }
-    closeList();
-    out.push(inlineMd(line));
-  }
-  closeList();
-  if (codeOpen) out.push("[/code]");
-  return out.join("\n");
-}
-
-function inlineMd(s: string): string {
-  return s
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, "[img]$2[/img]")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "[url=$2]$1[/url]")
-    .replace(/\*\*([^*]+)\*\*/g, "[b]$1[/b]")
-    .replace(/__([^_]+)__/g, "[b]$1[/b]")
-    .replace(/(^|\W)\*([^*\s][^*]*)\*/g, "$1[i]$2[/i]")
-    .replace(/(^|\W)_([^_\s][^_]*)_(?=\W|$)/g, "$1[i]$2[/i]")
-    .replace(/~~([^~]+)~~/g, "[strike]$1[/strike]")
-    .replace(/`([^`]+)`/g, "$1");
 }

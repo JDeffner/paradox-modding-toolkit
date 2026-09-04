@@ -32,6 +32,7 @@ import {
   configChangedNotification,
   indexChangedNotification,
   indexStatsRequest,
+  locTextRequest,
   lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
@@ -41,6 +42,7 @@ import {
   type ParadoxSettings,
   type StatusPayload,
   type LocEntryInfo,
+  type LocTextParams,
   type LookupLocParams,
   type ModFileChangeParams,
   type ModScopedParams,
@@ -53,13 +55,21 @@ import {
   exampleWikiVariableKinds,
   type ExampleWikiEntryParams,
   type ExampleWikiKind,
+  dynastyTreeRequest,
   eventGraphRequest,
   eventValueOptionsRequest,
   eventVocabularyRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  modifierFormatsRequest,
+  type ModifierFormatsParams,
+  type DefinitionFormParams,
+  type DefinitionEditParams,
   guiTreeRequest,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type DynastyTreeParams,
   type EventBannerParams,
   type EventDetailParams,
   type EventGraphParams,
@@ -89,6 +99,9 @@ import {
   type DependenciesParams,
   scopeAtRequest,
   type ScopeAtParams,
+  snippetsRequest,
+  type SnippetsParams,
+  type SnippetsResult,
   type ScopeAtResult,
 } from "@px-lsp/protocol/protocol";
 import { buildGuiTree } from "./features/guiTree";
@@ -149,6 +162,7 @@ import { ModOriginResolver } from "./index/modOrigin";
 import { loadSchema, type SchemaData } from "./schema/loader";
 import { VARIABLE_KINDS } from "./games/jomini/variables";
 import { activeProfile, setActiveProfile } from "./games/active";
+import { resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { resolveProfile } from "./games/registry";
 import type { SchemaEntry } from "./schema/types";
 import { URI } from "vscode-uri";
@@ -157,7 +171,8 @@ import { CompletionFeature } from "./features/completion";
 import { provideHover } from "./features/hover";
 import { setHoverDetail } from "./features/hoverRender";
 import { provideDateHover } from "./features/calendarDates";
-import { sanitizeCalendar } from "@px-lsp/protocol/calendar";
+import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import { isCalendarFile, readCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
@@ -180,14 +195,20 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
+import { buildSnippetList } from "./features/snippetList";
 import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
 import { computeLocCoverage } from "./overview/locCoverage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
+import { computeDynastyTree } from "./overview/dynastyTree";
 import { computeEventVocabulary, computeValueOptions } from "./overview/eventVocabulary";
 import { computeEventBanner } from "./overview/eventBanner";
+import { computeDefinitionForm } from "./creators/definitionForm";
+import { computeDefinitionEdits } from "./creators/definitionEdit";
+import { computeModifierFormats } from "./creators/modifierFormats";
+import { computeLocText, type LocTextDeps } from "./features/locText";
 import { computeDependencies } from "./overview/dependencies";
 import { wordRangeAt } from "./wordAt";
 
@@ -577,6 +598,30 @@ function workspaceRootOf(fsPath: string): string | null {
   const lower = fsPath.toLowerCase();
   if (settings.modPath && lower.startsWith(settings.modPath.toLowerCase())) return settings.modPath;
   return workspaceModRoots().find((r) => lower.startsWith(r.toLowerCase())) ?? null;
+}
+
+/**
+ * The display calendar a file's dates follow: the owning mod's
+ * `<mod>/.px-toolkit/calendar.json` (read once per root, dropped when the file
+ * changes), else the window-scoped `calendar` setting. `source` names which one
+ * for the hover, so a wrong date can be traced to its declaration.
+ */
+const calendarByRoot = new Map<string, { calendar: CalendarSetting; source: string } | null>();
+function calendarFor(fsPath: string): { calendar: CalendarSetting | undefined; source: string } {
+  const root = workspaceRootOf(fsPath);
+  if (root) {
+    const key = root.toLowerCase();
+    let cached = calendarByRoot.get(key);
+    if (cached === undefined) {
+      const read = readCalendarFile(root, activeProfile());
+      cached = read?.calendar
+        ? { calendar: read.calendar, source: path.relative(root, read.file).replace(/\\/g, "/") }
+        : null;
+      calendarByRoot.set(key, cached);
+    }
+    if (cached) return cached;
+  }
+  return { calendar: settings.calendar, source: "px.calendar" };
 }
 
 /** Schema entry for the folder a file lives in (structure/ambient/root-scope seed). */
@@ -1077,7 +1122,7 @@ function rebuildModNamespaces(): void {
 
 /** Ordered parent-mod roots from <mod>/<configDir>/playset.json, if present. */
 function readPlayset(modPath: string): string[] {
-  const file = path.join(modPath, activeProfile().configDirName, "playset.json");
+  const file = path.join(resolveConfigDir(modPath, activeProfile()), "playset.json");
   try {
     if (!fs.existsSync(file)) return [];
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -1104,6 +1149,7 @@ async function buildIndex(): Promise<void> {
   const tBuild = Date.now();
   const generation = ++scanGeneration;
   clearPathCaches();
+  calendarByRoot.clear();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),
@@ -1431,7 +1477,11 @@ connection.onInitialized(() => {
   // ourselves when the client supports dynamic registration.
   if (!clientOwnFileWatcher && clientWatchedFilesDynamic) {
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
-      watchers: [{ globPattern: "**/*.{txt,yml,gui,mod}" }, { globPattern: "**/metadata.json" }],
+      watchers: [
+        { globPattern: "**/*.{txt,yml,gui,mod}" },
+        { globPattern: "**/metadata.json" },
+        { globPattern: "**/calendar.json" },
+      ],
     });
   }
   // Bundled frequency tables for completion ranking (§C3); fail-soft to empty.
@@ -1546,6 +1596,7 @@ function applyModFileChange(fsPath: string): void {
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
   if (lower.endsWith(".gui")) invalidateGuiDefsCache();
+  if (isCalendarFile(fsPath, activeProfile())) calendarByRoot.clear();
   // Full re-harvest when a mod defines file or a gui file WITH textformatting
   // changed. Not on every .gui: the harvest reads only those out of gui/, and
   // autosave fires this after every GUI editor gesture.
@@ -1586,6 +1637,13 @@ connection.onRequest(eventGraphRequest, (params: EventGraphParams) =>
   computeEventGraph(data, params ?? {}, focusFilter(params?.modRoot))
 );
 
+// The dynasty picker list, or one dynasty's houses and members. The whole
+// character corpus is read once per index revision (see overview/dynastyTree.ts);
+// a profile without a `dynasty` schema kind answers supported: false.
+connection.onRequest(dynastyTreeRequest, (params: DynastyTreeParams | null) =>
+  computeDynastyTree(data, params ?? {}, focusFilter(params?.modRoot))
+);
+
 // What an event editor may offer: the profile's structure table, the schema's
 // reference fields resolved through the index, and the script_docs tokens.
 // Never a hand-written name list.
@@ -1603,6 +1661,26 @@ connection.onRequest(eventValueOptionsRequest, (params: EventValueOptionsParams 
 // event_backgrounds hops. Answering "nothing resolved" is a real answer.
 connection.onRequest(eventBannerRequest, (params: EventBannerParams) =>
   computeEventBanner(data, params?.theme ?? "")
+);
+
+// What a visual creator may offer for one definition kind: the schema entry,
+// the harvested structure keys, the index (options and the mod's own
+// definitions) and the modifier tokens. Never a hand-written field list.
+connection.onRequest(definitionFormRequest, (params: DefinitionFormParams | null) =>
+  computeDefinitionForm(data, schema, params ?? { kind: "" }, focusFilter(params?.modRoot))
+);
+
+// The script sibling of guiSourceEdit: the creators' writes as offsets into the
+// text the host handed over, applied there as one WorkspaceEdit.
+connection.onRequest(definitionEditRequest, (params: DefinitionEditParams | null) =>
+  computeDefinitionEdits(params)
+);
+
+// How the game itself prints a modifier: the profile's format folder, the loc
+// index and the game's own texticon blocks. A profile that names no formats
+// source answers null instead of a made-up label.
+connection.onRequest(modifierFormatsRequest, (params: ModifierFormatsParams | null) =>
+  computeModifierFormats(data, activeProfile().modifierFormats, settings.gamePath, params?.lines)
 );
 
 connection.onRequest(guiTreeRequest, (params: GuiTreeParams) => buildGuiTree(params.text ?? ""));
@@ -1768,12 +1846,65 @@ connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | nu
   );
 });
 
+connection.onRequest(snippetsRequest, (params: SnippetsParams): SnippetsResult => {
+  // Open script documents only; anything else is an empty list, not an error:
+  // a host that offers an "Insert Snippet" command asks from wherever the user
+  // happens to be.
+  const doc = params?.uri ? documents.get(params.uri) : undefined;
+  if (!doc || !isScriptLanguage(doc.languageId) || !params.position) return { snippets: [] };
+  const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+  const { result } = getParse(doc);
+  return {
+    snippets: buildSnippetList(
+      result,
+      doc.offsetAt(params.position),
+      entry?.kind ?? null,
+      activeProfile().skeletons,
+      data.tokens,
+      freqs.tokens
+    ),
+  };
+});
+
 connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] => {
   return data.index
     .lookup(params.key)
     .filter((d) => d.kind === "loc_key")
     .map((d) => ({ file: d.file, line: d.line, source: d.source, value: d.value }));
 });
+
+/**
+ * What paradox/locText resolves a value with: the loc index for the words, the
+ * definition index for the kind a `Get<Something>('name')` chain names, and the
+ * active profile's schema for the loc key that kind's names take. A kind the
+ * schema states nothing for falls back to the bare name inside locText.ts, so
+ * every game answers from its own table with no per-game branch here.
+ */
+function locTextDeps(): LocTextDeps {
+  return {
+    loc: locValue,
+    kindsOf: (name) => [
+      ...new Set(
+        data.index
+          .lookup(name)
+          .filter((d) => d.kind !== "loc_key")
+          .map((d) => d.kind)
+      ),
+    ],
+    patternsOf: (kind) => {
+      const entry = schema.entries.find((e) => e.kind === kind);
+      // The conservative `requiredLoc` first (the pattern nearly every
+      // definition of the kind defines), then the full `locPatterns` set.
+      return [entry?.requiredLoc?.[0], entry?.locPatterns?.[0]].filter((p): p is string => !!p);
+    },
+  };
+}
+
+// A loc value as the PLAYER reads it: markup stripped and the game's own
+// datafunctions resolved through the loc, definition and schema tables.
+connection.onRequest(locTextRequest, (params: LocTextParams | null) =>
+  computeLocText(params?.keys ?? [], locTextDeps())
+);
 
 // ---- language features ----------------------------------------------------------
 
@@ -1845,7 +1976,8 @@ connection.onHover((params) =>
     if (!isScriptLanguage(doc.languageId)) return null;
     const fsPath = URI.parse(doc.uri).fsPath;
     const entry = schemaEntryForFile(fsPath);
-    const dateHover = provideDateHover(settings.calendar, doc, params.position);
+    const { calendar, source } = calendarFor(fsPath);
+    const dateHover = provideDateHover(calendar, doc, params.position, source);
     if (dateHover) return dateHover;
     const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
     if (texture) return texture;
@@ -1932,11 +2064,20 @@ connection.languages.inlayHint.on((params) =>
   indexRead(`inlayHint ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
-    const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+    const fsPath = URI.parse(doc.uri).fsPath;
+    const entry = schemaEntryForFile(fsPath);
     const rootScopes = entry?.rootScopes?.length
       ? new Set(entry.rootScopes.map((s) => s.toLowerCase()))
       : null;
-    return provideInlayHints(data, settings, doc, params.range, rootScopes, entry);
+    return provideInlayHints(
+      data,
+      settings,
+      doc,
+      params.range,
+      rootScopes,
+      entry,
+      calendarFor(fsPath).calendar
+    );
   })
 );
 

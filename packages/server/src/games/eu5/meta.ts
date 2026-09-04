@@ -16,12 +16,16 @@ export const eu5Meta: GameMeta = {
   // EU5 mods carry .metadata/metadata.json (plus a required thumbnail.png);
   // descriptor.mod is at most a vestigial launcher artifact.
   descriptor: "metadata",
-  configDirName: ".eu5modding",
+  configDirName: ".px-toolkit",
+  legacyConfigDirName: ".eu5modding",
   docsFolderName: "Europa Universalis V",
   // EU5's `script_docs` console command writes to Documents/.../docs, not logs/.
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 3450310,
+  // dlcIconDir deliberately absent: no live install has been checked, so the
+  // Workshop panel shows this game's DLC (read from `<gameDir>/dlc/`) with the
+  // folder's own thumbnail.png, and falls back to Steam when there is none.
   eventNamespaces: true,
   scaffolds: EU5_SCAFFOLDS,
   // uiFont and guiTextMetrics deliberately absent: neither the font file nor

@@ -12,13 +12,20 @@ import * as vscode from "vscode";
 export type TabIconName =
   | "gui-editor"
   | "flag-builder"
+  | "coa-designer"
   | "event-graph"
+  | "dynasty-tree"
   | "gui-tree"
   | "event-sim"
   | "workshop"
   | "bbcode-preview"
   | "examples-wiki"
-  | "wiki";
+  | "trait-creator"
+  | "culture-creator"
+  | "tradition-creator"
+  | "legacy-creator"
+  | "wiki"
+  | "credits";
 
 let extensionUri: vscode.Uri | undefined;
 

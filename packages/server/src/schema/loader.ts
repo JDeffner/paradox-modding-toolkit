@@ -6,6 +6,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import { resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { activeProfile } from "../games/active";
 import type { GameProfile } from "../games/profile";
 import type { AmbientScope, SchemaEntry, KeySpec, RefField, SchemaOverlay } from "./types";
@@ -74,7 +75,7 @@ export function loadSchema(modPath: string | string[] | null, log?: (msg: string
   // first, collisions are rare and per-path).
   const roots = modPath === null ? [] : Array.isArray(modPath) ? modPath : [modPath];
   for (const root of roots) {
-    const overlayFile = path.join(root, profile.configDirName, "schema.json");
+    const overlayFile = path.join(resolveConfigDir(root, profile), "schema.json");
     try {
       if (!fs.existsSync(overlayFile)) continue;
       const overlay = JSON.parse(fs.readFileSync(overlayFile, "utf8")) as SchemaOverlay;

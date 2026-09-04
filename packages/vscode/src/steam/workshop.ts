@@ -29,6 +29,7 @@ import { metaFor } from "../meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseDescriptor, readDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { readMetadata } from "@px-lsp/protocol/descriptorMetadata";
+import { migrateConfigDir, resolveConfigDir } from "@px-lsp/protocol/configDir";
 import {
   readWorkshopMeta,
   upsertWorkshopMeta,
@@ -36,12 +37,16 @@ import {
 } from "@px-lsp/protocol/workshopMeta";
 import { explainSteamError } from "./steamErrors";
 import {
+  DEFAULT_LANGUAGE,
   hasListingFiles,
+  moveListing,
   readListingFiles,
   resolveChangeNote,
   resolveWorkshopDir,
+  SIBLING_WORKSHOP_DIR,
   type ChangeNote,
 } from "./workshopFiles";
+import { markdownToBBCode } from "./bbcodeMarkdown";
 import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
 
 export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
@@ -57,15 +62,15 @@ const BRIDGE_SILENCE_MS = 5 * 60_000;
 export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
 /** Resolved px.workshop.dir for `root`: where the listing lives as files. */
-export function workshopDirFor(root: string): string {
+export function workshopDirFor(root: string, meta: GameMeta): string {
   const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.dir");
-  return resolveWorkshopDir(root, setting);
+  return resolveWorkshopDir(root, setting, resolveConfigDir(root, meta));
 }
 
 /** The changenote resolved from px.workshop.changelog, or null. */
-export function changelogNoteFor(root: string, version: string | null): ChangeNote | null {
+export function changelogNoteFor(root: string, meta: GameMeta, version: string | null): ChangeNote | null {
   const setting = vscode.workspace.getConfiguration("px").get<string>("workshop.changelog");
-  return resolveChangeNote(workshopDirFor(root), setting, version);
+  return resolveChangeNote(workshopDirFor(root, meta), setting, version);
 }
 
 export interface PublishInfo {
@@ -77,6 +82,12 @@ export interface PublishInfo {
   description: string | null;
   /** The local per-language translations (workshop.json), keyed by Steam API language code. */
   translations: Record<string, WorkshopTranslation>;
+  /**
+   * Which of those descriptions are Markdown (`ListingFiles.markdown`, the
+   * empty string being the default one). Steam only takes BBCode, so they
+   * convert on the way out; `descriptionBBCode` does that for one of them.
+   */
+  markdown: string[];
   previewPath: string | null;
   /** The mod's own version (descriptor version= / metadata version). */
   version: string | null;
@@ -111,15 +122,20 @@ export function findPreview(root: string, preferred: string | null): string | nu
 export function readPublishInfo(
   root: string,
   meta: GameMeta,
-  workshopDir: string = workshopDirFor(root)
+  workshopDir: string = workshopDirFor(root, meta)
 ): PublishInfo | null {
-  const store = readWorkshopMeta(root, meta.configDirName);
+  const store = readWorkshopMeta(resolveConfigDir(root, meta));
   const files = hasListingFiles(workshopDir) ? readListingFiles(workshopDir) : null;
   const translations: Record<string, WorkshopTranslation> = { ...(store?.translations ?? {}) };
   for (const [lang, t] of Object.entries(files?.translations ?? {})) {
     translations[lang] = { ...translations[lang], ...t };
   }
   const description = files?.description ?? store?.description ?? null;
+  // A description only workshop.json still holds is pre-0.4.0 BBCode,
+  // whatever format its folder would write.
+  const markdown = (files?.markdown ?? []).filter((lang) =>
+    lang === DEFAULT_LANGUAGE ? files?.description != null : files?.translations[lang]?.description != null
+  );
   if (meta.descriptor === "mod") {
     let text: string;
     try {
@@ -139,6 +155,7 @@ export function readPublishInfo(
       publishedId: remote && /^\d+$/.test(remote) ? remote : null,
       description,
       translations,
+      markdown,
       previewPath: findPreview(root, value("picture")),
       version: value("version"),
       supportedVersion: value("supported_version"),
@@ -153,6 +170,7 @@ export function readPublishInfo(
     publishedId: storedId && /^\d+$/.test(storedId) ? storedId : null,
     description: description ?? (typeof md.short_description === "string" ? md.short_description : null),
     translations,
+    markdown,
     previewPath: findPreview(root, null),
     version: typeof md.version === "string" ? md.version : null,
     supportedVersion: typeof md.supported_game_version === "string" ? md.supported_game_version : null,
@@ -169,25 +187,7 @@ export function persistPublishedId(root: string, meta: GameMeta, itemId: string)
     );
     return;
   }
-  upsertWorkshopMeta(root, meta.configDirName, { publishedFileId: itemId });
-}
-
-/**
- * Copy the mod into a staging folder for the upload, leaving out dot entries
- * (`.git`, `.vscode`, the toolkit's own config dir) at every level - except
- * `.metadata`, which IS the descriptor for the newer games.
- */
-export function stageContent(root: string, staging: string, exclude: string[] = []): void {
-  fs.rmSync(staging, { recursive: true, force: true });
-  const skip = exclude.map((p) => path.resolve(p).toLowerCase());
-  fs.cpSync(root, staging, {
-    recursive: true,
-    filter: (src) => {
-      if (skip.includes(path.resolve(src).toLowerCase())) return false;
-      const base = path.basename(src);
-      return !base.startsWith(".") || base === ".metadata" || src === root;
-    },
-  });
+  upsertWorkshopMeta(migrateConfigDir(root, meta), { publishedFileId: itemId });
 }
 
 /**
@@ -209,19 +209,27 @@ export function lastCommitSubject(root: string): Promise<string> {
   });
 }
 
+/** One description as Steam takes it: BBCode, converted when the file is Markdown. */
+export function descriptionBBCode(info: PublishInfo, language: string, text: string): string {
+  return info.markdown.includes(language) ? markdownToBBCode(text) : text;
+}
+
 /**
  * The translation submits of an upload: one per language that has any text.
  * No changenote on them - one upload should read as one change on the item's
  * Change Notes tab, not one entry per language.
  */
-export function translationSubmits(translations: Record<string, WorkshopTranslation>): SubmitSpec[] {
-  return Object.entries(translations)
+export function translationSubmits(info: PublishInfo): SubmitSpec[] {
+  return Object.entries(info.translations)
     .filter(([, t]) => (t.title ?? "").trim() !== "" || (t.description ?? "").trim() !== "")
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([language, t]) => ({
       language,
       title: (t.title ?? "").trim() !== "" ? t.title : undefined,
-      description: (t.description ?? "").trim() !== "" ? t.description : undefined,
+      description:
+        (t.description ?? "").trim() !== ""
+          ? descriptionBBCode(info, language, t.description as string)
+          : undefined,
     }));
 }
 
@@ -304,6 +312,11 @@ export function workshopUrl(itemId: string): string {
   return `https://steamcommunity.com/sharedfiles/filedetails/?id=${itemId}`;
 }
 
+/** The same page inside the Steam client (Steam browser protocol). */
+export function workshopSteamUrl(itemId: string): string {
+  return `steam://url/CommunityFilePage/${itemId}`;
+}
+
 export function friendlyError(e: unknown, meta: GameMeta): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("Steam init failed")) {
@@ -312,10 +325,9 @@ export function friendlyError(e: unknown, meta: GameMeta): string {
       `Steam must be running and logged in to an account that owns ${meta.name}.`
     );
   }
-  // Steam's EResult phrases are accurate but bare ("limit exceeded"); say
-  // what the phrase usually means for a Workshop upload.
-  const hint = explainSteamError(msg);
-  return hint ? `${msg} (${hint})` : msg;
+  // steamwand names the raw code ("SubmitItemUpdate failed:
+  // k_EResultAccessDenied"); say what it means, code kept for support.
+  return explainSteamError(msg) ?? msg;
 }
 
 export function registerWorkshop(
@@ -341,6 +353,61 @@ export function registerWorkshop(
         return;
       }
       void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(info.publishedId)));
+    }),
+    vscode.commands.registerCommand("px.moveWorkshopListing", async () => {
+      const cfg = deps.cfg();
+      const meta = metaFor(cfg.gameId);
+      const root = activeRoot();
+      if (!root) {
+        void vscode.window.showWarningMessage("Paradox Modding Toolkit: no mod is focused.");
+        return;
+      }
+      const current = workshopDirFor(root, meta);
+      const inMod = path.join(resolveConfigDir(root, meta), "workshop");
+      const sibling = path.resolve(root, SIBLING_WORKSHOP_DIR);
+      const isInMod = path.resolve(current).toLowerCase() === inMod.toLowerCase();
+      type Item = vscode.QuickPickItem & { to: string };
+      const pick = await vscode.window.showQuickPick<Item>(
+        [
+          {
+            label: `Into the mod: ${meta.configDirName}/workshop`,
+            description: isInMod ? "already there" : undefined,
+            detail: "Everything in one folder; toolkit uploads leave it out.",
+            to: inMod,
+          },
+          {
+            label: "Next to the mod: ../workshop",
+            description: !isInMod && path.resolve(current) === sibling ? "already there" : undefined,
+            detail: `The mod-projects layout: ${sibling}`,
+            to: sibling,
+          },
+        ].filter((i) => i.description === undefined),
+        { title: "Move Workshop Listing", placeHolder: `Now at ${current}` }
+      );
+      if (!pick) return;
+      const info = readPublishInfo(root, meta, current);
+      try {
+        moveListing(current, pick.to, {
+          description: info?.description ?? "",
+          translations: info?.translations ?? {},
+        });
+      } catch (e) {
+        void vscode.window.showErrorMessage(
+          `Paradox Modding Toolkit: ${e instanceof Error ? e.message : String(e)}`
+        );
+        return;
+      }
+      // Both targets are what an empty setting resolves to, so an explicit
+      // override would only point at the old place now.
+      const setting = vscode.workspace.getConfiguration("px");
+      if ((setting.get<string>("workshop.dir") ?? "").trim() !== "") {
+        await setting.update("workshop.dir", undefined, vscode.ConfigurationTarget.Workspace);
+        await setting.update("workshop.dir", undefined, vscode.ConfigurationTarget.Global);
+      }
+      deps.log(`workshop: listing moved ${current} -> ${pick.to}`);
+      void vscode.window.showInformationMessage(
+        `Paradox Modding Toolkit: Workshop listing moved to ${pick.to}.`
+      );
     })
   );
 }

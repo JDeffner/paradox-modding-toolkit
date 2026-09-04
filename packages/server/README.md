@@ -291,7 +291,7 @@ The EU5 table is a lossy projection of community CWT rules and is only as
 right as those rules are. Its blast radius is bounded on purpose: a minimal
 hand-checked set of reference fields and **zero** required-localization
 patterns, so a wrong entry costs you navigation, never a false diagnostic. Fix
-gaps locally with a `<mod>/.eu5modding/schema.json` overlay, and please report
+gaps locally with a `<mod>/.px-toolkit/schema.json` overlay, and please report
 them. Attribution and license texts: `THIRD-PARTY-NOTICES.md`, shipped in the
 tarball next to this README.
 

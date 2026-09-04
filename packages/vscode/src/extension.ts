@@ -18,15 +18,24 @@ import {
 } from "vscode-languageclient/node";
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { findStrayCalendar } from "./calendarSettingsCheck";
+import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { flagBuilderSupported, guiEditorSupported, metaFor } from "./meta";
+import {
+  coaDesignerSupported,
+  creatorSupported,
+  flagBuilderSupported,
+  guiEditorSupported,
+  metaFor,
+} from "./meta";
+import { GAME_METAS } from "./gameDetect";
 import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
 import {
   editLocalizationCommand,
+  locTargetFile,
   openLocalizationSideBySide,
   replaceLocLineValue,
   upsertNewModLoc,
@@ -44,18 +53,27 @@ import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
-import { WikiPanel, IMAGE_GUIDELINES_ARTICLE } from "./webviews/wiki/panel";
+import { WikiPanel, CREDITS_ARTICLE, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
-import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
+import { declareCalendarCommand, generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
+import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
+import { TraditionCreatorPanel } from "./webviews/traditionCreator/panel";
+import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
+import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
+import { coaTargetArg } from "./webviews/flagBuilder/target";
+import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
+import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
+import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
-import type { FlagRoot } from "./webviews/flagBuilder/database";
+import { migrateConfigDir } from "@px-lsp/protocol/configDir";
+import { hasDesignerFiles, type FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
-import { modReportCommand } from "./modReport";
+import { buildModReport, modReportCommand } from "./modReport";
 import { generateTigerConfCommand } from "./tiger/conf";
 import { ErrorLogWatcher } from "./errorLog";
 import { launchGame, registerGameRun } from "./gameRun";
@@ -66,7 +84,8 @@ import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
-import { createModCommand } from "./modProjects/command";
+import { insertSnippetCommand } from "./insertSnippet";
+import { createModCommand, moveModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
 import { registerBBCodeSupport } from "./bbcodeSupport";
@@ -76,6 +95,9 @@ import {
   allClientCommandIds,
   configChangedNotification,
   indexStatsRequest,
+  locTextRequest,
+  type LocTextParams,
+  type LocTextResult,
   lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
@@ -91,14 +113,25 @@ import {
   eventBannerRequest,
   eventDetailRequest,
   eventGraphRequest,
+  definitionEditRequest,
+  definitionFormRequest,
+  modifierFormatsRequest,
+  type ModifierFormatsParams,
+  type ModifierFormatsResult,
+  type DefinitionEditParams,
+  type DefinitionEditResult,
+  type DefinitionForm,
+  type DefinitionFormParams,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
+  dynastyTreeRequest,
   eventVocabularyRequest,
   guiTreeRequest,
   guiLayoutRequest,
+  type DynastyTreeResult,
   type EventDetail,
   type EventBannerParams,
   type EventBannerResult,
@@ -196,8 +229,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.window.showInformationMessage(
       "EU5 support is community-sourced (folder mappings imported from cwtools-eu5-config) and not yet " +
         "verified against a live install. Wrong or missing mappings degrade navigation, never diagnostics. " +
-        "Please report gaps; a .eu5modding/schema.json overlay in your mod fixes them immediately."
+        "Please report gaps; a .px-toolkit/schema.json overlay in your mod fixes them immediately."
     );
+  }
+  // Once per minor version: the release is a beta, and the editors that write
+  // files or publish to Steam are the young parts. Keyed on major.minor so a
+  // patch release does not repeat it.
+  const minor = String(context.extension.packageJSON.version).split(".").slice(0, 2).join(".");
+  const betaKey = `px.betaNotice.${minor}`;
+  if (cfg.isCk3Workspace && !context.globalState.get<boolean>(betaKey)) {
+    void context.globalState.update(betaKey, true);
+    void vscode.window
+      .showInformationMessage(
+        "Paradox Modding Toolkit is currently in beta. The content creators (traits, legacies, cultures, " +
+          "dynasties, coats of arms, traditions) and the Steam Workshop upload are new this update. " +
+          "Check what they write before you rely on it, and use git versioning! Feedback of every kind helps!",
+        "Join the Discord"
+      )
+      .then((choice) => {
+        if (choice === "Join the Discord") void vscode.commands.executeCommand("px.openDiscord");
+      });
   }
   log(
     `activated. gamePath=${cfg.gamePath ?? "(none)"} logsPath=${cfg.logsPath ?? "(none)"} ` +
@@ -235,28 +286,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // A px.calendar declared in a mod's (or mod project's) own .vscode while the
   // OPENED folder has none: VS Code ignores that file, so every calendar
   // feature silently does nothing. The setting is window-scoped; say so once
-  // per workspace and offer to adopt the calendar where it counts.
+  // per workspace and offer to move the calendar into the mod itself
+  // (`.px-toolkit/calendar.json`), which is read wherever the mod is opened.
   if (cfg.isCk3Workspace && !cfg.calendar && !context.workspaceState.get<boolean>("px.strayCalendarNotice")) {
     const stray = findStrayCalendar(
       [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods],
-      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+      metaFor(cfg.gameId)
     );
     if (stray) {
       void context.workspaceState.update("px.strayCalendarNotice", true);
-      const actions = stray.calendar ? ["Use This Calendar", "Open Settings File"] : ["Open Settings File"];
+      const actions = stray.calendar ? ["Move Into Mod", "Open Settings File"] : ["Open Settings File"];
       void vscode.window
         .showWarningMessage(
           `Paradox Modding Toolkit: ${path.basename(path.dirname(path.dirname(stray.file)))} declares ` +
             "px.calendar in its own .vscode/settings.json, but VS Code only reads that file when the " +
-            "folder itself is opened. Put the calendar in the settings of the folder you open " +
-            "(or the .code-workspace) to activate the date preview.",
+            `folder itself is opened. Declare the calendar in the mod instead: ${metaFor(cfg.gameId).configDirName}/calendar.json ` +
+            "travels with the mod and is read wherever it is opened.",
           ...actions
         )
         .then((choice) => {
-          if (choice === "Use This Calendar") {
-            void vscode.workspace
-              .getConfiguration("px")
-              .update("calendar", stray.calendar, vscode.ConfigurationTarget.Workspace);
+          if (choice === "Move Into Mod" && stray.calendar) {
+            const file = writeCalendarFile(stray.modRoot, metaFor(cfg.gameId), stray.calendar);
+            notifyModFileChanged(file);
+            void vscode.window.showTextDocument(vscode.Uri.file(file));
           } else if (choice === "Open Settings File") {
             void vscode.window.showTextDocument(vscode.Uri.file(stray.file));
           }
@@ -302,6 +355,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       "px.flagBuilderSupported",
       flagBuilderSupported(cfg.gameId)
     );
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.coaDesignerSupported",
+      coaDesignerSupported(cfg.gameId)
+    );
+    // One key per creator kind ANY profile lists, set to whether the active
+    // game lists it. Walking the union rather than the active game's rows is
+    // what clears a key again when the workspace switches game; setting only
+    // the active ones would leave a CK3 palette entry visible in a Vic3
+    // workspace for the rest of the session.
+    const activeCreators = new Set((metaFor(cfg.gameId).creators ?? []).map((c) => c.kind));
+    const allCreators = new Set(
+      Object.values(GAME_METAS).flatMap((meta) => (meta.creators ?? []).map((c) => c.kind))
+    );
+    for (const kind of allCreators) {
+      void vscode.commands.executeCommand("setContext", `px.creator.${kind}`, activeCreators.has(kind));
+    }
     statusBar.update({
       tokens: lastServerStatus.tokens,
       tokensFromScriptDocs: lastServerStatus.tokensFromScriptDocs,
@@ -318,10 +388,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   updateStatus();
 
   // Baselines are per mod (multi-mod workspaces): each run suppresses the
-  // baseline of the mod it validates, not one global file. The config dir is
-  // the active game's (.ck3modding / .vic3modding / …).
+  // baseline of the mod it validates, not one global file.
   const baselineFileFor = (root: string | null) =>
-    root ? path.join(root, metaFor(cfg.gameId).configDirName, "tiger-baseline.json") : null;
+    root ? path.join(migrateConfigDir(root, metaFor(cfg.gameId)), "tiger-baseline.json") : null;
   let tigerUnusedOnce = false;
   const tigerExtraArgs = (modRoot: string): string[] => {
     const args: string[] = [];
@@ -348,6 +417,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return false;
   };
+  // Same gate, same wording, for every door into the Flag Builder: opening it
+  // and creating a coat of arms are the same feature.
+  const requireFlagBuilder = (): boolean => {
+    if (flagBuilderSupported(cfg.gameId)) return true;
+    void vscode.window.showInformationMessage(
+      `Paradox Modding Toolkit: the Flag Builder has no coat-of-arms format for ${metaFor(cfg.gameId).name} yet.`
+    );
+    return false;
+  };
+  // What both coat-of-arms panels need: game first, then dependency mods, then
+  // the workspace's own mods, which is the load order, so a mod's arms of the
+  // same name win like they do in the game.
+  const coaPanelOptions = (): {
+    meta: ReturnType<typeof metaFor>;
+    cfg: PxConfig;
+    roots: FlagRoot[];
+    mods: { label: string; path: string }[];
+    gameMissing: boolean;
+  } => {
+    const roots: FlagRoot[] = [];
+    if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
+    for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
+      if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+    }
+    const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+      .filter((p, i, all) => all.indexOf(p) === i)
+      .map((p) => ({ label: readModName(p), path: p }));
+    return {
+      meta: metaFor(cfg.gameId),
+      cfg: cfgForActive(),
+      roots,
+      mods,
+      gameMissing: cfg.gamePath === null,
+    };
+  };
+  /** The Coat of Arms Designer names its preview frames after heritages. */
+  const coaFrameLocText = (params: LocTextParams): Promise<LocTextResult> =>
+    lc.sendRequest<LocTextResult>(locTextRequest, params);
+  const coaDesignerAvailable = (roots: FlagRoot[]): boolean =>
+    coaDesignerSupported(cfg.gameId) && hasDesignerFiles(roots, metaFor(cfg.gameId).stageRoots);
+
   context.subscriptions.push(tiger);
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => tiger.onDidSaveDocument(doc)));
 
@@ -507,13 +617,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log(`watching ${watchRoots.length} root(s) for mod file changes`);
     for (const root of watchRoots) {
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
-      const w = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{txt,yml,gui,mod}")
-      );
-      w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
-      modWatchers.push(w);
+      // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
+      // which the server caches per mod until the file changes.
+      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/calendar.json"]) {
+        const w = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(root), glob)
+        );
+        w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
+        modWatchers.push(w);
+      }
     }
   };
   wireModWatcher();
@@ -592,6 +706,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       output.show(true);
     }),
     vscode.commands.registerCommand("px.runTiger", () => tiger.run(true)),
+    vscode.commands.registerCommand("px.insertSnippet", () =>
+      insertSnippetCommand((method, params) => lc.sendRequest(method, params))
+    ),
     // Target of the "N references" hover link: open the references peek for
     // the hovered site (the LSP reference provider supplies the locations).
     vscode.commands.registerCommand(
@@ -615,7 +732,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
-    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
+    vscode.commands.registerCommand("px.declareCalendar", () => declareCalendarCommand(cfgForActive())),
+    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive())),
     vscode.commands.registerCommand("px.generateCalendarLoc", () =>
       generateCalendarLocCommand(cfgForActive())
     ),
@@ -631,7 +749,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The guidelines are one page of the Wiki now, so the palette entry opens
     // the hub there instead of a panel of its own.
     vscode.commands.registerCommand("px.imageGuidelines", () =>
-      WikiPanel.show(context, metaFor(cfg.gameId), IMAGE_GUIDELINES_ARTICLE)
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), IMAGE_GUIDELINES_ARTICLE)
     ),
     DdsPreviewProvider.register(context)
   );
@@ -644,6 +762,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(errorLog);
   const focus = new FocusMod(context.workspaceState, () => cfg);
   const views = registerPxViews(context, lc, () => cfg, focus);
+  // Hoisted: the Wiki commands above are registered before `views` exists, but
+  // they only call this once the user opens the panel.
+  function wikiDeps(): WikiDeps {
+    return { modReport: () => buildModReport(lc, views.focusRoot()) };
+  }
   registerDashboardView(context, {
     getCfg: () => cfg,
     focus,
@@ -658,7 +781,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The toolkit's community server: the Project panel's Info group and the
     // palette both land here. Permanent invite, so it never needs a refresh.
     vscode.commands.registerCommand("px.openDiscord", () =>
-      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/ESstwqycug"))
+      vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/DfEJ2H9hj4"))
     ),
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
@@ -853,8 +976,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.showEventGraph", () => {
       EventGraphPanel.show(context, fetchGraph, seedGraphParams(cfg), graphActions);
     }),
-    vscode.commands.registerCommand("px.openWiki", () => {
-      WikiPanel.show(context, metaFor(cfg.gameId));
+    // The argument is optional: the palette entry opens the hub, the Problems
+    // view's "Explain Code" names the diagnostic article it wants.
+    vscode.commands.registerCommand("px.openWiki", (arg?: unknown) => {
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), typeof arg === "string" && arg ? arg : null);
+    }),
+    // The Credits are a wiki page; the Project panel's Info row keeps the command.
+    vscode.commands.registerCommand("px.openCredits", () => {
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), CREDITS_ARTICLE);
     }),
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.
@@ -952,30 +1081,190 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         metaFor(cfg.gameId)
       );
     }),
-    vscode.commands.registerCommand("px.openFlagBuilder", () => {
+    // The argument is optional: the palette entry and the Project panel open a
+    // blank form, an "edit this trait" caller names the definition.
+    vscode.commands.registerCommand("px.createTrait", (arg?: unknown) => {
       const meta = metaFor(cfg.gameId);
-      if (!flagBuilderSupported(cfg.gameId)) {
+      if (!creatorSupported(cfg.gameId, "trait")) {
         void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: the Flag Builder supports Victoria 3 and Europa Universalis V; this workspace is ${meta.name}.`
+          `Paradox Modding Toolkit: no Trait Creator has been built for ${meta.name} yet.`
         );
         return;
       }
-      // Game first, then dependency mods, then the workspace's own mods: the
-      // load order, so a mod's flag of the same name wins like in the game.
-      const roots: FlagRoot[] = [];
-      if (cfg.gamePath) roots.push({ label: "game", path: cfg.gamePath });
-      for (const p of [...cfg.parentPaths, ...cfg.workspaceMods, ...(cfg.modPath ? [cfg.modPath] : [])]) {
-        if (!roots.some((r) => r.path === p)) roots.push({ label: readModName(p), path: p });
+      const named = definitionName(arg);
+      TraitCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+        },
+        lookupLoc,
+        ...(named ? { name: named } : {}),
+      });
+    }),
+    // Same shape as px.createTrait: the palette entry and the Project panel
+    // open a blank form, and a caller that means one tradition names it (the
+    // Culture Creator's tradition rows are the caller this is for).
+    vscode.commands.registerCommand("px.createTradition", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      if (!creatorSupported(cfg.gameId, "culture_tradition")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Tradition Creator has been built for ${meta.name} yet.`
+        );
+        return;
+      }
+      const named = definitionName(arg);
+      TraditionCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
+        },
+        lookupLoc,
+        ...(named ? { name: named } : {}),
+      });
+    }),
+    // `arg` is the optional target ({ name, label }): the Dynasty Tree and
+    // "New Coat of Arms…" open the panel straight on the arms they mean. Which
+    // panel that is comes from the profile plus what is on disk: CK3 gets the
+    // designer rebuilt from its own designer files, every other game the Flag
+    // Builder, and so does CK3 when those files are not there to read.
+    vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
+      if (!requireFlagBuilder()) return;
+      const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
+      if (coaDesignerAvailable(options.roots))
+        CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
+      else FlagBuilderPanel.show(context, options);
+    }),
+    // The designer by name, for a keybinding or another extension that wants
+    // it whatever the routing above would pick.
+    vscode.commands.registerCommand("px.openCoaDesigner", (arg?: unknown) => {
+      const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
+      if (!coaDesignerAvailable(options.roots)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${metaFor(cfg.gameId).name} ships no Coat of Arms designer files to build the designer from.`
+        );
+        return;
+      }
+      CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
+    }),
+    vscode.commands.registerCommand("px.createCoatOfArms", () => {
+      if (!requireFlagBuilder()) return;
+      void createCoatOfArmsCommand(lc, views.focusRoot());
+    }),
+    // The argument is optional: the palette entry opens the picker, a deep link
+    // names the dynasty it wants.
+    vscode.commands.registerCommand("px.openDynastyTree", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      // Same host-side gate as the other creators: the profile lists the ones
+      // built against that game's own files. The server's `supported: false`
+      // still covers a client that gets here another way.
+      if (!creatorSupported(cfg.gameId, "dynasty_tree")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Dynasty Tree has been built for ${meta.name} yet.`
+        );
+        return;
       }
       const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)
         .map((p) => ({ label: readModName(p), path: p }));
-      FlagBuilderPanel.show(context, {
-        meta,
-        roots,
-        mods,
-        gameMissing: cfg.gamePath === null,
-      });
+      // Nothing to write into, or nothing to read: say which, in the words the
+      // setup flow uses, instead of opening a panel that cannot do anything.
+      const problems: string[] = [];
+      if (mods.length === 0)
+        problems.push(
+          "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
+        );
+      if (!cfg.gamePath)
+        problems.push(
+          `No game folder set, so only your own dynasties are listed. Set px.gamePath to .../steamapps/common/${meta.name}/game`
+        );
+      DynastyTreePanel.show(
+        context,
+        {
+          fetchTree: (params) => lc.sendRequest<DynastyTreeResult>(dynastyTreeRequest, params),
+          fetchOptions: (params) =>
+            lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+          locTarget: (key) => locTargetFile(cfg, lookupLoc, key),
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          lookupLoc,
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
+        },
+        {
+          cfg: cfgForActive(),
+          meta,
+          mods,
+          modRoot: views.focusRoot(),
+          setupProblem: problems.join(" ") || undefined,
+        },
+        typeof arg === "object" && arg !== null && typeof (arg as { dynasty?: unknown }).dynasty === "string"
+          ? (arg as { dynasty: string }).dynasty
+          : undefined
+      );
+    }),
+    // A creator row of the Create group. The profile decides which games have
+    // one (GameMeta.creators); a game with no culture folder gets an honest
+    // "nothing to write" from the form request rather than an empty panel.
+    vscode.commands.registerCommand("px.createCulture", (arg?: unknown) => {
+      const active = cfgForActive();
+      if (!metaFor(active.gameId).creators?.some((c) => c.kind === "culture")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the Culture Creator is not built for ${metaFor(active.gameId).name} yet.`
+        );
+        return;
+      }
+      CultureCreatorPanel.show(
+        context,
+        active,
+        {
+          fetchForm: (params: DefinitionFormParams) =>
+            lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          applyEdits: (params: DefinitionEditParams) =>
+            lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          lookupLoc,
+        },
+        definitionName(arg)
+      );
+    }),
+    // The optional argument opens an existing track (a Project-panel row, a
+    // future context menu); with none the panel starts on a fresh one.
+    vscode.commands.registerCommand("px.createDynastyLegacy", (arg?: unknown) => {
+      const active = cfgForActive();
+      const meta = metaFor(active.gameId);
+      if (!creatorSupported(active.gameId, "dynasty_legacy")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: ${meta.name} has no dynasty legacies, so there is no legacy creator for it.`
+        );
+        return;
+      }
+      LegacyCreatorPanel.show(
+        context,
+        {
+          cfg: active,
+          meta,
+          actions: {
+            fetchForm: (params: DefinitionFormParams) =>
+              lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+            applyEdits: (params: DefinitionEditParams) =>
+              lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+            fetchModifierFormats: (params: ModifierFormatsParams) =>
+              lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+            lookupLoc,
+          },
+        },
+        definitionName(arg)
+      );
     }),
     vscode.commands.registerCommand("px.modReport", () => modReportCommand(lc, views.focusRoot())),
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
@@ -1048,6 +1337,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       WorkshopPanel.show(context, {
+        gamePath: cfg.gamePath,
         meta: metaFor(cfg.gameId),
         mods,
         active: views.focusRoot() ?? cfg.modPath,
@@ -1066,7 +1356,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.newContent", () =>
       newContentCommand(cfgForActive(), notifyModFileChanged)
     ),
-    vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log))
+    vscode.commands.registerCommand("px.createMod", () => createModCommand(cfg, log)),
+    vscode.commands.registerCommand("px.moveMod", () => moveModCommand(cfgForActive(), log))
   );
   registerGameRun(context, cfgForActive, errorLog);
 
@@ -1133,6 +1424,15 @@ function seedGraphParams(cfg: PxConfig): EventGraphParams {
   }
   const ns = /(?:^|\n)\s*namespace\s*=\s*([A-Za-z0-9_-]+)/.exec(editor.document.getText());
   return scoped(ns ? { namespace: ns[1] } : {});
+}
+
+/** The definition a creator command was opened on, or nothing. The argument
+ *  comes off a command link or a panel row, so it is validated, not trusted. */
+function definitionName(arg: unknown): string | undefined {
+  if (typeof arg === "string") return /^[A-Za-z_][\w.-]*$/.test(arg) ? arg : undefined;
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name } = arg as { name?: unknown };
+  return typeof name === "string" && /^[A-Za-z_][\w.-]*$/.test(name) ? name : undefined;
 }
 
 /** The article a `px.showExamplesWiki` argument names, or nothing. The argument

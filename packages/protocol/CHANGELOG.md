@@ -6,6 +6,46 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## 0.2.1
+
+Ships with the toolkit's 0.4.0 release.
+
+- `protocol`: `paradox/locText` (`LocTextParams`, `LocTextResult`,
+  `LocTextValue`) — a localization value rendered to plain text, with `raw`,
+  `text` and `resolved` per key; a key the loc index cannot find is absent.
+- `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`);
+  `lines` on `ModifierFormatsParams` / `ModifierFormatsResult` (loc keys
+  answered as the same word-or-texticon parts a prefix is).
+- `protocol`: `source` on `OverviewDef`, `conditions` on `DefinitionForm`,
+  `DEFINITION_FORM_MAX_EXAMPLE`; `dna` and `skills` on `DynastyCharacter`,
+  `DYNASTY_SKILLS`.
+- `protocol`: `paradox/modifierFormats` (`ModifierFormatsParams`,
+  `ModifierFormatsResult`, `ModifierFormat`, `FormatPart`); `example` on
+  `DefinitionFormKey`, `label` on `EventVocabularyItem` and `OverviewDef`.
+- `protocol`: `paradox/definitionForm` and `paradox/definitionEdit`, the wire
+  pair the visual content creators are built on. The form carries two optional
+  fields: `group` on an option item (the family a definition belongs to when
+  one folder holds several) and `sampled` on a form key (the values the game's
+  own definitions write for a key no index can answer), capped by the new
+  `DEFINITION_FORM_MAX_SAMPLED`. Both are additive; a client that ignores them
+  behaves as before. Documented in docs/PROTOCOL.md; `paradox/guiSourceEdit` is
+  unchanged.
+- `paradox/dynastyTree`: `DynastyTreeParams` -> `DynastyTreeResult`, with
+  `DynastySummary`, `DynastyHouse` and `DynastyCharacter`. Documented in
+  `docs/PROTOCOL.md`.
+
+- `calendarFile`: `readCalendarFile` / `writeCalendarFile` / `isCalendarFile`
+  / `calendarFilePath` for the per-mod display calendar at
+  `<mod>/.px-toolkit/calendar.json` (the JSON form of `CalendarSetting`,
+  sanitized on read; an unusable file is told apart from a missing one).
+- `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
+  `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
+  name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path
+  instead of a root plus a dir name.
+- `EventGraphParams.connectedOnly` (default true): definitions with no edge
+  are left out of `paradox/eventGraph` before their cards are read; `root`
+  always stays. Send `false` for the whole namespace.
+
 ## 0.2.0
 
 Ships with the toolkit's 0.3.5 pre-release, ahead of 0.4.0.

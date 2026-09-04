@@ -30,7 +30,7 @@ export interface TranslationModOptions {
   gameShortName: string;
   /** The game's tiger validator binary, or null when it has none (EU5). */
   tigerName: string | null;
-  /** Per-game config dir (".ck3modding") the playset overlay goes into. */
+  /** The toolkit config dir (".px-toolkit") the playset overlay goes into. */
   configDirName: string;
   /** Which descriptor the game reads, which is the one the new mod gets. */
   descriptorKind: "mod" | "metadata";

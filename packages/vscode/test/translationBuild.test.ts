@@ -23,7 +23,7 @@ function build(
     gameName: "Crusader Kings III",
     gameShortName: "CK3",
     tigerName: "ck3-tiger",
-    configDirName: ".ck3modding",
+    configDirName: ".px-toolkit",
     descriptorKind: "mod",
     sourceName: "Big Mod",
     supportedVersion: "1.19.*",
@@ -86,7 +86,7 @@ describe("buildTranslationMod", () => {
   });
 
   it("writes a relative playset so the source mod indexes when opened alone", () => {
-    const playset = JSON.parse(byPath.get(".ck3modding/playset.json")!);
+    const playset = JSON.parse(byPath.get(".px-toolkit/playset.json")!);
     expect(playset.parents).toEqual(["../big_mod"]);
   });
 
@@ -108,7 +108,7 @@ describe("buildTranslationMod, metadata-descriptor game", () => {
     gameName: "Victoria 3",
     gameShortName: "Vic3",
     tigerName: "vic3-tiger",
-    configDirName: ".vic3modding",
+    configDirName: ".px-toolkit",
     descriptorKind: "metadata",
     sourceId: "com.github.example.Big-Mod",
     supportedVersion: "1.13.*",
@@ -152,6 +152,6 @@ describe("buildTranslationMod, metadata-descriptor game", () => {
 
   it("loc files and playset are unchanged by the descriptor convention", () => {
     expect(byPath.has("localization/german/replace/big_l_german.yml")).toBe(true);
-    expect(JSON.parse(byPath.get(".vic3modding/playset.json")!).parents).toEqual(["../big_mod"]);
+    expect(JSON.parse(byPath.get(".px-toolkit/playset.json")!).parents).toEqual(["../big_mod"]);
   });
 });

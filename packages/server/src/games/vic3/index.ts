@@ -5,11 +5,14 @@
  * (markdown format). No wiki fallback and no structures layer, see below.
  */
 import type { GameProfile } from "../profile";
+import type { SkeletonData } from "../../schema/skeletons";
 import { vic3Meta } from "./meta";
 import { VIC3_BLOCK_REF_FIELDS, VIC3_PREFIX_REFS, VIC3_REF_FIELDS, VIC3_SCHEMA } from "./schema";
 import { VIC3_STRUCTURES, VIC3_STRUCTURE_SOURCES } from "./structures";
 import { VIC3_SAVE_SCHEMA } from "./saveSchema";
 import GUI_SCHEMA from "../../../data/vic3/guiSchema.json";
+// Definition skeletons measured over the vanilla tree (scripts/build-skeletons.ts).
+import SKELETONS from "../../../data/vic3/skeletons.json";
 
 export const vic3Profile: GameProfile = {
   ...vic3Meta,
@@ -18,6 +21,7 @@ export const vic3Profile: GameProfile = {
   prefixRefs: VIC3_PREFIX_REFS,
   blockRefFields: VIC3_BLOCK_REF_FIELDS,
   guiSchema: GUI_SCHEMA,
+  skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   // guiTextMetrics live on the meta (the client reads them too, for the GUI
   // editor gate and its canvas line height).
   // Vic3 keeps an authored size on an EMPTY container (px_probe_c C5: the

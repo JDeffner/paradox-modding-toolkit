@@ -5,6 +5,12 @@
  * through the bridge. The app never touches the disk or Steam itself.
  */
 import type { ItemDetails, WorkshopVisibility } from "../../steam/jobs";
+/** One pre-upload finding. Declared here, not in steam/preflight.ts, so the
+ * DOM-only webview typecheck never pulls Node types in through that module. */
+export interface PreflightCheck {
+  level: "error" | "warn";
+  message: string;
+}
 
 /**
  * One language's local draft. Structurally the protocol's WorkshopTranslation
@@ -20,6 +26,26 @@ export interface TranslationDraft {
 export interface ModChoice {
   label: string;
   path: string;
+}
+
+/**
+ * One DLC the grid offers as a requirement. Read from the game install when
+ * the game path is known (which leaves Chapter bundles and the Subscription
+ * out), else from Steam, which has no icons.
+ */
+export interface DlcChoice {
+  steamId: number;
+  name: string;
+  /** Webview URI of the decoded icon, or null when there is none to show. */
+  iconUri: string | null;
+}
+
+/** A changelog the mod already has, offered as the changenote source. */
+export interface ChangelogCandidate {
+  path: string;
+  kind: "file" | "folder";
+  /** True when px.workshop.changelog already points at it. */
+  current: boolean;
 }
 
 export interface SteamLanguage {
@@ -51,18 +77,57 @@ export interface WorkshopModInfo {
   changeNoteSuggestion: string;
   /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
   changelogNote: { text: string; source: string } | null;
-  /** Where the changelog lookup pointed (resolved px.workshop.changelog). */
-  changelogPath: string;
+  /** Where the changelog lookup pointed (resolved px.workshop.changelog),
+   * relative to the workshop folder ("changelog", "CHANGELOG.md"). */
+  changelogDisplay: string;
+  /** What stands at that path; null when nothing does (which reads differently from a missing entry). */
+  changelogKind: "file" | "folder" | null;
+  /** Changelogs found in the mod or the workshop folder, to point the setting at. */
+  changelogCandidates: ChangelogCandidate[];
   /** The mod's own version (the next update's) and the supported game version. */
   version: string | null;
   supportedVersion: string | null;
   /** Resolved px.workshop.dir - where the listing lives as files. */
   workshopDir: string;
+  /** True when px.workshop.dir is set, false for the default folder inside the mod. */
+  workshopDirCustom: boolean;
   /** True when that folder exists: it is then the canonical listing store. */
   filesPresent: boolean;
+  /**
+   * Which descriptions the listing folder keeps as Markdown: the empty string
+   * for the default one, else the Steam language code. The panel converts
+   * those to BBCode before previewing, so the preview is what Steam gets.
+   */
+  markdown: string[];
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];
+  /** Steam names of the languages the game itself ships localization for (english excluded). */
+  gameLanguages: string[];
+  /** What would go wrong on upload, from the local files alone. */
+  checks: PreflightCheck[];
+  /** Extra previews from `<workshopDir>/previews/` (null = no such folder, Steam's gallery is left alone). */
+  previews: { dir: string; images: { name: string; uri: string }[]; videos: string[] } | null;
+  /** Required DLC and items from `<workshopDir>/dependencies.json` (null = never set, Steam's are left alone). */
+  dependencies: { apps: number[]; items: string[] } | null;
+  /** Installed Workshop mods the required-items picker offers first. */
+  dependencyCandidates: { itemId: string; label: string; declared: boolean }[];
+}
+
+/** What a download from Steam writes into the listing folder; mirrors the publish parts. */
+export interface PullParts {
+  /** item.json: title, tags, visibility, id. */
+  details: boolean;
+  /** The default-language description file. */
+  description: boolean;
+  /** translations/<lang>/ for every language whose text differs from the default. */
+  translations: boolean;
+  /** previews/: the gallery images downloaded, videos.txt, order.txt. */
+  previews: boolean;
+  /** dependencies.json. */
+  requirements: boolean;
+  /** The main preview image, into the mod folder. */
+  thumbnail: boolean;
 }
 
 /** Title/description as Steam serves one language (its fallback included). */
@@ -82,7 +147,23 @@ export type HostToApp =
       /** Steam unreachable or the query failed; disk data stays usable. */
       error: string | null;
     }
-  | { type: "uploadState"; busy: boolean; message?: string };
+  /** A long job runs (buttons off). Its steps arrive as `progress`. */
+  | { type: "uploadState"; busy: boolean }
+  /**
+   * One step of a running job: `step` names what is happening now, `done` of
+   * `total` how far the job is. `step: null` ends the job's progress.
+   */
+  | { type: "progress"; job: ProgressJob; step: string | null; done: number; total: number }
+  /** The game's DLC list, or why it could not be read. */
+  | { type: "dlc"; list: DlcChoice[]; source: DlcSource; error: string | null }
+  /** Titles of required Workshop items that are not installed (null = Steam does not know the id). */
+  | { type: "itemTitles"; titles: Record<string, string | null> };
+
+/** The long jobs that report progress. */
+export type ProgressJob = "upload" | "download";
+
+/** Where a DLC list came from: the install, Steam, or nowhere yet. */
+export type DlcSource = "game" | "steam" | "none";
 
 export type AppToHost =
   | { type: "ready" }
@@ -99,6 +180,10 @@ export type AppToHost =
       type: "upload";
       content: boolean;
       details: boolean;
+      /** The gallery (images + videos), separate from the details and the thumbnail. */
+      previews: boolean;
+      /** dependencies.json: the required DLC and items, applied after the submits. */
+      requirements: boolean;
       languages: string[];
       changeNote: string;
       visibility: WorkshopVisibility | null;
@@ -114,9 +199,36 @@ export type AppToHost =
   | { type: "openListingFile"; lang: string | null }
   /** Re-read everything from disk (the app already dropped its pending save). */
   | { type: "reload" }
-  /** Open the settings UI filtered to px.workshop. */
-  | { type: "openWorkshopSettings" }
   /** Surface a message as a VS Code notification (the app has no UI for it). */
   | { type: "notify"; message: string; warn?: boolean }
-  /** Download the live listing from Steam into the workshop folder (confirmed app-side). */
-  | { type: "pullListing" };
+  /** Download the chosen parts of the live listing into the workshop folder (confirmed app-side). */
+  | { type: "pullListing"; parts: PullParts }
+  /** Write previews/order.txt (bare file names, gallery order). */
+  | { type: "reorderPreviews"; names: string[] }
+  /**
+   * Ask for the game's DLC list. It is read from the install; `allowSteam`
+   * lets the host fall back to the Steam client when the game path is unknown.
+   */
+  | { type: "loadDlc"; allowSteam: boolean }
+  /** Ask Steam for the titles of required items that are not installed mods. */
+  | { type: "resolveItems"; ids: string[] }
+  /** Point px.workshop.changelog at an existing changelog (an absolute path from `changelogCandidates`). */
+  | { type: "setChangelogSource"; path: string }
+  /** Create `<workshopDir>/changelog/<version>.md` and open it. */
+  | { type: "createChangelog" }
+  /** Open the resolved changelog entry in the editor (creates nothing). */
+  | { type: "openChangelogEntry" }
+  /** Open one gallery video on YouTube. */
+  | { type: "openVideo"; id: string }
+  /** Write dependencies.json (required DLC app ids, required Workshop item ids). */
+  | { type: "setDependencies"; apps: number[]; items: string[] }
+  /** Pick images to copy into the previews folder (host opens the file dialog). */
+  | { type: "addPreviews" }
+  /** Delete one file of the previews folder (a bare file name). */
+  | { type: "removePreview"; name: string }
+  /** Write previews/videos.txt. */
+  | { type: "setVideos"; ids: string[] }
+  /** Reveal the previews folder in the OS file manager, creating it first. */
+  | { type: "openPreviewsFolder" }
+  /** Open the wiki's BBCode page: which tags Steam renders in a description. */
+  | { type: "bbcodeHelp" };

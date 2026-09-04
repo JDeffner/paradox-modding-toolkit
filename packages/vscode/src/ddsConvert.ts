@@ -11,12 +11,25 @@ import * as vscode from "vscode";
 import { encodeDds, hasTransparency, type DdsEncodeFormat } from "@px-lsp/server/dds";
 import { makeNonce } from "./webviews/nonce";
 
+/**
+ * Everything Chromium's <img> decodes, keyed by extension. A creator's
+ * "Custom picture…" takes any of these; the two formats the game itself
+ * writes (DDS, TGA) are handled by the caller, which copies or decodes them.
+ */
 const EXT_MIME: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".bmp": "image/bmp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".svg": "image/svg+xml",
 };
+
+/** The extensions `convertImageToDds` decodes, without the dot, for a file dialog. */
+export const CONVERTIBLE_IMAGE_EXT = Object.keys(EXT_MIME).map((ext) => ext.slice(1));
 
 interface DecodedPixels {
   width: number;
@@ -29,7 +42,7 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
   if (files.length === 0) {
     const picked = await vscode.window.showOpenDialog({
       canSelectMany: true,
-      filters: { Images: ["png", "jpg", "jpeg", "webp"] },
+      filters: { Images: CONVERTIBLE_IMAGE_EXT },
       title: "Select images to convert to DDS",
     });
     if (!picked || picked.length === 0) return;
@@ -82,7 +95,6 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
             if (await exists(target)) {
               const answer = await vscode.window.showWarningMessage(
                 `${target.path.split("/").pop()} already exists. Overwrite?`,
-                { modal: true },
                 "Overwrite"
               );
               if (answer !== "Overwrite") continue;
@@ -120,6 +132,36 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
     } else if (answer === guideLabel) {
       await vscode.commands.executeCommand("px.imageGuidelines");
     }
+  }
+}
+
+/**
+ * Convert ONE image into `target`, choosing the format the way "Auto" does.
+ *
+ * The command above asks where the file goes and which format to use; a
+ * creator already knows both, because the game derives an icon's path from the
+ * definition's name. Same decoder, same encoder, no second implementation.
+ */
+export async function convertImageToDds(source: vscode.Uri, target: vscode.Uri): Promise<void> {
+  const ext = extOf(source);
+  if (!(ext in EXT_MIME))
+    throw new Error(
+      `${ext || "that file"} is not a picture the converter reads (${CONVERTIBLE_IMAGE_EXT.join(", ")})`
+    );
+  const decoder = new WebviewDecoder();
+  try {
+    const bytes = await vscode.workspace.fs.readFile(source);
+    const decoded = await decoder.decode(
+      target.path,
+      `data:${EXT_MIME[ext]};base64,${Buffer.from(bytes).toString("base64")}`
+    );
+    const format: DdsEncodeFormat = hasTransparency(decoded.rgba) ? "bc3" : "bc1";
+    await vscode.workspace.fs.writeFile(
+      target,
+      encodeDds(decoded.width, decoded.height, decoded.rgba, format)
+    );
+  } finally {
+    decoder.dispose();
   }
 }
 

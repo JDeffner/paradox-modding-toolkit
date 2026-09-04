@@ -23,6 +23,9 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   dependenciesRequest,
+  dynastyTreeRequest,
+  type DynastyTreeParams,
+  type DynastyTreeResult,
   exampleWikiRequest,
   exampleWikiEntryRequest,
   type ExampleWikiDetail,
@@ -31,10 +34,19 @@ import {
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
+  definitionFormRequest,
+  definitionEditRequest,
+  locTextRequest,
+  type LocTextResult,
+  modifierFormatsRequest,
+  type DefinitionForm,
+  type DefinitionEditResult,
   guiVocabularyRequest,
   guiWidgetEditRequest,
   guiWidgetInfoRequest,
   scopeAtRequest,
+  snippetsRequest,
+  type SnippetsResult,
   statusNotification,
   type DependenciesResult,
   type GuiDependenciesResult,
@@ -114,6 +126,12 @@ smoke.3 = {
 		set_variable = { name = smoke_toll value = 5 }
 	}
 }
+# Nothing fires this and it fires nothing: the graph's default leaves it out.
+smoke.3 = {
+	type = character_event
+	title = smoke.3.t
+}
+
 `;
 
 // Parent-mod fixture (submod workflow): indexed via settings.parentPaths.
@@ -142,6 +160,18 @@ const DEP_MACRO_TXT = `macro = {
 	replace_with = "EqualTo_int32(Value, '(int32)0')"
 }
 `;
+
+// A mod trait, so paradox/definitionForm has one to list and to load.
+const TRAITS_TXT = `px_smoke_bold = {
+	category = personality
+	martial = 2
+}
+`;
+
+/** A second trait, written by paradox/definitionEdit's upsertBlock. */
+const MEEK_BLOCK = `px_smoke_meek = {
+	category = personality
+}`;
 
 const GUI_TXT = `widget = {
 	name = "smoke_root"
@@ -188,12 +218,62 @@ const CLOC_TXT = `SmokeCustom = {
 }
 `;
 
+// Dynasty tree fixture: one dynasty, one house, three characters, in the
+// shapes the vanilla files use (a dated block carries the birth).
+const DYNASTIES_TXT = `9000001 = {
+\tname = "dynn_Smoke"
+\tculture = "anglo_saxon"
+}
+`;
+
+const HOUSES_TXT = `house_smoke = {
+\tname = "dynn_Smoke"
+\tdynasty = 9000001
+}
+`;
+
+const CHARACTERS_TXT = `9000010 = {
+\tname = "Smoky"
+\tdna = "smoky_dna"
+\tdynasty_house = house_smoke
+\tmartial = 8
+\tlearning = 3
+\t1000.1.1 = {
+\t\tbirth = yes
+\t}
+\t1020.2.2 = {
+\t\tadd_spouse = 9000011
+\t}
+}
+9000011 = {
+\tname = "Smokina"
+\tfemale = yes
+\tdynasty = 9000002
+\t1002.1.1 = {
+\t\tbirth = yes
+\t}
+}
+9000012 = {
+\tname = "Smokelet"
+\tdynasty_house = house_smoke
+\tfather = 9000010
+\tmother = 9000011
+\t1025.1.1 = {
+\t\tbirth = yes
+\t}
+}
+`;
+
 const LOC_YML =
   "﻿l_english:\n" +
   ' smoke.1.t:0 "Smoke"\n' +
   ' smoke.1.a:0 "OK"\n' +
   " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n" +
-  ' smoke.1.macro:0 "[PxSmokeParentMac"\n';
+  ' smoke.1.macro:0 "[PxSmokeParentMac"\n' +
+  // paradox/locText's subject: a value shaped like the games' own parameter
+  // sentences. Appended, because two tests above index LOC_YML by line.
+  ' trait_px_smoke_bold:0 "Bold"\n' +
+  " smoke.param:0 \"The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common\"\n";
 
 function toUri(p: string): string {
   return "file:///" + p.replace(/\\/g, "/").replace(/^\//, "");
@@ -206,6 +286,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let parentDir: string;
   let depDir: string;
   let eventsFile: string;
+  let traitsFile: string;
   let eventsUri: string;
   let locFile: string;
   let locUri: string;
@@ -228,11 +309,15 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fxIn(parentDir, "events/parent_events.txt", PARENT_EVENTS_TXT);
     fxIn(depDir, "data_binding/px_smoke_macros.txt", DEP_MACRO_TXT);
     fx("common/scripted_effects/smoke_effects.txt", EFFECTS_TXT);
+    traitsFile = fx("common/traits/px_smoke_traits.txt", TRAITS_TXT);
     eventsFile = fx("events/smoke_events.txt", EVENTS_TXT);
     fx("common/customizable_localization/smoke_cloc.txt", CLOC_TXT);
     fx("common/scripted_guis/smoke_sguis.txt", SGUI_TXT);
     fx("common/scripted_effects/smoke_gui_effects.txt", GUI_EFFECT_TXT);
     guiPanelFile = fx("gui/smoke_panel.gui", GUI_PANEL_TXT);
+    fx("common/dynasties/smoke_dynasties.txt", DYNASTIES_TXT);
+    fx("common/dynasty_houses/smoke_houses.txt", HOUSES_TXT);
+    fx("history/characters/smoke_characters.txt", CHARACTERS_TXT);
     locFile = fx("localization/english/smoke_l_english.yml", LOC_YML);
     eventsUri = toUri(eventsFile);
     locUri = toUri(locFile);
@@ -556,6 +641,32 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     });
   });
 
+  it("paradox/dynastyTree answers the picker list and one dynasty's family", async () => {
+    const list = (await conn.sendRequest(
+      dynastyTreeRequest,
+      {} satisfies DynastyTreeParams
+    )) as DynastyTreeResult;
+    expect(list.supported).toBe(true);
+    const smoke = list.dynasties.find((d) => d.id === "9000001");
+    expect(smoke).toMatchObject({ nameKey: "dynn_Smoke", source: "mod", characterCount: 2, houseCount: 1 });
+    expect(list.nextCharacterId).toBe("9000013");
+
+    const tree = (await conn.sendRequest(dynastyTreeRequest, {
+      dynasty: "9000001",
+    } satisfies DynastyTreeParams)) as DynastyTreeResult;
+    expect(tree.houses?.map((h) => h.id)).toEqual(["house_smoke"]);
+    const father = tree.characters?.find((c) => c.id === "9000010");
+    expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
+    // The portrait name without the quotes the file wrote, and only the skills
+    // the block actually sets.
+    expect(father?.dna).toBe("smoky_dna");
+    expect(father?.skills).toEqual({ martial: 8, learning: 3 });
+    expect(tree.characters?.find((c) => c.id === "9000012")?.skills).toBeUndefined();
+    // The wife belongs to another dynasty: drawn, but not counted as a member.
+    expect(tree.characters?.find((c) => c.id === "9000011")?.external).toBe(true);
+    expect(tree.characters?.find((c) => c.id === "9000012")?.mother).toBe("9000011");
+  });
+
   it("paradox/eventGraph carries the query-box catalog, not just the selected nodes", async () => {
     const graph = (await conn.sendRequest("paradox/eventGraph", { root: "smoke.1" })) as {
       nodes: Array<{ id: string }>;
@@ -566,6 +677,19 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(graph.suggestions?.ids).toContain("smoke.2");
     expect(graph.suggestions?.namespaces).toContain("smoke");
     expect(graph.suggestions?.namespaces).toContain("psmoke");
+  });
+
+  it("paradox/eventGraph leaves unconnected definitions out unless asked for them", async () => {
+    const ids = async (params: object) => {
+      const graph = (await conn.sendRequest("paradox/eventGraph", params)) as {
+        nodes: Array<{ id: string }>;
+      };
+      return graph.nodes.map((n) => n.id);
+    };
+    expect(await ids({ namespace: "smoke" })).not.toContain("smoke.3");
+    expect(await ids({ namespace: "smoke", connectedOnly: false })).toContain("smoke.3");
+    // The queried root stays even when nothing links to it.
+    expect(await ids({ root: "smoke.3" })).toContain("smoke.3");
   });
 
   it("paradox/exampleWiki answers the searchable catalog", async () => {
@@ -856,6 +980,99 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       ops: [move(3, "{ 2 2 }")],
     })) as GuiSourceEditResult | null;
     expect(both).toBeNull();
+  });
+
+  it("paradox/definitionForm answers the trait form from the schema, harvest and index", async () => {
+    const form = (await conn.sendRequest(definitionFormRequest, {
+      kind: "trait",
+      name: "px_smoke_bold",
+    })) as DefinitionForm | null;
+    expect(form).not.toBeNull();
+    expect(form!.folder).toBe("common/traits");
+    expect(form!.locPatterns).toEqual(["trait_$", "trait_$_desc"]);
+    expect(form!.iconFolder).toBe("gfx/interface/icons/traits");
+    expect(form!.keys.map((k) => k.key)).toContain("category");
+    expect(form!.keys.find((k) => k.key === "opposites")?.refKinds).toEqual(["trait"]);
+    expect(form!.existing.map((d) => d.name)).toContain("px_smoke_bold");
+    expect(form!.existing.find((d) => d.name === "px_smoke_bold")?.file).toBe(traitsFile);
+    expect(form!.current?.source).toBe("mod");
+    expect(form!.current?.text).toBe(TRAITS_TXT.trimEnd());
+    // A kind this game's schema has no folder for is null, not an invented shape.
+    expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
+  });
+
+  it("paradox/snippets answers with the measured event skeleton and its blocks", async () => {
+    const result = (await conn.sendRequest(snippetsRequest, {
+      uri: eventsUri,
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    const definition = result.snippets.find((s) => s.form === "definition")!;
+    expect(definition.id).toBe("event");
+    expect(definition.label).toBe("new event");
+    expect(definition.detail).toMatch(/^skeleton measured over [\d,]+ vanilla definitions$/);
+    // The document declares `namespace = smoke`, so the insert reuses it and
+    // writes no second header line.
+    expect(definition.snippet).toContain("smoke.${1:1} = {");
+    expect(definition.snippet).not.toContain("namespace =");
+    expect(definition.plain).not.toContain("${");
+    // The kind's child blocks, measured over the game's own option blocks.
+    expect(result.snippets.some((s) => s.form === "block" && s.id === "event.option")).toBe(true);
+
+    // A document the server does not have open is an empty list, not an error.
+    const none = (await conn.sendRequest(snippetsRequest, {
+      uri: toUri(path.join(modDir, "events", "never_opened.txt")),
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    expect(none.snippets).toEqual([]);
+  });
+
+  it("paradox/modifierFormats needs the game's own format files to answer", async () => {
+    // This suite runs with gamePath null (the vanilla scan is skipped to keep
+    // the smoke fast), and the print rules live in the game folder. Null is the
+    // answer, not an invented label per modifier.
+    expect(await conn.sendRequest(modifierFormatsRequest, {})).toBeNull();
+  });
+
+  it("paradox/locText renders a value the way the player reads it", async () => {
+    // The mod's own trait and its loc key are all the chain needs: the schema
+    // says a trait's name lives under `trait_$`, the index says
+    // `px_smoke_bold` IS a trait, and the loc index has the word.
+    const result = (await conn.sendRequest(locTextRequest, {
+      keys: ["smoke.param", "smoke.1.t", "px_absent"],
+    })) as LocTextResult;
+    expect(result.values["smoke.param"]).toEqual({
+      raw: "The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common",
+      text: "The Bold trait is more common",
+      resolved: true,
+    });
+    // A value with nothing to resolve comes back as itself, and a key the loc
+    // index does not have is absent rather than an empty string.
+    expect(result.values["smoke.1.t"].text).toBe("Smoke");
+    expect(result.values.px_absent).toBeUndefined();
+  });
+
+  it("paradox/definitionEdit round-trips a property change and an appended block", async () => {
+    const edit = (await conn.sendRequest(definitionEditRequest, {
+      uri: toUri(traitsFile),
+      text: TRAITS_TXT,
+      ops: [
+        { op: "setProperties", name: "px_smoke_bold", properties: [{ key: "martial", value: "3" }] },
+        { op: "upsertBlock", name: "px_smoke_meek", text: MEEK_BLOCK },
+      ],
+    })) as DefinitionEditResult;
+    expect(edit.ops).toEqual([{}, {}]);
+    expect(applyEdits(TRAITS_TXT, edit.edits)).toBe(
+      TRAITS_TXT.replace("martial = 2", "martial = 3") + "\n" + MEEK_BLOCK + "\n"
+    );
+
+    // A refusal is an answer, per op, and it never throws.
+    const refused = (await conn.sendRequest(definitionEditRequest, {
+      uri: toUri(traitsFile),
+      text: TRAITS_TXT,
+      ops: [{ op: "setProperties", name: "px_absent", properties: [{ key: "martial", value: "1" }] }],
+    })) as DefinitionEditResult;
+    expect(refused.edits).toEqual([]);
+    expect(refused.ops[0].refused).toContain("px_absent");
   });
 
   it("paradox/guiWidgetInfo reports a widget's properties with their origins", async () => {

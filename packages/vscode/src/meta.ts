@@ -33,9 +33,27 @@ export function scriptDocsDir(meta: GameMeta): string {
   return meta.scriptDocsSubdir ?? "logs";
 }
 
+/**
+ * Whether a visual content creator opens for this game. The profile lists the
+ * creators built against that game's own files (`GameMeta.creators`), so a
+ * panel is offered where its data exists and nowhere else.
+ */
+export function creatorSupported(gameId: string, kind: string): boolean {
+  return (metaFor(gameId).creators ?? []).some((creator) => creator.kind === kind);
+}
+
 /** Whether the Flag Builder opens for this game: its meta declares the coat-of-arms layout. */
 export function flagBuilderSupported(gameId: string): boolean {
   return metaFor(gameId).flagBuilder === true;
+}
+
+/**
+ * Whether the game's own Coat of Arms designer can be rebuilt for this game.
+ * The profile says the game ships one; the caller still checks that the files
+ * are on disk, since a workspace with no game folder has no catalog to show.
+ */
+export function coaDesignerSupported(gameId: string): boolean {
+  return metaFor(gameId).coaDesigner === true;
 }
 
 /**

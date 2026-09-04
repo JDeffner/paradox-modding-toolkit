@@ -1,5 +1,37 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import type { IconName } from "../shared/icons";
+import { PX_CONFIG_DIR } from "@px-lsp/protocol/configDir";
+import { PATHS, type IconName } from "../shared/icons";
+
+/**
+ * The command each creator kind opens. The profile names the creators a game
+ * has; the command that draws them is the client's, so the mapping lives here.
+ * A kind with no row here has no panel yet and is left out rather than shown as
+ * a button that does nothing.
+ */
+const CREATOR_COMMANDS: Record<string, string> = {
+  trait: "px.createTrait",
+  dynasty_legacy: "px.createDynastyLegacy",
+  culture: "px.createCulture",
+  culture_tradition: "px.createTradition",
+  // Not a definition kind: a view over history/characters.
+  dynasty_tree: "px.openDynastyTree",
+};
+
+/** The creator rows of the Create group, in the profile's own order. */
+function creatorItems(meta: GameMeta): ActionItem[] {
+  const items: ActionItem[] = [];
+  for (const creator of meta.creators ?? []) {
+    const command = CREATOR_COMMANDS[creator.kind];
+    if (!command || !(creator.icon in PATHS)) continue;
+    items.push({
+      label: creator.label,
+      command,
+      icon: creator.icon as IconName,
+      ...(creator.tip ? { tip: creator.tip } : {}),
+    });
+  }
+  return items;
+}
 
 export interface ActionItem {
   label: string;
@@ -40,12 +72,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           tip: "Graph of what fires what in the focused mod.",
         },
         {
-          label: "Mod Report",
-          command: "px.modReport",
-          icon: "fileText",
-          tip: "Content counts, localization coverage and problems.",
-        },
-        {
           label: "Simulate Event",
           command: "px.simulateEvent",
           icon: "flaskConical",
@@ -63,16 +89,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "layoutTemplate",
           tip: "Render and edit the .gui window you are editing.",
         },
-        ...(meta.flagBuilder
-          ? [
-              {
-                label: "Flag Builder",
-                command: "px.openFlagBuilder",
-                icon: "flag" as const,
-                tip: "Compose a coat of arms and write it into the mod.",
-              },
-            ]
-          : []),
         {
           label: "Convert Image to DDS",
           command: "px.convertToDds",
@@ -113,6 +129,23 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "plus",
           tip: "Scaffold an event, decision or trait into the right folder.",
         },
+        // The visual creators follow the two scaffolds: same group, richer tool.
+        ...creatorItems(meta),
+        // ONE row for the designer, in Create. It used to be listed twice (a
+        // View row that opened the blank canvas and a Create row that asked
+        // what the arms are for), which read as two tools; the creation flow
+        // is the door, and it lands in the same panel. Both palette commands
+        // stay for a keybinding or a deep link.
+        ...(meta.flagBuilder
+          ? ([
+              {
+                label: meta.coaDesigner ? "Coat of Arms Designer" : "Flag Builder",
+                command: "px.createCoatOfArms",
+                icon: meta.coaDesigner ? "shield" : "flag",
+                tip: "Design arms for a dynasty, house or title and save them into the mod.",
+              },
+            ] satisfies ActionItem[])
+          : []),
       ],
     },
     {
@@ -128,7 +161,13 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "Wiki",
           command: "px.openWiki",
           icon: "library",
-          tip: "The toolkit's reference pages in one searchable place.",
+          tip: "The hub: format docs, image guidelines, diagnostics, mod report and the Examples Wiki.",
+        },
+        {
+          label: "Credits",
+          command: "px.openCredits",
+          icon: "heart",
+          tip: "Every project the toolkit builds on, with links.",
         },
         {
           label: "Examples Wiki",
@@ -179,7 +218,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 label: `Generate ${meta.tiger.confName}`,
                 command: "px.tigerGenerateConf",
                 icon: "settings",
-                tip: "Write a tiger config for this mod.",
+                tip: `Write a tiger config into this mod's ${PX_CONFIG_DIR}/ folder.`,
               },
               {
                 label: `Update ${meta.tiger.binaryName}`,

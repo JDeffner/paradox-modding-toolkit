@@ -16,12 +16,13 @@ to humans too.
   is a good first PR, and there is an issue form for reporting one.
 - **Bug reports and false diagnostics**, through the
   [issue forms](https://github.com/JDeffner/paradox-modding-toolkit/issues).
-- Questions and modding help: [Discord](https://discord.gg/ESstwqycug).
+- Questions and modding help: [Discord](https://discord.gg/DfEJ2H9hj4).
 
 ## Setup
 
-You need Node 22 or newer and [pnpm](https://pnpm.io). A game install is not
-required for most work; the test suite skips what it cannot reach.
+You need Node 22 or newer and [pnpm](https://pnpm.io) 11 or newer. A game
+install is not required for most work; the test suite skips what it cannot
+reach.
 
 ```bash
 git clone https://github.com/JDeffner/paradox-modding-toolkit.git

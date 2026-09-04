@@ -422,6 +422,7 @@ ${uiCss}
       <button id="titleLoc" class="px-toggle" data-size="sm" aria-pressed="false" data-tip="Caption every card with its localized title" data-tip-wrap>Loc</button>
     </div>
     <button id="toolBanner" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="false" data-tip="Draw each event's background illustration behind its card" data-tip-wrap>${icon("image")}</button>
+    <button id="toolConnected" class="tool px-btn" data-variant="ghost" data-size="icon-sm" aria-pressed="true" data-tip="Connected only: leave out every event nothing fires and that fires nothing. They are not even read, which keeps big mods fast." data-tip-wrap>${icon("link")}</button>
     <div class="px-separator" data-orientation="vertical"></div>
     <button id="undo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to undo" disabled>${icon("undo")}</button>
     <button id="redo" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Nothing to redo" disabled>${icon("redo")}</button>

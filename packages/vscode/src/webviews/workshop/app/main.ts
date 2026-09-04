@@ -1,20 +1,25 @@
 /**
  * The Workshop panel app: the focused mod's Workshop item on one page - what
- * the descriptor and workshop.json say (editable drafts), what Steam says
- * live (fetched through the host), and an Upload that submits the checked
- * parts. Drafts autosave to the workshop folder (or workshop.json while no
- * folder exists); nothing reaches Steam until Upload confirms. Built from the
- * shared px-ui classes; talks to the host only through messages.ts.
+ * the descriptor and the listing files say, what Steam says live (fetched
+ * through the host), and an Upload that submits the checked parts. The
+ * description and the translated descriptions are shown as previews only and
+ * edited in the editor (Edit file); the rest autosaves to the workshop folder.
+ * Nothing reaches Steam until Upload confirms. Built from the shared px-ui
+ * classes; talks to the host only through messages.ts.
  */
 import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
+import { markdownToBBCode } from "../../../steam/bbcodeMarkdown";
 import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, type MenuItem } from "../../shared/overlay";
 import type {
   AppToHost,
+  DlcChoice,
+  DlcSource,
   HostToApp,
   LiveTranslation,
   ModChoice,
+  PullParts,
   TranslationDraft,
   WorkshopModInfo,
 } from "../messages";
@@ -40,6 +45,21 @@ let liveTranslations: Record<string, LiveTranslation> = {};
 let liveError: string | null = null;
 let fetching = false;
 let busy = false;
+/** The game's DLC list, read once per session (from the install, else Steam). */
+let dlc: DlcChoice[] | null = null;
+let dlcSource: DlcSource = "none";
+let dlcError: string | null = null;
+let dlcLoading = false;
+let dlcAsked = false;
+let dlcSteamAsked = false;
+/** Translations switched off under Publish (the rest of the drafted ones upload). */
+const langsOff = new Set<string>();
+/** Titles of required items that are not installed mods (null = Steam does not know the id). */
+const itemTitles = new Map<string, string | null>();
+/** Ids a lookup is in flight for, so a re-render neither re-asks nor says "not found" early. */
+const itemsPending = new Set<string>();
+/** The running job's current step, or null when nothing runs. */
+let progressStep: { step: string; done: number; total: number } | null = null;
 
 /** The visibility the user picked, or null = whatever the item has. */
 let pickedVisibility: WorkshopVisibility | null = null;
@@ -51,11 +71,11 @@ const collapsed = new Set<string>();
  * (languages arriving from disk start collapsed; UI-added ones stay open). */
 let lastInfoActive: string | null = null;
 const knownLangs = new Set<string>();
-/** Where the changenote box was filled from; typing makes it "manual". */
-let noteSource: "changelog" | "commit" | "manual" = "manual";
-/** Edit vs preview, for the description and per translation language. */
-let descMode: "edit" | "preview" = "edit";
-const langMode = new Map<string, "edit" | "preview">();
+/** What the changenote is taken from. The picked source IS what uploads. */
+type NoteSource = "changelog" | "commit" | "write";
+/** The source the user picked, per mod. Unpicked mods follow `defaultNoteSource`. */
+const noteSourceByMod = new Map<string, NoteSource>();
+let noteSource: NoteSource = "write";
 
 const VISIBILITY_LABELS: Record<number, string> = {
   0: "Public",
@@ -77,6 +97,14 @@ function flushSave(): void {
   clearTimeout(saveTimer);
   saveTimer = undefined;
   send({ type: "saveLocal", description: draftDescription, translations: draftTranslations });
+}
+
+/** Re-read every description from disk. One action, offered on every row. */
+function reloadLocalFiles(): void {
+  // Drop the pending autosave so the reload cannot be overwritten mid-flight.
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  send({ type: "reload" });
 }
 
 /** The languages worth asking Steam about: drafted plus suggested. */
@@ -104,10 +132,36 @@ function renderAll(): void {
   renderToolbar();
   renderItem();
   renderStats();
-  renderDescriptionHints();
+  renderDescription();
   renderTranslations();
+  renderPreviews();
+  renderRequirements();
+  renderNote();
+  renderChecks();
   renderPublish();
 }
+
+/** The toolbar's inline progress: the step the running job reported, and how far it is. */
+function renderProgress(): void {
+  const box = $("jobProgress");
+  box.hidden = progressStep === null;
+  if (!progressStep) return;
+  const step = box.querySelector<HTMLElement>(".step")!;
+  step.textContent = progressStep.step;
+  step.setAttribute("data-tip", progressStep.step);
+  box.querySelector<HTMLElement>(".count")!.textContent =
+    progressStep.total > 1
+      ? `${Math.min(progressStep.done + 1, progressStep.total)}/${progressStep.total}`
+      : "";
+  const bar = box.querySelector<HTMLElement>(".bar")!;
+  const known = progressStep.total > 0;
+  bar.toggleAttribute("data-indeterminate", !known);
+  (bar.firstElementChild as HTMLElement).style.width = known
+    ? `${Math.round((progressStep.done / progressStep.total) * 100)}%`
+    : "";
+}
+
+const hasErrors = (): boolean => !!info?.checks.some((c) => c.level === "error");
 
 function renderToolbar(): void {
   const modBtn = $<HTMLButtonElement>("mod");
@@ -115,24 +169,40 @@ function renderToolbar(): void {
   modBtn.querySelector("span.px-truncate")!.textContent = label;
   modBtn.style.display = mods.length > 1 ? "" : "none";
 
+  // What Steam reported, not a verdict on the item: "live" read as if the
+  // item were public, which it need not be.
   const state = $("liveState");
+  let tip = liveError ?? "";
   if (fetching) state.textContent = "asking Steam…";
   else if (liveError) state.textContent = "Steam unreachable";
-  else if (live) state.textContent = "live";
-  else state.textContent = "";
-  state.setAttribute("data-tip", liveError ?? "");
+  else if (live?.timeUpdated) {
+    state.textContent = `updated ${uploadedOn(live.timeUpdated)}`;
+    tip = "When the item was last uploaded, as Steam reports it. The refresh button asks again.";
+  } else state.textContent = "";
+  state.setAttribute("data-tip", tip);
+  state.toggleAttribute("data-tip-wrap", tip !== "");
 
   $<HTMLButtonElement>("openPage").disabled = !info?.publishedId;
-  $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing;
+  $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing || hasErrors();
   $<HTMLButtonElement>("refresh").disabled = fetching || !info?.publishedId;
   $<HTMLButtonElement>("pull").disabled = busy || fetching || !info?.publishedId;
-  $("busy").classList.toggle("on", busy || fetching);
+  $("busy").classList.toggle("on", fetching && !busy);
+}
+
+/** A Steam timestamp (Unix seconds) as a short local date, or "today". */
+function uploadedOn(seconds: number): string {
+  const when = new Date(seconds * 1000);
+  if (when.toDateString() === new Date().toDateString()) return "today";
+  return when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
 function renderItem(): void {
   $("noDescriptor").classList.toggle("on", !!info?.descriptorMissing);
-  $("itemSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  for (const id of ["itemSection", "modFilesSection", "noteSection"])
+    $(id).style.display = info && !info.descriptorMissing ? "" : "none";
   if (!info || info.descriptorMissing) return;
+  $("modRoot").textContent = info.root;
+  $("modRoot").setAttribute("data-tip", info.root);
 
   const title = $<HTMLInputElement>("title");
   if (document.activeElement !== title) {
@@ -182,9 +252,13 @@ function renderItem(): void {
   const meta = $("itemMeta");
   if (live) {
     const when = (t: number) => new Date(t * 1000).toLocaleDateString();
-    meta.textContent =
-      `created ${when(live.timeCreated)}, last update ${when(live.timeUpdated)}` +
-      (live.banned ? " - BANNED by Steam" : "");
+    meta.replaceChildren(
+      document.createTextNode(`created ${when(live.timeCreated)}`),
+      document.createElement("br"),
+      document.createTextNode(
+        `last update ${when(live.timeUpdated)}` + (live.banned ? " - BANNED by Steam" : "")
+      )
+    );
   } else {
     meta.textContent = "";
   }
@@ -261,39 +335,32 @@ function renderTags(current: string[]): void {
 }
 
 /** Where the listing lives: the workshop folder (as files) or workshop.json. */
+/** The capsule by the label says which storage rule is in force; the line under it is the path. */
 function renderFilesRow(): void {
+  const badge = $("filesBadge");
   const box = $("filesBox");
-  box.replaceChildren();
+  badge.replaceChildren();
+  box.textContent = "";
   if (!info) return;
-  const badge = document.createElement("span");
-  badge.className = "px-badge";
-  badge.dataset.variant = "outline";
-  const hint = document.createElement("span");
-  hint.className = "px-muted px-xs px-truncate";
-  if (info.filesPresent) {
-    badge.textContent = "workshop folder";
-    badge.setAttribute(
-      "data-tip",
-      "The listing is stored as files here, so it diffs and versions like code."
-    );
-    hint.textContent = info.workshopDir;
-    hint.setAttribute("data-tip", info.workshopDir);
+  const chip = document.createElement("span");
+  chip.className = "px-badge";
+  chip.dataset.variant = "outline";
+  if (!info.filesPresent) {
+    chip.textContent = "workshop.json";
+    chip.setAttribute("data-tip", "No listing folder yet: drafts save to workshop.json in the mod.");
+    box.textContent = `no folder at ${info.workshopDir}`;
+  } else if (info.workshopDirCustom) {
+    chip.textContent = "custom";
+    chip.setAttribute("data-tip", "Folder set by px.workshop.dir.");
+    box.textContent = info.workshopDir;
   } else {
-    badge.textContent = "workshop.json";
-    badge.setAttribute("data-tip", "Drafts save to workshop.json inside the mod, not as listing files.");
-    hint.textContent = `no folder at ${info.workshopDir}`;
-    hint.setAttribute("data-tip", info.workshopDir);
+    chip.textContent = "default";
+    chip.setAttribute("data-tip", ".px-toolkit/workshop inside the mod.");
+    box.textContent = info.workshopDir;
   }
-  badge.setAttribute("data-tip-wrap", "");
-  const gear = document.createElement("button");
-  gear.className = "px-btn";
-  gear.dataset.variant = "ghost";
-  gear.dataset.size = "icon-xs";
-  gear.setAttribute("data-tip", "Open the settings for the listing folder and the changelog.");
-  gear.setAttribute("data-tip-wrap", "");
-  gear.append(iconEl("settings"));
-  gear.addEventListener("click", () => send({ type: "openWorkshopSettings" }));
-  box.append(badge, hint, gear);
+  chip.setAttribute("data-tip-wrap", "");
+  badge.append(chip);
+  box.setAttribute("data-tip", info.workshopDir);
 }
 
 function renderStats(): void {
@@ -314,8 +381,12 @@ function renderStats(): void {
     v.textContent = value.toLocaleString();
     const k = document.createElement("span");
     k.className = "k";
-    k.append(iconEl(icon), document.createTextNode(label));
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = label;
+    k.append(iconEl(icon), t);
     el.append(v, k);
+    el.setAttribute("data-tip", `${value.toLocaleString()} ${label}`);
     stats.append(el);
   };
   tile("users", "subscribers", live.numSubscriptions);
@@ -326,24 +397,106 @@ function renderStats(): void {
   tile("messageSquare", "comments", live.numComments);
 }
 
-function renderDescriptionHints(): void {
+/**
+ * Steam only takes BBCode, so a Markdown description converts before it is
+ * rendered: the preview then shows exactly what the upload sends.
+ */
+const previewHtml = (text: string, lang: string): string =>
+  bbcodeToHtml(info?.markdown.includes(lang) ? markdownToBBCode(text) : text);
+
+/**
+ * The description as the Workshop page will roughly render it. The text
+ * itself is edited in the editor (Edit file), so this is the only view of it
+ * the panel offers.
+ */
+function renderDescription(): void {
   $<HTMLButtonElement>("pullDesc").disabled = !live;
-  renderDescFileButtons();
-  renderDescMode();
+  fillPreview($("descPreview"), draftDescription, "", "No description yet. Edit file writes one.");
 }
 
-function renderDescFileButtons(): void {
-  $("openDescFile").style.display = info?.filesPresent ? "" : "none";
+/**
+ * A preview with the edit button pinned over its top left corner. The button
+ * sits beside the scroll box, not in it, so it stays put as the text scrolls.
+ */
+function previewBox(editTip: string, onEdit: () => void): { box: HTMLElement; preview: HTMLElement } {
+  const box = document.createElement("div");
+  box.className = "bbprev-box";
+  const preview = document.createElement("div");
+  preview.className = "bbprev";
+  const edit = document.createElement("button");
+  edit.className = "px-btn bbprev-edit";
+  edit.dataset.variant = "ghost";
+  edit.dataset.size = "icon-xs";
+  edit.setAttribute("aria-label", editTip);
+  edit.setAttribute("data-tip", editTip);
+  edit.setAttribute("data-tip-wrap", "");
+  edit.append(iconEl("pencil"));
+  edit.addEventListener("click", onEdit);
+  box.append(preview, edit);
+  return { box, preview };
 }
 
-function renderDescMode(): void {
-  const preview = descMode === "preview";
-  $("desc").hidden = preview;
-  $("descPreview").hidden = !preview;
-  if (preview) $("descPreview").innerHTML = bbcodeToHtml(draftDescription);
-  $("descMode")
-    .querySelectorAll("button")
-    .forEach((b) => b.classList.toggle("on", b.dataset.mode === descMode));
+/**
+ * The row under a preview: what the file is, then Edit file, Reload and (for
+ * the texts Steam also serves) Fetch from Steam. The default description
+ * carries the same three in html.ts, in the same order and sizes.
+ */
+function fileActionsRow(opts: {
+  hint: string;
+  editTip: string;
+  onEdit: () => void;
+  reloadTip?: string;
+  fetchTip?: string;
+  fetchDisabled?: boolean;
+  onFetch?: () => void;
+}): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "hintline";
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = opts.hint;
+  const grow = document.createElement("span");
+  grow.className = "px-grow";
+  const button = (
+    variant: string,
+    icon: Parameters<typeof iconEl>[0],
+    label: string,
+    tip: string,
+    onClick: () => void
+  ): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.className = "px-btn";
+    b.dataset.variant = variant;
+    b.dataset.size = "sm";
+    b.setAttribute("data-tip", tip);
+    b.setAttribute("data-tip-wrap", "");
+    b.append(iconEl(icon), document.createTextNode(` ${label}`));
+    b.addEventListener("click", onClick);
+    return b;
+  };
+  const edit = button("outline", "pencil", "Edit file", opts.editTip, opts.onEdit);
+  const reload = button(
+    "ghost",
+    "rotate",
+    "Reload",
+    opts.reloadTip ?? "Re-read the description and translations from the local files",
+    reloadLocalFiles
+  );
+  row.append(hint, grow, edit, reload);
+  if (opts.onFetch) {
+    const fetch = button("ghost", "arrowDown", "Fetch from Steam", opts.fetchTip ?? "", opts.onFetch);
+    fetch.disabled = !!opts.fetchDisabled;
+    row.append(fetch);
+  }
+  return row;
+}
+
+/** One BBCode preview box, or the muted line that stands in for empty text. */
+function fillPreview(box: HTMLElement, text: string, lang: string, empty: string): void {
+  const blank = text.trim() === "";
+  box.classList.toggle("empty", blank);
+  if (blank) box.textContent = empty;
+  else box.innerHTML = previewHtml(text, lang);
 }
 
 function translationRow(lang: string): HTMLElement {
@@ -354,40 +507,39 @@ function translationRow(lang: string): HTMLElement {
 
   const head = document.createElement("div");
   head.className = "head";
+  const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
+  const off = langsOff.has(lang);
+  if (off) row.dataset.off = "";
+  // The upload switch sits on the language's own row, left of its name.
+  const sw = document.createElement("label");
+  sw.className = "px-switch";
+  sw.setAttribute(
+    "data-tip",
+    off
+      ? "Not uploaded. Switch on to send this language."
+      : "Uploaded with the translations. Switch off to skip it."
+  );
+  sw.setAttribute("data-tip-wrap", "");
+  sw.addEventListener("click", (e) => e.stopPropagation());
+  const swInput = document.createElement("input");
+  swInput.type = "checkbox";
+  swInput.checked = !off;
+  swInput.disabled = !hasText;
+  swInput.addEventListener("change", () => {
+    if (swInput.checked) langsOff.delete(lang);
+    else langsOff.add(lang);
+    renderTranslations();
+    renderPublish();
+  });
+  sw.append(swInput, document.createElement("span"));
   const caret = iconEl("chevronDown");
   caret.classList.add("caret");
   const name = document.createElement("span");
+  name.className = "name";
   name.textContent = langLabel(lang);
   const state = document.createElement("span");
   state.className = "state px-grow";
-  const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
-  state.textContent = hasText ? "" : "empty - will not upload";
-  const seg = document.createElement("div");
-  seg.className = "seg";
-  seg.addEventListener("click", (e) => e.stopPropagation());
-  for (const mode of ["edit", "preview"] as const) {
-    const b = document.createElement("button");
-    b.textContent = mode === "edit" ? "Edit" : "Preview";
-    b.classList.toggle("on", (langMode.get(lang) ?? "edit") === mode);
-    b.addEventListener("click", () => {
-      langMode.set(lang, mode);
-      renderTranslations();
-    });
-    seg.append(b);
-  }
-  let open: HTMLButtonElement | null = null;
-  if (info?.filesPresent) {
-    open = document.createElement("button");
-    open.className = "px-btn";
-    open.dataset.variant = "ghost";
-    open.dataset.size = "icon-xs";
-    open.setAttribute("data-tip", `Open ${lang}/description.bbcode in the editor`);
-    open.append(iconEl("pencil"));
-    open.addEventListener("click", (e) => {
-      e.stopPropagation();
-      send({ type: "openListingFile", lang });
-    });
-  }
+  state.textContent = !hasText ? "empty - will not upload" : off ? "not uploaded" : "";
   const remove = document.createElement("button");
   remove.className = "px-btn";
   remove.dataset.variant = "ghost";
@@ -416,7 +568,7 @@ function translationRow(lang: string): HTMLElement {
         renderPublish();
       })()
   );
-  head.append(caret, name, state, seg, ...(open ? [open] : []), remove);
+  head.append(sw, caret, name, state, remove);
   head.addEventListener("click", () => {
     if (collapsed.has(lang)) collapsed.delete(lang);
     else collapsed.add(lang);
@@ -435,51 +587,41 @@ function translationRow(lang: string): HTMLElement {
     queueSave();
     renderPublish();
   });
-  const desc = document.createElement("textarea");
-  desc.className = "px-textarea";
-  desc.spellcheck = false;
-  desc.placeholder = `Description in ${langLabel(lang)}, BBCode like the default one`;
-  desc.value = draft.description ?? "";
-  desc.addEventListener("input", () => {
-    draftTranslations[lang] = { ...draftTranslations[lang], description: desc.value };
-    queueSave();
-    renderPublish();
-  });
-  if ((langMode.get(lang) ?? "edit") === "preview") {
-    const prev = document.createElement("div");
-    prev.className = "bbprev";
-    prev.innerHTML = bbcodeToHtml(draft.description ?? "");
-    desc.hidden = true;
-    body.append(title, desc, prev);
-  } else {
-    body.append(title, desc);
-  }
+  const prev = previewBox(`Edit the ${langLabel(lang)} description`, () =>
+    send({ type: "openListingFile", lang })
+  );
+  fillPreview(
+    prev.preview,
+    draft.description ?? "",
+    lang,
+    `No ${langLabel(lang)} description yet. Edit file writes one.`
+  );
 
+  // The same row as the default description's, so the two read as one design.
   const liveT = liveTranslations[lang];
-  if (liveT) {
-    const hint = document.createElement("div");
-    hint.className = "livehint";
-    const label = document.createElement("span");
-    label.textContent = "on Steam:";
-    const text = document.createElement("span");
-    text.className = "text";
-    text.textContent = `${liveT.title} - ${liveT.description.slice(0, 160) || "(no description)"}`;
-    text.setAttribute("data-tip", "What Steam serves for this language right now.");
-    const pull = document.createElement("button");
-    pull.className = "px-btn";
-    pull.dataset.variant = "ghost";
-    pull.dataset.size = "icon-xs";
-    pull.setAttribute("data-tip", "Replace the drafts with what Steam serves for this language");
-    pull.append(iconEl("arrowDown"));
-    pull.addEventListener("click", () => {
+  const hasLive = !!liveT && (liveT.title.trim() !== "" || liveT.description.trim() !== "");
+  const fetchTip = !liveT
+    ? "Steam has not answered for this language yet."
+    : !hasLive
+      ? "Steam serves no text for this language."
+      : `Replace the drafts with what Steam serves: ${liveT.title} - ${
+          liveT.description.slice(0, 160) || "(no description)"
+        }`;
+  const fileRow = fileActionsRow({
+    hint: `Edit translations/${lang}/description.bbcode in the editor.`,
+    editTip: `Open translations/${lang}/description.bbcode in the editor`,
+    onEdit: () => send({ type: "openListingFile", lang }),
+    fetchTip,
+    fetchDisabled: !hasLive,
+    onFetch: () => {
+      if (!liveT) return;
       draftTranslations[lang] = { title: liveT.title, description: liveT.description };
       queueSave();
       renderTranslations();
       renderPublish();
-    });
-    hint.append(label, text, pull);
-    body.append(hint);
-  }
+    },
+  });
+  body.append(title, prev.box, fileRow);
 
   row.append(head, body);
   return row;
@@ -501,13 +643,400 @@ function renderTranslations(): void {
   }
 }
 
+/** The upload's blockers and warnings, read from the local files. */
+function renderChecks(): void {
+  const box = $("checks");
+  box.replaceChildren();
+  for (const c of info?.checks ?? []) {
+    const row = document.createElement("div");
+    row.className = "check-row";
+    row.dataset.level = c.level;
+    row.append(iconEl(c.level === "error" ? "circleX" : "alert"), document.createTextNode(c.message));
+    box.append(row);
+  }
+}
+
+/**
+ * The extra previews: the local `previews/` folder when it exists (it then
+ * REPLACES the item's gallery on upload), else Steam's current gallery,
+ * read-only.
+ */
+function renderPreviews(): void {
+  $("previewsSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  if (!info || info.descriptorMissing) return;
+  const gallery = $("gallery");
+  gallery.replaceChildren();
+  const hint = $("previewsHint");
+  const liveCount = live?.additionalPreviews.length ?? 0;
+  const videos = $<HTMLInputElement>("videos");
+  if (!info.previews) {
+    hint.textContent =
+      `No previews folder yet. Add images to create ${info.workshopDir.replace(/\\/g, "/")}/previews; ` +
+      `until then the item's gallery on Steam stays as it is` +
+      (liveCount ? ` (${liveCount} on Steam now).` : ".");
+    for (const p of live?.additionalPreviews ?? [])
+      gallery.append(liveTile(p.type, p.urlOrVideoId, p.originalFileName));
+    videos.value = "";
+    videos.disabled = true;
+    return;
+  }
+  videos.disabled = false;
+  const n = info.previews.images.length + info.previews.videos.length;
+  hint.textContent =
+    n === 0
+      ? "The previews folder is empty: the next details upload removes every extra preview on Steam."
+      : `${info.previews.images.length} image(s) and ${info.previews.videos.length} video(s). ` +
+        `The next details upload replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}.`;
+  // Videos lead, the way Steam orders the gallery on the item page.
+  for (const id of info.previews.videos) gallery.append(liveTile(1, id, ""));
+  for (const img of info.previews.images) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    const el = document.createElement("img");
+    el.src = img.uri;
+    el.alt = img.name;
+    const cap = document.createElement("span");
+    cap.className = "cap";
+    cap.textContent = img.name;
+    const rm = document.createElement("button");
+    rm.className = "px-btn rm";
+    rm.dataset.variant = "secondary";
+    rm.dataset.size = "icon-xs";
+    rm.setAttribute("aria-label", `Remove ${img.name}`);
+    rm.append(iconEl("x"));
+    rm.addEventListener("click", () => send({ type: "removePreview", name: img.name }));
+    tile.append(el, cap, rm);
+    tile.dataset.name = img.name;
+    tile.setAttribute("data-tip", "Drag to reorder; the order is saved to previews/order.txt");
+    gallery.append(tile);
+  }
+  wireGalleryDrag(gallery);
+  if (document.activeElement !== videos) videos.value = info.previews.videos.join(", ");
+}
+
+/**
+ * Pointer-driven reorder of the image tiles. Press and move past a few pixels
+ * lifts a clone of the tile under the pointer; the tile itself stays in the
+ * flow as a dashed placeholder and moves between its siblings as the pointer
+ * crosses their centres, the siblings sliding into place (FLIP: measure,
+ * move, play the inverse transform back to zero). Release commits the order
+ * as file names. A plain click (no move) still reaches the Remove button.
+ */
+function wireGalleryDrag(gallery: HTMLElement): void {
+  const tiles = () => Array.from(gallery.querySelectorAll<HTMLElement>(".tile[data-name]"));
+  for (const tile of tiles()) {
+    tile.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0 || (down.target as HTMLElement).closest("button")) return;
+      const start = { x: down.clientX, y: down.clientY };
+      let ghost: HTMLElement | null = null;
+      let offset = { x: 0, y: 0 };
+      const before = tiles().map((t) => t.dataset.name);
+
+      // Layout boxes, not getBoundingClientRect: a sibling mid-slide reports
+      // its transformed rect, which made the hit test and the FLIP deltas
+      // chase the animation (the stutter). offsetLeft/Top ignore transforms.
+      const box = (t: HTMLElement) => ({
+        left: t.offsetLeft,
+        top: t.offsetTop,
+        right: t.offsetLeft + t.offsetWidth,
+        bottom: t.offsetTop + t.offsetHeight,
+        width: t.offsetWidth,
+      });
+      const flip = (move: () => void): void => {
+        const first = new Map(tiles().map((t) => [t, box(t)]));
+        move();
+        for (const t of tiles()) {
+          const a = first.get(t);
+          if (!a || t === tile) continue;
+          const b = box(t);
+          const dx = a.left - b.left;
+          const dy = a.top - b.top;
+          if (!dx && !dy) continue;
+          t.classList.remove("slide");
+          t.style.transform = `translate(${dx}px, ${dy}px)`;
+          void t.offsetWidth;
+          t.classList.add("slide");
+          t.style.transform = "";
+        }
+      };
+      const onMove = (e: PointerEvent): void => {
+        if (!ghost) {
+          if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
+          const r = tile.getBoundingClientRect();
+          offset = { x: start.x - r.left, y: start.y - r.top };
+          ghost = tile.cloneNode(true) as HTMLElement;
+          ghost.classList.add("lift");
+          ghost.removeAttribute("data-tip");
+          ghost.removeAttribute("data-name");
+          ghost.style.width = `${r.width}px`;
+          ghost.style.height = `${r.height}px`;
+          gallery.append(ghost);
+          tile.classList.add("placeholder");
+        }
+        ghost.style.left = `${e.clientX - offset.x}px`;
+        ghost.style.top = `${e.clientY - offset.y}px`;
+        // The slot the pointer is over decides where the placeholder goes.
+        const g = gallery.getBoundingClientRect();
+        const px = e.clientX - g.left + gallery.scrollLeft;
+        const py = e.clientY - g.top + gallery.scrollTop;
+        const over = tiles().find((t) => {
+          if (t === tile) return false;
+          const r = box(t);
+          return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
+        });
+        if (!over) return;
+        const r = box(over);
+        const after = px > r.left + r.width / 2;
+        const target = after ? over.nextSibling : over;
+        if (target === tile || (after && over.nextSibling === tile)) return;
+        flip(() => gallery.insertBefore(tile, target));
+      };
+      const onUp = (): void => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
+        if (!ghost) return;
+        ghost.remove();
+        tile.classList.remove("placeholder");
+        for (const t of tiles()) t.classList.remove("slide");
+        const names = tiles()
+          .map((t) => t.dataset.name ?? "")
+          .filter(Boolean);
+        if (names.join("\n") !== before.join("\n")) send({ type: "reorderPreviews", names });
+      };
+      // On the document, not the tile: insertBefore re-inserts the tile on
+      // every slot change, and a re-inserted node loses its pointer capture,
+      // which froze the drag as soon as it passed one slot.
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onUp);
+    });
+  }
+}
+
+function liveTile(type: number, urlOrId: string, name: string): HTMLElement {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  if (type === 1) {
+    tile.classList.add("video");
+    tile.append(iconEl("play"), document.createTextNode(` ${urlOrId}`));
+    tile.setAttribute("data-tip", "Open on YouTube");
+    tile.setAttribute("role", "button");
+    tile.tabIndex = 0;
+    tile.addEventListener("click", () => send({ type: "openVideo", id: urlOrId }));
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") send({ type: "openVideo", id: urlOrId });
+    });
+    return tile;
+  }
+  const el = document.createElement("img");
+  el.src = urlOrId;
+  el.alt = name;
+  const cap = document.createElement("span");
+  cap.className = "cap";
+  cap.textContent = name || "on Steam";
+  tile.append(el, cap);
+  return tile;
+}
+
+/** YouTube ids from ids, watch links or youtu.be links, comma or space separated. */
+function parseVideoIds(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/[,\s]+/)) {
+    const m = /(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{6,20})/.exec(raw) ?? /^([\w-]{6,20})$/.exec(raw);
+    if (m && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+/** What the listing requires: DLC of the game and other Workshop items. */
+function renderRequirements(): void {
+  $("requirementsSection").style.display = info && !info.descriptorMissing ? "" : "none";
+  if (!info || info.descriptorMissing) return;
+  // Local dependencies.json wins; without it Steam's current state shows, read-only until edited.
+  const apps = info.dependencies?.apps ?? live?.appDependencies ?? [];
+  const items = info.dependencies?.items ?? live?.children ?? [];
+  const commit = (nextApps: number[], nextItems: string[]) =>
+    send({ type: "setDependencies", apps: nextApps, items: nextItems });
+
+  // The list is read from the game install once per session, on open; Steam
+  // is the fallback (see the `dlc` message) when the install gives nothing.
+  if (!dlcAsked) {
+    dlcAsked = true;
+    dlcLoading = true;
+    send({ type: "loadDlc", allowSteam: false });
+  }
+
+  const dlcBox = $("dlcBox");
+  dlcBox.replaceChildren();
+  if (dlc?.length) {
+    const grid = document.createElement("div");
+    grid.className = "dlc-grid";
+    for (const d of dlc) {
+      const tile = document.createElement("button");
+      tile.className = "dlc-tile";
+      tile.type = "button";
+      tile.dataset.on = apps.includes(d.steamId) ? "1" : "";
+      tile.setAttribute("data-tip", `${d.name} (#${d.steamId})`);
+      tile.setAttribute("data-tip-wrap", "");
+      tile.setAttribute("aria-pressed", apps.includes(d.steamId) ? "true" : "false");
+      if (d.iconUri) {
+        const img = document.createElement("img");
+        img.src = d.iconUri;
+        img.alt = d.name;
+        // A missing or broken icon falls back to the name, like the Steam list.
+        img.addEventListener("error", () => img.replaceWith(nameCap(d.name)));
+        tile.append(img);
+      } else {
+        tile.append(nameCap(d.name));
+      }
+      const mark = document.createElement("span");
+      mark.className = "mark";
+      mark.append(iconEl("check"));
+      tile.append(mark);
+      tile.addEventListener("click", () => {
+        const on = apps.includes(d.steamId);
+        commit(on ? apps.filter((a) => a !== d.steamId) : [...apps, d.steamId], items);
+      });
+      grid.append(tile);
+    }
+    dlcBox.append(grid);
+  }
+  const dlcNote = document.createElement("div");
+  dlcNote.className = "px-muted px-xs";
+  if (dlcError) dlcNote.textContent = dlcError;
+  else if (dlcLoading) dlcNote.textContent = "Reading the DLC list…";
+  else if (dlcSource === "game") dlcNote.textContent = "Click a DLC to require it.";
+  else if (dlcSource === "steam")
+    dlcNote.textContent =
+      "From the Steam client (the game path is unknown, so there are no icons). Click a DLC to require it.";
+  else dlcNote.textContent = "No DLC list: neither the game files nor Steam gave one.";
+  dlcBox.append(dlcNote);
+
+  const itemsBox = $("itemsBox");
+  itemsBox.replaceChildren();
+  // Ids that are not an installed mod are looked up on Steam, once each.
+  const candidates = info.dependencyCandidates;
+  const unknown = items.filter(
+    (id) => !candidates.some((c) => c.itemId === id) && !itemTitles.has(id) && !itemsPending.has(id)
+  );
+  if (unknown.length) {
+    for (const id of unknown) itemsPending.add(id);
+    send({ type: "resolveItems", ids: unknown });
+  }
+  for (const id of items) {
+    const row = document.createElement("span");
+    row.className = "px-chip";
+    const label = info.dependencyCandidates.find((c) => c.itemId === id)?.label ?? itemTitles.get(id);
+    const text = document.createElement("span");
+    text.className = "name";
+    text.textContent = label ?? (itemsPending.has(id) ? "looking it up…" : "not found");
+    text.setAttribute("data-tip", label ?? "");
+    const idEl = document.createElement("span");
+    idEl.className = "id";
+    idEl.textContent = `#${id}`;
+    const rm = document.createElement("button");
+    rm.className = "px-btn";
+    rm.dataset.variant = "ghost";
+    rm.dataset.size = "icon-xs";
+    rm.setAttribute("aria-label", `Remove #${id}`);
+    rm.append(iconEl("x"));
+    rm.addEventListener("click", () =>
+      commit(
+        apps,
+        items.filter((i) => i !== id)
+      )
+    );
+    row.append(text, idEl, rm);
+    itemsBox.append(row);
+  }
+  if (items.length === 0) {
+    const none = document.createElement("span");
+    none.className = "px-muted px-xs";
+    none.textContent = "None. Subscribers are told to get these first.";
+    itemsBox.append(none);
+  }
+}
+
+/** The name caption of a DLC tile without an icon. */
+function nameCap(name: string): HTMLElement {
+  const cap = document.createElement("span");
+  cap.className = "cap";
+  cap.textContent = name;
+  return cap;
+}
+
+/** Translations that upload: drafted with text, and not switched off. */
+function enabledLanguages(): string[] {
+  if (!$<HTMLInputElement>("incLangs").checked) return [];
+  return uploadableLanguages().filter((l) => !langsOff.has(l));
+}
+
 function renderPublish(): void {
   const langs = uploadableLanguages();
-  $("langCount").textContent = langs.length ? `- ${langs.map(langLabel).join(", ")}` : "- none drafted yet";
   const incLangs = $<HTMLInputElement>("incLangs");
   incLangs.disabled = !langs.length;
   if (!langs.length) incLangs.checked = false;
+  const on = enabledLanguages();
+  $("langCount").textContent = !langs.length
+    ? "Upload (none drafted)"
+    : on.length === langs.length
+      ? `Upload all ${langs.length}`
+      : `Upload ${on.length} of ${langs.length}`;
+
+  // Each switch owns the card it sits in; the summary says what an upload sends.
+  const owned: [string, string][] = [
+    ["incContent", "modFilesSection"],
+    ["incDetails", "itemSection"],
+    ["incPreviews", "previewsSection"],
+    ["incRequirements", "requirementsSection"],
+    ["incLangs", "translationsSection"],
+    ["incNote", "noteSection"],
+  ];
+  for (const [input, section] of owned)
+    $(section).toggleAttribute("data-off", !$<HTMLInputElement>(input).checked);
+  const sends: string[] = [];
+  if ($<HTMLInputElement>("incContent").checked) sends.push("mod files");
+  if ($<HTMLInputElement>("incDetails").checked) sends.push("details");
+  if ($<HTMLInputElement>("incPreviews").checked) sends.push("previews");
+  if ($<HTMLInputElement>("incRequirements").checked) sends.push("requirements");
+  if (on.length) sends.push(`${on.length} translation${on.length === 1 ? "" : "s"}`);
+  if ($<HTMLInputElement>("incNote").checked && noteText().trim()) sends.push(`changenote (${noteOrigin()})`);
+  const summary = $("publishSummary");
+  summary.replaceChildren();
+  const lead = document.createElement("span");
+  lead.className = "sub";
+  lead.textContent = sends.length ? "Sends: " : "";
+  summary.append(
+    lead,
+    document.createTextNode(sends.length ? sends.join(", ") : "Nothing: every part is off.")
+  );
 }
+$<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
+
+for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incLangs", "incNote"]) {
+  $(id).addEventListener("change", renderPublish);
+}
+
+$("enableAll").addEventListener("click", () => {
+  $("enableAllConfirm").hidden = false;
+  $<HTMLButtonElement>("enableAll").disabled = true;
+});
+$("enableAllNo").addEventListener("click", () => {
+  $("enableAllConfirm").hidden = true;
+  $<HTMLButtonElement>("enableAll").disabled = false;
+});
+$("enableAllYes").addEventListener("click", () => {
+  $("enableAllConfirm").hidden = true;
+  $<HTMLButtonElement>("enableAll").disabled = false;
+  for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incNote"])
+    $<HTMLInputElement>(id).checked = true;
+  $<HTMLInputElement>("incLangs").checked = uploadableLanguages().length > 0;
+  langsOff.clear();
+  // The changenote card still has to redraw: its switch is on again.
+  renderNote();
+  renderPublish();
+});
 
 // ---------------------------------------------------------------------------
 // Messages
@@ -524,14 +1053,13 @@ function applyInfo(next: WorkshopModInfo | null): void {
     pickedVisibility = null;
     collapsed.clear();
     knownLangs.clear();
-    langMode.clear();
+    langsOff.clear();
   }
   // A pending autosave means the disk is behind the editor: keep the drafts.
   const pendingEdits = !switched && saveTimer !== undefined;
   if (!pendingEdits) {
     draftDescription = next?.description ?? "";
     draftTranslations = structuredClone(next?.translations ?? {});
-    $<HTMLTextAreaElement>("desc").value = draftDescription;
   }
   for (const lang of Object.keys(draftTranslations)) {
     if (!knownLangs.has(lang)) {
@@ -539,11 +1067,8 @@ function applyInfo(next: WorkshopModInfo | null): void {
       collapsed.add(lang);
     }
   }
-  if (switched) {
-    noteSource = next?.changelogNote ? "changelog" : next?.changeNoteSuggestion ? "commit" : "manual";
-    $<HTMLTextAreaElement>("note").value = next?.changelogNote?.text ?? next?.changeNoteSuggestion ?? "";
-  }
-  renderNoteSource();
+  // The typed note belongs to the mod it was typed for.
+  if (switched) $<HTMLTextAreaElement>("note").value = "";
   renderAll();
   // One Steam query per mod (plus the manual refresh button) - metadata
   // edits and draft saves must not spam Steam with re-queries.
@@ -580,7 +1105,30 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
     case "uploadState":
       busy = m.busy;
       renderToolbar();
-      $("liveState").textContent = m.message ?? (busy ? "uploading…" : "");
+      return;
+    case "progress":
+      progressStep = m.step === null ? null : { step: m.step, done: m.done, total: m.total };
+      renderProgress();
+      return;
+    case "dlc":
+      // The install gave nothing: ask Steam once before giving up.
+      if (m.source !== "game" && !m.list.length && !dlcSteamAsked) {
+        dlcSteamAsked = true;
+        send({ type: "loadDlc", allowSteam: true });
+        return;
+      }
+      dlcLoading = false;
+      dlc = m.error ? null : m.list;
+      dlcSource = m.source;
+      dlcError = m.error;
+      renderRequirements();
+      return;
+    case "itemTitles":
+      for (const [id, title] of Object.entries(m.titles)) {
+        itemsPending.delete(id);
+        itemTitles.set(id, title);
+      }
+      renderRequirements();
       return;
   }
 });
@@ -632,11 +1180,6 @@ $("visibility").addEventListener("click", () => {
   });
 });
 
-$<HTMLTextAreaElement>("desc").addEventListener("input", () => {
-  draftDescription = $<HTMLTextAreaElement>("desc").value;
-  queueSave();
-});
-
 $("pullDesc").addEventListener(
   "click",
   () =>
@@ -651,26 +1194,37 @@ $("pullDesc").addEventListener(
         if (!go) return;
       }
       draftDescription = live.description;
-      $<HTMLTextAreaElement>("desc").value = draftDescription;
       queueSave();
+      renderDescription();
     })()
 );
 
 $("addLang").addEventListener("click", () => {
   if (!info) return;
   const present = new Set(Object.keys(draftTranslations));
-  const suggested = info.suggestedLanguages.filter((l) => !present.has(l));
-  const rest = info.steamLanguages.filter((l) => !present.has(l.api) && !suggested.includes(l.api));
+  // The game's own languages lead, marked: those are the ones players read
+  // the game in. Within them, the ones this mod already localizes come first.
+  const suggested = new Set(info.suggestedLanguages);
+  const gameLangs = new Set(info.gameLanguages);
+  const game = [...gameLangs]
+    .filter((l) => !present.has(l))
+    .sort(
+      (a, b) =>
+        Number(suggested.has(b)) - Number(suggested.has(a)) || langLabel(a).localeCompare(langLabel(b))
+    );
+  const rest = info.steamLanguages.filter((l) => !present.has(l.api) && !gameLangs.has(l.api));
   const items: MenuItem[] = [
-    ...suggested.map<MenuItem>((api) => ({
+    ...game.map<MenuItem>((api) => ({
       value: api,
       label: langLabel(api),
-      hint: "in this mod's localization",
+      hint: suggested.has(api) ? "game · in this mod" : "game",
     })),
     ...rest.map<MenuItem>((l) => ({ value: l.api, label: l.label })),
   ];
+  // Wide enough that "Spanish (Latin America)" and its tag both fit.
   menu($("addLang"), items, {
     search: true,
+    width: 300,
     onPick: (api) => {
       if (!draftTranslations[api]) draftTranslations[api] = {};
       knownLangs.add(api);
@@ -692,14 +1246,18 @@ $("upload").addEventListener(
       // Mirror the modal's last word back into the Publish switches.
       $<HTMLInputElement>("incContent").checked = picked.content;
       $<HTMLInputElement>("incDetails").checked = picked.details;
+      $<HTMLInputElement>("incPreviews").checked = picked.previews;
       $<HTMLInputElement>("incLangs").checked = picked.languages.length > 0;
+      renderPublish();
       flushSave();
       send({
         type: "upload",
         content: picked.content,
         details: picked.details,
+        previews: picked.previews,
+        requirements: picked.requirements,
         languages: picked.languages,
-        changeNote: $<HTMLTextAreaElement>("note").value,
+        changeNote: $<HTMLInputElement>("incNote").checked ? noteText() : "",
         visibility: picked.details ? pickedVisibility : null,
       });
     })()
@@ -708,6 +1266,8 @@ $("upload").addEventListener(
 interface UploadChoice {
   content: boolean;
   details: boolean;
+  previews: boolean;
+  requirements: boolean;
   languages: string[];
 }
 
@@ -719,7 +1279,7 @@ interface UploadChoice {
 async function uploadModal(): Promise<UploadChoice | null> {
   if (!info) return null;
   const isNew = !info.publishedId;
-  const langs = uploadableLanguages();
+  const langs = enabledLanguages();
 
   const wrap = document.createElement("div");
   wrap.className = "modal-rows";
@@ -760,15 +1320,31 @@ async function uploadModal(): Promise<UploadChoice | null> {
     "Details",
     "title, description, visibility, tags, preview image"
   );
+  const previews = row(
+    "previews",
+    $<HTMLInputElement>("incPreviews").checked,
+    false,
+    "Previews",
+    "the gallery images and videos, replacing the item's gallery"
+  );
   const translations = row(
     "translations",
-    $<HTMLInputElement>("incLangs").checked && langs.length > 0,
+    langs.length > 0,
     langs.length === 0,
     "Translations",
-    langs.length ? langs.map(langLabel).join(", ") : "none drafted"
+    langs.length ? langs.map(langLabel).join(", ") : "none enabled"
+  );
+  const requirements = row(
+    "requirements",
+    $<HTMLInputElement>("incRequirements").checked,
+    !info?.dependencies,
+    "Requirements",
+    info?.dependencies
+      ? "the required DLC and items, replacing what the item declares"
+      : "none declared locally"
   );
 
-  const note = $<HTMLTextAreaElement>("note").value.trim();
+  const note = $<HTMLInputElement>("incNote").checked ? noteText().trim() : "";
   const lines = document.createElement("div");
   lines.className = "modal-line";
   const vis = pickedVisibility ?? live?.visibility ?? null;
@@ -801,9 +1377,17 @@ async function uploadModal(): Promise<UploadChoice | null> {
   const choice: UploadChoice = {
     content: content.checked,
     details: details.checked,
+    previews: previews.checked,
+    requirements: requirements.checked,
     languages: translations.checked ? langs : [],
   };
-  if (!choice.content && !choice.details && !choice.languages.length) {
+  if (
+    !choice.content &&
+    !choice.details &&
+    !choice.previews &&
+    !choice.requirements &&
+    !choice.languages.length
+  ) {
     send({ type: "notify", message: "Nothing was checked - upload skipped.", warn: true });
     return null;
   }
@@ -811,119 +1395,275 @@ async function uploadModal(): Promise<UploadChoice | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Description modes, changenote, listing download
+// Changenote, listing download
 // ---------------------------------------------------------------------------
 
-$("descMode")
-  .querySelectorAll("button")
-  .forEach((b) =>
-    b.addEventListener("click", () => {
-      descMode = b.dataset.mode === "preview" ? "preview" : "edit";
-      renderDescMode();
-    })
-  );
-
-function renderNoteSource(): void {
-  const btn = $<HTMLButtonElement>("noteSourceBtn");
-  const label = btn.querySelector("span.px-truncate")!;
-  const from = info?.changelogNote;
-  if (noteSource === "changelog" && from) {
-    label.textContent = `From changelog: ${from.source}`;
-    btn.setAttribute("data-tip", "The box was filled from this changelog entry. Edit freely.");
-  } else if (noteSource === "commit") {
-    label.textContent = "From last git commit";
-    btn.setAttribute("data-tip", "The box was filled with the mod's last commit subject.");
-  } else {
-    label.textContent = "Manual changenote";
-    btn.setAttribute("data-tip", "Written by hand. Click to fill it from a source instead.");
-  }
-  btn.setAttribute("data-tip-wrap", "");
+/**
+ * The changenote card: one visible choice of source, and the picked source is
+ * exactly what uploads. Nothing is prefilled into the box behind the reader's
+ * back, and typing no longer changes the source silently.
+ */
+function defaultNoteSource(): NoteSource {
+  if (info?.changelogNote) return "changelog";
+  if ((info?.changeNoteSuggestion ?? "").trim()) return "commit";
+  return "write";
 }
 
-$<HTMLTextAreaElement>("note").addEventListener("input", () => {
-  if (noteSource !== "manual") {
-    noteSource = "manual";
-    renderNoteSource();
-  }
-});
+/** The text this upload's changenote carries, from the picked source. */
+function noteText(): string {
+  if (noteSource === "changelog") return info?.changelogNote?.text ?? "";
+  if (noteSource === "commit") return info?.changeNoteSuggestion ?? "";
+  return $<HTMLTextAreaElement>("note").value;
+}
 
-$("noteSourceBtn").addEventListener("click", () => {
+/** How the Publish summary names the picked source. */
+function noteOrigin(): string {
+  if (noteSource === "changelog") return info?.changelogNote?.source ?? "changelog";
+  return noteSource === "commit" ? "last commit" : "written here";
+}
+
+/** The changelog the setting points at, as the card names it. */
+function changelogWhere(): string {
+  const display = info?.changelogDisplay ?? "changelog";
+  return info?.changelogKind === "file" || /\.\w+$/.test(display) ? display : `${display}/`;
+}
+
+function renderNote(): void {
+  noteSource = (active ? noteSourceByMod.get(active) : undefined) ?? defaultNoteSource();
+  for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>("#noteSeg .px-toggle")))
+    b.setAttribute("aria-pressed", String(b.dataset.src === noteSource));
+  $("noteChangelog").hidden = noteSource !== "changelog";
+  $("noteCommit").hidden = noteSource !== "commit";
+  $("noteWrite").hidden = noteSource !== "write";
+  if (noteSource === "changelog") renderChangelogNote();
+  else if (noteSource === "commit") renderCommitNote();
+}
+
+/** The location menu: where the changelog is, never what fills the note. */
+function changelogLocationMenu(anchor: HTMLElement): void {
   if (!info) return;
-  const from = info.changelogNote;
-  const commit = info.changeNoteSuggestion;
   const items: MenuItem[] = [
-    from
-      ? {
-          value: "changelog",
-          label: "Changelog entry",
-          hint: from.source,
-          description: info.version
-            ? `The entry matching version ${info.version}; Markdown already converted to BBCode.`
-            : "The resolved changelog entry.",
-        }
-      : {
-          value: "changelog-missing",
-          label: "Changelog entry",
-          hint: "none found",
-          description: `Looked at ${info.changelogPath}${info.version ? ` for version ${info.version}` : " (the descriptor has no version)"}. Folder: a ${info.version ?? "<version>"}.md/.bbcode/.txt file. Single file: a headline containing the version.`,
-        },
+    ...info.changelogCandidates
+      .filter((c) => !c.current)
+      .map<MenuItem>((c) => ({
+        value: `use:${c.path}`,
+        label: `Use this ${c.kind}`,
+        hint: c.path,
+        description: "Points px.workshop.changelog at it for this workspace folder.",
+      })),
     {
-      value: "commit",
-      label: "Last git commit",
-      hint: commit ? commit.split("\n")[0].slice(0, 40) : "no commits",
-      description: "The mod's most recent commit subject.",
+      value: "create",
+      label: "Create changelog",
+      hint: info.version ? `${info.version}.md` : "needs a version",
+      description: "Makes the changelog folder and this version's entry, then opens it.",
     },
-    { value: "manual", label: "Empty", description: "Clear the box and write your own." },
   ];
-  menu($("noteSourceBtn"), items, {
-    value: noteSource,
-    width: 320,
+  menu(anchor, items, {
+    width: 340,
     onPick: (v) => {
-      const note = $<HTMLTextAreaElement>("note");
-      if (v === "changelog" && info?.changelogNote) {
-        noteSource = "changelog";
-        note.value = info.changelogNote.text;
-      } else if (v === "changelog-missing") {
-        send({
-          type: "notify",
-          message: `No changelog entry for ${info?.version ? `version ${info.version}` : "this mod"} at ${info?.changelogPath ?? "the changelog path"}. The ? button in the toolbar explains the layout; px.workshop.changelog moves the location.`,
-          warn: true,
-        });
-        return;
-      } else if (v === "commit") {
-        noteSource = "commit";
-        note.value = info?.changeNoteSuggestion ?? "";
-      } else {
-        noteSource = "manual";
-        note.value = "";
-      }
-      renderNoteSource();
+      if (v === "create") send({ type: "createChangelog" });
+      else send({ type: "setChangelogSource", path: v.slice(4) });
     },
   });
-});
+}
+
+/** A button that opens the location menu. */
+function locationButton(label: string): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.className = "px-btn px-dropdown";
+  btn.dataset.variant = "ghost";
+  btn.dataset.size = "sm";
+  btn.style.width = "auto";
+  btn.setAttribute("data-tip", "Point the changenote at another changelog, or create one");
+  btn.setAttribute("data-tip-wrap", "");
+  btn.append(document.createTextNode(label), iconEl("chevronDown"));
+  btn.addEventListener("click", () => changelogLocationMenu(btn));
+  return btn;
+}
+
+function renderChangelogNote(): void {
+  const box = $("noteChangelog");
+  box.replaceChildren();
+  if (!info) return;
+  const note = info.changelogNote;
+  if (!note) {
+    box.append(...changelogEmptyState());
+    return;
+  }
+  const status = document.createElement("div");
+  status.className = "hintline";
+  const where = document.createElement("span");
+  where.className = "hint px-muted px-xs";
+  where.textContent = info.version ? `Version ${info.version} · ${note.source}` : note.source;
+  status.append(where, locationButton("Change…"));
+
+  // The entry as it will read on Steam: resolveChangeNote already converted a
+  // Markdown entry, so this is byte for byte what the upload sends.
+  const prev = previewBox(`Edit ${note.source}`, () => send({ type: "openChangelogEntry" }));
+  const blank = note.text.trim() === "";
+  prev.preview.classList.toggle("empty", blank);
+  if (blank) prev.preview.textContent = `${note.source} is empty.`;
+  else prev.preview.innerHTML = bbcodeToHtml(note.text);
+
+  const ext = /\.(\w+)$/.exec(note.source)?.[1].toLowerCase();
+  const format =
+    ext === "bbcode"
+      ? "BBCode as written."
+      : ext === "txt"
+        ? "plain text."
+        : "Markdown is converted to BBCode for Steam.";
+  box.append(
+    status,
+    prev.box,
+    fileActionsRow({
+      hint: `Edit ${note.source} in the editor; ${format}`,
+      editTip: `Open ${note.source} in the editor`,
+      onEdit: () => send({ type: "openChangelogEntry" }),
+      reloadTip: "Re-read the changelog and the local text files",
+    })
+  );
+}
+
+/** One sentence for why there is no entry, plus the actions that fix it. */
+function changelogEmptyState(): HTMLElement[] {
+  const line = document.createElement("div");
+  line.className = "px-muted px-xs";
+  const row = document.createElement("div");
+  row.className = "hintline";
+  const version = info?.version;
+  if (!version) {
+    line.textContent =
+      "The descriptor has no version, so no changelog entry can match. Set one in the Item card.";
+    return [line];
+  }
+  const where = changelogWhere();
+  const kind = info?.changelogKind ?? null;
+  if (kind === null) {
+    line.textContent = `No changelog at ${where} yet.`;
+    row.append(actionButton("plus", "Create changelog", () => send({ type: "createChangelog" })));
+    if (info?.changelogCandidates.length) row.append(locationButton("Use an existing one"));
+    return [line, row];
+  }
+  if (kind === "folder") {
+    line.textContent = `No entry for version ${version} in ${where}.`;
+    row.append(
+      actionButton("plus", `Create ${version}.md`, () => send({ type: "createChangelog" })),
+      locationButton("Use another")
+    );
+    return [line, row];
+  }
+  line.textContent = `${where} has no headline containing ${version}.`;
+  row.append(
+    actionButton("pencil", `Open ${where}`, () => send({ type: "createChangelog" })),
+    locationButton("Use another")
+  );
+  return [line, row];
+}
+
+function actionButton(
+  icon: Parameters<typeof iconEl>[0],
+  label: string,
+  onClick: () => void
+): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.className = "px-btn";
+  b.dataset.variant = "outline";
+  b.dataset.size = "sm";
+  b.append(iconEl(icon), document.createTextNode(` ${label}`));
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderCommitNote(): void {
+  const box = $("noteCommit");
+  box.replaceChildren();
+  const commit = (info?.changeNoteSuggestion ?? "").trim();
+  const block = document.createElement("div");
+  block.className = "bbprev";
+  if (!commit) {
+    block.classList.add("empty");
+    block.textContent = "No git commit found for this mod.";
+    const none = document.createElement("div");
+    none.className = "hintline";
+    const nonetext = document.createElement("span");
+    nonetext.className = "hint";
+    nonetext.textContent =
+      "The upload carries no changenote until the mod has a commit. Changelog and Write are the other sources.";
+    none.append(nonetext);
+    box.append(block, none);
+    return;
+  }
+  block.textContent = commit;
+  const hint = document.createElement("div");
+  hint.className = "hintline";
+  const text = document.createElement("span");
+  text.className = "hint";
+  text.textContent = "The subject of the mod's last git commit, sent as plain text.";
+  hint.append(text);
+  box.append(block, hint);
+}
+
+for (const btn of Array.from(document.querySelectorAll<HTMLButtonElement>("#noteSeg .px-toggle"))) {
+  btn.addEventListener("click", () => {
+    if (active) noteSourceByMod.set(active, btn.dataset.src as NoteSource);
+    renderNote();
+    renderPublish();
+  });
+}
 
 $("pull").addEventListener(
   "click",
   () =>
     void (async () => {
       if (!info?.publishedId || busy || fetching) return;
+      const wrap = document.createElement("div");
+      wrap.className = "modal-rows";
+      const part = (id: keyof PullParts, label: string, sub: string) => {
+        const r = document.createElement("div");
+        r.className = "pub-row";
+        const sw = document.createElement("label");
+        sw.className = "px-switch";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = true;
+        sw.append(input, document.createElement("span"));
+        const text = document.createElement("span");
+        text.className = "lbl";
+        text.append(document.createTextNode(label));
+        const subEl = document.createElement("span");
+        subEl.className = "sub";
+        subEl.textContent = ` - ${sub}`;
+        text.append(subEl);
+        r.append(sw, text);
+        wrap.append(r);
+        return [id, input] as const;
+      };
+      const inputs = [
+        part("details", "Details", "title, tags and visibility into item.json"),
+        part("description", "Description", "description.bbcode"),
+        part("translations", "Translations", "translations/<language>/ for every translated language"),
+        part("previews", "Previews", "the gallery images, videos.txt and order.txt into previews/"),
+        part("requirements", "Requirements", "dependencies.json"),
+        part("thumbnail", "Preview image", "the main image into the mod folder"),
+      ];
+      const warn = document.createElement("div");
+      warn.className = "modal-note";
+      warn.textContent =
+        `Overwrites the matching files in ${info.workshopDir} and replaces the local drafts. ` +
+        "Local text never uploaded to Steam is lost - commit or copy it first if it matters.";
+      wrap.append(warn);
       const go = await confirmDialog({
-        title: "Download the listing from Steam into files?",
-        description:
-          "The live description and every translated language are written into the workshop folder, which becomes the canonical store for the listing:",
-        details: [
-          `Folder: ${info.workshopDir} (px.workshop.dir)`,
-          "description.bbcode - the default-language description",
-          "<language>/title.txt and <language>/description.bbcode per translated language",
-          "item.json - title and publishedfileid",
-          "THIS OVERWRITES those files and replaces the local drafts. Local text that was never uploaded to Steam is lost - commit or copy it first if it matters.",
-        ],
+        title: "Download from Steam into files?",
+        content: wrap,
         confirmLabel: "Download & overwrite",
         destructive: true,
         wide: true,
       });
       if (!go) return;
-      send({ type: "pullListing" });
+      const parts = Object.fromEntries(
+        inputs.map(([id, input]) => [id, input.checked])
+      ) as unknown as PullParts;
+      send({ type: "pullListing", parts });
     })()
 );
 
@@ -969,124 +1709,232 @@ commitField("version", "version");
 commitField("supported", "supportedVersion");
 
 $("changePreview").addEventListener("click", () => send({ type: "pickPreview" }));
+$("addPreviews").addEventListener("click", () => send({ type: "addPreviews" }));
+$("openPreviews").addEventListener("click", () => send({ type: "openPreviewsFolder" }));
+{
+  const videos = $<HTMLInputElement>("videos");
+  const commitVideos = () => {
+    if (!info?.previews) return;
+    const ids = parseVideoIds(videos.value);
+    if (ids.join(",") !== info.previews.videos.join(",")) send({ type: "setVideos", ids });
+  };
+  videos.addEventListener("change", commitVideos);
+  videos.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") videos.blur();
+  });
+}
+{
+  const input = $<HTMLInputElement>("itemIdInput");
+  const currentItems = () => info?.dependencies?.items ?? live?.children ?? [];
+  const currentApps = () => info?.dependencies?.apps ?? live?.appDependencies ?? [];
+  const addItem = (id: string) => {
+    if (!/^\d+$/.test(id) || currentItems().includes(id)) return;
+    send({ type: "setDependencies", apps: currentApps(), items: [...currentItems(), id] });
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const m = /(\d{6,})/.exec(input.value);
+    if (m) addItem(m[1]);
+    input.value = "";
+  });
+  $("addItem").addEventListener("click", () => {
+    if (!info) return;
+    const present = new Set(currentItems());
+    // The id rides as the hint (small, muted, right) so the filter still matches it.
+    const items: MenuItem[] = info.dependencyCandidates
+      .filter((c) => !present.has(c.itemId))
+      .map((c) => ({
+        value: c.itemId,
+        label: c.label,
+        hint: `#${c.itemId}`,
+        description: c.declared ? "Declared in the descriptor" : undefined,
+      }));
+    if (items.length === 0) {
+      send({
+        type: "notify",
+        message: "No other installed Workshop mod to pick; paste an id or link instead.",
+      });
+      return;
+    }
+    const rowWidth = $("addItem").parentElement?.getBoundingClientRect().width ?? 0;
+    menu($("addItem"), items, { search: true, width: Math.max(320, rowWidth), onPick: addItem });
+  });
+}
 $("openDescFile").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
-$("reloadLocal").addEventListener("click", () => {
-  // Drop the pending autosave so the reload cannot be overwritten mid-flight.
-  clearTimeout(saveTimer);
-  saveTimer = undefined;
-  send({ type: "reload" });
-});
+$("descPreviewEdit").addEventListener("click", () => send({ type: "openListingFile", lang: null }));
+$("reloadLocal").addEventListener("click", reloadLocalFiles);
+$("bbcodeHelp").addEventListener("click", () => send({ type: "bbcodeHelp" }));
+$("noteBBCodeHelp").addEventListener("click", () => send({ type: "bbcodeHelp" }));
 $("previewEmpty").style.cursor = "pointer";
 $("previewEmpty").setAttribute("data-tip", "Pick an image to use as the Workshop preview");
 $("previewEmpty").addEventListener("click", () => send({ type: "pickPreview" }));
 
-$("helpBtn").addEventListener("click", () =>
-  helpDialog({
-    title: "The Steam Workshop panel",
-    intro:
-      "Your mod's Workshop item on one page: what the descriptor and your local files say, what Steam serves right now, and an Upload that sends the parts you check. Everything you type is a local draft. Nothing reaches Steam until you confirm an upload.",
-    sections: [
-      {
-        title: "The item",
-        items: [
-          {
-            lead: "Title, mod version and game version",
-            text: "come from the mod's descriptor, and editing them here writes the descriptor back.",
-          },
-          {
-            lead: "Tags",
-            text: "are the Workshop tags of the item, also kept in the descriptor. Add one from the game's known tags or type your own.",
-          },
-          {
-            lead: "The preview image",
-            text: "is the thumbnail in the mod folder. Change picks a new one and copies it in. Steam wants a square image, 512x512 or larger, under 1 MB.",
-          },
-          {
-            lead: "Visibility",
-            text: "is sent with the details on the next upload. A brand new item is always created private.",
-          },
-          {
-            lead: "Statistics",
-            text: "appear once Steam answers: subscribers, favorites, page visits, votes and comments. The refresh button asks again.",
-          },
-        ],
-      },
-      {
-        title: "Where the listing lives",
-        intro: "Two stores, and the panel says at the Files row which one this mod uses.",
-        items: [
-          {
-            lead: "A workshop folder",
-            text: "keeps the listing as files: description.bbcode, one folder per language with title.txt and description.bbcode, and item.json. They diff and version like the rest of your code. The folder is px.workshop.dir, resolved against the mod folder.",
-          },
-          {
-            lead: "Without that folder,",
-            text: "drafts save to workshop.json inside the mod instead.",
-          },
-          {
-            lead: "The download button",
-            text: "in the toolbar writes the folder from what is on Steam. It overwrites those files and your local drafts, so anything never uploaded is lost. It asks first.",
-          },
-          {
-            lead: "Reload",
-            text: "throws away the panel's unsaved edits and reads the local files again.",
-          },
-        ],
-      },
-      {
-        title: "Description and translations",
-        items: [
-          {
-            lead: "The description is Steam BBCode",
-            text: "([h1], [b], [list], [url=…]). Preview renders it roughly the way the Workshop page will.",
-          },
-          {
-            lead: "It saves as you type,",
-            text: "locally. Fetch from Steam replaces the draft with what the item currently shows.",
-          },
-          {
-            lead: "A translation",
-            text: "is the title and description a visitor browsing Steam in that language sees. The default text is what everyone else sees.",
-          },
-          {
-            lead: "A language with no text",
-            text: "never uploads, and its row says so. Removing a language deletes its local draft, not the text already on Steam.",
-          },
-        ],
-      },
-      {
-        title: "Changenotes",
-        items: [
-          {
-            lead: "Whatever stands in the box",
-            text: "is what uploads. The dropdown below only fills it.",
-          },
-          {
-            lead: "From changelog",
-            text: "takes the entry that matches the mod version. px.workshop.changelog points either at a folder with one file per version (1.2.md, v1.2.bbcode, 1.2.txt) or at a single file, where the section under the headline containing the version is used. Markdown is converted to BBCode.",
-          },
-          { lead: "From last git commit", text: "fills the box with the mod's last commit subject." },
-        ],
-      },
-      {
-        title: "Uploading",
-        items: [
-          {
-            lead: "The three switches under Publish",
-            text: "decide what goes: the mod files, the details (title, description, visibility, tags, preview) and the translations.",
-          },
-          {
-            lead: "Upload asks first",
-            text: "and re-offers the same three switches, so you can drop a part at the last moment.",
-          },
-          {
-            lead: "There is no rollback.",
-            text: "An update reaches subscribers within minutes, Steam keeps no previous version, and the toolkit cannot recover what an upload overwrote.",
-          },
-        ],
-      },
-    ],
-  })
-);
+/** The panel's help; `section` scrolls that section into view once open. */
+function openHelp(section?: string): void {
+  helpDialog(HELP);
+  if (!section) return;
+  const title = Array.from(document.querySelectorAll<HTMLElement>(".px-help-section-title")).find(
+    (t) => t.textContent === section
+  );
+  title?.parentElement?.scrollIntoView({ block: "start" });
+}
+$("helpBtn").addEventListener("click", () => openHelp());
+
+const HELP: Parameters<typeof helpDialog>[0] = {
+  title: "The Steam Workshop panel",
+  intro:
+    "Your mod's Workshop item on one page: what the descriptor and your local files say, what Steam serves right now, and an Upload that sends the parts you check. The description texts are edited in the editor, everything else here is a local draft. Nothing reaches Steam until you confirm an upload.",
+  sections: [
+    {
+      title: "The item",
+      items: [
+        {
+          lead: "Title, mod version and game version",
+          text: "come from the mod's descriptor, and editing them here writes the descriptor back.",
+        },
+        {
+          lead: "Tags",
+          text: "are the Workshop tags of the item, also kept in the descriptor. Add one from the game's known tags or type your own.",
+        },
+        {
+          lead: "The preview image",
+          text: "is the thumbnail in the mod folder. Change picks a new one and copies it in. Steam wants a square image, 512x512 or larger, under 1 MB.",
+        },
+        {
+          lead: "Visibility",
+          text: "is sent with the details on the next upload. A brand new item is always created private.",
+        },
+        {
+          lead: "Statistics",
+          text: "appear once Steam answers: subscribers, favorites, page visits, votes and comments. The refresh button asks again.",
+        },
+      ],
+    },
+    {
+      title: "Where the listing lives",
+      intro: "Two stores, and the panel says at the Files row which one this mod uses.",
+      items: [
+        {
+          lead: "The workshop folder",
+          text: "keeps the listing as files: description.bbcode, translations/<language>/ with title.txt and description.bbcode, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise. Edit file creates the folder from your drafts when it does not exist yet.",
+        },
+        {
+          lead: "The download button",
+          text: "in the toolbar writes the folder from what is on Steam. You pick the parts: details, description, translations, previews, requirements, the preview image. It overwrites those files and your local drafts, so anything never uploaded is lost.",
+        },
+        {
+          lead: "Reload",
+          text: "throws away the panel's unsaved edits and reads the local files again. Saving a description file in the editor does the same on its own.",
+        },
+      ],
+    },
+    {
+      title: "Description and translations",
+      items: [
+        {
+          lead: "The panel shows previews, not editors.",
+          text: "Edit file opens description.bbcode (a translation's own file for a language row) in the editor; save it and the preview follows. Reload re-reads the files on demand.",
+        },
+        {
+          lead: "The description is Steam BBCode",
+          text: "([h1], [b], [list], [url=…]). The preview renders it roughly the way the Workshop page will. A .bbcode file also opens as Markdown through Edit as Markdown.",
+        },
+        {
+          lead: "Fetch from Steam",
+          text: "replaces the local text with what the item currently shows.",
+        },
+        {
+          lead: "A translation",
+          text: "is the title and description a visitor browsing Steam in that language sees. The default text is what everyone else sees.",
+        },
+        {
+          lead: "A language with no text",
+          text: "never uploads, and its row says so. Removing a language deletes its local draft, not the text already on Steam.",
+        },
+      ],
+    },
+    {
+      title: "Previews",
+      intro:
+        "The gallery on the item's Workshop page: extra images and YouTube videos, kept as files in the listing's previews folder.",
+      items: [
+        {
+          lead: "The previews folder",
+          text: "is previews/ inside the workshop folder. Add images copies files into it; Folder opens it. While the folder exists, a details upload replaces the item's whole gallery with its content, an empty folder included. Without the folder, Steam's gallery is left alone.",
+        },
+        {
+          lead: "Accepted images",
+          text: "are .png, .jpg, .jpeg and .gif files. Each must be under 1 MB (1,048,576 bytes): Steam rejects larger ones, so the upload skips them and says how many it skipped.",
+        },
+        {
+          lead: "Order",
+          text: "follows previews/order.txt, one file name per line; dragging a tile writes it. Images not listed there follow in file-name order.",
+        },
+        {
+          lead: "The first image is not the thumbnail.",
+          text: "The item's preview image (the thumbnail.png in the mod folder, under Item above) is a separate file and uploads with the details.",
+        },
+        {
+          lead: "Videos",
+          text: "are YouTube ids or links in previews/videos.txt; the Videos box writes it.",
+        },
+      ],
+    },
+    {
+      title: "Requirements",
+      items: [
+        {
+          lead: "Required DLC and required items",
+          text: "are saved in dependencies.json next to the listing, and the Requirements switch decides whether the upload applies them to the item. Steam shows them on the item page; subscribers see what to get first. The DLC grid is read from your game install, so it lists exactly the DLC a mod can require - Chapter bundles and the Subscription are not among them.",
+        },
+      ],
+    },
+    {
+      title: "Changenotes",
+      intro:
+        "The note that appears on the item's Change Notes tab. The card offers three sources, and the one you pick is exactly what uploads - nothing is filled in behind your back.",
+      items: [
+        {
+          lead: "Changelog",
+          text: "sends the entry that matches the mod version, shown as Steam will render it. Markdown entries are converted to BBCode; a .bbcode entry goes as written and a .txt one as plain text. Edit file opens that entry in the editor.",
+        },
+        {
+          lead: "Where the entry comes from",
+          text: "is px.workshop.changelog, resolved against the workshop folder (default: changelog). It points either at a folder with one file per version (1.2.md, v1.2.bbcode, 1.2.txt) or at a single file, where the section under the headline containing the version is taken. The version in the descriptor picks the entry, so a forgotten bump means no note rather than the wrong one.",
+        },
+        {
+          lead: "Change… and Create changelog",
+          text: "only move the location: they point the setting at a changelog the mod already has, or make the folder and this version's entry and open it.",
+        },
+        { lead: "Last commit", text: "sends the mod's last git commit subject, as plain text." },
+        {
+          lead: "Write",
+          text: "sends what you type, for this upload only. It is never written to a changelog, and BBCode works in it.",
+        },
+      ],
+    },
+    {
+      title: "Uploading",
+      items: [
+        {
+          lead: "The switch in each card's title row",
+          text: "decides whether that part goes: the mod files, the Item details (title, description, visibility, tags, preview image), the gallery, the requirements, the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card sums up what the next upload sends.",
+        },
+        {
+          lead: "Enable all",
+          text: "switches every part on after a confirmation, translations and changenote included.",
+        },
+        {
+          lead: "Upload asks first",
+          text: "and re-offers the parts, so you can drop one at the last moment.",
+        },
+        {
+          lead: "There is no rollback.",
+          text: "An update reaches subscribers within minutes, Steam keeps no previous version, and the toolkit cannot recover what an upload overwrote.",
+        },
+      ],
+    },
+  ],
+};
 
 send({ type: "ready" });

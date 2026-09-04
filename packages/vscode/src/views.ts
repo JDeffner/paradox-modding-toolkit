@@ -10,11 +10,14 @@ import * as vscode from "vscode";
 import { kindStyle } from "@px-lsp/protocol/kinds";
 import * as path from "path";
 import type { LanguageClient } from "vscode-languageclient/node";
+import * as fs from "fs";
 import {
+  dependenciesRequest,
   indexChangedNotification,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
+  type DependenciesParams,
   type DependenciesResult,
   type DependencyGroup,
   type LocCoverage,
@@ -116,6 +119,10 @@ class Node extends vscode.TreeItem {
   children: Node[] = [];
   /** For loc-coverage items: the loc key, consumed by px.addLocalizationFromView. */
   pxKey?: string;
+  /** For problem rows: the bare diagnostic code (no source prefix). */
+  pxCode?: string;
+  /** For rows that stand for a place in a file: where the row-only commands act. */
+  pxLoc?: { file: string; line: number };
 
   constructor(label: string, state: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None) {
     super(label, state);
@@ -190,15 +197,25 @@ const SEVERITY_ORDER: Array<[vscode.DiagnosticSeverity, string, string]> = [
 ];
 
 class ProblemsProvider extends BaseProvider {
+  /** `hasArticle` decides whether a code row offers "Explain Code": only codes
+   *  the toolkit ships a wiki page for can be explained (tiger keys cannot). */
+  constructor(private readonly hasArticle: (code: string) => boolean) {
+    super();
+  }
+
   protected async roots(): Promise<Node[]> {
     const all = vscode.languages.getDiagnostics();
     const bySeverity = new Map<vscode.DiagnosticSeverity, Map<string, Map<string, vscode.Diagnostic[]>>>();
+    // The row label carries the source too, so the bare code is kept aside for
+    // the Explain/Suppress actions.
+    const codeOfKey = new Map<string, string>();
     for (const [uri, diags] of all) {
       for (const d of diags) {
         let byKey = bySeverity.get(d.severity);
         if (!byKey) bySeverity.set(d.severity, (byKey = new Map()));
         const code = typeof d.code === "object" ? String(d.code.value) : String(d.code ?? "other");
         const key = `${d.source ?? "?"} · ${code}`;
+        codeOfKey.set(key, code);
         let byFile = byKey.get(key);
         if (!byFile) byKey.set(key, (byFile = new Map()));
         const f = uri.fsPath;
@@ -221,12 +238,17 @@ class ProblemsProvider extends BaseProvider {
         for (const list of byFile.values()) keyTotal += list.length;
         const keyNode = new Node(`${key} (${keyTotal})`, vscode.TreeItemCollapsibleState.Collapsed);
         keyNode.iconPath = new vscode.ThemeIcon("tag");
+        const code = codeOfKey.get(key) ?? "";
+        keyNode.pxCode = code;
+        keyNode.contextValue = this.hasArticle(code) ? "px.problemCodeExplain" : "px.problemCode";
         for (const [file, list] of [...byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
           const fileNode = new Node(path.basename(file));
           fileNode.description = `${list.length}×`;
           fileNode.tooltip = list[0].message;
           fileNode.command = openCommand(file, list[0].range.start.line);
           fileNode.iconPath = new vscode.ThemeIcon("file");
+          fileNode.contextValue = "px.problemFile";
+          fileNode.pxLoc = { file, line: list[0].range.start.line };
           keyNode.children.push(fileNode);
         }
         sevNode.children.push(keyNode);
@@ -364,6 +386,12 @@ class DependenciesProvider extends BaseProvider {
     this.refresh();
   }
 
+  /** Back to the empty state (px.dependenciesClear). */
+  clear(): void {
+    this.result = null;
+    this.refresh();
+  }
+
   protected async roots(): Promise<Node[]> {
     const r = this.result;
     if (!r || !r.def) {
@@ -376,6 +404,9 @@ class DependenciesProvider extends BaseProvider {
     header.description = r.def.kind.replace(/_/g, " ");
     header.iconPath = new vscode.ThemeIcon("symbol-class");
     header.command = openCommand(r.def.file, r.def.line);
+    header.contextValue = "px.depItem";
+    header.pxKey = r.def.name;
+    header.pxLoc = { file: r.def.file, line: r.def.line };
     return [
       header,
       this.section(
@@ -413,6 +444,9 @@ class DependenciesProvider extends BaseProvider {
         leaf.description = path.basename(it.file);
         leaf.command = openCommand(it.file, it.line);
         leaf.iconPath = new vscode.ThemeIcon(kindStyle(g.kind).codicon);
+        leaf.contextValue = "px.depItem";
+        leaf.pxKey = it.name;
+        leaf.pxLoc = { file: it.file, line: it.line };
         return leaf;
       });
       return kindNode;
@@ -438,7 +472,21 @@ export function registerPxViews(
   focus: FocusMod
 ): PxViews {
   const overview = new OverviewProvider(lc, focus);
-  const problems = new ProblemsProvider();
+  // The Wiki panel's diagnostic articles are the same files, one per code, so
+  // the folder listing IS the set of explainable codes. Read once: it ships in
+  // the vsix and cannot change while the extension host runs.
+  let articleIds: Set<string>;
+  try {
+    articleIds = new Set(
+      fs
+        .readdirSync(context.asAbsolutePath("dist/diagnostics"))
+        .filter((n) => n.endsWith(".md") && n !== "README.md")
+        .map((n) => n.slice(0, -3))
+    );
+  } catch {
+    articleIds = new Set();
+  }
+  const problems = new ProblemsProvider((code) => articleIds.has(code));
   const locCoverage = new LocCoverageProvider(lc, focus);
   const overrides = new OverridesProvider(lc, focus);
   const dependencies = new DependenciesProvider();
@@ -465,7 +513,97 @@ export function registerPxViews(
     vscode.window.registerTreeDataProvider("px.dependencies", dependencies),
     vscode.commands.registerCommand("px.addLocalizationFromView", (node?: { pxKey?: string }) =>
       vscode.commands.executeCommand("px.editLocalization", node?.pxKey)
-    )
+    ),
+
+    // ---- Dependencies view actions ----
+    vscode.commands.registerCommand("px.dependenciesClear", () => dependencies.clear()),
+    // A toast, not a modal: the note is orientation, not a decision.
+    vscode.commands.registerCommand("px.dependenciesInfo", async () => {
+      const pick = await vscode.window.showInformationMessage(
+        "One definition at a time. Dependents reference it (they break if you rename or remove it); " +
+          "Dependencies are what it references. Fill the view from the definition under the cursor.",
+        "Show for Cursor"
+      );
+      if (pick) await vscode.commands.executeCommand("px.showDependencies");
+    }),
+    // Re-roots the view on the clicked row. The server resolves from a cursor
+    // position, so the row's file+line is turned back into one: the first word
+    // on that line is the definition's name.
+    vscode.commands.registerCommand("px.dependenciesForItem", async (node?: Node) => {
+      const loc = node?.pxLoc;
+      if (!loc) return;
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(loc.file));
+      const line = Math.min(loc.line, Math.max(doc.lineCount - 1, 0));
+      const at = doc.getWordRangeAtPosition(
+        new vscode.Position(line, doc.lineAt(line).firstNonWhitespaceCharacterIndex),
+        /[A-Za-z0-9_.-]+/
+      );
+      const params: DependenciesParams = {
+        uri: doc.uri.toString(),
+        position: { line, character: at?.start.character ?? 0 },
+      };
+      const result = await lc.sendRequest<DependenciesResult>(dependenciesRequest, params);
+      if (!result.def) {
+        void vscode.window.showInformationMessage(
+          "Paradox Modding Toolkit: no indexed definition at that location."
+        );
+        return;
+      }
+      dependencies.setResult(result);
+    }),
+    vscode.commands.registerCommand("px.openFromView", async (node?: Node) => {
+      const loc = node?.pxLoc;
+      if (!loc) return;
+      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(loc.file), {
+        selection: new vscode.Range(loc.line, 0, loc.line, 0),
+      } satisfies vscode.TextDocumentShowOptions);
+    }),
+    vscode.commands.registerCommand("px.findReferencesFromView", async (node?: Node) => {
+      const loc = node?.pxLoc;
+      if (!loc) return;
+      await vscode.commands.executeCommand("px.openFromView", node);
+      await vscode.commands.executeCommand("editor.action.referenceSearch.trigger");
+    }),
+    vscode.commands.registerCommand("px.copyNameFromView", async (node?: Node) => {
+      const name = node?.pxKey ?? (typeof node?.label === "string" ? node.label : undefined);
+      if (name) await vscode.env.clipboard.writeText(name);
+    }),
+
+    // ---- Problems view actions ----
+    vscode.commands.registerCommand("px.openProblemsPanel", () =>
+      vscode.commands.executeCommand("workbench.actions.view.problems")
+    ),
+    vscode.commands.registerCommand("px.explainDiagnosticCode", (node?: Node) => {
+      if (node?.pxCode) void vscode.commands.executeCommand("px.openWiki", node.pxCode);
+    }),
+    vscode.commands.registerCommand("px.suppressDiagnosticCode", async (node?: Node) => {
+      const code = node?.pxCode;
+      if (!code) return;
+      const pxCfg = vscode.workspace.getConfiguration("px");
+      const current = sanitizeStringList(pxCfg.get("diagnostics.ignore"));
+      if (current.includes(code)) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: “${code}” is already suppressed.`
+        );
+        return;
+      }
+      const yes = await vscode.window.showWarningMessage(
+        `Suppress every “${code}” diagnostic in this workspace? It is added to px.diagnostics.ignore.`,
+        "Suppress"
+      );
+      if (yes !== "Suppress") return;
+      await pxCfg.update("diagnostics.ignore", [...current, code], vscode.ConfigurationTarget.Workspace);
+    }),
+    vscode.commands.registerCommand("px.revealProblemFile", async (node?: Node) => {
+      const loc = node?.pxLoc;
+      if (loc) await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(loc.file));
+    }),
+    vscode.commands.registerCommand("px.nextProblemInFile", async (node?: Node) => {
+      const loc = node?.pxLoc;
+      if (!loc) return;
+      await vscode.commands.executeCommand("px.openFromView", node);
+      await vscode.commands.executeCommand("editor.action.marker.next");
+    })
   );
 
   const refreshServerBacked = () => {

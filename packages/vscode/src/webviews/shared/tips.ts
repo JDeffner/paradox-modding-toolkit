@@ -18,6 +18,10 @@ export function installTips(): void {
   // keeps (about 45 characters per line at 11px). Anything longer belongs in
   // the view's ? help dialog, not in a bubble running the width of the editor.
   const WRAP_MAX = 260;
+  // The one exception: an (i) beside a field whose whole job is to explain
+  // what the game expects of the input (a picture's size, format and path).
+  // That is a paragraph a modder hovers on purpose, so it may run wider.
+  const WIDE_MAX = 380;
 
   const tip = document.createElement("div");
   tip.className = "px-tip";
@@ -56,7 +60,7 @@ export function installTips(): void {
     const text = el.getAttribute("data-tip") ?? "";
     tip.textContent = text;
     const avail = Math.max(80, window.innerWidth - 2 * EDGE);
-    const cap = Math.min(WRAP_MAX, avail);
+    const cap = Math.min(el.hasAttribute("data-tip-wide") ? WIDE_MAX : WRAP_MAX, avail);
     const multiline = text.indexOf("\n") >= 0;
     const wrap = multiline || el.hasAttribute("data-tip-wrap");
     tip.style.whiteSpace = multiline ? "pre-line" : wrap ? "normal" : "nowrap";

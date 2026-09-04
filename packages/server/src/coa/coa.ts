@@ -31,6 +31,20 @@ export interface CoaInstance {
   rotation: number;
   scale: [number, number];
   position: [number, number];
+  /**
+   * The in-game designer's z key, absent on a hand-written instance.
+   *
+   * Measured on the vanilla corpus (game version 1.19.0.6): the 387 uses in 01_landed_titles.txt and
+   * 90_dynasties.txt hold only the values 1.01 .. 13.01, and in 229 of the 234
+   * definitions that carry any exactly one instance has none, so the designer
+   * writes `<draw index>.01` and omits the first. It spans layers (134
+   * definitions interleave them), but WITHIN one layer the file order is
+   * already the depth order in 336 of 337 layers (the exception,
+   * 90_dynasties.txt `dali_duan`, repeats 0 and 1.01), so sorting by it would
+   * change nothing there. The renderer therefore keeps file order and the
+   * value is carried only so a round trip does not drop it.
+   */
+  depth?: number;
 }
 
 export interface CoaSubInstance {
@@ -48,6 +62,22 @@ export interface CoaFlag {
   pattern: string;
   colors: CoaColor[];
   layers: CoaLayer[];
+}
+
+/**
+ * One row of a game's coat-of-arms designer catalog (a pattern or an emblem),
+ * in the order its file lists it. The reader is coaDesigner.ts; the type lives
+ * here because the webview app carries it and must not bundle the parser.
+ */
+export interface DesignerEntry {
+  /** The texture file name, e.g. `ce_fleur.dds`. */
+  file: string;
+  /** Color buttons to show. Absent in the file means "as many as the kind has". */
+  colors: number;
+  /** False for `visible = no`: the entry declares colors but stays out of the grid. */
+  visible: boolean;
+  /** Emblems only; "" for a pattern. */
+  category: string;
 }
 
 /** The slots a flag or a layer may fill, in the order the game names them. */
@@ -174,6 +204,7 @@ export function writeFlag(flag: CoaFlag): string {
         if (i.rotation !== 0) parts.push(`rotation = ${fmt(i.rotation)}`);
         parts.push(`scale = { ${fmt(i.scale[0])} ${fmt(i.scale[1])} }`);
         parts.push(`position = { ${fmt(i.position[0])} ${fmt(i.position[1])} }`);
+        if (i.depth !== undefined) parts.push(`depth = ${fmt(i.depth)}`);
         lines.push(`\t\tinstance = { ${parts.join(" ")} }`);
       }
     }

@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -38,6 +38,21 @@
         "icon": {
           "light": "./media/fileicons/bbcode-light.svg",
           "dark": "./media/fileicons/bbcode-dark.svg"
+        }
+      },
+      {
+        "id": "pxignore",
+        "aliases": [
+          "Paradox Toolkit Ignore",
+          ".pxignore"
+        ],
+        "filenames": [
+          ".pxignore"
+        ],
+        "configuration": "./pxignore-language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/pxignore-light.svg",
+          "dark": "./media/fileicons/pxignore-dark.svg"
         }
       },
       {
@@ -159,6 +174,11 @@
         "path": "./syntaxes/bbcode.tmLanguage.json"
       },
       {
+        "language": "pxignore",
+        "scopeName": "source.pxignore",
+        "path": "./syntaxes/pxignore.tmLanguage.json"
+      },
+      {
         "language": "paradox",
         "scopeName": "source.paradox",
         "path": "./syntaxes/paradox.tmLanguage.json"
@@ -270,6 +290,11 @@
         "title": "Go to Script Usage"
       },
       {
+        "command": "px.declareCalendar",
+        "category": "Paradox",
+        "title": "Declare Calendar (Display Calendar)"
+      },
+      {
         "command": "px.insertDate",
         "category": "Paradox",
         "title": "Insert Date (Display Calendar)"
@@ -362,6 +387,12 @@
         "icon": "$(library)"
       },
       {
+        "command": "px.openCredits",
+        "category": "Paradox",
+        "title": "Credits",
+        "icon": "$(heart)"
+      },
+      {
         "command": "px.simulateEvent",
         "category": "Paradox",
         "title": "Simulate Event",
@@ -395,6 +426,44 @@
         "command": "px.openFlagBuilder",
         "category": "Paradox",
         "title": "Open Flag Builder"
+      },
+      {
+        "command": "px.openCoaDesigner",
+        "category": "Paradox",
+        "title": "Open Coat of Arms Designer"
+      },
+      {
+        "command": "px.createTrait",
+        "category": "Paradox",
+        "title": "Open Trait Creator",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "px.createCoatOfArms",
+        "category": "Paradox",
+        "title": "New Coat of Arms…"
+      },
+      {
+        "command": "px.openDynastyTree",
+        "category": "Paradox",
+        "title": "Open Dynasty Tree"
+      },
+      {
+        "command": "px.createCulture",
+        "category": "Paradox",
+        "title": "Open Culture Creator",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "px.createTradition",
+        "category": "Paradox",
+        "title": "Open Tradition Creator",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "px.createDynastyLegacy",
+        "category": "Paradox",
+        "title": "Open Dynasty Legacy Creator"
       },
       {
         "command": "px.modReport",
@@ -457,6 +526,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "px.moveWorkshopListing",
+        "category": "Paradox",
+        "title": "Move Workshop Listing"
+      },
+      {
         "command": "px.openWorkshopManager",
         "category": "Paradox",
         "title": "Open Steam Workshop Panel",
@@ -474,9 +548,19 @@
         "title": "New Content (event, decision, …)"
       },
       {
+        "command": "px.insertSnippet",
+        "category": "Paradox",
+        "title": "Insert Snippet (definition skeleton, block)"
+      },
+      {
         "command": "px.createMod",
         "category": "Paradox",
         "title": "New Mod (project folder + launcher link)"
+      },
+      {
+        "command": "px.moveMod",
+        "category": "Paradox",
+        "title": "Move Mod (between game folder and project folder)"
       },
       {
         "command": "px.convertToDds",
@@ -495,6 +579,72 @@
         "category": "Paradox Localization",
         "title": "Add Localization…",
         "icon": "$(add)"
+      },
+      {
+        "command": "px.dependenciesClear",
+        "category": "Paradox",
+        "title": "Clear the Dependencies View",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "px.dependenciesInfo",
+        "category": "Paradox",
+        "title": "About the Dependencies View",
+        "icon": "$(question)"
+      },
+      {
+        "command": "px.dependenciesForItem",
+        "category": "Paradox",
+        "title": "Show Dependencies of This",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "px.openFromView",
+        "category": "Paradox",
+        "title": "Go to Definition",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.findReferencesFromView",
+        "category": "Paradox",
+        "title": "Find All References",
+        "icon": "$(references)"
+      },
+      {
+        "command": "px.copyNameFromView",
+        "category": "Paradox",
+        "title": "Copy Name",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "px.openProblemsPanel",
+        "category": "Paradox",
+        "title": "Open the Problems Panel",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "px.explainDiagnosticCode",
+        "category": "Paradox",
+        "title": "Explain Code",
+        "icon": "$(book)"
+      },
+      {
+        "command": "px.suppressDiagnosticCode",
+        "category": "Paradox",
+        "title": "Suppress Code",
+        "icon": "$(bell-slash)"
+      },
+      {
+        "command": "px.revealProblemFile",
+        "category": "Paradox",
+        "title": "Reveal in Explorer",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "px.nextProblemInFile",
+        "category": "Paradox",
+        "title": "Next Problem in File",
+        "icon": "$(arrow-down)"
       },
       {
         "command": "px.createDescriptor",
@@ -530,6 +680,35 @@
         "category": "Paradox",
         "title": "Show BBCode Source",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.openBBCodeHelp",
+        "category": "Paradox",
+        "title": "BBCode Formatting Help",
+        "icon": "$(question)"
+      },
+      {
+        "command": "px.editBBCodeAsMarkdown",
+        "category": "Paradox",
+        "title": "Edit as Markdown",
+        "icon": "$(markdown)"
+      },
+      {
+        "command": "px.backToBBCode",
+        "category": "Paradox",
+        "title": "Back to BBCode",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.convertBBCodeToMarkdown",
+        "category": "Paradox",
+        "title": "Convert to Markdown File"
+      },
+      {
+        "command": "px.convertMarkdownToBBCode",
+        "category": "Paradox",
+        "title": "Convert to BBCode",
+        "icon": "$(file-code)"
       },
       {
         "command": "px.customizeSidebar",
@@ -610,11 +789,12 @@
           {
             "id": "px.step.explore",
             "title": "Try it",
-            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Show Index Statistics](command:px.dumpIndexStats)",
+            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)",
             "media": {
               "markdown": "media/walkthrough/explore.md"
             },
             "completionEvents": [
+              "onCommand:px.insertSnippet",
               "onCommand:px.dumpIndexStats"
             ]
           },
@@ -695,7 +875,7 @@
             "default": "",
             "order": 2,
             "scope": "machine-overridable",
-            "markdownDescription": "Folder holding your mod PROJECTS - the recommended layout. Each mod gets its own subfolder there, with the real mod content in `<project>/mod`, so git history, notes and the Steam Workshop listing files (`<project>/workshop`) live next to the mod instead of inside what gets uploaded. The game still finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\n`Paradox: New Mod` asks for this folder on first use."
+            "markdownDescription": "Optional folder for mod PROJECTS, the layout that keeps git history, notes and the Steam Workshop listing files outside the mod folder: each mod gets its own subfolder there with the real mod content in `<project>/mod` and the listing in `<project>/workshop`. The game finds the mod through a link in its own mod folder (a `<name>.mod` path file, or a folder link for the metadata games).\n\nThe default layout needs no setting: the mod lives in the game's mod folder and a `.pxignore` file keeps git, editor and toolkit files out of toolkit uploads. `Paradox: New Mod` offers both."
           },
           "px.parentMods": {
             "type": "array",
@@ -705,7 +885,7 @@
             "default": [],
             "order": 3,
             "scope": "machine-overridable",
-            "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.ck3modding/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
+            "markdownDescription": "Dependency mods your mod builds on, for submods and compatibility patches. Absolute paths in load order, base first.\n\nParents are read-only context: their definitions resolve in completion, hover and navigation, but they are not validated or edited. Do **not** list mods you are editing — open those as workspace folders instead (*File → Add Folder to Workspace*) and they are picked up automatically.\n\nShareable per-mod alternative: `<mod>/.px-toolkit/playset.json` with `{ \"parents\": [\"path/to/parent\"] }`."
           },
           "px.excludedMods": {
             "type": "array",
@@ -806,7 +986,7 @@
             "default": null,
             "order": 6,
             "scope": "window",
-            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped: set it in the settings of the folder you OPEN (or the `.code-workspace`) and commit it; a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
+            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting. Same shape here: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD` (inlay hints + hover, `Paradox: Insert Date`). Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped, so it can hold one calendar per window and a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -864,15 +1044,22 @@
           },
           "px.workshop.dir": {
             "type": "string",
-            "default": "../workshop",
+            "default": "",
             "order": 4,
-            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). The default matches the `<project>/mod` + `<project>/workshop` layout: the listing sits NEXT to the mod folder, versioned but never uploaded.\n\nWhile the folder exists it is the canonical store the Workshop panel reads and writes: `description.bbcode`, `<language>/title.txt` + `<language>/description.bbcode` per translation, `item.json`. Without it, drafts stay in the mod's `workshop.json`."
+            "markdownDescription": "Where a mod's Steam Workshop listing lives as files, resolved against the mod's content folder (absolute paths work too). Empty: `.px-toolkit/workshop` inside the mod, which a toolkit upload leaves out (see `.pxignore`), or an existing `workshop` folder next to the mod (the `<project>/mod` + `<project>/workshop` layout).\n\nThe folder is the store the Workshop panel reads and writes: `description.bbcode`, `translations/<language>/title.txt` + `translations/<language>/description.bbcode` per translation, `item.json`, `previews/`, `dependencies.json`, `changelog/`. A `description.md` left from an earlier version is converted to BBCode once, the first time the panel reads the folder."
           },
           "px.workshop.changelog": {
             "type": "string",
             "default": "changelog",
             "order": 5,
-            "markdownDescription": "Where the Workshop panel looks for changenotes, resolved against the workshop folder (`px.workshop.dir`; absolute paths work too).\n\n- **A folder** (the default `changelog`): the file named after the descriptor's version is used - `1.2.md`, `v1.2.bbcode`, `1.2.txt`.\n- **A single file with headlines**: the section under the headline containing the version is used (`## 1.2.0` in Markdown, `[h2]1.2.0[/h2]` in BBCode).\n- **A single file without headlines**: the whole file.\n\nMarkdown is converted to Steam BBCode on the way."
+            "markdownDescription": "Where the Workshop panel looks for changenotes, resolved against the workshop folder (`px.workshop.dir`; absolute paths work too).\n\n- **A folder** (the default `changelog`): the file named after the descriptor's version is used - `1.2.md`, `v1.2.bbcode`, `1.2.txt`.\n- **A single file with headlines**: the section under the headline containing the version is used (`## 1.2.0` in Markdown, `[h2]1.2.0[/h2]` in BBCode).\n- **A single file without headlines**: the whole file.\n\nMarkdown is converted to Steam BBCode on the way.\n\nThe Workshop panel's changenote dropdown offers any changelog the mod already keeps (a `CHANGELOG.md` at the mod root, for instance) and writes this setting for you."
+          },
+          "px.coaLibraryDir": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "scope": "machine-overridable",
+            "markdownDescription": "Folder where the Coat of Arms Designer stores coats of arms as script files. Empty: `Documents/Paradox Interactive/<game folder>/px-toolkit/coat_of_arms`.\n\nThe library is outside any mod, so a design survives the mod it was drawn for. Each file holds one `NAME = { … }` definition, the same text the designer's Copy button puts on the clipboard, so a stored design can also be pasted into a mod by hand. The folder is created on the first export."
           },
           "px.trace.server": {
             "type": "string",
@@ -959,8 +1146,56 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "px.moveMod",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.addLocalizationFromView",
           "when": "false"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "false"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "false"
+        },
+        {
+          "command": "px.suppressDiagnosticCode",
+          "when": "false"
+        },
+        {
+          "command": "px.revealProblemFile",
+          "when": "false"
+        },
+        {
+          "command": "px.nextProblemInFile",
+          "when": "false"
+        },
+        {
+          "command": "px.dependenciesClear",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.dependenciesInfo",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openProblemsPanel",
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.guiTreeToggleParents",
@@ -993,6 +1228,10 @@
         {
           "command": "px.insertDate",
           "when": "px.isCk3Workspace && editorTextFocus"
+        },
+        {
+          "command": "px.declareCalendar",
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.generateCalendarLoc",
@@ -1047,6 +1286,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.openCredits",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.simulateEvent",
           "when": "px.isCk3Workspace"
         },
@@ -1065,6 +1308,34 @@
         {
           "command": "px.openFlagBuilder",
           "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.openCoaDesigner",
+          "when": "px.isCk3Workspace && px.coaDesignerSupported"
+        },
+        {
+          "command": "px.createTrait",
+          "when": "px.isCk3Workspace && px.creator.trait"
+        },
+        {
+          "command": "px.createCoatOfArms",
+          "when": "px.isCk3Workspace && px.flagBuilderSupported"
+        },
+        {
+          "command": "px.openDynastyTree",
+          "when": "px.isCk3Workspace && px.creator.dynasty_tree"
+        },
+        {
+          "command": "px.createCulture",
+          "when": "px.isCk3Workspace && px.creator.culture"
+        },
+        {
+          "command": "px.createTradition",
+          "when": "px.isCk3Workspace && px.creator.culture_tradition"
+        },
+        {
+          "command": "px.createDynastyLegacy",
+          "when": "px.isCk3Workspace && px.creator.dynasty_legacy"
         },
         {
           "command": "px.modReport",
@@ -1107,6 +1378,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.moveWorkshopListing",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "command": "px.openWorkshopManager",
           "when": "px.isCk3Workspace"
         },
@@ -1127,6 +1402,10 @@
           "when": "px.isCk3Workspace"
         },
         {
+          "command": "px.insertSnippet",
+          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
+        },
+        {
           "command": "px.convertToDds",
           "when": "px.isCk3Workspace"
         },
@@ -1144,15 +1423,35 @@
         },
         {
           "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode"
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
         },
         {
           "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode"
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd"
         },
         {
           "command": "px.openBBCodeSource",
           "when": "activeWebviewPanelId == px.bbcodePreview"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown"
         },
         {
           "command": "px.customizeSidebar",
@@ -1200,6 +1499,31 @@
           "group": "1_actions"
         },
         {
+          "command": "px.showDependencies",
+          "when": "view == px.dependencies",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.dependenciesClear",
+          "when": "view == px.dependencies",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.dependenciesInfo",
+          "when": "view == px.dependencies",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.openProblemsPanel",
+          "when": "view == px.problems",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.clearGameProblems",
+          "when": "view == px.problems",
+          "group": "1_actions"
+        },
+        {
           "command": "px.openKeybindings",
           "when": "view == px.tools",
           "group": "navigation@2"
@@ -1225,6 +1549,56 @@
           "command": "px.addLocalizationFromView",
           "when": "view == px.locCoverage && viewItem =~ /^px\\.loc/",
           "group": "1_edit"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "inline"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@2"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "1_navigate@3"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.dependencies && viewItem == px.depItem",
+          "group": "2_copy"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "view == px.problems && viewItem == px.problemCodeExplain",
+          "group": "inline"
+        },
+        {
+          "command": "px.explainDiagnosticCode",
+          "when": "view == px.problems && viewItem == px.problemCodeExplain",
+          "group": "1_navigate"
+        },
+        {
+          "command": "px.suppressDiagnosticCode",
+          "when": "view == px.problems && viewItem =~ /^px\\.problemCode/",
+          "group": "2_edit"
+        },
+        {
+          "command": "px.revealProblemFile",
+          "when": "view == px.problems && viewItem == px.problemFile",
+          "group": "1_navigate@1"
+        },
+        {
+          "command": "px.nextProblemInFile",
+          "when": "view == px.problems && viewItem == px.problemFile",
+          "group": "1_navigate@2"
         }
       ],
       "editor/context": [
@@ -1254,13 +1628,33 @@
       "editor/title": [
         {
           "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
           "group": "navigation@1"
         },
         {
-          "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode",
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
           "group": "navigation@2"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "resourceScheme == pxmd",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "resourceFilename == description.md",
+          "group": "navigation@1"
         },
         {
           "command": "px.openBBCodeSource",
@@ -1424,18 +1818,27 @@
       {
         "fileMatch": "**/.metadata/metadata.json",
         "url": "./schemas/pdx-metadata.schema.json"
+      },
+      {
+        "fileMatch": [
+          "**/.px-toolkit/calendar.json",
+          "**/.ck3modding/calendar.json",
+          "**/.vic3modding/calendar.json",
+          "**/.eu5modding/calendar.json"
+        ],
+        "url": "./schemas/calendar.schema.json"
       }
     ],
     "keybindings": [
       {
         "command": "px.openBBCodePreview",
         "key": "ctrl+shift+v",
-        "when": "editorTextFocus && editorLangId == bbcode"
+        "when": "editorTextFocus && (editorLangId == bbcode || resourceExtname == .bbcode)"
       },
       {
         "command": "px.openBBCodePreviewSide",
         "key": "ctrl+k v",
-        "when": "editorTextFocus && editorLangId == bbcode"
+        "when": "editorTextFocus && (editorLangId == bbcode || resourceExtname == .bbcode)"
       },
       {
         "command": "px.editLocalization",
@@ -1486,12 +1889,17 @@
         "command": "px.modReport",
         "key": "ctrl+alt+r",
         "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.insertSnippet",
+        "key": "ctrl+alt+i",
+        "when": "editorTextFocus && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
       }
     ]
   },
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs && node ../../scripts/copy-docs.mjs",
-    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18",
+    "compile:client": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text && esbuild src/steam/bridge.ts --bundle --outfile=dist/steamBridge.js --format=cjs --platform=node --target=node18 && esbuild src/webviews/guiEditor/decodeWorker.ts --bundle --outfile=dist/ddsWorker.js --format=cjs --platform=node --target=node18",
     "compile:webview": "node ../../scripts/compile-webviews.mjs",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18 --loader:.css=text --watch",
     "vscode:prepublish": "pnpm run compile",
@@ -1504,7 +1912,8 @@
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
-    "steamwand.js": "^0.2.1",
+    "ignore": "7.0.5",
+    "steamwand.js": "^0.4.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",

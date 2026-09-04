@@ -1,0 +1,107 @@
+/**
+ * The Dynasty Tree's undo. The rule worth a test is the refusal: a file that
+ * somebody else has changed since the panel wrote it must NOT be put back,
+ * because the panel's `before` would throw that work away.
+ */
+import { describe, expect, it } from "vitest";
+import { WriteJournal, type JournalIo } from "../src/webviews/dynastyTree/journal";
+
+function fakeIo(files: Record<string, string>): JournalIo & { refusals: string[] } {
+  const refusals: string[] = [];
+  return {
+    refusals,
+    read: (file) => Promise.resolve(files[file] ?? null),
+    write: (file, text) => {
+      files[file] = text;
+      return Promise.resolve(true);
+    },
+    refuse: (message) => void refusals.push(message),
+  };
+}
+
+describe("WriteJournal", () => {
+  it("puts the file back and then writes it again", async () => {
+    const files = { "/mod/a.txt": "after" };
+    const io = fakeIo(files);
+    const journal = new WriteJournal(io);
+    // Nothing recorded yet: neither direction has anything to do.
+    expect(await journal.undo()).toBe(false);
+    expect(await journal.redo()).toBe(false);
+
+    journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+
+    expect(await journal.undo()).toBe(true);
+    expect(files["/mod/a.txt"]).toBe("before");
+    expect(journal.depth).toEqual({ undo: 0, redo: 1 });
+
+    expect(await journal.redo()).toBe(true);
+    expect(files["/mod/a.txt"]).toBe("after");
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+  });
+
+  it("refuses when the file changed since the panel wrote it", async () => {
+    const files = { "/mod/a.txt": "somebody else edited this" };
+    const io = fakeIo(files);
+    const journal = new WriteJournal(io);
+    journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
+
+    expect(await journal.undo()).toBe(false);
+    expect(files["/mod/a.txt"]).toBe("somebody else edited this");
+    expect(io.refusals[0]).toContain("a.txt");
+    // The entry stays: nothing was undone, and the panel says so rather than
+    // quietly forgetting the write.
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+
+    // A file that is not there at all is the same refusal.
+    const gone = fakeIo({});
+    const missing = new WriteJournal(gone);
+    missing.record({ file: "/mod/gone.txt", before: "before", after: "after" });
+    expect(await missing.undo()).toBe(false);
+    expect(gone.refusals[0]).toContain("gone.txt");
+  });
+
+  it("ends the redo line at the next write", async () => {
+    const files = { "/mod/a.txt": "after" };
+    const journal = new WriteJournal(fakeIo(files));
+    journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
+    await journal.undo();
+    journal.record({ file: "/mod/a.txt", before: "before", after: "other" });
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+  });
+
+  it("takes a joined gesture back as one step, every file checked first", async () => {
+    const files = new Map([
+      ["/mod/a.txt", "after"],
+      ["/mod/loc.yml", "loc after"],
+    ]);
+    const refused: string[] = [];
+    const journal = new WriteJournal({
+      read: async (f) => files.get(f) ?? null,
+      write: async (f, t) => (files.set(f, t), true),
+      refuse: (m) => refused.push(m),
+    });
+    journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
+    journal.record({ file: "/mod/loc.yml", before: "loc before", after: "loc after" }, true);
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+
+    files.set("/mod/loc.yml", "edited elsewhere");
+    expect(await journal.undo()).toBe(false);
+    expect(files.get("/mod/a.txt")).toBe("after");
+    expect(refused).toHaveLength(1);
+
+    files.set("/mod/loc.yml", "loc after");
+    expect(await journal.undo()).toBe(true);
+    expect(files.get("/mod/a.txt")).toBe("before");
+    expect(files.get("/mod/loc.yml")).toBe("loc before");
+    expect(journal.depth).toEqual({ undo: 0, redo: 1 });
+  });
+
+  it("keeps only the last writes of a long session", async () => {
+    const journal = new WriteJournal(fakeIo({}), 2);
+    for (const n of [1, 2, 3]) {
+      journal.record({ file: `/mod/${n}.txt`, before: "b", after: "a" });
+    }
+    expect(journal.depth).toEqual({ undo: 2, redo: 0 });
+  });
+});

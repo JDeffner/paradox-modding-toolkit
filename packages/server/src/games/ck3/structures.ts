@@ -824,6 +824,43 @@ const CURATED: Record<string, StructureSpec> = {
 const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: string }>> = {
   trait: {
     valid_sex: { values: "enum:all|male|female", doc: "Which sex can have the trait. Default: all." },
+    // `opposites = { chaste }` in game/common/traits/00_traits.txt: the entries
+    // are trait names. Deliberately NOT a global REF_FIELD - scripted_relations
+    // spells the same key over relation names (00_scripted_relations.txt,
+    // `friend = { opposites = { rival ... } }`), and a global row would
+    // mis-resolve there.
+    opposites: { refKinds: ["trait"] },
+  },
+  culture: {
+    // game/common/culture/cultures/00_arabic.txt: `traditions = {
+    // tradition_tribe_unity ... }` names definitions of
+    // common/culture/traditions, and `parents = { bedouin assyrian }` names
+    // other cultures (bedouin is the top-level key of the same file).
+    traditions: { refKinds: ["culture_tradition"] },
+    parents: { refKinds: ["culture"] },
+    // The five pillar keys all name definitions of common/culture/pillars
+    // (00_arabic.txt: `ethos = ethos_stoic heritage = heritage_arabic
+    // language = language_arabic martial_custom = martial_custom_male_only
+    // head_determination = head_determination_domain`, each of them a
+    // top-level key in common/culture/pillars/00_*.txt). One folder, so one
+    // ref kind; the pillar's own `type` sorts the five pickers apart (the
+    // schema entry's groupKey).
+    ethos: { refKinds: ["culture_pillar"] },
+    heritage: { refKinds: ["culture_pillar"] },
+    language: { refKinds: ["culture_pillar"] },
+    martial_custom: { refKinds: ["culture_pillar"] },
+    head_determination: { refKinds: ["culture_pillar"] },
+    // `name_list = name_list_bedouin` (00_arabic.txt) names a top-level key of
+    // common/culture/name_lists (00_arabic.txt line 1 there).
+    name_list: { refKinds: ["name_list"] },
+  },
+  dynasty_perk: {
+    // _dynasty_perks.info spells the block `traits = { trait_name = int }`, and
+    // game/common/dynasty_perks/00_dynasty_perks.txt writes it that way
+    // (blood_legacy_4: `beauty_good_1 = 100`, `fecund = 50`), so the entry keys
+    // are trait names and the numbers are AI chances. Per-KIND and not a global
+    // RefField: `traits` elsewhere is a history list, a filter, a count.
+    traits: { refKinds: ["trait"] },
   },
   scheme_type: {
     category: { values: "enum:personal|contract|hostile" },

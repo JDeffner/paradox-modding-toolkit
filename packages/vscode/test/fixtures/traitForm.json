@@ -1,0 +1,1607 @@
+{
+  "kind": "trait",
+  "folder": "common/traits",
+  "locPatterns": ["trait_$", "trait_$_desc"],
+  "iconFolder": "gfx/interface/icons/traits",
+  "keys": [
+    {
+      "key": "desc",
+      "freq": 289
+    },
+    {
+      "key": "category",
+      "doc": "What unique category this trait is in, categories have gameplay implications as well as sorting",
+      "freq": 250,
+      "sampled": ["personality", "education"],
+      "example": "personality"
+    },
+    {
+      "key": "culture_modifier",
+      "doc": "Modifier that will be applied for characters with a culture with the specified parameter",
+      "values": "block",
+      "freq": 249,
+      "sampled": [
+        "mountain_trait_bonuses",
+        "ambitious_trait_penalty",
+        "craven_and_content_traits_looked_down_upon",
+        "craven_trait_costs_prestige",
+        "dry_trait_bonuses",
+        "hill_trait_bonuses",
+        "honorable_trait_bonuses",
+        "martial_education_more_valued",
+        "palace_politics_trait_bonuses",
+        "poorly_educated_leaders_distrusted",
+        "prowess_from_martial_education",
+        "trait_county_opinion_modifiers",
+        "winter_trait_bonuses"
+      ]
+    },
+    {
+      "key": "ruler_designer_cost",
+      "doc": "Cost to take in ruler designer, defaults to zero",
+      "freq": 222,
+      "example": "40"
+    },
+    {
+      "key": "flag",
+      "doc": "Flag this trait is marked with, can add multiple, localized as TRAIT_FLAG_DESC_name",
+      "freq": 204,
+      "sampled": [
+        "higher_chance_of_dying_in_battle",
+        "level_1_education",
+        "lower_chance_of_dying_in_combat",
+        "military_province"
+      ],
+      "example": "higher_chance_of_dying_in_battle"
+    },
+    {
+      "key": "ai_energy",
+      "doc": "Used 101x in vanilla traits (not in the .info docs).",
+      "freq": 101,
+      "sampled": ["low_negative_ai_value", "low_positive_ai_value", "very_high_positive_ai_value"],
+      "example": "low_negative_ai_value"
+    },
+    {
+      "key": "opposites",
+      "doc": "What traits this trait is the opposite of",
+      "values": "block",
+      "freq": 98,
+      "refKinds": ["trait"]
+    },
+    {
+      "key": "compatibility",
+      "doc": "This is not a Opinion modifier, but can be used by 'compatibility_modifier' and 'trait_compatibility' trigger. Compatibility is checked for the Trait holder vs the listed Traits (of another character.)",
+      "values": "block",
+      "freq": 97
+    },
+    {
+      "key": "diplomacy",
+      "freq": 90,
+      "example": "1"
+    },
+    {
+      "key": "shown_in_ruler_designer",
+      "doc": "This trait should be shown in the ruler designer. Defaults to yes.",
+      "values": "bool",
+      "freq": 81
+    },
+    {
+      "key": "level",
+      "doc": "What level in the group this trait is",
+      "freq": 77,
+      "example": "1"
+    },
+    {
+      "key": "group",
+      "doc": "What trait group this trait is in, grouping is used for both inheritance and equivalence",
+      "freq": 69,
+      "sampled": ["education_martial"],
+      "example": "education_martial"
+    },
+    {
+      "key": "intrigue",
+      "doc": "Used 63x in vanilla traits (not in the .info docs).",
+      "freq": 63,
+      "example": "1"
+    },
+    {
+      "key": "learning",
+      "doc": "Used 62x in vanilla traits (not in the .info docs).",
+      "freq": 62,
+      "example": "1"
+    },
+    {
+      "key": "same_opinion",
+      "doc": "Opinion impact if two characters share the trait",
+      "freq": 60,
+      "example": "-15"
+    },
+    {
+      "key": "ai_rationality",
+      "doc": "Used 58x in vanilla traits (not in the .info docs).",
+      "freq": 58,
+      "sampled": ["low_negative_ai_value", "very_low_positive_ai_value"],
+      "example": "low_negative_ai_value"
+    },
+    {
+      "key": "prowess",
+      "doc": "Used 58x in vanilla traits (not in the .info docs).",
+      "freq": 58,
+      "example": "-3"
+    },
+    {
+      "key": "attraction_opinion",
+      "doc": "Used 57x in vanilla traits (not in the .info docs).",
+      "freq": 57,
+      "example": "-10"
+    },
+    {
+      "key": "stewardship",
+      "freq": 56,
+      "example": "1"
+    },
+    {
+      "key": "martial",
+      "doc": "Used 55x in vanilla traits (not in the .info docs).",
+      "freq": 55,
+      "example": "2"
+    },
+    {
+      "key": "name",
+      "freq": 52
+    },
+    {
+      "key": "ai_honor",
+      "doc": "Used 49x in vanilla traits (not in the .info docs).",
+      "freq": 49,
+      "sampled": ["low_negative_ai_value"],
+      "example": "low_negative_ai_value"
+    },
+    {
+      "key": "health",
+      "doc": "Used 46x in vanilla traits (not in the .info docs).",
+      "freq": 46
+    },
+    {
+      "key": "minimum_age",
+      "doc": "Min age required to have this trait",
+      "freq": 39,
+      "example": "16"
+    },
+    {
+      "key": "physical",
+      "doc": "A physical aspect of the character's body",
+      "values": "bool",
+      "freq": 38
+    },
+    {
+      "key": "triggered_opinion",
+      "doc": "Applied if the associated conditions are fulfilled",
+      "values": "block",
+      "freq": 36
+    },
+    {
+      "key": "genetic",
+      "doc": "A genetic trait, mutually exclusive with having a manual inheritance chance.",
+      "values": "bool",
+      "freq": 34
+    },
+    {
+      "key": "birth",
+      "doc": "Trait generation 0-100 What % of characters out of 100 are born with this trait if not inherited",
+      "freq": 33
+    },
+    {
+      "key": "random_creation",
+      "doc": "0-100 - % chance of character to get this trait on creation. Only applicable to inheritable or genetic traits. Evaluate all traits independently for",
+      "freq": 33
+    },
+    {
+      "key": "track",
+      "values": "block",
+      "freq": 33
+    },
+    {
+      "key": "opposite_opinion",
+      "doc": "Opinion impact if two characters have opposite traits",
+      "freq": 30,
+      "example": "-10"
+    },
+    {
+      "key": "icon",
+      "values": "block",
+      "freq": 25
+    },
+    {
+      "key": "good",
+      "doc": "This trait is a \"good\" to have genetic trait",
+      "values": "bool",
+      "freq": 11
+    },
+    {
+      "key": "tracks",
+      "values": "block",
+      "freq": 10
+    },
+    {
+      "key": "enables_inbred",
+      "doc": "This trait enables the children of the character to be considered for the inbred trait",
+      "values": "bool",
+      "freq": 9
+    },
+    {
+      "key": "inheritance_blocker",
+      "doc": "Does this trait block inheritance, defaults to none, dynasty only blocks inheritance within the same dynasty",
+      "freq": 8
+    },
+    {
+      "key": "inherit_chance",
+      "doc": "0-100 what % of characters out of 100 inherit this trait, can not be set if a genetic trait",
+      "freq": 6
+    },
+    {
+      "key": "maximum_age",
+      "doc": "Max age allowed to have this trait",
+      "freq": 6
+    },
+    {
+      "key": "random_creation_weight",
+      "doc": "for chance to appear. If more than one such trait procs, select single resulting trait uniformily. As opposed to actually being born; this is for things like generated characters, script characters, etc. Positive value.…",
+      "freq": 6
+    },
+    {
+      "key": "add_commander_trait",
+      "doc": "This trait should make auto-generated characters add commander traits",
+      "values": "bool",
+      "freq": 5
+    },
+    {
+      "key": "claim_inheritance_blocker",
+      "doc": "Does this trait block claim inheritance, defaults to none, dynasty only blocks claim inheritance within the same dynasty",
+      "freq": 5
+    },
+    {
+      "key": "disables_combat_leadership",
+      "doc": "This character is blocked from being a commander",
+      "values": "bool",
+      "freq": 5
+    },
+    {
+      "key": "trait_exclusive_if_realm_contains",
+      "doc": "Commander terrain A list of terrain types that are taken into consideration when commander traits are randomly assigned to commanders. These traits are only assigned/considered if the commander's culture contains a prov…",
+      "values": "block",
+      "freq": 5
+    },
+    {
+      "key": "can_have_children",
+      "doc": "Can this character have any children at all, defaults to yes",
+      "values": "bool",
+      "freq": 4
+    },
+    {
+      "key": "shown_in_encyclopedia",
+      "doc": "This trait should be shown in the encyclopedia. Defaults to yes.",
+      "values": "bool",
+      "freq": 4
+    },
+    {
+      "key": "faith_modifier",
+      "doc": "Modifier that will be applied for characters if their faith has some doctrine with the specified parameter",
+      "values": "block",
+      "freq": 3
+    },
+    {
+      "key": "genetic_constraint_all",
+      "doc": "Portrait impacts This genetic constraint will be applied when gaining the trait",
+      "freq": 3
+    },
+    {
+      "key": "genetic_constraint_men",
+      "doc": "This genetic constraint will be applied when gaining the trait for men",
+      "freq": 3
+    },
+    {
+      "key": "genetic_constraint_women",
+      "doc": "This genetic constraint will be applied when gaining the trait for women",
+      "freq": 3
+    },
+    {
+      "key": "portrait_extremity_shift",
+      "doc": "When gaining this trait, every single morph gene will be shifted by this percentage towards 0 or 1; whichever it is closest to. E.G., 0.4 will shift 25% towards 0, resulting in 0.3",
+      "freq": 3
+    },
+    {
+      "key": "same_opinion_if_same_faith",
+      "doc": "Opinion impact if two characters share the trait and are of the same faith",
+      "freq": 3
+    },
+    {
+      "key": "ugliness_portrait_extremity_shift",
+      "doc": "When gaining this trait, every single morph gene associated with the character's most extreme single trait (as defined in common/genes) shifted by this percentage towards 0 or 1; whichever it is closest to. E.G., 0.4 wi…",
+      "freq": 3
+    },
+    {
+      "key": "bastard",
+      "doc": "This character is a bastard of said type",
+      "freq": 2
+    },
+    {
+      "key": "inherit_from_real_father",
+      "doc": "This trait should be inherited from the character's real father. Only impacts if the trait is genetic or has a manual inheritance chance. Defaults to yes.",
+      "values": "bool",
+      "freq": 2
+    },
+    {
+      "key": "parent_inheritance_sex",
+      "doc": "Specifies whether the trait can be inherited from male/female/all parents (all by default)",
+      "freq": 2
+    },
+    {
+      "key": "valid_sex",
+      "doc": "Which sex can have the trait. Default: all.",
+      "values": "enum:all|male|female",
+      "freq": 2
+    },
+    {
+      "key": "both_parent_has_trait_inherit_chance",
+      "doc": "0-100 what % of characters out of 100 inherit this trait, can not be set if a genetic trait",
+      "freq": 1
+    },
+    {
+      "key": "culture_succession_prio",
+      "doc": "If the culture of the person passing on their titles has this flag, then children with this trait are considered to be oldest (or youngest, in ultimogeniture) Does not affect gender preference and the like at all, just …",
+      "freq": 1
+    },
+    {
+      "key": "immortal",
+      "doc": "Will stop visual aging, and make the character immune to natural death. Can still be killed by script. Fertility will match visual age. You can use set_immortal_age to change the visual age",
+      "values": "bool",
+      "freq": 1
+    },
+    {
+      "key": "incapacitating",
+      "doc": "This character is unable to rule directly and requires a regent",
+      "values": "bool",
+      "freq": 1
+    }
+  ],
+  "options": {
+    "trait": [
+      {
+        "value": "px_stoic",
+        "hint": "this mod",
+        "label": "Stoic"
+      },
+      {
+        "value": "ambitious",
+        "hint": "vanilla",
+        "label": "Ambitious"
+      },
+      {
+        "value": "brave",
+        "hint": "vanilla",
+        "label": "Brave"
+      },
+      {
+        "value": "craven",
+        "hint": "vanilla",
+        "label": "Craven"
+      },
+      {
+        "value": "education_martial_1",
+        "hint": "vanilla",
+        "label": "Misguided Warrior"
+      }
+    ]
+  },
+  "modifiers": [
+    {
+      "name": "dynasty_opinion"
+    },
+    {
+      "name": "legitimacy_loss_mult"
+    },
+    {
+      "name": "intimidated_vassal_piety_contribution_mult"
+    },
+    {
+      "name": "vassal_herd_contribution_add"
+    },
+    {
+      "name": "ai_boldness"
+    },
+    {
+      "name": "ai_compassion"
+    },
+    {
+      "name": "same_faith_opinion"
+    },
+    {
+      "name": "monthly_merit_mult"
+    },
+    {
+      "name": "diplomatic_range_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_legitimacy_level_add"
+    },
+    {
+      "name": "owned_hostile_scheme_success_chance_add"
+    },
+    {
+      "name": "intrigue_mult"
+    },
+    {
+      "name": "build_piety_cost"
+    },
+    {
+      "name": "provisions_gain_mult"
+    },
+    {
+      "name": "owned_political_scheme_success_chance_growth_add"
+    },
+    {
+      "name": "happy_powerful_vassal_tax_contribution_add"
+    },
+    {
+      "name": "personal_scheme_phase_duration_add"
+    },
+    {
+      "name": "stationed_maa_screen_add"
+    },
+    {
+      "name": "intrigue_per_stress_level"
+    },
+    {
+      "name": "ignore_different_faith_opinion"
+    },
+    {
+      "name": "knight_effectiveness_per_martial"
+    },
+    {
+      "name": "owned_personal_scheme_success_chance_max_add"
+    },
+    {
+      "name": "owned_personal_scheme_success_chance_growth_add"
+    },
+    {
+      "name": "cowed_vassal_prestige_contribution_add"
+    },
+    {
+      "name": "mercenary_hire_cost_add"
+    },
+    {
+      "name": "treasury_ministry_budget_allocation"
+    },
+    {
+      "name": "fellow_vassal_opinion"
+    },
+    {
+      "name": "independent_primary_defender_advantage_add"
+    },
+    {
+      "name": "army_damage_mult"
+    },
+    {
+      "name": "enemy_personal_scheme_phase_duration_add"
+    },
+    {
+      "name": "opinion_of_female_rulers"
+    },
+    {
+      "name": "revolting_siege_morale_loss_mult"
+    },
+    {
+      "name": "provisions_use_mult"
+    },
+    {
+      "name": "revolting_siege_morale_loss_add"
+    },
+    {
+      "name": "culture_innovation_progress_chance_from_spread_add"
+    },
+    {
+      "name": "vassal_tax_contribution_mult"
+    },
+    {
+      "name": "enemy_contract_scheme_success_chance_max_add"
+    },
+    {
+      "name": "herd_capacity_add"
+    },
+    {
+      "name": "hard_casualty_modifier"
+    },
+    {
+      "name": "monthly_county_control_growth_factor_even_if_baron"
+    },
+    {
+      "name": "naval_movement_speed_mult"
+    },
+    {
+      "name": "monthly_war_influence_income_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_dread_mult"
+    },
+    {
+      "name": "intimidated_vassal_levy_contribution_add"
+    },
+    {
+      "name": "provisions_loss_mult"
+    },
+    {
+      "name": "character_max_merit_level_add"
+    },
+    {
+      "name": "advantage"
+    },
+    {
+      "name": "dynasty_house_opinion"
+    },
+    {
+      "name": "prowess"
+    },
+    {
+      "name": "learning_per_stress_level"
+    },
+    {
+      "name": "stationed_maa_damage_add"
+    },
+    {
+      "name": "monthly_income_mult"
+    },
+    {
+      "name": "maa_toughness_add"
+    },
+    {
+      "name": "prowess_per_influence_level"
+    },
+    {
+      "name": "domain_tax_different_faith_mult"
+    },
+    {
+      "name": "faith_conversion_piety_cost_add"
+    },
+    {
+      "name": "monthly_income_per_stress_level_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_knight_mult"
+    },
+    {
+      "name": "domain_limit_min"
+    },
+    {
+      "name": "development_decline_factor"
+    },
+    {
+      "name": "opinion_of_same_faith"
+    },
+    {
+      "name": "knight_effectiveness_per_intrigue"
+    },
+    {
+      "name": "vassal_herder_contribution_mult"
+    },
+    {
+      "name": "close_relative_opinion"
+    },
+    {
+      "name": "monthly_prestige"
+    },
+    {
+      "name": "courtier_and_guest_opinion"
+    },
+    {
+      "name": "monthly_barter_goods"
+    },
+    {
+      "name": "happy_powerful_vassal_prestige_contribution_add"
+    },
+    {
+      "name": "diplomacy_scheme_resistance"
+    },
+    {
+      "name": "cowed_vassal_barter_goods_contribution_mult"
+    },
+    {
+      "name": "negate_diplomacy_penalty_add"
+    },
+    {
+      "name": "raid_speed"
+    },
+    {
+      "name": "levy_screen"
+    },
+    {
+      "name": "accolade_glory_gain_mult"
+    },
+    {
+      "name": "knight_effectiveness_per_tyranny"
+    },
+    {
+      "name": "character_travel_speed"
+    },
+    {
+      "name": "levy_reinforcement_rate"
+    },
+    {
+      "name": "max_combat_roll"
+    },
+    {
+      "name": "character_capital_monthly_county_fertility_decline_add"
+    },
+    {
+      "name": "owned_contract_scheme_success_chance_add"
+    },
+    {
+      "name": "different_faith_county_opinion_mult_even_if_baron"
+    },
+    {
+      "name": "monthly_war_piety_income_add"
+    },
+    {
+      "name": "cowed_vassal_herd_contribution_mult"
+    },
+    {
+      "name": "monthly_piety_gain_per_happy_powerful_vassal_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_legitimacy_level_mult"
+    },
+    {
+      "name": "inbreeding_chance"
+    },
+    {
+      "name": "build_prestige_cost"
+    },
+    {
+      "name": "diplomacy_mult"
+    },
+    {
+      "name": "cultural_acceptance_gain_mult"
+    },
+    {
+      "name": "prestige_level_impact_mult"
+    },
+    {
+      "name": "building_slot_add"
+    },
+    {
+      "name": "hostage_renown_mult"
+    },
+    {
+      "name": "stationed_maa_toughness_mult"
+    },
+    {
+      "name": "monthly_tyranny"
+    },
+    {
+      "name": "blood_brother_prestige_mult"
+    },
+    {
+      "name": "monthly_lifestyle_xp_gain_add"
+    },
+    {
+      "name": "winter_advantage"
+    },
+    {
+      "name": "cowed_vassal_prestige_contribution_mult"
+    },
+    {
+      "name": "different_faith_liege_opinion"
+    },
+    {
+      "name": "owned_hostile_scheme_success_chance_max_add"
+    },
+    {
+      "name": "army_toughness_mult"
+    },
+    {
+      "name": "scheme_success_chance_max"
+    },
+    {
+      "name": "vassal_barter_goods_contribution_add"
+    },
+    {
+      "name": "travel_speed_mult"
+    },
+    {
+      "name": "direct_vassal_opinion"
+    },
+    {
+      "name": "monthly_county_control_decline_at_war_factor"
+    },
+    {
+      "name": "levy_siege"
+    },
+    {
+      "name": "legitimacy_gain_mult"
+    },
+    {
+      "name": "cowed_vassal_tax_contribution_mult"
+    },
+    {
+      "name": "monthly_lifestyle_xp_gain_mult"
+    },
+    {
+      "name": "county_fertility_decline_mult"
+    },
+    {
+      "name": "intimidated_vassal_tax_contribution_add"
+    },
+    {
+      "name": "tyranny_loss_mult"
+    },
+    {
+      "name": "great_project_build_speed"
+    },
+    {
+      "name": "enemy_contract_scheme_phase_duration_add"
+    },
+    {
+      "name": "character_max_piety_level_add"
+    },
+    {
+      "name": "levy_reinforcement_rate_same_faith_even_if_baron"
+    },
+    {
+      "name": "monthly_prestige_gain_per_dread_add"
+    },
+    {
+      "name": "capital_fort_level"
+    },
+    {
+      "name": "prowess_per_piety_level"
+    },
+    {
+      "name": "hostile_scheme_phase_duration_add"
+    },
+    {
+      "name": "intrigue"
+    },
+    {
+      "name": "cultural_head_acceptance_gain_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_happy_powerful_vassal_add"
+    },
+    {
+      "name": "fellow_tributary_opinion"
+    },
+    {
+      "name": "hostage_income_mult"
+    },
+    {
+      "name": "blood_brother_piety_mult"
+    },
+    {
+      "name": "political_scheme_phase_duration_add"
+    },
+    {
+      "name": "stress_gain_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_per_knight_add"
+    },
+    {
+      "name": "no_prowess_loss_from_age"
+    },
+    {
+      "name": "army_siege_value_mult"
+    },
+    {
+      "name": "cultural_head_fascination_add"
+    },
+    {
+      "name": "domicile_build_speed"
+    },
+    {
+      "name": "player_heir_opinion"
+    },
+    {
+      "name": "happy_powerful_vassal_prestige_contribution_mult"
+    },
+    {
+      "name": "monthly_piety_from_buildings_mult"
+    },
+    {
+      "name": "intrigue_scheme_resistance"
+    },
+    {
+      "name": "learning_scheme_phase_duration"
+    },
+    {
+      "name": "same_culture_holy_order_hire_cost_mult"
+    },
+    {
+      "name": "negate_learning_penalty_add"
+    },
+    {
+      "name": "levy_attack"
+    },
+    {
+      "name": "monthly_county_control_decline_factor_even_if_baron"
+    },
+    {
+      "name": "stress_loss_per_piety_level"
+    },
+    {
+      "name": "opinion_of_same_culture"
+    },
+    {
+      "name": "character_travel_safety_mult"
+    },
+    {
+      "name": "tax_per_piety_level"
+    },
+    {
+      "name": "character_max_prestige_level_add"
+    },
+    {
+      "name": "scheme_phase_duration"
+    },
+    {
+      "name": "owned_scheme_secrecy_add"
+    },
+    {
+      "name": "domain_tax_different_faith_mult_even_if_baron"
+    },
+    {
+      "name": "monthly_war_piety_income_mult"
+    },
+    {
+      "name": "happy_powerful_vassal_herd_contribution_add"
+    },
+    {
+      "name": "men_at_arms_maintenance"
+    },
+    {
+      "name": "herd_capacity_mult"
+    },
+    {
+      "name": "defender_advantage"
+    },
+    {
+      "name": "monthly_piety_gain_per_happy_powerful_vassal_add"
+    },
+    {
+      "name": "prowess_per_prestige_level"
+    },
+    {
+      "name": "maa_screen_mult"
+    },
+    {
+      "name": "prowess_per_merit_level"
+    },
+    {
+      "name": "monthly_treasury_from_liege_add"
+    },
+    {
+      "name": "enemy_political_scheme_phase_duration_add"
+    },
+    {
+      "name": "martial_mult"
+    },
+    {
+      "name": "monthly_piety_gain_per_court_position_add"
+    },
+    {
+      "name": "different_faith_suzerain_opinion"
+    },
+    {
+      "name": "defender_holding_advantage"
+    },
+    {
+      "name": "domicile_monthly_prestige_mult"
+    },
+    {
+      "name": "enemy_political_scheme_success_chance_add"
+    },
+    {
+      "name": "dread_per_tyranny_mult"
+    },
+    {
+      "name": "stewardship_per_influence_level"
+    },
+    {
+      "name": "general_opinion"
+    },
+    {
+      "name": "intimidated_vassal_prestige_contribution_add"
+    },
+    {
+      "name": "monthly_prestige_from_buildings_mult"
+    },
+    {
+      "name": "enemy_hostile_scheme_phase_duration_add"
+    },
+    {
+      "name": "enemy_personal_scheme_success_chance_max_add"
+    },
+    {
+      "name": "prowess_scheme_resistance"
+    },
+    {
+      "name": "negate_prowess_penalty_add"
+    },
+    {
+      "name": "army_pursuit_mult"
+    },
+    {
+      "name": "elderly_health"
+    },
+    {
+      "name": "monthly_county_control_decline_add_even_if_baron"
+    },
+    {
+      "name": "counter_resistance"
+    },
+    {
+      "name": "independent_ruler_opinion"
+    },
+    {
+      "name": "max_contract_schemes_add"
+    },
+    {
+      "name": "intimidated_vassal_piety_contribution_add"
+    },
+    {
+      "name": "strife_opinion_gain_mult"
+    },
+    {
+      "name": "monthly_dynasty_prestige"
+    },
+    {
+      "name": "opinion_of_parents"
+    },
+    {
+      "name": "stationed_maa_toughness_mult_per_piety_level"
+    },
+    {
+      "name": "character_max_influence_level_add"
+    },
+    {
+      "name": "vassal_herd_contribution_mult"
+    },
+    {
+      "name": "county_fertility_growth_mult"
+    },
+    {
+      "name": "tyranny_gain_mult"
+    },
+    {
+      "name": "intrigue_per_piety_level"
+    },
+    {
+      "name": "levy_reinforcement_rate_different_faith_even_if_baron"
+    },
+    {
+      "name": "different_faith_opinion"
+    },
+    {
+      "name": "monthly_merit"
+    },
+    {
+      "name": "monthly_county_control_growth_at_war_factor"
+    },
+    {
+      "name": "capital_additional_fort_level"
+    },
+    {
+      "name": "maa_damage_mult"
+    },
+    {
+      "name": "cowed_vassal_levy_contribution_add"
+    },
+    {
+      "name": "coastal_advantage"
+    },
+    {
+      "name": "opinion_of_suzerain"
+    },
+    {
+      "name": "mercenary_count_mult"
+    },
+    {
+      "name": "intrigue_per_influence_level"
+    },
+    {
+      "name": "child_health"
+    },
+    {
+      "name": "powerful_vassal_opinion"
+    },
+    {
+      "name": "knight_effectiveness_per_learning"
+    },
+    {
+      "name": "monthly_prestige_gain_per_court_position_add"
+    },
+    {
+      "name": "prisoner_opinion"
+    },
+    {
+      "name": "monthly_treasury_from_military_budget_mult"
+    },
+    {
+      "name": "vassal_barter_goods_contribution_mult"
+    },
+    {
+      "name": "supply_limit"
+    },
+    {
+      "name": "monthly_merit_per_title_maa_value"
+    },
+    {
+      "name": "title_creation_piety_cost_mult"
+    },
+    {
+      "name": "ai_war_cooldown"
+    },
+    {
+      "name": "monthly_war_barter_goods_income_add"
+    },
+    {
+      "name": "monthly_treasury_from_vassals"
+    },
+    {
+      "name": "holding_build_gold_cost"
+    },
+    {
+      "name": "levy_toughness"
+    },
+    {
+      "name": "happy_powerful_vassal_tax_contribution_mult"
+    },
+    {
+      "name": "ai_zeal"
+    },
+    {
+      "name": "cowed_vassal_piety_contribution_add"
+    },
+    {
+      "name": "monthly_county_control_growth_add_even_if_baron"
+    },
+    {
+      "name": "monthly_dread"
+    },
+    {
+      "name": "herd_conversion"
+    },
+    {
+      "name": "monthly_piety_gain_per_dread_mult"
+    },
+    {
+      "name": "dread_gain_mult"
+    },
+    {
+      "name": "martial"
+    },
+    {
+      "name": "maa_siege_value_add"
+    },
+    {
+      "name": "learning_per_prestige_level"
+    },
+    {
+      "name": "martial_per_piety_level"
+    },
+    {
+      "name": "maa_damage_add"
+    },
+    {
+      "name": "scheme_success_chance"
+    },
+    {
+      "name": "stewardship_mult"
+    },
+    {
+      "name": "learning_per_influence_level"
+    },
+    {
+      "name": "monthly_prestige_gain_per_court_position_mult"
+    },
+    {
+      "name": "domicile_monthly_herd_add"
+    },
+    {
+      "name": "stationed_maa_siege_value_mult"
+    },
+    {
+      "name": "martial_per_stress_level"
+    },
+    {
+      "name": "stationed_maa_damage_mult"
+    },
+    {
+      "name": "opinion_of_different_faith_liege"
+    },
+    {
+      "name": "enemy_political_scheme_success_chance_growth_add"
+    },
+    {
+      "name": "owned_legend_spread_mult"
+    },
+    {
+      "name": "knight_effectiveness_per_diplomacy"
+    },
+    {
+      "name": "dread_per_tyranny_add"
+    },
+    {
+      "name": "title_creation_cost_mult"
+    },
+    {
+      "name": "monthly_prestige_gain_mult"
+    },
+    {
+      "name": "domain_limit_max"
+    },
+    {
+      "name": "enemy_hostile_scheme_success_chance_max_add"
+    },
+    {
+      "name": "monthly_piety"
+    },
+    {
+      "name": "intimidated_vassal_prestige_contribution_mult"
+    },
+    {
+      "name": "siege_phase_time"
+    },
+    {
+      "name": "opinion_of_different_faith"
+    },
+    {
+      "name": "intimidated_vassal_barter_goods_contribution_add"
+    },
+    {
+      "name": "faith_creation_piety_cost_mult"
+    },
+    {
+      "name": "martial_scheme_resistance"
+    },
+    {
+      "name": "prowess_scheme_phase_duration"
+    },
+    {
+      "name": "tributary_piety_contribution_mult"
+    },
+    {
+      "name": "vassal_limit"
+    },
+    {
+      "name": "supply_duration"
+    },
+    {
+      "name": "uncontrolled_province_advantage"
+    },
+    {
+      "name": "character_travel_safety"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "monthly_county_control_decline_factor"
+    },
+    {
+      "name": "contract_scheme_phase_duration_add"
+    },
+    {
+      "name": "cowed_vassal_piety_contribution_mult"
+    },
+    {
+      "name": "ai_amenity_spending"
+    },
+    {
+      "name": "monthly_dynasty_prestige_mult"
+    },
+    {
+      "name": "intimidated_vassal_herd_contribution_add"
+    },
+    {
+      "name": "opinion_of_different_faith_suzerain"
+    },
+    {
+      "name": "stewardship_per_piety_level"
+    },
+    {
+      "name": "monthly_piety_gain_per_legitimacy_level_add"
+    },
+    {
+      "name": "horde_conversion_cost"
+    },
+    {
+      "name": "monthly_influence_mult"
+    },
+    {
+      "name": "stewardship_per_prestige_level"
+    },
+    {
+      "name": "martial_per_prestige_level"
+    },
+    {
+      "name": "hostage_prestige_mult"
+    },
+    {
+      "name": "mercenary_hire_time_mult"
+    },
+    {
+      "name": "pursue_efficiency"
+    },
+    {
+      "name": "life_expectancy"
+    },
+    {
+      "name": "domicile_travel_speed"
+    },
+    {
+      "name": "movement_speed_land_raiding"
+    },
+    {
+      "name": "domain_tax_same_faith_mult"
+    },
+    {
+      "name": "domicile_monthly_gold_add"
+    },
+    {
+      "name": "monthly_piety_gain_mult"
+    },
+    {
+      "name": "knight_effectiveness_mult"
+    },
+    {
+      "name": "men_at_arms_title_cap"
+    },
+    {
+      "name": "dread_decay_add"
+    },
+    {
+      "name": "development_decline"
+    },
+    {
+      "name": "eligible_child_except_player_heir_opinion"
+    },
+    {
+      "name": "monthly_treasury_from_military_budget_base"
+    },
+    {
+      "name": "happy_powerful_vassal_barter_goods_contribution_mult"
+    },
+    {
+      "name": "accolades"
+    },
+    {
+      "name": "ai_war_chance"
+    },
+    {
+      "name": "religious_head_opinion"
+    },
+    {
+      "name": "monthly_merit_per_liege_tax"
+    },
+    {
+      "name": "advantage_against_coreligionists"
+    },
+    {
+      "name": "holding_build_speed"
+    },
+    {
+      "name": "monthly_legitimacy_add"
+    },
+    {
+      "name": "travel_safety"
+    },
+    {
+      "name": "tax_mult"
+    },
+    {
+      "name": "county_opinion_add"
+    },
+    {
+      "name": "ai_greed"
+    },
+    {
+      "name": "ignore_negative_opinion_of_culture"
+    },
+    {
+      "name": "twin_opinion"
+    },
+    {
+      "name": "min_combat_roll"
+    },
+    {
+      "name": "intimidated_vassal_tax_contribution_mult"
+    },
+    {
+      "name": "attacker_advantage"
+    },
+    {
+      "name": "artifact_decay_reduction_mult"
+    },
+    {
+      "name": "stewardship_per_merit_level"
+    },
+    {
+      "name": "county_opinion_add_even_if_baron"
+    },
+    {
+      "name": "vassal_piety_contribution_mult"
+    },
+    {
+      "name": "character_opinion_from_low_prowess_add"
+    },
+    {
+      "name": "men_at_arms_recruitment_cost"
+    },
+    {
+      "name": "cowed_vassal_herd_contribution_add"
+    },
+    {
+      "name": "diplomacy_per_piety_level"
+    },
+    {
+      "name": "fort_level"
+    },
+    {
+      "name": "domain_limit"
+    },
+    {
+      "name": "suzerain_opinion"
+    },
+    {
+      "name": "maa_pursuit_mult"
+    },
+    {
+      "name": "monthly_war_income_mult"
+    },
+    {
+      "name": "domicile_monthly_piety_mult"
+    },
+    {
+      "name": "culture_tradition_max_add"
+    },
+    {
+      "name": "domicile_external_slots_capacity_add"
+    },
+    {
+      "name": "enemy_political_scheme_success_chance_max_add"
+    },
+    {
+      "name": "supply_capacity_add"
+    },
+    {
+      "name": "stationed_maa_toughness_add"
+    },
+    {
+      "name": "garrison_size"
+    },
+    {
+      "name": "owned_hostile_scheme_success_chance_growth_add"
+    },
+    {
+      "name": "led_by_owner_extra_advantage_add"
+    },
+    {
+      "name": "monthly_treasury_from_ministry_budget_mult"
+    },
+    {
+      "name": "knight_effectiveness_per_prowess"
+    },
+    {
+      "name": "controlled_province_advantage"
+    },
+    {
+      "name": "title_creation_piety_cost"
+    },
+    {
+      "name": "max_loot_mult"
+    },
+    {
+      "name": "holding_build_piety_cost"
+    },
+    {
+      "name": "scheme_discovery_chance_mult"
+    },
+    {
+      "name": "negate_fertility_penalty_add"
+    },
+    {
+      "name": "supply_loss_winter"
+    },
+    {
+      "name": "stationed_maa_damage_mult_per_piety_level"
+    },
+    {
+      "name": "monthly_treasury_from_non_vassals_mult"
+    },
+    {
+      "name": "happy_powerful_vassal_piety_contribution_add"
+    },
+    {
+      "name": "levy_reinforcement_rate_even_if_baron"
+    },
+    {
+      "name": "knight_limit"
+    },
+    {
+      "name": "happy_powerful_vassal_herd_contribution_mult"
+    },
+    {
+      "name": "can_vassals_be_attacked"
+    },
+    {
+      "name": "monthly_war_prestige_income_add"
+    },
+    {
+      "name": "owned_contract_scheme_success_chance_max_add"
+    },
+    {
+      "name": "learning_per_merit_level"
+    },
+    {
+      "name": "monthly_prestige_gain_per_happy_powerful_vassal_mult"
+    },
+    {
+      "name": "monthly_piety_gain_per_dread_add"
+    },
+    {
+      "name": "monthly_piety_gain_per_legitimacy_level_mult"
+    },
+    {
+      "name": "diplomacy_per_prestige_level"
+    },
+    {
+      "name": "monthly_income_from_herd_mult"
+    },
+    {
+      "name": "genetic_trait_strengthen_chance"
+    },
+    {
+      "name": "counter_efficiency"
+    },
+    {
+      "name": "hostile_county_attrition_raiding"
+    },
+    {
+      "name": "martial_per_influence_level"
+    },
+    {
+      "name": "provisions_capacity_mult"
+    },
+    {
+      "name": "owned_legend_spread_add"
+    },
+    {
+      "name": "dread_baseline_add"
+    },
+    {
+      "name": "monthly_barter_goods_mult"
+    },
+    {
+      "name": "enemy_scheme_secrecy_add"
+    },
+    {
+      "name": "eligible_child_opinion"
+    },
+    {
+      "name": "same_culture_holy_order_hire_cost_add"
+    },
+    {
+      "name": "monthly_income"
+    },
+    {
+      "name": "negative_random_genetic_chance"
+    },
+    {
+      "name": "travel_danger"
+    },
+    {
+      "name": "different_culture_opinion"
+    },
+    {
+      "name": "happy_powerful_vassal_piety_contribution_mult"
+    },
+    {
+      "name": "opinion_of_liege"
+    },
+    {
+      "name": "dread_loss_mult"
+    },
+    {
+      "name": "short_reign_duration_mult"
+    },
+    {
+      "name": "enemy_terrain_advantage"
+    },
+    {
+      "name": "domain_tax_same_faith_mult_even_if_baron"
+    },
+    {
+      "name": "build_speed"
+    },
+    {
+      "name": "scheme_secrecy"
+    },
+    {
+      "name": "vassal_levy_contribution_add"
+    },
+    {
+      "name": "owned_personal_scheme_success_chance_add"
+    },
+    {
+      "name": "stationed_maa_pursuit_add"
+    },
+    {
+      "name": "councillor_opinion"
+    },
+    {
+      "name": "maa_screen_add"
+    },
+    {
+      "name": "monthly_piety_gain_per_knight_add"
+    },
+    {
+      "name": "prowess_per_stress_level"
+    },
+    {
+      "name": "monthly_treasury_from_liege_mult"
+    },
+    {
+      "name": "levy_reinforcement_rate_friendly_territory"
+    },
+    {
+      "name": "long_reign_bonus_mult"
+    },
+    {
+      "name": "levy_size"
+    },
+    {
+      "name": "enemy_personal_scheme_success_chance_growth_add"
+    },
+    {
+      "name": "treasury_military_budget_allocation"
+    },
+    {
+      "name": "ignore_negative_culture_opinion"
+    },
+    {
+      "name": "cultural_head_fascination_mult"
+    },
+    {
+      "name": "monthly_treasury_from_ministry_budget_base"
+    },
+    {
+      "name": "child_opinion"
+    },
+    {
+      "name": "defender_winter_advantage"
+    },
+    {
+      "name": "monthly_treasury_from_non_vassals"
+    },
+    {
+      "name": "holding_build_prestige_cost"
+    },
+    {
+      "name": "learning_scheme_resistance"
+    },
+    {
+      "name": "same_culture_mercenary_hire_cost_add"
+    },
+    {
+      "name": "levy_pursuit"
+    }
+  ],
+  "existing": [
+    {
+      "name": "px_stoic",
+      "file": "px_traits.txt",
+      "line": 1,
+      "label": "Stoic"
+    }
+  ]
+}

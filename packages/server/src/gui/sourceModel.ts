@@ -57,6 +57,40 @@ export type GuiEntryKind = "widget" | "decl" | "property";
  * block alone.
  */
 
+/**
+ * The three .gui-specific tables the model reads, lifted into a parameter so
+ * the same span model can serve plain jomini script (`common/traits/*.txt`),
+ * which has none of them.
+ *
+ * `propertyBlocks` is NOT a set for script: the gui rule is the INVERSE one (a
+ * block child is a child widget unless its key is a known attribute block), so
+ * an empty set would classify every block in a trait as a widget and the
+ * writer would refuse to rewrite it. `null` says "this dialect has no child
+ * declarations at all", which is what script is.
+ */
+export interface SourceDialect {
+  /** Bare words that label the next assignment as a declaration. */
+  declMarkers: ReadonlySet<string>;
+  /** Keys taking the `key = "name" { ... }` slot spelling. */
+  slotKeys: ReadonlySet<string>;
+  /** Block-valued keys that are attributes; `null` = every block is an attribute. */
+  propertyBlocks: ReadonlySet<string> | null;
+}
+
+/** The default: the .gui tables, so every existing caller is unchanged. */
+export const GUI_DIALECT: SourceDialect = {
+  declMarkers: DECL_MARKERS,
+  slotKeys: SLOT_KEYS,
+  propertyBlocks: PROPERTY_BLOCKS,
+};
+
+/** Plain jomini script: no markers, no slot form, no child declarations. */
+export const SCRIPT_DIALECT: SourceDialect = {
+  declMarkers: new Set(),
+  slotKeys: new Set(),
+  propertyBlocks: null,
+};
+
 /** One `key [op] value` statement, with every raw span the writer addresses it by. */
 export interface GuiEntry {
   kind: GuiEntryKind;
@@ -177,13 +211,14 @@ interface BuildCtx {
   lineKind: Uint8Array;
   commentsByLine: Map<number, CommentNode[]>;
   entries: GuiEntry[];
+  dialect: SourceDialect;
 }
 
 const LINE_BLANK = 0;
 const LINE_COMMENT = 1;
 const LINE_CODE = 2;
 
-export function parseGuiSource(text: string): GuiSourceFile {
+export function parseGuiSource(text: string, dialect: SourceDialect = GUI_DIALECT): GuiSourceFile {
   const parsed = parseScript(text);
   const lines = new LineIndex(text);
   const commentsByLine = new Map<number, CommentNode[]>();
@@ -198,6 +233,7 @@ export function parseGuiSource(text: string): GuiSourceFile {
     lineKind: classifyLines(text, lines, commentsByLine),
     commentsByLine,
     entries: [],
+    dialect,
   };
   const root = buildBody(parsed.root.statements, -1, null, { start: 0, end: text.length }, null, ctx);
   return {
@@ -269,7 +305,7 @@ function buildBody(
       // A bare `template` / `type` / `blockoverride` word labels the next
       // assignment; anything else clears the label.
       marker =
-        stmt.value.kind === "scalar" && DECL_MARKERS.has(stmt.value.text.toLowerCase())
+        stmt.value.kind === "scalar" && ctx.dialect.declMarkers.has(stmt.value.text.toLowerCase())
           ? { text: stmt.value.text.toLowerCase(), span: stmt.value.range }
           : null;
       continue;
@@ -353,7 +389,7 @@ function buildEntry(
 ): GuiEntry {
   const { text, lines } = ctx;
   const opSpan = operatorSpan(text, stmt);
-  const slot = slotForm(stmt, declMarker);
+  const slot = slotForm(stmt, declMarker, ctx.dialect);
   const marker = slot?.marker ?? declMarker;
   const key = slot?.key ?? stmt.key;
   const value = slot?.value ?? stmt.value;
@@ -384,7 +420,7 @@ function buildEntry(
   const ownLine = startsLine && endsLine;
 
   const entry: GuiEntry = {
-    kind: classify(key, marker, block),
+    kind: classify(key, marker, block, ctx.dialect),
     key: key.text,
     keyLower: key.text.toLowerCase(),
     keySpan: key.range,
@@ -444,22 +480,29 @@ function buildEntry(
  * the writer and the preview can never disagree about what is a widget: a
  * block child is a widget unless its key is a known attribute block.
  */
-function classify(key: ScalarNode, marker: { text: string } | null, block: BlockNode | null): GuiEntryKind {
+function classify(
+  key: ScalarNode,
+  marker: { text: string } | null,
+  block: BlockNode | null,
+  dialect: SourceDialect
+): GuiEntryKind {
   if (marker) return "decl";
   if (!block) return "property";
+  if (!dialect.propertyBlocks) return "property";
   const lower = key.text.toLowerCase();
-  if (PROPERTY_BLOCKS.has(lower) || lower.startsWith("@")) return "property";
+  if (dialect.propertyBlocks.has(lower) || lower.startsWith("@")) return "property";
   return "widget";
 }
 
 /** The `blockoverride = "name" { ... }` spelling, re-read as marker + name + body. */
 function slotForm(
   stmt: AssignmentNode,
-  marker: { text: string; span: GuiSpan } | null
+  marker: { text: string; span: GuiSpan } | null,
+  dialect: SourceDialect
 ): { marker: { text: string; span: GuiSpan }; key: ScalarNode; value: BlockNode } | null {
   if (marker || stmt.value?.kind !== "tagged-block") return null;
   const lower = stmt.key.text.toLowerCase();
-  if (!SLOT_KEYS.has(lower)) return null;
+  if (!dialect.slotKeys.has(lower)) return null;
   return {
     marker: { text: lower, span: stmt.key.range },
     key: stmt.value.tag,

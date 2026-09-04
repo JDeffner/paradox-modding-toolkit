@@ -10,6 +10,7 @@
  */
 import type { CalendarLocSpec } from "@px-lsp/protocol/calendarLoc";
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
+import type { KindSkeleton } from "../schema/skeletons";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 import type { SaveSchema } from "../gui/saveSchema";
@@ -70,8 +71,10 @@ export interface GameMeta {
   engine: "jomini" | "clausewitz-classic";
   /** Mod descriptor convention: Paradox-launcher `.mod` file vs `.metadata/metadata.json`. */
   descriptor: "mod" | "metadata";
-  /** Per-workspace config dir holding schema.json / playset.json overlays. */
+  /** Per-mod config dir holding schema.json / playset.json overlays, workshop.json, the listing folder. */
   configDirName: string;
+  /** The pre-0.4.0 per-game name of that dir, still read as a fallback and renamed on first write. */
+  legacyConfigDirName?: string;
   /** Game folder under `Documents/Paradox Interactive/` (script_docs logs live in its logs/). */
   docsFolderName: string;
   /**
@@ -87,6 +90,12 @@ export interface GameMeta {
    */
   dataTypesCommand?: string;
   steamAppId: number;
+  /**
+   * Folder under the game data dir holding one icon per DLC, named after the
+   * DLC folder's number (`dlc_003.dds` or `dlc003.dds`). Absent = the install
+   * ships no such folder and the DLC's own `thumbnail.png` is used instead.
+   */
+  dlcIconDir?: string;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
   /**
@@ -129,6 +138,39 @@ export interface GameMeta {
    */
   flagBuilder?: boolean;
   /**
+   * The game ships its own in-game Coat of Arms designer, and the files that
+   * drive it (`gfx/coat_of_arms/{patterns,colored_emblems,color_palettes,
+   * emblem_layouts}/50_coa_designer_*.txt` and the `99_coa_designer_templates`
+   * coat-of-arms templates). Present = the toolkit offers the designer
+   * instead of the raw Flag Builder, when those files are actually on disk.
+   * Absent = the Flag Builder, as before.
+   */
+  coaDesigner?: boolean;
+  /**
+   * Visual content creators offered for this game, in Create-group order. A
+   * row is a definition kind the schema knows (the panel's command opens that
+   * creator), except `dynasty_tree`, which is a view over history files rather
+   * than one definition. Absent = no creator has been built against this
+   * game's own files, and the Create group shows only the scaffolds.
+   */
+  creators?: {
+    /** Schema kind, or the id of a bespoke creator that owns no single kind. */
+    kind: string;
+    label: string;
+    /** A Lucide icon name present in the client's webviews/shared/icons.ts. */
+    icon: string;
+    /** One-line hint for the panel row. */
+    tip?: string;
+  }[];
+  /**
+   * Where the game states how a modifier is PRINTED: the folder of format
+   * definitions (one block per modifier), and the `.gui` file whose `texticon`
+   * blocks map an icon name to its sprite. Both paths are relative to the game
+   * data dir. Absent = this game's print rules have not been read out of its
+   * own files, and `paradox/modifierFormats` answers null rather than guessing.
+   */
+  modifierFormats?: { folder: string; textIcons: string };
+  /**
    * Database entry-mode prefixes legal on top-level definition keys
    * (EU5's `REPLACE:key`). The indexer strips a leading `<MODE>:` before
    * treating the rest as the definition name. Absent = no such syntax.
@@ -166,6 +208,25 @@ export interface GameMeta {
   cacheSuffix: string;
 }
 
+/**
+ * Where a creator's condition builder gets the values of one trigger
+ * (`DefinitionForm.conditions`). Each source is something the server already
+ * holds, so a game patch changes the list without a release:
+ *
+ *   docList     the trigger's own script_docs entry enumerates them on its
+ *               metadata line ("has_dlc_feature … Traits: Valid Features: a,
+ *               b, and c", CK3 triggers.log 1.19)
+ *   kind        every indexed definition of a definition kind
+ *   innerKeys   the inner block keys of every definition of a kind, minus
+ *               `except` (a CK3 game rule's settings ARE its inner blocks;
+ *               the other two keys are `categories` and `default`, per
+ *               common/game_rules/_game_rules.info)
+ */
+export type ConditionValueSource =
+  | { from: "docList" }
+  | { from: "kind"; kind: string }
+  | { from: "innerKeys"; kind: string; except?: string[] };
+
 /** A game's full knowledge bundle: meta plus the tables the engine consumes. */
 export interface GameProfile extends GameMeta {
   /** Folder→definition-kind table (see schema/types.ts). */
@@ -186,6 +247,14 @@ export interface GameProfile extends GameMeta {
    */
   structures?: Record<string, StructureSpec>;
   /**
+   * Definition skeletons per kind (data/<id>/skeletons.json, harvested by
+   * scripts/build-skeletons.ts): the shape a new definition of the kind takes,
+   * measured over the game's own files. Absent or empty = nobody has measured
+   * this game's vanilla tree, and completion offers no skeleton for it rather
+   * than a shape written from memory.
+   */
+  skeletons?: Record<string, KindSkeleton>;
+  /**
    * Definition kinds that declare their own root scope in their body, keyed by
    * kind (scopes/inference.ts). Absent = every kind's root scope comes from the
    * schema table alone.
@@ -193,6 +262,13 @@ export interface GameProfile extends GameMeta {
   defRootKeys?: Record<string, DefRootKey>;
   /** Templated-modifier placeholder table (data/modifierTemplates.ts). */
   modifierPlaceholders: Record<string, PlaceholderSpec>;
+  /**
+   * Triggers a creator's condition builder may offer a value list for, keyed
+   * by trigger name (`paradox/definitionForm`'s `conditions`). Absent = the
+   * creators offer no picker for this game and fall back to free input, which
+   * is the honest answer for a game whose sources have not been measured.
+   */
+  conditionValues?: Record<string, ConditionValueSource>;
   /**
    * Bundled `[ ... ]` data-function tables (data/<id>/dataTypes.json), when the
    * game ships one. Shape is data/dataTypes.ts's bundled-JSON shape; typed

@@ -349,6 +349,7 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 | Anything at all | `paradox/configChanged` (push settings without a restart), `paradox/status` and `paradox/indexChanged` (server to client; index health and a re-query signal) |
 | A status bar or an index panel | `paradox/status`, `paradox/indexStats`, `paradox/reloadDocs` (re-parse `script_docs` after the user dumps them) |
 | A scope indicator | `paradox/scopeAt` (see below) |
+| An “insert a definition” command or palette | `paradox/snippets` (see below) |
 | Localization tooling | `paradox/lookupLoc`, `paradox/locCoverage` |
 | Mod-wide reports | `paradox/modOverview` (content inventory), `paradox/overrides` (what shadows vanilla, with the LIOS/FIOS winner) |
 | An impact view for one definition | `paradox/dependencies` (dependents and dependencies, by cursor or by name) |
@@ -386,6 +387,49 @@ server saying the gesture would not do what it looks like it does (a box owns
 its children's slots, a content-sized container ignores an explicit size, a
 type definition is used by other files). A write that lands but is only half
 honoured returns `edits` plus a `warning`.
+
+### paradox/snippets
+
+Everything the server can offer to insert at a cursor, so a host can build an
+"Insert Snippet" command without shipping a snippet table of its own. Request a
+position in an open script document:
+
+```jsonc
+// -> paradox/snippets
+{ "uri": "file:///d%3A/mods/my_mod/events/my_events.txt",
+  "position": { "line": 0, "character": 0 } }
+```
+
+```jsonc
+// <- result (abbreviated; the strings carry real newlines and tabs)
+{
+  "snippets": [
+    { "id": "event", "label": "new event", "form": "definition",
+      "detail": "skeleton measured over 9,791 vanilla definitions",
+      "snippet": "namespace = ${1:my_namespace}\n\n${1:my_namespace}.${2:1} = {\n\ttype = ${3|character_event,activity_event,letter_event,court_event|}\n\t…\n}",
+      "plain":   "namespace = my_namespace\n\nmy_namespace.1 = {\n\ttype = character_event\n\t…\n}" },
+    { "id": "event.option", "label": "option block", "form": "block", "…": "…" },
+    { "id": "if", "label": "if", "form": "token", "…": "…" }
+  ]
+}
+```
+
+Notes worth reading before you draw it:
+
+- **Both insert forms always ship.** Use `snippet` only if you expand `${1:…}`
+  tabstops; `plain` is the same shape with the placeholder text written out and
+  is guaranteed free of `${`. This mirrors the `snippetSupport` gate on
+  completion inserts.
+- **`form` groups the list**: one `definition` (the document folder's own kind),
+  then its `block` children, then `token` entries for the engine
+  triggers/effects legal in the block the cursor sits in, frequency-ordered and
+  capped at 60.
+- **The definition entry already knows about the file it lands in.** It writes
+  the `namespace =` header only when the document declares none, and reuses the
+  namespace the document already has when it does.
+- **An empty list is a normal answer**, not an error: the document is not an
+  open script document, or its folder maps to no definition kind, or nobody has
+  measured that game's vanilla files yet.
 
 ### paradox/scopeAt
 

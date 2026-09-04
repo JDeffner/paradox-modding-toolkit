@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "../config";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
+import { hasKindStyle, kindStyle } from "@px-lsp/protocol/kinds";
 import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
 import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
 import { metaFor } from "../meta";
@@ -35,10 +36,20 @@ interface KindItem extends vscode.QuickPickItem {
   template: ScaffoldTemplate;
 }
 
+/**
+ * The picker draws each kind with the glyph hovers, completion and the tree
+ * use for it (protocol/kinds.ts), so a decision looks the same everywhere.
+ * A template whose id has no kind style keeps the icon baked into its label.
+ */
+function labelWithKindIcon(template: ScaffoldTemplate): string {
+  if (!hasKindStyle(template.id)) return template.label;
+  return template.label.replace(/^\$\([^)]*\)\s*/, `$(${kindStyle(template.id).codicon}) `);
+}
+
 async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate | undefined> {
   const items: KindItem[] = templates.map((template) => ({
     template,
-    label: template.label,
+    label: labelWithKindIcon(template),
     detail: template.detail,
   }));
   const pick = await vscode.window.showQuickPick<KindItem>(items, {
@@ -48,11 +59,19 @@ async function pickKind(templates: ScaffoldTemplate[]): Promise<ScaffoldTemplate
   return pick?.template;
 }
 
+/**
+ * The prefix a generated file name starts with: what New Content used last in
+ * this session, else the mod folder's own name. Shared so every writer names
+ * its files the way the scaffold flow does.
+ */
+export function scaffoldPrefix(cfg: PxConfig): string {
+  return lastPrefix ?? (cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod");
+}
+
 const IDENTIFIER_HINT = "Use lowercase letters, digits and _, starting with a letter (e.g. my_mod).";
 
 async function askPrefix(cfg: PxConfig): Promise<string | undefined> {
-  const fallback = cfg.modPath ? sanitizePrefix(path.basename(cfg.modPath)) : "mymod";
-  const value = lastPrefix ?? fallback;
+  const value = scaffoldPrefix(cfg);
   const prefix = await vscode.window.showInputBox({
     title: "New Content — mod prefix",
     prompt: "Mod prefix for filenames and the event namespace (lowercase, letters/digits/_).",
