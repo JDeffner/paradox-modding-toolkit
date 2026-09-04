@@ -13,7 +13,7 @@
   engine's own block examples that fit the cursor. Bare LSP clients get the
   same items as plain text.
 - **Every creator says where it saves, and numbers drag on their label.** The
-  top bar of each creator reads `Saves to <mod> › <folder>/<file>` from the
+  top bar of each creator reads `<mod> › <folder>/<file>` (the folder under `common/`) from the
   moment the form loads, and clicking it changes the target before the save.
   The generated script is an ordinary section, open by default, copied by a
   click on it or by the copy button beside Save. A number field drags on its
