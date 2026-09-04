@@ -18,7 +18,7 @@
 import type { EventVocabularyItem } from "@px-lsp/protocol/protocol";
 import { iconEl } from "../../shared/icons";
 import { menu, type MenuItem } from "../../shared/overlay";
-import { keyLabel } from "../../shared/fields";
+import { keyLabel, scriptFoot } from "../../shared/fields";
 import { scrubbable } from "../../shared/scrub";
 import {
   DLC_TRIGGER,
@@ -173,6 +173,12 @@ interface AdvancedOptions {
   toBuilder: (text: string) => string | null;
   /** The block the builder writes right now, to seed a freshly opened area. */
   seed: () => string | null;
+  /**
+   * Save and open the definition in the editor. A textarea has no completion,
+   * no hover and no highlighting; a block big enough to need Advanced is a
+   * block better written in the file, so every one of these areas says so.
+   */
+  onOpenFile?: () => void;
 }
 
 function advanced(options: AdvancedOptions): Advanced {
@@ -196,6 +202,10 @@ function advanced(options: AdvancedOptions): Advanced {
   area.rows = 4;
   area.placeholder = options.placeholder;
   area.addEventListener("change", onChange);
+  // The same foot `scriptField` draws under its own area, and hidden with the
+  // area: the way out of the webview belongs to the script and not to the
+  // builder above it.
+  const foot = options.onOpenFile ? scriptFoot(options.onOpenFile) : null;
   const toggle = ghost("Advanced: script", "fileText");
   const face = document.createTextNode("Advanced: script");
   toggle.replaceChildren(iconEl("fileText"), face);
@@ -211,6 +221,7 @@ function advanced(options: AdvancedOptions): Advanced {
       if (text !== undefined) area.value = text;
       body.hidden = raw;
       area.hidden = !raw;
+      if (foot) foot.hidden = !raw;
       face.textContent = raw ? `Back to the ${label} builder` : "Advanced: script";
     },
     showNote(line) {
@@ -246,7 +257,7 @@ function advanced(options: AdvancedOptions): Advanced {
     note.hidden = true;
     onChange();
   };
-  box.append(body, area, note, toggle);
+  box.append(body, area, ...(foot ? [foot] : []), note, toggle);
   state.setRaw(false);
   return state;
 }
@@ -262,6 +273,8 @@ export interface ConditionFieldOptions {
   value: string;
   /** A real block from the game's own files, shown while the script is empty. */
   placeholder: string;
+  /** Save and open the definition in the editor, from the script area's foot. */
+  onOpenFile?: () => void;
 }
 
 /**
@@ -293,6 +306,7 @@ export function conditionField(options: ConditionFieldOptions): BlockField {
       "This block does more than the rows can show, so it stays script. " +
       "A trigger the builder can read is a DLC feature, a set of game rules, or a scripted trigger set to yes or no.",
     onChange: fire,
+    ...(options.onOpenFile ? { onOpenFile: options.onOpenFile } : {}),
     seed: () => writeConditions(rows),
     toBuilder: (text) => {
       const read = readConditions(text);
@@ -454,6 +468,8 @@ export interface EffectFieldOptions {
   locOf: (key: string) => string | undefined;
   /** Offer to copy another perk's effect block in, anchored on the button. */
   onTemplate?: (anchor: HTMLElement) => void;
+  /** Save and open the definition in the editor, from the script area's foot. */
+  onOpenFile?: () => void;
 }
 
 /**
@@ -510,6 +526,7 @@ export function effectField(options: EffectFieldOptions): EffectField {
       "This effect does more than a tooltip line, so it stays script. The perk's own work usually happens in an on_action; " +
       "the effect block is what the player reads.",
     onChange: fire,
+    ...(options.onOpenFile ? { onOpenFile: options.onOpenFile } : {}),
     seed: () => writeEffectLines(lines.map((l) => l.key)),
     toBuilder: (text) => {
       const read = readEffectLines(text);
@@ -622,6 +639,8 @@ export interface ChanceFieldOptions {
   placeholder: string;
   /** What the number drags on when there is no label column of its own. */
   handle?: HTMLElement;
+  /** Save and open the definition in the editor, from the script area's foot. */
+  onOpenFile?: () => void;
 }
 
 /**
@@ -651,6 +670,7 @@ export function chanceField(options: ChanceFieldOptions): BlockField {
     placeholder: `{ value = ${options.placeholder} }`,
     why: "This block weighs the choice with more than a number, so it stays script.",
     onChange: fire,
+    ...(options.onOpenFile ? { onOpenFile: options.onOpenFile } : {}),
     seed: () => writeChanceValue(read()),
     toBuilder: (text) => {
       const answer = readChanceValue(text);

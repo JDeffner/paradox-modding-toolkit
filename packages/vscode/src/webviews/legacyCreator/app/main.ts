@@ -24,7 +24,7 @@ import type {
   ModifierFormat,
 } from "@px-lsp/protocol/protocol";
 import { confirmDialog, menu, toast } from "../../shared/overlay";
-import { helpDialog } from "../../shared/help";
+import { helpDialog, type HelpItem, type HelpSpec } from "../../shared/help";
 import { installTips } from "../../shared/tips";
 import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
@@ -59,18 +59,18 @@ import {
   applyValues,
   changedProperties,
   effectLocKey,
+  freePerkName,
   locKeyFor,
+  modifierBlockValue,
   modifierRows,
   newDefBlock,
   parseDefBlock,
   parseModifierBlock,
   perkNameFor,
-  updateModifierRows,
   valueOf,
   valuesOf,
   wrapBlockValue,
   writeDefBlock,
-  writeModifierBlock,
   type DefBlock,
   type FieldValue,
   type ModifierEntry,
@@ -228,9 +228,20 @@ interface Fold {
   open(next: boolean): void;
 }
 
-function fold(title: string, lede: string | undefined, isOpen: boolean): Fold {
+function fold(
+  title: string,
+  lede: string | undefined,
+  isOpen: boolean,
+  /**
+   * What the ? in the head says. A function, not a spec: the sentences name
+   * the track and the perk the section is filling in right now, and both move
+   * while the form is open.
+   */
+  help?: () => HelpSpec
+): Fold {
   const box = el("section", "fold");
   if (isOpen) box.dataset.open = "";
+  const row = el("div", "fold-head-row");
   const head = document.createElement("button");
   head.className = "fold-head";
   head.type = "button";
@@ -240,9 +251,24 @@ function fold(title: string, lede: string | undefined, isOpen: boolean): Fold {
     if (box.hasAttribute("data-open")) box.removeAttribute("data-open");
     else box.dataset.open = "";
   };
+  row.append(head);
+  if (help) {
+    // Beside the head and not inside it: a button in a button is not markup a
+    // browser keeps, and the ? must not fold the section it explains.
+    const ask = document.createElement("button");
+    ask.className = "px-btn";
+    ask.type = "button";
+    ask.dataset.variant = "ghost";
+    ask.dataset.size = "icon-xs";
+    ask.dataset.tip = `What ${title} writes, and what it takes`;
+    ask.setAttribute("aria-label", `About ${title}`);
+    ask.append(iconEl("circleHelp"));
+    ask.onclick = () => helpDialog(help());
+    row.append(ask);
+  }
   const body = el("div", "fold-body");
   if (lede) body.append(el("div", "lede", lede));
-  box.append(head, body);
+  box.append(row, body);
   return {
     el: box,
     body,
@@ -312,8 +338,12 @@ function otherKeys(
   return out;
 }
 
-/** A raw control for a key with no designed widget: a block gets a text area. */
-function rawField(spec: DefinitionFormKey, value: string): Field<string> {
+/**
+ * A raw control for a key with no designed widget: a block gets a text area,
+ * and every text area offers the file, because a webview has no completion,
+ * no hover and no highlighting and the editor has all three.
+ */
+function rawField(spec: DefinitionFormKey, value: string, onOpenFile: () => void): Field<string> {
   const options = {
     label: spec.key,
     ...(spec.doc ? { doc: spec.doc } : {}),
@@ -321,7 +351,7 @@ function rawField(spec: DefinitionFormKey, value: string): Field<string> {
     value,
   };
   return spec.values === "block" || value.startsWith("{")
-    ? scriptField({ ...options, rows: 3, placeholder: "{ … }" })
+    ? scriptField({ ...options, rows: 3, placeholder: "{ … }", onOpenFile })
     : textField(options);
 }
 
@@ -418,21 +448,287 @@ const drawn = buildDrawn();
  * block, so a pick is a file copy and never a script line. The sizes are the
  * game's own files, measured over its 21 tracks (2026-09-04).
  */
+/** What every picture field of this creator says about formats. */
+const IMPORT_NOTE =
+  "The file the game reads is a DDS; a PNG, JPEG, WebP, GIF, BMP, AVIF, ICO, SVG or TGA you pick is converted into one, and transparency is kept.";
+
 const ART_NOTES = {
   icon: {
-    size: "140 x 140 px, the game shows it at 80 x 80.",
     doc: "There is no icon path to write into the block, so picking a picture here copies it into your mod under your track's key.",
+    info:
+      "140 x 140 px in the game's own files, drawn at 80 x 80 in the legacy window. " +
+      `${IMPORT_NOTE} ` +
+      "The game builds the path from the track's key, so a pick copies the picture into your mod under that key and you are asked which folder it goes to.",
   },
   illustration: {
-    size: "4216 x 368 px, drawn twice behind the perks, each pass masked to 2108 x 184.",
     doc: "The window's wide picture, stretched under the whole row of perks. Picking one copies it into your mod under your track's key.",
+    info:
+      "4216 x 368 px in the game's own 21 files. The window draws it twice behind the perks, each pass masked to 2108 x 184, so a picture that is not that wide is stretched to it. " +
+      `${IMPORT_NOTE} ` +
+      "The game builds the path from the track's key, so a pick copies the picture into your mod under that key and you are asked which folder it goes to.",
   },
 };
 
-/** One picture picker and the line that says what the game expects of it. */
-function artRow(field: Field<string>, folder: string, note: { size: string; doc: string }): HTMLElement[] {
+// ---------------------------------------------------------------------------
+// What each section of the form writes, behind its ? button
+// ---------------------------------------------------------------------------
+
+/**
+ * One section's ? dialog: what it WRITES as the intro (the key, and the
+ * harvest's own sentence about it where there is one), then what it takes and
+ * what the game does with it.
+ *
+ * Every number below is measured and its source is the comment on the parser
+ * that reads the same block (app/script.ts) or the harvest the form carries
+ * (`DefinitionFormKey.doc`, quoted through `spec.doc` rather than retyped).
+ */
+function sectionHelp(title: string, writes: string, items: HelpItem[]): HelpSpec {
+  return { title, intro: writes, sections: [{ title: "What it takes", items }] };
+}
+
+/** The harvest's sentence for a key, as a clause after the key's own name. */
+function writesKey(form: DefinitionForm | null, key: string, shape: string): string {
+  const doc = form?.keys.find((k) => k.key === key)?.doc;
+  return doc ? `${shape} The game's own note on it: "${doc}"` : shape;
+}
+
+/** The escape-hatch item every section with a script area carries. */
+const SCRIPT_ITEM: HelpItem = {
+  lead: "A block the rows cannot hold stays script.",
+  text: "Advanced: script keeps it byte for byte and names the line the builder stopped on. There is no completion in a text area, so Edit in the file saves first and opens the block in the editor.",
+};
+
+/** The grammar both trigger builders share, in one sentence. */
+const TRIGGER_ITEM: HelpItem = {
+  lead: "The builder writes three shapes:",
+  text: "has_dlc_feature = <feature>, OR = { has_game_rule = … } for any one of a set of rules, and <scripted trigger> = yes or no.",
+};
+
+const TRACK_HELP = {
+  identity: (): HelpSpec =>
+    sectionHelp(
+      "Identity",
+      "The key names the block the game reads (<key> = { … }); the two lines under it are its localization, <key>_name and <key>_desc.",
+      [
+        {
+          lead: "The key",
+          text: "is lowercase letters, digits and _, starting with a letter. It is the only thing you must type: the perk keys, both picture paths and every loc key follow it, and each stays editable.",
+        },
+        {
+          lead: "Name and description are localization, not script.",
+          text: "They are written to the loc file named after the track's own script file, in the language the top bar names.",
+        },
+        {
+          lead: "All 21 of the game's tracks define both keys.",
+          text: "A track with no name shows the player its raw key instead.",
+        },
+        {
+          lead: "Changing the key later",
+          text: "moves everything that still follows it and leaves anything you typed yourself alone.",
+        },
+      ]
+    ),
+  art: (): HelpSpec =>
+    sectionHelp(
+      "Art",
+      "Nothing. Neither picture is a script key: the game builds both paths from the track's key, so a pick copies the file into your mod under that key.",
+      [
+        {
+          lead: "The icon",
+          text: "is 140 x 140 in the game's own files and drawn at 80 x 80 beside the track's name.",
+        },
+        {
+          lead: "The illustration",
+          text: "is 4216 x 368 over the game's 21 files. The window stretches it behind the whole row of perks and draws it twice, each pass masked to 2108 x 184.",
+        },
+        { lead: "Custom picture…", text: IMPORT_NOTE },
+        {
+          lead: "Where it goes is asked.",
+          text: "The game's own folder by default, or any folder inside your mod. Anywhere else the game will not find it by name, so you reference it yourself.",
+        },
+      ]
+    ),
+  shown: (): HelpSpec =>
+    sectionHelp(
+      "Shown when",
+      writesKey(trackForm, SHOWN_KEY, "is_shown = { … }, a trigger in character scope."),
+      [
+        TRIGGER_ITEM,
+        {
+          lead: "A track with no is_shown is always offered.",
+          text: "The trigger decides whether the game shows the track at all, not whether its perks can be bought.",
+        },
+        {
+          lead: "Measured over the game's 21 tracks:",
+          text: "all 14 is_shown blocks open with has_dlc_feature, and 10 of them wrap the rest in OR = { has_game_rule = … }.",
+        },
+        SCRIPT_ITEM,
+      ]
+    ),
+  others: (): HelpSpec =>
+    sectionHelp("Other keys", "Whatever you type, straight into the track's block.", [
+      {
+        lead: "These are the keys the harvest reports for a dynasty legacy",
+        text: "that no control above stands for, plus any key your own file already carries. Nothing is hidden from you and nothing is dropped on save.",
+      },
+      {
+        lead: "A block value keeps your braces",
+        text: "and gets ours when you leave them off, so has_trait = brave lands as a block and not as a bare line.",
+      },
+      SCRIPT_ITEM,
+    ]),
+};
+
+const PERK_HELP = {
+  identity: (): HelpSpec =>
+    sectionHelp(
+      "Identity",
+      "The key names the perk's block, legacy = <track key> is written under it for you, and the line under the key is <perk key>_name.",
+      [
+        {
+          lead: "A perk only exists inside a track.",
+          text: "legacy = <track key> is written on every perk and never shown: it is how the game knows which track the perk hangs off.",
+        },
+        {
+          lead: "The key is prefilled",
+          text: "as the track's stem plus the first number no perk on the track uses. 18 of the game's 21 tracks name their perks that way; the other three shorten the stem, so it is a default and not a rule.",
+        },
+        {
+          lead: "Only the name is localization.",
+          text: "The game generates no description key for a perk. What a perk does is the sentences its effect prints.",
+        },
+      ]
+    ),
+  characterModifier: (): HelpSpec =>
+    sectionHelp(
+      "Modifiers for every dynasty member",
+      writesKey(perkForm, CHAR_MOD, "character_modifier = { <modifier> = <number> … }."),
+      [
+        {
+          lead: "One row is one modifier and one number.",
+          text: "The line beside it is what the player reads, printed the way the game prints it.",
+        },
+        {
+          lead: "Drag a number to scrub it.",
+          text: "A number you do not touch keeps its own text, so 0.30 stays 0.30 rather than becoming 0.3.",
+        },
+        {
+          lead: "A line the rows cannot hold",
+          text: "(a name = <loc key> heading for the group, a comment) stays where it is in the block and is written back untouched.",
+        },
+        { lead: "78 of the game's 105 perks", text: "carry this block." },
+      ]
+    ),
+  doctrines: (): HelpSpec =>
+    sectionHelp(
+      "Doctrine modifiers",
+      writesKey(perkForm, DOCTRINE_MOD, "One doctrine_character_modifier = { … } block per doctrine."),
+      [
+        {
+          lead: "It is a list, not one block.",
+          text: "The game's own erudition legacy writes three of them, so add as many as the perk needs.",
+        },
+        {
+          lead: "doctrine = <doctrine> is the condition, not a modifier.",
+          text: "The rows apply only to a dynasty member whose faith has that doctrine.",
+        },
+        {
+          lead: "name = <loc key> heads the group in the tooltip.",
+          text: "It follows the perk's key, and the sentence you type for it is written with the rest of the localization.",
+        },
+        {
+          lead: "A key written more than once cannot be edited line by line,",
+          text: "so a perk whose doctrine list moved is written back as a whole block.",
+        },
+      ]
+    ),
+  traits: (): HelpSpec =>
+    sectionHelp("Traits granted", writesKey(perkForm, TRAITS_KEY, "traits = { <trait> = <number> … }."), [
+      {
+        lead: "The player picks one of the listed traits",
+        text: "when the perk is unlocked.",
+      },
+      {
+        lead: "The number is the AI's chance of picking that trait,",
+        text: "not a modifier. The game's own weighted traits use 100.",
+      },
+      {
+        lead: "The choice is saved on the dynasty",
+        text: "as var:<perk key>_<trait key>, which is where the rest of your script reads it back from.",
+      },
+      { lead: "4 of the game's 105 perks", text: "use it." },
+    ]),
+  canBePicked: (): HelpSpec =>
+    sectionHelp(
+      "Can be picked when",
+      writesKey(perkForm, PICKED_KEY, "can_be_picked = { … }, a trigger in character scope."),
+      [
+        TRIGGER_ITEM,
+        {
+          lead: "A perk with no can_be_picked can always be bought",
+          text: "once the perks before it on the track are.",
+        },
+        {
+          lead: "Measured over the game's 105 perks:",
+          text: "of their 54 can_be_picked blocks, 10 are a DLC feature and 44 are a scripted trigger set to yes.",
+        },
+        SCRIPT_ITEM,
+      ]
+    ),
+  effect: (): HelpSpec =>
+    sectionHelp(
+      "On pick",
+      writesKey(perkForm, EFFECT_KEY, "effect = { custom_description_no_bullet = { text = <loc key> } … }."),
+      [
+        {
+          lead: "Each row is one tooltip line.",
+          text: "The sentence you type is the localization the game prints for it.",
+        },
+        {
+          lead: "The loc key follows the perk's key",
+          text: "(<perk>_effect, then <perk>_effect_2 and so on), which is why it is shown and not typed.",
+        },
+        {
+          lead: "Most perks do nothing here but talk.",
+          text: "74 of the game's 82 effect blocks are nothing but these lines; the perk's real work happens in an on_action that reads the perk.",
+        },
+        {
+          lead: "Start from a game perk's effect",
+          text: "copies another perk's lines in under YOUR keys, so your mod does not replace the game's own sentences.",
+        },
+        SCRIPT_ITEM,
+      ]
+    ),
+  chance: (): HelpSpec =>
+    sectionHelp("AI weight", writesKey(perkForm, CHANCE_KEY, "ai_chance = { value = <number> }."), [
+      {
+        lead: "One number, weighed against the other perks the AI could buy.",
+        text: "It is not a percentage. An empty field leaves the key out and the game uses its own default.",
+      },
+      { lead: "Drag the section's title", text: "to scrub the number." },
+      {
+        lead: "12 of the game's 37 ai_chance blocks are exactly this.",
+        text: "The other 25 weigh the choice with if = { limit = … multiply = … } and stay script.",
+      },
+      SCRIPT_ITEM,
+    ]),
+  others: (): HelpSpec =>
+    sectionHelp("Other keys", "Whatever you type, straight into the perk's block.", [
+      {
+        lead: "These are the keys the harvest reports for a dynasty perk",
+        text: "that no section above stands for, plus any key your own file already carries.",
+      },
+      {
+        lead: "A block value keeps your braces",
+        text: "and gets ours when you leave them off.",
+      },
+      SCRIPT_ITEM,
+    ]),
+};
+
+/** One picture picker and the path the game reads it from. */
+function artRow(field: Field<string>, folder: string): HTMLElement[] {
   const line = el("div", "artnote");
-  line.append(document.createTextNode(`${note.size} `));
   const code = document.createElement("code");
   code.textContent = `${folder}/<track key>.dds`;
   line.append(code);
@@ -455,7 +751,8 @@ function buildTrack(loc: Record<string, string>): void {
   const identity = fold(
     "Identity",
     "The key is the only thing you must type. The names, the perk keys and both pictures follow it.",
-    true
+    true,
+    TRACK_HELP.identity
   );
   for (const pattern of form.locPatterns) {
     const key = locKeyFor(pattern, name);
@@ -476,33 +773,39 @@ function buildTrack(loc: Record<string, string>): void {
   const art = fold(
     "Art",
     "Two pictures, both found by the track's key and neither written into the block.",
-    true
+    true,
+    TRACK_HELP.art
   );
   const block = el("div", "artblock");
   const pickers = el("div", "px-stack");
   if (form.iconFolder) {
     trackIcon = iconField({
       label: "Icon",
-      doc: `${ART_NOTES.icon.size} ${ART_NOTES.icon.doc}`,
+      doc: ART_NOTES.icon.doc,
+      info: ART_NOTES.icon.info,
       items: init!.icons,
       value: init!.icons.some((i) => i.key === name) ? name : "",
       onCustom: () => send({ type: "customIcon", track: trackName(), which: "icon" }),
       customLabel: "Custom picture…",
     });
     trackIcon.onChange(paintArt);
-    pickers.append(...artRow(trackIcon, form.iconFolder, ART_NOTES.icon));
+    pickers.append(...artRow(trackIcon, form.iconFolder));
   }
   if (init?.illustrationFolder) {
     trackIllustration = iconField({
       label: "Illustration",
-      doc: `${ART_NOTES.illustration.size} ${ART_NOTES.illustration.doc}`,
+      doc: ART_NOTES.illustration.doc,
+      info: ART_NOTES.illustration.info,
       items: init.illustrations,
       value: init.illustrations.some((i) => i.key === name) ? name : "",
       onCustom: () => send({ type: "customIcon", track: trackName(), which: "illustration" }),
       customLabel: "Custom picture…",
+      // 4216 x 368 is 11:1; a square tile of it is 44 x 4 px of paint, which
+      // is what made the grid unreadable. One strip per row instead.
+      tile: "wide",
     });
     trackIllustration.onChange(paintArt);
-    pickers.append(...artRow(trackIllustration, init.illustrationFolder, ART_NOTES.illustration));
+    pickers.append(...artRow(trackIllustration, init.illustrationFolder));
   }
   block.append(pickers);
   art.body.append(block);
@@ -511,13 +814,19 @@ function buildTrack(loc: Record<string, string>): void {
   // --- Shown when ----------------------------------------------------------
   const isShown = form.keys.find((k) => k.key === SHOWN_KEY);
   if (isShown) {
-    const shown = fold("Shown when", isShown.doc ?? "When the game offers this track at all.", false);
+    const shown = fold(
+      "Shown when",
+      isShown.doc ?? "When the game offers this track at all.",
+      false,
+      TRACK_HELP.shown
+    );
     trackShown = conditionField({
       label: isShown.key,
       bare: true,
       conditions: form.conditions ?? {},
       value: valueOf(trackOriginal ?? newDefBlock(name), isShown.key) ?? "",
       placeholder: EXAMPLE.isShown,
+      onOpenFile: () => openInFile("track", trackName),
     });
     trackShown.onChange(refreshScript);
     shown.body.append(trackShown.el);
@@ -530,10 +839,13 @@ function buildTrack(loc: Record<string, string>): void {
     const rest = fold(
       "Other keys the game documents for a legacy",
       "Everything the harvest reports that no control above stands for.",
-      false
+      false,
+      TRACK_HELP.others
     );
     for (const spec of others) {
-      const field = rawField(spec, valueOf(trackOriginal ?? newDefBlock(name), spec.key) ?? "");
+      const field = rawField(spec, valueOf(trackOriginal ?? newDefBlock(name), spec.key) ?? "", () =>
+        openInFile("track", trackName)
+      );
       trackOthers[spec.key] = field;
       rest.body.append(field.el);
     }
@@ -666,7 +978,10 @@ function refItems(kind: string): EventVocabularyItem[] {
 function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   const form = perkForm!;
   const original = loaded ? parseDefBlock(loaded.text) : null;
-  const name = loaded?.name ?? perkNameFor(trackName() || "legacy", perks.length);
+  // The first FREE number, not the perk count: removing the third of five and
+  // adding one back handed the new perk the fifth's own key.
+  const fresh = freePerkName(trackName() || "legacy", perks.map(perkName));
+  const name = loaded?.name ?? fresh;
 
   const tile = el("div", "perktile");
   tile.tabIndex = 0;
@@ -684,12 +999,17 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   tile.append(step, face, tools);
 
   const editor = el("div");
-  const identity = fold("Identity", "The key the game reads, and the name the player sees.", true);
+  const identity = fold(
+    "Identity",
+    "The key the game reads, and the name the player sees.",
+    true,
+    PERK_HELP.identity
+  );
   const key = textField({
     label: "Key",
     doc: "The perk's key. Its loc key and its default name follow it.",
     value: name,
-    placeholder: perkNameFor(trackName() || "legacy", perks.length),
+    placeholder: fresh,
   });
   identity.body.append(key.el);
   editor.append(identity.el);
@@ -729,11 +1049,11 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   }));
 
   /** One `name = number` block of the perk, in a section of its own. */
-  const modBlock = (blockKey: string, title: string, isOpen: boolean): void => {
+  const modBlock = (blockKey: string, title: string, isOpen: boolean, help: () => HelpSpec): void => {
     const spec = form.keys.find((k) => k.key === blockKey);
     if (!spec) return;
     const entries = parseModifierBlock(original ? (valueOf(original, blockKey) ?? "") : "");
-    const section = fold(title, spec.doc, isOpen || entries.length > 0);
+    const section = fold(title, spec.doc, isOpen || entries.length > 0, help);
     section.title.dataset.tip = blockKey;
     const field = rowsField({
       label: blockKey,
@@ -750,14 +1070,14 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     editor.append(section.el);
   };
 
-  modBlock(CHAR_MOD, "Modifiers for every dynasty member", true);
+  modBlock(CHAR_MOD, "Modifiers for every dynasty member", true, PERK_HELP.characterModifier);
 
   // A perk writes ONE `doctrine_character_modifier` per doctrine, and the
   // game's own erudition_legacy_4 writes three, so the form holds a list.
   const doctrineSpec = form.keys.find((k) => k.key === DOCTRINE_MOD);
   if (doctrineSpec) {
     const values = original ? valuesOf(original, DOCTRINE_MOD) : [];
-    const section = fold("Doctrine modifiers", doctrineSpec.doc, values.length > 0);
+    const section = fold("Doctrine modifiers", doctrineSpec.doc, values.length > 0, PERK_HELP.doctrines);
     section.title.dataset.tip = DOCTRINE_MOD;
     const inner = form.blocks?.[DOCTRINE_MOD]?.find((k) => k.key === "doctrine");
     const kind = inner?.refKinds?.[0] ?? DOCTRINE_KEY;
@@ -781,7 +1101,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   if (traitsSpec) {
     const entries = parseModifierBlock(original ? (valueOf(original, TRAITS_KEY) ?? "") : "");
     const kind = traitsSpec.refKinds?.[0] ?? TRAIT_KEY;
-    const section = fold("Traits granted", traitsSpec.doc, entries.length > 0);
+    const section = fold("Traits granted", traitsSpec.doc, entries.length > 0, PERK_HELP.traits);
     section.title.dataset.tip = TRAITS_KEY;
     const field = rowsField({
       label: TRAITS_KEY,
@@ -814,8 +1134,16 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     editor.append(section.el);
   };
 
+  // Every script area of a perk opens the perks' file at THIS perk's block.
+  const openPerkFile = (): void => openInFile("perks", () => perkName(perk));
+
   if (has(PICKED_KEY)) {
-    const section = fold("Can be picked when", docOf(PICKED_KEY), blockValue(PICKED_KEY) !== "");
+    const section = fold(
+      "Can be picked when",
+      docOf(PICKED_KEY),
+      blockValue(PICKED_KEY) !== "",
+      PERK_HELP.canBePicked
+    );
     addBlock(
       PICKED_KEY,
       section,
@@ -825,11 +1153,12 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
         conditions: form.conditions ?? {},
         value: blockValue(PICKED_KEY),
         placeholder: EXAMPLE.canBePicked,
+        onOpenFile: openPerkFile,
       })
     );
   }
   if (has(EFFECT_KEY)) {
-    const section = fold("On pick", docOf(EFFECT_KEY), true);
+    const section = fold("On pick", docOf(EFFECT_KEY), true, PERK_HELP.effect);
     perk.effect = effectField({
       label: EFFECT_KEY,
       bare: true,
@@ -838,12 +1167,13 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
       placeholder: EXAMPLE.effect,
       locOf: (locKey) => locValues.get(locKey),
       onTemplate: (anchor) => pickTemplate(perk, anchor),
+      onOpenFile: openPerkFile,
     });
     addBlock(EFFECT_KEY, section, perk.effect);
     askLoc(perk.effect.keys());
   }
   if (has(CHANCE_KEY)) {
-    const section = fold("AI weight", docOf(CHANCE_KEY), blockValue(CHANCE_KEY) !== "");
+    const section = fold("AI weight", docOf(CHANCE_KEY), blockValue(CHANCE_KEY) !== "", PERK_HELP.chance);
     addBlock(
       CHANCE_KEY,
       section,
@@ -853,6 +1183,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
         handle: section.title,
         value: blockValue(CHANCE_KEY),
         placeholder: EXAMPLE.chance,
+        onOpenFile: openPerkFile,
       })
     );
   }
@@ -863,10 +1194,11 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     const section = fold(
       "Other keys",
       "Everything the harvest reports that no section above stands for.",
-      false
+      false,
+      PERK_HELP.others
     );
     for (const spec of others) {
-      const field = rawField(spec, original ? (valueOf(original, spec.key) ?? "") : "");
+      const field = rawField(spec, original ? (valueOf(original, spec.key) ?? "") : "", openPerkFile);
       perk.others[spec.key] = field;
       section.body.append(field.el);
     }
@@ -1010,7 +1342,13 @@ function perkBlock(perk: Perk): DefBlock {
   for (const [blockKey, mod] of Object.entries(perk.mods)) {
     values.push({
       key: blockKey,
-      value: writeModifierBlock(updateModifierRows(mod.entries, mod.field.get())),
+      // The file's own block when the rows write nothing: an empty
+      // `character_modifier = { }` is a key the perk HAS (script.ts).
+      value: modifierBlockValue(
+        mod.entries,
+        mod.field.get(),
+        perk.original ? valueOf(perk.original, blockKey) : null
+      ),
     });
   }
   for (const [blockKey, field] of Object.entries(perk.blocks)) {
@@ -1135,11 +1473,27 @@ interface PanelState {
 }
 
 const saved = (vscode.getState() as PanelState | null) ?? {};
+/** What the form beside it needs to stay a form: the strip's own floor plus room. */
+const MIN_FORM = 360;
 const side = sidePanel($("side"), {
   ...(saved.width ? { width: saved.width } : {}),
   collapsed: true,
+  // A width remembered from a wide window would otherwise leave nothing for
+  // the track itself when the panel is narrow.
+  max: () => Math.max(220, document.documentElement.clientWidth - MIN_FORM),
   onChange: ({ width }) => vscode.setState({ width }),
 });
+
+window.addEventListener("resize", () => {
+  side.reclamp();
+  // The tooltip is positioned from a tile's rectangle, which the resize just
+  // moved; it would sit over the form at its old place until the pointer came
+  // back. Popovers and menus close themselves (shared/overlay.ts).
+  hideTip();
+});
+// The same for a scroll: the form scrolls under the tip, and so does the
+// strip itself once the row is wider than the panel.
+document.addEventListener("scroll", hideTip, true);
 
 /** The panel's head: the perk it is showing, and where it sits on the track. */
 function paintSideHead(): void {
@@ -1362,41 +1716,52 @@ function definitionFor(
   };
 }
 
-function save(): void {
-  if (!trackForm || !perkForm) return;
+/**
+ * The blocks the last save handed the host, kept until it answers. They are
+ * what the definitions BECOME once the write lands, and they are snapshotted
+ * here rather than rebuilt from the form on the reply, so an edit made while
+ * the save was in flight is still an edit and not something already written.
+ */
+let pendingSave: { track: DefBlock; perks: { perk: Perk; block: DefBlock }[] } | null = null;
+
+/** True when the save was handed to the host; false when the form refused it. */
+function save(): boolean {
+  if (!trackForm || !perkForm) return false;
   const name = trackName();
   if (!NAME_RE.test(name)) {
     toast("The track needs a key: lowercase letters, digits and _, starting with a letter.", "destructive");
-    return;
+    return false;
   }
   if (trackSource !== null && trackSource !== "mod" && !overrideMode && name === trackOriginal?.name) {
     toast(`Duplicating ${name} needs a key of its own. Change it, or switch to Override.`, "destructive");
-    return;
+    return false;
   }
   const names = perks.map(perkName);
   const bad = names.find((n) => !NAME_RE.test(n));
   if (bad !== undefined) {
     toast(`"${bad}" is not a usable perk key: lowercase letters, digits and _.`, "destructive");
-    return;
+    return false;
   }
   if (new Set(names).size !== names.length) {
     toast("Two perks share a key. Each perk needs its own.", "destructive");
-    return;
+    return false;
   }
 
   const trackKeys = trackForm.keys.map((k) => k.key);
   const perkKeys = perkForm.keys.map((k) => k.key);
+  const trackBody = trackBlock();
+  const perkBodies = perks.map((perk) => ({ perk, block: perkBlock(perk) }));
   const track = definitionFor(
-    trackBlock(),
+    trackBody,
     trackOriginal,
     trackSource,
     trackFile,
     locPairs(trackLoc, name),
     trackKeys
   );
-  const written = perks.map((perk) =>
+  const written = perkBodies.map(({ perk, block }) =>
     definitionFor(
-      perkBlock(perk),
+      block,
       perk.original,
       perk.source,
       perk.file,
@@ -1414,6 +1779,7 @@ function save(): void {
   );
   const icon = trackIcon?.get() ?? "";
   const illustration = trackIllustration?.get() ?? "";
+  pendingSave = { track: trackBody, perks: perkBodies };
   send({
     type: "save",
     track,
@@ -1422,6 +1788,58 @@ function save(): void {
     icon: icon && icon !== name ? icon : null,
     illustration: illustration && illustration !== name ? illustration : null,
   });
+  return true;
+}
+
+/**
+ * A landed save makes the form's own blocks the ones on disk.
+ *
+ * Without this the app still held `original = null` after a create, so every
+ * later save wrote each block WHOLE over a file the modder may have edited by
+ * hand in between. From here the next save is an edit that rewrites only the
+ * keys that moved; a definition renamed afterwards goes back to a create,
+ * because there is no block of that new name in the file.
+ */
+function adoptSaved(trackTo: string, perksTo: string | null): void {
+  const sent = pendingSave;
+  pendingSave = null;
+  if (!sent) return;
+  trackOriginal = sent.track;
+  trackSource = "mod";
+  trackFile = trackTo;
+  overrideMode = false;
+  paintMode();
+  const badge = $("source");
+  badge.hidden = false;
+  badge.textContent = "this mod";
+  // The Duplicate/Override choice is about the game's copy of a track; the
+  // track is now the mod's own, and there is nothing left to choose.
+  $("mode").hidden = true;
+  for (const { perk, block } of sent.perks) {
+    if (!perks.includes(perk)) continue;
+    perk.original = block;
+    perk.source = "mod";
+    perk.file = perksTo;
+  }
+}
+
+/**
+ * "Edit in the file": save, then open the definition where it landed.
+ *
+ * The host holds no blocks of its own, so it cannot write them and then open
+ * the file by itself. The app saves, and asks from the REPLY: one message
+ * after the other, never two the host could answer out of order.
+ */
+let openAfterSave: { name: string; which: TargetKind } | null = null;
+
+function openInFile(which: TargetKind, nameOf: () => string): void {
+  const name = nameOf().trim();
+  if (!NAME_RE.test(name)) {
+    toast("Give it a key first: the file opens at the definition's own block.", "destructive");
+    return;
+  }
+  openAfterSave = { name, which };
+  if (!save()) openAfterSave = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1497,11 +1915,13 @@ function rebuildArt(which: "icon" | "illustration", select?: string): void {
   const note = isIcon ? ART_NOTES.icon : ART_NOTES.illustration;
   const rebuilt = iconField({
     label: isIcon ? "Icon" : "Illustration",
-    doc: `${note.size} ${note.doc}`,
+    doc: note.doc,
+    info: note.info,
     items: isIcon ? init.icons : init.illustrations,
     value: select ?? previous.get(),
     onCustom: () => send({ type: "customIcon", track: trackName(), which }),
     customLabel: "Custom picture…",
+    ...(isIcon ? {} : { tile: "wide" as const }),
   });
   rebuilt.onChange(paintArt);
   previous.el.replaceWith(rebuilt.el);
@@ -1577,7 +1997,9 @@ $("new").onclick = () => {
   applyInit(init);
 };
 
-$("save").onclick = save;
+$("save").onclick = () => {
+  save();
+};
 
 $("lookup").onclick = () => {
   const items = (perkForm?.modifiers ?? []).map((mod) => ({
@@ -1763,9 +2185,14 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       refreshScript();
       break;
     }
-    case "saved":
+    case "saved": {
+      adoptSaved(message.trackFile, message.perksFile);
       dropped = [];
+      const open = openAfterSave;
+      openAfterSave = null;
+      if (open) send({ type: "openFile", name: open.name, which: open.which });
       break;
+    }
     case "toast":
       toast(message.message, message.variant);
       break;

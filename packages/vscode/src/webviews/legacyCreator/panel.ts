@@ -25,7 +25,6 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
-import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import {
@@ -33,10 +32,11 @@ import {
   defaultSaveTarget,
   openSaveTarget,
   pickSaveTargetChoice,
+  revealDefinition,
   writeLocValues,
   type SaveTargetChoice,
 } from "../../creators/save";
-import { wireImages } from "../../creators/images";
+import { importPicture, wireImages } from "../../creators/images";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM } from "../guiEditor/textureCache";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { makeNonce } from "../nonce";
@@ -70,9 +70,6 @@ const PERK_KIND = "dynasty_perk";
  * paths are built from the track's key, which is why a pick is a file copy.
  */
 const ILLUSTRATION_FOLDER = "gfx/interface/illustrations/legacy_tracks";
-
-/** Images the DDS converter reads, plus the format the game itself wants. */
-const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "dds"];
 
 export interface LegacyCreatorActions {
   fetchForm(params: DefinitionFormParams): Promise<DefinitionForm | null>;
@@ -186,7 +183,11 @@ export class LegacyCreatorPanel {
     if (existing) {
       existing.options = options;
       existing.panel.reveal(vscode.ViewColumn.Active);
-      void existing.postInit(name);
+      // A reveal is not a reset. `postInit` posts a fresh `init`, and the app
+      // answers one by rebuilding the form from empty slots while the track's
+      // key stays in the box: the next save then wrote those empty blocks over
+      // the modder's file. Only a caller that NAMED a track asks for a load.
+      if (name) void existing.load(name);
       return;
     }
     LegacyCreatorPanel.instance = new LegacyCreatorPanel(context, options, name);
@@ -451,7 +452,10 @@ export class LegacyCreatorPanel {
         });
         return;
       case "customIcon":
-        await this.convertIcon(message.track, message.which);
+        await this.importArt(message.track, message.which);
+        return;
+      case "openFile":
+        await this.openDefinition(message.name, message.which === "perks" ? "perks" : "track");
         return;
       case "images":
         wireImages(this.panel, roots(this.options.cfg), this.textures, message);
@@ -557,14 +561,32 @@ export class LegacyCreatorPanel {
       return;
     }
 
-    const pairs = [...message.track.loc, ...message.perks.flatMap((perk) => perk.loc)];
+    const done: HostToApp = {
+      type: "saved",
+      trackFile: trackTarget.file,
+      perksFile: perkTarget?.file ?? null,
+    };
+    // A NEW loc key lands beside the definition that needs it: the track's
+    // words in the track file's own loc file, a perk's in the perks' one.
+    // Without the target they went to whichever mod file held their siblings,
+    // which for a first legacy is any file at all.
     let locFiles: string[];
     try {
-      locFiles = await writeLocValues(cfg, actions.lookupLoc, pairs);
+      locFiles = [
+        ...(await writeLocValues(cfg, actions.lookupLoc, message.track.loc, trackTarget)),
+        ...(perkTarget
+          ? await writeLocValues(
+              cfg,
+              actions.lookupLoc,
+              message.perks.flatMap((perk) => perk.loc),
+              perkTarget
+            )
+          : []),
+      ];
     } catch (err) {
       // The blocks are written; only the loc failed. The app still gets its
       // reply, so the panel does not sit on a half-reported save.
-      this.post({ type: "saved" });
+      this.post(done);
       this.post({
         type: "toast",
         message: `${message.track.name} was written, but its localization was not: ${err instanceof Error ? err.message : String(err)}`,
@@ -579,10 +601,13 @@ export class LegacyCreatorPanel {
       iconNote += this.copyArt("illustration", message.illustration, message.track.name, trackTarget.modPath);
     }
 
-    this.post({ type: "saved" });
+    this.post(done);
+    // The loc files are NAMED, not counted: a modder who has to find the
+    // sentence they just typed should not have to guess which file took it.
+    const locNames = [...new Set(locFiles)].map((file) => path.basename(file));
     const written = [
       `${message.track.name} and ${message.perks.length} perk${message.perks.length === 1 ? "" : "s"}`,
-      `${new Set(locFiles).size} loc file${new Set(locFiles).size === 1 ? "" : "s"}`,
+      locNames.length > 0 ? `loc into ${locNames.join(" and ")}` : "no localization",
     ].join(", ");
     this.post({ type: "toast", message: `Saved ${written}.${iconNote}` });
     if (message.dropped.length > 0) {
@@ -625,36 +650,31 @@ export class LegacyCreatorPanel {
   }
 
   /**
-   * A picture of the modder's own, converted by the toolkit's own encoder
-   * (convertImageToDds, the non-interactive half of the DDS command): the
-   * creator already knows the format question's answer and the target path,
-   * so nothing is asked and nothing is announced twice.
+   * A picture of the modder's own, in whatever format they have it, into the
+   * mod the track is being saved to (`creators/images.ts` importPicture): any
+   * format Chromium decodes plus TGA and DDS, converted on the way in, and the
+   * modder is asked where it goes so a mod with its own art tree is not forced
+   * into the game's folder.
    */
-  private async convertIcon(track: string, which: ArtKind): Promise<void> {
-    const { cfg } = this.options;
+  private async importArt(track: string, which: ArtKind): Promise<void> {
     const { folder, files } = this.artOf(which);
-    const modPath = cfg.modPath ?? cfg.workspaceMods[0];
+    // The picture goes into the mod the definition goes into, so the two never
+    // land in different mods.
+    const modPath = this.targetChoice("track")?.modPath;
     if (!folder || !modPath) return;
     if (!/^[a-z][a-z0-9_]*$/.test(track)) {
       this.post({ type: "toast", message: "Give the track its key first: the picture is saved under it." });
       return;
     }
-    const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { Images: IMAGE_EXT },
-      title: `Picture for ${track}`,
-    });
-    const source = picked?.[0]?.fsPath;
-    if (!source) return;
-    const dir = path.join(modPath, ...folder.split("/"));
-    const target = path.join(dir, `${track}.dds`);
+    let written;
     try {
-      fs.mkdirSync(dir, { recursive: true });
-      if (source.toLowerCase().endsWith(".dds")) {
-        fs.copyFileSync(source, target);
-      } else {
-        await convertImageToDds(vscode.Uri.file(source), vscode.Uri.file(target));
-      }
+      written = await importPicture({
+        modPath,
+        folder,
+        name: track,
+        title: `Picture for ${track}`,
+        textures: this.textures,
+      });
     } catch (err) {
       this.post({
         type: "toast",
@@ -663,12 +683,28 @@ export class LegacyCreatorPanel {
       });
       return;
     }
-    if (!fs.existsSync(target)) {
-      this.post({ type: "toast", message: "No picture was written." });
-      return;
-    }
+    if (!written) return;
     this.post({ type: "icons", icons: this.resolveIcons(folder, files), select: track, which });
-    this.post({ type: "toast", message: `Picture written to ${folder}/${track}.dds.` });
+    this.post({
+      type: "toast",
+      message: written.inPlace
+        ? `Picture written to ${written.rel}.`
+        : `Picture written to ${written.rel}. The game looks for it under ${folder}/${track}.dds, so reference it yourself.`,
+    });
+  }
+
+  /**
+   * Open one of the two files at a definition's block. The app saves before it
+   * asks, which is what the script areas' "Edit in the file" promises, so the
+   * block is in the file by the time the editor shows it.
+   */
+  private async openDefinition(name: string, which: TargetKind): Promise<void> {
+    const form = which === "track" ? this.legacyForm : this.perkForm;
+    const choice = this.targetChoice(which);
+    if (!form || !choice) return;
+    const target = await openSaveTarget(this.options.cfg, form.folder, choice);
+    if (!target) return;
+    await revealDefinition(target.abs, name);
   }
 }
 

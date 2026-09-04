@@ -6,7 +6,12 @@
  * edits and write the loc.
  */
 import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
-import type { CreatorImagesReply, CreatorImagesRequest, CreatorSaveTarget } from "../shared/creatorMessages";
+import type {
+  CreatorImagesReply,
+  CreatorImagesRequest,
+  CreatorOpenFileRequest,
+  CreatorSaveTarget,
+} from "../shared/creatorMessages";
 
 /** Which of the two name-derived pictures a track reads. */
 export type ArtKind = "icon" | "illustration";
@@ -121,6 +126,12 @@ export type AppToHost =
    */
   | { type: "changeTarget"; which: TargetKind }
   /**
+   * Open one of the two files in the editor, at this definition's block. The
+   * app saves first and sends this from the reply, so the block is in the file
+   * by the time the editor opens. `which` names the file (`track` or `perks`).
+   */
+  | CreatorOpenFileRequest
+  /**
    * Hand back the `effect` block of an existing perk, so a new perk can start
    * from what the game itself writes.
    */
@@ -167,5 +178,12 @@ export type HostToApp =
    * when nothing is indexed under that name. The app takes the key it wants.
    */
   | { type: "perkEffect"; name: string; block: string | null }
-  | { type: "saved" }
+  /**
+   * The blocks are in the files, and these are the files they went into. The
+   * app adopts what it just sent as the definitions' own text, so the NEXT
+   * save is an edit that rewrites only the keys that moved instead of writing
+   * every block whole over a file the modder may have edited by hand.
+   * `perksFile` is null when the track carried no perk.
+   */
+  | { type: "saved"; trackFile: string; perksFile: string | null }
   | { type: "toast"; message: string; variant?: "default" | "destructive" };
