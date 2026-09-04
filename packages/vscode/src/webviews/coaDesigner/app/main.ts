@@ -399,48 +399,55 @@ function alphaMask(key: string, img: HTMLImageElement): HTMLCanvasElement {
  * pulls the arms in by that ratio; every mapping between pointer, selection
  * outline and pixels goes through this one rect.
  */
-function armsRect(): { x: number; y: number; w: number; h: number } {
+type Box = { x: number; y: number; w: number; h: number };
+
+function armsRect(): Box {
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
   const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
   // A mask smaller than the cell says how far the arms sit in (the title
   // pair); a mask the size of the cell says nothing, and the frame's own
-  // interior is measured instead (every house and dynasty sheet).
+  // hole is measured instead (every house and dynasty sheet).
   if (frame && mask && cell > mask.naturalWidth) {
     const ratio = mask.naturalWidth / cell;
     const w = canvas.width * ratio;
     const h = canvas.height * ratio;
     return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
   }
-  const inside = frame ? frameInterior(frame) : null;
-  if (!inside) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  const hole = frame ? frameHole(frame) : null;
+  const shape = mask ? maskShape(`masks/${frameId}`, mask) : null;
+  if (!hole || !shape) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  // The rect the whole mask is drawn at so that its painted shape lands on
+  // the hole: the arms are clipped to the mask, so they land there too.
+  const w = (hole.w / shape.w) * canvas.width;
+  const h = (hole.h / shape.h) * canvas.height;
   return {
-    x: inside.x * canvas.width,
-    y: inside.y * canvas.height,
-    w: inside.w * canvas.width,
-    h: inside.h * canvas.height,
+    x: (hole.x - shape.x * (hole.w / shape.w)) * canvas.width,
+    y: (hole.y - shape.y * (hole.h / shape.h)) * canvas.height,
+    w,
+    h,
   };
 }
 
 /**
- * The hole in a frame cell, as fractions of the cell: how far from the centre
- * the frame's own paint starts, along the middle row and the middle column.
+ * Where the arms go in a frame cell: the bounding box of the transparent
+ * region around the cell's centre, as fractions of the cell.
  *
- * The house and dynasty masks are the full 160 px of their cell (a shield
- * whose top is row 0 and whose point is the last row), while the frame cell
- * paints a border with a transparent middle (house_frame_22 cell 2: rows 8
- * to 152, columns 8 to 150, measured on 1.19). The game fits the masked arms
- * into that hole; drawing them at the cell size put the pattern's corners
- * outside the shield. Measured once per frame and tier, off the texture the
- * preview draws.
+ * The house and dynasty masks are the full 160 px of their cell, while the
+ * frame cell paints a border around a transparent middle, so the mask's
+ * painted shape has to be fitted to that hole. A scan along the middle row
+ * and column was not enough: house_frame_14 is a roundel with concave
+ * sides, and its hole is 34 px wider at the top than on the middle row
+ * (measured on 1.19), so the arms came out a narrow shield. A flood fill
+ * from the centre finds the whole hole. Once per frame and tier.
  */
-const interiors = new Map<string, { x: number; y: number; w: number; h: number } | null>();
+const holes = new Map<string, Box | null>();
 
-function frameInterior(frame: HTMLImageElement): { x: number; y: number; w: number; h: number } | null {
+function frameHole(frame: HTMLImageElement): Box | null {
   const cells = frameCells(frame);
   const index = frameCellIndex(cells);
   const key = `${frameId}:${index}`;
-  const hit = interiors.get(key);
+  const hit = holes.get(key);
   if (hit !== undefined) return hit;
   const cell = Math.round(frame.naturalWidth / cells);
   const size = frame.naturalHeight;
@@ -450,22 +457,75 @@ function frameInterior(frame: HTMLImageElement): { x: number; y: number; w: numb
   const cctx = c.getContext("2d", { willReadFrequently: true })!;
   cctx.drawImage(frame, index * cell, 0, cell, size, 0, 0, cell, size);
   const alpha = cctx.getImageData(0, 0, cell, size).data;
-  const opaque = (x: number, y: number): boolean => alpha[(y * cell + x) * 4 + 3] >= 128;
+  const clear = (x: number, y: number): boolean => alpha[(y * cell + x) * 4 + 3] < 128;
   const midX = Math.floor(cell / 2);
   const midY = Math.floor(size / 2);
-  let out: { x: number; y: number; w: number; h: number } | null = null;
-  if (!opaque(midX, midY)) {
-    let left = midX;
-    while (left > 0 && !opaque(left - 1, midY)) left--;
-    let right = midX;
-    while (right < cell - 1 && !opaque(right + 1, midY)) right++;
-    let top = midY;
-    while (top > 0 && !opaque(midX, top - 1)) top--;
-    let bottom = midY;
-    while (bottom < size - 1 && !opaque(midX, bottom + 1)) bottom++;
+  let out: Box | null = null;
+  if (clear(midX, midY)) {
+    const seen = new Uint8Array(cell * size);
+    const stack = [midY * cell + midX];
+    seen[stack[0]] = 1;
+    let left = midX,
+      right = midX,
+      top = midY,
+      bottom = midY;
+    while (stack.length > 0) {
+      const at = stack.pop()!;
+      const x = at % cell;
+      const y = (at - x) / cell;
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx,
+          ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= cell || ny >= size) continue;
+        const n = ny * cell + nx;
+        if (seen[n] || !clear(nx, ny)) continue;
+        seen[n] = 1;
+        stack.push(n);
+      }
+    }
     out = { x: left / cell, y: top / size, w: (right - left + 1) / cell, h: (bottom - top + 1) / size };
   }
-  interiors.set(key, out);
+  holes.set(key, out);
+  return out;
+}
+
+/** The painted part of a mask (alpha at least half), as fractions of the mask. */
+const shapes = new Map<string, Box>();
+
+function maskShape(key: string, mask: HTMLImageElement): Box {
+  const hit = shapes.get(key);
+  if (hit) return hit;
+  const c = alphaMask(key, mask);
+  const w = c.width,
+    h = c.height;
+  const alpha = c.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+  let left = w,
+    right = -1,
+    top = h,
+    bottom = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (alpha[(y * w + x) * 4 + 3] < 128) continue;
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+  }
+  const out: Box =
+    right < 0
+      ? { x: 0, y: 0, w: 1, h: 1 }
+      : { x: left / w, y: top / h, w: (right - left + 1) / w, h: (bottom - top + 1) / h };
+  shapes.set(key, out);
   return out;
 }
 
@@ -2295,6 +2355,7 @@ $("toggleRight").onclick = () => right.toggle();
 $("libImport").onclick = async () => {
   if (await confirmDiscard("Importing a design")) send({ type: "libraryList" });
 };
+$("libDir").onclick = () => send({ type: "libraryDir" });
 $("libExport").onclick = () => {
   if (!flag.name.trim()) {
     toast("Give the arms a name first.", "destructive");

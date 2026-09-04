@@ -189,8 +189,9 @@ ${uiCss}
         <div id="leftBody">
           <div class="px-panel-title">Library</div>
           <div class="toolRow">
-            <button id="libImport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Load a design you stored earlier" data-tip-wrap>${icon("folderOpen")} Import…</button>
-            <button id="libExport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Store this design as a script file outside any mod" data-tip-wrap>${icon("download")} Export</button>
+            <button id="libImport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open a design from your library" data-tip-wrap>${icon("library")} Library</button>
+            <button id="libExport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Save this design to your library, outside any mod" data-tip-wrap>${icon("save")} Save</button>
+            <button id="libDir" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Choose the library folder (px.coaLibraryDir)" data-tip-wrap>${icon("folderOpen")}</button>
           </div>
           <div class="px-panel-title">Frame</div>
           <div class="toolRow">

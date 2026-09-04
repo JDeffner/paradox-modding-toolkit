@@ -88,6 +88,8 @@ export type AppToHost =
   | { type: "open" }
   /** Read the library folder; the answer is a `library` message. */
   | { type: "libraryList" }
+  /** Pick the library folder; the host writes px.coaLibraryDir. */
+  | { type: "libraryDir" }
   /** Store this design in the library as `<name>.txt`; replacing asks first. */
   | { type: "libraryExport"; name: string; script: string }
   | { type: "exportPng"; name: string; dataUrl: string };

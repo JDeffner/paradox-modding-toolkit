@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Coat of Arms Designer: every frame fits, and the library has a folder
+  button.** The arms are fitted to the whole hole of a frame cell, found by
+  a flood fill from its centre, so a roundel with concave sides (house frame
+  14) no longer squeezes the arms into a narrow shield: the mask's painted
+  shape is laid over the hole and the pattern reaches the border on every
+  frame. The Library row reads Library and Save, with a folder button that
+  sets `px.coaLibraryDir` from a folder picker.
 - **A .bbcode file is edited as Markdown in place.** "Edit as Markdown" in a
   `.bbcode` file's title bar opens the same file as Markdown (a `pxmd`
   document named `<file>.bbcode.md`): what you see is the BBCode converted,

@@ -361,6 +361,26 @@ export class CoaDesignerPanel {
       case "libraryExport":
         await this.exportToLibrary(message.name, message.script);
         return;
+      case "libraryDir": {
+        const current = coaLibraryDir(this.options.meta);
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFolders: true,
+          canSelectFiles: false,
+          canSelectMany: false,
+          ...(current && fs.existsSync(current) ? { defaultUri: vscode.Uri.file(current) } : {}),
+          title: "Coat of arms library folder",
+          openLabel: "Use this folder",
+        });
+        const dir = picked?.[0]?.fsPath;
+        if (!dir) return;
+        // Machine scoped, like the setting itself: the library is a folder on
+        // this computer, not a fact about the workspace.
+        await vscode.workspace
+          .getConfiguration("px")
+          .update("coaLibraryDir", dir, vscode.ConfigurationTarget.Global);
+        this.post({ type: "toast", message: `Library folder: ${dir}` });
+        return;
+      }
       case "exportPng":
         await this.exportPng(message.name, message.dataUrl);
         return;
