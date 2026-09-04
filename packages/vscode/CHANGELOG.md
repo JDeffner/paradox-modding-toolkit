@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Dynasty Tree: Edit on every card, and a click on empty canvas goes back
+  to the dynasty.** A game character's card and inspector carry Edit again;
+  saving writes a full copy under the same id into your mod, as an override,
+  and the form's heading says so. Clicking the canvas away from any card
+  (without dragging) closes the character view and shows the dynasty the
+  panel opened on, the same as Escape.
 - **Coat of Arms Designer: the arms stay inside the shield, the catalog runs
   to the bottom, one lock for the scale.** A house or dynasty frame now fits
   the arms into the hole in its own cell, measured off the texture (the

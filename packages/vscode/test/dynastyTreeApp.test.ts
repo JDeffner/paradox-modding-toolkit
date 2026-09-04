@@ -246,7 +246,7 @@ describe("the Dynasty Tree app", () => {
     expect(doc.querySelector("#scene .card[data-selected]")).not.toBeNull();
   });
 
-  it("offers add child, add spouse and edit on a card, but no edit on a vanilla one", () => {
+  it("offers add child, add spouse and edit on every card; a vanilla edit is an override", () => {
     const app = boot();
     app.send({ type: "tree", tree: TREE, ms: 4 });
     expect([...card(app, "1").querySelectorAll(".cact")].map((a) => a.getAttribute("data-act"))).toEqual([
@@ -257,7 +257,13 @@ describe("the Dynasty Tree app", () => {
     expect([...card(app, "2").querySelectorAll(".cact")].map((a) => a.getAttribute("data-act"))).toEqual([
       "child",
       "spouse",
+      "edit",
     ]);
+    click(app, card(app, "2").querySelector('.cact[data-act="edit"]')!);
+    expect(app.window.document.querySelector("#sideBody h2")?.textContent).toBe("Override 2 in your mod");
+    // The override goes where a new character goes, not into the game file.
+    expect(app.posted.at(-1)).toEqual({ type: "target" });
+    app.window.document.querySelector<HTMLButtonElement>("#sideBody button")?.click();
     click(app, card(app, "1").querySelector('.cact[data-act="spouse"]')!);
     const side = app.window.document.getElementById("sideBody")!;
     expect(side.textContent).toContain("New character 4");

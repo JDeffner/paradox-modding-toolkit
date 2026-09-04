@@ -100,6 +100,8 @@ interface State {
   gameName: string;
   /** `px.calendar`, when the workspace declares one; undefined = script dates. */
   calendar?: CalendarSetting;
+  /** The open form edits a game character: the save is an override in the mod. */
+  overriding?: boolean;
   /** The character the inspector shows, or null for the dynasty itself. */
   selected: string | null;
   /** A form being filled: a new character, or an edit of an existing one. */
@@ -818,15 +820,23 @@ function belonging(char: DynastyCharacter): string {
   return char.dynasty;
 }
 
-/** Add child, add spouse, edit: the three things a card is used for. */
+/**
+ * Add child, add spouse, edit: the three things a card is used for. Edit is
+ * on every card: a game character's edit is written into the mod under the
+ * same id (the same override the other creators offer), and hiding the
+ * button on those cards read as the feature being gone.
+ */
 function cardActions(char: DynastyCharacter): SVGElement {
   const acts: Array<{ act: string; glyph: IconName; tip: string; run: () => void }> = [
     { act: "child", glyph: "plus", tip: "Add a child of this character", run: () => startChild(char) },
     { act: "spouse", glyph: "heart", tip: "Add a spouse for this character", run: () => startSpouse(char) },
+    {
+      act: "edit",
+      glyph: "pencil",
+      tip: char.source === "mod" ? "Edit this character" : "Edit this character as an override in your mod",
+      run: () => startEdit(char),
+    },
   ];
-  if (char.source === "mod") {
-    acts.push({ act: "edit", glyph: "pencil", tip: "Edit this character", run: () => startEdit(char) });
-  }
   const size = 18;
   const gap = 3;
   const group = document.createElementNS(SVG_NS, "g");
@@ -938,6 +948,7 @@ function select(id: string | null): void {
   state.selected = id;
   state.draft = null;
   state.draftFile = undefined;
+  state.overriding = false;
   drawTree();
   renderInspector();
 }
@@ -1046,7 +1057,7 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
       node(
         "div",
         "note",
-        "This character comes from the game files, so the panel does not change them. Add child and Add spouse write a new character into your mod that points at this one."
+        "This character comes from the game files, which the panel never changes. Edit writes a full copy under the same id into your mod, as an override; Add child and Add spouse write a new character into your mod that points at this one."
       )
     );
   }
@@ -1103,11 +1114,9 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
   root.append(facts);
 
   const actions = node("div", "actions");
-  if (editable) {
-    const edit = button("Edit", "pencil", "default");
-    edit.addEventListener("click", () => startEdit(char));
-    actions.append(edit);
-  }
+  const edit = button(editable ? "Edit" : "Edit as override", "pencil", "default");
+  edit.addEventListener("click", () => startEdit(char));
+  actions.append(edit);
   const child = button("Add child", "plus");
   child.addEventListener("click", () => startChild(char));
   const spouse = button("Add spouse", "plus");
@@ -1159,9 +1168,13 @@ function startEdit(char: DynastyCharacter): void {
     traits: [...char.traits],
     spouses: [...char.spouses],
   };
-  state.draftFile = char.file;
+  // A game character has no file of ours to write back to: the override goes
+  // where a new character goes, and the form says so in its heading.
+  state.draftFile = char.source === "mod" ? char.file : undefined;
+  state.overriding = char.source !== "mod";
   state.birthHint = undefined;
-  post({ type: "target", file: char.file });
+  if (char.source === "mod") post({ type: "target", file: char.file });
+  else post({ type: "target" });
   renderInspector();
 }
 
@@ -1211,7 +1224,17 @@ function startSpouse(partner: DynastyCharacter): void {
 
 function renderForm(root: HTMLElement, form: CharacterForm): void {
   const tree = state.tree;
-  root.append(node("h2", undefined, state.draftFile ? `Edit ${form.id}` : `New character ${form.id}`));
+  root.append(
+    node(
+      "h2",
+      undefined,
+      state.draftFile
+        ? `Edit ${form.id}`
+        : state.overriding
+          ? `Override ${form.id} in your mod`
+          : `New character ${form.id}`
+    )
+  );
   if (state.setupProblem) root.append(node("div", "note", state.setupProblem));
 
   const body = node("div", "sec");
@@ -1625,18 +1648,23 @@ $canvas.addEventListener("pointerdown", (ev) => {
   const startX = ev.clientX;
   const startY = ev.clientY;
   const origin = { x: view.x, y: view.y };
+  let moved = false;
   $canvas.setAttribute("data-panning", "");
   $canvas.setPointerCapture(ev.pointerId);
   const move = (m: PointerEvent): void => {
+    if (Math.abs(m.clientX - startX) + Math.abs(m.clientY - startY) > 3) moved = true;
     view.x = origin.x + (m.clientX - startX);
     view.y = origin.y + (m.clientY - startY);
     applyView();
   };
-  const up = (): void => {
+  const up = (m: PointerEvent): void => {
     $canvas.removeAttribute("data-panning");
     $canvas.removeEventListener("pointermove", move);
     $canvas.removeEventListener("pointerup", up);
     $canvas.removeEventListener("pointercancel", up);
+    // A click on empty canvas (no drag) is the way back to the dynasty view
+    // the panel opened on, the same as Escape; a drag stays a pan.
+    if (m.type === "pointerup" && !moved && (state.selected !== null || state.draft)) select(null);
   };
   $canvas.addEventListener("pointermove", move);
   $canvas.addEventListener("pointerup", up);
