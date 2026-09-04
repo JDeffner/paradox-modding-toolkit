@@ -371,7 +371,7 @@ ${BBPREV_CSS}
       <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
       <div id="descPreview" class="bbprev" hidden></div>
       <div class="hintline">
-        <span>Saved to description.bbcode as you type; goes to Steam on Upload.</span>
+        <span id="descFileHint">Saved to the listing file as you type; goes to Steam on Upload.</span>
         <span class="px-grow"></span>
         <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
         <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>

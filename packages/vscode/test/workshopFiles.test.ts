@@ -1,7 +1,8 @@
 /**
  * The workshop folder as the listing's file store (steam/workshopFiles.ts):
- * the CI-repo layout round-trips, changenotes resolve from the changelog
- * folder or a big changelog file, and Markdown converts to Steam BBCode.
+ * the CI-repo layout round-trips, the description file is Markdown unless
+ * the folder already keeps BBCode, and changenotes resolve from the changelog
+ * folder or a big changelog file.
  */
 import { describe, expect, it, afterEach } from "vitest";
 import * as fs from "fs";
@@ -11,7 +12,7 @@ import {
   changelogCandidates,
   extractVersionSection,
   hasListingFiles,
-  mdToBBCode,
+  descriptionFile,
   readItemJson,
   moveListing,
   writePreviewOrder,
@@ -66,20 +67,21 @@ describe("listing files", () => {
   it("round-trips description and translations in the CI layout", () => {
     const dir = tmp();
     writeListingFiles(dir, {
-      description: "[h1]Hello[/h1]",
+      description: "# Hello",
       translations: {
-        german: { title: "Hallo", description: "[b]Deutsch[/b]" },
+        german: { title: "Hallo", description: "**Deutsch**" },
         french: { description: "Français" },
       },
     });
-    expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toBe("[h1]Hello[/h1]");
+    expect(fs.readFileSync(path.join(dir, "description.md"), "utf8")).toBe("# Hello");
     expect(fs.readFileSync(path.join(dir, "translations", "german", "title.txt"), "utf8")).toBe("Hallo\n");
     expect(fs.existsSync(path.join(dir, "translations", "french", "title.txt"))).toBe(false);
 
     const back = readListingFiles(dir);
-    expect(back.description).toBe("[h1]Hello[/h1]");
-    expect(back.translations.german).toEqual({ title: "Hallo", description: "[b]Deutsch[/b]" });
+    expect(back.description).toBe("# Hello");
+    expect(back.translations.german).toEqual({ title: "Hallo", description: "**Deutsch**" });
     expect(back.translations.french).toEqual({ description: "Français" });
+    expect(back.markdown.sort()).toEqual(["", "french", "german"]);
   });
 
   it("removes the files of a language whose draft went empty", () => {
@@ -256,36 +258,31 @@ describe("extractVersionSection", () => {
   });
 });
 
-describe("mdToBBCode", () => {
-  it("converts the changenote staples", () => {
-    const md = [
-      "# Big",
-      "Some *emphasis* and **bold** and ~~gone~~ and `code`.",
-      "- one",
-      "- [link](https://example.com)",
-      "1. first",
-      "---",
-      "```",
-      "raw **stays**",
-      "```",
-    ].join("\n");
-    expect(mdToBBCode(md)).toBe(
-      [
-        "[h1]Big[/h1]",
-        "Some [i]emphasis[/i] and [b]bold[/b] and [strike]gone[/strike] and code.",
-        "[list]",
-        "[*] one",
-        "[*] [url=https://example.com]link[/url]",
-        "[/list]",
-        "[olist]",
-        "[*] first",
-        "[/olist]",
-        "[hr][/hr]",
-        "[code]",
-        "raw **stays**",
-        "[/code]",
-      ].join("\n")
-    );
+describe("description file choice", () => {
+  it("writes Markdown into a folder that has neither file", () => {
+    const dir = tmp();
+    expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.md"), markdown: true });
+    writeListingFiles(dir, { description: "# Hi", translations: {} });
+    expect(fs.existsSync(path.join(dir, "description.bbcode"))).toBe(false);
+  });
+
+  it("leaves a folder that already keeps BBCode on BBCode", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.bbcode"), "[h1]Hi[/h1]", "utf8");
+    expect(descriptionFile(dir).markdown).toBe(false);
+    writeListingFiles(dir, { description: "[h1]Bye[/h1]", translations: {} });
+    expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toBe("[h1]Bye[/h1]");
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+    expect(readListingFiles(dir).markdown).toEqual([]);
+  });
+
+  it("prefers .md when a folder has both", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.bbcode"), "[h1]Old[/h1]", "utf8");
+    fs.writeFileSync(path.join(dir, "description.md"), "# New", "utf8");
+    const listing = readListingFiles(dir);
+    expect(listing.description).toBe("# New");
+    expect(listing.markdown).toEqual([""]);
   });
 });
 

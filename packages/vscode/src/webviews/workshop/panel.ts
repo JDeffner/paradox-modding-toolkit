@@ -22,6 +22,7 @@ import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
+  descriptionFile,
   hasListingFiles,
   langDir,
   PREVIEWS_DIR,
@@ -43,6 +44,7 @@ import { changelogCandidates, DEFAULT_CHANGELOG } from "../../steam/workshopFile
 import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
   changelogNoteFor,
+  descriptionBBCode,
   findPreview,
   friendlyError,
   lastCommitSubject,
@@ -57,6 +59,7 @@ import {
   workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
+import { bbcodeToMarkdown } from "../../steam/bbcodeMarkdown";
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -82,6 +85,13 @@ export interface WorkshopPanelOptions {
   gamePath: string | null;
   log: (msg: string) => void;
 }
+
+/**
+ * Steam serves BBCode; a folder that keeps its description as Markdown gets
+ * Markdown back, so a download never changes the format a modder chose.
+ */
+const asStored = (dir: string, bbcode: string): string =>
+  descriptionFile(dir).markdown ? bbcodeToMarkdown(bbcode) : bbcode;
 
 export class WorkshopPanel {
   private static instance: WorkshopPanel | undefined;
@@ -296,6 +306,7 @@ export class WorkshopPanel {
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
+      markdown: info?.markdown ?? [],
       previewUri: previewPath ? this.fileUri(previewPath) : null,
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
@@ -316,7 +327,8 @@ export class WorkshopPanel {
       checks: info
         ? preflight({
             name: info.name,
-            description: info.description ?? "",
+            // Steam's 8000-byte cap is on the BBCode, not on the Markdown source.
+            description: descriptionBBCode(info, "", info.description ?? ""),
             tags: info.tags,
             previewPath,
             previewBytes: previewPath ? (fs.statSync(previewPath).size ?? null) : null,
@@ -693,17 +705,19 @@ export class WorkshopPanel {
       );
       return;
     }
-    const file = lang
-      ? path.join(langDir(dir, lang), "description.bbcode")
-      : path.join(dir, "description.bbcode");
-    if (!fs.existsSync(file)) {
+    const chosen = descriptionFile(lang ? langDir(dir, lang) : dir);
+    if (!fs.existsSync(chosen.file)) {
       // Seed a missing file with the draft the store holds, so nothing is lost.
       const info = readPublishInfo(root, meta, dir);
-      const seed = (lang ? info?.translations[lang]?.description : info?.description) ?? "";
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, seed, "utf8");
+      let seed = (lang ? info?.translations[lang]?.description : info?.description) ?? "";
+      // That draft can still be the BBCode workshop.json kept before 0.4.0.
+      if (chosen.markdown && seed !== "" && !info?.markdown.includes(lang ?? "")) {
+        seed = bbcodeToMarkdown(seed);
+      }
+      fs.mkdirSync(path.dirname(chosen.file), { recursive: true });
+      fs.writeFileSync(chosen.file, seed, "utf8");
     }
-    await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
+    await vscode.window.showTextDocument(vscode.Uri.file(chosen.file), { preview: false });
   }
 
   /** Write one descriptor/metadata scalar; empty input leaves the file alone. */
@@ -859,15 +873,15 @@ export class WorkshopPanel {
             if (title === "" && description === "") continue;
             translations[lang] = {
               ...(title !== "" ? { title } : {}),
-              ...(description !== "" ? { description } : {}),
+              ...(description !== "" ? { description: asStored(langDir(dir, lang), description) } : {}),
             };
           }
           wrote.push(`${Object.keys(translations).length} translation(s)`);
         }
         let description = current?.description ?? "";
         if (parts.description) {
-          description = item.description;
-          wrote.push("description.bbcode");
+          description = asStored(dir, item.description);
+          wrote.push(path.basename(descriptionFile(dir).file));
         }
         writeListingFiles(dir, { description, translations });
       }
@@ -1024,7 +1038,7 @@ export class WorkshopPanel {
             tool: "px-toolkit",
           });
           main.title = info.name ?? undefined;
-          main.description = info.description ?? "";
+          main.description = descriptionBBCode(info, "", info.description ?? "");
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;
@@ -1048,9 +1062,7 @@ export class WorkshopPanel {
         submits.push(main);
       }
       submits.push(
-        ...translationSubmits(info.translations).filter(
-          (s) => s.language && message.languages.includes(s.language)
-        )
+        ...translationSubmits(info).filter((s) => s.language && message.languages.includes(s.language))
       );
       if (!submits.length) {
         this.notify("Nothing to upload.", "warn");

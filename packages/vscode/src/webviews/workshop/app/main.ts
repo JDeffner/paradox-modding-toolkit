@@ -8,6 +8,7 @@
  */
 import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
+import { markdownToBBCode } from "../../../steam/bbcodeMarkdown";
 import { iconEl } from "../../shared/icons";
 import { confirmDialog, menu, type MenuItem } from "../../shared/overlay";
 import type {
@@ -373,6 +374,16 @@ function renderStats(): void {
   tile("messageSquare", "comments", live.numComments);
 }
 
+/**
+ * Steam only takes BBCode, so a Markdown description converts before it is
+ * rendered: the preview then shows exactly what the upload sends.
+ */
+const previewHtml = (text: string, lang: string): string =>
+  bbcodeToHtml(info?.markdown.includes(lang) ? markdownToBBCode(text) : text);
+
+/** What the listing folder calls its description file. */
+const descFileName = (): string => (info?.markdown.includes("") ? "description.md" : "description.bbcode");
+
 function renderDescriptionHints(): void {
   $<HTMLButtonElement>("pullDesc").disabled = !live;
   renderDescFileButtons();
@@ -380,14 +391,20 @@ function renderDescriptionHints(): void {
 }
 
 function renderDescFileButtons(): void {
+  const name = descFileName();
   $("openDescFile").style.display = info?.filesPresent ? "" : "none";
+  $("openDescFile").setAttribute("data-tip", `Open the workshop folder's ${name} in the editor`);
+  $("descFileHint").textContent = `Saved to ${name} as you type; goes to Steam on Upload.`;
+  $<HTMLTextAreaElement>("desc").placeholder = info?.markdown.includes("")
+    ? "The item's description, in Markdown (# heading, **bold**, - list, [text](url))."
+    : "The item's description, in Steam's BBCode ([h1], [b], [list], [url=…]).";
 }
 
 function renderDescMode(): void {
   const preview = descMode === "preview";
   $("desc").hidden = preview;
   $("descPreview").hidden = !preview;
-  if (preview) $("descPreview").innerHTML = bbcodeToHtml(draftDescription);
+  if (preview) $("descPreview").innerHTML = previewHtml(draftDescription, "");
   $("descMode")
     .querySelectorAll("button")
     .forEach((b) => b.classList.toggle("on", b.dataset.mode === descMode));
@@ -453,7 +470,7 @@ function translationRow(lang: string): HTMLElement {
     open.className = "px-btn";
     open.dataset.variant = "ghost";
     open.dataset.size = "icon-xs";
-    open.setAttribute("data-tip", `Open ${lang}/description.bbcode in the editor`);
+    open.setAttribute("data-tip", `Open the ${lang} ${descFileName()} in the editor`);
     open.append(iconEl("pencil"));
     open.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -520,7 +537,7 @@ function translationRow(lang: string): HTMLElement {
   if ((langMode.get(lang) ?? "edit") === "preview") {
     const prev = document.createElement("div");
     prev.className = "bbprev";
-    prev.innerHTML = bbcodeToHtml(draft.description ?? "");
+    prev.innerHTML = previewHtml(draft.description ?? "", lang);
     desc.hidden = true;
     body.append(title, desc, prev);
   } else {
@@ -1446,7 +1463,7 @@ $("pull").addEventListener(
       };
       const inputs = [
         part("details", "Details", "title, tags and visibility into item.json"),
-        part("description", "Description", "description.bbcode"),
+        part("description", "Description", descFileName()),
         part("translations", "Translations", "translations/<language>/ for every translated language"),
         part("previews", "Previews", "the gallery images, videos.txt and order.txt into previews/"),
         part("requirements", "Requirements", "dependencies.json"),
@@ -1625,7 +1642,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       items: [
         {
           lead: "The workshop folder",
-          text: "keeps the listing as files: description.bbcode, translations/<language>/ with title.txt and description.bbcode, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise.",
+          text: "keeps the listing as files: description.md, translations/<language>/ with title.txt and description.md, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise.",
         },
         {
           lead: "The download button",

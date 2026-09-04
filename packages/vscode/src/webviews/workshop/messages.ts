@@ -92,6 +92,12 @@ export interface WorkshopModInfo {
   workshopDirCustom: boolean;
   /** True when that folder exists: it is then the canonical listing store. */
   filesPresent: boolean;
+  /**
+   * Which descriptions the listing folder keeps as Markdown: the empty string
+   * for the default one, else the Steam language code. The panel converts
+   * those to BBCode before previewing, so the preview is what Steam gets.
+   */
+  markdown: string[];
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];
@@ -111,7 +117,7 @@ export interface WorkshopModInfo {
 export interface PullParts {
   /** item.json: title, tags, visibility, id. */
   details: boolean;
-  /** description.bbcode. */
+  /** The default-language description file. */
   description: boolean;
   /** translations/<lang>/ for every language whose text differs from the default. */
   translations: boolean;
