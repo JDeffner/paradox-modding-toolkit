@@ -53,6 +53,25 @@
   layers (picker thumbnails stay small), an empty layer reads as an empty slot,
   the cost prints as the game's `<CURRENCY>_COST` line with its icon, and the
   tooltip tones `#P`, `#N` and `#V` text the way the game does.
+- **Dynasty Legacy Creator: saves that keep your file, and a ? on every
+  section.** Reopening the creator on a track you were already editing reveals
+  the panel instead of resetting the form, so a save after it can no longer
+  write empty perk blocks over your file. Once a track is saved it counts as
+  the mod's own, so the next save rewrites only the lines that changed; a
+  block the builders only reindented (a one-line `is_shown = { … }`) counts as
+  unchanged, and an empty `character_modifier = { }` the file already has is
+  kept rather than dropped. "Add perk" takes the first number no perk on the
+  track uses, so removing the third of five and adding one back no longer
+  produces a duplicate key. Every section of the track form and of the perk
+  editor has a ? that says what it writes, what it accepts and what the game
+  does with it, and every script area offers "Edit in the file", which saves
+  and opens the definition in the editor. The illustration picker shows one
+  4216x368 strip per row instead of a 44x4 square, both picture fields carry
+  the sizes and formats behind an (i), a custom picture takes any format (PNG,
+  JPEG, WebP, GIF, BMP, AVIF, ICO, SVG, TGA, DDS) and asks which folder of the
+  mod it goes to, and new localization lands in the loc file named after the
+  script file it belongs to. The perk row keeps the game's 296:128 tiles at
+  every panel width and scrolls instead of squashing them.
 - **Dynasty Legacy Creator without script.** `is_shown` and a perk's
   `can_be_picked` are rows over the DLC features, game rules and scripted
   triggers the game files use; `ai_chance` is a number; a perk's `effect` is
