@@ -176,11 +176,24 @@ function allElements(): ElementRef[] {
   return out;
 }
 
-const selectedBoxes = (): ElementBox[] => selection.map((r) => boxOf(flag.layers[r.layer], r.instance));
+/**
+ * What the tools act on: the selection, or, with nothing selected, the one
+ * element the placement panel is showing. The panel's numbers already edited
+ * that element with nothing selected; a mirror button beside them that did
+ * nothing read as broken.
+ */
+function actedOn(): ElementRef[] {
+  if (selection.length > 0) return selection;
+  const layer = flag.layers[layerIndex];
+  if (!layer || locked.has(layerIndex) || instanceCount(layer) === 0) return [];
+  return [{ layer: layerIndex, instance: Math.min(instIndex, instanceCount(layer) - 1) }];
+}
 
-/** Write boxes back, one per selected element, materializing implicit instances. */
+const selectedBoxes = (): ElementBox[] => actedOn().map((r) => boxOf(flag.layers[r.layer], r.instance));
+
+/** Write boxes back, one per acted-on element, materializing implicit instances. */
 function writeBoxes(boxes: readonly ElementBox[]): void {
-  selection.forEach((ref, i) => {
+  actedOn().forEach((ref, i) => {
     const layer = flag.layers[ref.layer];
     materialize(layer);
     writeBox(layer, ref.instance, boxes[i]);
@@ -390,10 +403,28 @@ function armsRect(): { x: number; y: number; w: number; h: number } {
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
   const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
-  const ratio = mask && frame && cell > mask.naturalWidth ? mask.naturalWidth / cell : 1;
+  const ratio =
+    frameInset(frameId) ?? (mask && frame && cell > mask.naturalWidth ? mask.naturalWidth / cell : 1);
   const w = canvas.width * ratio;
   const h = canvas.height * ratio;
   return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
+}
+
+/**
+ * How far a house or dynasty frame pulls the arms in. Their masks are the
+ * full 160 px of the cell, so the mask ratio says nothing; the inset is the
+ * widgets' own (gui/shared/coat_of_arms.gui, measured on 1.19): coa_house_widget
+ * is 40 px around a 28 px coat_of_arms_icon, coa_dynasty_widget 56 around 44.
+ * Without it the arms filled the whole cell and stuck out past the shield.
+ */
+const FRAME_INSET: readonly [prefix: string, ratio: number][] = [
+  ["dynasty", 44 / 56],
+  ["house", 28 / 40],
+];
+
+function frameInset(id: string): number | null {
+  const hit = FRAME_INSET.find(([prefix]) => id.startsWith(prefix) || id.includes("_" + prefix));
+  return hit ? hit[1] : null;
 }
 
 /**
@@ -669,15 +700,6 @@ function numberField(
     onCommit: commit,
   });
   return { el: row, input };
-}
-
-function checkbox(label: string, checked: boolean, onChange: (on: boolean) => void): HTMLElement {
-  const box = el("input");
-  box.type = "checkbox";
-  box.checked = checked;
-  box.onchange = () => onChange(box.checked);
-  const wrap = el("label", "check", box, label);
-  return wrap;
 }
 
 // ---------------------------------------------------------------------------
@@ -1340,7 +1362,7 @@ const scaleMatched = (ref: ElementRef): boolean => !unmatchedScale.has(matchKeyO
 
 /** One gesture, one undo step: run `edit` over the whole selection and commit once. */
 function editSelection(edit: (boxes: ElementBox[]) => ElementBox[]): void {
-  if (selection.length === 0) return;
+  if (actedOn().length === 0) return;
   writeBoxes(edit(selectedBoxes()));
   refresh();
 }
@@ -1485,14 +1507,14 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }).el
   );
 
-  const scale = el("div", "pair");
-  const y = numberField(matched ? "Scale" : "Scale Y", inst.scale[1], 0.01, (v) => {
+  const scale = el("div", "pair scale");
+  const y = numberField("Scale Y", inst.scale[1], 0.01, (v) => {
     inst.scale[1] = v;
     if (scaleMatched(ref)) inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
     draw();
     if (scaleMatched(ref)) renderPanel();
   });
-  const x = numberField(matched ? "Scale" : "Scale X", inst.scale[0], 0.01, (v) => {
+  const x = numberField("Scale X", inst.scale[0], 0.01, (v) => {
     inst.scale[0] = v;
     if (scaleMatched(ref)) {
       inst.scale[1] = Math.sign(inst.scale[1] || 1) * Math.abs(v);
@@ -1500,7 +1522,27 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }
     draw();
   });
-  scale.append(x.el, y.el);
+  // The lock stands between the two numbers it ties together, the way a
+  // graphics editor draws it; a flip is the mirror tool below, so no checkbox
+  // repeats it here.
+  const lock = iconButton(
+    matched ? "lock" : "unlock",
+    matched ? "X and Y scale move together" : "X and Y scale move apart",
+    () => {
+      const key = matchKeyOf(ref);
+      if (matched) unmatchedScale.add(key);
+      else {
+        unmatchedScale.delete(key);
+        inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(inst.scale[1]);
+      }
+      refresh();
+    }
+  );
+  lock.id = "scaleLock";
+  lock.dataset.variant = "outline";
+  lock.dataset.size = "icon-sm";
+  lock.setAttribute("aria-pressed", String(matched));
+  scale.append(x.el, lock, y.el);
 
   const rest = el("div", "pair");
   rest.append(
@@ -1515,29 +1557,7 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }).el
   );
 
-  const checks = el("div", "checks");
-  checks.append(
-    checkbox("Match X and Y scale", matched, (on) => {
-      const key = matchKeyOf(ref);
-      if (on) {
-        unmatchedScale.delete(key);
-        inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(inst.scale[1]);
-      } else unmatchedScale.add(key);
-      refresh();
-    }),
-    // A flip is a negative scale on that axis; the game's own checkbox writes
-    // exactly that (`scale = { -0.61 0.61 }` in 01_landed_titles.txt).
-    checkbox("Flip X Axis", inst.scale[0] < 0, (on) => {
-      inst.scale[0] = (on ? -1 : 1) * Math.abs(inst.scale[0]);
-      refresh();
-    }),
-    checkbox("Flip Y Axis", inst.scale[1] < 0, (on) => {
-      inst.scale[1] = (on ? -1 : 1) * Math.abs(inst.scale[1]);
-      refresh();
-    })
-  );
-
-  body.append(position, scale, rest, checks, selectionTools());
+  body.append(position, scale, rest, selectionTools());
   return body;
 }
 

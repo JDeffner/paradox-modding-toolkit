@@ -80,7 +80,8 @@ ${uiCss}
   #tabsRow .px-tabs { width: 100%; }
   #tabsRow .px-tab { flex: 1 1 0; }
   .tabBody { display: none; flex-direction: column; gap: 10px; padding: 4px 10px 14px; }
-  .tabBody[data-active] { display: flex; }
+  /* The active tab fills the panel, so its catalog grid can take the rest. */
+  .tabBody[data-active] { display: flex; flex: 1 1 auto; min-height: 0; }
 
   /* The catalog grids: the game wraps them at 5 across. */
   .grid { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 4px; }
@@ -93,7 +94,10 @@ ${uiCss}
   .tile[aria-selected="true"] { border-color: var(--px-primary); }
   .tile canvas, .tile img { width: 100%; aspect-ratio: 3 / 2; border-radius: var(--px-radius-sm); }
   .tile[data-square] canvas, .tile[data-square] img { aspect-ratio: 1 / 1; object-fit: contain; }
-  .gridScroll { max-height: 46vh; overflow: auto; }
+  /* The catalog runs to the bottom of the panel and scrolls inside itself,
+     without a scrollbar of its own: the wheel and the tiles say where you are. */
+  .gridScroll { flex: 1 1 auto; min-height: 120px; overflow: auto; scrollbar-width: none; align-content: start; }
+  .gridScroll::-webkit-scrollbar { display: none; }
 
   /* Color rows: a labelled swatch button per slot the pattern or emblem shows. */
   .colorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
@@ -118,9 +122,11 @@ ${uiCss}
   .detail { display: flex; flex-direction: column; gap: 6px; }
   .detail .px-field { min-width: 0; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  /* Scale X, the lock, Scale Y: the lock sits level with the two inputs. */
+  .pair.scale { grid-template-columns: 1fr auto 1fr; align-items: end; }
+  #scaleLock { margin-bottom: 2px; }
+  #scaleLock[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
   .detail .px-input { width: 100%; min-width: 0; }
-  .checks { display: flex; flex-direction: column; gap: 4px; }
-  .check { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--px-text-sm); }
   #layerList .px-item .px-item-tools { gap: 2px; }
   #layerList .px-item[data-locked] .px-item-label { color: var(--px-muted-fg); }
 
@@ -145,7 +151,7 @@ ${uiCss}
 <div id="app">
   <div id="toolbar">
     <button id="toggleLeft" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
-    <input id="name" class="px-input" placeholder="my_house_coa" spellcheck="false" data-tip="The key the definition is written under" />
+    <input id="name" class="px-input" placeholder="my_house_coa" spellcheck="false" data-tip="The key: the arms are written as <key> = { … }, and a dynasty, house or title names it in its coa = line." data-tip-wrap />
     <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
     <span id="targetLine"></span>
     <div class="px-row" style="gap:2px">

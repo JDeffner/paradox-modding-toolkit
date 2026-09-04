@@ -12,8 +12,8 @@
  *   emblem layers, substituting the layout's `@texture_*` / `@color_*` holes;
  * - picking an emblem fits the layer's color slots to the `colors` count that
  *   emblem declares in `50_coa_designer_emblems.txt`;
- * - "Flip X Axis" is a NEGATIVE scale on that axis, which is how the game
- *   writes a mirrored instance.
+ * - a mirror is a NEGATIVE scale on that axis, which is how the game writes
+ *   a flipped instance.
  *
  * The catalog is a hand-cut miniature of the real files, not a capture: these
  * cases are about what the app does with a catalog, and the readers that turn
@@ -243,16 +243,14 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(layer.colors.map((c) => c.name)).toEqual(["color1"]);
   });
 
-  it("Flip X Axis writes a negative scale on that axis alone", () => {
+  it("Mirror horizontally writes a negative scale on that axis alone", () => {
     const app = boot();
     app.tab("emblems");
-    const flip = [...app.document.querySelectorAll<HTMLElement>("#placement .check")].find((l) =>
-      l.textContent?.includes("Flip X Axis")
+    const flip = [...app.document.querySelectorAll<HTMLElement>("#placement .selTools button")].find(
+      (b) => b.dataset.tip === "Mirror horizontally"
     );
-    if (!flip) throw new Error("no Flip X Axis checkbox");
-    const box = flip.querySelector<HTMLInputElement>("input")!;
-    box.checked = true;
-    box.dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    if (!flip) throw new Error("no mirror tool");
+    flip.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
     const layer = app.current().layers[0];
     if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
     expect(layer.instances[0].scale).toEqual([-0.7, 0.7]);
@@ -264,13 +262,10 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(app.errors).toEqual([]);
   });
 
-  it("Match X and Y scale is on before anyone touches it", () => {
+  it("the scale lock is closed before anyone touches it", () => {
     const app = boot();
     app.tab("emblems");
-    const match = [...app.document.querySelectorAll<HTMLElement>("#placement .check")].find((l) =>
-      l.textContent?.includes("Match X and Y scale")
-    );
-    expect(match?.querySelector<HTMLInputElement>("input")?.checked).toBe(true);
+    expect(app.document.querySelector("#scaleLock")?.getAttribute("aria-pressed")).toBe("true");
     // And it bites: one axis pulls the other with it.
     const scaleY = [...app.document.querySelectorAll<HTMLElement>("#placement .px-field")].find((f) =>
       f.querySelector(".px-label")?.textContent?.startsWith("Scale")

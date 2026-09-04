@@ -22,7 +22,8 @@ import {
 import type { FlagTarget } from "./messages";
 import { blockScalars, coaTargetItems, coaTargetLabel, COA_TARGET_KINDS, type CoaTargetKind } from "./target";
 
-const TYPE_A_KEY = "$(edit) Type a key…";
+/** The designer's own key field is where a new key is typed, once. */
+const NAME_IN_DESIGNER = "$(new-file) Name it in the designer";
 
 export async function createCoatOfArmsCommand(lc: LanguageClient, modRoot: string | null): Promise<void> {
   const overview = await lc.sendRequest<ModOverview>(modOverviewRequest, {
@@ -42,9 +43,9 @@ export async function createCoatOfArmsCommand(lc: LanguageClient, modRoot: strin
         family: kind as CoaTargetKind | undefined,
       })),
       {
-        label: TYPE_A_KEY,
+        label: NAME_IN_DESIGNER,
         description: "",
-        detail: "Write the arms under a key you type.",
+        detail: "Start blank; the key goes in the designer's top-left field.",
         family: undefined,
       },
     ],
@@ -52,20 +53,28 @@ export async function createCoatOfArmsCommand(lc: LanguageClient, modRoot: strin
   );
   if (!chosen) return;
 
-  const target = chosen.family
-    ? await pickDefinition(chosen.family, byKind.get(chosen.family.defKind)!)
-    : await typeKey();
-  if (!target) return;
-  await vscode.commands.executeCommand("px.openFlagBuilder", target);
+  if (!chosen.family) {
+    await vscode.commands.executeCommand("px.openFlagBuilder");
+    return;
+  }
+  const target = await pickDefinition(chosen.family, byKind.get(chosen.family.defKind)!);
+  if (target === undefined) return;
+  await vscode.commands.executeCommand("px.openFlagBuilder", target ?? undefined);
 }
 
-/** One pick per definition of the kind, plus the escape for keys not in the mod. */
-async function pickDefinition(kind: CoaTargetKind, bucket: OverviewKind): Promise<FlagTarget | undefined> {
+/**
+ * One pick per definition of the kind, plus the escape for keys not in the
+ * mod: null opens the designer blank, undefined is a cancel.
+ */
+async function pickDefinition(
+  kind: CoaTargetKind,
+  bucket: OverviewKind
+): Promise<FlagTarget | null | undefined> {
   const items = coaTargetItems(kind, bucket.defs, blockScalarsOf(cachedReader()));
   const capped = bucket.count > bucket.defs.length;
   const picked = await vscode.window.showQuickPick(
     [
-      { label: TYPE_A_KEY, description: "", detail: "", target: undefined as FlagTarget | undefined },
+      { label: NAME_IN_DESIGNER, description: "", detail: "", target: null as FlagTarget | null },
       ...items.map((item) => ({
         label: item.title,
         // A dynasty key is a number and a character key is their house: the
@@ -83,16 +92,7 @@ async function pickDefinition(kind: CoaTargetKind, bucket: OverviewKind): Promis
     }
   );
   if (!picked) return undefined;
-  return picked.target ?? (await typeKey());
-}
-
-async function typeKey(): Promise<FlagTarget | undefined> {
-  const typed = await vscode.window.showInputBox({
-    prompt: "Coat of arms key: the name the definition is written under.",
-    validateInput: (v) =>
-      /^[\w.-]+$/.test(v.trim()) ? null : "A key with no spaces: letters, digits, _ . and - only",
-  });
-  return typed?.trim() ? { name: typed.trim() } : undefined;
+  return picked.target;
 }
 
 /** One read per file, however many definitions of it the picker lists. */

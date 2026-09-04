@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Coat of Arms Designer: the arms stay inside the shield, the catalog runs
+  to the bottom, one lock for the scale.** A house or dynasty frame now insets
+  the arms the way the game's own widgets do (the coat_of_arms_icon is 28 px
+  in a 40 px house widget and 44 in a 56 px dynasty widget, measured in
+  gui/shared/coat_of_arms.gui), so the pattern no longer sticks out past the
+  frame's shield. The pattern and layout catalogs fill the panel down to the
+  bottom edge and scroll without a bar of their own. Scale X and Scale Y sit
+  either side of a lock button that ties them together; the flip checkboxes
+  are gone, because the mirror tools under the numbers already do that, and
+  those tools now act on the shown emblem when nothing is selected. New Coat
+  of Arms no longer asks for a key in a prompt: the key is typed once, in the
+  designer's top-left field, whose hover says what it is for.
 - **Trait, Tradition and Culture Creators: the localization lands where you
   look for it, and every picture says what it has to be.** New loc keys go to
   `localization/<lang>/<the script file's name>_l_<lang>.yml` of the mod the
