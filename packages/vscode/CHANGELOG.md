@@ -281,6 +281,20 @@
   event nothing fires and that fires nothing. The server drops them before it
   reads their cards, so a mod with hundreds of standalone events opens faster.
   Turn it off to see the whole namespace; the queried event always stays.
+- **Dynasty Tree: undo, the whole portrait, and traits that say what they do.**
+  Every write the panel makes can be taken back (Ctrl+Z, Ctrl+Y, or the two
+  toolbar buttons), including the localization line a new dynasty writes; a
+  file somebody else changed meanwhile is named and left alone. A save no
+  longer throws an editor over the tree: the inspector says what it wrote and
+  offers the file. The DNA field carries the portrait, not just its name, with
+  Open, Copy DNA (the whole `common/dna_data` block) and Paste DNA (a block or
+  a bare `portrait_info` off the clipboard is written into your mod under a
+  free key, never over one that is there). A trait row shows its picture at 28
+  px, its first stat lines in the game's own words and a `mod` tag for traits
+  your workspace defines; its tooltip is the game's 52 px picture with no
+  frame and every stat line, so `fertility` and `attraction_opinion` stop
+  going missing. The spouse menu is a proper 320 px searchable list, and
+  Escape closes the inspector.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 
