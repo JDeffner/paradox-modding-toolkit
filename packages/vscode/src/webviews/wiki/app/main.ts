@@ -7,6 +7,11 @@
  * Mod Report the host builds when the page opens), and the hub itself. Cards
  * and rows that point at another view run a command through the host.
  *
+ * The switch at the top of the sidebar picks the game the pages are for. An
+ * article that names a game shows only for that one, so a page id resolves to
+ * the selected game's alternate: every read of `articles` goes through
+ * `visible()`.
+ *
  * Every article arrives with the content message, so typing filters in place
  * with no round trip. The markdown goes through the toolkit's own renderer
  * (webviews/markdown.ts), which escapes as it goes.
@@ -30,6 +35,9 @@ const DIAG_SECTION = "Diagnostics";
 
 let hub: WikiHubEntry[] = [];
 let articles: WikiArticle[] = [];
+let games: { id: string; name: string }[] = [];
+/** The game the pages are shown for; the workspace's until the switch moves. */
+let game = "";
 /** null = the front page. */
 let selected: string | null = null;
 let query = "";
@@ -37,7 +45,9 @@ let diagOpen = false;
 /** The last report the host sent; null while one is being built. */
 let report: string | null = null;
 
-const diagnostics = (): WikiArticle[] => articles.filter((a) => a.section === DIAG_SECTION);
+/** The articles of the selected game: one without a game belongs to all. */
+const visible = (): WikiArticle[] => articles.filter((a) => !a.game || a.game === game);
+const diagnostics = (): WikiArticle[] => visible().filter((a) => a.section === DIAG_SECTION);
 const isDiagnostic = (id: string | null): boolean => diagnostics().some((a) => a.id === id);
 
 function matchesArticle(article: WikiArticle, needle: string): boolean {
@@ -81,14 +91,26 @@ function row(iconName: IconName, label: string, tip: string | undefined, onOpen:
   return node;
 }
 
+/**
+ * The severity as one coloured symbol with the word on hover: a row that
+ * opened with a file icon and closed with a text badge spent its width on
+ * two things that said nothing about the code.
+ */
+function severityMark(badge: string | undefined): HTMLElement {
+  const level = (badge ?? "").toLowerCase().split("/")[0];
+  const glyph: IconName = level === "error" ? "circleX" : level === "warning" ? "alert" : "info";
+  const mark = el("span", "sev");
+  mark.setAttribute("data-level", level || "info");
+  mark.setAttribute("data-tip", badge ?? "Severity unknown");
+  mark.appendChild(iconEl(glyph));
+  return mark;
+}
+
 function diagRow(article: WikiArticle): HTMLElement {
-  const node = row("fileText", article.title, undefined, () => select(article.id));
-  node.classList.add("diag");
-  if (article.badge) {
-    const badge = el("span", "px-badge", article.badge);
-    badge.setAttribute("data-variant", "outline");
-    node.appendChild(badge);
-  }
+  const node = el("div", "px-item diag");
+  node.appendChild(severityMark(article.badge));
+  node.appendChild(el("span", "px-item-label", article.title));
+  pressable(node, () => select(article.id));
   node.setAttribute("aria-selected", String(article.id === selected));
   return node;
 }
@@ -99,7 +121,7 @@ function renderToc(nav: HTMLElement): void {
   const list = el("div", "px-list");
   nav.appendChild(list);
 
-  const home = row("library", "Wiki", "The front page.", () => select(null));
+  const home = row("library", "Home", "The front page.", () => select(null));
   home.setAttribute("aria-selected", String(selected === null));
   list.appendChild(home);
 
@@ -128,7 +150,7 @@ function renderToc(nav: HTMLElement): void {
 /** Search results: matching hub entries, then matching pages, flat. */
 function renderSearch(nav: HTMLElement, needle: string): void {
   const entries = hub.filter((e) => e.label.toLowerCase().includes(needle));
-  const pages = articles.filter((a) => matchesArticle(a, needle));
+  const pages = visible().filter((a) => matchesArticle(a, needle));
   if (entries.length === 0 && pages.length === 0) {
     const empty = el("div", undefined, "No page matches that.");
     empty.id = "navEmpty";
@@ -205,7 +227,7 @@ function renderHub(content: HTMLElement): void {
 }
 
 function renderDiagnosticsIndex(content: HTMLElement): void {
-  renderCrumbs([{ label: "Wiki", to: null }], "Diagnostics");
+  renderCrumbs([{ label: "Home", to: null }], "Diagnostics");
   content.appendChild(el("h1", undefined, "Diagnostics"));
   content.appendChild(
     el(
@@ -229,12 +251,9 @@ function renderDiagnosticsIndex(content: HTMLElement): void {
   for (const article of codes) {
     const tr = el("tr", "link");
     tr.appendChild(el("td", undefined, article.title));
-    const sev = el("td");
-    if (article.badge) {
-      const badge = el("span", "px-badge", article.badge);
-      badge.setAttribute("data-variant", "outline");
-      sev.appendChild(badge);
-    }
+    const sev = el("td", "sevcell");
+    sev.appendChild(severityMark(article.badge));
+    sev.appendChild(el("span", undefined, article.badge ?? ""));
     tr.appendChild(sev);
     tr.appendChild(el("td", undefined, article.summary ?? ""));
     pressable(tr, () => select(article.id));
@@ -245,7 +264,7 @@ function renderDiagnosticsIndex(content: HTMLElement): void {
 }
 
 function renderModReport(content: HTMLElement): void {
-  renderCrumbs([{ label: "Wiki", to: null }], "Mod Report");
+  renderCrumbs([{ label: "Home", to: null }], "Mod Report");
   if (report === null) {
     const pending = el("div", undefined, "Building the report from the live index…");
     pending.id = "pending";
@@ -268,7 +287,7 @@ function renderModReport(content: HTMLElement): void {
 }
 
 function renderArticle(content: HTMLElement, article: WikiArticle): void {
-  const trail = [{ label: "Wiki", to: null as string | null }];
+  const trail = [{ label: "Home", to: null as string | null }];
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
@@ -281,7 +300,7 @@ function renderPage(): void {
   else if (selected === DIAGNOSTICS) renderDiagnosticsIndex(content);
   else if (selected === MOD_REPORT) renderModReport(content);
   else {
-    const article = articles.find((a) => a.id === selected);
+    const article = visible().find((a) => a.id === selected);
     if (article) renderArticle(content, article);
     else renderHub(content);
   }
@@ -300,13 +319,28 @@ function select(id: string | null): void {
 }
 
 const known = (id: string): boolean =>
-  id === DIAGNOSTICS || id === MOD_REPORT || articles.some((a) => a.id === id);
+  id === DIAGNOSTICS || id === MOD_REPORT || visible().some((a) => a.id === id);
+
+/** The switch: one option per supported game, on the selected one. */
+function renderGames(): void {
+  const node = $<HTMLSelectElement>("game");
+  node.textContent = "";
+  for (const entry of games) {
+    const option = el("option", undefined, entry.name) as HTMLOptionElement;
+    option.value = entry.id;
+    node.appendChild(option);
+  }
+  node.value = game;
+}
 
 window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
   const msg = ev.data;
   if (msg.type === "content") {
     hub = msg.hub;
     articles = msg.articles;
+    games = msg.games;
+    game = msg.game;
+    renderGames();
     select(msg.select && known(msg.select) ? msg.select : selected);
   } else if (msg.type === "select") {
     if (known(msg.id)) select(msg.id);
@@ -320,6 +354,13 @@ const input = $<HTMLInputElement>("query");
 input.addEventListener("input", () => {
   query = input.value;
   renderNav();
+});
+
+const gameSelect = $<HTMLSelectElement>("game");
+gameSelect.addEventListener("change", () => {
+  game = gameSelect.value;
+  // A page the new game has no article for falls back to the front page.
+  select(selected !== null && known(selected) ? selected : null);
 });
 
 $("helpBtn").addEventListener("click", () =>
@@ -343,6 +384,19 @@ $("helpBtn").addEventListener("click", () =>
             lead: "Mod Report",
             text: "is built when you open it, from the live index of the focused mod: content counts, problems, localization coverage and overrides. Rebuild makes a fresh one.",
           },
+          {
+            lead: "Modding Tools",
+            text: "lists tools other modders built for the game: map editors, translators, audio tools, history converters. Each row links to the tool.",
+          },
+        ],
+      },
+      {
+        title: "The game switch",
+        items: [
+          {
+            lead: "The select at the top of the sidebar",
+            text: "picks the game the wiki shows pages for, so you can read another game's pages without changing the workspace. The toolkit itself keeps working on the workspace's game.",
+          },
         ],
       },
       {
@@ -354,8 +408,8 @@ $("helpBtn").addEventListener("click", () =>
             text: "is the searchable list of every trigger, effect, target, modifier and datafunction, with real examples out of the game's files.",
           },
           {
-            lead: "Format Docs",
-            text: "opens the game's own _*.info format docs for the file you are editing. Only CK3 ships them, so the card is CK3 only.",
+            lead: "Steam Error Codes",
+            text: "lists every result code a Workshop upload can fail with, the number other tools print, and what to do.",
           },
           { lead: "Credits", text: "names every project the toolkit builds on." },
         ],

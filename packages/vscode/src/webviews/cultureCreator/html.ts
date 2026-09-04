@@ -92,12 +92,8 @@ ${uiCss}
   #banner { display: flex; flex-direction: column; gap: 4px; }
   #banner:empty { display: none; }
   #saveNote { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  /* The script preview folds: it is a check, not the working surface. */
-  #script > summary { cursor: pointer; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #script pre {
-    margin: 6px 0 0; padding: 8px 10px; overflow-x: auto; background: var(--px-muted);
-    border-radius: var(--px-radius-md); font-family: var(--px-font-mono); font-size: var(--px-text-sm);
-  }
+  /* The save target line (shared/saveTarget.ts) sits in the toolbar. */
+  #target { display: flex; min-width: 0; }
   /* A weight and a name on one row, the shape ethnicities has in the file. */
   .wrow { display: flex; align-items: center; gap: 6px; }
   .wrow > input[type="number"] { width: 72px; }
@@ -112,13 +108,8 @@ ${uiCss}
   .dlchead { display: flex; align-items: center; gap: 6px; }
   .dlchead > span { flex: 1 1 auto; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
 
-  /* The composed tradition icon: the game stacks its layer folders in index
-     order, so the layers are absolutely positioned in DOM order. */
-  .tradicon {
-    position: relative; flex: 0 0 auto; display: block;
-    width: var(--tradicon, 48px); height: var(--tradicon, 48px);
-  }
-  .tradicon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  /* The composed tradition icon is .px-tradicon in the shared stylesheet
+     (shared/traditionIcon.ts), which the Tradition Creator draws too. */
   /* The tradition picker's group heading (the game groups by category). */
   .catgroup {
     padding: 8px 6px 2px; font-size: var(--px-text-xs); font-weight: 600;
@@ -141,17 +132,45 @@ ${uiCss}
     font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--px-muted-fg);
   }
   .pvhead > .count { font-weight: 400; letter-spacing: 0; text-transform: none; }
+  /* The ethos is the one pillar the game draws as a painted banner: measured in
+     window_culture.gui, container_pillar_item puts [CulturePillar.GetIcon] in a
+     400x100 box with the pillar's name centred over it. */
+  #pvEthos { display: flex; }
+  .pvethos { position: relative; display: flex; width: 100%; max-width: 400px; }
+  .pvethos > canvas { display: block; width: 100%; height: auto; }
+  .pvethos > .ename {
+    position: absolute; inset: auto 0 8px; text-align: center;
+    font-size: var(--px-text-sm); font-weight: 600; color: #f2e8d5;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+  .pvethos[data-empty] {
+    aspect-ratio: 4 / 1; align-items: center; justify-content: center;
+    border: 1px dashed var(--px-border); border-radius: var(--px-radius-md);
+    color: var(--px-muted-fg); font-size: var(--px-text-xs); font-style: italic;
+  }
   #pvPillars { display: flex; flex-direction: column; gap: 4px; }
-  .pvpillar { display: flex; align-items: center; gap: 8px; min-height: 32px; }
-  .pvpillar > .picon { width: 28px; height: 28px; flex: 0 0 auto; }
-  .pvpillar > .picon > img { width: 100%; height: 100%; object-fit: contain; }
+  /* icon_doctrine at size = { 44 44 }, the size the culture window draws the
+     heritage, language and martial pillars at. */
+  .pvpillar { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  .pvpillar > .picon { width: 44px; height: 44px; flex: 0 0 auto; }
+  .pvpillar > .picon > canvas, .pvpillar > .picon > img { display: block; width: 100%; height: 100%; }
   .pvpillar > .ptext { display: flex; flex-direction: column; min-width: 0; }
   .pvpillar .pfam { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   .pvpillar .pname { font-size: var(--px-text-sm); }
   .pvpillar .pname[data-empty] { color: var(--px-muted-fg); font-style: italic; }
-  #pvTraditions { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
-  .pvtrad { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
-  .pvtrad > .tname { font-size: var(--px-text-xs); line-height: 1.25; overflow-wrap: anywhere; }
+  /* The traditions grid: the game's fixedgridbox adds 284x180 cells holding a
+     276x168 tile, whose icon is 276x138 with the name across the bottom
+     (maximumsize 220x44). The tiles keep that shape and stop growing at the
+     game's own size. */
+  #pvTraditions { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+  .pvtrad { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+  .pvtrad > .px-tradicon { width: 100%; height: auto; max-width: 276px; aspect-ratio: 276 / 138; }
+  /* The game's widget_tradition_icon draws every layer at size = { 100% 100% },
+     so the tile stretches them rather than letterboxing them. */
+  .pvtrad > .px-tradicon > img { object-fit: fill; }
+  .pvtrad > .tname {
+    max-width: 80%; font-size: var(--px-text-xs); line-height: 1.25; overflow-wrap: anywhere;
+  }
   .pvempty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* The hover card the preview quotes the game's own tooltip in. */
   #pvTip { position: fixed; z-index: 80; max-width: 280px; pointer-events: none; }
@@ -165,8 +184,10 @@ ${uiCss}
     <span id="source" class="px-badge" data-variant="outline" hidden></span>
     <button id="new" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Start over on a blank culture">${icon("filePlus")}New</button>
     <button id="open" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Load a culture that already exists into this form">${icon("folderOpen")}Open</button>
+    <!-- The script section's copy button lands here (shared/scriptSection.ts). -->
+    <span id="scriptCopy"></span>
     <span class="px-grow"></span>
-    <span id="target" class="px-muted px-xs"></span>
+    <span id="target"></span>
     <button id="mode" class="px-btn px-dropdown" data-variant="outline" data-size="sm" hidden data-tip="This culture belongs to the game. Choose how your mod changes it." data-tip-wrap>
       <span class="px-truncate">Duplicate</span>${icon("chevronDown")}</button>
     <button id="save" class="px-btn" data-variant="default" data-size="sm">${icon("save")}Save</button>
@@ -178,10 +199,7 @@ ${uiCss}
         <div id="banner"></div>
         <div id="saveNote"></div>
         ${sections}
-        <details id="script">
-          <summary>Script preview</summary>
-          <pre id="scriptText"></pre>
-        </details>
+        <div id="scriptSlot"></div>
         <div class="note">A culture nobody has is invisible in game. Assign it to characters or counties in history to see it.</div>
       </div>
     </div>
@@ -189,6 +207,8 @@ ${uiCss}
       <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
         <div id="pvBand"><div id="pvName"></div><div id="pvKey"></div></div>
+        <div class="pvhead">Ethos</div>
+        <div id="pvEthos"></div>
         <div class="pvhead">Pillars</div>
         <div id="pvPillars"></div>
         <div class="pvhead">Traditions <span class="count" id="pvCount"></span></div>

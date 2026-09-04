@@ -10,6 +10,7 @@
  */
 import type { CalendarLocSpec } from "@px-lsp/protocol/calendarLoc";
 import type { DefRootKey, RefField, SchemaEntry, StructureSpec } from "../schema/types";
+import type { KindSkeleton } from "../schema/skeletons";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 import type { SaveSchema } from "../gui/saveSchema";
@@ -207,6 +208,25 @@ export interface GameMeta {
   cacheSuffix: string;
 }
 
+/**
+ * Where a creator's condition builder gets the values of one trigger
+ * (`DefinitionForm.conditions`). Each source is something the server already
+ * holds, so a game patch changes the list without a release:
+ *
+ *   docList     the trigger's own script_docs entry enumerates them on its
+ *               metadata line ("has_dlc_feature … Traits: Valid Features: a,
+ *               b, and c", CK3 triggers.log 1.19)
+ *   kind        every indexed definition of a definition kind
+ *   innerKeys   the inner block keys of every definition of a kind, minus
+ *               `except` (a CK3 game rule's settings ARE its inner blocks;
+ *               the other two keys are `categories` and `default`, per
+ *               common/game_rules/_game_rules.info)
+ */
+export type ConditionValueSource =
+  | { from: "docList" }
+  | { from: "kind"; kind: string }
+  | { from: "innerKeys"; kind: string; except?: string[] };
+
 /** A game's full knowledge bundle: meta plus the tables the engine consumes. */
 export interface GameProfile extends GameMeta {
   /** Folder→definition-kind table (see schema/types.ts). */
@@ -227,6 +247,14 @@ export interface GameProfile extends GameMeta {
    */
   structures?: Record<string, StructureSpec>;
   /**
+   * Definition skeletons per kind (data/<id>/skeletons.json, harvested by
+   * scripts/build-skeletons.ts): the shape a new definition of the kind takes,
+   * measured over the game's own files. Absent or empty = nobody has measured
+   * this game's vanilla tree, and completion offers no skeleton for it rather
+   * than a shape written from memory.
+   */
+  skeletons?: Record<string, KindSkeleton>;
+  /**
    * Definition kinds that declare their own root scope in their body, keyed by
    * kind (scopes/inference.ts). Absent = every kind's root scope comes from the
    * schema table alone.
@@ -234,6 +262,13 @@ export interface GameProfile extends GameMeta {
   defRootKeys?: Record<string, DefRootKey>;
   /** Templated-modifier placeholder table (data/modifierTemplates.ts). */
   modifierPlaceholders: Record<string, PlaceholderSpec>;
+  /**
+   * Triggers a creator's condition builder may offer a value list for, keyed
+   * by trigger name (`paradox/definitionForm`'s `conditions`). Absent = the
+   * creators offer no picker for this game and fall back to free input, which
+   * is the honest answer for a game whose sources have not been measured.
+   */
+  conditionValues?: Record<string, ConditionValueSource>;
   /**
    * Bundled `[ ... ]` data-function tables (data/<id>/dataTypes.json), when the
    * game ships one. Shape is data/dataTypes.ts's bundled-JSON shape; typed

@@ -49,6 +49,13 @@ export interface FieldOptions {
    * say nothing is a form nobody can start filling in.
    */
   placeholder?: string;
+  /**
+   * What the game expects of the INPUT, as a paragraph behind an (i) beside
+   * the label: a picture's size, format and path, a number's range. `doc`
+   * says what the key means; this says what to give it. Every image field of
+   * a creator carries one, so the guideline is a hover away everywhere.
+   */
+  info?: string;
 }
 
 /** One `name = value` row of a modifier block. */
@@ -143,17 +150,47 @@ export function keyLabel(text: string): HTMLSpanElement {
   return label;
 }
 
-/** The label + control grid row every field shares. */
-function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
+/** The label + control grid row every field shares, with its label: a number
+ *  field drags on the label, so the builder needs the element back. */
+function labelledRow(
+  options: FieldOptions,
+  control: HTMLElement
+): { row: HTMLElement; label: HTMLSpanElement } {
   const row = el("div", "px-field");
   const label = keyLabel(options.label);
   if (options.doc) {
     label.dataset.tip = options.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
+  if (options.info) label.append(infoIcon(options.info));
   row.append(label, control);
-  return row;
+  return { row, label };
+}
+
+/**
+ * The (i) that carries a field's input guideline. Its own element, not the
+ * label's tip: the label already says what the key MEANS, and a scrubbable
+ * label must stay a drag handle. A creator with a control of its own (a
+ * section head, a picker) appends one the same way.
+ */
+export function infoIcon(text: string): HTMLElement {
+  const info = el("span", "px-field-info");
+  info.dataset.tip = text;
+  info.dataset.tipWrap = "";
+  info.dataset.tipWide = "";
+  info.setAttribute("role", "img");
+  info.setAttribute("aria-label", text);
+  info.append(iconEl("info"));
+  return info;
+}
+
+/**
+ * The label + control row on its own, for a creator that builds a control the
+ * field builders do not cover (the Dynasty Tree's date parts) and still has to
+ * line up with the rows around it.
+ */
+export function fieldRow(options: FieldOptions, control: HTMLElement): HTMLElement {
+  return labelledRow(options, control).row;
 }
 
 function emitter<T>(): { listeners: ((value: T) => void)[]; fire: (value: T) => void } {
@@ -211,10 +248,17 @@ function vocabularyItems(items: readonly EventVocabularyItem[]): MenuItem[] {
 function searchPopover(
   anchor: HTMLElement,
   placeholder: string,
-  render: (query: string, body: HTMLElement, close: () => void) => void
+  render: (query: string, body: HTMLElement, close: () => void) => void,
+  opts: {
+    width?: number;
+    /** One control between the search box and the results, outside the scroll. */
+    action?: HTMLElement;
+  } = {}
 ): void {
   const root = el("div", "px-picker");
-  root.style.width = "300px";
+  root.style.width = `${opts.width ?? 300}px`;
+  // Past the popover's 480px cap (ui.css lifts it for a wide picker).
+  if ((opts.width ?? 300) > 480) root.dataset.wide = "";
   const group = el("div", "px-input-group");
   group.append(iconEl("search"));
   const search = document.createElement("input");
@@ -224,11 +268,18 @@ function searchPopover(
   search.spellcheck = false;
   group.append(search);
   const body = el("div", "px-picker-results");
-  root.append(group, body);
-  const close = popover(anchor, root);
-  const fill = (): void => render(search.value, body, close);
+  root.append(group);
+  if (opts.action) root.append(opts.action);
+  root.append(body);
+  // Filled BEFORE it is placed: the popover measures its content to pick a
+  // side and a height, and a picker measured empty (44px of search box) was
+  // put right under a control at the bottom of the page, then grew its 300px
+  // of results down past the viewport edge.
+  let close: () => void = () => undefined;
+  const fill = (): void => render(search.value, body, () => close());
   search.oninput = fill;
   fill();
+  close = popover(anchor, root);
   search.focus();
 }
 
@@ -302,7 +353,8 @@ export interface NumberFieldOptions extends FieldOptions {
   step?: number;
 }
 
-/** A number that drags (scrub.ts). Blank is `null`: the key is not written. */
+/** A number whose LABEL drags it (scrub.ts). Blank is `null`: the key is not
+ *  written. */
 export function numberField(options: NumberFieldOptions): Field<number | null> {
   const { listeners, fire } = emitter<number | null>();
   const step = options.step ?? 1;
@@ -315,13 +367,20 @@ export function numberField(options: NumberFieldOptions): Field<number | null> {
   input.value = options.value === null || options.value === undefined ? "" : String(options.value);
   const read = (): number | null => (input.value.trim() === "" ? null : Number(input.value));
   input.addEventListener("change", () => fire(read()));
-  scrubbable(input, { step, onChange: () => undefined, onCommit: () => fire(read()) });
 
   const box = el("div", "px-row");
   box.style.maxWidth = "140px";
   box.append(input);
+  // The label is the drag handle, so the input is only ever typed in.
+  const { row, label } = labelledRow(options, box);
+  scrubbable(input, {
+    step,
+    handle: label,
+    onChange: () => undefined,
+    onCommit: () => fire(read()),
+  });
   return {
-    el: fieldRow(options, box),
+    el: row,
     get: read,
     set: (value) => {
       input.value = value === null ? "" : String(value);
@@ -622,19 +681,33 @@ export interface IconFieldOptions extends FieldOptions {
   /** The pictures of the kind's icon folder, mod entries first. */
   items: readonly IconChoice[];
   value?: string;
-  /** Offered under the grid; the panel owns the file dialog and the encoder. */
+  /** Offered ABOVE the grid; the panel owns the file dialog and the encoder. */
   onCustom?: () => void;
   customLabel?: string;
+  /**
+   * `wide` for pictures that are a strip and not a square (a legacy track's
+   * 4216 x 368 illustration): one per row, wide enough to tell apart, key
+   * under it. A square tile of such a picture is 44 x 4 px of paint.
+   */
+  tile?: "square" | "wide";
 }
 
 /** The kind's icon, picked from the folder the game reads it from. */
 export function iconField(options: IconFieldOptions): Field<string> {
   const { listeners, fire } = emitter<string>();
   let current = options.value ?? "";
+  const wide = options.tile === "wide";
   const row = el("div", "px-row");
   const preview = document.createElement("img");
   preview.className = "px-icontile";
   preview.alt = "";
+  if (wide) {
+    preview.style.width = "160px";
+    preview.style.height = "14px";
+    preview.style.minWidth = "0";
+    preview.style.flexShrink = "1";
+    preview.style.objectFit = "fill";
+  }
   const face = el("span", "px-truncate px-xs px-muted");
   const choose = ghostButton("Choose…", "image");
   const clear = ghostButton("Clear", "x");
@@ -648,44 +721,57 @@ export function iconField(options: IconFieldOptions): Field<string> {
     clear.hidden = current === "";
   };
 
-  choose.onclick = () =>
-    searchPopover(choose, "Search icons…", (query, body, close) => {
-      body.replaceChildren();
-      const q = query.trim().toLowerCase();
-      const matches = options.items.filter((item) => item.key.toLowerCase().includes(q));
-      const grid = el("div", "px-icongrid");
-      for (const item of matches.slice(0, 400)) {
-        const tile = document.createElement("button");
-        tile.className = "px-btn";
-        tile.dataset.variant = "ghost";
-        tile.dataset.tip = item.key;
-        tile.dataset.tipWrap = "";
-        const img = document.createElement("img");
-        img.className = "px-icontile";
-        img.src = item.url;
-        img.alt = item.key;
-        img.loading = "lazy";
-        tile.append(img);
-        tile.onclick = () => {
-          current = item.key;
-          paint();
-          fire(current);
-          close();
-        };
-        grid.append(tile);
-      }
-      if (matches.length === 0) grid.append(el("div", "px-menu-empty", "No match"));
-      body.append(grid);
-      if (options.onCustom) {
-        const custom = ghostButton(options.customLabel ?? "Custom image…", "imageDown");
-        custom.style.width = "100%";
-        custom.onclick = () => {
-          close();
-          options.onCustom?.();
-        };
-        body.append(custom);
-      }
-    });
+  choose.onclick = () => {
+    // The one action that is not a pick stands at the top, under the search
+    // box and outside the scrolling grid: reaching "Custom picture…" used to
+    // mean scrolling past every icon the game ships.
+    let custom: HTMLElement | undefined;
+    if (options.onCustom) {
+      custom = ghostButton(options.customLabel ?? "Custom picture…", "imageDown");
+      custom.className += " px-picker-action";
+    }
+    searchPopover(
+      choose,
+      "Search icons…",
+      (query, body, close) => {
+        if (custom) {
+          custom.onclick = () => {
+            close();
+            options.onCustom?.();
+          };
+        }
+        body.replaceChildren();
+        const q = query.trim().toLowerCase();
+        const matches = options.items.filter((item) => item.key.toLowerCase().includes(q));
+        const grid = el("div", "px-icongrid");
+        if (wide) grid.dataset.wide = "";
+        for (const item of matches.slice(0, 400)) {
+          const tile = document.createElement("button");
+          tile.className = "px-btn";
+          tile.dataset.variant = "ghost";
+          tile.dataset.tip = item.key;
+          tile.dataset.tipWrap = "";
+          const img = document.createElement("img");
+          img.className = "px-icontile";
+          img.src = item.url;
+          img.alt = item.key;
+          img.loading = "lazy";
+          tile.append(img);
+          if (wide) tile.append(el("span", "px-icontile-key", item.key));
+          tile.onclick = () => {
+            current = item.key;
+            paint();
+            fire(current);
+            close();
+          };
+          grid.append(tile);
+        }
+        if (matches.length === 0) grid.append(el("div", "px-menu-empty", "No match"));
+        body.append(grid);
+      },
+      { ...(wide ? { width: 520 } : {}), ...(custom ? { action: custom } : {}) }
+    );
+  };
   clear.onclick = () => {
     current = "";
     paint();
@@ -756,6 +842,7 @@ export function modifierListField(options: ModifierListFieldOptions): Field<Modi
         fire(read());
       };
       value.addEventListener("change", commit);
+      // An inline pair has no label of its own, so the input stays the handle.
       scrubbable(value, { step: 0.1, onChange: () => undefined, onCommit: commit });
       const drop = document.createElement("button");
       drop.className = "px-btn";
@@ -797,6 +884,12 @@ export interface LocFieldOptions extends FieldOptions {
   key: string;
   value?: string;
   multiline?: boolean;
+  /**
+   * What the key's own hover says. A creator names the field the key follows
+   * ("the culture key in the top-left field"), because "the name" is only
+   * obvious to whoever wrote the form.
+   */
+  keyTip?: string;
 }
 
 /** A loc pair: the key the game generates, and the text the player reads. */
@@ -813,7 +906,8 @@ export function locField(options: LocFieldOptions): Field<string> {
   if (options.placeholder) input.placeholder = options.placeholder;
   input.addEventListener("change", () => fire(input.value));
   const key = el("code", "px-mono px-xs px-muted", options.key);
-  key.dataset.tip = "The loc key the game looks up. It follows the name, so it is not editable.";
+  key.dataset.tip =
+    options.keyTip ?? "The loc key the game looks up. It follows the name, so it is not editable.";
   key.dataset.tipWrap = "";
   box.append(input, key);
   return {
@@ -829,6 +923,26 @@ export function locField(options: LocFieldOptions): Field<string> {
 export interface ScriptFieldOptions extends FieldOptions {
   value?: string;
   rows?: number;
+  /**
+   * Open the definition's file in the editor. A textarea has no completion,
+   * no hover and no highlighting, so a block of any size is better written in
+   * the file; the area says so and offers the way there when a creator gives
+   * it one (the host saves first when the block is not in the file yet).
+   */
+  onOpenFile?: () => void;
+}
+
+/** The note every script area carries under it, with the file as the way out. */
+export function scriptFoot(onOpenFile: () => void): HTMLElement {
+  const foot = el("div", "px-script-foot");
+  foot.append(el("span", "px-grow", "No completion or highlighting here."));
+  const open = ghostButton("Edit in the file", "externalLink");
+  open.dataset.tip =
+    "Save, then open this definition in the editor, where script has completion and hover docs.";
+  open.dataset.tipWrap = "";
+  open.onclick = onOpenFile;
+  foot.append(open);
+  return foot;
 }
 
 /**
@@ -854,8 +968,13 @@ export function scriptField(options: ScriptFieldOptions): Field<string> {
     area.value = area.value.slice(0, start) + "\t" + area.value.slice(end);
     area.selectionStart = area.selectionEnd = start + 1;
   });
+  let control: HTMLElement = area;
+  if (options.onOpenFile) {
+    control = el("div", "px-stack");
+    control.append(area, scriptFoot(options.onOpenFile));
+  }
   return {
-    el: fieldRow(options, area),
+    el: fieldRow(options, control),
     get: () => area.value,
     set: (value) => {
       area.value = value;

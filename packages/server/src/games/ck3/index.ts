@@ -3,6 +3,7 @@
  * and bundled-data import, assembled behind the GameProfile interface.
  */
 import type { GameProfile } from "../profile";
+import type { SkeletonData } from "../../schema/skeletons";
 import { ck3Meta } from "./meta";
 import { BLOCK_REF_FIELDS, CK3_SCHEMA, PREFIX_REFS, REF_FIELDS } from "./schema";
 import { STRUCTURE_SOURCES } from "./structures";
@@ -13,6 +14,8 @@ import { CK3_SAVE_SCHEMA } from "./saveSchema";
 // and scripts/build-gui-schema.ts for regeneration.
 import BUNDLED_DATA_TYPES from "../../../data/ck3/dataTypes.json";
 import GUI_SCHEMA from "../../../data/ck3/guiSchema.json";
+// Definition skeletons measured over the vanilla tree (scripts/build-skeletons.ts).
+import SKELETONS from "../../../data/ck3/skeletons.json";
 
 export const ck3Profile: GameProfile = {
   ...ck3Meta,
@@ -30,8 +33,21 @@ export const ck3Profile: GameProfile = {
     scripted_gui: { key: "scope", default: "character" },
   },
   modifierPlaceholders: CK3_MODIFIER_PLACEHOLDERS,
+  // The three triggers the measured condition shapes need. Over the game's own
+  // 21 dynasty legacy tracks every `is_shown` opens with `has_dlc_feature`, and
+  // over its 105 dynasty perks every `can_be_picked` is either
+  // `has_dlc_feature = <feature>` (10) or `<scripted trigger> = yes` (44).
+  conditionValues: {
+    // triggers.log enumerates the whole set on the trigger itself.
+    has_dlc_feature: { from: "docList" },
+    // `has_game_rule = unrestricted_dynasty_legacies_all` names a SETTING, and
+    // a setting is an inner block of a game_rule (00_game_rules.txt).
+    has_game_rule: { from: "innerKeys", kind: "game_rule", except: ["categories", "default"] },
+    scripted_trigger: { from: "kind", kind: "scripted_trigger" },
+  },
   bundledDataTypes: BUNDLED_DATA_TYPES,
   guiSchema: GUI_SCHEMA,
+  skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   saveSchema: CK3_SAVE_SCHEMA,
   wikiNote: "Source: CK3 wiki (may lag behind the current game version)",
   diagnosticSource: "ck3-script",

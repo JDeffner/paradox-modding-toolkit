@@ -1,4 +1,5 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
+import { PX_CONFIG_DIR } from "@px-lsp/protocol/configDir";
 import { PATHS, type IconName } from "../shared/icons";
 
 /**
@@ -11,6 +12,7 @@ const CREATOR_COMMANDS: Record<string, string> = {
   trait: "px.createTrait",
   dynasty_legacy: "px.createDynastyLegacy",
   culture: "px.createCulture",
+  culture_tradition: "px.createTradition",
   // Not a definition kind: a view over history/characters.
   dynasty_tree: "px.openDynastyTree",
 };
@@ -87,26 +89,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "layoutTemplate",
           tip: "Render and edit the .gui window you are editing.",
         },
-        // One row, two panels: px.openFlagBuilder opens the game's own Coat of
-        // Arms designer where the profile says the game ships one, and the raw
-        // Flag Builder everywhere else. The label follows.
-        ...(meta.flagBuilder
-          ? [
-              meta.coaDesigner
-                ? {
-                    label: "Coat of Arms Designer",
-                    command: "px.openFlagBuilder",
-                    icon: "shield" as const,
-                    tip: "Design arms the way the game's own designer does.",
-                  }
-                : {
-                    label: "Flag Builder",
-                    command: "px.openFlagBuilder",
-                    icon: "flag" as const,
-                    tip: "Compose a coat of arms and write it into the mod.",
-                  },
-            ]
-          : []),
         {
           label: "Convert Image to DDS",
           command: "px.convertToDds",
@@ -132,12 +114,15 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
         },
         // The visual creators follow the two scaffolds: same group, richer tool.
         ...creatorItems(meta),
-        // Same glyph as the View group's Flag Builder row: one tool, one
-        // icon. This row is the creation door, that one the blank canvas.
+        // ONE row for the designer, in Create. It used to be listed twice (a
+        // View row that opened the blank canvas and a Create row that asked
+        // what the arms are for), which read as two tools; the creation flow
+        // is the door, and it lands in the same panel. Both palette commands
+        // stay for a keybinding or a deep link.
         ...(meta.flagBuilder
           ? ([
               {
-                label: "New Coat of Arms…",
+                label: meta.coaDesigner ? "Coat of Arms Designer" : "Flag Builder",
                 command: "px.createCoatOfArms",
                 icon: meta.coaDesigner ? "shield" : "flag",
                 tip: "Design arms for a dynasty, house or title and save them into the mod.",
@@ -233,7 +218,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 label: `Generate ${meta.tiger.confName}`,
                 command: "px.tigerGenerateConf",
                 icon: "settings",
-                tip: "Write a tiger config for this mod.",
+                tip: `Write a tiger config into this mod's ${PX_CONFIG_DIR}/ folder.`,
               },
               {
                 label: `Update ${meta.tiger.binaryName}`,

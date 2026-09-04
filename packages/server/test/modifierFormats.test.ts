@@ -104,6 +104,8 @@ beforeAll(() => {
     loc("MOD_MONTHLY_INCOME_PREFIX", "[gold_i]"),
     loc("game_concept_gold_i", "@gold_icon!"),
     loc("MOD_MONTHLY_POSTFIX", "/month"),
+    // A line of the game's own UI: how CK3 prints a gold cost (core_l_english.yml).
+    loc("GOLD_COST", "[gold_i] $VALUE|0$"),
   ]);
 });
 
@@ -151,5 +153,14 @@ describe("computeModifierFormats", () => {
     expect(formats.positive_random_genetic_chance.label).toBe("Chance of new good Congenital Traits");
     // Nothing to read: readable, but still the modifier's own name.
     expect(formats.hidden_modifier.label).toBe("Hidden Modifier");
+  });
+
+  it("renders the loc keys a client names as the same parts, and leaves out what it cannot", () => {
+    const result = computeModifierFormats(data, SOURCE, dir, ["GOLD_COST", "NO_SUCH_KEY"])!;
+    expect(result.lines).toEqual({
+      GOLD_COST: [{ icon: { texture: "gfx/interface/icons/icon_gold.dds" } }, { text: " $VALUE|0$" }],
+    });
+    // Nothing asked, nothing answered: the field is absent, not an empty table.
+    expect(computeModifierFormats(data, SOURCE, dir)!.lines).toBeUndefined();
   });
 });

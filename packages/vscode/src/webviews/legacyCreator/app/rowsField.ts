@@ -31,6 +31,8 @@ export interface RowsItem {
 export interface RowsFieldOptions {
   label: string;
   doc?: string;
+  /** Drawn without the label column: the section it sits in already names it. */
+  bare?: boolean;
   items: readonly RowsItem[];
   rows?: readonly ModifierRow[];
   addLabel: string;
@@ -166,14 +168,17 @@ export function rowsField(options: RowsFieldOptions): Field<ModifierRow[]> {
   box.append(list, add);
   paint();
 
-  const row = el("div", "px-field");
-  const label = el("span", "px-label", options.label);
-  if (options.doc) {
-    label.dataset.tip = options.doc;
-    label.dataset.tipWrap = "";
-    label.style.cursor = "help";
+  let row: HTMLElement = box;
+  if (!options.bare) {
+    row = el("div", "px-field");
+    const label = el("span", "px-label", options.label);
+    if (options.doc) {
+      label.dataset.tip = options.doc;
+      label.dataset.tipWrap = "";
+      label.style.cursor = "help";
+    }
+    row.append(label, box);
   }
-  row.append(label, box);
 
   return {
     el: row,

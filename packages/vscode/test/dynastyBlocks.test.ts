@@ -52,6 +52,11 @@ describe("characterBlock", () => {
     expect(woman).toContain("\tfemale = yes\n");
     expect(woman).toContain("\tdynasty = 1000\n");
     expect(woman).not.toContain("dynasty_house");
+
+    // With only a name typed the block is still saveable, and says nothing.
+    const bare = characterBlock({ id: "42", name: "Nn", female: false, traits: [], spouses: [] });
+    expect(bare.text).toBe(`42 = {\n\tname = "Nn"\n}\n`);
+    expect(bare.notes).toEqual([]);
   });
 
   it("marries a spouse in a dated block, and dates the marriage from the form", () => {
@@ -60,12 +65,6 @@ describe("characterBlock", () => {
     // Dated blocks come out in date order, whatever order the form built them.
     expect(text.indexOf("943.8.7")).toBeLessThan(text.indexOf("965.3.1"));
     expect(text.indexOf("965.3.1")).toBeLessThan(text.indexOf("975.7.8"));
-  });
-
-  it("is saveable with only a name typed", () => {
-    const bare = characterBlock({ id: "42", name: "Nn", female: false, traits: [], spouses: [] });
-    expect(bare.text).toBe(`42 = {\n\tname = "Nn"\n}\n`);
-    expect(bare.notes).toEqual([]);
   });
 });
 
@@ -107,21 +106,32 @@ describe("characterBlock round trip", () => {
       religion: "catholic",
       birth: "849.1.1",
       death: "899.10.26",
+      dna: "7627_earl_alfred",
+      skills: { martial: 11, learning: 13 },
       traits: ["honest", "just"],
       spouses: ["306020"],
     },
     PREVIOUS
   );
 
-  it("keeps every statement the form does not model, byte for byte", () => {
-    for (const line of [
-      "\tdna = 7627_earl_alfred",
-      "\tmartial = 11",
-      "\tlearning = 13",
-      "\tsexuality = heterosexual",
-    ]) {
+  it("writes the dna and the skills back unchanged, and keeps what the form does not model", () => {
+    for (const line of ["\tdna = 7627_earl_alfred", "\tmartial = 11", "\tlearning = 13"]) {
       expect(edited.text).toContain(`${line}\n`);
     }
+    // Once each: the form owns them now, so the source lines are not kept too.
+    expect(edited.text.match(/martial = /g)).toHaveLength(1);
+    // `sexuality` is no field of the form's, so it survives byte for byte.
+    expect(edited.text).toContain("\tsexuality = heterosexual\n");
+  });
+
+  // A skill written as a script value never becomes a number in the form, so
+  // the form must not be allowed to write it away.
+  it("keeps a skill the form could not read as a number", () => {
+    const kept = characterBlock(
+      { id: "7627", name: "Alfred", female: false, traits: [], spouses: [] },
+      `7627 = {\n\tname = Alfred\n\tmartial = @heroic_martial\n}`
+    );
+    expect(kept.text).toContain("\tmartial = @heroic_martial\n");
   });
 
   it("keeps a dated block that carries more than a birth, exactly as written", () => {
@@ -131,9 +141,7 @@ describe("characterBlock round trip", () => {
     // It was kept, so the form's birth was not written a second time.
     expect(edited.text.match(/birth = yes/g)).toHaveLength(1);
     expect(edited.notes.some((n) => n.includes("849.1.1"))).toBe(true);
-  });
-
-  it("keeps a marriage where it stands instead of re-dating it", () => {
+    // A marriage stays where it stands rather than being re-dated.
     expect(edited.text).toContain("\t867.1.1 = {\n\t\tadd_spouse = 306020\n\t}\n");
     expect(edited.text.match(/add_spouse/g)).toHaveLength(1);
   });
@@ -156,19 +164,14 @@ describe("characterBlock round trip", () => {
 });
 
 describe("dynastyBlock and houseBlock", () => {
-  it("writes a dynasty as its loc key and culture", () => {
+  it("writes a dynasty as its loc key and culture, and a house as its loc key and its dynasty", () => {
     expect(dynastyBlock({ id: "1000000", nameKey: "dynn_Testing", culture: "anglo_saxon" })).toBe(
       `1000000 = {\n\tname = "dynn_Testing"\n\tculture = "anglo_saxon"\n}\n`
     );
-  });
-
-  it("leaves the culture out when the form has none", () => {
+    // No culture in the form, no culture line.
     expect(dynastyBlock({ id: "1000000", nameKey: "dynn_Testing" })).toBe(
       `1000000 = {\n\tname = "dynn_Testing"\n}\n`
     );
-  });
-
-  it("writes a house as its loc key and its dynasty", () => {
     expect(houseBlock({ id: "house_testing", nameKey: "dynn_Testing", dynasty: "1000000" })).toBe(
       `house_testing = {\n\tname = "dynn_Testing"\n\tdynasty = 1000000\n}\n`
     );

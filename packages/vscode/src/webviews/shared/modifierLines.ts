@@ -93,29 +93,41 @@ function texticon(part: Extract<FormatPart, { icon: unknown }>, url: string): HT
 }
 
 /**
- * `[prefix] value label [suffix]`, the game's own order. `imageUrl` turns a
- * texture path into something the webview may load (the host's decoded PNG);
- * a texture it cannot resolve is left out rather than drawn as a broken image.
+ * Draw a run of parts into `into`: a word as text, a texticon as its sprite.
+ * `imageUrl` turns a texture path into something the webview may load (the
+ * host's decoded PNG); a texture it cannot resolve is left out rather than
+ * drawn as a broken image. `text` may rewrite a word part (a cost line's
+ * `$VALUE|0$` slot becomes the number); it returns the node to append.
  */
+export function renderParts(
+  list: readonly FormatPart[],
+  into: HTMLElement,
+  imageUrl: (texture: string) => string | null,
+  text: (part: string) => Node = (part) => document.createTextNode(part)
+): void {
+  for (const part of list) {
+    if ("icon" in part) {
+      const url = imageUrl(part.icon.texture);
+      if (url) into.append(texticon(part, url));
+      continue;
+    }
+    into.append(text(part.text));
+  }
+}
+
+/** `[prefix] value label [suffix]`, the game's own order. */
 export function renderModifierLine(
   line: ModifierLine,
   imageUrl: (texture: string) => string | null
 ): HTMLElement {
   const row = document.createElement("span");
   row.className = `px-mod-line ${line.tone}`;
-  const parts = (list: FormatPart[]): void => {
-    for (const part of list) {
-      if ("icon" in part) {
-        const url = imageUrl(part.icon.texture);
-        if (url) row.append(texticon(part, url));
-        continue;
-      }
-      const text = document.createElement("span");
-      text.textContent = part.text;
-      row.append(text);
-    }
+  const word = (part: string): Node => {
+    const text = document.createElement("span");
+    text.textContent = part;
+    return text;
   };
-  parts(line.prefix);
+  renderParts(line.prefix, row, imageUrl, word);
   const value = document.createElement("span");
   value.className = "px-mod-value";
   value.textContent = line.value;
@@ -124,6 +136,6 @@ export function renderModifierLine(
   label.className = "px-mod-label";
   label.textContent = line.label;
   row.append(label);
-  parts(line.suffix);
+  renderParts(line.suffix, row, imageUrl, word);
   return row;
 }

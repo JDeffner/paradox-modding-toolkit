@@ -37,6 +37,7 @@ import {
 } from "@px-lsp/protocol/workshopMeta";
 import { explainSteamError } from "./steamErrors";
 import {
+  DEFAULT_LANGUAGE,
   hasListingFiles,
   moveListing,
   readListingFiles,
@@ -45,6 +46,7 @@ import {
   SIBLING_WORKSHOP_DIR,
   type ChangeNote,
 } from "./workshopFiles";
+import { markdownToBBCode } from "./bbcodeMarkdown";
 import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
 
 export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
@@ -80,6 +82,12 @@ export interface PublishInfo {
   description: string | null;
   /** The local per-language translations (workshop.json), keyed by Steam API language code. */
   translations: Record<string, WorkshopTranslation>;
+  /**
+   * Which of those descriptions are Markdown (`ListingFiles.markdown`, the
+   * empty string being the default one). Steam only takes BBCode, so they
+   * convert on the way out; `descriptionBBCode` does that for one of them.
+   */
+  markdown: string[];
   previewPath: string | null;
   /** The mod's own version (descriptor version= / metadata version). */
   version: string | null;
@@ -123,6 +131,11 @@ export function readPublishInfo(
     translations[lang] = { ...translations[lang], ...t };
   }
   const description = files?.description ?? store?.description ?? null;
+  // A description only workshop.json still holds is pre-0.4.0 BBCode,
+  // whatever format its folder would write.
+  const markdown = (files?.markdown ?? []).filter((lang) =>
+    lang === DEFAULT_LANGUAGE ? files?.description != null : files?.translations[lang]?.description != null
+  );
   if (meta.descriptor === "mod") {
     let text: string;
     try {
@@ -142,6 +155,7 @@ export function readPublishInfo(
       publishedId: remote && /^\d+$/.test(remote) ? remote : null,
       description,
       translations,
+      markdown,
       previewPath: findPreview(root, value("picture")),
       version: value("version"),
       supportedVersion: value("supported_version"),
@@ -156,6 +170,7 @@ export function readPublishInfo(
     publishedId: storedId && /^\d+$/.test(storedId) ? storedId : null,
     description: description ?? (typeof md.short_description === "string" ? md.short_description : null),
     translations,
+    markdown,
     previewPath: findPreview(root, null),
     version: typeof md.version === "string" ? md.version : null,
     supportedVersion: typeof md.supported_game_version === "string" ? md.supported_game_version : null,
@@ -194,19 +209,27 @@ export function lastCommitSubject(root: string): Promise<string> {
   });
 }
 
+/** One description as Steam takes it: BBCode, converted when the file is Markdown. */
+export function descriptionBBCode(info: PublishInfo, language: string, text: string): string {
+  return info.markdown.includes(language) ? markdownToBBCode(text) : text;
+}
+
 /**
  * The translation submits of an upload: one per language that has any text.
  * No changenote on them - one upload should read as one change on the item's
  * Change Notes tab, not one entry per language.
  */
-export function translationSubmits(translations: Record<string, WorkshopTranslation>): SubmitSpec[] {
-  return Object.entries(translations)
+export function translationSubmits(info: PublishInfo): SubmitSpec[] {
+  return Object.entries(info.translations)
     .filter(([, t]) => (t.title ?? "").trim() !== "" || (t.description ?? "").trim() !== "")
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([language, t]) => ({
       language,
       title: (t.title ?? "").trim() !== "" ? t.title : undefined,
-      description: (t.description ?? "").trim() !== "" ? t.description : undefined,
+      description:
+        (t.description ?? "").trim() !== ""
+          ? descriptionBBCode(info, language, t.description as string)
+          : undefined,
     }));
 }
 

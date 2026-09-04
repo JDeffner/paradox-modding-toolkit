@@ -49,7 +49,10 @@ ${uiCss}
   #jobProgress .bar { flex: 0 0 120px; height: 3px; border-radius: 2px; background: var(--px-muted); overflow: hidden; }
   #jobProgress .bar > span { display: block; height: 100%; width: 0; background: var(--px-primary); transition: width 200ms linear; }
   #jobProgress .bar[data-indeterminate] > span { width: 30%; animation: busy-slide 1.2s ease-in-out infinite; }
-  #main { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  /* Vertical only: overflow-y auto alone would make the x axis auto too,
+     so anything too wide for the pane would scroll the whole page sideways.
+     Every wide thing (preview tables, code blocks) scrolls in its own box. */
+  #main { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
   /* The editor area is usually the window minus the Activity Bar and an open
      Project sidebar (about 1000 to 1500px). One column until both cards get
      about 560px (2 * 560 + gap + padding = 1164px); capped and centered when
@@ -112,9 +115,11 @@ ${uiCss}
   .stat .k { display: flex; align-items: center; gap: 3px; color: var(--px-muted-fg); font-size: var(--px-text-xs); min-width: 0; }
   .stat .k .px-icon { width: 11px; height: 11px; flex: 0 0 auto; }
   .stat .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #desc { min-height: 170px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
-  .hintline { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .hintline .px-grow { flex: 1 1 auto; }
+  /* Wraps: the buttons never shrink (nowrap), so a narrow pane has to move
+     them to their own line rather than push the card past the page. */
+  .hintline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .hintline .px-grow { flex: 1 1 auto; min-width: 0; }
+  .hintline .hint { min-width: 0; }
   #translations { display: flex; flex-direction: column; gap: 6px; }
   .lang { border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
   .lang > .head {
@@ -126,9 +131,6 @@ ${uiCss}
   .lang > .body { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; }
   .lang[data-collapsed] > .body { display: none; }
   .lang .px-input { width: 100%; }
-  .lang textarea { min-height: 90px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
-  .lang .livehint { display: flex; align-items: baseline; gap: 6px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  .lang .livehint .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   #publishRows { display: flex; flex-direction: column; gap: 8px; }
   .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .pub-row .lbl { min-width: 0; }
@@ -153,14 +155,12 @@ ${uiCss}
   #enableAllConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-left: 3px solid var(--px-destructive); font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   #enableAllConfirm[hidden] { display: none; }
   #note { width: 100%; min-height: 56px; resize: vertical; }
+  /* The changenote's three sources: the picked one's body is the only one shown. */
+  #noteSeg { align-self: flex-start; }
+  #noteChangelog, #noteCommit, #noteWrite { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  /* A commit subject is one line: no scroll window, no grip. */
+  #noteCommit .bbprev { min-height: 0; height: auto; resize: none; }
   .section > .px-panel-title { padding: 0; }
-  /* Edit | Preview segmented toggle (description and translations). */
-  .seg { display: flex; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); overflow: hidden; }
-  .seg button {
-    border: none; background: none; color: var(--px-muted-fg); font: inherit;
-    font-size: var(--px-text-xs); padding: 2px 9px; cursor: pointer;
-  }
-  .seg button.on { background: var(--px-muted); color: var(--px-fg); }
   /* Editable tag chips. */
   .tag-chip { display: inline-flex; align-items: center; gap: 3px; }
   .tag-chip button { border: none; background: none; color: inherit; cursor: pointer; padding: 0; display: flex; opacity: 0.7; }
@@ -168,7 +168,13 @@ ${uiCss}
   .tag-chip button .px-icon { width: 11px; height: 11px; }
   #tagAdd input { width: 130px; }
 ${BBPREV_CSS}
-  .lang .bbprev { min-height: 90px; }
+  /* A starting height, not the final one: the reader drags the bottom edge
+     down for more. The description gets the taller start, a language row the
+     shorter one, and each can be dragged back to its min-height. */
+  #descPreview { height: 220px; }
+  .lang .bbprev, #noteChangelog .bbprev { min-height: 90px; height: 160px; }
+  /* The description files are edited in the editor: an empty one says so. */
+  .bbprev.empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Upload confirmation modal rows. */
   .modal-rows { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; text-align: left; }
   .modal-rows .pub-row { min-height: 24px; }
@@ -182,7 +188,7 @@ ${BBPREV_CSS}
   .gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gallery .tile .rm { position: absolute; top: 2px; right: 2px; }
-  .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); cursor: pointer; }
   /* Pointer-driven reorder: the lifted tile follows the pointer above the
      rest, its slot stays as a dashed placeholder, the others slide (FLIP). */
   .gallery .tile[data-name] { cursor: grab; touch-action: none; }
@@ -214,9 +220,10 @@ ${BBPREV_CSS}
   }
   .dlc-tile .mark .px-icon { width: 11px; height: 11px; }
   .dlc-tile[data-on="1"] .mark { display: flex; }
-  .req-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--px-text-sm); min-width: 0; }
-  .req-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .req-item .id { color: var(--px-muted-fg); font-size: var(--px-text-xs); flex: 0 0 auto; }
+  /* Required items are chips: they fill the row and wrap, rather than one
+     mostly empty line each. The name truncates, the tooltip carries it whole. */
+  #itemsBox .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+  #itemsBox .id { color: var(--px-muted-fg); flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -228,7 +235,7 @@ ${BBPREV_CSS}
     <span id="liveState" class="px-muted px-xs"></span>
     <span id="jobProgress" hidden><span class="step"></span><span class="count"></span><span class="bar"><span></span></span></span>
     <span class="px-grow"></span>
-    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
+    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in Steam (in the browser when Steam is not installed)" data-tip-wrap>${icon("externalLink")}</button>
     <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
@@ -321,11 +328,19 @@ ${BBPREV_CSS}
         <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
         <label class="hdr-switch" data-tip="Send the changenote with the upload; it appears on the item's Change Notes tab." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></span></label>
       </div>
-      <textarea id="note" class="px-textarea" spellcheck="false" placeholder="What changed in this update"></textarea>
-      <div class="hintline">
-        <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-        <span class="px-grow"></span>
-        <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
+      <div id="noteSeg" class="px-toggle-group" data-spacing="0">
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="changelog" data-tip="Send the changelog entry that matches the mod version." data-tip-wrap>Changelog</button>
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="commit" data-tip="Send the subject of the mod's last git commit." data-tip-wrap>Last commit</button>
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="write" data-tip="Write a note for this upload only." data-tip-wrap>Write</button>
+      </div>
+      <div id="noteChangelog"></div>
+      <div id="noteCommit"></div>
+      <div id="noteWrite">
+        <textarea id="note" class="px-textarea" spellcheck="false" placeholder="A note for this upload. BBCode works: [b], [list], [url=…]."></textarea>
+        <div class="hintline">
+          <span class="hint">Sent with this upload only, not written to a changelog.</span>
+          <button id="noteBBCodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
+        </div>
       </div>
     </div>
     <div class="section" id="previewsSection">
@@ -333,7 +348,6 @@ ${BBPREV_CSS}
         <span class="px-grow"></span>
         <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
         <label class="hdr-switch" data-tip="Upload the gallery: the images and videos below replace the item's gallery on Steam. The thumbnail belongs to Details." data-tip-wrap data-tip-side="left">Previews <span class="px-switch"><input id="incPreviews" type="checkbox" checked /><span></span></span></label>
-        <button id="previewsHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How previews work" data-tip="How previews work" data-tip-side="left">${icon("circleHelp")}</button>
       </div>
       <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
       <div id="gallery" class="gallery"></div>
@@ -342,16 +356,20 @@ ${BBPREV_CSS}
         <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
       </div>
       <div class="field" style="margin-top:8px">
-        <span class="px-label">Videos</span>
+        <span class="px-label" style="display:inline-flex;align-items:center;gap:4px">Videos <button id="videosHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How to add several videos" data-tip="Several videos: separate the YouTube links or ids with commas. They show on the item in that order." data-tip-wrap>${icon("circleHelp")}</button></span>
         <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
       </div>
     </div>
     <div class="section" id="requirementsSection">
-      <div class="px-panel-title">Requirements</div>
+      <div class="px-panel-title">Requirements
+        <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload the required DLC and items below, replacing what the item declares on Steam." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incRequirements" type="checkbox" checked /><span></span></span></label>
+      </div>
       <div class="px-label" style="margin-bottom:4px">Required DLC</div>
       <div id="dlcBox"></div>
       <div class="px-label" style="margin:10px 0 4px">Required items</div>
-      <div id="itemsBox"></div>
+      <div id="itemsBox" class="px-chips"></div>
       <div class="field" style="margin-top:6px">
         <span class="px-label">Add a required item</span>
         <div class="px-row" style="gap:6px;align-items:center">
@@ -361,19 +379,16 @@ ${BBPREV_CSS}
       </div>
     </div>
     <div class="section wide">
-      <div class="px-panel-title">Description
-        <span class="px-grow"></span>
-        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly as the Workshop page will.">
-          <button data-mode="edit" class="on">Edit</button>
-          <button data-mode="preview">Preview</button>
-        </div>
+      <div class="px-panel-title">Description</div>
+      <div class="bbprev-box">
+        <div id="descPreview" class="bbprev"></div>
+        <button id="descPreviewEdit" class="px-btn bbprev-edit" data-variant="ghost" data-size="icon-xs" aria-label="Edit description.bbcode" data-tip="Edit description.bbcode">${icon("pencil")}</button>
       </div>
-      <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
-      <div id="descPreview" class="bbprev" hidden></div>
       <div class="hintline">
-        <span>Saved to description.bbcode as you type; goes to Steam on Upload.</span>
+        <span class="hint">Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
+        <button id="bbcodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
         <span class="px-grow"></span>
-        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
+        <button id="openDescFile" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Edit file</button>
         <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
         <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
       </div>

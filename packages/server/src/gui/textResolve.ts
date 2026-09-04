@@ -34,7 +34,7 @@ const LOC_KEY = /^[A-Za-z0-9_][A-Za-z0-9_.\-']*$/;
  * Loc formatting the game does not draw: `#bold text#!`, `#R text#!`, `§Ytext§!`,
  * `@icon!` icon references. Removed for measurement; the preview has no glyphs for them.
  */
-function stripFormatting(s: string): string {
+export function stripFormatting(s: string): string {
   return s
     .replace(/#!/g, "")
     .replace(/#[A-Za-z_][A-Za-z0-9_;:]*\s?/g, "")
@@ -45,7 +45,7 @@ function stripFormatting(s: string): string {
 }
 
 /** Split `a [Fn] b [[literal]` into literal and datafunction pieces. */
-function tokenize(s: string): { literal?: string; fn?: string }[] {
+export function tokenize(s: string): { literal?: string; fn?: string }[] {
   const out: { literal?: string; fn?: string }[] = [];
   let lit = "";
   for (let i = 0; i < s.length; i++) {
@@ -87,7 +87,7 @@ function locOfCall(fn: string, loc: TextResolvers["loc"]): string | undefined {
 }
 
 /** `GetPlayer.GetName` -> `GetName`; `Concept('x','y')` -> `Concept`; strips a `Get` prefix and arguments. */
-function chipFor(fn: string): string {
+export function chipFor(fn: string): string {
   // `|0`, `|%`: format specifiers after the chain, not part of the name.
   const chain = fn.split("|")[0];
   const last = chain.split(".").pop() ?? chain;

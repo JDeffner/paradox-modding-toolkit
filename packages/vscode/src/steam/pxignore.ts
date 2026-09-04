@@ -43,6 +43,7 @@ AGENTS.md
 
 # tooling
 node_modules/
+*-tiger.conf
 *.psd
 *.xcf
 *.kra

@@ -38,7 +38,8 @@ ${uiCss}
   #name { width: 200px; font-family: var(--px-font-mono); }
   /* A dropdown fills its field cell by default; in a toolbar it is a button. */
   #mode { width: auto; }
-  #target { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* The save target line (shared/saveTarget.ts) sits in the toolbar. */
+  #target { display: flex; min-width: 0; }
   #body { flex: 1 1 auto; display: flex; min-height: 0; }
   #form { flex: 1 1 auto; overflow-y: auto; min-width: 0; }
   #sections {
@@ -85,12 +86,9 @@ ${uiCss}
   .modrow > .px-mod-line, .modrow > .modrow-empty { grid-column: 1 / -1; padding-left: 2px; }
   .modrow-empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
 
-  /* A key the file keeps the last word on: named, never silently dropped. */
-  .kept {
-    display: flex; align-items: center; gap: 6px;
-    color: var(--px-muted-fg); font-size: var(--px-text-xs);
-  }
-  .kept > code { font-family: var(--px-font-mono); color: var(--px-fg); }
+  /* One statement of a key written as script; the game reads a repeated key as
+     several, so each gets its own box and its own remove button. */
+  .scriptrow { display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 6px; align-items: start; }
 
   /* The preview panel. */
   #side > .px-sidepanel-body { gap: 10px; padding: 10px; }
@@ -99,12 +97,14 @@ ${uiCss}
     font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
     font-weight: 600; color: var(--px-muted-fg);
   }
-  /* The framed icon: the game draws the frame over the picture, so the picture
-     is inset and the frame covers the whole tile. */
+  /* The framed icon. The game's trait tooltip draws ONE widget for it
+     (character_trait_tooltip in gui/shared/cooltip.gui, trait_icon_texture at
+     size = { 52 52 }), and a trait's picture shares one 120x120 canvas with the
+     _frame_*.dds templates (measured): so the frame sits UNDER the picture,
+     same box, same size. */
   .tip-head { display: flex; align-items: center; gap: 8px; }
-  .tip-icon { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
-  .tip-icon > img { position: absolute; inset: 8px; width: 48px; height: 48px; object-fit: contain; }
-  .tip-icon > img.frame { inset: 0; width: 64px; height: 64px; }
+  .tip-icon { position: relative; width: 52px; height: 52px; flex: 0 0 auto; }
+  .tip-icon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .tip-icon > .noicon {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 2px; border: 1px dashed var(--px-border); border-radius: var(--px-radius-sm);
@@ -120,18 +120,23 @@ ${uiCss}
   }
   .tip-rel img { width: 20px; height: 20px; object-fit: contain; }
   .tip-note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  #script {
-    margin: 0; padding: 8px 10px; overflow: auto; max-height: 260px;
-    background: var(--px-muted); border-radius: var(--px-radius-md);
-    font-family: var(--px-font-mono); font-size: var(--px-text-xs); white-space: pre;
+  .tip-fact { display: flex; flex-direction: column; gap: 1px; font-size: var(--px-text-sm); }
+  /* What the player never reads, kept in the tooltip but behind a rule so it
+     cannot be mistaken for a line the game prints. */
+  .tip-hidden {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--px-border);
   }
+  .tip-hidden-title {
+    font-size: var(--px-text-xs); text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 600; color: var(--px-muted-fg);
+  }
+  .tip-hidden .tip-fact > div:first-child { font-family: var(--px-font-mono); }
   #problem {
     margin: 12px 16px; padding: 10px 12px; border: 1px solid var(--px-border);
     border-radius: var(--px-radius-md); background: var(--px-muted);
     font-size: var(--px-text-sm);
   }
-  details > summary { cursor: pointer; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  details[open] > summary { margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -146,6 +151,8 @@ ${uiCss}
       data-tip="Open an existing trait in this form">${icon("folderOpen")}</button>
     <button id="reveal" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden
       data-tip="Open the file this trait comes from">${icon("fileText")}</button>
+    <!-- The script section's copy button lands here (shared/scriptSection.ts). -->
+    <span id="scriptCopy"></span>
     <span class="px-grow"></span>
     <span id="target"></span>
     <button id="mode" class="px-btn px-dropdown" data-variant="outline" data-size="sm" hidden
@@ -166,10 +173,7 @@ ${uiCss}
       <div class="px-sidepanel-body">
         <div id="sideHead">Preview</div>
         <div id="tip"></div>
-        <details id="scriptBox">
-          <summary>What gets written</summary>
-          <pre id="script"></pre>
-        </details>
+        <div id="scriptSlot"></div>
       </div>
     </div>
   </div>

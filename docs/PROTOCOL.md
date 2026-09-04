@@ -83,7 +83,9 @@ interface ParadoxSettings {
   locLanguage: string;         // "english", ...
   scopeInlayHints: boolean;
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
-  calendar?: CalendarSetting;  // custom era calendar for date display (inlay hints + hover); absent = off
+  calendar?: CalendarSetting;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
+                               //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
+                               //   that mod; the server reads it itself and re-reads it when the file changes
                                //   { epoch: number; after: string; before?: string;
                                //     months?: { name: string; days: number }[] }
                                //   script year >= epoch displays as (year-epoch+1) <after>,
@@ -141,6 +143,7 @@ instead.
 | `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number }` — re-parse script_docs logs |
 | `paradox/indexStats` | request | `null` → `IndexStats` (definition counts by kind/source) |
 | `paradox/lookupLoc` | request | `{ key: string }` → `LocEntryInfo[]` — localization entries for a key, mod first |
+| `paradox/locText` | request | `LocTextParams` → `LocTextResult` — the same values as the PLAYER reads them: `{ raw, text, resolved }` per key, with the game's markup stripped and its `[ … ]` datafunctions resolved. A key the loc index cannot find is absent from `values` |
 | `paradox/modOverview` | request | `ModScopedParams` → `ModOverview` — content inventory by kind |
 | `paradox/locCoverage` | request | `ModScopedParams` → `LocCoverage[]` — per-language missing/orphaned/untranslated keys |
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
@@ -154,8 +157,9 @@ instead.
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
-| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the modifier vocabulary, the mod's existing definitions of the kind, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
-| `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). `null` when the active profile names no formats source or no game folder is configured |
+| `paradox/snippets` | request | `SnippetsParams` → `SnippetsResult` — the code snippets a host can offer at a cursor: the measured skeleton of the document folder's definition kind (`form: "definition"`, header line included when the document declares none), that kind's child blocks (`form: "block"`), then the engine triggers/effects legal in the cursor's block whose script_docs entry ships a usable `usage:` example (`form: "token"`, frequency-ordered, capped at 60). A token whose example marks fields `# optional` yields a second entry right after it, `<token>.full`, labelled "<token> (all fields)", carrying every field the example shows while the first carries only the required ones. Every entry carries both a `${1:…}` `snippet` and a `plain` form. A document the server does not know answers with an empty list |
+| `paradox/definitionForm` | request | `DefinitionFormParams` → `DefinitionForm \| null` — everything a visual creator needs to draw a form for one definition kind: the schema entry's folder, the full set of loc key patterns the game reads for the kind (not the conservative `requiredLoc` subset a diagnostic demands) and the icon folder, the harvested body keys (with the game's own docs, value hints and vanilla usage counts), the option list per referenced kind (each option labelled with its `group` where the kind has families), the values the game itself writes for keys no index can answer (`sampled`), the value list per trigger a condition builder may offer rows for (`conditions`), the modifier vocabulary, every indexed definition of the kind with its source, and (with `name`) that definition's block verbatim. `null` when the active game's schema has no such kind |
+| `paradox/modifierFormats` | request | `ModifierFormatsParams` → `ModifierFormatsResult \| null` — how the game PRINTS each modifier it knows: the player-facing `label`, `decimals`, `color` (which direction is good for the player), `percent` / `alreadyPercent` / `noSign` / `hidden`, and `prefix` / `suffix` / `negativeSuffix` as parts that are either a word or a texticon (`texture` plus an optional `uv` rectangle). With `lines` (loc keys), `lines` in the result holds each resolved key's value as the same parts, so a client can print a line of the game's own UI (a cost) with the game's icons. `null` when the active profile names no formats source or no game folder is configured |
 | `paradox/definitionEdit` | request | `DefinitionEditParams` → `DefinitionEditResult` — text edits that write a definition into a script file: `setProperties` changes or removes keys of one top-level block, `upsertBlock` replaces or appends a whole `name = { … }`. Offsets into the request's text, one verdict per op |
 | `paradox/guiTree` | request | `{ uri, text }` → `GuiTree` — widget tree of a .gui document |
 | `paradox/guiLayout` | request | `{ uri, text, visibility?, loc?, previewValues? }` → `GuiLayoutResult` — measured layout rectangles for a .gui document, with stage timings, the conditional-visibility checks it met, and each textbox's text resolved through the loc index unless `loc: "raw"` |
@@ -177,16 +181,32 @@ array means unknown. That is the honest answer, not an error — the server
 annotates and ranks, it never hides or diagnoses on scope grounds. Render
 several as `a|b` and none as "unknown".
 
+`paradox/snippets` answers only from what the game states. A definition
+skeleton carries a key because at least half of the game's own definitions of
+that kind carry it, in the median position it holds there; a value is
+pre-filled only where the key's whole measured vocabulary is small enough to be
+a choice, and is the key's own name as placeholder text otherwise. A kind whose
+definitions share no key at all (a scripted effect's body is whatever the
+effect does) still answers with the wrapper, the measured name shape and the
+file header, and an empty body — that is the honest shape, not an invented one.
+The same skeletons also reach clients that never send this request: they are
+completion items at a file's top level and on a blank line inside a definition
+body, ranked after the block's structure keys.
+
 `paradox/dynastyTree` is one method with two answers, because a family tree
 needs the whole picker before it needs one family. Both come from the game's own
 files: the folders are the ones the active profile's schema maps to the
 `dynasty`, `dynasty_house` and `character` kinds, the members come from the
 character blocks (`name`, `female`, `dynasty` or `dynasty_house`, `father`,
-`mother`, `culture`, `religion`, `trait`, and the dated blocks whose KEY is the
+`mother`, `culture`, `religion`, `trait`, `dna`, the six skills of
+`DYNASTY_SKILLS` as a `skills` map, and the dated blocks whose KEY is the
 date of the `birth`, `death` or `add_spouse` inside them), and the display names
 come from the loc index, falling back to the loc key itself rather than
 inventing one. A character reaches its dynasty through its house when it names
-one. `nextCharacterId` and `nextDynastyId` are the largest numeric id seen
+one. `dna` is the portrait name without the quotes the file may put around it,
+and a skill whose value is not a number (a script value) is left out of `skills`
+rather than guessed at, so a client rewriting the block keeps that line as
+written. `nextCharacterId` and `nextDynastyId` are the largest numeric id seen
 across game and mods plus one, so a client can offer a free id without
 searching. A profile whose schema has no `dynasty` kind answers
 `supported: false` with empty lists, which a client says out loud instead of
@@ -555,8 +575,12 @@ its own order (curated keys first, then by vanilla usage count), each with the
 game's one-line documentation, a coarse `values` hint and its `freq`; `options`
 lists every indexed definition of each kind a key names, mod entries first,
 through the same resolver `paradox/eventValueOptions` answers with; `modifiers`
-is the script_docs modifier vocabulary hover already reads; `existing` is the
-`paradox/modOverview` walk for that one kind; and `current` is the block's own
+is the script_docs modifier vocabulary hover already reads; `existing` is every indexed
+definition of the kind, the mod's own first and each side name-sorted (capped
+at 500), each carrying its `source` (`mod` / `vanilla` / `parent`) so a client's
+Open menu can say where one comes from: a creator opens a game definition to
+duplicate or override it, so a list of the mod's own could not answer "start
+from the game's"; and `current` is the block's own
 bytes read off disk. A key with no widget in a client is still in `keys`, so a
 form can show it rather than hide it (AD-5).
 
@@ -570,7 +594,15 @@ with the scalar literal the indexed definitions of the kind write most often
 for it: a real value for a form to show as its input's placeholder. Unlike
 `sampled` it counts numbers and quoted text (quotes stripped) and it survives
 the cap, because a key whose value differs in every definition is exactly the
-one that needs an example.
+one that needs an example. A key whose value is a BLOCK has no scalar literal
+at all, so it carries the body the definitions write most often instead,
+collapsed onto one line, comments dropped, cut with an ellipsis past
+`DEFINITION_FORM_MAX_EXAMPLE` (120): a script field gets a placeholder like
+every other field. A key whose value set is already stated (`bool`, `enum:`)
+carries `example` too, and no `sampled`: measuring a list the schema or the doc
+already gives would only be less complete, but a dropdown showing the value the
+game itself writes still says more than one reading "not set". A key answered by
+the definition index (`refKinds`) has neither: its options are the index's.
 
 Two fields answer questions one flat list cannot. An option carries `group`
 when the schema entry for its kind names a `groupKey`: one folder can hold
@@ -585,6 +617,21 @@ the files at request time rather than stored. A key whose value differs in
 every definition has no value SET, so past `DEFINITION_FORM_MAX_SAMPLED` (80)
 the field is absent instead of listing everything; a key with `refKinds` never
 carries it, because `options` already answers it.
+
+`conditions` answers a question `options` cannot: a key whose value is a whole
+TRIGGER (`is_shown`, `can_be_picked`) names no kind, so a client that wants to
+offer condition rows instead of a text area has nothing to fill them from. It
+maps a trigger name to the values that trigger accepts, for the handful of
+triggers the active game's profile names. Each list comes from what the server
+already holds: the trigger's own script_docs entry where the game enumerates
+the values on it (CK3's `has_dlc_feature` carries `Valid Features: …` in
+triggers.log), every indexed definition of a kind (`scripted_trigger`), or the
+inner block keys of every definition of a kind (a CK3 game rule's settings ARE
+its inner blocks, so `has_game_rule` is answered from `common/game_rules`). A
+trigger nothing resolves for in this workspace (no script_docs dump, no game
+folder) is ABSENT rather than empty, so a client offers a free input instead of
+a picker with nothing in it, and the whole field is absent for a game whose
+profile names no triggers.
 
 `paradox/modifierFormats` completes the pair for a client that lets a modder
 add modifiers: `paradox/definitionForm` says which modifiers exist, this says
@@ -605,7 +652,49 @@ never has to decide what an unformatted modifier looks like. `color` says which
 direction is GOOD FOR THE PLAYER, not which sign is positive: `stress_gain_mult`
 is `bad`, so a negative value is the green one. `negativeSuffix` is why
 `noSign` is safe — the game hides the sign exactly where the suffix carries the
-direction in words ("5 days faster").
+direction in words ("5 days faster"). `lines` runs any loc key through the same
+chain: CK3 prints a tradition's cost as `PRESTIGE_COST` = `"[prestige_i]
+$VALUE|0$"`, and a client that asks for that key gets the prestige icon and the
+`$VALUE|0$` slot back as parts, with the number's decimals in the slot.
+
+`paradox/locText` is the reading half of `paradox/lookupLoc`. `lookupLoc`
+answers a loc value VERBATIM, which is what an editor needs; a panel that shows
+the value needs the sentence. CK3 words a culture parameter as `"The
+[GetTrait('rough_terrain_expert').GetName( GetNullCharacter )] Commander Trait
+is more common"` (145 of the 280 `culture_parameter_*` values that carry a real
+call take that one shape, measured over the 609 english values), and a form
+that prints it verbatim shows the modder brackets. Each answered key carries
+`raw` (byte for byte what `lookupLoc` gives), `text`, and `resolved`, which is
+false when any part of the value stayed a word for something the server could
+not finish. A key the loc index does not have is ABSENT from `values`, so a
+client shows the key itself rather than a defined blank.
+
+The rules `text` follows, in order: the game's `#tag … #!`, `§Y … §!` and
+`@icon!` markup is dropped; a nested `$key$` is substituted one level from the
+loc index (an unfilled slot such as `$VALUE|0$` stays verbatim and sets
+`resolved: false`); `[culture|E]` concept links and `Concept('x', … )` become
+that concept's own word; `[prestige_i]` icon tags are dropped with the space
+they leave; `Localize('k')` becomes its value; `SelectLocalization( cond, 'a',
+'b' )` becomes the value of `'a'`, the branch a player with the DLC reads; and
+any `Get<Something>('name')` chain ending in `GetName`, `GetTypeName` or
+`GetNameNoTooltip` becomes that definition's own name. Every other expression
+falls back to the chain's last word (`ScriptValue`) with `resolved: false`,
+never an invented value. What the value a resolved call lands on holds is
+rendered one level further, so a key that IS a call (`court_physician` =
+`"[GetCourtPositionType('court_physician_court_position').GetName()]"`) reads
+as words.
+
+Nothing in that chain is written per game. The words come from the loc index
+(mod entries shadow the game's), the KIND a `Get<Something>('name')` names
+comes from the definition index, and the loc key that kind's names take comes
+from the active profile's schema entry (`requiredLoc` first, then
+`locPatterns`, then the bare name): CK3's `trait` states `trait_$`, so
+`GetTrait('brave')` reads `trait_brave`, while `men_at_arms` states `$` and
+`GetMaA('bowmen')` reads `bowmen`. Where a name carries several kinds, the one
+whose PascalCase spelling the function name contains wins
+(`GetCourtPositionType` → `court_position`). A game whose schema states no
+pattern for a kind still resolves whatever the bare name localizes, and answers
+the name itself when nothing does.
 
 `paradox/definitionEdit` is the script sibling of `paradox/guiSourceEdit` and
 follows the same contract: the server never writes, `edits` are

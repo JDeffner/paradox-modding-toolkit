@@ -36,6 +36,8 @@ import {
   guiTreeRequest,
   definitionFormRequest,
   definitionEditRequest,
+  locTextRequest,
+  type LocTextResult,
   modifierFormatsRequest,
   type DefinitionForm,
   type DefinitionEditResult,
@@ -43,6 +45,8 @@ import {
   guiWidgetEditRequest,
   guiWidgetInfoRequest,
   scopeAtRequest,
+  snippetsRequest,
+  type SnippetsResult,
   statusNotification,
   type DependenciesResult,
   type GuiDependenciesResult,
@@ -230,7 +234,10 @@ const HOUSES_TXT = `house_smoke = {
 
 const CHARACTERS_TXT = `9000010 = {
 \tname = "Smoky"
+\tdna = "smoky_dna"
 \tdynasty_house = house_smoke
+\tmartial = 8
+\tlearning = 3
 \t1000.1.1 = {
 \t\tbirth = yes
 \t}
@@ -262,7 +269,11 @@ const LOC_YML =
   ' smoke.1.t:0 "Smoke"\n' +
   ' smoke.1.a:0 "OK"\n' +
   " smoke.1.desc:0 \"Hi [ROOT.Char.Custom2('SmokeCustom', scope:host)]\"\n" +
-  ' smoke.1.macro:0 "[PxSmokeParentMac"\n';
+  ' smoke.1.macro:0 "[PxSmokeParentMac"\n' +
+  // paradox/locText's subject: a value shaped like the games' own parameter
+  // sentences. Appended, because two tests above index LOC_YML by line.
+  ' trait_px_smoke_bold:0 "Bold"\n' +
+  " smoke.param:0 \"The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common\"\n";
 
 function toUri(p: string): string {
   return "file:///" + p.replace(/\\/g, "/").replace(/^\//, "");
@@ -646,6 +657,11 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(tree.houses?.map((h) => h.id)).toEqual(["house_smoke"]);
     const father = tree.characters?.find((c) => c.id === "9000010");
     expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
+    // The portrait name without the quotes the file wrote, and only the skills
+    // the block actually sets.
+    expect(father?.dna).toBe("smoky_dna");
+    expect(father?.skills).toEqual({ martial: 8, learning: 3 });
+    expect(tree.characters?.find((c) => c.id === "9000012")?.skills).toBeUndefined();
     // The wife belongs to another dynasty: drawn, but not counted as a member.
     expect(tree.characters?.find((c) => c.id === "9000011")?.external).toBe(true);
     expect(tree.characters?.find((c) => c.id === "9000012")?.mother).toBe("9000011");
@@ -985,11 +1001,54 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
   });
 
+  it("paradox/snippets answers with the measured event skeleton and its blocks", async () => {
+    const result = (await conn.sendRequest(snippetsRequest, {
+      uri: eventsUri,
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    const definition = result.snippets.find((s) => s.form === "definition")!;
+    expect(definition.id).toBe("event");
+    expect(definition.label).toBe("new event");
+    expect(definition.detail).toMatch(/^skeleton measured over [\d,]+ vanilla definitions$/);
+    // The document declares `namespace = smoke`, so the insert reuses it and
+    // writes no second header line.
+    expect(definition.snippet).toContain("smoke.${1:1} = {");
+    expect(definition.snippet).not.toContain("namespace =");
+    expect(definition.plain).not.toContain("${");
+    // The kind's child blocks, measured over the game's own option blocks.
+    expect(result.snippets.some((s) => s.form === "block" && s.id === "event.option")).toBe(true);
+
+    // A document the server does not have open is an empty list, not an error.
+    const none = (await conn.sendRequest(snippetsRequest, {
+      uri: toUri(path.join(modDir, "events", "never_opened.txt")),
+      position: { line: 0, character: 0 },
+    })) as SnippetsResult;
+    expect(none.snippets).toEqual([]);
+  });
+
   it("paradox/modifierFormats needs the game's own format files to answer", async () => {
     // This suite runs with gamePath null (the vanilla scan is skipped to keep
     // the smoke fast), and the print rules live in the game folder. Null is the
     // answer, not an invented label per modifier.
     expect(await conn.sendRequest(modifierFormatsRequest, {})).toBeNull();
+  });
+
+  it("paradox/locText renders a value the way the player reads it", async () => {
+    // The mod's own trait and its loc key are all the chain needs: the schema
+    // says a trait's name lives under `trait_$`, the index says
+    // `px_smoke_bold` IS a trait, and the loc index has the word.
+    const result = (await conn.sendRequest(locTextRequest, {
+      keys: ["smoke.param", "smoke.1.t", "px_absent"],
+    })) as LocTextResult;
+    expect(result.values["smoke.param"]).toEqual({
+      raw: "The [GetTrait('px_smoke_bold').GetName( GetNullCharacter )] trait is more common",
+      text: "The Bold trait is more common",
+      resolved: true,
+    });
+    // A value with nothing to resolve comes back as itself, and a key the loc
+    // index does not have is absent rather than an empty string.
+    expect(result.values["smoke.1.t"].text).toBe("Smoke");
+    expect(result.values.px_absent).toBeUndefined();
   });
 
   it("paradox/definitionEdit round-trips a property change and an appended block", async () => {

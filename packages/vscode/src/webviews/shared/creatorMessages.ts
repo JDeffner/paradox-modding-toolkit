@@ -1,6 +1,7 @@
 /**
- * The message pair every visual creator needs and none of them should spell
- * twice: a webview asking the host to turn game asset paths into pictures.
+ * The messages every visual creator needs and none of them should spell twice:
+ * turning game asset paths into pictures, copying a block of script, and
+ * saying where the next save lands.
  *
  * The app never sees a .dds. It names the paths the game itself names
  * (`gfx/interface/icons/traits/brave.dds`, read out of a schema entry's icon
@@ -24,4 +25,50 @@ export interface CreatorImagesRequest {
 export interface CreatorImagesReply {
   type: "images";
   urls: Record<string, string | null>;
+  /** The request's own cap, echoed: a thumbnail and a full-size decode of one path are two pictures. */
+  maxDim?: number;
+}
+
+/**
+ * App -> host: put this text on the clipboard. A webview cannot reach the
+ * clipboard, so the host writes it and answers with the toast.
+ */
+export interface CreatorCopyRequest {
+  type: "copy";
+  text: string;
+}
+
+/**
+ * Where a creator's next save goes, for the top bar to SHOW (saveTarget.ts).
+ * The path is mod-relative with forward slashes (`common/traits/mymod.txt`):
+ * an absolute machine path is the host's business, not the modder's.
+ */
+export interface CreatorSaveTarget {
+  /** The mod's own name, as its descriptor gives it. */
+  modLabel: string;
+  path: string;
+}
+
+/** Host -> app: the target the next save will use, resolved without asking. */
+export interface CreatorTargetReply {
+  type: "target";
+  target: CreatorSaveTarget | null;
+}
+
+/** App -> host: the modder clicked the line; open the picker. */
+export interface CreatorChangeTargetRequest {
+  type: "changeTarget";
+}
+
+/**
+ * App -> host: open the definition's file in the editor, at its block. A
+ * script area in a webview has no completion, hover or highlighting, so every
+ * one of them offers this way out (fields.ts `scriptFoot`). The host saves
+ * first when the block is not in the file yet; `which` names the target for a
+ * creator that writes more than one file.
+ */
+export interface CreatorOpenFileRequest {
+  type: "openFile";
+  name: string;
+  which?: string;
 }

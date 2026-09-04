@@ -17,6 +17,14 @@ export interface DesignerPaletteColor {
 export interface DesignerFrame {
   id: string;
   label: string;
+  /**
+   * The gui type that draws the frame, from the cultures that name it
+   * (`house_coa_frame` / `dynasty_coa_frame`). It decides how much of the frame
+   * cell the arms fill; absent when no culture names the frame.
+   */
+  family?: "house" | "dynasty";
+  /** Heritage ids of the cultures wearing it, most cultures first: the label's words. */
+  heritages?: string[];
 }
 
 /** A whole coat of arms written against the layouts file's placeholders. */

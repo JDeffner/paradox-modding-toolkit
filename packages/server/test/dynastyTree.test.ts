@@ -10,14 +10,26 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { clearDynastyModel, computeDynastyTree, hasDynastyModel } from "../src/overview/dynastyTree";
+import {
+  clearDynastyModel,
+  computeDynastyTree,
+  hasDynastyModel,
+  readCharacterBlock,
+} from "../src/overview/dynastyTree";
+import { parseScript } from "../src/parser";
 import { ServerData } from "../src/serverData";
 import type { Definition } from "@px-lsp/protocol/types";
 
 const CHARACTERS = `7627 = {
 	name = Alfred #the Great
+	dna = 7627_earl_alfred
 	dynasty_house = house_british_isles_wessex
 	martial = 11
+	diplomacy = 13
+	intrigue = 8
+	stewardship = 13
+	learning = 13
+	prowess = 11
 	religion = catholic
 	culture = anglo_saxon
 	trait = honest
@@ -156,10 +168,7 @@ describe("computeDynastyTree", () => {
     expect(cerdicing?.houseCount).toBe(1);
     // A key with no loc entry reads as the key, never as an invented name.
     expect(result.dynasties.find((d) => d.id === "2004005")?.name).toBe("dynn_Mucel");
-  });
-
-  it("counts the next free ids from every id the index knows", () => {
-    const result = computeDynastyTree(data, {});
+    // The next free ids count from every id the index knows.
     expect(result.nextCharacterId).toBe("306021");
     expect(result.nextDynastyId).toBe("2004006");
   });
@@ -177,6 +186,11 @@ describe("computeDynastyTree", () => {
     ).toEqual(["100", "102", "7627"]);
     // The picker list is not resent with a single dynasty.
     expect(result.dynasties).toEqual([]);
+    // A spouse of another dynasty comes with the tree, marked as not its own.
+    const wife = result.characters?.find((c) => c.id === "306020");
+    expect(wife?.external).toBe(true);
+    expect(wife?.female).toBe(true);
+    expect(wife?.dynasty).toBe("2004005");
   });
 
   it("reads parents, dates, traits and spouses out of the character block", () => {
@@ -199,14 +213,32 @@ describe("computeDynastyTree", () => {
     expect(eadward?.father).toBe("7627");
     expect(eadward?.mother).toBe("306020");
     expect(eadward?.birth).toBe("874.1.1");
+
+    // The dna and every skill the block sets come with them.
+    expect(alfred?.dna).toBe("7627_earl_alfred");
+    expect(alfred?.skills).toEqual({
+      martial: 11,
+      diplomacy: 13,
+      intrigue: 8,
+      stewardship: 13,
+      learning: 13,
+      prowess: 11,
+    });
+    // A block that sets none of them says so by carrying no skills at all.
+    expect(result.characters?.find((c) => c.id === "102")?.skills).toBeUndefined();
   });
 
-  it("brings in a spouse from another dynasty, marked as not this tree's", () => {
-    const result = computeDynastyTree(data, { dynasty: "1047006" });
-    const wife = result.characters?.find((c) => c.id === "306020");
-    expect(wife?.external).toBe(true);
-    expect(wife?.female).toBe(true);
-    expect(wife?.dynasty).toBe("2004005");
+  // The game writes dna both ways (350 bare, 88 quoted); the record carries the
+  // name either way, so a round trip cannot leave a quote in the value.
+  it("strips the quotes a dna statement may carry", () => {
+    const text = `109610 = {\n\tdna = "109610_shisnand_coimbra"\n\tmartial = 5\n\tprowess = ok\n}`;
+    const { root: parsed } = parseScript(text);
+    const first = parsed.statements[0];
+    const block = first.kind === "assignment" && first.value?.kind === "block" ? first.value : null;
+    const record = readCharacterBlock("109610", block!, { source: "vanilla", file: "f.txt", line: 0 });
+    expect(record.dna).toBe("109610_shisnand_coimbra");
+    // A skill that is not a number is left to the writer's verbatim path.
+    expect(record.skills).toEqual({ martial: 5 });
   });
 
   it("answers an empty list for a dynasty nothing defines", () => {

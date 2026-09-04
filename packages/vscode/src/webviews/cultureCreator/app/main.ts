@@ -21,10 +21,14 @@ import { isValidScriptDate, parseScriptDate, type CalendarSetting } from "@px-ls
 import { iconEl } from "../../shared/icons";
 import { menu, popover, toast } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
+import { scriptSection } from "../../shared/scriptSection";
+import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
 import { clampToViewport, installTips } from "../../shared/tips";
+import { traditionIcon as traditionIconEl } from "../../shared/traditionIcon";
 import {
   colorField,
+  enumField,
   filterVocabulary,
   locField,
   multiRefField,
@@ -34,9 +38,8 @@ import {
   titleCaseFromName,
   type Field,
 } from "../../shared/fields";
-import type { AppToHost, CultureInit, HostToApp, SaveMode } from "../messages";
+import type { AppToHost, CultureInit, CultureSave, HostToApp, SaveMode } from "../messages";
 import {
-  baseName,
   changedProperties,
   firstValues,
   locKeyFor,
@@ -59,6 +62,7 @@ import {
   weightRowsOf,
   type DlcTradition,
 } from "./script";
+import { flatIcon, maskedArt } from "./gameArt";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -79,12 +83,45 @@ const PAIRS = ["house_coa_mask_offset", "house_coa_mask_scale"] as const;
  * language (heritage.dds, language.dds), and head_determination has none.
  */
 const PILLAR_ICONS = "gfx/interface/icons/culture_pillars";
+/**
+ * The ethos is the one pillar family the game draws as a painted banner rather
+ * than as an icon (window_culture.gui, container_pillar_item: a 592x130
+ * `highlight_icon` in a box the culture window overrides to 400x100), and its
+ * files are 1200x260 where the other pillar icons are 120x120.
+ */
+const ETHOS = "ethos";
+/** The color the flat-icon template tints through (gameArt.ts). */
+const COLORS_TEXTURE = "gfx/interface/colors/colors_textured.dds";
+/** The rough-edge cutout the ethos banner is drawn with (gameArt.ts). */
+const MASK_TEXTURE = "gfx/interface/component_masks/mask_rough_edges.dds";
 /** Decodes per request, so a folder of hundreds never blocks the extension host. */
 const IMAGE_CHUNK = 40;
-/** The biggest a picture is ever drawn here (the traditions grid tile). */
+/**
+ * How big each picture is decoded. One number per kind, because a downscale
+ * that suits a chip ruins the two textures that are read by their geometry:
+ * colors_textured.dds is ten 96px cells across and the mask is a nine-slice.
+ */
 const IMAGE_DIM = 64;
+/** The pillar icons' own size; the culture window draws them at 44x44. */
+const PILLAR_DIM = 120;
+/** The tradition layer files are 545x285 and the game's tile is 276 wide. */
+const TRADITION_DIM = 276;
+/** The ethos banner, at twice the game's 400px box so it stays sharp. */
+const ETHOS_DIM = 800;
+/** Both texture atlases are asked for whole: their cells are the geometry. */
+const COLORS_DIM = 960;
+const MASK_DIM = 300;
+/** icon_doctrine size = { 44 44 } in window_culture.gui. */
+const PILLAR_ICON_PX = 44;
+/** container_pillar_item's box in the culture window: blockoverride 400x100. */
+const ETHOS_BOX_W = 400;
+const ETHOS_BOX_RATIO = 4;
 
 const NAME_RE = /^[a-z][a-z0-9_]*$/;
+
+/** What the mono key under a loc field says on hover. */
+const KEY_TIP =
+  "The loc key the game looks up. It is built from the culture key in the top-left field, so it changes with it and cannot be typed here.";
 
 /** One key the form binds to: what it writes now, and how to load a value in. */
 interface Bound {
@@ -113,28 +150,49 @@ let traditionPicks: string[] = [];
 
 const nameInput = $<HTMLInputElement>("name");
 
+/** Where the next save lands, shown from the moment the form loads. */
+const target = saveTargetLine(() => send({ type: "changeTarget" }));
+target.set(null);
+$("target").append(target.el);
+
+/** The block a save will write, as an ordinary section of the form. */
+const script = scriptSection({
+  note: "This is what your mod file will contain.",
+  onCopy: (text) => send({ type: "copy", text }),
+});
+$("scriptSlot").replaceWith(script.el);
+$("scriptCopy").replaceWith(script.copyButton);
+
 // ---------------------------------------------------------------------------
 // Pictures: the app names game asset paths, the host answers with URLs
 // ---------------------------------------------------------------------------
 
 /** rel -> the URL the host gave, or null when no root has the file. */
 const images = new Map<string, string | null>();
-const queued = new Set<string>();
+/** rel -> the decode size it was asked at; one request carries one size. */
+const queued = new Map<string, number>();
 const queue: string[] = [];
 let inFlight = false;
 
 function pump(): void {
   if (inFlight || queue.length === 0) return;
+  // `maxDim` is per message, so a batch only ever holds keys of one size.
+  const dim = queued.get(queue[0]) ?? IMAGE_DIM;
+  const keys: string[] = [];
+  for (let i = 0; i < queue.length && keys.length < IMAGE_CHUNK;) {
+    if ((queued.get(queue[i]) ?? IMAGE_DIM) === dim) keys.push(queue.splice(i, 1)[0]);
+    else i++;
+  }
   inFlight = true;
-  send({ type: "images", keys: queue.splice(0, IMAGE_CHUNK), maxDim: IMAGE_DIM });
+  send({ type: "images", keys, maxDim: dim });
 }
 
 /** The picture for a game-relative path, asking for it the first time. */
-function imageUrl(rel: string): string | null {
+function imageUrl(rel: string, maxDim = IMAGE_DIM): string | null {
   const known = images.get(rel);
   if (known !== undefined) return known;
   if (!queued.has(rel)) {
-    queued.add(rel);
+    queued.set(rel, maxDim);
     queue.push(rel);
     pump();
   }
@@ -142,9 +200,9 @@ function imageUrl(rel: string): string | null {
 }
 
 /** The first of several candidate paths that resolved (a pillar's own icon, then its family's). */
-function firstImage(rels: readonly string[]): string | null {
+function firstImage(rels: readonly string[], maxDim = IMAGE_DIM): string | null {
   for (const rel of rels) {
-    const url = imageUrl(rel);
+    const url = imageUrl(rel, maxDim);
     if (url) return url;
   }
   return null;
@@ -153,6 +211,28 @@ function firstImage(rels: readonly string[]): string | null {
 /** The two files a pillar's picture may be, most specific first. */
 function pillarIcons(value: string, family: string): string[] {
   return value === "" ? [] : [`${PILLAR_ICONS}/${value}.dds`, `${PILLAR_ICONS}/${family}.dds`];
+}
+
+/** A pillar's picture at the size its family is drawn at. */
+function pillarImage(value: string, family: string): string | null {
+  return firstImage(pillarIcons(value, family), family === ETHOS ? ETHOS_DIM : PILLAR_DIM);
+}
+
+/**
+ * What a pillar's own picture has to be, behind the (i) on its row. A pillar
+ * is picked here rather than drawn, but a modder who writes one needs the file
+ * that goes with it.
+ *
+ * Measured in game/gfx/interface/icons/culture_pillars: the seven ethos files
+ * are 1200 x 260 and the other eight are 120 x 120, all 32-bit with an alpha
+ * channel. The boxes they are drawn in are the culture window's
+ * (window_culture.gui: 400 x 100 for the ethos banner, 44 x 44 for an icon).
+ */
+function pillarArtInfo(family: string): string {
+  const where = `${PILLAR_ICONS}/<pillar key>.dds, else ${family}.dds. Any picture format converts to DDS.`;
+  return family === ETHOS
+    ? `1200 x 260 px, stretched to 400 x 100 under a rough-edge mask: paint to the edges.\n${where}`
+    : `120 x 120 px, drawn at 44 x 44 and tinted: a solid shape on a transparent background.\n${where}`;
 }
 
 /** Fill in every placeholder whose picture has since arrived. */
@@ -168,24 +248,16 @@ function paintImages(): void {
 
 /**
  * A tradition's icon: the game stacks one file per layer folder in index order
- * (CULTURE_TRADITION_LAYER_PATHS), so the layers are drawn on top of each other
- * in the order the host resolved them.
+ * (CULTURE_TRADITION_LAYER_PATHS), which the shared composer draws in the order
+ * the host resolved them.
  */
 function traditionIcon(name: string, size: number): HTMLElement {
-  const box = el("span", "tradicon");
-  box.style.setProperty("--tradicon", `${size}px`);
   const layers = init?.catalog.traditions[name]?.layers ?? [];
-  for (const rel of layers) {
-    const img = document.createElement("img");
-    img.alt = "";
-    img.dataset.rel = rel;
-    const url = imageUrl(rel);
-    if (url) img.src = url;
-    else img.hidden = true;
-    box.append(img);
-  }
-  box.hidden = layers.length === 0;
-  return box;
+  return traditionIconEl(
+    layers.map((rel) => ({ rel })),
+    size,
+    (rel) => imageUrl(rel, TRADITION_DIM)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -354,11 +426,22 @@ function traditionsField(
   const box = el("div", "px-chips");
   const add = ghost("Add tradition", "plus");
   const items = (): EventVocabularyItem[] => optionsOf("culture_tradition");
+  // A tradition the game does not have yet is its own creator; this only opens it.
+  const create = ghost("New tradition", "filePlus");
+  create.dataset.tip = "Design a new tradition in the Tradition Creator, then add it here.";
+  create.onclick = () => send({ type: "editTradition", name: "" });
   const paint = (): void => {
     box.replaceChildren();
     for (const value of current) {
       const chip = el("span", "px-chip");
       chip.append(traditionIcon(value, 16), el("span", "", labelOf(value)));
+      const edit = document.createElement("button");
+      edit.className = "px-btn";
+      edit.dataset.variant = "ghost";
+      edit.dataset.size = "icon-xs";
+      edit.dataset.tip = `Open ${value} in the Tradition Creator`;
+      edit.append(iconEl("pencil"));
+      edit.onclick = () => send({ type: "editTradition", name: value });
       const drop = document.createElement("button");
       drop.className = "px-btn";
       drop.dataset.variant = "ghost";
@@ -370,12 +453,12 @@ function traditionsField(
         paint();
         onChange();
       };
-      chip.append(drop);
+      chip.append(edit, drop);
       box.append(chip);
     }
     if (current.length === 0)
       box.append(el("span", "px-muted px-xs", "No tradition yet. The game allows several."));
-    box.append(add);
+    box.append(add, create);
   };
   add.onclick = () =>
     searchPopover(add, "Search traditions…", (query, body, close) => {
@@ -773,7 +856,7 @@ function block(name: string): string {
 
 function refresh(): void {
   const name = currentName();
-  $("scriptText").textContent = block(name || "culture");
+  script.set(block(name || "culture"));
   $("saveNote").textContent = missingNote();
 
   for (const row of locRows) {
@@ -809,6 +892,7 @@ function render(): void {
     const field = locField({
       label: locLabel(pattern),
       key: locKeyFor(pattern, currentName()),
+      keyTip: KEY_TIP,
       value: titleCaseFromName(currentName()),
       placeholder: titleCaseFromName(currentName()) || "Bedouin",
     });
@@ -835,10 +919,11 @@ function render(): void {
     const field = refField({
       label: label(key),
       doc: docOf(key),
+      info: pillarArtInfo(key),
       items,
       value: raw(key) ?? "",
       placeholder: pickerPlaceholder(exampleOf(key) ?? items[0]?.value),
-      thumb: (value) => firstImage(pillarIcons(value, key)),
+      thumb: (value) => pillarImage(value, key),
     });
     pillarPicks.set(key, raw(key) ?? "");
     field.onChange((value) => {
@@ -876,7 +961,7 @@ function render(): void {
   nameList.onChange(refresh);
   bind("name_list", () => nameList.get() || null);
   names.append(nameList.el);
-  names.append(simpleText("name_order_convention", raw("name_order_convention")));
+  names.append(pickOne("name_order_convention", raw("name_order_convention")));
   const ethnicities = weightRowsField(
     "Ethnicities",
     docOf("ethnicities"),
@@ -956,6 +1041,9 @@ function render(): void {
         value: raw(key.key) ?? "",
         placeholder: "{ … }",
         rows: 3,
+        // A textarea has no completion, no hover and no highlighting; the note
+        // under it says so and offers the editor, which has all three.
+        onOpenFile: openInFile,
       });
       field.onChange(refresh);
       bind(key.key, () => field.get().trim() || null);
@@ -968,6 +1056,31 @@ function render(): void {
   // The baseline every "did this change?" question is asked against.
   loaded = values();
   refresh();
+}
+
+/**
+ * A key whose whole vocabulary the game writes out: a picker, not a text box.
+ * `name_order_convention` is two values in the entire game
+ * (`dynasty_always_first` 22x, `japanese` 4x, measured in
+ * game/common/culture/cultures), and the engine reads no others, so a free-text
+ * field there only invites a typo the game fails silently on. The file's own
+ * value is always in the list (AD-5: annotate, never hide), and a workspace
+ * whose index has answered nothing yet falls back to the text field rather
+ * than to an empty picker.
+ */
+function pickOne(key: string, value: string | undefined): HTMLElement {
+  const sampled = keyOf(key)?.sampled ?? [];
+  if (sampled.length === 0) return simpleText(key, value);
+  const field = enumField({
+    label: label(key),
+    doc: docOf(key),
+    values: value && !sampled.includes(value) ? [...sampled, value] : sampled,
+    value: value ?? "",
+    ...(exampleOf(key) ? { placeholder: exampleOf(key)! } : {}),
+  });
+  field.onChange(refresh);
+  bind(key, () => field.get() || null);
+  return field.el;
 }
 
 /** A plain key: free text, with the values the game itself writes behind the chevron. */
@@ -1030,6 +1143,29 @@ function withTip(node: HTMLElement, title: string, body: string): HTMLElement {
   return node;
 }
 
+/**
+ * The ethos as the culture window draws it: the pillar's art stretched into a
+ * 400x100 box, cut out by Mask_Rough_Edges, with its name centred over it.
+ */
+function paintEthos(): void {
+  const slot = $("pvEthos");
+  slot.replaceChildren();
+  const value = pillarPicks.get(ETHOS) ?? "";
+  const box = el("div", "pvethos");
+  const url = value === "" ? null : pillarImage(value, ETHOS);
+  if (!url) {
+    box.dataset.empty = "";
+    box.textContent = value === "" ? "No ethos yet" : "No picture for this ethos";
+    slot.append(box);
+    return;
+  }
+  // The banner fills the panel, up to the box the game itself gives it.
+  const width = Math.min(ETHOS_BOX_W, slot.clientWidth || ETHOS_BOX_W);
+  box.append(maskedArt(url, imageUrl(MASK_TEXTURE, MASK_DIM), width, width / ETHOS_BOX_RATIO));
+  box.append(el("span", "ename", labelOf(value)));
+  slot.append(withTip(box, labelOf(value), init?.catalog.descs[value] ?? value));
+}
+
 function paintPreview(): void {
   const name = currentName();
   const shown = locRows[0]?.field.get().trim() || titleCaseFromName(name) || "Your culture";
@@ -1048,21 +1184,21 @@ function paintPreview(): void {
     band.style.removeProperty("--px-band-fg");
   }
 
+  paintEthos();
+
   const pillars = $("pvPillars");
   pillars.replaceChildren();
   for (const key of PILLARS) {
+    if (key === ETHOS) continue; // drawn above, as the banner the game draws
     const value = pillarPicks.get(key) ?? "";
     const row = el("div", "pvpillar");
     // The box keeps its width even when the family has no picture (measured:
-    // head_determination ships none), so the five rows stay one column.
+    // head_determination ships none), so the rows stay one column.
     const box = el("span", "picon");
-    const url = firstImage(pillarIcons(value, key));
-    if (url) {
-      const img = document.createElement("img");
-      img.alt = "";
-      img.src = url;
-      box.append(img);
-    }
+    const url = pillarImage(value, key);
+    // icon_doctrine tints the black silhouette through colors_textured; the
+    // canvas does what the game's template does (gameArt.ts).
+    if (url) box.append(flatIcon(url, imageUrl(COLORS_TEXTURE, COLORS_DIM), PILLAR_ICON_PX));
     row.append(box);
     const text = el("div", "ptext");
     text.append(el("span", "pfam", label(key)));
@@ -1136,19 +1272,25 @@ function applyInit(next: CultureInit): void {
   // Only a game culture offers the choice; loading never selects "override".
   $("mode").hidden = parsed === null || current?.source === "mod";
   paintMode();
-  $("target").textContent = next.saveMod
-    ? `${next.saveMod} · ${next.form.folder} · ${next.locLanguage}`
-    : next.form.folder;
   render();
   prefetch();
 }
 
 /** Ask for every picture the pickers will want, before a menu is ever opened. */
 function prefetch(): void {
-  for (const family of PILLARS) imageUrl(`${PILLAR_ICONS}/${family}.dds`);
-  for (const item of optionsOf("culture_pillar")) imageUrl(`${PILLAR_ICONS}/${item.value}.dds`);
+  // The two atlases the preview composites with, whole: their cells ARE the
+  // geometry, so a thumbnail-sized decode would be useless (gameArt.ts).
+  imageUrl(COLORS_TEXTURE, COLORS_DIM);
+  imageUrl(MASK_TEXTURE, MASK_DIM);
+  for (const family of PILLARS) {
+    imageUrl(`${PILLAR_ICONS}/${family}.dds`, family === ETHOS ? ETHOS_DIM : PILLAR_DIM);
+  }
+  for (const item of optionsOf("culture_pillar")) {
+    const dim = item.group === ETHOS ? ETHOS_DIM : PILLAR_DIM;
+    imageUrl(`${PILLAR_ICONS}/${item.value}.dds`, dim);
+  }
   for (const trad of Object.values(init?.catalog.traditions ?? {})) {
-    for (const rel of trad.layers) imageUrl(rel);
+    for (const rel of trad.layers) imageUrl(rel, TRADITION_DIM);
   }
 }
 
@@ -1188,7 +1330,14 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       if (init) paintPreview();
       break;
     case "loading":
-      $("target").textContent = "loading…";
+      // Where the next save goes is not known until the form has answered.
+      target.set(null);
+      break;
+    case "target":
+      target.set(msg.target);
+      break;
+    case "toast":
+      toast(msg.message, msg.variant);
       break;
     case "saved":
       toast(`Saved ${msg.name}`);
@@ -1208,7 +1357,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
 // Toolbar and shell
 // ---------------------------------------------------------------------------
 
-sidePanel($("side"), { min: 240, max: 520, width: 320 });
+// Wide enough by default for the ethos banner and the traditions grid at the
+// sizes the culture window uses (a 400x100 banner, 276-wide tradition tiles).
+sidePanel($("side"), { min: 260, max: 760, width: 460 });
 
 for (const fold of Array.from(document.querySelectorAll<HTMLButtonElement>(".fold"))) {
   fold.onclick = () => {
@@ -1261,14 +1412,19 @@ $("mode").onclick = () =>
 
 $("wiki").onclick = () => send({ type: "openExamples" });
 
-$("save").onclick = () => {
+/**
+ * Everything a save says, or null when the key is not one the engine reads.
+ * Both the Save button and a script box's "Edit in the file" go through it: the
+ * file a modder is sent to has to hold what the form says.
+ */
+function savePayload(): CultureSave | null {
   const name = currentName();
   if (!NAME_RE.test(name)) {
     toast(
       "A culture key is lowercase letters, digits and underscores, starting with a letter.",
       "destructive"
     );
-    return;
+    return null;
   }
   const now = values();
   // `setProperties` rewrites ONE statement per key, and a culture may write
@@ -1279,17 +1435,25 @@ $("save").onclick = () => {
   const loc = locRows
     .map((row) => ({ key: locKeyFor(row.pattern, name), value: row.field.get() }))
     .filter((pair) => pair.value.trim() !== "");
-  const file = init?.form.current?.file;
-  const sourceFile = file ? baseName(file) : undefined;
-  send({
+  return {
     type: "save",
     name,
     mode,
     block: block(name),
     ...(mode === "edit" && !dlcMoved ? { changed: changedProperties(loaded, now) } : {}),
     loc,
-    ...(mode === "edit" || mode === "override" ? { sourceFile } : {}),
-  });
+  };
+}
+
+$("save").onclick = () => {
+  const payload = savePayload();
+  if (payload) send(payload);
 };
+
+/** The way out of every script box: save, then open the block in the editor. */
+function openInFile(): void {
+  const payload = savePayload();
+  if (payload) send({ type: "openFile", name: payload.name, save: payload });
+}
 
 send({ type: "ready" });

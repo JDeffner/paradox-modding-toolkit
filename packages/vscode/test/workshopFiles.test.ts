@@ -1,7 +1,8 @@
 /**
  * The workshop folder as the listing's file store (steam/workshopFiles.ts):
- * the CI-repo layout round-trips, changenotes resolve from the changelog
- * folder or a big changelog file, and Markdown converts to Steam BBCode.
+ * the CI-repo layout round-trips, the description file is BBCode unless the
+ * folder still holds an older description.md, and changenotes resolve from
+ * the changelog folder or a big changelog file.
  */
 import { describe, expect, it, afterEach } from "vitest";
 import * as fs from "fs";
@@ -11,8 +12,9 @@ import {
   changelogCandidates,
   extractVersionSection,
   hasListingFiles,
-  mdToBBCode,
+  descriptionFile,
   readItemJson,
+  migrateMarkdownListing,
   moveListing,
   writePreviewOrder,
   readDependencies,
@@ -23,6 +25,7 @@ import {
   upsertItemJson,
   writeDependencies,
   writeListingFiles,
+  writeSteamDescription,
   writeVideos,
 } from "../src/steam/workshopFiles";
 
@@ -80,6 +83,7 @@ describe("listing files", () => {
     expect(back.description).toBe("[h1]Hello[/h1]");
     expect(back.translations.german).toEqual({ title: "Hallo", description: "[b]Deutsch[/b]" });
     expect(back.translations.french).toEqual({ description: "Français" });
+    expect(back.markdown).toEqual([]);
   });
 
   it("removes the files of a language whose draft went empty", () => {
@@ -256,36 +260,51 @@ describe("extractVersionSection", () => {
   });
 });
 
-describe("mdToBBCode", () => {
-  it("converts the changenote staples", () => {
-    const md = [
-      "# Big",
-      "Some *emphasis* and **bold** and ~~gone~~ and `code`.",
-      "- one",
-      "- [link](https://example.com)",
-      "1. first",
-      "---",
-      "```",
-      "raw **stays**",
-      "```",
-    ].join("\n");
-    expect(mdToBBCode(md)).toBe(
-      [
-        "[h1]Big[/h1]",
-        "Some [i]emphasis[/i] and [b]bold[/b] and [strike]gone[/strike] and code.",
-        "[list]",
-        "[*] one",
-        "[*] [url=https://example.com]link[/url]",
-        "[/list]",
-        "[olist]",
-        "[*] first",
-        "[/olist]",
-        "[hr][/hr]",
-        "[code]",
-        "raw **stays**",
-        "[/code]",
-      ].join("\n")
+describe("description file choice", () => {
+  it("writes BBCode into a folder that has neither file", () => {
+    const dir = tmp();
+    expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.bbcode"), markdown: false });
+    // The format is the folder's: an empty folder already reports BBCode.
+    expect(readListingFiles(dir).markdown).toEqual([]);
+    writeListingFiles(dir, { description: "[h1]Hi[/h1]", translations: {} });
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+  });
+
+  it("still reads a listing that holds a description.md, and migrates it to .bbcode once", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.md"), "# Hi", "utf8");
+    fs.mkdirSync(path.join(dir, "translations", "german"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "translations", "german", "description.md"), "**fett**", "utf8");
+    expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.md"), markdown: true });
+    expect(readListingFiles(dir).markdown).toEqual(["german", ""]);
+    expect(migrateMarkdownListing(dir).sort()).toEqual([".", path.join("translations", "german")]);
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "description.bbcode"), "utf8")).toContain("[h1]Hi[/h1]");
+    expect(fs.readFileSync(path.join(dir, "translations", "german", "description.bbcode"), "utf8")).toBe(
+      "[b]fett[/b]"
     );
+    const listing = readListingFiles(dir);
+    expect(listing.markdown).toEqual([]);
+    expect(migrateMarkdownListing(dir)).toEqual([]);
+  });
+
+  it("replaces a legacy .md with the BBCode a download served", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.md"), "# Old", "utf8");
+    writeSteamDescription(dir, "[h1]From Steam[/h1]");
+    expect(fs.existsSync(path.join(dir, "description.md"))).toBe(false);
+    const listing = readListingFiles(dir);
+    expect(listing.description).toBe("[h1]From Steam[/h1]");
+    expect(listing.markdown).toEqual([]);
+  });
+
+  it("prefers .md when a folder has both", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "description.bbcode"), "[h1]Old[/h1]", "utf8");
+    fs.writeFileSync(path.join(dir, "description.md"), "# New", "utf8");
+    const listing = readListingFiles(dir);
+    expect(listing.description).toBe("# New");
+    expect(listing.markdown).toEqual([""]);
   });
 });
 

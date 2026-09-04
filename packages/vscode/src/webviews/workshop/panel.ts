@@ -22,8 +22,11 @@ import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
+  DESCRIPTION_BBCODE,
+  descriptionFile,
   hasListingFiles,
   langDir,
+  migrateMarkdownListing,
   PREVIEWS_DIR,
   readDependencies,
   readItemJson,
@@ -32,6 +35,7 @@ import {
   writeDependencies,
   writeListingFiles,
   writePreviewOrder,
+  writeSteamDescription,
   writeVideos,
 } from "../../steam/workshopFiles";
 import { preflight } from "../../steam/preflight";
@@ -43,6 +47,7 @@ import { changelogCandidates, DEFAULT_CHANGELOG } from "../../steam/workshopFile
 import { ensurePxIgnore, PXIGNORE_FILE, stageContent } from "../../steam/pxignore";
 import {
   changelogNoteFor,
+  descriptionBBCode,
   findPreview,
   friendlyError,
   lastCommitSubject,
@@ -57,6 +62,7 @@ import {
   workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
+import { bbcodeToMarkdown } from "../../steam/bbcodeMarkdown";
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -83,6 +89,9 @@ export interface WorkshopPanelOptions {
   log: (msg: string) => void;
 }
 
+/** How long the listing files may keep changing before the panel re-reads them. */
+const LISTING_RELOAD_MS = 300;
+
 export class WorkshopPanel {
   private static instance: WorkshopPanel | undefined;
   private static readonly viewType = "px.workshop";
@@ -98,6 +107,9 @@ export class WorkshopPanel {
   private resourceRoots: vscode.Uri[];
   /** Titles of required items looked up on Steam, so a re-render never re-asks. */
   private readonly itemTitles = new Map<string, string | null>();
+  /** Watches the active mod's listing text and changelog; the panel only previews both. */
+  private listingWatchers: vscode.FileSystemWatcher[] = [];
+  private listingReload: ReturnType<typeof setTimeout> | undefined;
 
   private constructor(context: vscode.ExtensionContext, options: WorkshopPanelOptions) {
     this.context = context;
@@ -158,13 +170,62 @@ export class WorkshopPanel {
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.watchListing();
+  }
+
+  /**
+   * The description, translation and changelog files are edited in the editor,
+   * not here, so the panel follows them: a change to one of them re-posts
+   * info, which is the path Reload takes. Re-created whenever the active mod
+   * or the changelog setting changes, and once more when the folder is
+   * materialised (a watcher on a folder that did not exist yet reports
+   * nothing).
+   */
+  private watchListing(): void {
+    for (const w of this.listingWatchers.splice(0)) w.dispose();
+    const root = this.active;
+    if (this.disposed || !root) return;
+    const dir = workshopDirFor(root, this.options.meta);
+    const changed = (): void => {
+      clearTimeout(this.listingReload);
+      this.listingReload = setTimeout(() => {
+        if (!this.uploading) void this.postInfo();
+      }, LISTING_RELOAD_MS);
+    };
+    // The changelog may sit outside the workshop folder (px.workshop.changelog
+    // takes any path), so it is watched from ITS parent, as both a file and a
+    // folder of entries.
+    const changelog = this.changelogPath(root);
+    const base = path.basename(changelog);
+    for (const pattern of [
+      new vscode.RelativePattern(vscode.Uri.file(dir), "{description.*,translations/*/*}"),
+      new vscode.RelativePattern(vscode.Uri.file(path.dirname(changelog)), `{${base},${base}/*}`),
+    ]) {
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+      watcher.onDidChange(changed);
+      watcher.onDidCreate(changed);
+      watcher.onDidDelete(changed);
+      this.listingWatchers.push(watcher);
+    }
+  }
+
+  /** Where the changenote lookup points: px.workshop.changelog, resolved. */
+  private changelogPath(root: string): string {
+    return path.resolve(
+      workshopDirFor(root, this.options.meta),
+      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
+        DEFAULT_CHANGELOG
+    );
   }
 
   static show(context: vscode.ExtensionContext, options: WorkshopPanelOptions): void {
     const existing = WorkshopPanel.instance;
     if (existing) {
       existing.options = options;
-      if (options.active) existing.active = options.active;
+      if (options.active && options.active !== existing.active) {
+        existing.active = options.active;
+        existing.watchListing();
+      }
       existing.panel.reveal();
       void existing.postInfo();
       return;
@@ -176,6 +237,8 @@ export class WorkshopPanel {
     if (this.disposed) return;
     this.disposed = true;
     WorkshopPanel.instance = undefined;
+    clearTimeout(this.listingReload);
+    for (const w of this.listingWatchers.splice(0)) w.dispose();
     for (const d of this.disposables.splice(0)) d.dispose();
     this.panel.dispose();
   }
@@ -254,11 +317,18 @@ export class WorkshopPanel {
     void vscode.window.showErrorMessage(`Workshop: ${friendly}`);
   }
 
-  /** The upload result as a toast with the item page one click away, in the Steam client first. */
-  private notifyUploaded(itemId: string, submits: number): void {
+  /**
+   * The upload result as a toast with the item page one click away, in the
+   * Steam client first. It names the mod and the parts that went, since the
+   * panel that said what would go may be behind the editor by now. One line:
+   * a VS Code notification renders no line breaks.
+   */
+  private notifyUploaded(itemId: string, name: string, createdNow: boolean, parts: string[]): void {
     void vscode.window
       .showInformationMessage(
-        `Upload done: item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
+        `Upload complete: ${name} ${createdNow ? "uploaded" : "updated"}. ` +
+          (parts.length ? `Sent: ${parts.join(", ")}. ` : "") +
+          "Subscribers get it within minutes.",
         "Open in Steam",
         "Open in Browser"
       )
@@ -273,6 +343,14 @@ export class WorkshopPanel {
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
     const workshopDir = workshopDirFor(root, meta);
+    // A listing kept as Markdown is moved to BBCode the first time it is read:
+    // the panel previews BBCode only, and a .md preview never looked like Steam.
+    const migrated = hasListingFiles(workshopDir) ? migrateMarkdownListing(workshopDir) : [];
+    if (migrated.length) {
+      this.notify(
+        `Converted description.md to description.bbcode in ${migrated.length === 1 && migrated[0] === "." ? "the listing folder" : migrated.join(", ")}: the listing keeps the format Steam takes.`
+      );
+    }
     const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
@@ -281,11 +359,8 @@ export class WorkshopPanel {
     } catch {
       /* unreadable preview = none */
     }
-    const changelogPath = path.resolve(
-      workshopDir,
-      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
-        DEFAULT_CHANGELOG
-    );
+    const changelogPath = this.changelogPath(root);
+    const changelogRel = path.relative(workshopDir, changelogPath);
     return {
       root,
       gameName: meta.name,
@@ -296,15 +371,19 @@ export class WorkshopPanel {
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
+      markdown: info?.markdown ?? [],
       previewUri: previewPath ? this.fileUri(previewPath) : null,
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
-      changelogPath,
+      changelogDisplay:
+        changelogRel === "" || changelogRel.startsWith("..")
+          ? changelogPath
+          : changelogRel.replace(/\\/g, "/"),
       workshopDirCustom:
         (vscode.workspace.getConfiguration("px").get<string>("workshop.dir") ?? "").trim() !== "",
-      changelogPresent: fs.existsSync(changelogPath),
+      changelogKind: changelogKindOf(changelogPath),
       changelogCandidates: changelogCandidates(root, workshopDir, changelogPath),
       version: info?.version ?? null,
       supportedVersion: info?.supportedVersion ?? null,
@@ -316,7 +395,8 @@ export class WorkshopPanel {
       checks: info
         ? preflight({
             name: info.name,
-            description: info.description ?? "",
+            // Steam's 8000-byte cap is on the BBCode, not on the Markdown source.
+            description: descriptionBBCode(info, "", info.description ?? ""),
             tags: info.tags,
             previewPath,
             previewBytes: previewPath ? (fs.statSync(previewPath).size ?? null) : null,
@@ -400,6 +480,7 @@ export class WorkshopPanel {
         // The app only offers paths the host listed, but the message is still text from a webview.
         if (!this.options.mods.some((m) => m.path === message.path)) return;
         this.active = message.path;
+        this.watchListing();
         await this.postInfo();
         return;
       case "saveLocal": {
@@ -419,7 +500,11 @@ export class WorkshopPanel {
         return;
       case "openPage": {
         const id = root ? readPublishInfo(root, meta)?.publishedId : null;
-        if (id) void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(id)));
+        if (!id) return;
+        // The client's own page beats the browser's when Steam is installed:
+        // it is where subscribing, rating and the change notes already live.
+        const url = findSteamLibraries().length ? workshopSteamUrl(id) : workshopUrl(id);
+        void vscode.env.openExternal(vscode.Uri.parse(url));
         return;
       }
       case "createDescriptor":
@@ -468,6 +553,15 @@ export class WorkshopPanel {
       case "createChangelog":
         await this.createChangelog();
         return;
+      case "openChangelogEntry":
+        await this.openChangelogEntry();
+        return;
+      case "openVideo":
+        // The app parses ids out of links; this is still text from a webview.
+        if (/^[\w-]{6,20}$/.test(message.id)) {
+          void vscode.env.openExternal(vscode.Uri.parse(`https://www.youtube.com/watch?v=${message.id}`));
+        }
+        return;
       case "setDependencies": {
         if (!root) return;
         writeDependencies(workshopDirFor(root, meta), {
@@ -513,6 +607,9 @@ export class WorkshopPanel {
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
         return;
       }
+      case "bbcodeHelp":
+        await vscode.commands.executeCommand("px.openBBCodeHelp");
+        return;
     }
   }
 
@@ -616,7 +713,29 @@ export class WorkshopPanel {
     } catch (e) {
       this.notifyError(`Setting px.workshop.changelog failed - ${String(e)}`, e);
     }
+    this.watchListing();
     await this.postInfo();
+  }
+
+  /**
+   * Open the changelog entry the changenote comes from. It resolves the same
+   * way the card's preview did (setting + mod version) and creates nothing:
+   * the button only shows while an entry exists.
+   */
+  private async openChangelogEntry(): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const note = changelogNoteFor(root, meta, readPublishInfo(root, meta)?.version ?? null);
+    if (!note) return;
+    // `source` is the entry relative to the workshop folder, or absolute when
+    // the changelog lives outside it; resolve covers both.
+    const file = path.resolve(workshopDirFor(root, meta), note.source);
+    if (!fs.existsSync(file)) return;
+    await vscode.window.showTextDocument(vscode.Uri.file(file), {
+      viewColumn: vscode.ViewColumn.Beside,
+      preview: false,
+    });
   }
 
   /**
@@ -633,12 +752,7 @@ export class WorkshopPanel {
       this.notify("The mod has no version yet; set one before creating a changelog entry.", "warn");
       return;
     }
-    const workshopDir = workshopDirFor(root, meta);
-    const dir = path.resolve(
-      workshopDir,
-      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
-        DEFAULT_CHANGELOG
-    );
+    const dir = this.changelogPath(root);
     if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) {
       await vscode.window.showTextDocument(vscode.Uri.file(dir), { preview: false });
       return;
@@ -677,7 +791,14 @@ export class WorkshopPanel {
     return choice === "Create Anyway";
   }
 
-  /** Open (creating if needed) a listing file of the workshop folder. */
+  /**
+   * Open (creating if needed) a listing file of the workshop folder. The
+   * panel only previews this text, so the file has to be reachable even
+   * before the folder exists: it is then written from whatever store is
+   * canonical right now (readPublishInfo = the folder if it exists, else the
+   * pre-0.4.0 workshop.json drafts), item.json included, so nothing drafted
+   * is left behind in the old store.
+   */
   private async openListingFile(lang: string | null): Promise<void> {
     const { meta } = this.options;
     const root = this.active;
@@ -687,23 +808,44 @@ export class WorkshopPanel {
     if (lang !== null && !STEAM_LANGUAGES.some((l) => l.api === lang)) return;
     const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir)) {
-      this.notify(
-        `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
-        "warn"
-      );
-      return;
+      if (!(await this.confirmWorkshopDirPlacement(dir))) return;
+      const drafts = readPublishInfo(root, meta, dir);
+      try {
+        writeListingFiles(dir, {
+          description: drafts?.description ?? "",
+          translations: drafts?.translations ?? {},
+        });
+        upsertItemJson(dir, {
+          ...(drafts?.name ? { title: drafts.name } : {}),
+          ...(drafts?.publishedId ? { publishedfileid: drafts.publishedId } : {}),
+          ...(drafts?.tags.length ? { tags: drafts.tags } : {}),
+        });
+      } catch (e) {
+        this.notifyError(`Creating the workshop folder failed - ${String(e)}`, e);
+        return;
+      }
+      this.notify(`Created the listing folder at ${dir}.`);
+      this.watchListing();
+      await this.postInfo();
     }
-    const file = lang
-      ? path.join(langDir(dir, lang), "description.bbcode")
-      : path.join(dir, "description.bbcode");
-    if (!fs.existsSync(file)) {
+    const chosen = descriptionFile(lang ? langDir(dir, lang) : dir);
+    if (!fs.existsSync(chosen.file)) {
       // Seed a missing file with the draft the store holds, so nothing is lost.
       const info = readPublishInfo(root, meta, dir);
-      const seed = (lang ? info?.translations[lang]?.description : info?.description) ?? "";
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, seed, "utf8");
+      let seed = (lang ? info?.translations[lang]?.description : info?.description) ?? "";
+      // That draft can still be the BBCode workshop.json kept before 0.4.0.
+      if (chosen.markdown && seed !== "" && !info?.markdown.includes(lang ?? "")) {
+        seed = bbcodeToMarkdown(seed);
+      }
+      fs.mkdirSync(path.dirname(chosen.file), { recursive: true });
+      fs.writeFileSync(chosen.file, seed, "utf8");
     }
-    await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
+    // Beside, not in this column: the panel stays visible, so its watcher-fed
+    // preview updates as the file is saved.
+    await vscode.window.showTextDocument(vscode.Uri.file(chosen.file), {
+      viewColumn: vscode.ViewColumn.Beside,
+      preview: false,
+    });
   }
 
   /** Write one descriptor/metadata scalar; empty input leaves the file alone. */
@@ -867,9 +1009,18 @@ export class WorkshopPanel {
         let description = current?.description ?? "";
         if (parts.description) {
           description = item.description;
-          wrote.push("description.bbcode");
+          wrote.push(DESCRIPTION_BBCODE);
         }
         writeListingFiles(dir, { description, translations });
+        // What Steam served is BBCode, so it lands as .bbcode whatever the
+        // folder held before; a legacy description.md would shadow it on read.
+        if (parts.description) writeSteamDescription(dir, description);
+        if (parts.translations) {
+          for (const [lang, t] of Object.entries(translations)) {
+            if ((t.description ?? "").trim() !== "")
+              writeSteamDescription(langDir(dir, lang), t.description as string);
+          }
+        }
       }
 
       if (parts.previews || parts.thumbnail) step("Images", "downloading images…");
@@ -988,7 +1139,7 @@ export class WorkshopPanel {
       // a just-created item has nothing on Steam yet.
       const wsDir = workshopDirFor(root, meta);
       const previews = message.previews ? readPreviews(wsDir) : null;
-      const deps = message.details ? readDependencies(wsDir) : null;
+      const deps = message.requirements ? readDependencies(wsDir) : null;
       if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
 
@@ -1024,7 +1175,7 @@ export class WorkshopPanel {
             tool: "px-toolkit",
           });
           main.title = info.name ?? undefined;
-          main.description = info.description ?? "";
+          main.description = descriptionBBCode(info, "", info.description ?? "");
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;
@@ -1048,9 +1199,7 @@ export class WorkshopPanel {
         submits.push(main);
       }
       submits.push(
-        ...translationSubmits(info.translations).filter(
-          (s) => s.language && message.languages.includes(s.language)
-        )
+        ...translationSubmits(info).filter((s) => s.language && message.languages.includes(s.language))
       );
       if (!submits.length) {
         this.notify("Nothing to upload.", "warn");
@@ -1114,7 +1263,15 @@ export class WorkshopPanel {
             if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
           });
       }
-      this.notifyUploaded(itemId, submits.length);
+      const sent: string[] = [];
+      if (message.content) sent.push("mod files");
+      if (message.details) sent.push("details");
+      if (message.previews) sent.push("previews");
+      if (deps) sent.push("requirements");
+      if (message.languages.length)
+        sent.push(`${message.languages.length} translation${message.languages.length === 1 ? "" : "s"}`);
+      if (message.changeNote.trim()) sent.push("changenote");
+      this.notifyUploaded(itemId, info.name ?? path.basename(root), createdNow, sent);
       await this.postInfo();
     } catch (e) {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);
@@ -1123,6 +1280,15 @@ export class WorkshopPanel {
       this.uploading = false;
       this.endProgress("upload");
     }
+  }
+}
+
+/** What stands at the changelog path: a folder of entries, one file, or nothing. */
+function changelogKindOf(target: string): WorkshopModInfo["changelogKind"] {
+  try {
+    return fs.statSync(target).isDirectory() ? "folder" : "file";
+  } catch {
+    return null;
   }
 }
 

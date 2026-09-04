@@ -4,20 +4,25 @@
  * The app draws a form and produces a block of script; it never reads a file,
  * never talks to the language server and never decides where anything goes.
  * Everything it knows about the game arrives in `init` (the form the server
- * answered, the mod it saves into, the loc language, the icon folder's file
- * names), and the pictures come back as webview URLs on request, because a
- * webview cannot read the disk.
+ * answered, the loc language, the icon folder's file names) or in `target`
+ * (where the next save lands), and the pictures come back as webview URLs on
+ * request, because a webview cannot read the disk.
  */
 import type { DefinitionForm, ModifierFormat } from "@px-lsp/protocol/protocol";
-import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
+import type {
+  CreatorChangeTargetRequest,
+  CreatorCopyRequest,
+  CreatorImagesReply,
+  CreatorImagesRequest,
+  CreatorOpenFileRequest,
+  CreatorTargetReply,
+} from "../shared/creatorMessages";
 
 /** How the save writes: the app decides, the host obeys. */
 export type SaveMode = "create" | "edit" | "duplicate" | "override";
 
 export interface TraitCreatorInit {
   form: DefinitionForm;
-  /** The mod a save goes into, for the app to SHOW. The host picks the file. */
-  modLabel: string | null;
   /** The language the loc values are written for (`english`). */
   locLanguage: string;
   /** The prefix the New Content flow remembers; the default name starts with it. */
@@ -34,8 +39,15 @@ export type HostToApp =
   | { type: "form"; form: DefinitionForm }
   /** Thumbnails for the icon keys that were asked for; null = undecodable. */
   | { type: "icons"; urls: Record<string, string | null> }
-  /** A converted custom image is now the trait's icon under this file name. */
-  | { type: "iconWritten"; key: string; url: string | null }
+  /** Where the next save lands, sent as the form loads and after every change. */
+  | CreatorTargetReply
+  /**
+   * A picture of the modder's own was written. `inPlace` is false when they
+   * sent it somewhere other than the icon folder: the game cannot find it by
+   * the trait's name there, so it is neither offered in the grid nor treated
+   * as the trait's icon.
+   */
+  | { type: "iconWritten"; key: string; url: string | null; inPlace: boolean }
   /** A save finished. `ok` false leaves the form exactly as it was. */
   | { type: "saved"; ok: boolean; name: string }
   /**
@@ -57,9 +69,21 @@ export type AppToHost =
   /** Decode these icon file names to PNG and answer with webview URLs. */
   | { type: "icons"; keys: string[] }
   | { type: "save"; save: TraitSave }
-  | { type: "openFile"; file: string; line: number }
+  /** The toolbar's "open the file this came from", at the block's own line. */
+  | { type: "revealSource"; file: string; line: number }
+  /**
+   * A script box's "Edit in the file": save the definition, then open it in
+   * the editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: TraitSave })
   /** Deep link into the Examples Wiki for a trigger, effect or modifier name. */
   | { type: "openExamples"; name: string }
+  /** The script section was clicked, or its copy button. */
+  | CreatorCopyRequest
+  /** The target line was clicked: ask where the save should go. */
+  | CreatorChangeTargetRequest
   /** Pick an image and convert it into the mod's icon folder under `name`. */
   | { type: "convertIcon"; name: string }
   /** Decode these game-relative texture paths (a modifier line's texticon). */

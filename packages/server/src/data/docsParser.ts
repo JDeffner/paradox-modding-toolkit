@@ -41,6 +41,8 @@ const SCOPE_LINE = /^(Supported [Ss]copes|Input [Ss]copes|Output [Ss]copes):\s*(
 const META_LINE =
   /^(Supported [Tt]argets|Targets?|Traits|Categories|Use [Aa]reas|Requires [Dd]ata|Wild[ _]?[Cc]ard|Global [Ll]ink):\s*(.*)$/;
 
+const braceDelta = (s: string): number => (s.match(/\{/g) ?? []).length - (s.match(/\}/g) ?? []).length;
+
 export function parseLog(content: string, kind: TokenKind): TokenData[] {
   const tokens: TokenData[] = [];
   const seen = new Set<string>();
@@ -50,6 +52,9 @@ export function parseLog(content: string, kind: TokenKind): TokenData[] {
   // True once a `usage:` header was seen for the current entry: subsequent
   // non-metadata lines are captured (with indentation) as the usage example.
   let inUsage = false;
+  // >0 while an inline (header-less) example is still open. Measured on the
+  // 1.19 dumps: 378 effects.log examples run over several lines.
+  let openBraces = 0;
   const flush = () => {
     if (current && current.name && !seen.has(current.name)) {
       current.doc = current.doc.trim();
@@ -61,6 +66,7 @@ export function parseLog(content: string, kind: TokenKind): TokenData[] {
     }
     current = null;
     inUsage = false;
+    openBraces = 0;
   };
 
   for (const rawLine of lines) {
@@ -71,8 +77,8 @@ export function parseLog(content: string, kind: TokenKind): TokenData[] {
     }
     const trimmed = line.trim();
     if (trimmed === "") {
-      // Blank lines inside a `usage:` block are structural; keep them.
-      if (current && inUsage && current.usage) current.usage += "\n";
+      // Blank lines inside a captured example are structural; keep them.
+      if (current && (inUsage || openBraces > 0) && current.usage) current.usage += "\n";
       continue;
     }
 
@@ -108,6 +114,18 @@ export function parseLog(content: string, kind: TokenKind): TokenData[] {
       continue;
     }
 
+    // An inline example that opened a block keeps capturing until the braces
+    // balance. A metadata line always ends the entry's body, so it wins over an
+    // example that never closes (the extractor's balance guard drops those).
+    if (openBraces > 0) {
+      if (applyMetaLine(current, trimmed)) {
+        openBraces = 0;
+        continue;
+      }
+      current.usage += "\n" + line;
+      openBraces += braceDelta(line);
+      continue;
+    }
     // A metadata line ends any open usage capture and is recorded structurally.
     if (applyMetaLine(current, trimmed)) {
       inUsage = false;
@@ -126,6 +144,7 @@ export function parseLog(content: string, kind: TokenKind): TokenData[] {
     // the usage example; anything after it stays prose.
     if (current.usage === undefined && SYNTAX_LINE.test(trimmed)) {
       current.usage = trimmed;
+      openBraces = Math.max(0, braceDelta(trimmed));
       continue;
     }
     // Otherwise: continuation of the description prose.
@@ -171,8 +190,6 @@ const MASKED_NAME = /^([A-Za-z0-9_.$]+):\s*$/;
 const MASKED_FIELD = /^(Mask|Name|Description):\s*(.*)$/;
 // `--- Static modifier types ---` and friends: section banners, not entries.
 const SECTION_BANNER = /^-{3,}/;
-
-const braceDelta = (s: string): number => (s.match(/\{/g) ?? []).length - (s.match(/\}/g) ?? []).length;
 
 /**
  * Markdown dump dialect (effects.log, triggers.log, event_targets.log of newer

@@ -21,8 +21,25 @@ export function isPlainScriptFileName(name: string): boolean {
  * modder's files keep one naming scheme across both commands.
  */
 export function defaultDefinitionFileName(prefix: string, kind: string): string {
-  const plural = /[^aeiou]y$/.test(kind) ? `${kind.slice(0, -1)}ies` : `${kind}s`;
+  const plural = kind.endsWith("s")
+    ? kind // `coat_of_arms` is already the folder's own plural
+    : /[^aeiou]y$/.test(kind)
+      ? `${kind.slice(0, -1)}ies`
+      : `${kind}s`;
   return `${prefix}_${plural}.txt`;
+}
+
+/**
+ * The file a creator saves into when nobody picks another, so the top bar can
+ * name the target from the moment the form loads instead of asking at save
+ * time: the file an edited definition came from, else the default name.
+ *
+ * `sourceFile` is a bare file name of the mod's own folder; anything else (a
+ * vanilla file, a path) is ignored, because a save may not write there.
+ */
+export function defaultTargetFileName(opts: { sourceFile?: string; prefix: string; kind: string }): string {
+  const source = opts.sourceFile?.trim();
+  return source && isPlainScriptFileName(source) ? source : defaultDefinitionFileName(opts.prefix, opts.kind);
 }
 
 /**

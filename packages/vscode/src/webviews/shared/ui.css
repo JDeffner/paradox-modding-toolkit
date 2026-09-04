@@ -354,11 +354,25 @@ body.vscode-light .px-textarea {
   font-size: var(--px-text-sm);
   border-radius: var(--px-radius-md);
 }
-.px-input.px-scrub:not(:focus) {
+/* The drag handle of a number (scrub.ts): its label where the field has one,
+   the input itself where it has none. A label that drags says so with the
+   cursor and must not select its own text under the pointer. */
+.px-scrub {
   cursor: ew-resize;
+}
+.px-input.px-scrub:focus {
+  cursor: text;
+}
+.px-label.px-scrub,
+span.px-scrub {
+  user-select: none;
 }
 .px-input[data-scrubbing] {
   border-color: var(--px-ring);
+}
+.px-label[data-scrubbing],
+span.px-scrub[data-scrubbing] {
+  color: var(--px-fg);
 }
 .px-input[type="number"] {
   font-variant-numeric: tabular-nums;
@@ -390,6 +404,14 @@ body.vscode-light .px-textarea {
   font-size: var(--px-text-sm);
   font-weight: 500;
   color: var(--px-muted-fg);
+}
+/* A label carrying the game's own doc explains itself on hover; a label that
+   drags its number (scrub.ts) says that instead. */
+.px-label[data-tip] {
+  cursor: help;
+}
+.px-label.px-scrub {
+  cursor: ew-resize;
 }
 /* Label column, control column. The label column is FIXED so every row in a
    form lines up, and it WRAPS: a definition key is as long as the game made it
@@ -816,6 +838,9 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* overlay.ts caps the height to the room beside the anchor; content that
+     still does not fit scrolls inside the box rather than past the screen. */
+  overflow: hidden auto;
   min-width: 200px;
   max-width: min(480px, calc(100vw - 16px));
   padding: 10px;
@@ -835,6 +860,13 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   padding: 0;
   min-width: 0;
   max-width: calc(100vw - 16px);
+}
+/* A picker over wide pictures asks for more than the cap (fields.ts). */
+.px-popover:has(> .px-picker[data-wide]) {
+  max-width: calc(100vw - 16px);
+}
+.px-picker[data-wide] {
+  max-width: 100%;
 }
 .px-popover-title {
   font-weight: 500;
@@ -877,7 +909,10 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   box-shadow: var(--px-shadow-md);
 }
 .px-menu-list {
-  max-height: 280px;
+  /* Capped by the room the popover has under (or over) its anchor: overlay.ts
+     sets --px-popover-max, so a list near a screen edge scrolls instead of
+     running off it. The filter box above it takes about 40px. */
+  max-height: min(280px, calc(var(--px-popover-max, 280px) - 44px));
   overflow: hidden auto;
   display: flex;
   flex-direction: column;
@@ -1448,8 +1483,15 @@ button.px-swatch:focus-visible {
 
 /* The picker popovers fields.ts opens: a search box over a scrolling body. */
 .px-picker-results {
-  max-height: 300px;
+  max-height: min(300px, calc(var(--px-popover-max, 300px) - 64px));
   overflow-y: auto;
+  margin-top: 6px;
+}
+/* The one action a picker offers above its results: "Custom picture…" sits
+   at the top, where it is reached without scrolling past 400 tiles. */
+.px-picker-action {
+  width: 100%;
+  justify-content: flex-start;
   margin-top: 6px;
 }
 
@@ -1469,6 +1511,75 @@ button.px-swatch:focus-visible {
   flex: 0 0 auto;
   object-fit: contain;
   image-rendering: auto;
+}
+/* A picker over WIDE pictures (a legacy track's 4216 x 368 illustration): one
+   picture per row at a width it can be told apart at, its key under it. */
+.px-icongrid[data-wide] {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+.px-icongrid[data-wide] > .px-btn {
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px;
+}
+.px-icongrid[data-wide] .px-icontile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4216 / 368;
+  object-fit: fill;
+}
+.px-icongrid[data-wide] .px-icontile-key {
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The (i) beside a field's label: a hover explains what the game expects of
+   the input (a picture's size, format and path), longer than a label tip. */
+.px-field-info {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: var(--px-muted-fg);
+  cursor: help;
+}
+.px-field-info > .px-icon {
+  width: 12px;
+  height: 12px;
+}
+/* The line under a script area: script typed here gets no completion, so
+   the area says so and offers the file. */
+.px-script-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+}
+
+/* A culture tradition's composed picture (traditionIcon.ts): the engine stacks
+   one file per layer folder, so the layers are absolutely positioned in DOM
+   order. `--px-tradicon` sizes a square box; a caller with a shape of its own
+   (the game's 220x120 tile) sizes the box in its own page styles instead. */
+.px-tradicon {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: var(--px-tradicon, 48px);
+  height: var(--px-tradicon, 48px);
+}
+.px-tradicon > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* How the GAME prints a modifier, and the panel that shows it (modifierLines.ts).
@@ -1563,6 +1674,99 @@ button.px-swatch:focus-visible {
 }
 *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* The generated script, as a section of the form rather than a fold
+   (scriptSection.ts). The whole block is one copy target, so it says so on
+   hover and lifts the way a row does. */
+.px-script {
+  display: flex;
+  flex-direction: column;
+  cursor: copy;
+}
+.px-script > .px-panel-title {
+  padding: 0 2px;
+  border-bottom: 1px solid var(--px-border);
+}
+.px-script-hint {
+  font-size: var(--px-text-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0;
+  transition: opacity var(--px-ease);
+}
+.px-script:hover .px-script-hint {
+  opacity: 1;
+}
+.px-script > pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--px-muted);
+  border-radius: var(--px-radius-md);
+  font-family: var(--px-font-mono);
+  font-size: var(--px-text-xs);
+  white-space: pre;
+  color: var(--px-fg);
+}
+.px-script:hover > pre {
+  background: color-mix(in oklch, var(--px-muted), var(--px-fg) 4%);
+}
+.px-script-note {
+  padding: 4px 2px 0;
+  color: var(--px-muted-fg);
+  font-size: var(--px-text-xs);
+}
+
+/* Where the next save lands, in a creator's top bar (saveTarget.ts): a quiet
+   line until it is hovered, because it is a statement first and a button
+   second. */
+.px-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 340px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: none;
+  color: var(--px-muted-fg);
+  font: inherit;
+  font-size: var(--px-text-xs);
+  cursor: pointer;
+  text-align: left;
+}
+.px-target:hover {
+  background: var(--px-muted);
+  color: var(--px-fg);
+}
+/* ONE line, always. The mod name keeps its start and the path keeps its end
+   (the file name is the part that matters), each losing its middle to an
+   ellipsis before the chip grows a second line. The path's ellipsis sits at
+   its start through `direction: rtl`: the text is LTR, so its characters keep
+   their order and only the overflow moves to the left. */
+.px-target > .px-target-mod {
+  flex: 0 1 auto;
+  min-width: 4ch;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.px-target > .px-target-sep {
+  flex: 0 0 auto;
+}
+.px-target > .px-target-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--px-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 /* The hidden attribute wins over every component's own display rule, so

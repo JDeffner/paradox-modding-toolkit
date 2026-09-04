@@ -8,6 +8,52 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Block templates: a `usage:` example whose `#` comments only mark fields
+  optional now produces TWO templates instead of none. `snippet`/`plain` carry
+  the required fields, the new `BlockTemplate.full` carries every field, and
+  `paradox/snippets` emits it as a second item, `<token>.full` / "<token> (all
+  fields)", under the same cap slot as the first. Any other `#` comment still
+  rejects the example, and a comment that marks no field (a line of its own, or
+  the line that only opens a nested block) rejects it too: a wrong template
+  teaches a shape the engine refuses. Two gates in front of the extractor moved
+  with it: the classic dump parser now follows a header-less `name = { …` example
+  over the following lines until its braces balance (378 of the CK3 effects.log
+  examples run over several lines, and every one of them used to be cut after
+  its first line), and an example wrapped in the scope it must run in
+  (`<founding character> = { create_cadet_branch = { … } }`) is unwrapped when
+  that wrapper holds nothing but the token's own block. Measured over the
+  shipped dumps: CK3 679 templates before, 718 after, 8 of them carrying
+  `full`; Vic3 unchanged at 265 (its markdown dialect already followed
+  multi-line examples and its dump carries no scope wrappers). Longer examples
+  reach hover too, which shows `usage` under its own line cap.
+
+- `paradox/locText`: a loc value as the PLAYER reads it, the reading half of
+  `paradox/lookupLoc`. Markup dropped, `$key$` substituted one level, concept
+  links and icon tags resolved, and any `Get<Something>('name')` chain ending
+  in `GetName` / `GetTypeName` / `GetNameNoTooltip` rendered through the loc
+  key its kind states. No table of function names: the kind comes from the
+  definition index and the key pattern from the active profile's schema, so
+  every game answers from its own table. Measured over one game's 609
+  `culture_parameter_*` values (280 carry a real call): 242 of the 280 render
+  completely, and an expression only the running game can finish keeps the
+  chain's last word with `resolved: false`.
+- `paradox/snippets` and skeleton completion items: a new definition's shape
+  per kind, measured over the game's own files at build time
+  (`scripts/build-skeletons.ts --game <id>` writes `data/<id>/skeletons.json`;
+  keys in at least half the definitions, median order, the most written value
+  or number as tabstop text, kinds under ten definitions withheld). Completion
+  adds the items at the top level of a kind's folder and on an empty line
+  inside a definition; existing items and their ranking are byte-identical in
+  rank-eval. Snippet form only for clients declaring `snippetSupport`.
+- `paradox/definitionForm`: `existing` lists every definition of the kind
+  (mod first, then the game's and a dependency's, each with its `source`);
+  block keys and stated value sets (`bool`, `enum:`) carry an `example` too, a
+  block body collapsed to one line of at most 120 characters; `conditions`
+  carries the value lists of the triggers a no-code condition builder offers
+  (`has_dlc_feature`, `has_game_rule`, scripted triggers), read from the
+  trigger's own docs and the index. A `Valid …:` doc line is read after its
+  LAST colon: the docs parser keeps its own label in front, which swallowed the
+  first value of every list.
 - `paradox/modifierFormats`: how every modifier prints, read from the game's
   `common/modifier_definition_formats` files, its loc and `gui/texticons.gui`,
   behind the profile (`GameMeta.modifierFormats`, CK3 only). A modifier with no
@@ -51,6 +97,14 @@ changes. Before the split it moved inside the extension's version (up to
   `gfx/interface/icons/dynasty`, a perk carries `$_name` (all 105 vanilla perks
   define it, and none defines a desc), and a perk's `traits` entries are trait
   references.
+- CK3 schema: `culture_pillar` states `$_name` (`$_desc`) and `domicile_building`
+  `$_domicile_building` (`$_domicile_building_desc`), measured 160/162 and
+  1620/1620 against the game's english loc, so `paradox/locText` renders a
+  pillar's or a domicile building's name instead of its key.
+- Date inlay hints and hover read the owning mod's
+  `<mod>/.px-toolkit/calendar.json` before the `calendar` setting, cached per
+  mod root and dropped when the file changes (the server's own watcher now
+  covers `**/calendar.json`). The hover's rule line names the source.
 
 ## 0.3.0
 

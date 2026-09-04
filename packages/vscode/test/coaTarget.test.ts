@@ -50,15 +50,9 @@ const CHARACTERS = [
 ].join("\n");
 
 describe("blockScalars", () => {
-  it("reads the block's own scalars and stops at its closing brace", () => {
+  it("reads the block's own scalars, ignoring a dated sub-block, and starts fresh at a later block", () => {
+    // `dynasty = 999` sits in a dated block: an effect, not the character's fact.
     expect(blockScalars(CHARACTERS, 0)).toEqual({ name: "Mahmud", dynasty: "855", culture: "persian" });
-  });
-
-  it("ignores assignments inside a dated sub-block", () => {
-    expect(blockScalars(CHARACTERS, 0).dynasty).toBe("855");
-  });
-
-  it("reads a later block without seeing the earlier ones", () => {
     expect(blockScalars(CHARACTERS, 10)).toEqual({
       name: "Farroukh",
       dynasty_house: "house_khayyam",
@@ -83,10 +77,7 @@ describe("coaTargetItems", () => {
       { key: "house_khayyam", title: "Farroukh", file: "C:/mod/history/characters/persian.txt" },
       { key: "855", title: "Mahmud", file: "C:/mod/history/characters/persian.txt" },
     ]);
-  });
-
-  it("leaves out a character with neither a house nor a dynasty", () => {
-    // Nothing in the coa database would ever be read for them.
+    // With neither, nothing in the coa database would ever be read for them.
     expect(coaTargetItems(kind("character"), [def("6898", 16)], scalars)).toEqual([]);
   });
 
@@ -111,21 +102,19 @@ describe("coaTargetItems", () => {
 describe("targetAction", () => {
   const flags = [{ name: "house_luxemburg", source: "game", file: "90_dynasties.txt" }];
 
-  it("opens the definition the key already has", () => {
+  it("opens the definition the key already has, and starts a fresh flag under one nothing defines", () => {
     expect(targetAction("house_luxemburg", flags)).toEqual({ kind: "open", entry: flags[0] });
-  });
-
-  it("starts a fresh flag under a key nothing defines yet", () => {
     expect(targetAction("house_deffner", flags)).toEqual({ kind: "new", name: "house_deffner" });
   });
 });
 
 describe("coaTargetArg", () => {
-  it("takes a name and a label", () => {
+  it("takes a name and a label, and drops an empty label rather than showing a blank line", () => {
     expect(coaTargetArg({ name: "house_clare", label: "de Clare (house)" })).toEqual({
       name: "house_clare",
       label: "de Clare (house)",
     });
+    expect(coaTargetArg({ name: "25061", label: "   " })).toEqual({ name: "25061", label: undefined });
   });
 
   it("refuses anything that is not a legal key", () => {
@@ -135,9 +124,5 @@ describe("coaTargetArg", () => {
     expect(coaTargetArg({ name: 25061 })).toBeUndefined();
     expect(coaTargetArg(undefined)).toBeUndefined();
     expect(coaTargetArg("house_clare")).toBeUndefined();
-  });
-
-  it("drops an empty label rather than showing a blank line", () => {
-    expect(coaTargetArg({ name: "25061", label: "   " })).toEqual({ name: "25061", label: undefined });
   });
 });

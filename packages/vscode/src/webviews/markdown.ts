@@ -9,10 +9,16 @@ export function escapeHtml(text: string): string {
 }
 
 function inline(text: string): string {
-  return escapeHtml(text)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  return (
+    escapeHtml(text)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      // Only http(s) becomes a link, so a `javascript:` or `data:` target stays
+      // literal text. escapeHtml already ran, so an `&` in the url is `&amp;`,
+      // which is what the attribute needs.
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, `<a href="$2">$1</a>`)
+  );
 }
 
 function cells(row: string): string[] {
@@ -69,6 +75,17 @@ export function renderMarkdown(markdown: string): string {
       continue;
     }
 
+    // A quote: every consecutive `> ` line, as one paragraph.
+    if (line.startsWith(">")) {
+      const quote: string[] = [];
+      while (i < lines.length && lines[i].startsWith(">")) {
+        quote.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote><p>${inline(quote.join(" "))}</p></blockquote>`);
+      continue;
+    }
+
     if (/^[-*]\s/.test(line)) {
       out.push("<ul>");
       while (i < lines.length && /^[-*]\s/.test(lines[i])) {
@@ -85,7 +102,7 @@ export function renderMarkdown(markdown: string): string {
     }
 
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s|```)/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s|```|>)/.test(lines[i])) {
       para.push(lines[i]);
       i++;
     }

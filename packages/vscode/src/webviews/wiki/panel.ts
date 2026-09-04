@@ -2,7 +2,13 @@
  * The Wiki panel (px.openWiki): the hub for the toolkit's reference
  * knowledge. Its front page is a set of cards, one per destination: the
  * other reference views (Examples Wiki, Format Docs, Credits) and the pages
- * the wiki holds itself (Image Guidelines, Diagnostics, Mod Report).
+ * the wiki holds itself (Image Guidelines, Diagnostics, Mod Report, Modding
+ * Tools).
+ *
+ * The sidebar carries a game switch, so a user can read another game's pages
+ * without changing the workspace: articles that name a game (Modding Tools)
+ * show only for the selected one, and the switch starts on the workspace's
+ * game.
  *
  * Articles are files the repo already keeps - the image guidelines shipped
  * in media/, the per-diagnostic explanations copied into dist/diagnostics by
@@ -17,7 +23,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { hasFormatDocs } from "../../meta";
+import { creditsMarkdown } from "../credits/credits";
+import { GAME_METAS } from "../../gameDetect";
+import { MODDING_TOOLS, moddingToolsMarkdown } from "./moddingTools";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -39,8 +47,8 @@ export class WikiPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
-  private meta: GameMeta;
   private deps: WikiDeps;
+  private readonly game: string;
   private select: string | null;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
@@ -52,8 +60,8 @@ export class WikiPanel {
     select: string | null
   ) {
     this.context = context;
-    this.meta = meta;
     this.deps = deps;
+    this.game = meta.id;
     this.select = select;
     const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(WikiPanel.viewType, "Wiki", vscode.ViewColumn.Active, {
@@ -96,7 +104,6 @@ export class WikiPanel {
   ): void {
     const existing = WikiPanel.instance;
     if (existing) {
-      existing.meta = meta;
       existing.deps = deps;
       existing.panel.reveal(vscode.ViewColumn.Active);
       if (select) existing.post({ type: "select", id: select });
@@ -123,8 +130,10 @@ export class WikiPanel {
       case "ready":
         this.post({
           type: "content",
-          hub: hub(this.meta),
+          hub: hub(),
           articles: readArticles(this.context),
+          games: Object.values(GAME_METAS).map((m) => ({ id: m.id, name: m.name })),
+          game: this.game,
           select: this.select,
         });
         this.select = null;
@@ -147,7 +156,7 @@ export class WikiPanel {
 }
 
 /** The front-page cards, in reading order, labelled for the active game. */
-function hub(meta: GameMeta): WikiHubEntry[] {
+function hub(): WikiHubEntry[] {
   return [
     {
       label: "Examples Wiki",
@@ -155,17 +164,6 @@ function hub(meta: GameMeta): WikiHubEntry[] {
       tip: "Search every trigger, effect and datafunction, with real examples out of the game's files.",
       target: { command: "px.showExamplesWiki" },
     },
-    // Only CK3 ships _*.info docs; the other games get no docs card.
-    ...(hasFormatDocs(meta.id)
-      ? [
-          {
-            label: "Format Docs",
-            icon: "fileText" as const,
-            tip: "The game's own format docs for the file you are editing.",
-            target: { command: "px.openInfoDocs" },
-          },
-        ]
-      : []),
     {
       label: "Image Guidelines",
       icon: "image",
@@ -185,13 +183,38 @@ function hub(meta: GameMeta): WikiHubEntry[] {
       target: { page: "mod-report" },
     },
     {
+      label: "Steam Error Codes",
+      icon: "cloudUpload",
+      tip: "Every Steam result code a Workshop upload can fail with, and what to do about each.",
+      target: { page: STEAM_ERRORS_ARTICLE },
+    },
+    {
+      label: "Steam BBCode",
+      icon: "fileText",
+      tip: "Every tag Steam renders in a description, changenote or translation, with the syntax.",
+      target: { page: STEAM_BBCODE_ARTICLE },
+    },
+    {
+      label: "Modding Tools",
+      icon: "wrench",
+      tip: "Tools other modders built for the game you mod: map editors, translators, audio, history converters, with links.",
+      target: { page: MODDING_TOOLS_ARTICLE },
+    },
+    {
       label: "Credits",
       icon: "heart",
       tip: "Every project the toolkit builds on, with links.",
-      target: { command: "px.openCredits" },
+      target: { page: CREDITS_ARTICLE },
     },
   ];
 }
+
+/** The pages that are not diagnostics and not the image guidelines. */
+export const STEAM_ERRORS_ARTICLE = "steam-error-codes";
+export const STEAM_BBCODE_ARTICLE = "steam-bbcode";
+export const CREDITS_ARTICLE = "credits";
+/** One page per game shares this id; the game switch picks which one shows. */
+export const MODDING_TOOLS_ARTICLE = "modding-tools";
 
 /** `**Severity:** Error · **Source:** ...` opens every diagnostic page. */
 function severity(markdown: string): string | undefined {
@@ -215,6 +238,41 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       title: "Image Guidelines",
       section: "Art & assets",
       markdown: guidelines,
+    });
+  }
+  // The GitHub wiki's page, shipped in the vsix so it reads offline too.
+  const steam = read(context.asAbsolutePath("media/steam-workshop-error-codes.md"));
+  if (steam) {
+    articles.push({
+      id: STEAM_ERRORS_ARTICLE,
+      title: "Steam Error Codes",
+      section: "Steam Workshop",
+      markdown: steam,
+    });
+  }
+  const bbcode = read(context.asAbsolutePath("media/steam-bbcode.md"));
+  if (bbcode) {
+    articles.push({
+      id: STEAM_BBCODE_ARTICLE,
+      title: "Steam BBCode",
+      section: "Steam Workshop",
+      markdown: bbcode,
+    });
+  }
+  articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", markdown: creditsMarkdown() });
+
+  // One alternate per game with a curated list; the app shows the selected
+  // game's. The markdown is built here, not read from a file: the table is a
+  // typed list in moddingTools.ts.
+  for (const id of Object.keys(MODDING_TOOLS)) {
+    const markdown = moddingToolsMarkdown(id, GAME_METAS[id]?.name ?? id);
+    if (!markdown) continue;
+    articles.push({
+      id: MODDING_TOOLS_ARTICLE,
+      title: "Modding Tools",
+      section: "Community",
+      game: id,
+      markdown,
     });
   }
 

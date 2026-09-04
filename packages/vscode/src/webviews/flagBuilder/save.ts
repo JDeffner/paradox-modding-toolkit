@@ -65,7 +65,20 @@ export async function saveFlagToMod(o: SaveFlagOptions): Promise<string | null> 
     if (!typed) return null;
     file = typed;
   }
-  const abs = path.join(dir, file);
+  return writeFlagFile({ ...o, file });
+}
+
+/**
+ * Write the definition into one named file of the mod's coa folder, asking
+ * nothing: the Coat of Arms Designer shows its target in the top bar from the
+ * moment it opens, so by save time the question has already been answered.
+ * The file keeps its BOM and a new one gets one, like every script file the
+ * games read.
+ */
+export async function writeFlagFile(o: SaveFlagOptions & { file: string }): Promise<string | null> {
+  if (!/^[\w.-]+\.txt$/.test(o.file)) return null;
+  const dir = path.join(o.modPath, o.stageRoot ?? "", "common", "coat_of_arms", "coat_of_arms");
+  const abs = path.join(dir, o.file);
   let text = "";
   try {
     text = fs.readFileSync(abs, "utf8");
@@ -78,5 +91,5 @@ export async function saveFlagToMod(o: SaveFlagOptions): Promise<string | null> 
   fs.writeFileSync(abs, BOM + body, "utf8");
   const doc = await vscode.workspace.openTextDocument(abs);
   await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true });
-  return file;
+  return o.file;
 }

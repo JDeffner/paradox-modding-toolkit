@@ -132,3 +132,27 @@ export const CREDIT_SECTIONS: CreditSection[] = [
     ],
   },
 ];
+
+/**
+ * The same list as a wiki page (the Wiki hub renders it; the standalone
+ * Credits panel is gone). One line per project: the name as a link, who it is
+ * by, the license, then what the toolkit uses it for.
+ */
+export function creditsMarkdown(): string {
+  const lines = [
+    "# Credits",
+    "",
+    "Every project the toolkit builds on. The full license texts and the provenance are in " +
+      "[THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md).",
+  ];
+  for (const section of CREDIT_SECTIONS) {
+    lines.push("", `## ${section.title}`, "");
+    for (const entry of section.entries) {
+      const by = entry.author
+        ? ` by ${entry.authorUrl ? `[${entry.author}](${entry.authorUrl})` : entry.author}`
+        : "";
+      lines.push(`- **[${entry.name}](${entry.url})**${by}, ${entry.license}. ${entry.usedFor}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}

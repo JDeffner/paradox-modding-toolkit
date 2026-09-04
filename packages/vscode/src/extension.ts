@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { findStrayCalendar } from "./calendarSettingsCheck";
+import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
@@ -34,6 +35,7 @@ import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
 import {
   editLocalizationCommand,
+  locTargetFile,
   openLocalizationSideBySide,
   replaceLocLineValue,
   upsertNewModLoc,
@@ -51,15 +53,15 @@ import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
-import { WikiPanel, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
-import { CreditsPanel } from "./webviews/credits/panel";
+import { WikiPanel, CREDITS_ARTICLE, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
-import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
+import { declareCalendarCommand, generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
+import { TraditionCreatorPanel } from "./webviews/traditionCreator/panel";
 import { TraitCreatorPanel } from "./webviews/traitCreator/panel";
 import { createCoatOfArmsCommand } from "./webviews/flagBuilder/create";
 import { coaTargetArg } from "./webviews/flagBuilder/target";
@@ -82,6 +84,7 @@ import { bigWorkspaceWarning, measureWorkspace } from "./bigWorkspace";
 import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
+import { insertSnippetCommand } from "./insertSnippet";
 import { createModCommand, moveModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
@@ -92,6 +95,9 @@ import {
   allClientCommandIds,
   configChangedNotification,
   indexStatsRequest,
+  locTextRequest,
+  type LocTextParams,
+  type LocTextResult,
   lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
@@ -262,28 +268,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // A px.calendar declared in a mod's (or mod project's) own .vscode while the
   // OPENED folder has none: VS Code ignores that file, so every calendar
   // feature silently does nothing. The setting is window-scoped; say so once
-  // per workspace and offer to adopt the calendar where it counts.
+  // per workspace and offer to move the calendar into the mod itself
+  // (`.px-toolkit/calendar.json`), which is read wherever the mod is opened.
   if (cfg.isCk3Workspace && !cfg.calendar && !context.workspaceState.get<boolean>("px.strayCalendarNotice")) {
     const stray = findStrayCalendar(
       [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods],
-      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+      metaFor(cfg.gameId)
     );
     if (stray) {
       void context.workspaceState.update("px.strayCalendarNotice", true);
-      const actions = stray.calendar ? ["Use This Calendar", "Open Settings File"] : ["Open Settings File"];
+      const actions = stray.calendar ? ["Move Into Mod", "Open Settings File"] : ["Open Settings File"];
       void vscode.window
         .showWarningMessage(
           `Paradox Modding Toolkit: ${path.basename(path.dirname(path.dirname(stray.file)))} declares ` +
             "px.calendar in its own .vscode/settings.json, but VS Code only reads that file when the " +
-            "folder itself is opened. Put the calendar in the settings of the folder you open " +
-            "(or the .code-workspace) to activate the date preview.",
+            `folder itself is opened. Declare the calendar in the mod instead: ${metaFor(cfg.gameId).configDirName}/calendar.json ` +
+            "travels with the mod and is read wherever it is opened.",
           ...actions
         )
         .then((choice) => {
-          if (choice === "Use This Calendar") {
-            void vscode.workspace
-              .getConfiguration("px")
-              .update("calendar", stray.calendar, vscode.ConfigurationTarget.Workspace);
+          if (choice === "Move Into Mod" && stray.calendar) {
+            const file = writeCalendarFile(stray.modRoot, metaFor(cfg.gameId), stray.calendar);
+            notifyModFileChanged(file);
+            void vscode.window.showTextDocument(vscode.Uri.file(file));
           } else if (choice === "Open Settings File") {
             void vscode.window.showTextDocument(vscode.Uri.file(stray.file));
           }
@@ -405,6 +413,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // same name win like they do in the game.
   const coaPanelOptions = (): {
     meta: ReturnType<typeof metaFor>;
+    cfg: PxConfig;
     roots: FlagRoot[];
     mods: { label: string; path: string }[];
     gameMissing: boolean;
@@ -417,8 +426,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
       .filter((p, i, all) => all.indexOf(p) === i)
       .map((p) => ({ label: readModName(p), path: p }));
-    return { meta: metaFor(cfg.gameId), roots, mods, gameMissing: cfg.gamePath === null };
+    return {
+      meta: metaFor(cfg.gameId),
+      cfg: cfgForActive(),
+      roots,
+      mods,
+      gameMissing: cfg.gamePath === null,
+    };
   };
+  /** The Coat of Arms Designer names its preview frames after heritages. */
+  const coaFrameLocText = (params: LocTextParams): Promise<LocTextResult> =>
+    lc.sendRequest<LocTextResult>(locTextRequest, params);
   const coaDesignerAvailable = (roots: FlagRoot[]): boolean =>
     coaDesignerSupported(cfg.gameId) && hasDesignerFiles(roots, metaFor(cfg.gameId).stageRoots);
 
@@ -581,13 +599,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log(`watching ${watchRoots.length} root(s) for mod file changes`);
     for (const root of watchRoots) {
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
-      const w = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{txt,yml,gui,mod}")
-      );
-      w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
-      modWatchers.push(w);
+      // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
+      // which the server caches per mod until the file changes.
+      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/calendar.json"]) {
+        const w = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(root), glob)
+        );
+        w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
+        modWatchers.push(w);
+      }
     }
   };
   wireModWatcher();
@@ -666,6 +688,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       output.show(true);
     }),
     vscode.commands.registerCommand("px.runTiger", () => tiger.run(true)),
+    vscode.commands.registerCommand("px.insertSnippet", () =>
+      insertSnippetCommand((method, params) => lc.sendRequest(method, params))
+    ),
     // Target of the "N references" hover link: open the references peek for
     // the hovered site (the LSP reference provider supplies the locations).
     vscode.commands.registerCommand(
@@ -689,7 +714,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
-    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
+    vscode.commands.registerCommand("px.declareCalendar", () => declareCalendarCommand(cfgForActive())),
+    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive())),
     vscode.commands.registerCommand("px.generateCalendarLoc", () =>
       generateCalendarLocCommand(cfgForActive())
     ),
@@ -937,8 +963,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openWiki", (arg?: unknown) => {
       WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), typeof arg === "string" && arg ? arg : null);
     }),
+    // The Credits are a wiki page; the Project panel's Info row keeps the command.
     vscode.commands.registerCommand("px.openCredits", () => {
-      CreditsPanel.show();
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), CREDITS_ARTICLE);
     }),
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.
@@ -1060,6 +1087,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ...(named ? { name: named } : {}),
       });
     }),
+    // Same shape as px.createTrait: the palette entry and the Project panel
+    // open a blank form, and a caller that means one tradition names it (the
+    // Culture Creator's tradition rows are the caller this is for).
+    vscode.commands.registerCommand("px.createTradition", (arg?: unknown) => {
+      const meta = metaFor(cfg.gameId);
+      if (!creatorSupported(cfg.gameId, "culture_tradition")) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: no Tradition Creator has been built for ${meta.name} yet.`
+        );
+        return;
+      }
+      const named = definitionName(arg);
+      TraditionCreatorPanel.show(context, {
+        cfg: cfgForActive(),
+        meta,
+        actions: {
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
+        },
+        lookupLoc,
+        ...(named ? { name: named } : {}),
+      });
+    }),
     // `arg` is the optional target ({ name, label }): the Dynasty Tree and
     // "New Coat of Arms…" open the panel straight on the arms they mean. Which
     // panel that is comes from the profile plus what is on disk: CK3 gets the
@@ -1068,7 +1121,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openFlagBuilder", (arg?: unknown) => {
       if (!requireFlagBuilder()) return;
       const options = { ...coaPanelOptions(), target: coaTargetArg(arg) };
-      if (coaDesignerAvailable(options.roots)) CoaDesignerPanel.show(context, options);
+      if (coaDesignerAvailable(options.roots))
+        CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
       else FlagBuilderPanel.show(context, options);
     }),
     // The designer by name, for a keybinding or another extension that wants
@@ -1081,7 +1135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
         return;
       }
-      CoaDesignerPanel.show(context, options);
+      CoaDesignerPanel.show(context, { ...options, fetchLocText: coaFrameLocText });
     }),
     vscode.commands.registerCommand("px.createCoatOfArms", () => {
       if (!requireFlagBuilder()) return;
@@ -1122,6 +1176,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             lc.sendRequest<EventValueOptionsResult | null>(eventValueOptionsRequest, params),
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
+          locTarget: (key) => locTargetFile(cfg, lookupLoc, key),
+          fetchForm: (params) => lc.sendRequest<DefinitionForm | null>(definitionFormRequest, params),
+          fetchModifierFormats: (params) =>
+            lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
+          lookupLoc,
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
         },
         {
           cfg: cfgForActive(),

@@ -14,6 +14,10 @@
  *
  * Listings written before 0.4.0 keep `<steamlang>/` at the root; reads fall
  * back to it and the next write moves the language into `translations/`.
+ * Descriptions are BBCode, the format Steam serves and takes. A folder that
+ * still holds a `description.md` from an earlier version is converted once
+ * when the panel reads it (`migrateMarkdownListing`); until then it reads as
+ * Markdown, and nothing writes a new one.
  *
  * The folder's location is `px.workshop.dir`, resolved against the mod root.
  * Empty (the default) means `<configDir>/workshop` inside the mod, which a
@@ -27,10 +31,60 @@
 import * as fs from "fs";
 import * as path from "path";
 import { STEAM_LANGUAGES, type WorkshopTranslation } from "@px-lsp/protocol/workshopMeta";
+import { markdownToBBCode } from "./bbcodeMarkdown";
 
 export const SIBLING_WORKSHOP_DIR = "../workshop";
 export const DEFAULT_CHANGELOG = "changelog";
 export const TRANSLATIONS_DIR = "translations";
+
+export const DESCRIPTION_MD = "description.md";
+export const DESCRIPTION_BBCODE = "description.bbcode";
+
+/**
+ * The description file of one folder, and whether it is Markdown.
+ *
+ * `.md` wins when both exist, so a listing written before 0.4.0 keeps reading
+ * the file its author edits; a folder with neither gets `.bbcode`, the format
+ * Steam serves. Reads and writes both go through this, so the choice cannot
+ * drift between them.
+ */
+export function descriptionFile(dir: string): { file: string; markdown: boolean } {
+  const md = path.join(dir, DESCRIPTION_MD);
+  if (fs.existsSync(md)) return { file: md, markdown: true };
+  return { file: path.join(dir, DESCRIPTION_BBCODE), markdown: false };
+}
+
+/**
+ * Write one folder's description as the BBCode Steam served (the download
+ * path). A legacy `description.md` beside it is removed: `.md` wins on read,
+ * so leaving it would shadow the text just downloaded.
+ */
+export function writeSteamDescription(dir: string, bbcode: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, DESCRIPTION_BBCODE), bbcode, "utf8");
+  fs.rmSync(path.join(dir, DESCRIPTION_MD), { force: true });
+}
+
+/**
+ * Move a listing written before 0.4.1 off Markdown: every `description.md`
+ * (the root, `translations/<lang>/`, and the pre-0.4.0 `<lang>/` at the root)
+ * becomes `description.bbcode` holding the BBCode the upload sent Steam
+ * anyway, and the `.md` goes. Done once, when the panel reads the folder,
+ * so no later write has to know which format a draft is in. Returns the
+ * folders migrated, relative to `workshopDir`, for the one-time notice.
+ */
+export function migrateMarkdownListing(workshopDir: string): string[] {
+  const moved: string[] = [];
+  const dirs = [workshopDir];
+  for (const { api } of STEAM_LANGUAGES) dirs.push(langDir(workshopDir, api), path.join(workshopDir, api));
+  for (const dir of dirs) {
+    const md = path.join(dir, DESCRIPTION_MD);
+    if (!fs.existsSync(md)) continue;
+    writeSteamDescription(dir, markdownToBBCode(fs.readFileSync(md, "utf8")));
+    moved.push(path.relative(workshopDir, dir) || ".");
+  }
+  return moved;
+}
 
 /** Where one language's files live: `translations/<lang>/`. */
 export function langDir(workshopDir: string, api: string): string {
@@ -58,11 +112,20 @@ export function hasListingFiles(workshopDir: string): boolean {
 }
 
 export interface ListingFiles {
-  /** description.bbcode, or null when the file is absent. */
+  /** The default description, or null when the file is absent. */
   description: string | null;
   /** Per Steam language code: what the `<lang>/` folder holds. */
   translations: Record<string, WorkshopTranslation>;
+  /**
+   * Which descriptions came from a `.md` file: `""` for the default one,
+   * else the Steam language code. They convert to BBCode on upload and in
+   * the panel's preview; on disk they stay what the modder edits.
+   */
+  markdown: string[];
 }
+
+/** The `markdown` key of the default description. */
+export const DEFAULT_LANGUAGE = "";
 
 const read = (file: string): string | null => {
   try {
@@ -75,23 +138,32 @@ const read = (file: string): string | null => {
 /** The listing the workshop folder currently holds. */
 export function readListingFiles(workshopDir: string): ListingFiles {
   const translations: Record<string, WorkshopTranslation> = {};
+  const markdown: string[] = [];
   for (const { api } of STEAM_LANGUAGES) {
     let dir = langDir(workshopDir, api);
+    let chosen = descriptionFile(dir);
     let title = read(path.join(dir, "title.txt"));
-    let description = read(path.join(dir, "description.bbcode"));
+    let description = read(chosen.file);
     if (title === null && description === null) {
       // Pre-0.4.0 layout: the language folder sits at the root.
       dir = path.join(workshopDir, api);
+      chosen = descriptionFile(dir);
       title = read(path.join(dir, "title.txt"));
-      description = read(path.join(dir, "description.bbcode"));
+      description = read(chosen.file);
       if (title === null && description === null) continue;
     }
+    if (chosen.markdown) markdown.push(api);
     translations[api] = {
       ...(title !== null ? { title: title.trim() } : {}),
       ...(description !== null ? { description } : {}),
     };
   }
-  return { description: read(path.join(workshopDir, "description.bbcode")), translations };
+  const chosen = descriptionFile(workshopDir);
+  const description = read(chosen.file);
+  // The format is the folder's, not the file's: only a folder that still
+  // holds a description.md reads (and writes) as Markdown.
+  if (chosen.markdown) markdown.push(DEFAULT_LANGUAGE);
+  return { description, translations, markdown };
 }
 
 /**
@@ -104,7 +176,7 @@ export function writeListingFiles(
   listing: { description: string; translations: Record<string, WorkshopTranslation> }
 ): void {
   fs.mkdirSync(workshopDir, { recursive: true });
-  fs.writeFileSync(path.join(workshopDir, "description.bbcode"), listing.description, "utf8");
+  fs.writeFileSync(descriptionFile(workshopDir).file, listing.description, "utf8");
   for (const { api } of STEAM_LANGUAGES) {
     const t = listing.translations[api];
     const dir = langDir(workshopDir, api);
@@ -118,13 +190,13 @@ export function writeListingFiles(
     }
     fs.mkdirSync(dir, { recursive: true });
     writeOrRemove(path.join(dir, "title.txt"), title === "" ? null : title + "\n");
-    writeOrRemove(path.join(dir, "description.bbcode"), description.trim() === "" ? null : description);
+    writeOrRemove(descriptionFile(dir).file, description.trim() === "" ? null : description);
   }
 }
 
 /** Remove only the two files this store manages, and the folder once it is empty. */
 function removeLangFiles(dir: string): void {
-  for (const f of ["title.txt", "description.bbcode"]) {
+  for (const f of ["title.txt", DESCRIPTION_BBCODE, DESCRIPTION_MD]) {
     try {
       fs.rmSync(path.join(dir, f));
     } catch {
@@ -460,80 +532,11 @@ export function extractVersionSection(text: string, version: string): string | n
 }
 
 function finishNote(text: string, file: string): string {
-  const note = /\.md$/i.test(file) ? mdToBBCode(text) : text;
+  const note = /\.md$/i.test(file) ? markdownToBBCode(text) : text;
   return note.trim();
 }
 
 function displaySource(workshopDir: string, file: string): string {
   const rel = path.relative(workshopDir, file);
   return rel.startsWith("..") ? file : rel.replace(/\\/g, "/");
-}
-
-/**
- * A modest Markdown -> Steam BBCode conversion for changenotes: headings,
- * emphasis, strikethrough, links, images, lists, hr, fenced code. Inline code
- * loses its backticks (Steam's [code] is a block). Anything else passes
- * through - Steam shows unknown markup as text, never breaks.
- */
-export function mdToBBCode(text: string): string {
-  const out: string[] = [];
-  const lines = text.split(/\r?\n/);
-  let listOpen: "list" | "olist" | null = null;
-  let codeOpen = false;
-  const closeList = (): void => {
-    if (listOpen) out.push(`[/${listOpen}]`);
-    listOpen = null;
-  };
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      closeList();
-      out.push(codeOpen ? "[/code]" : "[code]");
-      codeOpen = !codeOpen;
-      continue;
-    }
-    if (codeOpen) {
-      out.push(line);
-      continue;
-    }
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (h) {
-      closeList();
-      const level = Math.min(h[1].length, 3);
-      out.push(`[h${level}]${inlineMd(h[2])}[/h${level}]`);
-      continue;
-    }
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      closeList();
-      out.push("[hr][/hr]");
-      continue;
-    }
-    const li = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/.exec(line);
-    if (li) {
-      const kind = li[1] ? "list" : "olist";
-      if (listOpen !== kind) {
-        closeList();
-        out.push(`[${kind}]`);
-        listOpen = kind;
-      }
-      out.push(`[*] ${inlineMd(li[3])}`);
-      continue;
-    }
-    closeList();
-    out.push(inlineMd(line));
-  }
-  closeList();
-  if (codeOpen) out.push("[/code]");
-  return out.join("\n");
-}
-
-function inlineMd(s: string): string {
-  return s
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, "[img]$2[/img]")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "[url=$2]$1[/url]")
-    .replace(/\*\*([^*]+)\*\*/g, "[b]$1[/b]")
-    .replace(/__([^_]+)__/g, "[b]$1[/b]")
-    .replace(/(^|\W)\*([^*\s][^*]*)\*/g, "$1[i]$2[/i]")
-    .replace(/(^|\W)_([^_\s][^_]*)_(?=\W|$)/g, "$1[i]$2[/i]")
-    .replace(/~~([^~]+)~~/g, "[strike]$1[/strike]")
-    .replace(/`([^`]+)`/g, "$1");
 }

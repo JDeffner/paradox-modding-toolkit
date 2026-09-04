@@ -27,7 +27,7 @@ import {
   iconField,
   locField,
   multiRefField,
-  scriptField,
+  scriptFoot,
   textField,
   titleCaseFromName,
   type Field,
@@ -39,20 +39,34 @@ import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 import { menu, toast, confirmDialog, type MenuItem } from "../../shared/overlay";
+import { scriptSection } from "../../shared/scriptSection";
+import { saveTargetLine } from "../../shared/saveTarget";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
-import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit } from "../messages";
-import { baseName, writeBlock } from "../../shared/scriptBlock";
-import { frameTexture, renderTraitTip, type PreviewModifier, type PreviewTrait } from "./preview";
+import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit, TraitSave } from "../messages";
+import { baseName, statementLines, writeBlock } from "../../shared/scriptBlock";
+import {
+  fillTraitLoc,
+  frameTexture,
+  plainLoc,
+  renderTraitTip,
+  type PreviewFact,
+  type PreviewModifier,
+  type PreviewOpinion,
+  type PreviewTrait,
+} from "./preview";
 import {
   emptyState,
   fieldLines,
+  fieldStatements,
   loadTrait,
   locKeys,
   nameProblem,
+  readTriggeredOpinions,
   traitFieldSpecs,
   traitWrites,
+  TRIGGERED_OPINION_KEY,
   type FieldValue,
   type LoadedTrait,
   type SectionId,
@@ -107,7 +121,7 @@ const HELP = {
         },
         {
           lead: "Identity.",
-          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom image converts a PNG into the mod under the trait's name.",
+          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom picture takes any image format, asks which folder of your mod it goes into, and writes the DDS under the trait's name.",
         },
         {
           lead: "Modifiers.",
@@ -128,7 +142,7 @@ const HELP = {
         },
         {
           lead: "Nothing else moves.",
-          text: "Keys no field can stand for (a dynamic desc, a repeated block) are written back exactly as the file has them, and are listed as kept.",
+          text: "A key no ordinary field can stand for (a dynamic desc, a block written several times) opens as script boxes holding the file's own text, one per statement, and everything you do not touch is written back byte for byte.",
         },
         {
           lead: "A duplicate is the game's own text.",
@@ -164,6 +178,35 @@ const textureAsked = new Set<string>();
 /** Flag name -> the player's word for it, when the loc index had one. */
 const flagLoc = new Map<string, string>();
 const flagAsked = new Set<string>();
+/** Any loc key the preview asked for -> the game's value. */
+const locText = new Map<string, string>();
+const locAsked = new Set<string>();
+
+/**
+ * The loc entry the game's trait tooltip prints each opinion key through, from
+ * `localization/english/custom_localization/character_relations_l_english.yml`
+ * (`TRAIT_OPINION_SAME_TRAIT` = "Opinion of [TRAIT.GetName( GetNullCharacter )]
+ * Characters", and its three neighbours). A key with no entry of its own falls
+ * back to its own name made readable, the way a modifier line does.
+ */
+const OPINION_LOC: Record<string, string> = {
+  same_opinion: "TRAIT_OPINION_SAME_TRAIT",
+  same_opinion_if_same_faith: "TRAIT_OPINION_SAME_TRAIT_AND_SAME_FAITH",
+  opposite_opinion: "TRAIT_OPINION_OPPOSITE_TRAIT",
+  attraction_opinion: "TRAIT_OPINION_ATTRACTION",
+};
+
+/**
+ * How the game prints one `compatibility` row: `core_l_english.yml`,
+ * "$TRAIT$ likes $OTHER_TRAIT$: $VALUE|=+0$" and its dislikes twin.
+ */
+const COMPATIBILITY_LOC = { likes: "TRAIT_COMPATIBILITY_LIKES", dislikes: "TRAIT_COMPATIBILITY_DISLIKES" };
+
+/**
+ * The three keys of `_traits.info`'s "Loc/icon" section: they ARE the tooltip's
+ * words and picture, so the hidden group does not repeat them as rules.
+ */
+const TOOLTIP_KEYS = new Set(["name", "desc", "icon"]);
 
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const nameInput = byId<HTMLInputElement>("name");
@@ -172,11 +215,23 @@ const modeButton = byId<HTMLButtonElement>("mode");
 const saveButton = byId<HTMLButtonElement>("save");
 const revealButton = byId<HTMLButtonElement>("reveal");
 const sectionsBox = byId("sections");
-const targetLabel = byId("target");
 const problemBox = byId("problem");
 const tipBox = byId("tip");
-const scriptBox = byId("script");
 const previewButton = byId<HTMLButtonElement>("togglePreview");
+
+/** Where the next save lands, shown from the moment the form loads. */
+const target = saveTargetLine(() => post({ type: "changeTarget" }));
+target.set(null);
+byId("target").append(target.el);
+
+/** The block a save will write, as a section of the preview panel. */
+const script = scriptSection({
+  note: "This is what your mod file will contain.",
+  onCopy: (text) => post({ type: "copy", text }),
+});
+byId("scriptSlot").replaceWith(script.el);
+byId("scriptCopy").replaceWith(script.copyButton);
+
 /** The name field's own tip, restored when a typed name stops being wrong. */
 const NAME_TIP = nameInput.dataset.tip ?? "";
 
@@ -225,8 +280,18 @@ function paintDropdown(button: HTMLButtonElement, value: string, placeholder: st
   else button.dataset.placeholder = "";
 }
 
-/** A number input that scrubs (px-ui rule 5) and commits on change. */
-function numberInput(value: number | null, placeholder: string, commit: (v: number | null) => void) {
+/**
+ * A number input that commits on change. It scrubs (px-ui rule 5) by its
+ * `handle`: the label or caption the number is drawn under, so typing in the
+ * box never moves the value. A row with no name of its own (a modifier row's
+ * value) passes nothing and drags on the input itself.
+ */
+function numberInput(
+  value: number | null,
+  placeholder: string,
+  commit: (v: number | null) => void,
+  handle?: HTMLElement
+) {
   const input = document.createElement("input");
   input.className = "px-input";
   input.dataset.size = "sm";
@@ -236,7 +301,12 @@ function numberInput(value: number | null, placeholder: string, commit: (v: numb
   input.value = value === null ? "" : String(value);
   const read = (): number | null => (input.value.trim() === "" ? null : Number(input.value));
   input.addEventListener("change", () => commit(read()));
-  scrubbable(input, { step: 1, onChange: () => undefined, onCommit: () => commit(read()) });
+  scrubbable(input, {
+    step: 1,
+    ...(handle ? { handle } : {}),
+    onChange: () => undefined,
+    onCommit: () => commit(read()),
+  });
   return input;
 }
 
@@ -252,6 +322,23 @@ function numberInput(value: number | null, placeholder: string, commit: (v: numb
  */
 function placeholderFor(spec: TraitFieldSpec): string | undefined {
   return spec.example ?? spec.sampled?.[0];
+}
+
+/**
+ * What the game expects of a trait's picture, behind the (i) on the icon row.
+ *
+ * Measured in game/gfx/interface/icons/traits: 375 of its 409 .dds files are
+ * exactly 120 x 120, and every one of them is 32-bit with an alpha channel.
+ * The frame under the icon shares that canvas (preview.ts), and the tooltip
+ * draws the pair at 52 x 52 (gui/shared/cooltip.gui). The folder is the form's,
+ * never spelled here.
+ */
+function iconInfo(): string {
+  const folder = form?.iconFolder ?? "the game's trait icon folder";
+  return (
+    "120 x 120 px, drawn at 52 x 52. Transparent around the emblem: the frame sits under it.\n" +
+    `${folder}/<trait key>.dds. Any picture format converts to DDS.`
+  );
 }
 
 function optionsFor(spec: TraitFieldSpec): EventVocabularyItem[] {
@@ -271,6 +358,14 @@ function traitThumb(name: string): string | null {
 function flagLocPrefix(): string | null {
   const doc = specs.find((spec) => spec.key === "flag")?.doc ?? "";
   return /localized as ([A-Za-z_]+?)name\b/.exec(doc)?.[1] ?? null;
+}
+
+/** Resolve loc keys the preview prints through; each is asked for once. */
+function askForLoc(keys: readonly string[]): void {
+  const fresh = keys.filter((key) => key !== "" && !locAsked.has(key));
+  if (fresh.length === 0) return;
+  for (const key of fresh) locAsked.add(key);
+  post({ type: "loc", keys: fresh });
 }
 
 function askForFlagLoc(names: readonly string[]): void {
@@ -295,7 +390,15 @@ function buildField(spec: TraitFieldSpec): Field<FieldValue> {
     case "number":
       return numberField(spec, value as number | null) as Field<FieldValue>;
     case "bool":
-      return boolField({ ...shared, value: value as boolean | null }) as Field<FieldValue>;
+      return boolField({
+        ...shared,
+        // A tri-state has no placeholder slot, so the value the game itself
+        // writes for the key rides in the label's own tip instead.
+        ...(placeholder
+          ? { doc: `${spec.doc ? `${spec.doc} ` : ""}The game writes ${placeholder} here.` }
+          : {}),
+        value: value as boolean | null,
+      }) as Field<FieldValue>;
     case "enum":
       return pickField(spec, String(value)) as Field<FieldValue>;
     case "multiRef":
@@ -313,12 +416,13 @@ function buildField(spec: TraitFieldSpec): Field<FieldValue> {
     case "icon":
       return iconField({
         ...shared,
+        info: iconInfo(),
         items: iconItems,
         value: String(value),
         onCustom: () => post({ type: "convertIcon", name: nameInput.value.trim() }),
       }) as Field<FieldValue>;
     case "script":
-      return scriptField({ ...shared, value: String(value), rows: 4 }) as Field<FieldValue>;
+      return scriptListField(spec, value as string[]) as Field<FieldValue>;
     default:
       return textField({
         ...shared,
@@ -328,6 +432,91 @@ function buildField(spec: TraitFieldSpec): Field<FieldValue> {
         ...(spec.sampled?.length ? { suggestions: spec.sampled } : {}),
       }) as Field<FieldValue>;
   }
+}
+
+/**
+ * A key written as script, once or many times. The game reads a repeated key
+ * as several statements (vanilla writes up to 7 `culture_modifier` and 7
+ * `triggered_opinion` blocks in one trait, measured in 00_traits.txt), so this
+ * is a LIST of script boxes rather than one: it is what lets every line of an
+ * opened trait come back to a control instead of staying raw text.
+ */
+function scriptListField(spec: TraitFieldSpec, values: string[]): Field<string[]> {
+  const listeners: ((v: string[]) => void)[] = [];
+  // Always one box: an empty one writes nothing, and a key with no box would
+  // be a row with nothing to type in.
+  let current = values.length > 0 ? [...values] : [""];
+  const placeholder = placeholderFor(spec) ?? "";
+  const box = node("div", "px-stack");
+  const list = node("div", "px-stack");
+  const add = ghostButton("Add another", "plus");
+  add.dataset.tip = "The game reads a key written twice as two statements.";
+  const emit = (): void => listeners.forEach((fn) => fn([...current]));
+
+  const paint = (): void => {
+    list.replaceChildren();
+    current.forEach((text, index) => {
+      const row = node("div", "scriptrow");
+      const area = document.createElement("textarea");
+      area.className = "px-textarea px-mono";
+      area.spellcheck = false;
+      area.rows = Math.min(10, Math.max(3, text.split("\n").length));
+      area.value = text;
+      if (placeholder) area.placeholder = placeholder;
+      area.setAttribute("aria-label", spec.key);
+      area.addEventListener("change", () => {
+        current[index] = area.value;
+        emit();
+      });
+      area.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Tab" || ev.shiftKey) return;
+        ev.preventDefault();
+        const start = area.selectionStart;
+        area.value = area.value.slice(0, start) + "\t" + area.value.slice(area.selectionEnd);
+        area.selectionStart = area.selectionEnd = start + 1;
+      });
+      row.append(area);
+      if (current.length > 1) {
+        const drop = document.createElement("button");
+        drop.className = "px-btn";
+        drop.dataset.variant = "ghost";
+        drop.dataset.size = "icon-xs";
+        drop.dataset.tip = "Remove this statement";
+        drop.append(iconEl("trash"));
+        drop.onclick = () => {
+          current.splice(index, 1);
+          paint();
+          emit();
+        };
+        row.append(drop);
+      }
+      list.append(row);
+    });
+  };
+
+  add.onclick = () => {
+    current.push("");
+    paint();
+    emit();
+  };
+  paint();
+  add.style.alignSelf = "flex-start";
+  // A textarea has no completion, no hover and no highlighting: the note under
+  // the boxes says so and offers the editor, which has all three.
+  box.append(
+    list,
+    add,
+    scriptFoot(() => void openInFile())
+  );
+  return {
+    el: fieldRow(spec, box),
+    get: () => [...current],
+    set: (next) => {
+      current = next.length > 0 ? [...next] : [""];
+      paint();
+    },
+    onChange: (listener) => listeners.push(listener),
+  };
 }
 
 /**
@@ -374,17 +563,21 @@ function pickField(spec: TraitFieldSpec, value: string): Field<string> {
   };
 }
 
-/** A plain number row, in the shared `.px-field` grid. */
+/** A plain number row, in the shared `.px-field` grid; the label drags it. */
 function numberField(spec: TraitFieldSpec, value: number | null): Field<number | null> {
   const listeners: ((v: number | null) => void)[] = [];
-  const input = numberInput(value, placeholderFor(spec) ?? "", (v) => listeners.forEach((fn) => fn(v)));
   const row = node("div", "px-field");
   const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
+  const input = numberInput(
+    value,
+    placeholderFor(spec) ?? "",
+    (v) => listeners.forEach((fn) => fn(v)),
+    label
+  );
   const box = node("div", "px-row");
   box.style.maxWidth = "140px";
   box.append(input);
@@ -419,7 +612,9 @@ function skillsRow(list: readonly TraitFieldSpec[]): HTMLElement {
       (value) => {
         state.values[spec.key] = value;
         refreshPreview();
-      }
+      },
+      // The caption over the box is this number's label: it is what drags.
+      caption
     );
     input.setAttribute("aria-label", spec.key);
     input.dataset.key = spec.key;
@@ -429,8 +624,8 @@ function skillsRow(list: readonly TraitFieldSpec[]): HTMLElement {
   return box;
 }
 
-/** The picker entries for a modifier: the player's word, the key as the hint. */
-function modifierItems(): MenuItem[] {
+/** Every modifier the game knows: the player's word, the key as the hint. */
+function allModifierItems(): MenuItem[] {
   return (form?.modifiers ?? []).map((item) => {
     const label = formats?.[item.name]?.label;
     return {
@@ -440,6 +635,21 @@ function modifierItems(): MenuItem[] {
       ...(item.doc ? { description: item.doc } : {}),
     };
   });
+}
+
+/**
+ * The same list MINUS every name this form already draws a field for.
+ *
+ * `_traits.info` reads an unknown property as a modifier, so the six skills and
+ * the `ai_*` family are modifiers AND documented keys: the Skills row and the
+ * Advanced section already write them. Offered in the Modifiers picker too, a
+ * modder could add `martial` a second time, and the game would read the two
+ * statements as one key written twice. A file that HAS such a statement still
+ * round-trips: `loadTrait` puts it in the designed field, never in a row.
+ */
+function modifierItems(): MenuItem[] {
+  const drawn = new Set(specs.map((spec) => spec.key));
+  return allModifierItems().filter((item) => !drawn.has(item.value));
 }
 
 /** The picker entries for a trait: the player's word, the key as the hint. */
@@ -590,7 +800,6 @@ function fieldRow(spec: TraitFieldSpec, control: HTMLElement): HTMLElement {
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
-    label.style.cursor = "help";
   }
   row.append(label, control);
   return row;
@@ -614,16 +823,6 @@ function sectionEl(title: string, lede: string | undefined, open: boolean): HTML
   return box;
 }
 
-/** The row that names a key the file keeps the last word on. */
-function keptRow(key: string): HTMLElement {
-  const row = node("div", "kept");
-  row.append(iconEl("lock"));
-  const code = document.createElement("code");
-  code.textContent = key;
-  row.append(code, document.createTextNode(" is kept exactly as the file writes it."));
-  return row;
-}
-
 /**
  * "What does this modifier do?" is a question the toolkit already answers, so
  * the panel links into the Examples Wiki rather than repeating its article.
@@ -634,8 +833,10 @@ function examplesRow(): HTMLElement {
   button.dataset.variant = "link";
   button.dataset.size = "xs";
   button.textContent = "Look a modifier up in the Examples Wiki";
+  // Every modifier, not the picker's list: looking `martial` up is a fair
+  // question even though the Skills row is where a trait writes it.
   button.onclick = () =>
-    menu(button, modifierItems(), {
+    menu(button, allModifierItems(), {
       search: true,
       width: 340,
       onPick: (name) => post({ type: "openExamples", name }),
@@ -687,15 +888,11 @@ function render(): void {
     // The skills are one row of six; the opinions are two per row. Everything
     // else is one field per row, in the shared label + control grid.
     if (section.id === "skills") {
-      body.append(skillsRow(list.filter((spec) => !loaded?.verbatim.has(spec.key))));
-      for (const spec of list) if (loaded?.verbatim.has(spec.key)) body.append(keptRow(spec.key));
+      body.append(skillsRow(list));
     } else {
       const pairs = section.id === "opinions" ? node("div", "pairs") : body;
+      if (pairs !== body) body.append(pairs);
       for (const spec of list) {
-        if (loaded?.verbatim.has(spec.key)) {
-          body.append(keptRow(spec.key));
-          continue;
-        }
         const field = buildField(spec);
         field.onChange((value) => {
           state.values[spec.key] = value;
@@ -703,9 +900,10 @@ function render(): void {
           refreshPreview();
         });
         fields.set(spec.key, field);
-        pairs.append(field.el);
+        // Two opinion NUMBERS fit a row; `triggered_opinion` is script, and a
+        // half-width box is not something a block can be read in.
+        (spec.widget === "script" ? body : pairs).append(field.el);
       }
-      if (pairs !== body) body.append(pairs);
     }
     sectionsBox.append(box);
     if (section.id === MODIFIERS_AFTER) sectionsBox.append(modifiersSection());
@@ -728,7 +926,7 @@ function currentName(): string {
  */
 function buildBlock(): string {
   const name = currentName() || "trait";
-  return writeBlock(name, loaded?.block ?? null, traitWrites(specs, state, baseline, loaded?.verbatim));
+  return writeBlock(name, loaded?.block ?? null, traitWrites(specs, state, baseline));
 }
 
 /** A texture a modifier line needs; asked for once, drawn when it arrives. */
@@ -748,23 +946,30 @@ function previewLine(name: string, value: number | string): HTMLElement {
 }
 
 /**
- * Which of the form's own number keys the tooltip prints as a modifier line:
- * the ones the GAME formats as modifiers (the six skills, `health`,
- * `attraction_opinion`), never a key like `minimum_age` that is a rule rather
- * than a bonus. Before the host has answered, the sections the layout already
- * calls modifier-shaped stand in.
+ * Which of the form's own keys the tooltip prints as a modifier line: the ones
+ * the GAME formats as modifiers (the six skills, `health`, the `ai_*` family),
+ * never a key like `minimum_age` that is a rule rather than a bonus. The
+ * opinion keys are out because the game prints them through their own
+ * `TRAIT_OPINION_*` lines instead. Before the host has answered, the section
+ * the layout already calls modifier-shaped stands in.
  */
 function isModifierKey(spec: TraitFieldSpec): boolean {
-  if (spec.widget !== "number") return false;
+  if (spec.section === "opinions") return false;
   if (formats) return formats[spec.key] !== undefined;
-  return spec.section === "skills" || spec.section === "opinions";
+  return spec.section === "skills";
 }
 
 function previewModifiers(): PreviewModifier[] {
   const out: PreviewModifier[] = [];
   for (const spec of specs) {
+    if (!isModifierKey(spec)) continue;
     const value = state.values[spec.key];
-    if (isModifierKey(spec) && typeof value === "number") out.push({ name: spec.key, value });
+    // A key whose widget is a text box still holds a number the game formats
+    // (`health = 1`); a script value's name comes through verbatim and the
+    // line tones itself neutral.
+    if (typeof value === "number") out.push({ name: spec.key, value });
+    else if (typeof value === "string" && value.trim() !== "")
+      out.push({ name: spec.key, value: value.trim() });
   }
   for (const row of state.modifiers) {
     if (row.name.trim() !== "") out.push({ name: row.name, value: row.value });
@@ -772,7 +977,139 @@ function previewModifiers(): PreviewModifier[] {
   return out;
 }
 
+/** The name the tooltip's own title shows, which its opinion lines name too. */
+function traitDisplayName(): string {
+  return locFields[0]?.field.get().trim() || titleCaseFromName(currentName());
+}
+
+/** Every opposite as one phrase, for the `[TRAIT_2 …]` slot of an opinion line. */
+function oppositeNames(): string {
+  return previewOpposites()
+    .map((other) => other.label)
+    .join(", ");
+}
+
+/**
+ * `same_opinion` and its three neighbours, worded through the entries the
+ * game's own trait tooltip prints them with. A key whose entry the loc index
+ * cannot resolve, or whose line needs an opposite the trait does not name,
+ * falls back to its own key made readable rather than to invented prose.
+ */
+function previewOpinions(): PreviewOpinion[] {
+  askForLoc(Object.values(OPINION_LOC));
+  const other = oppositeNames();
+  const out: PreviewOpinion[] = [];
+  for (const spec of specs) {
+    if (spec.section !== "opinions" || spec.key === TRIGGERED_OPINION_KEY) continue;
+    const value = state.values[spec.key];
+    if (typeof value !== "number") continue;
+    const template = locText.get(OPINION_LOC[spec.key] ?? "");
+    const needsOther = template !== undefined && /\[TRAIT_2\.|\$OTHER_TRAIT\$/.test(template);
+    const label =
+      template === undefined || (needsOther && other === "")
+        ? titleCaseFromName(spec.key)
+        : fillTraitLoc(template, { trait: traitDisplayName(), other });
+    out.push({ label: label || titleCaseFromName(spec.key), value });
+  }
+  return out;
+}
+
+/** `compatibility` rows, each as the whole line the game prints for one. */
+function previewCompatibility(): PreviewFact[] {
+  askForLoc([COMPATIBILITY_LOC.likes, COMPATIBILITY_LOC.dislikes]);
+  // A block of @script_values is not rows any more: it opened as script, and
+  // the preview cannot print a number it does not have.
+  if (!widgetIs("compatibility", "refRows")) return [];
+  const rows = (state.values.compatibility as ModifierRow[] | undefined) ?? [];
+  const items = form?.options.trait ?? [];
+  const out: PreviewFact[] = [];
+  for (const row of rows) {
+    if (row.name.trim() === "") continue;
+    const other = items.find((item) => item.value === row.name)?.label || row.name;
+    const key = row.value < 0 ? COMPATIBILITY_LOC.dislikes : COMPATIBILITY_LOC.likes;
+    const template = locText.get(key);
+    out.push({
+      text: template
+        ? fillTraitLoc(template, { trait: traitDisplayName(), other, value: row.value })
+        : `${traitDisplayName()} / ${other}: ${row.value >= 0 ? "+" : ""}${row.value}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * `triggered_opinion` blocks. The game has no loc line of its own for one: it
+ * applies the named opinion modifier, so the line is that modifier's own word
+ * (its loc entry, else its key) and the block's other statements are shown as
+ * the conditions `_traits.info` documents them to be.
+ */
+function previewTriggered(): PreviewFact[] {
+  const raw = (state.values[TRIGGERED_OPINION_KEY] as string[] | undefined) ?? [];
+  const blocks = readTriggeredOpinions(raw);
+  askForLoc(blocks.map((entry) => entry.modifier));
+  return blocks
+    .filter((entry) => entry.modifier !== "")
+    .map((entry) => ({
+      text: opinionModifierWord(entry.modifier),
+      ...(entry.conditions.length > 0 ? { note: entry.conditions.join(", ") } : {}),
+    }));
+}
+
+/**
+ * The player's word for an opinion modifier. The game's own entry when it
+ * resolves to prose; the key itself when the entry is still a datafunction the
+ * panel has no character to run it against (`kinslayer_intolerant` is
+ * "Known [GetTrait('kinslayer_3').GetName( … )]"), because the key at least
+ * says something true.
+ */
+function opinionModifierWord(name: string): string {
+  const value = locText.get(name);
+  if (value === undefined) return name;
+  const text = plainLoc(value).trim();
+  return text === "" || text.includes("[") ? name : text;
+}
+
+/**
+ * What the trait does that no tooltip line says: the rule keys of the Advanced
+ * section that carry a value (`immortal`, `physical`, `minimum_age`, `group`).
+ * The note under each is the game's own sentence about the key from
+ * `_traits.info`, which is the only honest answer to "so where does the player
+ * notice this".
+ *
+ * A key written as a block is left out: `culture_modifier` and its kind DO
+ * reach the player, conditionally, and their bodies are already in the script
+ * section below in full.
+ */
+function previewHidden(): PreviewFact[] {
+  const out: PreviewFact[] = [];
+  for (const spec of specs) {
+    if (spec.section !== "advanced" || spec.widget === "script") continue;
+    if (TOOLTIP_KEYS.has(spec.key) || isModifierKey(spec)) continue;
+    for (const line of fieldLines(spec, state.values[spec.key])) {
+      out.push({ text: oneLine(line), ...(spec.doc ? { note: spec.doc } : {}) });
+    }
+  }
+  return out;
+}
+
+/** A statement on one line, so a block body reads as a row of the tooltip. */
+function oneLine(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 90 ? `${flat.slice(0, 89)}…` : flat;
+}
+
+/**
+ * Whether a key still has its designed widget. A loaded file can promote one to
+ * script (a `compatibility` block of @script_values, an `icon` written as a
+ * dynamic block), and then its value is raw text: the readers that expect the
+ * designed shape have to ask first.
+ */
+function widgetIs(key: string, widget: TraitFieldSpec["widget"]): boolean {
+  return specs.find((spec) => spec.key === key)?.widget === widget;
+}
+
 function previewOpposites(): PreviewTrait[] {
+  if (!widgetIs("opposites", "multiRef")) return [];
   const values = (state.values.opposites as string[] | undefined) ?? [];
   const items = form?.options.trait ?? [];
   return values.map((value) => ({
@@ -784,12 +1121,12 @@ function previewOpposites(): PreviewTrait[] {
 
 /** The picture the game will draw: the chosen icon, else the one the key names. */
 function previewIcon(): string | null {
-  const chosen = String(state.values.icon ?? "");
+  const chosen = widgetIs("icon", "icon") ? String(state.values.icon ?? "") : "";
   return chosen ? (iconItems.find((item) => item.key === chosen)?.url ?? null) : traitThumb(currentName());
 }
 
 function refreshPreview(): void {
-  scriptBox.textContent = buildBlock();
+  script.set(buildBlock());
   const category = String(state.values.category ?? "");
   const frame = frameTexture(category);
   if (frame) askForIcons([frame]);
@@ -797,13 +1134,19 @@ function refreshPreview(): void {
     renderTraitTip(
       {
         key: currentName(),
-        name: locFields[0]?.field.get().trim() || titleCaseFromName(currentName()),
+        name: traitDisplayName(),
         desc: locFields[1]?.field.get().trim() ?? "",
         iconUrl: previewIcon(),
         frameUrl: frame ? (iconItems.find((item) => item.key === frame)?.url ?? null) : null,
         modifiers: previewModifiers(),
+        opinions: previewOpinions(),
+        compatibility: previewCompatibility(),
+        triggered: previewTriggered(),
         opposites: previewOpposites(),
-        flags: ((state.values.flag as string[] | undefined) ?? []).map((name) => flagLoc.get(name) ?? name),
+        flags: widgetIs("flag", "chips")
+          ? ((state.values.flag as string[] | undefined) ?? []).map((name) => flagLoc.get(name) ?? name)
+          : [],
+        hidden: previewHidden(),
       },
       { formats, imageUrl: textureUrl }
     )
@@ -817,6 +1160,22 @@ function refreshPreview(): void {
 }
 
 /**
+ * One statement's value, as `setProperties` wants it: the server drops it into
+ * the file over the old value's span, at the statement's own position, so a
+ * block value has to bring the indentation of its own lines with it. Without
+ * that the body and the closing brace land at column 0 while the statement
+ * sits a tab in, which is the same defect `statementLines` fixes on the
+ * whole-block path.
+ */
+function propertyValue(key: string, statement: string): string {
+  const eol = loaded?.block.eol ?? "\n";
+  const indent = loaded?.block.indent ?? "\t";
+  return statementLines(statement)
+    .join(eol + indent)
+    .slice(key.length + 3);
+}
+
+/**
  * Edit mode sends only what moved, as raw script text, so a save rewrites the
  * lines the modder touched and leaves their file alone. Null when one of the
  * changes cannot be one property (a key written twice, like `flag`): the whole
@@ -826,12 +1185,17 @@ function changedProperties(): { key: string; value: string | null }[] | null {
   if (!baseline) return null;
   const out: { key: string; value: string | null }[] = [];
   for (const spec of specs) {
-    if (loaded?.verbatim.has(spec.key)) continue;
-    const lines = fieldLines(spec, state.values[spec.key]);
-    const was = fieldLines(spec, baseline.values[spec.key]);
-    if (lines.join("\n") === was.join("\n")) continue;
-    if (lines.length > 1) return null;
-    out.push({ key: spec.key, value: lines.length === 0 ? null : lines[0].slice(spec.key.length + 3) });
+    // Statements, not lines: a `compatibility` block is one property written
+    // over three lines, where two `flag` lines are two statements and no single
+    // property can stand for them.
+    const now = fieldStatements(spec, state.values[spec.key]);
+    const was = fieldStatements(spec, baseline.values[spec.key]);
+    if (now.join("\n") === was.join("\n")) continue;
+    if (now.length > 1) return null;
+    out.push({
+      key: spec.key,
+      value: now.length === 0 ? null : propertyValue(spec.key, now[0]),
+    });
   }
   const before = new Map(baseline.modifiers.map((row) => [row.name, row.value]));
   for (const row of state.modifiers) {
@@ -849,9 +1213,12 @@ function changedProperties(): { key: string; value: string | null }[] | null {
 
 function applyForm(next: DefinitionForm, keepName?: string): void {
   form = next;
-  specs = traitFieldSpecs(next);
   const modifiers = new Set(next.modifiers.map((m) => m.name));
-  loaded = next.current ? loadTrait(specs, next.current.text, modifiers) : null;
+  const designed = traitFieldSpecs(next);
+  loaded = next.current ? loadTrait(designed, next.current.text, modifiers) : null;
+  // A loaded file may need a wider widget for one of its keys than the harvest
+  // alone asks for, so the specs the form draws are the ones the load settled.
+  specs = loaded ? loaded.specs : designed;
   state = loaded ? loaded.state : emptyState(specs);
   baseline = loaded ? (JSON.parse(JSON.stringify(loaded.state)) as TraitState) : null;
 
@@ -896,7 +1263,10 @@ function buildLocFields(name: string): void {
         ? "What the tooltip says about the trait. Written into your mod's localization."
         : "What the player sees. Written into your mod's localization.",
     });
-    if (isDesc) field.set("");
+    // BOTH keys start filled, with the name made readable. A save only writes
+    // the keys that have a value, so an empty description used to write no
+    // `trait_<key>_desc` at all and the game printed the raw key where the
+    // sentence should be. A prefilled one is text to replace, not a hole.
     field.onChange(() => refreshPreview());
     return { key, field };
   });
@@ -950,39 +1320,58 @@ function askForIcons(keys: string[]): void {
 // Saving
 // ---------------------------------------------------------------------------
 
-async function save(): Promise<void> {
-  if (!form) return;
+/**
+ * Everything a save says, or null when the form is not saveable yet (a name the
+ * engine cannot read). Both the Save button and a script box's "Edit in the
+ * file" go through it: the file a modder is sent to has to hold what the form
+ * says.
+ */
+function savePayload(): TraitSave | null {
+  if (!form) return null;
   const name = currentName();
   const problem = nameProblem(name);
   if (problem) {
     toast(problem, "destructive");
-    return;
-  }
-  if (mode === "override") {
-    const ok = await confirmDialog({
-      title: `Override the game's ${name}?`,
-      description:
-        "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
-        "changes from every future game patch. Partial overrides do not exist.",
-      confirmLabel: "Override",
-      destructive: true,
-    });
-    if (!ok) return;
+    return null;
   }
   const changed = mode === "edit" ? changedProperties() : null;
-  post({
-    type: "save",
-    save: {
-      name,
-      mode,
-      block: buildBlock(),
-      ...(changed ? { changed } : {}),
-      loc: locFields
-        .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
-        .filter((pair) => pair.value !== ""),
-      ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
-    },
+  return {
+    name,
+    mode,
+    block: buildBlock(),
+    ...(changed ? { changed } : {}),
+    loc: locFields
+      .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
+      .filter((pair) => pair.value !== ""),
+    ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
+  };
+}
+
+/** The override warning, asked once wherever a write is about to happen. */
+function confirmOverride(name: string): Promise<boolean> {
+  return confirmDialog({
+    title: `Override the game's ${name}?`,
+    description:
+      "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
+      "changes from every future game patch. Partial overrides do not exist.",
+    confirmLabel: "Override",
+    destructive: true,
   });
+}
+
+async function save(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "save", save: payload });
+}
+
+/** The way out of every script box: save, then open the block in the editor. */
+async function openInFile(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "openFile", name: payload.name, save: payload });
 }
 
 // ---------------------------------------------------------------------------
@@ -1037,13 +1426,25 @@ byId("new").onclick = () => {
   applyForm(blank, defaultName());
 };
 
+/** Where a listed definition comes from, in the words the pickers use. */
+const SOURCE_HINT: Record<string, string> = {
+  mod: "this mod",
+  vanilla: "the game",
+  parent: "a dependency",
+};
+
 byId("open").onclick = () => {
   const items = [
-    ...(form?.existing ?? []).map((def) => ({
-      value: def.name,
-      label: def.label || def.name,
-      hint: def.label ? def.name : "this mod",
-    })),
+    // Every trait the index has, the mod's own first: a modder opens a game
+    // trait to duplicate or override it as often as their own to edit it.
+    ...(form?.existing ?? []).map((def) => {
+      const where = SOURCE_HINT[def.source ?? "mod"] ?? def.source ?? "";
+      return {
+        value: def.name,
+        label: def.label || def.name,
+        hint: def.label ? `${def.name} · ${where}` : where,
+      };
+    }),
     ...(form?.options.trait ?? [])
       .filter((item) => !(form?.existing ?? []).some((def) => def.name === item.value))
       .map((item) => ({
@@ -1061,7 +1462,7 @@ byId("open").onclick = () => {
 };
 
 revealButton.onclick = () => {
-  if (form?.current) post({ type: "openFile", file: form.current.file, line: form.current.line });
+  if (form?.current) post({ type: "revealSource", file: form.current.file, line: form.current.line });
 };
 
 function paintPreviewButton(): void {
@@ -1085,9 +1486,6 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   switch (message.type) {
     case "init": {
       init = message.init;
-      targetLabel.textContent = message.init.modLabel
-        ? `Saving into ${message.init.modLabel} (${message.init.locLanguage})`
-        : "";
       problemBox.hidden = message.init.problem === undefined;
       problemBox.textContent = message.init.problem ?? "";
       applyForm(message.init.form);
@@ -1095,6 +1493,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     }
     case "form":
       applyForm(message.form);
+      break;
+    case "target":
+      target.set(message.target);
       break;
     case "modifierFormats":
       // The formats reach a modifier row's label, so the whole form is redrawn
@@ -1120,6 +1521,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "loc": {
       const prefix = flagLocPrefix() ?? "";
       for (const [key, value] of Object.entries(message.values)) {
+        locText.set(key, value);
         if (prefix && key.startsWith(prefix)) flagLoc.set(key.slice(prefix.length), value);
         const entry = locFields.find((e) => e.key === key);
         if (entry) entry.field.set(value);
@@ -1128,10 +1530,14 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     }
     case "iconWritten": {
+      // A picture the modder sent to a folder of their own is not in the icon
+      // folder, so it is not one of the grid's entries and it is not what the
+      // game will draw for this key: the host has already said so.
+      if (!message.inPlace) break;
       const field = fields.get("icon");
       if (message.url) iconItems.push({ key: message.key, url: message.url });
-      // A custom image lands under the trait's own name, which is exactly the
-      // path the game derives from the key: the block writes no `icon` line.
+      // In place, the picture lands under the trait's own name, which is
+      // exactly the path the game derives from the key: no `icon` line at all.
       if (field) field.set("");
       state.values.icon = "";
       refreshPreview();

@@ -23,12 +23,7 @@
  * Browser code. No DOM, no host, no game knowledge: which keys exist and what
  * they mean arrives from `paradox/definitionForm`.
  */
-import {
-  changedProperties as diffValues,
-  parseBlock,
-  scanItems,
-  type ScriptItem,
-} from "../../shared/scriptBlock";
+import { parseBlock, scanItems, type ScriptItem } from "../../shared/scriptBlock";
 
 export { locKeyFor } from "../../shared/scriptBlock";
 
@@ -138,6 +133,70 @@ export function valueOf(def: DefBlock, key: string): string | null {
 }
 
 /**
+ * EVERY value written for `key`, in file order.
+ *
+ * Most keys are last-in-wins, but a few are a list the engine reads whole:
+ * `doctrine_character_modifier` is written once per doctrine, and the game's
+ * own erudition_legacy_4 carries three of them
+ * (00_dynasty_perks.txt, measured). `valueOf` would show a modder one.
+ */
+export function valuesOf(def: DefBlock, key: string): string[] {
+  return def.statements.filter((st) => st.key === key).map((st) => st.value);
+}
+
+/**
+ * Put a repeated key's whole list back. The occurrences the block already has
+ * keep their place and their comments; extra ones are appended right after the
+ * last of them (or at `order`'s rank when the block had none), and occurrences
+ * the form no longer has are removed the way `applyValues` removes a key.
+ */
+export function applyRepeated(
+  def: DefBlock,
+  key: string,
+  values: readonly string[],
+  order: readonly string[]
+): DefBlock {
+  const statements = def.statements.map((st) => ({ ...st, before: [...st.before] }));
+  let tail = [...def.tail];
+  const at = statements.flatMap((st, i) => (st.key === key ? [i] : []));
+
+  // The ones the block already has, rewritten in place.
+  const kept = Math.min(at.length, values.length);
+  for (let i = 0; i < kept; i++) statements[at[i]] = { ...statements[at[i]], value: values[i] };
+
+  // The ones it no longer has, removed from the back so the indexes hold.
+  for (let i = at.length - 1; i >= kept; i--) {
+    const index = at[i];
+    const orphan = statements[index].before;
+    statements.splice(index, 1);
+    if (orphan.length > 0) {
+      if (index < statements.length) statements[index].before = [...orphan, ...statements[index].before];
+      else tail = [...orphan, ...tail];
+    }
+  }
+
+  // The new ones, after the last that was kept, else where the key belongs.
+  if (values.length > kept) {
+    const rank = (k: string): number => {
+      const found = order.indexOf(k);
+      return found < 0 ? order.length : found;
+    };
+    let insert = kept > 0 ? at[kept - 1] + 1 : statements.length;
+    if (kept === 0) {
+      for (let i = 0; i < statements.length; i++) {
+        if (rank(statements[i].key) > rank(key)) {
+          insert = i;
+          break;
+        }
+      }
+    }
+    const fresh = values.slice(kept).map((value) => ({ before: [], key, value, after: "" }));
+    statements.splice(insert, 0, ...fresh);
+  }
+  return { ...def, statements, tail };
+}
+
+/**
  * Put the form's answers into a block. A key the block already has keeps its
  * place, its comments and its trailing comment; a key it does not have is
  * inserted where `order` (the harvest's own key order) puts it; a `null` value
@@ -189,6 +248,25 @@ export function applyValues(
 }
 
 /**
+ * Two values that say the same thing to the game.
+ *
+ * A builder writes the block its own way: a file's one-line
+ * `is_shown = { has_dlc_feature = x }` comes back out of the condition builder
+ * as three indented lines. That is a change in the text and none in the
+ * script, and reporting it made a save rewrite a line the modder never
+ * touched. A value carrying a `#` is compared verbatim instead, because a
+ * newline ENDS a comment and folding it away would read the line behind it as
+ * part of the comment.
+ */
+function sameScript(a: string | null, b: string | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (a.includes("#") || b.includes("#")) return false;
+  const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
+  return flat(a) === flat(b);
+}
+
+/**
  * The `setProperties` list for an edit: only the keys whose value actually
  * moved, so a save of an untouched form writes nothing at all.
  */
@@ -197,9 +275,12 @@ export function changedProperties(
   next: DefBlock,
   keys: readonly string[]
 ): { key: string; value: string | null }[] {
-  const valuesOf = (def: DefBlock): Map<string, string | null> =>
-    new Map(keys.map((key) => [key, valueOf(def, key)]));
-  return diffValues(valuesOf(original), valuesOf(next));
+  const out: { key: string; value: string | null }[] = [];
+  for (const key of new Set(keys)) {
+    const value = valueOf(next, key);
+    if (!sameScript(valueOf(original, key), value)) out.push({ key, value });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +362,23 @@ export function updateModifierRows(
   return out;
 }
 
+/**
+ * What a modifier block contributes to the save: the block the rows write, or
+ * the one the file already had when the rows write nothing.
+ *
+ * An empty block is not a missing key. `tgp_chinese_legacy_3` and
+ * `tgp_chinese_legacy_4` both carry `character_modifier = { }` with a tab-only
+ * line inside (08_tgp_dynasty_perks.txt, measured 2026-09-04), and dropping the
+ * key on save would be an edit the modder never made.
+ */
+export function modifierBlockValue(
+  entries: readonly ModifierEntry[],
+  rows: readonly { name: string; value: number }[],
+  previous: string | null
+): string | null {
+  return writeModifierBlock(updateModifierRows(entries, rows)) ?? previous;
+}
+
 /** The block source for a modifier block, or null when it holds nothing. */
 export function writeModifierBlock(entries: readonly ModifierEntry[]): string | null {
   const lines = entries
@@ -329,21 +427,46 @@ export function doctrineOf(entries: readonly ModifierEntry[]): string {
 
 /** The entries with their `doctrine =` line set, added at the top, or removed. */
 export function withDoctrine(entries: readonly ModifierEntry[], value: string): ModifierEntry[] {
+  return withLine(entries, "doctrine", value);
+}
+
+/**
+ * The other line a modifier block carries that is not a modifier: `name =`,
+ * the loc key the game heads the modifier group with. Measured in
+ * 00_dynasty_perks.txt: erudition_legacy_2 and erudition_legacy_4 write
+ * `name = <perk>_modifier_name` on every one of their doctrine blocks.
+ */
+export function modifierNameOf(entries: readonly ModifierEntry[]): string {
+  for (const entry of entries) {
+    if (entry.kind !== "raw") continue;
+    const match = /^name\s*=\s*([^\s#]+)/.exec(entry.text);
+    if (match) return match[1].replace(/^"|"$/g, "");
+  }
+  return "";
+}
+
+/** The entries with their `name =` line set, added at the top, or removed. */
+export function withModifierName(entries: readonly ModifierEntry[], value: string): ModifierEntry[] {
+  return withLine(entries, "name", value);
+}
+
+/** One `key = value` line of a modifier block, replaced where it is or put first. */
+function withLine(entries: readonly ModifierEntry[], key: string, value: string): ModifierEntry[] {
   const trimmed = value.trim();
+  const test = new RegExp(`^${key}\\s*=`);
   const out: ModifierEntry[] = [];
   let replaced = false;
   for (const entry of entries) {
-    const isDoctrine = entry.kind === "raw" && /^doctrine\s*=/.test(entry.text);
-    if (!isDoctrine) {
+    if (!(entry.kind === "raw" && test.test(entry.text))) {
       out.push(entry);
       continue;
     }
     if (trimmed !== "" && !replaced) {
-      out.push({ kind: "raw", text: `doctrine = ${trimmed}` });
+      out.push({ kind: "raw", text: `${key} = ${trimmed}` });
       replaced = true;
     }
   }
-  if (trimmed !== "" && !replaced) out.unshift({ kind: "raw", text: `doctrine = ${trimmed}` });
+  if (trimmed !== "" && !replaced) out.unshift({ kind: "raw", text: `${key} = ${trimmed}` });
   return out;
 }
 
@@ -359,6 +482,233 @@ export function withDoctrine(entries: readonly ModifierEntry[], value: string): 
 export function effectLocKey(effect: string): string | null {
   const match = /custom_description[a-z_]*\s*=\s*\{[^{}]*?\btext\s*=\s*"?([A-Za-z0-9_.]+)"?/.exec(effect);
   return match ? match[1] : null;
+}
+
+// ---------------------------------------------------------------------------
+// The blocks a modder should not have to type: conditions, tooltips, chances
+// ---------------------------------------------------------------------------
+
+/**
+ * The three trigger names the builders draw a row for. They are the game's own
+ * words, but nothing here assumes they exist: a row is only offered for a
+ * trigger `DefinitionForm.conditions` answered with a value list, and a block
+ * the grammar below cannot hold stays raw script.
+ *
+ * Measured (CK3 1.19.0.6): all 14 `is_shown` blocks of the game's 21 dynasty
+ * legacy tracks open with `has_dlc_feature`, 10 of them wrapping the rest in
+ * `OR = { has_game_rule = … }`; of the 105 dynasty perks' 54 `can_be_picked`
+ * blocks, 10 are `has_dlc_feature = <feature>` and 44 are
+ * `<scripted trigger> = yes`.
+ */
+export const DLC_TRIGGER = "has_dlc_feature";
+export const RULE_TRIGGER = "has_game_rule";
+export const SCRIPTED_TRIGGERS = "scripted_trigger";
+
+/** One row of a condition builder. */
+export type Condition =
+  /** `has_dlc_feature = <feature>`. */
+  | { kind: "dlc"; value: string }
+  /** `OR = { has_game_rule = a  has_game_rule = b }`: any one of the rules. */
+  | { kind: "rules"; values: string[] }
+  /** `<scripted trigger> = yes|no`. */
+  | { kind: "trigger"; name: string; value: boolean };
+
+/**
+ * The statements of a `{ … }` value, or null when it is not a statement list.
+ *
+ * Empty is not "not a block": a field the modder never filled in, and a script
+ * area they cleared, both read as a body with no statements. Without that an
+ * empty "Advanced: script" area could never go back to its builder, since
+ * every builder asks this first.
+ */
+export function bodyOf(value: string): Body | null {
+  const text = value.replace(/\r\n/g, "\n");
+  if (text.trim() === "") return { head: "", statements: [], tail: [] };
+  if (!text.startsWith("{")) return null;
+  const inner = text.slice(1, text.lastIndexOf("}"));
+  return readBody(inner, scanItems(inner));
+}
+
+/**
+ * What a builder's reader answers: the rows, or the first source line it could
+ * not read. The line is what the note under the script area shows, because
+ * "this block does more than the rows can show" without naming the line leaves
+ * a modder hunting through their own script.
+ */
+export type ReadResult<T> = { ok: true; value: T } | { ok: false; line: string };
+
+/** The first line of a text that says something, trimmed, for a note. */
+function firstLine(text: string): string {
+  return (
+    text
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line !== "") ?? ""
+  );
+}
+
+/** One statement as a note shows it: its own line, never the whole block. */
+function statementLine(st: Statement): string {
+  const value = firstLine(st.value);
+  return `${st.key} = ${st.value.includes("\n") ? `${value} …` : value}`;
+}
+
+/** The first line of a body that carries prose no builder can put back. */
+function proseLine(body: Body): string {
+  if (body.head !== "") return body.head;
+  for (const st of body.statements) {
+    const before = st.before.find((line) => line.trim() !== "");
+    if (before) return before.trim();
+    if (st.after !== "") return `${st.key} = ${firstLine(st.value)} ${st.after}`;
+  }
+  return body.tail.find((line) => line.trim() !== "")?.trim() ?? "";
+}
+
+/** True when a body carries a comment or a stray line no builder can put back. */
+function hasProse(body: Body): boolean {
+  if (body.head !== "") return true;
+  if (body.tail.some((line) => line.trim() !== "")) return true;
+  return body.statements.some((st) => st.after !== "" || st.before.some((l) => l.trim() !== ""));
+}
+
+function conditionOf(st: Statement): Condition | null {
+  if (st.key === DLC_TRIGGER && !st.value.startsWith("{")) return { kind: "dlc", value: st.value };
+  if (st.key === "OR") {
+    const inner = bodyOf(st.value);
+    if (!inner || hasProse(inner) || inner.statements.length === 0) return null;
+    if (inner.statements.some((s) => s.key !== RULE_TRIGGER || s.value.startsWith("{"))) return null;
+    return { kind: "rules", values: inner.statements.map((s) => s.value) };
+  }
+  if (st.value === "yes" || st.value === "no") {
+    return { kind: "trigger", name: st.key, value: st.value === "yes" };
+  }
+  return null;
+}
+
+/**
+ * The rows a trigger block reads as, or null when it holds anything the
+ * builder cannot show. Null is the honest answer, not a failure: the form then
+ * keeps the block as script and says so (AD-5, nothing is hidden or dropped).
+ */
+export function parseConditions(value: string): Condition[] | null {
+  const read = readConditions(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseConditions` with the line it stopped on, for the note under the area. */
+export function readConditions(value: string): ReadResult<Condition[]> {
+  const body = bodyOf(value);
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
+  const rows: Condition[] = [];
+  for (const st of body.statements) {
+    const row = conditionOf(st);
+    if (!row) return { ok: false, line: statementLine(st) };
+    rows.push(row);
+  }
+  return { ok: true, value: rows };
+}
+
+/** The block source for a condition list, or null when it says nothing. */
+export function writeConditions(rows: readonly Condition[]): string | null {
+  const lines: string[] = [];
+  for (const row of rows) {
+    if (row.kind === "dlc") {
+      if (row.value.trim() === "") continue;
+      lines.push(`${DLC_TRIGGER} = ${row.value.trim()}`);
+    } else if (row.kind === "rules") {
+      const values = row.values.map((v) => v.trim()).filter((v) => v !== "");
+      if (values.length === 0) continue;
+      lines.push("OR = {");
+      for (const value of values) lines.push(`\t${RULE_TRIGGER} = ${value}`);
+      lines.push("}");
+    } else {
+      if (row.name.trim() === "") continue;
+      lines.push(`${row.name.trim()} = ${row.value ? "yes" : "no"}`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return `{\n${lines.map((l) => `\t\t${l}`).join("\n")}\n\t}`;
+}
+
+/**
+ * The wrapper a perk's effect prints its sentence through. Measured over the
+ * game's 105 dynasty perks: 74 of the 82 `effect` blocks are nothing BUT these
+ * (113 of them in all, 110 written exactly `{ text = <loc key> }`), because the
+ * perk's real work happens in an on_action and the effect only says so.
+ */
+export const TOOLTIP_KEY = "custom_description_no_bullet";
+
+/** The loc keys an effect block prints, in order, or null when it does more. */
+export function parseEffectLines(value: string): string[] | null {
+  const read = readEffectLines(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseEffectLines` with the line it stopped on. */
+export function readEffectLines(value: string): ReadResult<string[]> {
+  const body = bodyOf(value);
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
+  const keys: string[] = [];
+  for (const st of body.statements) {
+    if (st.key !== TOOLTIP_KEY) return { ok: false, line: statementLine(st) };
+    const inner = bodyOf(st.value);
+    if (!inner || hasProse(inner) || inner.statements.length !== 1) {
+      return { ok: false, line: statementLine(st) };
+    }
+    const only = inner.statements[0];
+    if (only.key !== "text" || only.value.startsWith("{")) {
+      return { ok: false, line: statementLine(only) };
+    }
+    keys.push(only.value.replace(/^"|"$/g, ""));
+  }
+  return { ok: true, value: keys };
+}
+
+/** The block source for a list of tooltip lines, or null when it has none. */
+export function writeEffectLines(keys: readonly string[]): string | null {
+  const wanted = keys.map((key) => key.trim()).filter((key) => key !== "");
+  if (wanted.length === 0) return null;
+  const lines = wanted.flatMap((key) => [`\t\t${TOOLTIP_KEY} = {`, `\t\t\ttext = ${key}`, "\t\t}"]);
+  return `{\n${lines.join("\n")}\n\t}`;
+}
+
+/**
+ * The number a plain `{ value = N }` chance block carries, or null when the
+ * block does more. Measured: 12 of the game's 37 perk `ai_chance` blocks are
+ * exactly that; the other 25 add `if = { limit = … multiply = … }` blocks,
+ * which stay script.
+ */
+export function parseChanceValue(value: string): number | null {
+  const read = readChanceValue(value);
+  return read.ok ? read.value : null;
+}
+
+/** `parseChanceValue` with the line it stopped on. */
+export function readChanceValue(value: string): ReadResult<number | null> {
+  const body = bodyOf(value);
+  if (!body) return { ok: false, line: firstLine(value) };
+  if (hasProse(body)) return { ok: false, line: proseLine(body) };
+  if (body.statements.length === 0) return { ok: true, value: null };
+  if (body.statements.length > 1) return { ok: false, line: statementLine(body.statements[1]) };
+  const only = body.statements[0];
+  const number = Number(only.value);
+  if (only.key !== "value" || only.value === "" || !Number.isFinite(number)) {
+    return { ok: false, line: statementLine(only) };
+  }
+  return { ok: true, value: number };
+}
+
+/** The block source for a plain chance, or null when nothing was given. */
+export function writeChanceValue(value: number | null): string | null {
+  return value === null ? null : `{\n\t\tvalue = ${value}\n\t}`;
+}
+
+/** The loc key the nth tooltip line of a perk gets by default. */
+export function effectKeyFor(perk: string, index: number): string {
+  return index === 0 ? `${perk}_effect` : `${perk}_effect_${index + 1}`;
 }
 
 // ---------------------------------------------------------------------------

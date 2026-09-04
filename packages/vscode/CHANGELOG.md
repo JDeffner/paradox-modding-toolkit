@@ -2,6 +2,316 @@
 
 ## Unreleased
 
+- **The changenote says where it comes from before you upload it.** The box
+  was prefilled from your changelog or your last commit without saying so,
+  typing into it silently changed the source, and one dropdown mixed filling
+  the box with moving the changelog. The card now offers three sources as a
+  segmented choice, Changelog, Last commit and Write, and the picked one is
+  exactly what uploads: the changelog entry is shown as rendered BBCode with
+  its file named and an Edit file button, the commit subject as the plain text
+  it is sent as, and Write as a box for this upload only. Missing entries say
+  which one is missing and offer to create it; the Publish summary and the
+  upload confirmation name the source.
+
+- **The Workshop panel follows the changelog file too.** Editing the entry in
+  the editor left the panel showing the old text until you pressed Reload.
+  The panel now watches the resolved changelog, wherever
+  `px.workshop.changelog` points.
+
+- **Required items are chips, videos come first and open on click.** Each
+  required item took a whole row for two words, and the gallery showed videos
+  after the images although Steam shows them first. The items now wrap as
+  chips, the video tiles lead the gallery, and clicking one opens it on
+  YouTube.
+
+- **The upload toast names the mod and what was sent.** It said "item
+  #3794588375 updated (1 submit)", which is the bridge's view, not yours. It
+  now reads "Upload complete: <your mod> updated. Sent: mod files, details,
+  changenote." and keeps both buttons to the item page.
+
+- **The panel's page button prefers the Steam client, and its state line says
+  when the item was last uploaded.** The toolbar's external-link button always
+  went to the browser, and the word "live" beside it read as if the item were
+  public, which it need not be. The button opens the Steam client's page when
+  Steam is installed, and the line now says "updated 2 Sep 2026", as Steam
+  reports it.
+
+- **Description previews are a window on the text, not the whole of it.** A
+  long description pushed everything under it off the page, and a wide table
+  or code block inside one scrolled the whole panel sideways. Every preview
+  now starts at a fixed height, scrolls its own content on both axes, and has
+  a drag grip on its bottom edge for as much of the text as you want to see.
+
+- **Every description row carries the same three buttons.** The default
+  description had Edit file, Reload and Fetch from Steam; a translation row
+  had Edit file and a bare arrow next to a line of Steam's text. Each
+  translation now gets the identical row, with what Steam serves for that
+  language in the Fetch button's tooltip, and each preview carries an edit
+  button in its top left corner.
+
+- **BBCode formatting help, in the wiki and one click from where you write
+  it.** The tags Steam renders were only discoverable through completion. The
+  wiki has a Steam BBCode page, the editor title bar of a `.bbcode` file (and
+  of its Markdown face) has a question-mark button that opens it, and the
+  Workshop panel's description hint links to it.
+
+- **Edit file opens beside the Workshop panel.** The file took over the
+  panel's own editor group, so the panel vanished behind the text it
+  previews. It opens in the next group instead, and the preview follows every
+  save. The preview button also works from the Markdown face of a `.bbcode`
+  file: it renders the file behind it.
+
+- **The Workshop panel's Requirements card has its own upload switch.** The
+  required DLC and items rode along with Details, so sending a corrected title
+  also rewrote what the item declares on Steam, and there was no way to send
+  the requirements alone. Requirements is now a part like the others: its own
+  switch, its own "Not uploaded" chip, its own line in the Publish summary
+  and in the upload confirmation.
+
+- **Description and translations are previews now; the text is edited in its
+  file.** The panel had a textarea per description, which invited edits that
+  were saved from two places at once and shown out of the editor's reach. It
+  shows only the rendered BBCode, with an Edit file button that opens
+  `description.bbcode` (a language's own file for a translation row), creating
+  the listing folder from your drafts when there is none yet. Saving the file
+  updates the preview: the panel watches the listing's text files.
+
+- **A listing folder keeps its description as BBCode, the format Steam
+  serves.** New folders got `description.md`, so the panel and the download
+  both showed Markdown that the Workshop page never renders that way. New
+  folders now get `description.bbcode`, and a download from Steam writes
+  BBCode, removing a `description.md` it replaces. A listing that still holds
+  a `description.md` is converted to `description.bbcode` once, the first
+  time the panel reads it, with a notice; the text is the BBCode the upload
+  sent Steam anyway. A `.bbcode` file still opens as Markdown through Edit as
+  Markdown.
+
+- **An engine effect whose example marks fields `# optional` now offers a
+  block to insert, and offers it twice: the required fields, and every field.**
+  Until now any `#` in a dumped `usage:` example dropped the whole template,
+  because "# or:" comments enumerate forms that cannot be collapsed into one
+  block. Comments that only say a field is optional are a different thing and
+  are now read as one: the snippet list shows `create_holy_order` and
+  `create_holy_order (all fields)` side by side. Every other comment still
+  drops the example. Two things in front of that rule moved with it: an example
+  that has no `usage:` header is now followed over its whole block instead of
+  being cut after its first line (378 of the CK3 effects.log examples run over
+  several lines), and an example that shows the scope the effect must run in
+  (`<founding character> = { create_cadet_branch = { … } }`) is unwrapped, so
+  the block starts where the modder types. Over the shipped dumps that is 679
+  CK3 templates before and 718 after, 8 of them with an all-fields form; Vic3
+  stays at 265, its dump needing neither fix. Hover shows the same examples, so
+  they are fuller there too.
+
+- **Coat of Arms Designer: the House China and House Japan frames show the
+  arms, every frame sits where the game puts it, and frames have names.** Those
+  two masks are 160x160 of pure black at alpha 255, so reading a mask as
+  brightness made them mask everything away and the frame showed an empty
+  grid; a mask is its alpha channel, which is also how the game reads
+  title_mask.dds (pure white, shape in alpha). The arms are now sized the way
+  gui/shared/coat_of_arms.gui sizes them, at 120 of the frame's own 156 for a
+  house frame and 120 of 172 for a dynasty frame against the 160 cell, instead
+  of being stretched onto the measured hole: across the 31 vanilla frames that
+  fills the whole window of the frame (99.9% of it, against 99.5% before) and
+  keeps the arms square, which the hole fit did not. The frame picker names
+  each frame after the heritages whose cultures wear it, read from
+  `house_coa_frame` in common/culture/cultures and named through the loc index:
+  "House Frame 14 (Turkic, Mongolic, Tungusic)", up to three, then "…". A frame
+  no culture names keeps its number.
+- **The tiger conf lives in `.px-toolkit/`, so an upload never ships it.**
+  Generate tiger.conf writes `<game>-tiger.conf` into the mod's `.px-toolkit/`
+  folder instead of the mod root, and a run passes it with `--config`. A
+  Workshop upload always leaves that folder out, so your validator settings
+  stay a local file and are not published with the mod. A conf you keep at the
+  mod root still wins: tiger loads that one by itself, and new uploads leave
+  `*-tiger.conf` out too. The generated file says on line two how to run tiger
+  by hand with it: `ck3-tiger --config .px-toolkit/ck3-tiger.conf <mod folder>`.
+- **Wiki: a Modding Tools page per game, and a game switch.** Modding Tools
+  lists the tools other modders built for the game you mod, curated from that
+  game's own wiki list: validators, translators, map and history editors,
+  audio and 3D tools, with a link on every row. Tools the toolkit does the job
+  of are left out, so the page never sends you to install something you
+  already have, and an "Add a tool" section says how to tell me about one that
+  fills a gap. A switch at the top of the wiki sidebar picks the game the
+  pages are shown for, so you can read another game's tools without changing
+  the workspace. Links in a wiki page render as links now: the Credits page
+  showed raw brackets and bare URLs.
+- **Coat of Arms Designer: every frame fits, and the library has a folder
+  button.** The arms are fitted to the whole hole of a frame cell, found by
+  a flood fill from its centre, so a roundel with concave sides (house frame
+  14) no longer squeezes the arms into a narrow shield: the mask's painted
+  shape is laid over the hole and the pattern reaches the border on every
+  frame. The Library row reads Library and Save, with a folder button that
+  sets `px.coaLibraryDir` from a folder picker.
+- **A .bbcode file is edited as Markdown in place.** "Edit as Markdown" in a
+  `.bbcode` file's title bar opens the same file as Markdown (a `pxmd`
+  document named `<file>.bbcode.md`): what you see is the BBCode converted,
+  a save converts it back and writes the `.bbcode`, and no second file
+  appears. VS Code's own Markdown preview and buttons work on it, and Back
+  to BBCode returns to the file. The buttons and keys of a `.bbcode` file
+  now also show when another extension owns the `.bbcode` language. The
+  command that writes a real Markdown file stays in the palette as Convert
+  to Markdown File.
+- **Wiki: Home, Credits and Steam Error Codes inside it, a sidebar that keeps
+  its width, severity as a symbol.** The front page is reached by a Home row
+  and crumb. Credits is a wiki page now (the Project panel's Info row still
+  opens it) and Format Docs left the hub, since it opens a file and not a
+  page. A Steam Error Codes page carries the full table of Workshop result
+  codes, the number other tools print, and what to do about each. The
+  sidebar no longer grows when the diagnostic codes fold out. A diagnostic
+  row leads with one coloured symbol for its severity, in the theme's own
+  Problems colours, with the word on hover, instead of a file icon and a
+  text badge.
+- **Steam Workshop descriptions are Markdown now, converted to BBCode for
+  Steam.** The listing folder keeps `description.md` (and
+  `translations/<language>/description.md`), so the description edits with
+  the Markdown highlighting, preview and tooling you already have. The
+  conversion runs where Steam is touched: Markdown becomes BBCode on upload,
+  BBCode becomes Markdown on download, and the panel's preview converts
+  first, so it shows what Steam will show. Every tag Steam documents maps
+  both ways, including tables, quotes, spoilers and code; anything else
+  crosses as plain text, so nothing is ever lost. The file rule: `.md` wins
+  when both exist, a folder with neither gets `.md`, and a folder that
+  already holds `description.bbcode` stays on BBCode, so nobody is migrated
+  behind their back. A `.bbcode` file's title bar has **Edit as Markdown**,
+  which writes the `.md` next to it and opens it; a `description.md` has
+  **Convert to BBCode** the other way. A `.bbcode` title bar now carries one
+  preview button, **Open BBCode Preview to the Side**, which opens beside the
+  file and keeps the cursor where it was, like Markdown's does.
+
+- **Coat of Arms Designer: a smooth drag, a catalog that scrolls on its own,
+  captioned tools.** Dragging an emblem rebuilt the whole side panel on
+  every pointer move, which redrew the catalog grid per pixel and made the
+  drag lag; only the placement numbers follow the pointer now and the panel
+  is rebuilt once the drag ends. In the Emblems tab the texture grid scrolls
+  inside the tab, so the layer list stays in view, and the category picker
+  has room above the grid. The tools under the numbers sit in captioned
+  groups (Align, Distribute, Mirror, Copy) instead of one row of arrows.
+- **The Project panel no longer lists Insert Snippet.** The command stays in
+  the palette and on Ctrl+Alt+I; the row was one more thing in Create that
+  did not create a file.
+- **Dynasty Tree: Edit on every card, and a click on empty canvas goes back
+  to the dynasty.** A game character's card and inspector carry Edit again;
+  saving writes a full copy under the same id into your mod, as an override,
+  and the form's heading says so. Clicking the canvas away from any card
+  (without dragging) closes the character view and shows the dynasty the
+  panel opened on, the same as Escape.
+- **Coat of Arms Designer: the arms stay inside the shield, the catalog runs
+  to the bottom, one lock for the scale.** A house or dynasty frame now fits
+  the arms into the hole in its own cell, measured off the texture (the
+  masks of these sheets are the full 160 px of the cell, so they said nothing
+  about the inset, and the pattern filled the cell and stuck out past the
+  frame's shield). The pattern and layout catalogs fill the panel down to the
+  bottom edge and scroll without a bar of their own. Scale X and Scale Y sit
+  either side of a lock button that ties them together; the flip checkboxes
+  are gone, because the mirror tools under the numbers already do that, and
+  those tools now act on the shown emblem when nothing is selected. New Coat
+  of Arms no longer asks for a key in a prompt: the key is typed once, in the
+  designer's top-left field, whose hover says what it is for.
+- **Trait, Tradition and Culture Creators: the localization lands where you
+  look for it, and every picture says what it has to be.** New loc keys go to
+  `localization/<lang>/<the script file's name>_l_<lang>.yml` of the mod the
+  definition was written to, instead of the mod's largest loc file, and every
+  toast names the files by name. The name and the description are both
+  prefilled, so a save always writes the pair rather than leaving the game to
+  print the raw key. Each picture field has an (i) with the size, the format,
+  the path the game builds and what has to be transparent, all read out of the
+  installed game (trait icons 120x120, tradition layers 545x285, culture
+  pillars 120x120 with the ethos banners at 1200x260). A custom trait picture
+  takes any image format, asks which folder of your mod it goes into, and
+  writes the DDS. Every script box carries "No completion or highlighting
+  here. Edit in the file", which saves the definition and opens it in the
+  editor at its block. The Modifiers picker no longer lists the six skills and
+  the other keys the form already draws a field for, and a rewritten
+  `compatibility` block is indented like the rest of the block instead of
+  landing at column 0.
+- **Code snippets, measured from the game.** Typing at the top of a script
+  file offers a skeleton of that folder's definition kind (`new event`, `new
+  decision`, 119 kinds for Crusader Kings III, 93 for Victoria 3), and an
+  empty line inside a definition offers its common child blocks (`option
+  block`). Each skeleton is the shape the game's own files write most: keys
+  present in at least half of the vanilla definitions, in their usual order,
+  with the most written value or number pre-filled as a tabstop. `Insert
+  Snippet…` (Ctrl+Alt+I, palette, Project panel) lists the skeletons and the
+  engine's own block examples that fit the cursor. Bare LSP clients get the
+  same items as plain text.
+- **Every creator says where it saves, and numbers drag on their label.** The
+  top bar of each creator reads `<mod> › <folder>/<file>` (the folder under `common/`) from the
+  moment the form loads, and clicking it changes the target before the save.
+  The generated script is an ordinary section, open by default, copied by a
+  click on it or by the copy button beside Save. A number field drags on its
+  label, so the input is only for typing. The Open menu lists the game's own
+  definitions next to the mod's, marked by source.
+- **Coat of Arms Designer: one door, six tiers, no freeze, many emblems at
+  once.** The dashboard offers the designer once, under Create. House and
+  dynasty frames are sprite sheets of six tiers; the preview draws one cell
+  (tier 2 by default) with a tier picker beside the frame picker. Textures
+  decode on worker threads: opening the designer on a large mod used to stall
+  the extension host for 1.7 s, now the longest stall is 9 ms. Shift-click
+  and Ctrl+A select several emblems, a layer can be locked, a selection moves,
+  scales and rotates as one box, aligns and distributes, mirrors, duplicates
+  and nudges with the arrow keys; a grid with centre lines snaps positions,
+  and X and Y scale stay matched by default.
+- **Trait Creator: the preview prints what the game prints.** The category
+  frame sits under the picture (the frame textures are opaque in the centre),
+  the picture is the tooltip's 52 px, every opinion key prints through the
+  game's own sentences, modifiers the game hides from players (`hidden = yes`
+  in the format files, the `ai_*` family) sit in their own group, and every
+  key `_traits.info` documents has a control, so a loaded vanilla trait round
+  trips with nothing left as raw script. Every field, dropdown and script area
+  shows a real vanilla value as its placeholder.
+- **Culture Creator: pillars, ethos and traditions as the culture window
+  draws them.** Pillar icons are tinted the way `icon_flat_standard` tints
+  them (an additive pass of the game's colour sheet), the ethos is the wide
+  banner behind the rough-edge mask, tradition tiles keep the window's 276:138
+  shape, and the preview panel starts wider. A tradition chip opens the
+  Tradition Creator on that tradition, and New tradition opens it blank.
+- **Tradition Creator.** A creator for `common/culture/traditions`: name and
+  description, category, an icon composed from the game's own layer folders
+  with a picker per layer and a live preview, cost, parameters as switches
+  with their tooltip sentences, modifier blocks with the player's lines,
+  conditions as script with real examples. Keys are written in the order the
+  game writes them; the output passes ck3-tiger clean. The icon section shows
+  the composed tile at the game's 220x120 from full-size decodes of the chosen
+  layers (picker thumbnails stay small), an empty layer reads as an empty slot,
+  the cost prints as the game's `<CURRENCY>_COST` line with its icon, and the
+  tooltip tones `#P`, `#N` and `#V` text the way the game does.
+- **Dynasty Legacy Creator: saves that keep your file, and a ? on every
+  section.** Reopening the creator on a track you were already editing reveals
+  the panel instead of resetting the form, so a save after it can no longer
+  write empty perk blocks over your file. Once a track is saved it counts as
+  the mod's own, so the next save rewrites only the lines that changed; a
+  block the builders only reindented (a one-line `is_shown = { … }`) counts as
+  unchanged, and an empty `character_modifier = { }` the file already has is
+  kept rather than dropped. A track has exactly the number of perks the
+  game's own tracks have (5, read from the game's perk files): there is no
+  adding or removing, because the legacy window is not built for another
+  count, and a loaded track with a different count says so under the row.
+  After a save a notification names the track file, the perks file and the
+  loc file, with buttons that open them. Every section of the track form and of the perk
+  editor has a ? that says what it writes, what it accepts and what the game
+  does with it, and every script area offers "Edit in the file", which saves
+  and opens the definition in the editor. The illustration picker shows one
+  4216x368 strip per row instead of a 44x4 square, both picture fields carry
+  the sizes and formats behind an (i), a custom picture takes any format (PNG,
+  JPEG, WebP, GIF, BMP, AVIF, ICO, SVG, TGA, DDS) and asks which folder of the
+  mod it goes to, and new localization lands in the loc file named after the
+  script file it belongs to. The perk row keeps the game's 296:128 tiles at
+  every panel width and scrolls instead of squashing them.
+- **Dynasty Legacy Creator without script.** `is_shown` and a perk's
+  `can_be_picked` are rows over the DLC features, game rules and scripted
+  triggers the game files use; `ai_chance` is a number; a perk's `effect` is
+  built from tooltip lines, modifiers and flags, or copied from a game perk as
+  a starting point, with raw script kept as the advanced fallback that round
+  trips unchanged. The game's own tracks open for Duplicate or Override, both
+  save targets are visible, and Escape closes the perk panel.
+- **Dynasty Tree: dates in the mod's calendar, traits with faces.** Born and
+  Died are era, year, month and day controls driven by `px.calendar` (custom
+  months and eras included; "31 Third Moon 1000 BC" writes `1000.3.31`), and
+  the cards show the display year. The trait picker is wide, shows the
+  player's name with the id as hint, carries the trait's picture, and hovering
+  a trait shows the game's tooltip. A character's DNA has copy and paste, the
+  six skills are editable, and the panel says which history file it writes.
 - **The content creators are rebuilt for people who do not script.** Every
   value the toolkit's index knows is a picker (traits, pillars, traditions,
   name lists, modifiers, doctrines, houses, parents), every empty input shows
@@ -156,6 +466,22 @@
   `description.bbcode`, `item.json` and `dependencies.json` at
   its root; each language lives in `translations/<language>/`. Old root
   language folders are still read and move on the next save.
+- **The display calendar lives in the mod.** A total-conversion mod declares
+  its era system in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare
+  Calendar` writes an editable example), committed with the mod and read
+  wherever the mod is opened: one calendar per mod in a multi-mod window, and
+  bare LSP clients need no settings plumbing because the server reads the file
+  itself. Date hints, hover, Insert Date and Generate Calendar Localization all
+  use it; the hover names the source (`.px-toolkit/calendar.json` or the
+  setting). `px.calendar` stays as the fallback for a mod without the file. A
+  stray declaration in a mod's own `.vscode/settings.json` now offers **Move
+  Into Mod**, which writes the file where it counts. The file is validated
+  against a schema as you edit it.
+- **`.pxignore` is a language.** The upload ignore list gets its own language
+  mode: `#` comments, `!` negation, trailing `/` folder markers, `*` / `**` /
+  `?` globs and character classes each highlighted, `#` toggles a comment, and
+  a slashed-circle file icon.
+
 - **Required DLC and required items in the Workshop panel.** A Requirements
   section lists the game's DLC as Steam reports it (unowned ones marked) and
   the required Workshop items, with installed mods and declared dependencies
@@ -216,6 +542,57 @@
   event nothing fires and that fires nothing. The server drops them before it
   reads their cards, so a mod with hundreds of standalone events opens faster.
   Turn it off to see the whole namespace; the queried event always stays.
+- **Tradition Creator: parameter sentences read like the game.** A parameter
+  the game already words used to be quoted with its markup showing (`already
+  reads "The [GetTrait('rough_terrain_expert').GetName( GetNullCharacter )]
+  Commander Trait is more common"`). The picker chip, the helper line and the
+  tooltip now read "The Rough Terrain Expert Commander Trait is more common":
+  the server resolves the game's own text functions through its loc,
+  definition and schema tables. 242 of the 280 parameter sentences that carry
+  such a call resolve completely; one that does not falls back to the
+  parameter's key instead of showing brackets.
+- **Dynasty Tree: undo, the whole portrait, and traits that say what they do.**
+  Every write the panel makes can be taken back (Ctrl+Z, Ctrl+Y, or the two
+  toolbar buttons), including the localization line a new dynasty writes; a
+  file somebody else changed meanwhile is named and left alone. A save no
+  longer throws an editor over the tree: the inspector says what it wrote and
+  offers the file. The DNA field carries the portrait, not just its name, with
+  Open, Copy DNA (the whole `common/dna_data` block) and Paste DNA (a block or
+  a bare `portrait_info` off the clipboard is written into your mod under a
+  free key, never over one that is there). A trait row shows its picture at 28
+  px, its first stat lines in the game's own words and a `mod` tag for traits
+  your workspace defines; its tooltip is the game's 52 px picture with no
+  frame and every stat line, so `fertility` and `attraction_opinion` stop
+  going missing. The spouse menu is a proper 320 px searchable list, and
+  Escape closes the inspector.
+- **Coat of Arms Designer: two panels, a finer grid and a library of your own
+  designs.** What a design is (pattern, layout, emblems) stays on the right;
+  what you do to it (the library, the preview frame, the grid and the whole
+  placement section) moved to a new left panel, so the numbers stay on screen
+  whichever tab is up and neither column can squeeze the arms under 320 px.
+  The grid is on at 16 x 16 out of the box and goes to 64; an arrow key now
+  moves one grid cell and Shift four, or 1/256 and 1/32 of the arms with the
+  grid off, instead of a quarter of the arms. Export stores the design as a
+  script file in a library folder outside any mod (`px.coaLibraryDir`,
+  `Documents/Paradox Interactive/<game>/px-toolkit/coat_of_arms` by default)
+  holding exactly what Copy puts on the clipboard; Import shows what is stored
+  as pictures and loads the one you pick. Randomize is gone.
+- **Dynasty Legacy Creator: doctrine modifiers as a list, the illustration
+  the game draws, and sections that read as prose.** A perk applies one
+  `doctrine_character_modifier` per doctrine and the game's own erudition
+  legacy writes three, so the form holds as many as the perk needs, each with
+  its doctrine, its optional name and its own modifiers; a loaded perk no
+  longer comes back with only the last of them. The track's Art section names
+  what the game expects of each picture (the icon at 140 x 140, shown at
+  80 x 80; the illustration at 4216 x 368) and the row below draws the
+  illustration the way the window does, one picture stretched behind every
+  perk and drawn twice through the frame and the mask. "Advanced: script"
+  always has a way back: an empty area returns without a word, a readable one
+  returns as rows, and one the reader stopped on names the line and offers to
+  drop the script. The save is one line naming the mod, whose menu moves
+  either of the two files, and the perk editor is titled with the perk, walks
+  the track with its own arrows and opens on the first perk of a loaded
+  track.
 
 ## 0.3.6 (beta, pre-release) - Workshop safety fix
 

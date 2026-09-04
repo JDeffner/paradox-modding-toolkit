@@ -8,6 +8,15 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- `protocol`: `paradox/locText` (`LocTextParams`, `LocTextResult`,
+  `LocTextValue`) — a localization value rendered to plain text, with `raw`,
+  `text` and `resolved` per key; a key the loc index cannot find is absent.
+- `protocol`: `paradox/snippets` (`SnippetsParams`, `SnippetsResult`);
+  `lines` on `ModifierFormatsParams` / `ModifierFormatsResult` (loc keys
+  answered as the same word-or-texticon parts a prefix is).
+- `protocol`: `source` on `OverviewDef`, `conditions` on `DefinitionForm`,
+  `DEFINITION_FORM_MAX_EXAMPLE`; `dna` and `skills` on `DynastyCharacter`,
+  `DYNASTY_SKILLS`.
 - `protocol`: `paradox/modifierFormats` (`ModifierFormatsParams`,
   `ModifierFormatsResult`, `ModifierFormat`, `FormatPart`); `example` on
   `DefinitionFormKey`, `label` on `EventVocabularyItem` and `OverviewDef`.
@@ -23,6 +32,10 @@ version (up to 0.3.2); that history is in the extension changelog
   `DynastySummary`, `DynastyHouse` and `DynastyCharacter`. Documented in
   `docs/PROTOCOL.md`.
 
+- `calendarFile`: `readCalendarFile` / `writeCalendarFile` / `isCalendarFile`
+  / `calendarFilePath` for the per-mod display calendar at
+  `<mod>/.px-toolkit/calendar.json` (the JSON form of `CalendarSetting`,
+  sanitized on read; an unusable file is told apart from a missing one).
 - `configDir`: `resolveConfigDir` / `migrateConfigDir` locate a mod's
   `.px-toolkit/` folder, falling back to (and renaming) the pre-0.4.0 per-game
   name. `readWorkshopMeta` / `upsertWorkshopMeta` now take that folder path

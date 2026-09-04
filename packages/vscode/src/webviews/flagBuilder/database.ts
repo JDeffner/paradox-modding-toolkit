@@ -143,6 +143,7 @@ const DESIGNER_FILES = {
 } as const;
 
 const FRAMES_DIR = ["gfx", "interface", "coat_of_arms", "frames"];
+const CULTURES_DIR = ["common", "culture", "cultures"];
 /** The title frame is the one pair that sits above frames/ (gui/shared/coat_of_arms.gui). */
 const TITLE_FRAME = { texture: "title_86.dds", mask: "title_mask.dds" };
 /** The frames a modder reaches for first, ahead of the numbered house series. */
@@ -209,17 +210,125 @@ function buildDesignerCatalog(
     layouts,
     layoutDefaults: parseAtDefaults(layoutText),
     template: templates[0] ?? null,
-    frames: designerFrames(dirs),
+    frames: designerFrames(dirs, frameUsage(readCultures(dirs).values())),
     emptyEmblem: allEmblems.find((e) => e.colors === 0)?.file ?? "",
   };
 }
 
-/** Title-case a frame id for its menu row: `house_frame_02` -> `House Frame 02`. */
-function frameLabel(id: string): string {
-  return id
+/**
+ * The frame one culture wears, from `common/culture/cultures`. `house` is
+ * `house_coa_frame` and `dynasty` is `dynasty_coa_frame` (`_cultures.info`:
+ * "CoA frame for houses of this culture"); a culture that states neither is on
+ * the engine's own default frame.
+ */
+export interface CultureFrames {
+  heritage: string;
+  house?: string;
+  dynasty?: string;
+}
+
+/** What the cultures say about one frame: which gui widget draws it, and for whom. */
+export interface FrameUse {
+  /** The gui type the frame is drawn by, which decides how big the arms are. */
+  family: "house" | "dynasty";
+  /** Heritage ids, most cultures first, ties by id. */
+  heritages: string[];
+}
+
+/**
+ * The cultures of every root, later roots overriding by id (the game's
+ * last-in-wins rule for `common/`). Only the keys the frame picker needs are
+ * read, and only at the culture's own level, so a `heritage` inside a nested
+ * block cannot be mistaken for the culture's.
+ */
+export function readCultures(dirs: { dir: string }[]): Map<string, CultureFrames> {
+  const out = new Map<string, CultureFrames>();
+  for (const { dir } of dirs) {
+    const folder = path.join(dir, ...CULTURES_DIR);
+    for (const f of listDir(folder)
+      .filter((f) => f.endsWith(".txt"))
+      .sort()) {
+      const text = readText(path.join(folder, f));
+      if (text) for (const [id, culture] of parseCultureFrames(text)) out.set(id, culture);
+    }
+  }
+  return out;
+}
+
+/** `culture_id = { heritage = … house_coa_frame = … }`, brace depth counted. */
+function parseCultureFrames(text: string): [string, CultureFrames][] {
+  const out: [string, CultureFrames][] = [];
+  let depth = 0;
+  let id: string | null = null;
+  let culture: CultureFrames | null = null;
+  for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, "");
+    if (depth === 0) {
+      const open = /^([A-Za-z0-9_]+)\s*=\s*\{/.exec(line);
+      id = open ? open[1] : null;
+      culture = open ? { heritage: "" } : null;
+    } else if (depth === 1 && culture) {
+      const pair = /^\s*(heritage|house_coa_frame|dynasty_coa_frame)\s*=\s*([A-Za-z0-9_]+)/.exec(line);
+      if (pair?.[1] === "heritage") culture.heritage = pair[2];
+      else if (pair?.[1] === "house_coa_frame") culture.house = pair[2];
+      else if (pair?.[1] === "dynasty_coa_frame") culture.dynasty = pair[2];
+    }
+    for (const ch of line) {
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+    }
+    if (depth <= 0) {
+      if (id && culture) out.push([id, culture]);
+      depth = 0;
+      id = null;
+      culture = null;
+    }
+  }
+  return out;
+}
+
+/** Which cultures wear each frame, keyed by frame id. */
+export function frameUsage(cultures: Iterable<CultureFrames>): Map<string, FrameUse> {
+  const counts = new Map<string, { family: "house" | "dynasty"; heritages: Map<string, number> }>();
+  for (const culture of cultures) {
+    for (const [family, frame] of [
+      ["house", culture.house],
+      ["dynasty", culture.dynasty],
+    ] as const) {
+      if (!frame || !culture.heritage) continue;
+      const use = counts.get(frame) ?? { family, heritages: new Map<string, number>() };
+      use.heritages.set(culture.heritage, (use.heritages.get(culture.heritage) ?? 0) + 1);
+      counts.set(frame, use);
+    }
+  }
+  const out = new Map<string, FrameUse>();
+  for (const [frame, use] of counts) {
+    const heritages = [...use.heritages]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([heritage]) => heritage);
+    out.set(frame, { family: use.family, heritages });
+  }
+  return out;
+}
+
+/** How many heritages a frame's label names before it says "and more". */
+const LABEL_HERITAGES = 3;
+
+/**
+ * A frame's menu row: `house_frame_02` -> `House Frame 02`, plus the heritages
+ * that wear it once their names are known (`House Frame 02 (South Slavic,
+ * Caucasian, Albanian, …)`). The game names no frame, so the heritages of the
+ * cultures that state it are the only words it has.
+ */
+export function frameLabel(id: string, heritageNames: string[] = []): string {
+  const name = id
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+  if (!heritageNames.length) return name;
+  const shown = heritageNames.slice(0, LABEL_HERITAGES);
+  if (heritageNames.length > LABEL_HERITAGES) shown.push("…");
+  return `${name} (${shown.join(", ")})`;
 }
 
 /**
@@ -228,7 +337,7 @@ function frameLabel(id: string): string {
  * are needed, because the game masks the arms with one and draws the other
  * over them (gui/shared/coat_of_arms.gui).
  */
-function designerFrames(dirs: { dir: string }[]): DesignerFrame[] {
+function designerFrames(dirs: { dir: string }[], usage: Map<string, FrameUse>): DesignerFrame[] {
   const ids = new Set<string>();
   for (const { dir } of dirs) {
     const frames = path.join(dir, ...FRAMES_DIR);
@@ -247,7 +356,14 @@ function designerFrames(dirs: { dir: string }[]): DesignerFrame[] {
   };
   return [...ids]
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-    .map((id) => ({ id, label: frameLabel(id) }));
+    .map((id) => {
+      const use = usage.get(id);
+      return {
+        id,
+        label: frameLabel(id),
+        ...(use ? { family: use.family, heritages: use.heritages } : {}),
+      };
+    });
 }
 
 /** The `<id>.dds` / `<id>_mask.dds` pair of a frame, last root wins; null when absent. */

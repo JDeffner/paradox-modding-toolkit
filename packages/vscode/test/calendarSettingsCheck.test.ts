@@ -54,7 +54,20 @@ describe("findStrayCalendar", () => {
     const file = writeSettings(project, `{\n  // era math\n  ${CAL.slice(1)}`);
     const hit = findStrayCalendar([modRoot], [opened]);
     expect(hit?.file).toBe(file);
+    expect(hit?.modRoot).toBe(modRoot);
     expect(hit?.calendar).toEqual({ epoch: 4000, after: "AD", before: "BC" });
+  });
+
+  it("skips a mod that already declares its calendar in .px-toolkit/calendar.json", () => {
+    const opened = tmp();
+    const project = path.join(opened, "My Mod");
+    const modRoot = path.join(project, "mod");
+    fs.mkdirSync(path.join(modRoot, ".px-toolkit"), { recursive: true });
+    writeSettings(project, CAL);
+    const names = { configDirName: ".px-toolkit" };
+    expect(findStrayCalendar([modRoot], [opened], names)).not.toBeNull();
+    fs.writeFileSync(path.join(modRoot, ".px-toolkit", "calendar.json"), '{ "epoch": 4000, "after": "AD" }');
+    expect(findStrayCalendar([modRoot], [opened], names)).toBeNull();
   });
 
   it("skips settings under an opened root and reports nothing when clean", () => {

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradox Toolkit Ignore",
+  "scopeName": "source.pxignore",
+  "patterns": [{ "include": "#comment" }, { "include": "#pattern" }],
+  "repository": {
+    "comment": {
+      "match": "^\\s*(#).*$",
+      "name": "comment.line.number-sign.pxignore",
+      "captures": { "1": { "name": "punctuation.definition.comment.pxignore" } }
+    },
+    "pattern": {
+      "begin": "^\\s*(?=\\S)",
+      "end": "$",
+      "name": "meta.pattern.pxignore",
+      "patterns": [
+        {
+          "match": "^\\s*(!)",
+          "captures": { "1": { "name": "keyword.operator.negation.pxignore" } }
+        },
+        { "match": "\\\\.", "name": "constant.character.escape.pxignore" },
+        { "match": "\\*\\*", "name": "keyword.operator.glob.globstar.pxignore" },
+        { "match": "[*?]", "name": "keyword.operator.glob.pxignore" },
+        { "match": "\\[[^\\]]*\\]", "name": "keyword.operator.glob.class.pxignore" },
+        { "match": "/(?=\\s*$)", "name": "keyword.operator.directory.pxignore" },
+        { "match": "/", "name": "punctuation.separator.path.pxignore" },
+        { "match": "[^\\s/*?\\[\\\\]+", "name": "string.unquoted.pattern.pxignore" }
+      ]
+    }
+  }
+}

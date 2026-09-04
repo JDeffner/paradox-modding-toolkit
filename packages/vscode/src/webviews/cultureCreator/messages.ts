@@ -6,7 +6,14 @@
  */
 import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 import type { DefinitionForm } from "@px-lsp/protocol/protocol";
-import type { CreatorImagesReply, CreatorImagesRequest } from "../shared/creatorMessages";
+import type {
+  CreatorChangeTargetRequest,
+  CreatorCopyRequest,
+  CreatorImagesReply,
+  CreatorImagesRequest,
+  CreatorOpenFileRequest,
+  CreatorTargetReply,
+} from "../shared/creatorMessages";
 
 /**
  * One tradition, as the game's own files describe it beyond what the definition
@@ -60,8 +67,6 @@ export type SaveMode =
 export interface CultureInit {
   /** Everything paradox/definitionForm answered for kind "culture". */
   form: DefinitionForm;
-  /** The mod a save goes into by default, for the toolbar's target. */
-  saveMod: string | null;
   /** px.locLanguage: which localization file a loc value lands in. */
   locLanguage: string;
   /** The prefix the New Content flow remembers; the name is prefilled with it. */
@@ -91,7 +96,11 @@ export type HostToApp =
   | { type: "idle" }
   | { type: "error"; message: string }
   /** The decoded pictures for the asset paths the app asked about. */
-  | CreatorImagesReply;
+  | CreatorImagesReply
+  /** Where the next save lands, for the top bar's target line. */
+  | CreatorTargetReply
+  /** Something the host did and the app should say (a copy, a refusal). */
+  | { type: "toast"; message: string; variant?: "destructive" };
 
 export type AppToHost =
   | { type: "ready" }
@@ -104,15 +113,28 @@ export type AppToHost =
   /** Open the Examples Wiki on a name the form shows. */
   /** Open the Examples Wiki; a culture key is no article, so no target is sent. */
   | { type: "openExamples" }
-  | {
-      type: "save";
-      name: string;
-      mode: SaveMode;
-      /** The whole `name = { … }` block, for create / duplicate / override. */
-      block: string;
-      /** Only the keys that changed, for an edit. */
-      changed?: { key: string; value: string | null }[];
-      loc: { key: string; value: string }[];
-      /** Bare file name the culture was loaded from, offered first on the pick. */
-      sourceFile?: string;
-    };
+  /** Open the Tradition Creator on this tradition, or on a blank form when the name is empty. */
+  | { type: "editTradition"; name: string }
+  /** Put the generated block on the clipboard; a webview cannot reach it. */
+  | CreatorCopyRequest
+  /** The target line was clicked: ask where the next save should go. */
+  | CreatorChangeTargetRequest
+  | CultureSave
+  /**
+   * A script box's "Edit in the file": save the culture, then open it in the
+   * editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: CultureSave });
+
+export interface CultureSave {
+  type: "save";
+  name: string;
+  mode: SaveMode;
+  /** The whole `name = { … }` block, for create / duplicate / override. */
+  block: string;
+  /** Only the keys that changed, for an edit. */
+  changed?: { key: string; value: string | null }[];
+  loc: { key: string; value: string }[];
+}

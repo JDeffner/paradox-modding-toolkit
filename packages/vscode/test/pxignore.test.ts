@@ -24,6 +24,7 @@ describe("pxignore", () => {
     expect(keep(".git", true)).toBe(false);
     expect(keep(path.join(".vscode", "settings.json"), false)).toBe(false);
     expect(keep("art.psd", false)).toBe(false);
+    expect(keep("ck3-tiger.conf", false)).toBe(false);
     expect(keep(path.join("common", "traits", "x.txt"), false)).toBe(true);
   });
 

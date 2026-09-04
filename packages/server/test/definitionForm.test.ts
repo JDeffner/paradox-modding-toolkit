@@ -17,6 +17,8 @@ px_stoic = {
 	category = personality
 	opposites = { craven }
 	martial = 2
+	valid_sex = male
+	shown_in_ruler_designer = no
 }
 `;
 
@@ -51,6 +53,32 @@ px_levantine = {
 }
 `;
 
+/**
+ * `unrestricted_dynasty_legacies` VERBATIM out of common/game_rules/
+ * 00_game_rules.txt (CK3 1.19.0.6). Its three settings ARE its inner blocks,
+ * which is the only place a `has_game_rule` value list can come from
+ * (_game_rules.info documents `categories` and `default` as the other two
+ * keys).
+ */
+const GAME_RULES_TXT = `unrestricted_dynasty_legacies = {
+	categories = { game_modes tweaks }
+
+	default = unrestricted_dynasty_legacies_default
+
+	unrestricted_dynasty_legacies_default = { }
+	unrestricted_dynasty_legacies_player_only = { }
+	unrestricted_dynasty_legacies_all = { }
+}
+`;
+
+/**
+ * `has_dlc_feature`'s own entry as triggers.log 1.19 writes it, with the
+ * `Traits:` label the docs parser keeps in front of the enumeration.
+ */
+const DLC_FEATURE_TRAITS =
+  "Traits: Valid Features: garments_of_the_hre, fashion_of_the_abbasid_court, " +
+  "the_northern_lords, and songs_of_the_realm";
+
 let dir: string;
 let traitsFile: string;
 const data = new ServerData();
@@ -64,7 +92,20 @@ beforeAll(() => {
   fs.writeFileSync(pillarsFile, PILLARS_TXT, "utf8");
   const culturesFile = path.join(dir, "px_cultures.txt");
   fs.writeFileSync(culturesFile, CULTURES_TXT, "utf8");
+  const rulesFile = path.join(dir, "00_game_rules.txt");
+  fs.writeFileSync(rulesFile, GAME_RULES_TXT, "utf8");
+  data.setTokens([
+    { name: "has_dlc_feature", kind: "trigger", doc: "", scopes: [], traits: DLC_FEATURE_TRAITS },
+  ]);
   data.index.addAll([
+    { name: "unrestricted_dynasty_legacies", kind: "game_rule", file: rulesFile, line: 0, source: "vanilla" },
+    {
+      name: "can_start_new_legacy_track_trigger",
+      kind: "scripted_trigger",
+      file: "vanilla.txt",
+      line: 0,
+      source: "vanilla",
+    },
     // The loc entries the labels come from: `trait_$` for a trait (the schema's
     // own first pattern), `$_name` for a pillar (its entry names none). One
     // trait deliberately has no loc entry at all.
@@ -106,19 +147,23 @@ describe("computeDefinitionForm", () => {
     const category = form.keys.find((k) => k.key === "category")!;
     expect(category.doc).toContain("category");
     expect(category.freq).toBeGreaterThan(0);
-  });
 
-  it("carries the per-kind ref rows and one option list per kind they name", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "trait" })!;
+    // A ref row names its kinds, and that kind gets one option list, resolved
+    // through the index with the mod's own entries first.
     expect(form.keys.find((k) => k.key === "opposites")?.refKinds).toEqual(["trait"]);
-    // Resolved through the index, mod entries first.
     expect(form.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
     expect(form.options.trait[0].hint).toBe("this mod");
   });
 
-  it("lists the mod's own definitions of the kind, not vanilla's", () => {
+  it("lists every definition of the kind for the Open menu, the mod's first", () => {
     const form = computeDefinitionForm(data, schema, { kind: "trait" })!;
-    expect(form.existing.map((d) => d.name)).toEqual(["px_stoic"]);
+    // A creator opens a game trait to duplicate or override it, so vanilla is
+    // offered too, behind the mod's own and labelled with where it comes from.
+    expect(form.existing.map((d) => [d.name, d.source])).toEqual([
+      ["px_stoic", "mod"],
+      ["brave", "vanilla"],
+      ["craven", "vanilla"],
+    ]);
     expect(form.existing[0].file).toBe(traitsFile);
   });
 
@@ -126,13 +171,12 @@ describe("computeDefinitionForm", () => {
     const form = computeDefinitionForm(data, schema, { kind: "trait", name: "px_stoic" })!;
     expect(form.current?.source).toBe("mod");
     expect(form.current?.line).toBe(1);
-    expect(form.current?.text).toBe(TRAITS_TXT.split("\n").slice(1, 6).join("\n"));
-  });
+    expect(form.current?.text).toBe(TRAITS_TXT.split("\n").slice(1, 8).join("\n"));
 
-  it("names an unindexed definition without inventing a block", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "trait", name: "no_such_trait" })!;
-    expect(form.current).toBeUndefined();
-    expect(form.keys.length).toBe(60);
+    // A name the index does not hold still answers the form, with no block.
+    const unindexed = computeDefinitionForm(data, schema, { kind: "trait", name: "no_such_trait" })!;
+    expect(unindexed.current).toBeUndefined();
+    expect(unindexed.keys.length).toBe(60);
   });
 
   it("carries the culture ref rows the vanilla files justify", () => {
@@ -140,22 +184,18 @@ describe("computeDefinitionForm", () => {
     expect(form.folder).toBe("common/culture/cultures");
     expect(form.keys.find((k) => k.key === "traditions")?.refKinds).toEqual(["culture_tradition"]);
     expect(form.keys.find((k) => k.key === "parents")?.refKinds).toEqual(["culture"]);
-  });
-
-  it("labels each pillar option with the family its own block declares", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
-    // One folder holds all five families; `type = ethos` inside the block is
-    // the only thing that tells them apart (schema groupKey on culture_pillar).
+    // One folder holds all five pillar families; `type = ethos` inside the
+    // block is the only thing that tells them apart (schema groupKey on
+    // culture_pillar), so each option is labelled with the family it declares.
     expect(form.keys.find((k) => k.key === "ethos")?.refKinds).toEqual(["culture_pillar"]);
     expect(form.keys.find((k) => k.key === "name_list")?.refKinds).toEqual(["name_list"]);
     expect(form.options.culture_pillar.map((i) => [i.value, i.group])).toEqual([
       ["ethos_stoic", "ethos"],
       ["language_arabic", "language"],
     ]);
-  });
 
-  it("samples the values the indexed cultures write for keys no index answers", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    // For keys no index answers, the values the indexed cultures write are
+    // sampled instead.
     const key = (k: string): string[] | undefined => form.keys.find((x) => x.key === k)?.sampled;
     // Most used first: both cultures write mena, one adds dde_abbasid.
     expect(key("clothing_gfx")).toEqual(["mena_clothing_gfx", "dde_abbasid_clothing_gfx"]);
@@ -167,7 +207,18 @@ describe("computeDefinitionForm", () => {
     expect(key("ethos")).toBeUndefined();
   });
 
-  it("carries the dynasty legacy rows the vanilla files justify", () => {
+  it("answers the tradition, legacy and perk forms the other creators draw", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "culture_tradition" })!;
+    expect(form.folder).toBe("common/culture/traditions");
+    // All 196 vanilla traditions localize both; requiredLoc keeps only $_name.
+    expect(form.locPatterns).toEqual(["$_name", "$_desc"]);
+    // The picture is composed from layer folders, not one file, so the schema
+    // entry names no icon folder and the creator reads the layers itself.
+    expect(form.iconFolder).toBeUndefined();
+    // The harvest's own keys, most used first: `layers` and `category` are what
+    // _traditions.info adds on top of the shared cultural-trait shape.
+    expect(form.keys.slice(0, 4).map((k) => k.key)).toEqual(["layers", "category", "cost", "parameters"]);
+
     // _dynasty_legacies.info states $_name; all 21 vanilla tracks also define
     // $_desc, and window_dynasty_legacy.gui reads the picture off the key.
     const legacy = computeDefinitionForm(data, schema, { kind: "dynasty_legacy" })!;
@@ -195,6 +246,34 @@ describe("computeDefinitionForm", () => {
     expect(perk.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
   });
 
+  it("answers each condition trigger from the source the profile names", () => {
+    const form = computeDefinitionForm(data, schema, { kind: "dynasty_legacy" })!;
+    const values = (trigger: string): string[] | undefined =>
+      form.conditions?.[trigger]?.map((item) => item.value);
+    // docList: the whole enumeration, INCLUDING the first entry, which the
+    // `Traits:` label in front of `Valid Features:` used to swallow.
+    expect(values("has_dlc_feature")).toEqual([
+      "garments_of_the_hre",
+      "fashion_of_the_abbasid_court",
+      "the_northern_lords",
+      "songs_of_the_realm",
+    ]);
+    // innerKeys: a game rule's settings, without `categories` and `default`.
+    expect(values("has_game_rule")).toEqual([
+      "unrestricted_dynasty_legacies_default",
+      "unrestricted_dynasty_legacies_player_only",
+      "unrestricted_dynasty_legacies_all",
+    ]);
+    // kind: the definition index, the same resolver the options use.
+    expect(values("scripted_trigger")).toEqual(["can_start_new_legacy_track_trigger"]);
+
+    // A trigger with an empty list would draw an empty picker, so a trigger
+    // nothing resolves for is left out of the table entirely: its ABSENCE is
+    // what tells a creator to offer a free input instead.
+    const bare = computeDefinitionForm(new ServerData(), schema, { kind: "dynasty_legacy" })!;
+    expect(bare.conditions).toBeUndefined();
+  });
+
   it("labels options and existing definitions with the loc the game reads", () => {
     const trait = computeDefinitionForm(data, schema, { kind: "trait" })!;
     // trait_$ is the schema's first loc pattern; craven has no loc entry, so it
@@ -204,7 +283,7 @@ describe("computeDefinitionForm", () => {
       ["brave", "Brave"],
       ["craven", undefined],
     ]);
-    expect(trait.existing.map((d) => d.label)).toEqual(["Stoic"]);
+    expect(trait.existing.map((d) => d.label)).toEqual(["Stoic", "Brave", undefined]);
 
     // culture_pillar's schema entry names no loc pattern: $_name, then $.
     const culture = computeDefinitionForm(data, schema, { kind: "culture" })!;
@@ -220,6 +299,26 @@ describe("computeDefinitionForm", () => {
     expect(trait.keys.find((k) => k.key === "martial")?.example).toBe("2");
     // A key no indexed definition writes has no example to give.
     expect(trait.keys.find((k) => k.key === "desc")?.example).toBeUndefined();
+
+    // `valid_sex = all/male/female` and `shown_in_ruler_designer = yes/no`:
+    // the set is the schema's and the doc's, the example is the file's, so a
+    // dropdown and a tri-state both have something to show when they are empty,
+    // and neither carries a measured list.
+    const validSex = trait.keys.find((k) => k.key === "valid_sex")!;
+    expect(validSex.example).toBe("male");
+    expect(validSex.sampled).toBeUndefined();
+    const shown = trait.keys.find((k) => k.key === "shown_in_ruler_designer")!;
+    expect(shown.example).toBe("no");
+    expect(shown.sampled).toBeUndefined();
+  });
+
+  it("gives a block key the body the game writes for it, on one line", () => {
+    const culture = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    // Both cultures write `ethnicities = { … }` and nothing else; a script
+    // field has an example to show like every other field.
+    expect(culture.keys.find((k) => k.key === "ethnicities")?.example).toMatch(/^\{ \d+ = \w+/);
+    // A block written differently in each definition still yields one of them.
+    expect(culture.keys.find((k) => k.key === "clothing_gfx")?.example).toContain("mena_clothing_gfx");
   });
 
   it("answers null for a kind the active game's schema does not have", () => {

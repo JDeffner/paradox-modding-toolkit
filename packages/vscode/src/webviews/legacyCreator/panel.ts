@@ -25,25 +25,51 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
-import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
-import { applyDefinitionEdits, pickSaveTarget, writeLocValues } from "../../creators/save";
-import { wireImages } from "../../creators/images";
+import {
+  applyDefinitionEdits,
+  defaultSaveTarget,
+  openSaveTarget,
+  pickSaveTargetChoice,
+  revealDefinition,
+  writeLocValues,
+  type SaveTargetChoice,
+} from "../../creators/save";
+import { importPicture, wireImages } from "../../creators/images";
 import { GuiTextureCache, THUMBNAIL_MAX_DIM } from "../guiEditor/textureCache";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { legacyCreatorHtml } from "./html";
 import { commonPerkCount, perkLinks, perksOfTrack, type PerkLink } from "./perkIndex";
-import type { AppToHost, HostToApp, IconEntry, LoadedPerk, SaveDefinition } from "./messages";
+import type {
+  AppToHost,
+  ArtKind,
+  HostToApp,
+  IconEntry,
+  LoadedPerk,
+  SaveDefinition,
+  TargetKind,
+} from "./messages";
 
 /** The two kinds this panel edits, as the CK3 schema table spells them. */
 const TRACK_KIND = "dynasty_legacy";
 const PERK_KIND = "dynasty_perk";
 
-/** Images the DDS converter reads, plus the format the game itself wants. */
-const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "dds"];
+/**
+ * The SECOND picture a legacy track reads by name: the wide illustration the
+ * legacy window draws behind the row of perks, `[DynastyLegacy.GetTrackIcon]`
+ * in gui/window_dynasty_legacy.gui. It resolves to
+ * gfx/interface/illustrations/legacy_tracks/<track key>.dds, 21 files of
+ * 4216 x 368 for the 21 vanilla tracks (measured 2026-09-04).
+ *
+ * A schema entry carries one `iconFolder` and that one is the 140 x 140 icon,
+ * so this path is named here, beside the frame and mask the same window draws
+ * both pictures through. Nothing is written into the block either way: both
+ * paths are built from the track's key, which is why a pick is a file copy.
+ */
+const ILLUSTRATION_FOLDER = "gfx/interface/illustrations/legacy_tracks";
 
 export interface LegacyCreatorActions {
   fetchForm(params: DefinitionFormParams): Promise<DefinitionForm | null>;
@@ -100,8 +126,14 @@ export class LegacyCreatorPanel {
   private perkForm: DefinitionForm | null = null;
   /** Icon key -> the file it was found in, latest root wins (the game's order). */
   private iconFiles = new Map<string, string>();
+  /** The same for the window's illustration, which is its own folder. */
+  private illustrationFiles = new Map<string, string>();
   /** The track the panel should open on, until the app is ready for it. */
   private pending: string | undefined;
+  /** The perks of the loaded track: where a perk save writes back by default. */
+  private loadedPerks: LoadedPerk[] = [];
+  /** The targets the modder picked, which outrank the defaults until a load. */
+  private chosen: Record<TargetKind, SaveTargetChoice | null> = { track: null, perks: null };
 
   private constructor(context: vscode.ExtensionContext, options: LegacyCreatorOptions, name?: string) {
     this.options = options;
@@ -151,7 +183,11 @@ export class LegacyCreatorPanel {
     if (existing) {
       existing.options = options;
       existing.panel.reveal(vscode.ViewColumn.Active);
-      void existing.postInit(name);
+      // A reveal is not a reset. `postInit` posts a fresh `init`, and the app
+      // answers one by rebuilding the form from empty slots while the track's
+      // key stays in the box: the next save then wrote those empty blocks over
+      // the modder's file. Only a caller that NAMED a track asks for a load.
+      if (name) void existing.load(name);
       return;
     }
     LegacyCreatorPanel.instance = new LegacyCreatorPanel(context, options, name);
@@ -190,7 +226,7 @@ export class LegacyCreatorPanel {
     }
     this.legacyForm = legacy;
     this.perkForm = perk;
-    const icons = this.resolveIcons(legacy.iconFolder);
+    const icons = this.resolveIcons(legacy.iconFolder, this.iconFiles);
     this.post({
       type: "init",
       init: {
@@ -198,11 +234,12 @@ export class LegacyCreatorPanel {
         perk,
         formats: formats?.formats ?? null,
         refIconFolders: await this.refIconFolders(perk, modRoot),
-        modLabel: cfg.modPath ? path.basename(cfg.modPath) : null,
         locLanguage: cfg.locLanguage,
         prefix: scaffoldPrefix(cfg),
         perksPerTrack: cfg.gamePath ? commonPerkCount(this.perkLinksIn(cfg.gamePath, perk.folder)) : null,
         icons,
+        illustrations: this.resolveIcons(ILLUSTRATION_FOLDER, this.illustrationFiles),
+        illustrationFolder: ILLUSTRATION_FOLDER,
         // Any mod of the workspace can be written into (writableMods in
         // creators/save.ts), not only a focus mod.
         problem:
@@ -211,9 +248,61 @@ export class LegacyCreatorPanel {
             : "No mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder.",
       },
     });
+    this.postTargets();
     const target = name ?? this.pending;
     this.pending = undefined;
     if (target) await this.load(target);
+  }
+
+  // -------------------------------------------------------------------------
+  // Where a save goes: resolved up front, shown, and changeable before saving
+  // -------------------------------------------------------------------------
+
+  /**
+   * Where one of the two files lands: what the modder picked, else the default
+   * the rules give (the mod file the definition was loaded from, else the mod
+   * of record under the kind's own file name). A definition that came from the
+   * game or a parent has no writable source, so it falls to the default.
+   */
+  private targetChoice(which: TargetKind): SaveTargetChoice | null {
+    if (this.chosen[which]) return this.chosen[which];
+    const source =
+      which === "track"
+        ? this.legacyForm?.current?.source === "mod"
+          ? this.legacyForm.current.file
+          : undefined
+        : this.loadedPerks.find((perk) => perk.source === "mod")?.file;
+    return defaultSaveTarget(this.options.cfg, {
+      kind: which === "track" ? TRACK_KIND : PERK_KIND,
+      ...(source ? { sourcePath: source } : {}),
+    });
+  }
+
+  /** Tell the app where each file goes, so its top bar can say so. */
+  private postTargets(): void {
+    const line = (which: TargetKind, folder: string | undefined) => {
+      const choice = this.targetChoice(which);
+      return choice && folder ? { modLabel: choice.modLabel, path: `${folder}/${choice.file}` } : null;
+    };
+    this.post({
+      type: "targets",
+      track: line("track", this.legacyForm?.folder),
+      perks: line("perks", this.perkForm?.folder),
+    });
+  }
+
+  /** A target line was clicked: the same picker the save used to open. */
+  private async changeTarget(which: TargetKind): Promise<void> {
+    const form = which === "track" ? this.legacyForm : this.perkForm;
+    if (!form) return;
+    const current = this.targetChoice(which);
+    const picked = await pickSaveTargetChoice(this.options.cfg, form.folder, {
+      kind: which === "track" ? TRACK_KIND : PERK_KIND,
+      ...(current ? { sourceFile: current.file } : {}),
+    });
+    if (!picked) return;
+    this.chosen[which] = picked;
+    this.postTargets();
   }
 
   /**
@@ -256,8 +345,8 @@ export class LegacyCreatorPanel {
    * thumbnails. The key is the file's base name, which is exactly what the
    * game derives the path from, so the grid shows what a track key would find.
    */
-  private resolveIcons(folder: string | undefined): IconEntry[] {
-    this.iconFiles.clear();
+  private resolveIcons(folder: string | undefined, into: Map<string, string>): IconEntry[] {
+    into.clear();
     if (!folder) return [];
     const found = new Map<string, IconEntry>();
     for (const root of roots(this.options.cfg)) {
@@ -267,7 +356,7 @@ export class LegacyCreatorPanel {
           const png = this.textures.resolveFile(abs, THUMBNAIL_MAX_DIM);
           if (!png) continue;
           const key = file.slice(0, -4);
-          this.iconFiles.set(key, abs);
+          into.set(key, abs);
           found.set(key, {
             key,
             url: this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString(),
@@ -321,7 +410,27 @@ export class LegacyCreatorPanel {
       const value = (await actions.lookupLoc(key)).find((entry) => entry.value !== undefined)?.value;
       if (value !== undefined) loc[key] = value;
     }
+    // The track that was opened decides where a save goes, so a target the
+    // modder picked for the previous one does not carry over.
+    this.loadedPerks = perks;
+    this.chosen = { track: null, perks: null };
     this.post({ type: "loaded", track, perks, loc });
+    this.postTargets();
+  }
+
+  /**
+   * One perk's block, for the app's "start from a game perk's effect" picker.
+   * Read through the form request like everything else, so the copy is the
+   * definition the game really loads and not the first file of that name; the
+   * app takes the key it wants out of it.
+   */
+  private async perkTemplate(name: string): Promise<void> {
+    const form = await this.options.actions.fetchForm({
+      kind: PERK_KIND,
+      name,
+      modRoot: this.options.cfg.modPath,
+    });
+    this.post({ type: "perkEffect", name, block: form?.current?.text ?? null });
   }
 
   // -------------------------------------------------------------------------
@@ -343,7 +452,10 @@ export class LegacyCreatorPanel {
         });
         return;
       case "customIcon":
-        await this.convertIcon(message.track);
+        await this.importArt(message.track, message.which);
+        return;
+      case "openFile":
+        await this.openDefinition(message.name, message.which === "perks" ? "perks" : "track");
         return;
       case "images":
         wireImages(this.panel, roots(this.options.cfg), this.textures, message);
@@ -359,6 +471,16 @@ export class LegacyCreatorPanel {
         this.post({ type: "locValues", values });
         return;
       }
+      case "copy":
+        await vscode.env.clipboard.writeText(message.text);
+        this.post({ type: "toast", message: "Script copied to the clipboard." });
+        return;
+      case "changeTarget":
+        await this.changeTarget(message.which);
+        return;
+      case "perkEffect":
+        await this.perkTemplate(message.name);
+        return;
       case "save":
         await this.save(message);
         return;
@@ -393,22 +515,19 @@ export class LegacyCreatorPanel {
     const perkForm = this.perkForm;
     if (!legacyForm || !perkForm) return;
 
-    // Both targets before either write: a cancelled second question must not
-    // leave the track written and its perks missing.
-    const trackTarget = await pickSaveTarget(cfg, legacyForm.folder, {
-      kind: TRACK_KIND,
-      ...(message.track.sourceFile ? { sourceFile: message.track.sourceFile } : {}),
-    });
+    // No question here: both targets have been on screen since the form
+    // loaded. Both are opened before either write, so a refused file name
+    // cannot leave the track written and its perks missing.
+    const trackChoice = this.targetChoice("track");
+    const perkChoice = message.perks.length > 0 ? this.targetChoice("perks") : null;
+    if (!trackChoice || (message.perks.length > 0 && !perkChoice)) {
+      this.post({ type: "toast", message: "No mod folder to save into.", variant: "destructive" });
+      return;
+    }
+    const trackTarget = await openSaveTarget(cfg, legacyForm.folder, trackChoice);
     if (!trackTarget) return;
-    const perkSource = message.perks.find((perk) => perk.sourceFile)?.sourceFile;
-    const perkTarget =
-      message.perks.length > 0
-        ? await pickSaveTarget(cfg, perkForm.folder, {
-            kind: PERK_KIND,
-            ...(perkSource ? { sourceFile: perkSource } : {}),
-          })
-        : null;
-    if (message.perks.length > 0 && !perkTarget) return;
+    const perkTarget = perkChoice ? await openSaveTarget(cfg, perkForm.folder, perkChoice) : null;
+    if (perkChoice && !perkTarget) return;
 
     const refused: string[] = [];
     if (perkTarget) {
@@ -442,14 +561,32 @@ export class LegacyCreatorPanel {
       return;
     }
 
-    const pairs = [...message.track.loc, ...message.perks.flatMap((perk) => perk.loc)];
+    const done: HostToApp = {
+      type: "saved",
+      trackFile: trackTarget.file,
+      perksFile: perkTarget?.file ?? null,
+    };
+    // A NEW loc key lands beside the definition that needs it: the track's
+    // words in the track file's own loc file, a perk's in the perks' one.
+    // Without the target they went to whichever mod file held their siblings,
+    // which for a first legacy is any file at all.
     let locFiles: string[];
     try {
-      locFiles = await writeLocValues(cfg, actions.lookupLoc, pairs);
+      locFiles = [
+        ...(await writeLocValues(cfg, actions.lookupLoc, message.track.loc, trackTarget)),
+        ...(perkTarget
+          ? await writeLocValues(
+              cfg,
+              actions.lookupLoc,
+              message.perks.flatMap((perk) => perk.loc),
+              perkTarget
+            )
+          : []),
+      ];
     } catch (err) {
       // The blocks are written; only the loc failed. The app still gets its
       // reply, so the panel does not sit on a half-reported save.
-      this.post({ type: "saved" });
+      this.post(done);
       this.post({
         type: "toast",
         message: `${message.track.name} was written, but its localization was not: ${err instanceof Error ? err.message : String(err)}`,
@@ -459,31 +596,63 @@ export class LegacyCreatorPanel {
     }
 
     let iconNote = "";
-    if (message.icon) iconNote = this.copyIcon(message.icon, message.track.name, trackTarget.modPath);
+    if (message.icon) iconNote += this.copyArt("icon", message.icon, message.track.name, trackTarget.modPath);
+    if (message.illustration) {
+      iconNote += this.copyArt("illustration", message.illustration, message.track.name, trackTarget.modPath);
+    }
 
-    this.post({ type: "saved" });
+    this.post(done);
+    // The loc files are NAMED, not counted: a modder who has to find the
+    // sentence they just typed should not have to guess which file took it.
+    const locNames = [...new Set(locFiles)].map((file) => path.basename(file));
     const written = [
       `${message.track.name} and ${message.perks.length} perk${message.perks.length === 1 ? "" : "s"}`,
-      `${new Set(locFiles).size} loc file${new Set(locFiles).size === 1 ? "" : "s"}`,
+      locNames.length > 0 ? `loc into ${locNames.join(" and ")}` : "no localization",
     ].join(", ");
     this.post({ type: "toast", message: `Saved ${written}.${iconNote}` });
-    if (message.dropped.length > 0) {
-      const files = [...new Set(message.dropped.map((perk) => path.basename(perk.file)))].join(", ");
-      void vscode.window.showInformationMessage(
-        `Paradox Modding Toolkit: ${message.dropped.map((perk) => perk.name).join(", ")} ` +
-          `left the track but ${message.dropped.length === 1 ? "its block is" : "their blocks are"} still in ${files}. ` +
-          `Delete ${message.dropped.length === 1 ? "it" : "them"} there to remove ${message.dropped.length === 1 ? "it" : "them"} from the game.`
-      );
-    }
+
+    // Where the code went, with the way there: a modder who saved a track and
+    // then looked for it in the wrong folder is the case this answers. A
+    // notification with buttons, never a modal.
+    const rel = (target: { modPath: string; abs: string }): string =>
+      path.relative(target.modPath, target.abs).split(path.sep).join("/");
+    const OPEN_TRACK = "Open track file";
+    const OPEN_PERKS = "Open perks file";
+    const where = [
+      `the track in ${rel(trackTarget)}`,
+      ...(perkTarget ? [`the perks in ${rel(perkTarget)}`] : []),
+      ...(locNames.length > 0 ? [`the names in ${locNames.join(" and ")}`] : []),
+    ].join(", ");
+    void vscode.window
+      .showInformationMessage(
+        `Paradox Modding Toolkit: saved ${message.track.name}: ${where}.`,
+        OPEN_TRACK,
+        ...(perkTarget ? [OPEN_PERKS] : [])
+      )
+      .then((choice) => {
+        if (choice === OPEN_TRACK) return revealDefinition(trackTarget.abs, message.track.name);
+        if (choice === OPEN_PERKS && perkTarget) {
+          return revealDefinition(perkTarget.abs, message.perks[0]?.name ?? "");
+        }
+        return undefined;
+      });
+  }
+
+  /** Which folder and which cache one of the two pictures lives in. */
+  private artOf(which: ArtKind): { folder: string | undefined; files: Map<string, string> } {
+    return which === "illustration"
+      ? { folder: ILLUSTRATION_FOLDER, files: this.illustrationFiles }
+      : { folder: this.legacyForm?.iconFolder, files: this.iconFiles };
   }
 
   /**
    * Put the picked picture under the track's own key, which is the only way to
-   * choose an icon for a name-derived path. Returns the sentence for the toast.
+   * choose a picture for a name-derived path. Returns the sentence for the toast.
    */
-  private copyIcon(key: string, track: string, modPath: string): string {
-    const folder = this.legacyForm?.iconFolder;
-    const from = this.iconFiles.get(key);
+  private copyArt(which: ArtKind, key: string, track: string, modPath: string): string {
+    const { folder, files } = this.artOf(which);
+    const from = files.get(key);
+    const word = which === "illustration" ? "Illustration" : "Icon";
     if (!folder || !from) return "";
     const dir = path.join(modPath, ...folder.split("/"));
     const to = path.join(dir, `${track}.dds`);
@@ -492,43 +661,38 @@ export class LegacyCreatorPanel {
       fs.mkdirSync(dir, { recursive: true });
       fs.copyFileSync(from, to);
     } catch (err) {
-      return ` The icon could not be copied: ${err instanceof Error ? err.message : String(err)}`;
+      return ` The ${word.toLowerCase()} could not be copied: ${err instanceof Error ? err.message : String(err)}`;
     }
-    this.post({ type: "icons", icons: this.resolveIcons(folder), select: track });
-    return ` Icon copied to ${folder}/${track}.dds.`;
+    this.post({ type: "icons", icons: this.resolveIcons(folder, files), select: track, which });
+    return ` ${word} copied to ${folder}/${track}.dds.`;
   }
 
   /**
-   * A picture of the modder's own, converted by the toolkit's own encoder
-   * (convertImageToDds, the non-interactive half of the DDS command): the
-   * creator already knows the format question's answer and the target path,
-   * so nothing is asked and nothing is announced twice.
+   * A picture of the modder's own, in whatever format they have it, into the
+   * mod the track is being saved to (`creators/images.ts` importPicture): any
+   * format Chromium decodes plus TGA and DDS, converted on the way in, and the
+   * modder is asked where it goes so a mod with its own art tree is not forced
+   * into the game's folder.
    */
-  private async convertIcon(track: string): Promise<void> {
-    const { cfg } = this.options;
-    const folder = this.legacyForm?.iconFolder;
-    const modPath = cfg.modPath ?? cfg.workspaceMods[0];
+  private async importArt(track: string, which: ArtKind): Promise<void> {
+    const { folder, files } = this.artOf(which);
+    // The picture goes into the mod the definition goes into, so the two never
+    // land in different mods.
+    const modPath = this.targetChoice("track")?.modPath;
     if (!folder || !modPath) return;
     if (!/^[a-z][a-z0-9_]*$/.test(track)) {
       this.post({ type: "toast", message: "Give the track its key first: the picture is saved under it." });
       return;
     }
-    const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { Images: IMAGE_EXT },
-      title: `Picture for ${track}`,
-    });
-    const source = picked?.[0]?.fsPath;
-    if (!source) return;
-    const dir = path.join(modPath, ...folder.split("/"));
-    const target = path.join(dir, `${track}.dds`);
+    let written;
     try {
-      fs.mkdirSync(dir, { recursive: true });
-      if (source.toLowerCase().endsWith(".dds")) {
-        fs.copyFileSync(source, target);
-      } else {
-        await convertImageToDds(vscode.Uri.file(source), vscode.Uri.file(target));
-      }
+      written = await importPicture({
+        modPath,
+        folder,
+        name: track,
+        title: `Picture for ${track}`,
+        textures: this.textures,
+      });
     } catch (err) {
       this.post({
         type: "toast",
@@ -537,12 +701,28 @@ export class LegacyCreatorPanel {
       });
       return;
     }
-    if (!fs.existsSync(target)) {
-      this.post({ type: "toast", message: "No picture was written." });
-      return;
-    }
-    this.post({ type: "icons", icons: this.resolveIcons(folder), select: track });
-    this.post({ type: "toast", message: `Icon written to ${folder}/${track}.dds.` });
+    if (!written) return;
+    this.post({ type: "icons", icons: this.resolveIcons(folder, files), select: track, which });
+    this.post({
+      type: "toast",
+      message: written.inPlace
+        ? `Picture written to ${written.rel}.`
+        : `Picture written to ${written.rel}. The game looks for it under ${folder}/${track}.dds, so reference it yourself.`,
+    });
+  }
+
+  /**
+   * Open one of the two files at a definition's block. The app saves before it
+   * asks, which is what the script areas' "Edit in the file" promises, so the
+   * block is in the file by the time the editor shows it.
+   */
+  private async openDefinition(name: string, which: TargetKind): Promise<void> {
+    const form = which === "track" ? this.legacyForm : this.perkForm;
+    const choice = this.targetChoice(which);
+    if (!form || !choice) return;
+    const target = await openSaveTarget(this.options.cfg, form.folder, choice);
+    if (!target) return;
+    await revealDefinition(target.abs, name);
   }
 }
 

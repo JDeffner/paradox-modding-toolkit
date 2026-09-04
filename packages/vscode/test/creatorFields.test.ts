@@ -25,35 +25,27 @@ const TRAITS = [
 ];
 
 describe("filterVocabulary", () => {
-  it("matches the name, the source badge and the doc line", () => {
+  it("matches the name, the source badge, the doc line and the loc-resolved label, either case", () => {
     expect(filterVocabulary(TRAITS, "brav").map((i) => i.value)).toEqual(["brave"]);
     expect(filterVocabulary(TRAITS, "this mod").map((i) => i.value)).toEqual(["px_stoic"]);
     // The sentence, not the key: what a modder remembers about a trait.
     expect(filterVocabulary(TRAITS, "risk").map((i) => i.value)).toEqual(["craven"]);
+    expect(filterVocabulary(TRAITS, "COURAGE").map((i) => i.value)).toEqual(["brave"]);
+    // The name a picker actually shows, when loc resolved one.
+    const labelled = [{ value: "px_stoic", label: "Stoic" }, { value: "brave" }];
+    expect(filterVocabulary(labelled, "stoi").map((i) => i.value)).toEqual(["px_stoic"]);
   });
 
   it("keeps the source order and answers everything for an empty query", () => {
     expect(filterVocabulary(TRAITS, "  ").map((i) => i.value)).toEqual(["brave", "craven", "px_stoic"]);
     expect(filterVocabulary(TRAITS, "a").map((i) => i.value)).toEqual(["brave", "craven", "px_stoic"]);
   });
-
-  it("matches the loc-resolved name a picker actually shows", () => {
-    const items = [{ value: "px_stoic", label: "Stoic" }, { value: "brave" }];
-    expect(filterVocabulary(items, "stoi").map((i) => i.value)).toEqual(["px_stoic"]);
-  });
-
-  it("ignores case on both sides", () => {
-    expect(filterVocabulary(TRAITS, "COURAGE").map((i) => i.value)).toEqual(["brave"]);
-  });
 });
 
 describe("chips", () => {
-  it("adds at the end and never twice", () => {
+  it("adds at the end and never twice, removes by value and leaves the rest in order", () => {
     expect(addChip(["brave"], "craven")).toEqual(["brave", "craven"]);
     expect(addChip(["brave", "craven"], "brave")).toEqual(["brave", "craven"]);
-  });
-
-  it("removes by value and leaves the rest in order", () => {
     expect(removeChip(["brave", "craven", "px_stoic"], "craven")).toEqual(["brave", "px_stoic"]);
     expect(removeChip(["brave"], "nothing")).toEqual(["brave"]);
   });
@@ -77,10 +69,6 @@ describe("modifierRowsToScript", () => {
         { name: "health", value: 1 },
       ])
     ).toBe("health = 1");
-  });
-
-  it("writes an integer without a decimal point", () => {
-    expect(modifierRowsToScript([{ name: "health", value: 2 }])).toBe("health = 2");
   });
 });
 
@@ -107,18 +95,17 @@ describe("refField picker", () => {
     return [...document.body.querySelectorAll<HTMLElement>(".px-menu-item")];
   };
 
-  it("reads the player's word and keeps the key as the hint", () => {
-    const rows = open([{ value: "brave", label: "Brave", hint: "game" }]);
-    const row = rows.find((r) => r.textContent?.includes("Brave"))!;
-    expect(row.querySelector(".px-grow")!.textContent).toBe("Brave");
-    expect(row.querySelector(".px-menu-hint")!.textContent).toBe("brave");
-  });
-
-  it("leads with the key when loc has no name for the definition", () => {
-    const rows = open([{ value: "px_stoic", hint: "this mod" }]);
-    const row = rows.find((r) => r.textContent?.includes("px_stoic"))!;
-    expect(row.querySelector(".px-grow")!.textContent).toBe("px_stoic");
-    expect(row.querySelector(".px-menu-hint")!.textContent).toBe("this mod");
+  it("reads the player's word, keeps the key as the hint, and leads with the key when loc has none", () => {
+    const rows = open([
+      { value: "brave", label: "Brave", hint: "game" },
+      { value: "px_stoic", hint: "this mod" },
+    ]);
+    const named = rows.find((r) => r.textContent?.includes("Brave"))!;
+    expect(named.querySelector(".px-grow")!.textContent).toBe("Brave");
+    expect(named.querySelector(".px-menu-hint")!.textContent).toBe("brave");
+    const bare = rows.find((r) => r.textContent?.includes("px_stoic"))!;
+    expect(bare.querySelector(".px-grow")!.textContent).toBe("px_stoic");
+    expect(bare.querySelector(".px-menu-hint")!.textContent).toBe("this mod");
   });
 });
 

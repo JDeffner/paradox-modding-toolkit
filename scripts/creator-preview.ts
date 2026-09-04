@@ -4,7 +4,8 @@
  *
  *   pnpm run preview:creators [-- --port 5331]
  *   http://localhost:5331/creator/traitCreator      (dynastyTree, legacyCreator,
- *                                                     cultureCreator, coaDesigner)
+ *                                                     cultureCreator, coaDesigner,
+ *                                                     traditionCreator)
  *
  * The server bundle (packages/server/dist/server.js, so `pnpm run compile`
  * first) is forked over node IPC with the game and mod from dev-paths.json and
@@ -49,7 +50,11 @@ import {
   perksOfTrack,
 } from "../packages/vscode/src/webviews/legacyCreator/perkIndex";
 import { buildCatalog } from "../packages/vscode/src/webviews/cultureCreator/catalog";
+import { buildTraditionCatalog } from "../packages/vscode/src/webviews/traditionCreator/catalog";
+import { costLocKey } from "../packages/vscode/src/webviews/traditionCreator/messages";
 import { parseNamedColors } from "../packages/server/src/coa/coaParse";
+import { parseScript } from "../packages/server/src/parser";
+import { plainLoc } from "../packages/vscode/src/webviews/traitCreator/app/preview";
 import {
   buildFlagDatabase,
   locateTexture,
@@ -149,6 +154,13 @@ async function lookup(keys: string[]): Promise<Record<string, string>> {
   }
   return out;
 }
+/**
+ * The legacy window's wide picture. A schema entry carries one icon folder, so
+ * the panel names this one itself (legacyCreator/panel.ts
+ * ILLUSTRATION_FOLDER, which imports vscode and cannot be read from here).
+ */
+const LEGACY_ILLUSTRATIONS = "gfx/interface/illustrations/legacy_tracks";
+
 function iconEntries(folder: string | undefined): { key: string; url: string; source: string }[] {
   if (!folder) return [];
   const found = new Map<string, { key: string; url: string; source: string }>();
@@ -192,6 +204,60 @@ function allPerkLinks(folder: string) {
   }
   return links;
 }
+/**
+ * The Dynasty Tree's trait tooltip, the same shape its panel builds: the loc
+ * pair, the picture, and every `name = number` the trait's own block carries
+ * that the modifier vocabulary knows.
+ */
+const traitTipCache = new Map<string, unknown>();
+/** panel.ts asks for the print rules ONCE per panel; so does this. */
+let formatsOnce: Promise<ModifierFormatsResult | null> | undefined;
+async function traitTip(name: string): Promise<unknown> {
+  const known = traitTipCache.get(name);
+  if (known !== undefined) return known;
+  formatsOnce ??= req<ModifierFormatsResult | null>("paradox/modifierFormats", { modRoot: modPath });
+  const [all, one, formatsResult] = await Promise.all([form("trait"), form("trait", name), formatsOnce]);
+  const vocabulary = new Set(all.modifiers.map((mod) => mod.name));
+  const modifiers: { name: string; value: number }[] = [];
+  let icon = "";
+  if (one?.current) {
+    const { root: parsed } = parseScript(one.current.text);
+    const first = parsed.statements[0];
+    const block = first?.kind === "assignment" && first.value?.kind === "block" ? first.value : null;
+    for (const stmt of block?.statements ?? []) {
+      if (stmt.kind !== "assignment" || stmt.value?.kind !== "scalar") continue;
+      if (stmt.key.text === "icon") icon = stmt.value.text;
+      else if (vocabulary.has(stmt.key.text) && Number.isFinite(Number(stmt.value.text))) {
+        modifiers.push({ name: stmt.key.text, value: Number(stmt.value.text) });
+      }
+    }
+  }
+  const formats = formatsResult?.formats ?? {};
+  const values = await lookup([`trait_${name}`, `trait_${name}_desc`]);
+  const images: Record<string, string | null> = {};
+  for (const row of modifiers) {
+    for (const part of [...(formats[row.name]?.prefix ?? []), ...(formats[row.name]?.suffix ?? [])]) {
+      if ("icon" in part) images[part.icon.texture] = imageUrl(part.icon.texture, 0);
+    }
+  }
+  const tip = {
+    tip: {
+      key: name,
+      name: plainLoc(values[`trait_${name}`] ?? name),
+      desc: plainLoc(values[`trait_${name}_desc`] ?? ""),
+      iconUrl: imageUrl(`${all.iconFolder}/${icon || name}.dds`, 128),
+      frameUrl: null,
+      modifiers,
+      opposites: [],
+      flags: [],
+    },
+    formats: Object.fromEntries(modifiers.map((row) => [row.name, formats[row.name]]).filter(([, f]) => f)),
+    images,
+  };
+  traitTipCache.set(name, tip);
+  return tip;
+}
+
 async function refIconFolders(f: DefinitionForm): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const kind of new Set<string>(f.keys.flatMap((k) => k.refKinds ?? []))) {
@@ -232,7 +298,6 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
             type: "init",
             init: {
               form: f,
-              saveMod: path.basename(modPath),
               locLanguage: "english",
               prefix: "cult",
               namedColors,
@@ -240,6 +305,12 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
               noMod: false,
               noGame: false,
             },
+          },
+          // The host resolves where a save lands; here the default name is
+          // enough to show the line the panel draws.
+          {
+            type: "target",
+            target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_cultures.txt` },
           },
         ];
       };
@@ -252,8 +323,10 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return load(String(m.name));
         case "images":
           return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
+        case "copy":
+          return [{ type: "toast", message: "preview: the clipboard is the extension host's" }];
         default:
-          return String(m.type) === "save" ? [refuse("save")] : [];
+          return ["save", "changeTarget"].includes(String(m.type)) ? [refuse(String(m.type))] : [];
       }
     },
   },
@@ -285,11 +358,16 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
               type: "init",
               init: {
                 form: f,
-                modLabel: path.basename(modPath),
                 locLanguage: "english",
                 prefix: "cult",
                 iconKeys: iconKeys(f),
               },
+            },
+            // The host resolves where a save lands; here the default name is
+            // enough to show the line the panel draws.
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_traits.txt` },
             },
             { type: "modifierFormats", formats: formats?.formats ?? null },
           ];
@@ -314,6 +392,55 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
       }
     },
   },
+  traditionCreator: {
+    html: "src/webviews/traditionCreator/html.ts",
+    entry: "src/webviews/traditionCreator/app/main.ts",
+    handle: async (m) => {
+      switch (m.type) {
+        case "ready": {
+          const catalog = buildTraditionCatalog(roots);
+          const [f, formats] = await Promise.all([
+            form("culture_tradition"),
+            req<ModifierFormatsResult | null>("paradox/modifierFormats", {
+              modRoot: modPath,
+              lines: catalog.costKeys.map(costLocKey),
+            }),
+          ]);
+          return [
+            {
+              type: "init",
+              init: {
+                form: f,
+                locLanguage: "english",
+                prefix: "cult",
+                catalog,
+              },
+            },
+            // The host resolves where a save lands; here the default name is
+            // enough to show the line the panel draws.
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: `${f.folder}/cult_culture_traditions.txt` },
+            },
+            { type: "modifierFormats", formats: formats?.formats ?? null, lines: formats?.lines ?? {} },
+          ];
+        }
+        case "open":
+        case "load": {
+          const f = await form("culture_tradition", String(m.name));
+          return f ? [{ type: "form", form: f }] : [];
+        }
+        case "images":
+          return [
+            { type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0), maxDim: m.maxDim },
+          ];
+        case "loc":
+          return [{ type: "loc", values: await lookup(m.keys as string[]) }];
+        default:
+          return String(m.type) === "save" ? [refuse("save")] : [];
+      }
+    },
+  },
   legacyCreator: {
     html: "src/webviews/legacyCreator/html.ts",
     entry: "src/webviews/legacyCreator/app/main.ts",
@@ -333,13 +460,21 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
                 perk,
                 formats: formats?.formats ?? null,
                 refIconFolders: await refIconFolders(perk),
-                modLabel: path.basename(modPath),
                 locLanguage: "english",
                 prefix: "cult",
                 perksPerTrack: commonPerkCount(allPerkLinks(perk.folder)),
                 icons: iconEntries(legacy.iconFolder),
+                illustrations: iconEntries(LEGACY_ILLUSTRATIONS),
+                illustrationFolder: LEGACY_ILLUSTRATIONS,
                 problem: null,
               },
+            },
+            // The host resolves both files a legacy is written into; here the
+            // default names are enough to show the two lines the panel draws.
+            {
+              type: "targets",
+              track: { modLabel: path.basename(modPath), path: `${legacy.folder}/cult_legacies.txt` },
+              perks: { modLabel: path.basename(modPath), path: `${perk.folder}/cult_dynasty_perks.txt` },
             },
           ];
         }
@@ -364,8 +499,17 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return [{ type: "images", urls: images(m.keys as string[], (m.maxDim as number) ?? 0) }];
         case "loc":
           return [{ type: "locValues", values: await lookup(m.keys as string[]) }];
+        // A read like any other: the block of the perk whose effect is being
+        // copied, so the "start from a game perk's effect" picker works here.
+        case "perkEffect": {
+          const name = String(m.name);
+          const f = await form("dynasty_perk", name);
+          return [{ type: "perkEffect", name, block: f?.current?.text ?? null }];
+        }
         default:
-          return String(m.type) === "save" || String(m.type) === "customIcon" ? [refuse(String(m.type))] : [];
+          return ["save", "customIcon", "copy", "changeTarget"].includes(String(m.type))
+            ? [refuse(String(m.type))]
+            : [];
       }
     },
   },
@@ -380,7 +524,16 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
       const db = () => buildFlagDatabase("Crusader Kings III", flagRoots, undefined, false, true);
       switch (m.type) {
         case "ready":
-          return [{ type: "init", db: db(), mods }];
+          return [
+            { type: "init", db: db(), mods },
+            {
+              type: "target",
+              target: {
+                modLabel: mods[0]?.label ?? path.basename(modPath),
+                path: "common/coat_of_arms/coat_of_arms/preview_coat_of_arms.txt",
+              },
+            },
+          ];
         case "textures": {
           const urls: Record<string, string | null> = {};
           for (const key of m.keys as string[]) {
@@ -403,7 +556,7 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
           return entry ? [{ type: "opened", entry, flag: d.definitions[entry.name] }] : [];
         }
         default:
-          return ["save", "paste", "exportPng", "copy"].includes(String(m.type))
+          return ["save", "paste", "exportPng", "copy", "changeTarget"].includes(String(m.type))
             ? [refuse(String(m.type))]
             : [];
       }
@@ -414,11 +567,36 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
     entry: "src/webviews/dynastyTree/app/main.ts",
     handle: async (m) => {
       switch (m.type) {
+        case "traitIcons": {
+          const f = await form("trait");
+          const urls: Record<string, string | null> = {};
+          for (const name of m.names as string[]) urls[name] = imageUrl(`${f.iconFolder}/${name}.dds`, 48);
+          return [{ type: "traitIcons", urls }];
+        }
+        case "traitTip":
+          return [{ type: "traitTip", name: m.name, tip: await traitTip(String(m.name)) }];
+        // The clipboard is the host's; the preview answers with a fixed name so
+        // the DNA round trip can still be driven here.
+        case "copy":
+          return [{ type: "toast", message: "Copied to the clipboard." }];
+        case "paste":
+          return [{ type: "pasted", field: m.field, text: "preview_pasted_dna" }];
+        case "target":
+          return [
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: "history/characters/cult_characters.txt" },
+            },
+          ];
         case "ready": {
           const t0 = Date.now();
           const r = await req<Record<string, unknown>>("paradox/dynastyTree", { modRoot: modPath });
           return [
             { type: "init", gameName: "Crusader Kings III", mods },
+            {
+              type: "target",
+              target: { modLabel: path.basename(modPath), path: "history/characters/cult_characters.txt" },
+            },
             {
               type: "list",
               supported: r.supported,
@@ -465,6 +643,17 @@ const HANDLERS: Record<string, { html: string; entry: string; handle: Handler }>
             } catch {
               sets[kind] = [];
             }
+          }
+          // panel.ts labelTraits: eventValueOptions answers keys only, so the
+          // trait form's loc-resolved names are folded in the same way.
+          const traitForm = await form("trait");
+          const labels = new Map<string, string>();
+          for (const item of traitForm.options.trait ?? [])
+            if (item.label) labels.set(item.value, item.label);
+          for (const def of traitForm.existing) if (def.label) labels.set(def.name, def.label);
+          for (const item of (sets.trait as { value: string; label?: string }[]) ?? []) {
+            const label = labels.get(item.value);
+            if (label) item.label = label;
           }
           return [
             {

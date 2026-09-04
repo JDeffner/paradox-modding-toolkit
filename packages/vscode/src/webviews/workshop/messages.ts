@@ -77,10 +77,11 @@ export interface WorkshopModInfo {
   changeNoteSuggestion: string;
   /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
   changelogNote: { text: string; source: string } | null;
-  /** Where the changelog lookup pointed (resolved px.workshop.changelog). */
-  changelogPath: string;
-  /** True when that path exists at all (a missing entry reads differently from a missing changelog). */
-  changelogPresent: boolean;
+  /** Where the changelog lookup pointed (resolved px.workshop.changelog),
+   * relative to the workshop folder ("changelog", "CHANGELOG.md"). */
+  changelogDisplay: string;
+  /** What stands at that path; null when nothing does (which reads differently from a missing entry). */
+  changelogKind: "file" | "folder" | null;
   /** Changelogs found in the mod or the workshop folder, to point the setting at. */
   changelogCandidates: ChangelogCandidate[];
   /** The mod's own version (the next update's) and the supported game version. */
@@ -92,6 +93,12 @@ export interface WorkshopModInfo {
   workshopDirCustom: boolean;
   /** True when that folder exists: it is then the canonical listing store. */
   filesPresent: boolean;
+  /**
+   * Which descriptions the listing folder keeps as Markdown: the empty string
+   * for the default one, else the Steam language code. The panel converts
+   * those to BBCode before previewing, so the preview is what Steam gets.
+   */
+  markdown: string[];
   steamLanguages: SteamLanguage[];
   /** Steam codes guessed from the mod's localization folders, to offer first. */
   suggestedLanguages: string[];
@@ -111,7 +118,7 @@ export interface WorkshopModInfo {
 export interface PullParts {
   /** item.json: title, tags, visibility, id. */
   details: boolean;
-  /** description.bbcode. */
+  /** The default-language description file. */
   description: boolean;
   /** translations/<lang>/ for every language whose text differs from the default. */
   translations: boolean;
@@ -175,6 +182,8 @@ export type AppToHost =
       details: boolean;
       /** The gallery (images + videos), separate from the details and the thumbnail. */
       previews: boolean;
+      /** dependencies.json: the required DLC and items, applied after the submits. */
+      requirements: boolean;
       languages: string[];
       changeNote: string;
       visibility: WorkshopVisibility | null;
@@ -207,6 +216,10 @@ export type AppToHost =
   | { type: "setChangelogSource"; path: string }
   /** Create `<workshopDir>/changelog/<version>.md` and open it. */
   | { type: "createChangelog" }
+  /** Open the resolved changelog entry in the editor (creates nothing). */
+  | { type: "openChangelogEntry" }
+  /** Open one gallery video on YouTube. */
+  | { type: "openVideo"; id: string }
   /** Write dependencies.json (required DLC app ids, required Workshop item ids). */
   | { type: "setDependencies"; apps: number[]; items: string[] }
   /** Pick images to copy into the previews folder (host opens the file dialog). */
@@ -216,4 +229,6 @@ export type AppToHost =
   /** Write previews/videos.txt. */
   | { type: "setVideos"; ids: string[] }
   /** Reveal the previews folder in the OS file manager, creating it first. */
-  | { type: "openPreviewsFolder" };
+  | { type: "openPreviewsFolder" }
+  /** Open the wiki's BBCode page: which tags Steam renders in a description. */
+  | { type: "bbcodeHelp" };
