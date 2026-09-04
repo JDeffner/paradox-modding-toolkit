@@ -289,7 +289,7 @@ describe("dynasty legacy creator app", () => {
     expect(app.name.value).toBe("px_legacy_track");
     expect(app.cards()).toHaveLength(5);
     expect(app.window.document.getElementById("perkNote")?.textContent).toContain(
-      "Vanilla tracks have 5 perks"
+      "The game's tracks have 5 perks each"
     );
   });
 

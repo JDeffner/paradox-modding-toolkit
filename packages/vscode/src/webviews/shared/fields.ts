@@ -699,6 +699,8 @@ export function iconField(options: IconFieldOptions): Field<string> {
   if (wide) {
     preview.style.width = "160px";
     preview.style.height = "14px";
+    preview.style.minWidth = "0";
+    preview.style.flexShrink = "1";
     preview.style.objectFit = "fill";
   }
   const face = el("span", "px-truncate px-xs px-muted");

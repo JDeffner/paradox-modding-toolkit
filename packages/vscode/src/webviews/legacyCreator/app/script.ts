@@ -728,19 +728,3 @@ export function perkNameFor(track: string, index: number): string {
   const stem = track.endsWith("_track") ? track.slice(0, -"_track".length) : track;
   return `${stem}_${index + 1}`;
 }
-
-/**
- * The name a NEW perk gets: the first number of the track's own series that no
- * perk on the track uses.
- *
- * Numbering off the perk COUNT handed a five-perk track whose third perk had
- * been removed a fifth named `<stem>_5`, which the track already had, and the
- * modder had to rename it by hand before the form would save.
- */
-export function freePerkName(track: string, taken: readonly string[]): string {
-  const used = new Set(taken);
-  for (let index = 0; ; index++) {
-    const name = perkNameFor(track, index);
-    if (!used.has(name)) return name;
-  }
-}

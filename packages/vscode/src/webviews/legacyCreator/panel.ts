@@ -610,14 +610,32 @@ export class LegacyCreatorPanel {
       locNames.length > 0 ? `loc into ${locNames.join(" and ")}` : "no localization",
     ].join(", ");
     this.post({ type: "toast", message: `Saved ${written}.${iconNote}` });
-    if (message.dropped.length > 0) {
-      const files = [...new Set(message.dropped.map((perk) => path.basename(perk.file)))].join(", ");
-      void vscode.window.showInformationMessage(
-        `Paradox Modding Toolkit: ${message.dropped.map((perk) => perk.name).join(", ")} ` +
-          `left the track but ${message.dropped.length === 1 ? "its block is" : "their blocks are"} still in ${files}. ` +
-          `Delete ${message.dropped.length === 1 ? "it" : "them"} there to remove ${message.dropped.length === 1 ? "it" : "them"} from the game.`
-      );
-    }
+
+    // Where the code went, with the way there: a modder who saved a track and
+    // then looked for it in the wrong folder is the case this answers. A
+    // notification with buttons, never a modal.
+    const rel = (target: { modPath: string; abs: string }): string =>
+      path.relative(target.modPath, target.abs).split(path.sep).join("/");
+    const OPEN_TRACK = "Open track file";
+    const OPEN_PERKS = "Open perks file";
+    const where = [
+      `the track in ${rel(trackTarget)}`,
+      ...(perkTarget ? [`the perks in ${rel(perkTarget)}`] : []),
+      ...(locNames.length > 0 ? [`the names in ${locNames.join(" and ")}`] : []),
+    ].join(", ");
+    void vscode.window
+      .showInformationMessage(
+        `Paradox Modding Toolkit: saved ${message.track.name}: ${where}.`,
+        OPEN_TRACK,
+        ...(perkTarget ? [OPEN_PERKS] : [])
+      )
+      .then((choice) => {
+        if (choice === OPEN_TRACK) return revealDefinition(trackTarget.abs, message.track.name);
+        if (choice === OPEN_PERKS && perkTarget) {
+          return revealDefinition(perkTarget.abs, message.perks[0]?.name ?? "");
+        }
+        return undefined;
+      });
   }
 
   /** Which folder and which cache one of the two pictures lives in. */

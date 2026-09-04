@@ -77,9 +77,12 @@
   the mod's own, so the next save rewrites only the lines that changed; a
   block the builders only reindented (a one-line `is_shown = { … }`) counts as
   unchanged, and an empty `character_modifier = { }` the file already has is
-  kept rather than dropped. "Add perk" takes the first number no perk on the
-  track uses, so removing the third of five and adding one back no longer
-  produces a duplicate key. Every section of the track form and of the perk
+  kept rather than dropped. A track has exactly the number of perks the
+  game's own tracks have (5, read from the game's perk files): there is no
+  adding or removing, because the legacy window is not built for another
+  count, and a loaded track with a different count says so under the row.
+  After a save a notification names the track file, the perks file and the
+  loc file, with buttons that open them. Every section of the track form and of the perk
   editor has a ? that says what it writes, what it accepts and what the game
   does with it, and every script area offers "Edit in the file", which saves
   and opens the definition in the editor. The illustration picker shows one

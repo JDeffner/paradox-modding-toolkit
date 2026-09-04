@@ -93,12 +93,6 @@ export interface SaveDefinition {
   sourceFile?: string;
 }
 
-/** A perk the modder dropped from a track that already exists on disk. */
-export interface DroppedPerk {
-  name: string;
-  file: string;
-}
-
 /** The two files a legacy is written into. */
 export type TargetKind = "track" | "perks";
 
@@ -140,7 +134,6 @@ export type AppToHost =
       type: "save";
       track: SaveDefinition;
       perks: SaveDefinition[];
-      dropped: DroppedPerk[];
       /**
        * The icon the modder picked from the grid, when it is not already the
        * track's own picture: the host copies it to <iconFolder>/<track>.dds.

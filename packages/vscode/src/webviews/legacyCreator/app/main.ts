@@ -23,7 +23,7 @@ import type {
   EventVocabularyItem,
   ModifierFormat,
 } from "@px-lsp/protocol/protocol";
-import { confirmDialog, menu, toast } from "../../shared/overlay";
+import { menu, toast } from "../../shared/overlay";
 import { helpDialog, type HelpItem, type HelpSpec } from "../../shared/help";
 import { installTips } from "../../shared/tips";
 import { iconEl } from "../../shared/icons";
@@ -59,7 +59,6 @@ import {
   applyValues,
   changedProperties,
   effectLocKey,
-  freePerkName,
   locKeyFor,
   modifierBlockValue,
   modifierRows,
@@ -166,8 +165,6 @@ let perks: Perk[] = [];
 let selected: Perk | null = null;
 /** The key every prefilled name was derived from, so a rename can follow it. */
 let derivedFrom = "";
-/** Perks the modder took off a saved track; the host names the file that keeps them. */
-let dropped: { name: string; file: string }[] = [];
 
 // --- the track's own controls ------------------------------------------------
 let trackLoc: { pattern: string; field: Field<string> }[] = [];
@@ -386,7 +383,6 @@ function buildDrawn(): {
   el: HTMLElement;
   note: HTMLElement;
   perks: HTMLElement;
-  add: HTMLElement;
 } {
   const row = el("div");
   row.id = "legacyRow";
@@ -421,19 +417,12 @@ function buildDrawn(): {
   perksHost.id = "perks";
   strip.append(stripArt, perksHost);
 
-  const add = el("div", "perktile");
-  add.id = "addPerk";
-  add.dataset.add = "";
-  add.tabIndex = 0;
-  add.setAttribute("role", "button");
-  add.dataset.tip = "Add a perk to the end of the track";
-  add.append(iconEl("plus"), el("span", "", "Add perk"));
-  stripRow.append(strip, add);
+  stripRow.append(strip);
 
   const note = el("div", "lede");
   note.id = "perkNote";
   row.append(box, stripRow);
-  return { el: row, note, perks: perksHost, add };
+  return { el: row, note, perks: perksHost };
 }
 
 const drawn = buildDrawn();
@@ -978,25 +967,14 @@ function refItems(kind: string): EventVocabularyItem[] {
 function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   const form = perkForm!;
   const original = loaded ? parseDefBlock(loaded.text) : null;
-  // The first FREE number, not the perk count: removing the third of five and
-  // adding one back handed the new perk the fifth's own key.
-  const fresh = freePerkName(trackName() || "legacy", perks.map(perkName));
-  const name = loaded?.name ?? fresh;
+  const name = loaded?.name ?? perkNameFor(trackName() || "legacy", perks.length);
 
   const tile = el("div", "perktile");
   tile.tabIndex = 0;
   tile.setAttribute("role", "button");
   const step = el("span", "step");
   const face = el("span", "face");
-  const tools = el("span", "px-item-tools");
-  const drop = document.createElement("button");
-  drop.className = "px-btn";
-  drop.dataset.variant = "ghost";
-  drop.dataset.size = "icon-xs";
-  drop.dataset.tip = "Remove this perk from the track";
-  drop.append(iconEl("trash"));
-  tools.append(drop);
-  tile.append(step, face, tools);
+  tile.append(step, face);
 
   const editor = el("div");
   const identity = fold(
@@ -1009,7 +987,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     label: "Key",
     doc: "The perk's key. Its loc key and its default name follow it.",
     value: name,
-    placeholder: fresh,
+    placeholder: perkNameFor(trackName() || "legacy", perks.length),
   });
   identity.body.append(key.el);
   editor.append(identity.el);
@@ -1233,10 +1211,6 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
   };
   tile.addEventListener("pointerenter", () => showTip(perk));
   tile.addEventListener("pointerleave", hideTip);
-  drop.onclick = (ev) => {
-    ev.stopPropagation();
-    void removePerk(perk);
-  };
 
   perks.push(perk);
   drawn.perks.append(tile);
@@ -1304,28 +1278,6 @@ function renamePerk(perk: Perk): void {
   perk.effect?.rename(was, name);
   perk.doctrines?.rename(was, name);
   askLoc([...(perk.effect?.keys() ?? []), ...(perk.doctrines?.keys() ?? [])]);
-}
-
-async function removePerk(perk: Perk): Promise<void> {
-  const name = perkName(perk);
-  if (perk.source === "mod" && perk.file) {
-    const ok = await confirmDialog({
-      title: `Remove ${name} from the track?`,
-      description:
-        "The tile goes away and the perk stops being written. Its block stays in the file it already lives in: " +
-        "the toolkit does not delete definitions for you. Delete it there if you want it gone from the game.",
-      confirmLabel: "Remove from the track",
-      destructive: true,
-    });
-    if (!ok) return;
-    dropped.push({ name, file: perk.file });
-  }
-  perks = perks.filter((p) => p !== perk);
-  perk.tile.remove();
-  if (selected === perk) selectPerk(null);
-  if (tipFor === perk) hideTip();
-  renumber();
-  refreshScript();
 }
 
 function renumber(): void {
@@ -1563,7 +1515,7 @@ function enableTileDrag(list: HTMLElement): void {
   list.addEventListener("pointerdown", (down) => {
     if (down.button !== 0) return;
     const tile = (down.target as HTMLElement).closest<HTMLElement>(".perktile");
-    if (!tile || tile.dataset.add !== undefined) return;
+    if (!tile) return;
     if ((down.target as HTMLElement).closest("button")) return;
     const from = perks.findIndex((p) => p.tile === tile);
     if (from < 0 || perks.length < 2) return;
@@ -1784,7 +1736,6 @@ function save(): boolean {
     type: "save",
     track,
     perks: written,
-    dropped: dropped.slice(),
     icon: icon && icon !== name ? icon : null,
     illustration: illustration && illustration !== name ? illustration : null,
   });
@@ -1846,25 +1797,6 @@ function openInFile(which: TargetKind, nameOf: () => string): void {
 // Wiring
 // ---------------------------------------------------------------------------
 
-/**
- * The tile that ends the row: the only way a track grows a perk. It stands
- * BESIDE the illustration and not on it, because the strip is exactly the box
- * the game's own perks define and a sixth tile would stretch the picture.
- */
-const addTile = drawn.add;
-const addPerkClicked = (): void => {
-  const perk = addPerk();
-  refreshScript();
-  selectPerk(perk);
-};
-addTile.onclick = addPerkClicked;
-addTile.onkeydown = (ev) => {
-  if (ev.key === "Enter" || ev.key === " ") {
-    ev.preventDefault();
-    addPerkClicked();
-  }
-};
-
 function reset(loc: Record<string, string> = {}): void {
   perks = [];
   selectPerk(null);
@@ -1882,7 +1814,6 @@ function applyInit(payload: CreatorInit): void {
   trackOriginal = null;
   trackSource = null;
   trackFile = null;
-  dropped = [];
   const nameInput = $<HTMLInputElement>("name");
   if (nameInput.value.trim() === "") nameInput.value = `${payload.prefix}_legacy_track`;
   derivedFrom = nameInput.value.trim();
@@ -1893,15 +1824,39 @@ function applyInit(payload: CreatorInit): void {
   problem.hidden = payload.problem === null;
   problem.textContent = payload.problem ?? "";
   $<HTMLButtonElement>("save").disabled = payload.problem !== null;
-  drawn.note.textContent =
-    payload.perksPerTrack === null
-      ? "The illustration is one picture stretched behind every perk. (The game folder is not set, so the usual number of perks could not be read.)"
-      : `The illustration is one picture stretched behind every perk. (Vanilla tracks have ${payload.perksPerTrack} perks.)`;
+  paintPerkNote(null);
   askImages([TRACK_FRAME, TRACK_MASK], STRIP_DIM);
   reset();
-  const slots = payload.perksPerTrack ?? 1;
-  for (let i = 0; i < slots; i++) addPerk();
+  for (let i = 0; i < perkSlots(); i++) addPerk();
   refreshScript();
+}
+
+/**
+ * A track has exactly as many perks as the game's own tracks: the legacy
+ * window lays out that many tiles and no more, so a track with another count
+ * breaks the window. Measured off the game's perk files (perksPerTrack); when
+ * the game folder is not set the count falls back to the one every CK3 track
+ * has had since release. Whoever wants another count is past what a form
+ * should offer and edits the file.
+ */
+const DEFAULT_SLOTS = 5;
+
+function perkSlots(): number {
+  return init?.perksPerTrack ?? DEFAULT_SLOTS;
+}
+
+/** The line under the row: the count the game expects, and this track's when it differs. */
+function paintPerkNote(loadedCount: number | null): void {
+  const slots = perkSlots();
+  const source =
+    init?.perksPerTrack === null
+      ? `The game folder is not set, so the count is the ${DEFAULT_SLOTS} every game track has.`
+      : `The game's tracks have ${slots} perks each.`;
+  const mismatch =
+    loadedCount !== null && loadedCount !== slots
+      ? ` This track has ${loadedCount}, which the legacy window is not built for; the tiles show what the file holds.`
+      : "";
+  drawn.note.textContent = `The illustration is one picture stretched behind every perk. ${source}${mismatch}`;
 }
 
 /**
@@ -1935,7 +1890,6 @@ function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<st
   trackOriginal = track.current ? parseDefBlock(track.current.text) : null;
   trackSource = track.current?.source ?? null;
   trackFile = track.current?.file ?? null;
-  dropped = [];
   overrideMode = false;
   paintMode();
   if (trackOriginal) $<HTMLInputElement>("name").value = trackOriginal.name;
@@ -1947,6 +1901,7 @@ function applyLoaded(track: DefinitionForm, loaded: LoadedPerk[], loc: Record<st
   $("mode").hidden = trackSource === null || trackSource === "mod";
   reset(loc);
   for (const perk of loaded) addPerk(perk, loc);
+  paintPerkNote(loaded.length);
   paintArt();
   refreshScript();
   // A loaded track opens on its first perk: the panel's whole subject is the
@@ -2103,16 +2058,16 @@ $("helpBtn").onclick = () =>
             text: "to edit that perk on the right, one perk at a time; the panel's arrows walk the track. Drag a tile to move it along the track; the numbers follow.",
           },
           {
+            lead: "A track has exactly five perks,",
+            text: "because that is what the game's legacy window lays out; there is no adding or removing here. A track that needs another count is written in the file by hand, by someone who knows what the window does with it.",
+          },
+          {
             lead: "Doctrine modifiers are a list.",
             text: "A perk applies one block per doctrine, and the game's own erudition legacy writes three of them, so add as many as the perk needs.",
           },
           {
             lead: "legacy = <track> is written for you",
             text: "on every perk, because a perk only exists inside a track.",
-          },
-          {
-            lead: "Removing a saved perk",
-            text: "takes it off the track but leaves its block in the file it already lives in. The toolkit never deletes a definition for you.",
           },
         ],
       },
@@ -2187,7 +2142,6 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     }
     case "saved": {
       adoptSaved(message.trackFile, message.perksFile);
-      dropped = [];
       const open = openAfterSave;
       openAfterSave = null;
       if (open) send({ type: "openFile", name: open.name, which: open.which });

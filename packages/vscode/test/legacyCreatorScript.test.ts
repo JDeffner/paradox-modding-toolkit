@@ -13,7 +13,6 @@ import {
   bodyOf,
   changedProperties,
   doctrineOf,
-  freePerkName,
   modifierBlockValue,
   modifierNameOf,
   readChanceValue,
@@ -249,18 +248,6 @@ describe("legacy creator: reading and writing a definition block", () => {
   it("prefills a perk name off the track's own key", () => {
     expect(perkNameFor("blood_legacy_track", 0)).toBe("blood_legacy_1");
     expect(perkNameFor("px_mytrack", 4)).toBe("px_mytrack_5");
-  });
-
-  it("names a new perk after the first number the track does not use", () => {
-    // The bug: with the third of five removed, counting the perks named the
-    // new one `px_mytrack_5`, which the track already had.
-    const track = "px_mytrack";
-    const kept = ["px_mytrack_1", "px_mytrack_2", "px_mytrack_4", "px_mytrack_5"];
-    expect(freePerkName(track, kept)).toBe("px_mytrack_3");
-    expect(freePerkName(track, [])).toBe("px_mytrack_1");
-    expect(freePerkName(track, [...kept, "px_mytrack_3"])).toBe("px_mytrack_6");
-    // A key the modder typed is not in the series, so it takes no number.
-    expect(freePerkName(track, ["hand_written"])).toBe("px_mytrack_1");
   });
 
   it("does not report a block the builder only reindented as changed", () => {

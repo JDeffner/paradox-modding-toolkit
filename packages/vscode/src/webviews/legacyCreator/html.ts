@@ -179,14 +179,6 @@ ${uiCss}
   .perktile > .px-item-tools { position: absolute; top: 2px; right: 2px; opacity: 0; }
   .perktile:hover > .px-item-tools,
   .perktile:focus-within > .px-item-tools { opacity: 1; }
-  /* The one tile that is not on the strip: the game has no such tile, so it
-     keeps the panel's own chrome. */
-  #addPerk {
-    flex: 0 0 132px; align-self: stretch; align-items: center; justify-content: center;
-    border: 1px dashed var(--px-border); border-radius: var(--px-radius-md);
-    background: none; color: var(--px-muted-fg); aspect-ratio: auto;
-  }
-  #addPerk:hover { background: var(--px-muted); }
   #perkTip { position: fixed; z-index: 80; max-width: 320px; pointer-events: none; }
   #perkTip > .px-game-tip { background: var(--px-popover); box-shadow: var(--px-shadow-md); }
   .rows-preview { padding: 0 8px 2px 8px; }
