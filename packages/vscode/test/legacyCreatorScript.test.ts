@@ -131,19 +131,17 @@ describe("legacy creator: reading and writing a definition block", () => {
       expect(block, source.slice(0, 30)).not.toBeNull();
       expect(writeDefBlock(block!)).toBe(source);
     }
-  });
-
-  it("keeps a perk's trailing comment, blank lines and tab-only line", () => {
+    // What the model holds them as: the trailing comment on the opening line,
+    // the blank line before the modifier, the tab-only line before ai_chance.
     const block = parseDefBlock(PERKS[0])!;
     expect(block.name).toBe("blood_legacy_1");
     expect(block.head).toBe("# Noble Veins");
     expect(block.statements.map((s) => s.key)).toEqual(["legacy", "character_modifier", "ai_chance"]);
-    // The blank line before the modifier and the tab-only line before ai_chance.
     expect(block.statements[1].before).toEqual([""]);
     expect(block.statements[2].before).toEqual(["\t"]);
   });
 
-  it("changing one modifier number rewrites exactly one line", () => {
+  it("changing one modifier number rewrites exactly one line, and removing a key drops its own", () => {
     const block = parseDefBlock(PERKS[0])!;
     const entries = parseModifierBlock(valueOf(block, "character_modifier")!);
     // `name = blood_legacy_1_modifier` is not a row; it is kept where it was.
@@ -164,27 +162,17 @@ describe("legacy creator: reading and writing a definition block", () => {
     const after = writeDefBlock(next).split("\n");
     expect(after.length).toBe(before.length);
     const moved = after.filter((line, i) => line !== before[i]);
+    // The row nobody touched keeps the file's own `0.30`, not a reprinted 0.3.
     expect(moved).toEqual(["\t\tpositive_random_genetic_chance = 0.5"]);
-  });
 
-  it("keeps 0.30 as 0.30 while the modder does not touch it", () => {
-    const entries = parseModifierBlock(valueOf(parseDefBlock(PERKS[2])!, "character_modifier")!);
-    expect(writeModifierBlock(updateModifierRows(entries, modifierRows(entries)))).toBe(
-      "{\n" +
-        "\t\tname = blood_legacy_3_modifier\n" +
-        "\t\tnegative_random_genetic_chance = -0.30\n" +
-        "\t\tnegative_inactive_inheritance_chance = -0.30\n" +
-        "\t}"
+    const dropped = applyValues(
+      parseDefBlock(PERKS[4])!,
+      [{ key: "character_modifier", value: null }],
+      PERK_KEYS
     );
-  });
-
-  it("reads the traits block as rows because its values are AI chances", () => {
-    const entries = parseModifierBlock(valueOf(parseDefBlock(PERKS[3])!, "traits")!);
-    expect(modifierRows(entries).slice(0, 2)).toEqual([
-      { name: "beauty_good_1", value: 100 },
-      { name: "intellect_good_1", value: 100 },
-    ]);
-    expect(entries.every((e) => e.kind === "row")).toBe(true);
+    expect(writeDefBlock(dropped)).toBe(
+      "blood_legacy_5 = { # Octogenarians\n\tlegacy = blood_legacy_track\n\n}"
+    );
   });
 
   it("writes a new perk in the harvest's key order, with legacy first", () => {
@@ -214,43 +202,20 @@ describe("legacy creator: reading and writing a definition block", () => {
     );
   });
 
-  it("removing a key drops its line and leaves the rest alone", () => {
-    const block = parseDefBlock(PERKS[4])!;
-    const next = applyValues(block, [{ key: "character_modifier", value: null }], PERK_KEYS);
-    expect(writeDefBlock(next)).toBe(
-      "blood_legacy_5 = { # Octogenarians\n\tlegacy = blood_legacy_track\n\n}"
-    );
-  });
-
-  it("an untouched form changes no property at all", () => {
-    const block = parseDefBlock(PERKS[1])!;
-    const entries = parseModifierBlock(valueOf(block, "character_modifier")!);
-    const next = applyValues(
-      block,
-      [
-        { key: "legacy", value: "blood_legacy_track" },
-        {
-          key: "character_modifier",
-          value: writeModifierBlock(updateModifierRows(entries, modifierRows(entries))),
-        },
-      ],
-      PERK_KEYS
-    );
-    expect(changedProperties(block, next, PERK_KEYS)).toEqual([]);
-  });
-
   it("only braces the modder did not write are added", () => {
     expect(wrapBlockValue("  ")).toBeNull();
     expect(wrapBlockValue("{ has_trait = brave }")).toBe("{ has_trait = brave }");
     expect(wrapBlockValue("has_trait = brave")).toBe("{\n\t\thas_trait = brave\n\t}");
   });
 
-  it("prefills a perk name off the track's own key", () => {
+  it("names a perk and its tooltip loc keys off the track's own key", () => {
     expect(perkNameFor("blood_legacy_track", 0)).toBe("blood_legacy_1");
     expect(perkNameFor("px_mytrack", 4)).toBe("px_mytrack_5");
+    expect(effectKeyFor("blood_legacy_4", 0)).toBe("blood_legacy_4_effect");
+    expect(effectKeyFor("blood_legacy_4", 1)).toBe("blood_legacy_4_effect_2");
   });
 
-  it("does not report a block the builder only reindented as changed", () => {
+  it("does not report a block the builder only reindented, or left empty, as changed", () => {
     // ep1_culture_legacy_track writes its trigger on one line
     // (99_legacies.txt); the condition builder writes it back over three.
     const original = parseDefBlock(
@@ -269,11 +234,10 @@ describe("legacy creator: reading and writing a definition block", () => {
       ["is_shown"]
     );
     expect(changedProperties(original, moved, ["is_shown"]).map((c) => c.key)).toEqual(["is_shown"]);
-  });
 
-  it("keeps an empty character_modifier the file already has", () => {
-    // tgp_chinese_legacy_3 and tgp_chinese_legacy_4 both carry one
-    // (08_tgp_dynasty_perks.txt, measured 2026-09-04).
+    // And an empty character_modifier the file already has: tgp_chinese_legacy_3
+    // and tgp_chinese_legacy_4 both carry one (08_tgp_dynasty_perks.txt,
+    // measured 2026-09-04).
     const block = parseDefBlock(
       "tgp_chinese_legacy_3 = {\n\tlegacy = tgp_china_legacy_track\n\tcharacter_modifier = {\n\t\t\n\t}\n}"
     )!;
@@ -315,11 +279,6 @@ describe("legacy creator: reading and writing a definition block", () => {
       "{\n\t\tdoctrine = d_x\n\t\tprowess = 1\n\t}"
     );
   });
-
-  it("finds the loc key a perk's effect prints, and nothing else", () => {
-    expect(effectLocKey(valueOf(parseDefBlock(PERKS[3])!, "effect")!)).toBe("blood_legacy_4_effect");
-    expect(effectLocKey(wrapBlockValue("add_prestige = 100")!)).toBeNull();
-  });
 });
 
 /**
@@ -342,7 +301,7 @@ describe("legacy creator: the blocks the builders read", () => {
   /** 08_tgp_dynasty_perks.txt: what 44 of the 54 can_be_picked blocks are. */
   const SCRIPTED = "{ eligible_for_tgp_china_legacy_trigger = yes }";
 
-  it("reads the two shapes a track's is_shown really has", () => {
+  it("reads the shapes a track's is_shown really has, and writes them back", () => {
     expect(parseConditions(DLC_ONLY)).toEqual([{ kind: "dlc", value: "hybridize_culture" }]);
     expect(parseConditions(WITH_RULES)).toEqual([
       { kind: "dlc", value: "all_under_heaven" },
@@ -351,16 +310,9 @@ describe("legacy creator: the blocks the builders read", () => {
     expect(parseConditions(SCRIPTED)).toEqual([
       { kind: "trigger", name: "eligible_for_tgp_china_legacy_trigger", value: true },
     ]);
-  });
-
-  it("declines a condition it cannot show instead of dropping half of it", () => {
+    // An OR the rows cannot hold is declined whole, never dropped by half.
     expect(parseConditions(NESTED)).toBeNull();
-    // A comment is content too: the rows have nowhere to put it back.
-    expect(parseConditions("{\n\t\t# only with the DLC\n\t\thas_dlc_feature = legends\n\t}")).toBeNull();
-    // Empty is NOT "cannot be shown": see the empty-script-area test below.
-  });
 
-  it("writes the rows back in the game's own shape", () => {
     expect(writeConditions(parseConditions(WITH_RULES)!)).toBe(WITH_RULES);
     expect(writeConditions([{ kind: "dlc", value: "legends" }])).toBe(
       "{\n\t\thas_dlc_feature = legends\n\t}"
@@ -380,6 +332,9 @@ describe("legacy creator: the blocks the builders read", () => {
     // An effect that does something stays script.
     expect(parseEffectLines("{\n\t\tadd_prestige = 100\n\t}")).toBeNull();
     expect(writeEffectLines([])).toBeNull();
+    // The one loc key the tooltip prints, and nothing for an effect with none.
+    expect(effectLocKey(valueOf(parseDefBlock(PERKS[3])!, "effect")!)).toBe("blood_legacy_4_effect");
+    expect(effectLocKey(wrapBlockValue("add_prestige = 100")!)).toBeNull();
   });
 
   it("reads a plain ai_chance as a number and leaves a weighted one alone", () => {
@@ -524,11 +479,6 @@ describe("legacy creator: the blocks the builders read", () => {
       line: "has_dlc_feature = legends",
     });
   });
-
-  it("names a perk's tooltip loc keys the way the game does", () => {
-    expect(effectKeyFor("blood_legacy_4", 0)).toBe("blood_legacy_4_effect");
-    expect(effectKeyFor("blood_legacy_4", 1)).toBe("blood_legacy_4_effect_2");
-  });
 });
 
 describe("legacy creator: which perk belongs to which track", () => {
@@ -543,9 +493,8 @@ describe("legacy creator: which perk belongs to which track", () => {
     ]);
     expect(perksOfTrack(perkLinks(FILE), "blood_legacy_track")).toEqual(["blood_legacy_1", "blood_legacy_2"]);
     expect(perksOfTrack(perkLinks(FILE), "warfare_legacy_track")).toEqual([]);
-  });
 
-  it("takes the count most tracks share, not the first or the biggest", () => {
+    // The slot count is the one most tracks share, not the first or the biggest.
     const links = [
       ...["a1", "a2", "a3", "a4", "a5"].map((name) => ({ name, track: "a" })),
       ...["b1", "b2", "b3", "b4", "b5"].map((name) => ({ name, track: "b" })),

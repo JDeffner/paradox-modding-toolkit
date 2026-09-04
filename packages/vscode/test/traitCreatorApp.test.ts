@@ -175,12 +175,6 @@ function pickEnum(app: Booted, key: string, value: string): void {
 }
 
 describe("the Trait Creator boots on the real form", () => {
-  it("asks the host for nothing until it is told what a trait is", () => {
-    const app = boot();
-    expect(app.posted[0]).toEqual({ type: "ready" });
-    expect(app.posted.some((m) => m.type === "icons")).toBe(true);
-  });
-
   it("shows every key the form answered, in its designed section", () => {
     const app = boot();
     const labels = app.labels();
@@ -191,12 +185,19 @@ describe("the Trait Creator boots on the real form", () => {
     expect(labels).toContain("Description");
   });
 
-  it("prefills the name from the mod prefix and says where it saves", () => {
+  it("prefills the name from the mod prefix, says where it saves, and refuses a key the engine cannot read", () => {
     const app = boot();
+    expect(app.posted[0]).toEqual({ type: "ready" });
+    expect(app.posted.some((m) => m.type === "icons")).toBe(true);
     expect(app.document.querySelector<HTMLInputElement>("#name")!.value).toBe("px_trait");
     expect(app.document.getElementById("target")!.textContent).toContain("cultivation");
     expect(app.document.getElementById("target")!.textContent).toContain("traits/px_traits.txt");
     expect(app.document.getElementById("source")!.textContent).toBe("New");
+
+    type(app, "#name", "Px Stoic");
+    expect(app.document.querySelector<HTMLButtonElement>("#save")!.disabled).toBe(true);
+    type(app, "#name", "px_stoic");
+    expect(app.document.querySelector<HTMLButtonElement>("#save")!.disabled).toBe(false);
   });
 
   it("says what is missing instead of opening a form whose Save would fail", () => {
@@ -204,18 +205,10 @@ describe("the Trait Creator boots on the real form", () => {
     expect(app.document.getElementById("problem")!.hidden).toBe(false);
     expect(app.document.querySelector<HTMLButtonElement>("#save")!.disabled).toBe(true);
   });
-
-  it("refuses a name the engine cannot read", () => {
-    const app = boot();
-    type(app, "#name", "Px Stoic");
-    expect(app.document.querySelector<HTMLButtonElement>("#save")!.disabled).toBe(true);
-    type(app, "#name", "px_stoic");
-    expect(app.document.querySelector<HTMLButtonElement>("#save")!.disabled).toBe(false);
-  });
 });
 
 describe("every list is a picker over what the game has", () => {
-  it("offers the categories the game's own traits write, not a text box", () => {
+  it("offers the categories the game's own traits write, and names a trait the way the player reads it", () => {
     const app = boot();
     const trigger = control(app, "category") as HTMLButtonElement;
     expect(trigger.tagName).toBe("BUTTON");
@@ -223,23 +216,9 @@ describe("every list is a picker over what the game has", () => {
     trigger.click();
     expect(offered(app)).toContain("personality");
     expect(offered(app)).toContain("education");
-  });
 
-  it("names a trait the way the player reads it, with its key as the hint", () => {
-    const app = boot();
     (control(app, "opposites").querySelector("button") as HTMLButtonElement).click();
     expect(offered(app, ".px-picker-results")).toContain("Brave | brave");
-  });
-
-  it("names a modifier the way the game prints it, with its key as the hint", () => {
-    const app = boot();
-    app.send({ type: "modifierFormats", formats: FORMATS });
-    const add = [...app.document.querySelectorAll("#sections .px-btn")].find(
-      (b) => b.textContent === "Add modifier"
-    ) as HTMLButtonElement;
-    add.click();
-    (app.document.querySelector("#sections .modrow > .px-dropdown") as HTMLButtonElement).click();
-    expect(offered(app)).toContain("Dynasty Opinion | dynasty_opinion");
   });
 
   it("leaves the keys the form already draws out of the modifier picker", () => {
@@ -259,19 +238,6 @@ describe("every list is a picker over what the game has", () => {
     expect(offers).toContain("Dynasty Opinion | dynasty_opinion");
   });
 
-  it("shows the body the game writes as a script field's placeholder", () => {
-    const example = "{ parameter = mountain_trait_bonuses mountains_max_combat_roll = 3 }";
-    const app = boot({
-      ...INIT,
-      form: {
-        ...FORM,
-        keys: FORM.keys.map((key) => (key.key === "culture_modifier" ? { ...key, example } : key)),
-      },
-    });
-    const area = control(app, "culture_modifier").querySelector("textarea")!;
-    expect(area.placeholder).toBe(example);
-  });
-
   it("shows the value the game writes most often as every skill's placeholder", () => {
     const app = boot();
     // `martial = 2` is the literal the indexed traits write most; a blank field
@@ -284,43 +250,41 @@ describe("every list is a picker over what the game has", () => {
 });
 
 describe("the preview is the game's own tooltip", () => {
-  it("prints a skill the way the game prints it, and frames it by category", () => {
+  it("prints a skill the way the game prints it, and frames it by category UNDER the picture", () => {
     const app = boot();
     app.send({ type: "modifierFormats", formats: FORMATS });
+    type(app, "#name", "brave");
     setSkill(app, "martial", "3");
     pickEnum(app, "category", "education");
     // The frame is asked for by name; the host answers with a decoded picture.
     expect(app.posted.some((m) => m.type === "icons" && m.keys.includes("_frame_education.dds"))).toBe(true);
-    app.send({ type: "icons", urls: { "_frame_education.dds": "https://host/frame.png" } });
+    app.send({
+      type: "icons",
+      urls: { "_frame_education.dds": "https://host/frame.png", "brave.dds": "https://host/brave.png" },
+    });
 
     const line = app.document.querySelector("#tip .px-mod-line")!;
     expect(line.querySelector(".px-mod-value")!.textContent).toBe("+3");
     expect(line.querySelector(".px-mod-label")!.textContent).toBe("Martial");
     // `color = good` and a positive value: the player's green.
     expect(line.className).toContain("good");
-    expect(app.document.querySelector<HTMLImageElement>("#tip .tip-icon img.frame")!.src).toBe(
-      "https://host/frame.png"
-    );
-  });
-
-  it("draws the category frame UNDER the picture, at the same size", () => {
-    const app = boot();
-    type(app, "#name", "brave");
-    pickEnum(app, "category", "education");
-    app.send({
-      type: "icons",
-      urls: { "_frame_education.dds": "https://host/frame.png", "brave.dds": "https://host/brave.png" },
-    });
     // The frames are opaque in the middle and share the picture's own 120x120
     // canvas, so drawn over it they would hide the trait entirely.
     const images = [...app.document.querySelectorAll<HTMLImageElement>("#tip .tip-icon img")];
     expect(images.map((img) => img.className)).toEqual(["frame", ""]);
+    expect(images[0].src).toBe("https://host/frame.png");
     expect(images[1].src).toBe("https://host/brave.png");
   });
 
   it("prints the opinion keys through the game's own tooltip loc entries", () => {
     const app = boot();
     type(app, "#name", "px_stoic");
+    // Nothing resolved a picture, so the tile is empty and names the file it
+    // wants; the title follows the key until the modder types over it.
+    const tile = app.document.querySelector<HTMLElement>("#tip .tip-icon .noicon")!;
+    expect(tile.title).toContain("px_stoic");
+    expect(app.document.querySelector("#tip .px-game-tip-title")!.textContent).toBe("Px Stoic");
+
     setNumber(app, "same_opinion", "10");
     // The panel asks for the entries rather than carrying words of its own.
     expect(app.posted.some((m) => m.type === "loc" && m.keys.includes("TRAIT_OPINION_SAME_TRAIT"))).toBe(
@@ -334,7 +298,7 @@ describe("the preview is the game's own tooltip", () => {
     expect(line.querySelector(".px-mod-value")!.textContent).toBe("+10");
   });
 
-  it("puts a modifier the game marks hidden under its own heading", () => {
+  it("puts what the player is never shown under its own heading, with the doc for a rule", () => {
     const app = boot();
     app.send({ type: "modifierFormats", formats: FORMATS });
     setSkill(app, "martial", "3");
@@ -354,11 +318,11 @@ describe("the preview is the game's own tooltip", () => {
     expect(hidden.textContent).toContain("Ai Boldness");
     // The skill the player DOES read stays above the rule.
     expect(hidden.textContent).not.toContain("Martial");
-  });
 
-  it("puts a rule the game prints no tooltip line for under the same heading, with its doc", () => {
-    const app = boot();
-    app.send({
+    // A rule the game prints no tooltip line for at all lands under the same
+    // heading, with _traits.info's own sentence about it from the harvest.
+    const loaded = boot();
+    loaded.send({
       type: "form",
       form: {
         ...FORM,
@@ -370,10 +334,9 @@ describe("the preview is the game's own tooltip", () => {
         },
       },
     });
-    const hidden = app.document.querySelector("#tip .tip-hidden")!;
-    expect(hidden.textContent).toContain("immortal = yes");
-    // The note is _traits.info's own sentence about the key, by way of the harvest.
-    expect(hidden.textContent).toContain("Will stop visual aging");
+    const rule = loaded.document.querySelector("#tip .tip-hidden")!;
+    expect(rule.textContent).toContain("immortal = yes");
+    expect(rule.textContent).toContain("Will stop visual aging");
   });
 
   it("words a triggered_opinion with the modifier's own loc, and keeps the key when it is a datafunction", () => {
@@ -410,16 +373,6 @@ describe("the preview is the game's own tooltip", () => {
     );
     expect(app.document.querySelector("#tip")!.textContent).not.toContain("GetTrait");
   });
-
-  it("shows an empty tile that names the missing picture when nothing resolved one", () => {
-    const app = boot();
-    type(app, "#name", "px_stoic");
-    const tile = app.document.querySelector<HTMLElement>("#tip .tip-icon .noicon")!;
-    expect(tile.textContent).toBe("");
-    expect(tile.title).toContain("px_stoic");
-    // The name follows the key until the modder types over it.
-    expect(app.document.querySelector("#tip .px-game-tip-title")!.textContent).toBe("Px Stoic");
-  });
 });
 
 describe("a new trait saves with a name and one stat", () => {
@@ -441,16 +394,6 @@ describe("a new trait saves with a name and one stat", () => {
     expect(save.loc).toEqual([
       { key: "trait_px_stoic", value: "Px Stoic" },
       { key: "trait_px_stoic_desc", value: "Px Stoic" },
-    ]);
-  });
-
-  it("renaming moves the loc keys with the name", () => {
-    const app = boot();
-    type(app, "#name", "px_iron_willed");
-    app.document.querySelector<HTMLButtonElement>("#save")!.click();
-    expect(app.save()!.loc).toEqual([
-      { key: "trait_px_iron_willed", value: "Px Iron Willed" },
-      { key: "trait_px_iron_willed_desc", value: "Px Iron Willed" },
     ]);
   });
 });

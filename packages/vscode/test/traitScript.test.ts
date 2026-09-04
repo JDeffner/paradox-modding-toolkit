@@ -253,19 +253,14 @@ const IMMORTAL =
   "}\n";
 
 describe("the vanilla traits load and come back unchanged", () => {
-  it("brave: five culture_modifier blocks, a desc block and a compatibility block survive", () => {
+  it("five culture_modifier blocks, repeated flags, a comment after a brace and a rule key all survive", () => {
+    // brave: five culture_modifier blocks, a desc block, a compatibility block.
     expect(roundTrip(BRAVE)).toBe(BRAVE);
-  });
-
-  it("education_martial_1: two flag statements of the same key survive", () => {
+    // education_martial_1: two flag statements of the same key.
     expect(roundTrip(EDUCATION)).toBe(EDUCATION);
-  });
-
-  it("child_of_concubine_female: a comment after an opening brace survives", () => {
+    // child_of_concubine_female: a comment after an opening brace.
     expect(roundTrip(CONCUBINE)).toBe(CONCUBINE);
-  });
-
-  it("immortal: the rule key, four flags and a dynamic desc survive", () => {
+    // immortal: the rule key, four flags and a dynamic desc.
     expect(roundTrip(IMMORTAL)).toBe(IMMORTAL);
   });
 });
@@ -326,48 +321,43 @@ describe("what the form actually read", () => {
     expect(loaded.state.modifiers).toEqual([{ name: "long_reign_bonus_mult", value: -1000 }]);
   });
 
-  it("education_martial_1 collects both flags into one chip list", () => {
-    const loaded = loadTrait(SPECS, EDUCATION, MODIFIERS)!;
-    expect(loaded.state.values.flag).toEqual(["level_1_education", "military_province"]);
-    expect(loaded.state.values.add_commander_trait).toBe(true);
-    expect(loaded.state.values.ruler_designer_cost).toBe(0);
-  });
+  it("reads a zero, a no and a bare icon file name as themselves", () => {
+    const education = loadTrait(SPECS, EDUCATION, MODIFIERS)!;
+    expect(education.state.values.flag).toEqual(["level_1_education", "military_province"]);
+    expect(education.state.values.add_commander_trait).toBe(true);
+    // A cost of 0 is a value the file has, not an empty field.
+    expect(education.state.values.ruler_designer_cost).toBe(0);
 
-  it("child_of_concubine_female reads the bare icon file name and a no", () => {
-    const loaded = loadTrait(SPECS, CONCUBINE, MODIFIERS)!;
-    expect(loaded.state.values.icon).toBe("child_of_concubine.dds");
-    expect(loaded.state.values.shown_in_ruler_designer).toBe(false);
-    expect(loaded.state.values.opposites).toEqual(["bastard", "legitimized_bastard", "wild_oat"]);
+    const concubine = loadTrait(SPECS, CONCUBINE, MODIFIERS)!;
+    expect(concubine.state.values.icon).toBe("child_of_concubine.dds");
+    expect(concubine.state.values.shown_in_ruler_designer).toBe(false);
+    expect(concubine.state.values.opposites).toEqual(["bastard", "legitimized_bastard", "wild_oat"]);
   });
 });
 
 describe("one changed field is one changed line", () => {
-  it("a number", () => {
-    const out = roundTrip(BRAVE, (_specs, loaded) => {
+  it("a number is rewritten in place, a yes/no set to not-set loses its line", () => {
+    const number = roundTrip(BRAVE, (_specs, loaded) => {
       loaded.state.values.martial = 4;
     });
-    expect(out).toBe(BRAVE.replace("\tmartial = 2\n", "\tmartial = 4\n"));
-  });
+    expect(number).toBe(BRAVE.replace("\tmartial = 2\n", "\tmartial = 4\n"));
 
-  it("a yes/no set to not-set removes its line", () => {
-    const out = roundTrip(EDUCATION, (_specs, loaded) => {
+    const cleared = roundTrip(EDUCATION, (_specs, loaded) => {
       loaded.state.values.add_commander_trait = null;
     });
-    expect(out).toBe(EDUCATION.replace("\tadd_commander_trait = yes\n", ""));
+    expect(cleared).toBe(EDUCATION.replace("\tadd_commander_trait = yes\n", ""));
   });
 
-  it("a key the block never had is appended", () => {
-    const out = roundTrip(CONCUBINE, (_specs, loaded) => {
+  it("a key the block never had is appended, and a chip list as one statement each", () => {
+    const appended = roundTrip(CONCUBINE, (_specs, loaded) => {
       loaded.state.values.minimum_age = 16;
     });
-    expect(out).toBe(CONCUBINE.replace(/\}\n$/, "\tminimum_age = 16\n}\n"));
-  });
+    expect(appended).toBe(CONCUBINE.replace(/\}\n$/, "\tminimum_age = 16\n}\n"));
 
-  it("a chip added writes a second statement of the same key", () => {
-    const out = roundTrip(CONCUBINE, (_specs, loaded) => {
+    const chips = roundTrip(CONCUBINE, (_specs, loaded) => {
       loaded.state.values.flag = ["px_first", "px_second"];
     });
-    expect(out).toContain("\tflag = px_first\n\tflag = px_second\n");
+    expect(chips).toContain("\tflag = px_first\n\tflag = px_second\n");
   });
 });
 
@@ -386,18 +376,16 @@ describe("a block value sits one level in, like the rest of the block", () => {
     "\tlearning = 16\n" +
     "}\n";
 
-  it("indents a rewritten compatibility block, not just its first line", () => {
-    const out = roundTrip(NESTED, (_specs, loaded) => {
+  it("indents a rewritten and an appended block, not just their first lines", () => {
+    const rewritten = roundTrip(NESTED, (_specs, loaded) => {
       loaded.state.values.compatibility = [{ name: "albino", value: 6.5 }];
     });
-    expect(out).toBe(NESTED.replace("\t\talbino = 6\n", "\t\talbino = 6.5\n"));
-  });
+    expect(rewritten).toBe(NESTED.replace("\t\talbino = 6\n", "\t\talbino = 6.5\n"));
 
-  it("indents an appended script block the same way", () => {
-    const out = roundTrip(NESTED, (_specs, loaded) => {
+    const appended = roundTrip(NESTED, (_specs, loaded) => {
       loaded.state.values.triggered_opinion = ["{\n\topinion_modifier = px_liked\n}"];
     });
-    expect(out).toContain("\ttriggered_opinion = {\n\t\topinion_modifier = px_liked\n\t}");
+    expect(appended).toContain("\ttriggered_opinion = {\n\t\topinion_modifier = px_liked\n\t}");
   });
 });
 
@@ -415,12 +403,9 @@ describe("a new trait", () => {
 });
 
 describe("the small readers", () => {
-  it("reads a token list only when every entry is a bare token", () => {
+  it("reads a list only when every entry is a shape the widget can hold", () => {
     expect(readTokenList("{ craven ambitious }")).toEqual(["craven", "ambitious"]);
     expect(readTokenList("{ craven = 2 }")).toBeNull();
-  });
-
-  it("reads number rows only when every value is a literal number", () => {
     expect(readNumberRows("{ brave = 20\n drunkard = -5 }")).toEqual([
       { name: "brave", value: 20 },
       { name: "drunkard", value: -5 },
