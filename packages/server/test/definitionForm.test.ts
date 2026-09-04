@@ -147,12 +147,10 @@ describe("computeDefinitionForm", () => {
     const category = form.keys.find((k) => k.key === "category")!;
     expect(category.doc).toContain("category");
     expect(category.freq).toBeGreaterThan(0);
-  });
 
-  it("carries the per-kind ref rows and one option list per kind they name", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "trait" })!;
+    // A ref row names its kinds, and that kind gets one option list, resolved
+    // through the index with the mod's own entries first.
     expect(form.keys.find((k) => k.key === "opposites")?.refKinds).toEqual(["trait"]);
-    // Resolved through the index, mod entries first.
     expect(form.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);
     expect(form.options.trait[0].hint).toBe("this mod");
   });
@@ -174,12 +172,11 @@ describe("computeDefinitionForm", () => {
     expect(form.current?.source).toBe("mod");
     expect(form.current?.line).toBe(1);
     expect(form.current?.text).toBe(TRAITS_TXT.split("\n").slice(1, 8).join("\n"));
-  });
 
-  it("names an unindexed definition without inventing a block", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "trait", name: "no_such_trait" })!;
-    expect(form.current).toBeUndefined();
-    expect(form.keys.length).toBe(60);
+    // A name the index does not hold still answers the form, with no block.
+    const unindexed = computeDefinitionForm(data, schema, { kind: "trait", name: "no_such_trait" })!;
+    expect(unindexed.current).toBeUndefined();
+    expect(unindexed.keys.length).toBe(60);
   });
 
   it("carries the culture ref rows the vanilla files justify", () => {
@@ -187,22 +184,18 @@ describe("computeDefinitionForm", () => {
     expect(form.folder).toBe("common/culture/cultures");
     expect(form.keys.find((k) => k.key === "traditions")?.refKinds).toEqual(["culture_tradition"]);
     expect(form.keys.find((k) => k.key === "parents")?.refKinds).toEqual(["culture"]);
-  });
-
-  it("labels each pillar option with the family its own block declares", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
-    // One folder holds all five families; `type = ethos` inside the block is
-    // the only thing that tells them apart (schema groupKey on culture_pillar).
+    // One folder holds all five pillar families; `type = ethos` inside the
+    // block is the only thing that tells them apart (schema groupKey on
+    // culture_pillar), so each option is labelled with the family it declares.
     expect(form.keys.find((k) => k.key === "ethos")?.refKinds).toEqual(["culture_pillar"]);
     expect(form.keys.find((k) => k.key === "name_list")?.refKinds).toEqual(["name_list"]);
     expect(form.options.culture_pillar.map((i) => [i.value, i.group])).toEqual([
       ["ethos_stoic", "ethos"],
       ["language_arabic", "language"],
     ]);
-  });
 
-  it("samples the values the indexed cultures write for keys no index answers", () => {
-    const form = computeDefinitionForm(data, schema, { kind: "culture" })!;
+    // For keys no index answers, the values the indexed cultures write are
+    // sampled instead.
     const key = (k: string): string[] | undefined => form.keys.find((x) => x.key === k)?.sampled;
     // Most used first: both cultures write mena, one adds dde_abbasid.
     expect(key("clothing_gfx")).toEqual(["mena_clothing_gfx", "dde_abbasid_clothing_gfx"]);
@@ -214,7 +207,7 @@ describe("computeDefinitionForm", () => {
     expect(key("ethos")).toBeUndefined();
   });
 
-  it("answers the culture tradition form the Tradition Creator draws", () => {
+  it("answers the tradition, legacy and perk forms the other creators draw", () => {
     const form = computeDefinitionForm(data, schema, { kind: "culture_tradition" })!;
     expect(form.folder).toBe("common/culture/traditions");
     // All 196 vanilla traditions localize both; requiredLoc keeps only $_name.
@@ -225,9 +218,7 @@ describe("computeDefinitionForm", () => {
     // The harvest's own keys, most used first: `layers` and `category` are what
     // _traditions.info adds on top of the shared cultural-trait shape.
     expect(form.keys.slice(0, 4).map((k) => k.key)).toEqual(["layers", "category", "cost", "parameters"]);
-  });
 
-  it("carries the dynasty legacy rows the vanilla files justify", () => {
     // _dynasty_legacies.info states $_name; all 21 vanilla tracks also define
     // $_desc, and window_dynasty_legacy.gui reads the picture off the key.
     const legacy = computeDefinitionForm(data, schema, { kind: "dynasty_legacy" })!;
@@ -275,14 +266,12 @@ describe("computeDefinitionForm", () => {
     ]);
     // kind: the definition index, the same resolver the options use.
     expect(values("scripted_trigger")).toEqual(["can_start_new_legacy_track_trigger"]);
-  });
 
-  it("leaves a trigger nothing resolves for out of the table entirely", () => {
-    // A trigger with an empty list would draw an empty picker; its ABSENCE is
+    // A trigger with an empty list would draw an empty picker, so a trigger
+    // nothing resolves for is left out of the table entirely: its ABSENCE is
     // what tells a creator to offer a free input instead.
-    const bare = new ServerData();
-    const form = computeDefinitionForm(bare, schema, { kind: "dynasty_legacy" })!;
-    expect(form.conditions).toBeUndefined();
+    const bare = computeDefinitionForm(new ServerData(), schema, { kind: "dynasty_legacy" })!;
+    expect(bare.conditions).toBeUndefined();
   });
 
   it("labels options and existing definitions with the loc the game reads", () => {
@@ -310,13 +299,11 @@ describe("computeDefinitionForm", () => {
     expect(trait.keys.find((k) => k.key === "martial")?.example).toBe("2");
     // A key no indexed definition writes has no example to give.
     expect(trait.keys.find((k) => k.key === "desc")?.example).toBeUndefined();
-  });
 
-  it("gives a stated value set an example but no measured list", () => {
-    const trait = computeDefinitionForm(data, schema, { kind: "trait" })!;
     // `valid_sex = all/male/female` and `shown_in_ruler_designer = yes/no`:
     // the set is the schema's and the doc's, the example is the file's, so a
-    // dropdown and a tri-state both have something to show when they are empty.
+    // dropdown and a tri-state both have something to show when they are empty,
+    // and neither carries a measured list.
     const validSex = trait.keys.find((k) => k.key === "valid_sex")!;
     expect(validSex.example).toBe("male");
     expect(validSex.sampled).toBeUndefined();

@@ -39,18 +39,20 @@ function at(nodes: LayoutNode[], id: string): LayoutNode {
 }
 
 describe("layoutTree", () => {
-  it("puts a child one row under the lower of its parents", () => {
-    const chars = [c("gran"), c("dad", { father: "gran" }), c("kid", { father: "dad" })];
-    expect(rows(chars)).toEqual({ gran: 0, dad: 1, kid: 2 });
-  });
-
-  it("puts a married-in spouse on their partner's row, not the top one", () => {
-    const chars = [
+  it("puts a child one row under the lower of its parents, and a married-in spouse on their partner's", () => {
+    expect(rows([c("gran"), c("dad", { father: "gran" }), c("kid", { father: "dad" })])).toEqual({
+      gran: 0,
+      dad: 1,
+      kid: 2,
+    });
+    // The wife has no parent here, so nothing but the marriage says which row
+    // she belongs on: it must not be the top one.
+    const married = [
       c("gran"),
       c("dad", { father: "gran", spouses: ["wife"] }),
       c("wife", { spouses: ["dad"] }),
     ];
-    expect(rows(chars)).toEqual({ gran: 0, dad: 1, wife: 1 });
+    expect(rows(married)).toEqual({ gran: 0, dad: 1, wife: 1 });
   });
 
   it("stands a couple over its children, oldest child first", () => {
@@ -110,13 +112,14 @@ describe("layoutTree", () => {
       const before = child[0].points[i - 1];
       expect(point[0] === before[0] || point[1] === before[1]).toBe(true);
     }
-  });
 
-  it("drops the line from the card itself when only one parent is known", () => {
-    const chars = [c("mum"), c("kid", { mother: "mum" })];
-    const parent = layoutTree(chars).edges.filter((e) => e.kind === "parent");
-    expect(parent).toHaveLength(1);
-    expect(parent[0].members).toEqual(["mum", "kid"]);
+    // With one parent known there is no bar to hang the line on, so it comes
+    // off the card itself.
+    const alone = layoutTree([c("mum"), c("kid", { mother: "mum" })]).edges.filter(
+      (e) => e.kind === "parent"
+    );
+    expect(alone).toHaveLength(1);
+    expect(alone[0].members).toEqual(["mum", "kid"]);
   });
 
   it("survives a file that makes someone their own ancestor", () => {

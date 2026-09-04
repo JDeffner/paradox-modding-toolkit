@@ -14,6 +14,8 @@ describe("scanBlocks", () => {
     expect([...blocks.keys()]).toEqual(["a", "b"]);
     expect(blocks.get("a")!.text).toBe("a = {\n\tx = 1\n}");
     expect(text.slice(blocks.get("b")!.start, blocks.get("b")!.end)).toBe(blocks.get("b")!.text);
+    // A repeated key keeps its last block, the way the engine does.
+    expect(scanBlocks("dup = {\n\tx = 1\n}\ndup = {\n\tx = 2\n}\n").get("dup")!.text).toContain("x = 2");
   });
 
   it("ignores braces inside comments and quoted values", () => {
@@ -23,22 +25,14 @@ describe("scanBlocks", () => {
     expect(blocks.get("real")!.text.endsWith("}")).toBe(true);
   });
 
-  it("keeps the last block of a repeated key, the way the engine does", () => {
-    const blocks = scanBlocks("dup = {\n\tx = 1\n}\ndup = {\n\tx = 2\n}\n");
-    expect(blocks.get("dup")!.text).toContain("x = 2");
-  });
-
   it("survives a file that ends mid-block", () => {
     expect([...scanBlocks("open = {\n\tx = 1\n").keys()]).toEqual([]);
   });
 });
 
 describe("uniqueKey", () => {
-  it("takes the name when nothing has it", () => {
-    expect(uniqueKey("eadgar_dna", new Set())).toBe("eadgar_dna");
-  });
-
   it("suffixes rather than replacing a portrait that is already there", () => {
+    expect(uniqueKey("eadgar_dna", new Set())).toBe("eadgar_dna");
     expect(uniqueKey("eadgar_dna", new Set(["eadgar_dna"]))).toBe("eadgar_dna_2");
     expect(uniqueKey("eadgar_dna", new Set(["eadgar_dna", "eadgar_dna_2"]))).toBe("eadgar_dna_3");
   });
@@ -47,20 +41,13 @@ describe("uniqueKey", () => {
 describe("parseDnaPaste", () => {
   const genes = "genes={ hair_color={ 1 2 3 4 } }";
 
-  it("reads a whole definition the portrait editor copied", () => {
+  it("tells a whole definition, a bare portrait_info half and a bare name apart", () => {
     const paste = parseDnaPaste(
       `bookmark_guy = {\n\tportrait_info = {\n\t\t${genes}\n\t}\n\tenabled = yes\n}`
     );
     expect(paste).toMatchObject({ kind: "block", key: "bookmark_guy" });
     expect(paste && "body" in paste && paste.body.startsWith("{")).toBe(true);
-  });
-
-  it("reads a bare portrait_info half", () => {
-    const paste = parseDnaPaste(`portrait_info = {\n\t${genes}\n}`);
-    expect(paste?.kind).toBe("portrait");
-  });
-
-  it("reads a bare name as a name", () => {
+    expect(parseDnaPaste(`portrait_info = {\n\t${genes}\n}`)?.kind).toBe("portrait");
     expect(parseDnaPaste("  eadgar_dna \n")).toEqual({ kind: "name", name: "eadgar_dna" });
   });
 
@@ -76,14 +63,12 @@ describe("dnaPasteBlock", () => {
     expect(dnaPasteBlock("eadgar_dna_2", paste)).toBe("eadgar_dna_2 = {\n\tportrait_info = { genes={ } }\n}");
   });
 
-  it("wraps a bare portrait_info in a block of its own", () => {
+  it("wraps a bare portrait_info in a block of its own, and writes nothing for a bare name", () => {
     const paste = parseDnaPaste("portrait_info = {\n\tgenes={ }\n}")!;
     expect(dnaPasteBlock("eadgar_dna", paste)).toBe(
       "eadgar_dna = {\n\tportrait_info = {\n\t\tgenes={ }\n\t}\n}"
     );
-  });
-
-  it("writes nothing for a bare name: there is no block to write", () => {
+    // A name is not a block: there is nothing to write.
     expect(dnaPasteBlock("x", { kind: "name", name: "x" })).toBeNull();
   });
 });

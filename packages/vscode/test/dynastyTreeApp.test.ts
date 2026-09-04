@@ -178,12 +178,10 @@ function sideButton(app: Booted, label: string): HTMLButtonElement {
 }
 
 describe("the Dynasty Tree app", () => {
-  it("asks the host for its state as soon as it boots", () => {
-    expect(boot().posted).toEqual([{ type: "ready" }]);
-  });
-
   it("lists dynasties and turns a click into an open request", () => {
     const app = boot();
+    // Nothing is drawn until the host answers, so the app asks as it boots.
+    expect(app.posted).toEqual([{ type: "ready" }]);
     app.send({
       type: "list",
       supported: true,
@@ -239,16 +237,13 @@ describe("the Dynasty Tree app", () => {
     expect(card(app, "1").textContent).toContain("Smoky");
     expect(card(app, "1").textContent).toContain("1000–");
     expect(card(app, "1").querySelector(".ctagtext")!.textContent).toBe("Smoke");
-  });
 
-  it("shows the dynasty in the inspector until a character is picked", () => {
-    const app = boot();
-    app.send({ type: "tree", tree: TREE, ms: 4 });
-    const side = app.window.document.getElementById("sideBody")!;
+    // The inspector shows the dynasty until a character is picked.
+    const side = doc.getElementById("sideBody")!;
     expect(side.textContent).toContain("Houses (1)");
     click(app, card(app, "1"));
     expect(side.textContent).toContain("Smoky");
-    expect(app.window.document.querySelector("#scene .card[data-selected]")).not.toBeNull();
+    expect(doc.querySelector("#scene .card[data-selected]")).not.toBeNull();
   });
 
   it("offers add child, add spouse and edit on a card, but no edit on a vanilla one", () => {

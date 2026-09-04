@@ -36,14 +36,11 @@ describe("definitionBody", () => {
     expect(definitionBody(file, 1)).toBe(["is_human = {", "  NOT = { has_trait = beast }", "}"].join(NL));
   });
 
-  it("handles a block that opens and closes on one line", () => {
-    const file = write(["other = { always = yes }", "next = { }"]);
-    expect(definitionBody(file, 0)).toBe("other = { always = yes }");
-  });
-
-  it("returns the single line for an assignment with no block", () => {
-    const file = write(["my_value = 5"]);
-    expect(definitionBody(file, 0)).toBe("my_value = 5");
+  it("returns the one line of a block that closes on it, or of an assignment with no block", () => {
+    expect(definitionBody(write(["other = { always = yes }", "next = { }"]), 0)).toBe(
+      "other = { always = yes }"
+    );
+    expect(definitionBody(write(["my_value = 5"]), 0)).toBe("my_value = 5");
   });
 
   it("does not count braces inside comments or quoted strings", () => {
@@ -62,20 +59,17 @@ describe("definitionBody", () => {
   });
 
   it("gives up on a block that never closes rather than returning the rest of the file", () => {
-    const file = write(["broken = {", "  a = 1", "  b = 2"]);
-    expect(definitionBody(file, 0)).toBeNull();
+    expect(definitionBody(write(["broken = {", "  a = 1", "  b = 2"]), 0)).toBeNull();
+    // As it does for a file that is not there and a line past the end of one.
+    const file = write(["a = { b = 1 }"]);
+    expect(definitionBody(path.join(path.dirname(file), "nope.txt"), 0)).toBeNull();
+    expect(definitionBody(file, 99)).toBeNull();
   });
 
   it("stops at maxLines so one malformed file cannot dominate a hover", () => {
     const file = write(["big = {", ...Array.from({ length: 500 }, (_, i) => `  a${i} = 1`), "}"]);
     const body = definitionBody(file, 0, 20);
     expect(body!.split(NL)).toHaveLength(20);
-  });
-
-  it("returns null for a missing file or an out-of-range line", () => {
-    const file = write(["a = { b = 1 }"]);
-    expect(definitionBody(path.join(path.dirname(file), "nope.txt"), 0)).toBeNull();
-    expect(definitionBody(file, 99)).toBeNull();
   });
 
   it("re-reads a file after it changes, with no explicit invalidation", () => {

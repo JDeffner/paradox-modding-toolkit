@@ -67,12 +67,10 @@ const text = (key: string): string => renderLocValue(LOC[key], deps).text;
 const resolved = (key: string): boolean => renderLocValue(LOC[key], deps).resolved;
 
 describe("locText rendering", () => {
-  it("resolves a trait chain through the kind's own loc pattern", () => {
+  it("resolves a chain through the kind's own loc pattern, `trait_$` or a bare `$`", () => {
     expect(text("p_trait")).toBe("The Rough Terrain Expert Commander Traits is more common");
     expect(resolved("p_trait")).toBe(true);
-  });
-
-  it("resolves a kind whose loc key IS the name (men-at-arms, terrain, court position)", () => {
+    // Men-at-arms, terrain and court position: the loc key IS the name.
     expect(text("p_maa")).toBe("Can recruit Bowmen as Men-at-Arms");
     expect(text("p_terrain")).toBe("Fights better in Hills");
     expect(text("p_court")).toBe("Unlock the Personal Physician one Tier earlier");
@@ -93,32 +91,25 @@ describe("locText rendering", () => {
     expect(resolved("p_select")).toBe(true);
   });
 
-  it("drops an icon tag and the space it leaves behind", () => {
+  it("drops an icon tag with the space it leaves behind, and the game's colour markup", () => {
     expect(text("p_icon")).toBe("Gain Prestige");
+    expect(text("FORMATTED")).toBe("plus five Prestige");
   });
 
-  it("substitutes a nested $key$ one level and renders what it lands on", () => {
+  it("substitutes a nested $key$ one level, and keeps an unfillable one verbatim", () => {
     expect(text("p_nested")).toBe("Also: the Prestige sentence");
     expect(resolved("p_nested")).toBe(true);
-  });
-
-  it("keeps an unfillable $key$ verbatim and says the value is unresolved", () => {
     expect(text("p_unknown_key")).toBe("Also: $NO_SUCH_KEY$");
     expect(resolved("p_unknown_key")).toBe(false);
   });
 
-  it("falls back to the chain's own word for an expression only the game can evaluate", () => {
+  it("falls back to the chain's own word, or the definition name, and says it is unresolved", () => {
+    // An expression only the game can evaluate keeps the function's word.
     expect(text("p_script_value")).toBe("Gains ScriptValue a month");
     expect(resolved("p_script_value")).toBe(false);
-  });
-
-  it("falls back to the definition name when nothing localizes it", () => {
+    // A name nothing localizes reads as the name, never as an invented title.
     expect(text("p_unknown_name")).toBe("Can recruit px_new_unit as Men-at-Arms");
     expect(resolved("p_unknown_name")).toBe(false);
-  });
-
-  it("strips the game's colour markup from a plain value", () => {
-    expect(text("FORMATTED")).toBe("plus five Prestige");
   });
 });
 

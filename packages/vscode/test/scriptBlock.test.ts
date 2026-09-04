@@ -26,6 +26,10 @@ describe("scanning a block body", () => {
     ]);
     const first = scanItems(body)[0];
     expect(body.slice(first.start, first.end)).toBe("category = personality");
+    // A quoted key and a quoted value are one token each.
+    const quoted = scanItems('"my key" = "a name"');
+    expect(quoted[0].key).toBe('"my key"');
+    expect(quoted[0].value).toBe('"a name"');
   });
 
   it("takes a nested block whole, braces balanced", () => {
@@ -42,17 +46,13 @@ describe("scanning a block body", () => {
     expect(items[0].value).toBe("{ # why\n\t\tx = 1\n\t}");
   });
 
-  it("reads a quoted key and a quoted value as one token each", () => {
-    const items = scanItems('"my key" = "a name"');
-    expect(items[0].key).toBe('"my key"');
-    expect(items[0].value).toBe('"a name"');
-  });
-
-  it("keeps the file's own line ending and indentation", () => {
+  it("keeps the file's own line ending and indentation, and binds a repeated key to its first value", () => {
     const block = parseBlock("px_x = {\r\n\ta = 1\r\n}")!;
     expect(block.eol).toBe("\r\n");
     expect(block.indent).toBe("\t");
     expect(block.items.map((item) => item.value)).toEqual(["1"]);
+    const repeated = parseBlock("px_x = {\n\tflag = one\n\tflag = two\n}")!;
+    expect(firstValues(repeated).get("flag")).toBe("one");
   });
 
   it("reads an empty body as no statements and writes it back unchanged", () => {
@@ -60,21 +60,14 @@ describe("scanning a block body", () => {
     expect(block.items).toEqual([]);
     expect(writeBlock(block.name, block, [])).toBe("px_x = {\n}");
   });
-
-  it("binds a repeated key to its first value", () => {
-    const block = parseBlock("px_x = {\n\tflag = one\n\tflag = two\n}")!;
-    expect(firstValues(block).get("flag")).toBe("one");
-  });
 });
 
 describe("reading a value the way a widget needs it", () => {
-  it("reads a token list only when every entry is a bare token", () => {
+  it("reads a list, or `key = number` rows, only when EVERY entry is of that shape", () => {
+    // A widget that cannot hold the whole value must not hold half of it.
     expect(readTokenList("{ craven ambitious }")).toEqual(["craven", "ambitious"]);
     expect(readTokenList("{ craven = 2 }")).toBeNull();
     expect(readTokenList("craven")).toBeNull();
-  });
-
-  it("reads `key = number` rows only when every value is a literal number", () => {
     expect(readNumberRows("{\n\tbrave = 20\n\tdrunkard = -5\n}")).toEqual([
       { name: "brave", value: 20 },
       { name: "drunkard", value: -5 },
@@ -107,14 +100,8 @@ describe("changedProperties", () => {
       { key: "c", value: null },
       { key: "d", value: "4" },
     ]);
-  });
-
-  it("reports nothing at all for a form nobody touched", () => {
-    const values = new Map<string, string | null>([
-      ["a", "1"],
-      ["b", null],
-    ]);
-    expect(changedProperties(values, new Map(values))).toEqual([]);
+    // A form nobody touched reports nothing at all.
+    expect(changedProperties(before, new Map(before))).toEqual([]);
   });
 });
 
@@ -164,14 +151,10 @@ const CONCUBINE =
   "}\n";
 
 describe("a vanilla block round trip", () => {
-  it("gives the block back byte for byte when no write claims a span", () => {
+  it("gives the block back byte for byte, and rewrites one statement by copying every other span", () => {
     const block = parseBlock(CONCUBINE)!;
     expect(block.name).toBe("child_of_concubine_female");
     expect(writeBlock(block.name, block, [])).toBe(CONCUBINE);
-  });
-
-  it("rewrites one statement and copies every other span", () => {
-    const block = parseBlock(CONCUBINE)!;
     const out = writeBlock(block.name, block, [
       { key: "diplomacy", lines: ["diplomacy = -2"], changed: true },
     ]);
