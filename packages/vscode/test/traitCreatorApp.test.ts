@@ -195,7 +195,7 @@ describe("the Trait Creator boots on the real form", () => {
     const app = boot();
     expect(app.document.querySelector<HTMLInputElement>("#name")!.value).toBe("px_trait");
     expect(app.document.getElementById("target")!.textContent).toContain("cultivation");
-    expect(app.document.getElementById("target")!.textContent).toContain("common/traits/px_traits.txt");
+    expect(app.document.getElementById("target")!.textContent).toContain("traits/px_traits.txt");
     expect(app.document.getElementById("source")!.textContent).toBe("New");
   });
 

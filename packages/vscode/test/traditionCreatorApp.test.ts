@@ -278,7 +278,7 @@ describe("the Tradition Creator boots on the real form", () => {
     expect(app.document.querySelector<HTMLInputElement>("#name")!.value).toBe("tradition_px");
     expect(app.document.getElementById("target")!.textContent).toContain("cultivation");
     expect(app.document.getElementById("target")!.textContent).toContain(
-      "common/culture/traditions/px_culture_traditions.txt"
+      "culture/traditions/px_culture_traditions.txt"
     );
     expect(app.document.getElementById("source")!.textContent).toBe("New");
   });
