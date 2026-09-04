@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **Coat of Arms Designer: the House China and House Japan frames show the
+  arms, every frame sits where the game puts it, and frames have names.** Those
+  two masks are 160x160 of pure black at alpha 255, so reading a mask as
+  brightness made them mask everything away and the frame showed an empty
+  grid; a mask is its alpha channel, which is also how the game reads
+  title_mask.dds (pure white, shape in alpha). The arms are now sized the way
+  gui/shared/coat_of_arms.gui sizes them, at 120 of the frame's own 156 for a
+  house frame and 120 of 172 for a dynasty frame against the 160 cell, instead
+  of being stretched onto the measured hole: across the 31 vanilla frames that
+  fills the whole window of the frame (99.9% of it, against 99.5% before) and
+  keeps the arms square, which the hole fit did not. The frame picker names
+  each frame after the heritages whose cultures wear it, read from
+  `house_coa_frame` in common/culture/cultures and named through the loc index:
+  "House Frame 14 (Turkic, Mongolic, Tungusic)", up to three, then "…". A frame
+  no culture names keeps its number.
+- **The tiger conf lives in `.px-toolkit/`, so an upload never ships it.**
+  Generate tiger.conf writes `<game>-tiger.conf` into the mod's `.px-toolkit/`
+  folder instead of the mod root, and a run passes it with `--config`. A
+  Workshop upload always leaves that folder out, so your validator settings
+  stay a local file and are not published with the mod. A conf you keep at the
+  mod root still wins: tiger loads that one by itself, and new uploads leave
+  `*-tiger.conf` out too. The generated file says on line two how to run tiger
+  by hand with it: `ck3-tiger --config .px-toolkit/ck3-tiger.conf <mod folder>`.
+- **Wiki: a Modding Tools page per game, and a game switch.** Modding Tools
+  lists the tools other modders built for the game you mod, curated from that
+  game's own wiki list: validators, translators, map and history editors,
+  audio and 3D tools, with a link on every row. Tools the toolkit does the job
+  of are left out, so the page never sends you to install something you
+  already have, and an "Add a tool" section says how to tell me about one that
+  fills a gap. A switch at the top of the wiki sidebar picks the game the
+  pages are shown for, so you can read another game's tools without changing
+  the workspace. Links in a wiki page render as links now: the Credits page
+  showed raw brackets and bare URLs.
 - **Coat of Arms Designer: every frame fits, and the library has a folder
   button.** The arms are fitted to the whole hole of a frame cell, found by
   a flood fill from its centre, so a roundel with concave sides (house frame

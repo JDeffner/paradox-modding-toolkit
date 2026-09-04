@@ -16,6 +16,7 @@ import type { PxConfig } from "../config";
 import { isUnder, modRootFor } from "../config";
 import { metaFor } from "../meta";
 import { renderLoadModBlocks } from "./loadMods";
+import { resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
 import { parseTigerJson, type TigerReport } from "@px-lsp/protocol/tigerParser";
 import {
@@ -176,16 +177,19 @@ export class TigerRunner implements vscode.Disposable {
   }
 
   /**
-   * Dependency mods without a user conf: when the mod root has no
-   * `<game>-tiger.conf`, point tiger (--config) at a generated temp conf
-   * holding only `load_mod` blocks for cfg.parentPaths, so definitions from
-   * dependency mods resolve during validation. A conf in the mod root always
-   * wins — tiger loads it by itself and load_mod lives there
-   * (px.tigerGenerateConf seeds it).
+   * The conf a run uses, in order: the one in the mod's config dir
+   * (`.px-toolkit/`, where px.tigerGenerateConf writes it, kept out of Workshop
+   * uploads) passed with --config; else a conf at the mod root, which tiger
+   * loads by itself; else, for dependency mods without any user conf, a
+   * generated temp conf holding only `load_mod` blocks for cfg.parentPaths, so
+   * definitions from dependency mods resolve during validation.
    */
   private configArgs(cfg: PxConfig, modRoot: string): string[] {
     const meta = metaFor(cfg.gameId);
     if (!meta.tiger) return [];
+    // Per mod root, not cfg.modPath: multi-mod workspaces run tiger per mod.
+    const inConfigDir = path.join(resolveConfigDir(modRoot, meta), meta.tiger.confName);
+    if (fs.existsSync(inConfigDir)) return ["--config", inConfigDir];
     if (fs.existsSync(path.join(modRoot, meta.tiger.confName))) return [];
     const deps = renderLoadModBlocks(meta.descriptor, cfg.parentPaths, modRoot);
     for (const dir of deps.skipped) this.log(`tiger: dependency mod skipped (no descriptor found): ${dir}`);

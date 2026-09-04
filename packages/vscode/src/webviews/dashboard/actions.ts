@@ -1,4 +1,5 @@
 import type { GameMeta } from "@px-lsp/server/games/profile";
+import { PX_CONFIG_DIR } from "@px-lsp/protocol/configDir";
 import { PATHS, type IconName } from "../shared/icons";
 
 /**
@@ -217,7 +218,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
                 label: `Generate ${meta.tiger.confName}`,
                 command: "px.tigerGenerateConf",
                 icon: "settings",
-                tip: "Write a tiger config for this mod.",
+                tip: `Write a tiger config into this mod's ${PX_CONFIG_DIR}/ folder.`,
               },
               {
                 label: `Update ${meta.tiger.binaryName}`,
