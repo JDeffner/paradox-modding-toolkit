@@ -232,6 +232,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         "Please report gaps; a .px-toolkit/schema.json overlay in your mod fixes them immediately."
     );
   }
+  // Once per minor version: the release is a beta, and the editors that write
+  // files or publish to Steam are the young parts. Keyed on major.minor so a
+  // patch release does not repeat it.
+  const minor = String(context.extension.packageJSON.version).split(".").slice(0, 2).join(".");
+  const betaKey = `px.betaNotice.${minor}`;
+  if (cfg.isCk3Workspace && !context.globalState.get<boolean>(betaKey)) {
+    void context.globalState.update(betaKey, true);
+    void vscode.window
+      .showInformationMessage(
+        `Paradox Modding Toolkit ${minor} is a beta. The content creators (traits, legacies, cultures, ` +
+          "dynasties, coats of arms, traditions) and the Steam Workshop upload are new: check what they " +
+          "write before you rely on it, and keep your mod in git. Feedback of every kind helps; " +
+          "please join the Discord and tell me what broke or what you miss.",
+        "Join the Discord"
+      )
+      .then((choice) => {
+        if (choice === "Join the Discord") void vscode.commands.executeCommand("px.openDiscord");
+      });
+  }
   log(
     `activated. gamePath=${cfg.gamePath ?? "(none)"} logsPath=${cfg.logsPath ?? "(none)"} ` +
       `modPath=${cfg.modPath ?? "(none)"} workspaceMods=${cfg.workspaceMods.length} ` +
