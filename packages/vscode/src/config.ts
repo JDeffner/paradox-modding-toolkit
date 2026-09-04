@@ -95,9 +95,9 @@ function windowsDocumentsFolder(): string {
 }
 
 /** Every place `Documents/Paradox Interactive/<game>/<subdir>` can live on this
- * platform, most likely first. */
+ * platform, most likely first. `subdir` may be several levels ("a/b"). */
 function docsSubdirCandidates(docsFolderName: string, steamAppId: number, subdir: string): string[] {
-  const suffix = ["Paradox Interactive", docsFolderName, subdir];
+  const suffix = ["Paradox Interactive", docsFolderName, ...subdir.split("/")];
   const candidates: string[] = [];
   if (process.platform === "win32") {
     candidates.push(path.join(windowsDocumentsFolder(), ...suffix));
@@ -136,6 +136,23 @@ function defaultLogsPath(
 export function gameDocsSubdir(meta: GameMeta, subdir: string): string | null {
   const candidates = docsSubdirCandidates(meta.docsFolderName, meta.steamAppId, subdir);
   return candidates.find((c) => fs.existsSync(c)) ?? candidates[0] ?? null;
+}
+
+/**
+ * Where the Coat of Arms Designer keeps its library, whether or not it exists
+ * yet (the first export creates it): `px.coaLibraryDir` when set, else
+ * `Documents/Paradox Interactive/<game>/px-toolkit/coat_of_arms`.
+ *
+ * It is OURS, not the game's: the games have no script-export folder for coats
+ * of arms (their designer's Save To Disk writes a screenshot), so the library
+ * sits beside the game's own user folders under a `px-toolkit` name rather than
+ * inside one the game reads.
+ */
+export const COA_LIBRARY_SUBDIR = "px-toolkit/coat_of_arms";
+
+export function coaLibraryDir(meta: GameMeta): string | null {
+  const set = (vscode.workspace.getConfiguration("px").get<string>("coaLibraryDir") ?? "").trim();
+  return set === "" ? gameDocsSubdir(meta, COA_LIBRARY_SUBDIR) : set;
 }
 
 export function readConfig(): PxConfig {
