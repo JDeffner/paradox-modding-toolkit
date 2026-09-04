@@ -1,10 +1,11 @@
 /**
- * Where a preview frame's name comes from (flagBuilder/database.ts). CK3 names
- * no frame, but every culture states the one its houses wear, so the heritages
- * of those cultures are the frame's words: cultures in, labels out.
+ * Where a preview frame's words come from. CK3 names no frame, but every
+ * culture states the one its houses wear, so the heritages of those cultures
+ * are the frame's words: cultures in, a plain label and a menu hint out.
  */
 import { describe, expect, it } from "vitest";
 import { frameLabel, frameUsage, type CultureFrames } from "../src/webviews/flagBuilder/database";
+import { frameHint } from "../src/webviews/flagBuilder/messages";
 
 const culture = (heritage: string, house?: string, dynasty?: string): CultureFrames => ({
   heritage,
@@ -39,17 +40,19 @@ describe("frameUsage", () => {
 });
 
 describe("frameLabel", () => {
-  it("keeps the plain id when no culture names the frame", () => {
+  it("is the plain id, so the picker button fits beside the tier", () => {
     expect(frameLabel("house_frame_27")).toBe("House Frame 27");
+    expect(frameLabel("title")).toBe("Title");
   });
+});
 
-  it("names up to three heritages, then says there are more", () => {
-    expect(frameLabel("house_frame_03", ["Frankish"])).toBe("House Frame 03 (Frankish)");
-    expect(frameLabel("house_frame_14", ["Turkic", "Mongolic", "Tungusic"])).toBe(
-      "House Frame 14 (Turkic, Mongolic, Tungusic)"
-    );
-    expect(frameLabel("house_frame_16", ["Ancient Greek", "Mongolic", "Egyptian", "Gothic"])).toBe(
-      "House Frame 16 (Ancient Greek, Mongolic, Egyptian, …)"
+describe("frameHint", () => {
+  it("names two heritages and counts the rest", () => {
+    expect(frameHint([])).toBe("");
+    expect(frameHint(["Frankish"])).toBe("Frankish");
+    expect(frameHint(["Turkic", "Mongolic"])).toBe("Turkic, Mongolic");
+    expect(frameHint(["South Slavic", "Caucasian", "Albanian", "Balkan", "Carpathian"])).toBe(
+      "South Slavic, Caucasian +3"
     );
   });
 });

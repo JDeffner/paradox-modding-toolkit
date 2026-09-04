@@ -19,7 +19,6 @@ import { GuiTextureCache } from "../guiEditor/textureCache";
 import type { LocTextParams, LocTextResult } from "@px-lsp/protocol/protocol";
 import {
   buildFlagDatabase,
-  frameLabel,
   locateDesignerFrame,
   locateTexture,
   type FlagRoot,
@@ -31,7 +30,13 @@ import { scaffoldPrefix } from "../../scaffold/command";
 import { defaultTargetFileName, isPlainScriptFileName, vanillaNameClash } from "../../creators/saveTargets";
 import { libraryFileName, libraryHas, readLibrary, writeLibraryFile } from "./library";
 import { coaDesignerHtml } from "./html";
-import { THUMB_DIM, type AppToHost, type DesignerUiState, type HostToApp } from "./messages";
+import {
+  THUMB_DIM,
+  type AppToHost,
+  type DesignerUiState,
+  type HostToApp,
+  type LibraryState,
+} from "./messages";
 
 const UI_KEY = "px.coaDesigner.ui";
 
@@ -156,8 +161,25 @@ export class CoaDesignerPanel {
     void this.nameFrames(db).then(() => {
       if (this.db === db) this.post({ type: "frames", frames: db.designer?.frames ?? [] });
     });
-    this.post({ type: "init", db, mods, ui: this.state.get<DesignerUiState>(UI_KEY), target });
+    this.post({
+      type: "init",
+      db,
+      mods,
+      ui: this.state.get<DesignerUiState>(UI_KEY),
+      target,
+      library: this.libraryState(),
+    });
     this.postTarget();
+  }
+
+  /**
+   * Where the library is and whether the modder said so. `coaLibraryDir` folds
+   * the two cases into one path, and the app has to tell them apart: a default
+   * nobody picked is worth saying out loud before a design is written into it.
+   */
+  private libraryState(): LibraryState {
+    const set = (vscode.workspace.getConfiguration("px").get<string>("coaLibraryDir") ?? "").trim();
+    return { dir: coaLibraryDir(this.options.meta) ?? "", chosen: set !== "" };
   }
 
   /**
@@ -180,7 +202,7 @@ export class CoaDesignerPanel {
       const names = (frame.heritages ?? [])
         .map((h) => values[`${h}_name`]?.text)
         .filter((name): name is string => Boolean(name));
-      if (names.length) frame.label = frameLabel(frame.id, names);
+      if (names.length) frame.heritageNames = names;
     }
   }
 
@@ -416,6 +438,7 @@ export class CoaDesignerPanel {
         await vscode.workspace
           .getConfiguration("px")
           .update("coaLibraryDir", dir, vscode.ConfigurationTarget.Global);
+        this.post({ type: "libraryDir", ...this.libraryState() });
         this.post({ type: "toast", message: `Library folder: ${dir}` });
         return;
       }

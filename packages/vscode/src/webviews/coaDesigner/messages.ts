@@ -55,8 +55,25 @@ export interface DesignerUiState {
   tab?: DesignerTab;
 }
 
+/**
+ * The library folder and whether the modder picked it. `chosen` is false while
+ * the setting is empty, which is the default: the folder is then one the panel
+ * chose, and the buttons say so before a design lands in it.
+ */
+export interface LibraryState {
+  dir: string;
+  chosen: boolean;
+}
+
 export type HostToApp =
-  | { type: "init"; db: FlagDatabase; mods: ModTarget[]; ui?: DesignerUiState; target?: FlagTarget }
+  | {
+      type: "init";
+      db: FlagDatabase;
+      mods: ModTarget[];
+      ui?: DesignerUiState;
+      target?: FlagTarget;
+      library: LibraryState;
+    }
   /** The clipboard held a definition; the app asks before replacing its own. */
   | { type: "pasted"; flag: CoaFlag }
   /** "Adjust Existing Design": what the modder picked out of the host's list. */
@@ -72,6 +89,8 @@ export type HostToApp =
   | { type: "target"; target: CreatorSaveTarget | null }
   /** What the library folder holds, for the Import overlay. `dir` is shown when it is empty. */
   | { type: "library"; dir: string; items: LibraryItem[] }
+  /** The folder picker answered: the library row's tooltips follow it. */
+  | ({ type: "libraryDir" } & LibraryState)
   | { type: "toast"; message: string };
 
 export type AppToHost =

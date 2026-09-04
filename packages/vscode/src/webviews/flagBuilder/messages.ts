@@ -23,8 +23,25 @@ export interface DesignerFrame {
    * cell the arms fill; absent when no culture names the frame.
    */
   family?: "house" | "dynasty";
-  /** Heritage ids of the cultures wearing it, most cultures first: the label's words. */
+  /** Heritage ids of the cultures wearing it, most cultures first: the picker's words. */
   heritages?: string[];
+  /** The same heritages once the loc index has named them, in the same order. */
+  heritageNames?: string[];
+}
+
+/** How many heritage names a frame's menu hint shows before it counts the rest. */
+const HINT_HERITAGES = 2;
+
+/**
+ * A frame's menu hint: the heritages that wear it, then how many more ("South
+ * Slavic, Caucasian +3"). A menu row is one line and the names are long, so the
+ * full list stays in the button's tooltip.
+ */
+export function frameHint(heritageNames: readonly string[]): string {
+  if (!heritageNames.length) return "";
+  const rest = heritageNames.length - HINT_HERITAGES;
+  const shown = heritageNames.slice(0, HINT_HERITAGES).join(", ");
+  return rest > 0 ? `${shown} +${rest}` : shown;
 }
 
 /** A whole coat of arms written against the layouts file's placeholders. */

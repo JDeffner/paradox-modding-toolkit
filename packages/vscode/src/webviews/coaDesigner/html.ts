@@ -38,6 +38,10 @@ ${uiCss}
   #name { width: 170px; font-weight: 600; }
   #target { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
   #target:empty { display: none; }
+  /* The save path stands next to the mod picker, which already names the mod,
+     so the line drops its own mod half and truncates instead of wrapping. */
+  #targetLine .px-target { max-width: 260px; }
+  #targetLine .px-target-mod, #targetLine .px-target-sep { display: none; }
   #toolbar .px-separator { height: 20px; align-self: center; }
   #main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
   #stage {
@@ -61,6 +65,10 @@ ${uiCss}
   #zoom, #hint { padding: 0 6px; }
   #hint:empty { display: none; }
   #frame, #tier, #gridDiv { width: auto; min-width: 0; }
+  /* The frame name is long and the tier is two words: the frame gives up its
+     width first, so "Tier 1" stays readable however narrow the panel is. */
+  #frame { flex: 1 1 auto; }
+  #tier { flex: 0 0 auto; }
   #gridToggle[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
 
   /* The left panel's own body: same rhythm as a tab body on the right. */
@@ -162,7 +170,6 @@ ${uiCss}
     <button id="toggleLeft" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Hide the tools" data-tip-side="right">${icon("panelLeftClose")}</button>
     <input id="name" class="px-input" placeholder="my_house_coa" spellcheck="false" data-tip="The key: the arms are written as <key> = { … }, and a dynasty, house or title names it in its coa = line." data-tip-wrap />
     <span id="target" class="px-muted px-xs" data-tip="What these arms are for"></span>
-    <span id="targetLine"></span>
     <div class="px-row" style="gap:2px">
       <button id="new" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Start From Scratch">${icon("filePlus")}</button>
       <button id="open" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Adjust Existing Design">${icon("folderOpen")}</button>
@@ -176,6 +183,7 @@ ${uiCss}
     </div>
     <span class="px-grow"></span>
     <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:320px;min-width:180px" data-tip="Mod the arms are saved into">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+    <span id="targetLine"></span>
     <button id="save" class="px-btn" data-variant="default" data-tip="Write the definition into the mod's coat_of_arms folder">${icon("save")} Save</button>
     <button id="png" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Export as PNG">${icon("imageDown")}</button>
     <div class="px-separator" data-orientation="vertical"></div>

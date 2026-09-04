@@ -311,24 +311,17 @@ export function frameUsage(cultures: Iterable<CultureFrames>): Map<string, Frame
   return out;
 }
 
-/** How many heritages a frame's label names before it says "and more". */
-const LABEL_HERITAGES = 3;
-
 /**
- * A frame's menu row: `house_frame_02` -> `House Frame 02`, plus the heritages
- * that wear it once their names are known (`House Frame 02 (South Slavic,
- * Caucasian, Albanian, …)`). The game names no frame, so the heritages of the
- * cultures that state it are the only words it has.
+ * A frame's name: `house_frame_02` -> `House Frame 02`. It is the id and
+ * nothing else, because it has to fit a picker button beside the tier control;
+ * the heritages that wear the frame ride along on `heritageNames` and reach the
+ * modder as the menu's hint and the button's tooltip.
  */
-export function frameLabel(id: string, heritageNames: string[] = []): string {
-  const name = id
+export function frameLabel(id: string): string {
+  return id
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
-  if (!heritageNames.length) return name;
-  const shown = heritageNames.slice(0, LABEL_HERITAGES);
-  if (heritageNames.length > LABEL_HERITAGES) shown.push("…");
-  return `${name} (${shown.join(", ")})`;
 }
 
 /**

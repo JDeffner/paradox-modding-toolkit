@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The Coat of Arms Designer's controls say what they are and fit their
+  row.** A frame's label carried every heritage that wears it, which spilled
+  out of the picker button and pushed the tier button off screen; the label is
+  now the frame's plain name, the menu shows the heritages beside it as a hint
+  the filter still searches, and the full list is the button's tooltip. The
+  library buttons now say when no folder was chosen and where designs land
+  until one is, the Textures category picker matches the height of the fields
+  around it, and the save path moved next to the mod it belongs to.
+
 - **The changenote says where it comes from before you upload it.** The box
   was prefilled from your changelog or your last commit without saying so,
   typing into it silently changed the source, and one dropdown mixed filling

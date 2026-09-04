@@ -172,7 +172,12 @@ function boot(): Booted {
   const push = (message: HostToApp): void => {
     window.dispatchEvent(new window.MessageEvent("message", { data: message }));
   };
-  push({ type: "init", db: DB, mods: [{ label: "test_mod", path: "/mods/test" }] });
+  push({
+    type: "init",
+    db: DB,
+    mods: [{ label: "test_mod", path: "/mods/test" }],
+    library: { dir: "C:/docs/px-toolkit/coat_of_arms", chosen: false },
+  });
 
   const click = (selector: string): void => {
     const el = window.document.querySelector<HTMLElement>(selector);

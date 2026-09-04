@@ -35,9 +35,11 @@ import type {
   FlagTarget,
   HostToApp,
   LibraryItem,
+  LibraryState,
   ModTarget,
 } from "../messages";
 import { GRID_COLUMNS } from "../messages";
+import { frameHint } from "../../flagBuilder/messages";
 import { targetAction } from "../../flagBuilder/target";
 import { middleEllipsis } from "../../flagBuilder/app/paths";
 import { clearRenderCaches, previewThumb, renderFlag, textureKeys } from "../../flagBuilder/app/render";
@@ -1297,7 +1299,7 @@ function renderEmblems(): void {
     const head = el("div", "px-panel-title", "Textures");
     const pick = el("button", "px-btn px-dropdown");
     pick.dataset.variant = "outline";
-    pick.dataset.size = "sm";
+    // Standard height: it sits with the tab's own fields, not among icon rows.
     pick.style.width = "auto";
     const category = emblemCategory || cat.categories[0] || "";
     pick.append(el("span", "px-truncate", categoryLabel(category)), iconEl("chevronDown"));
@@ -1776,6 +1778,28 @@ function applyTarget(next: FlagTarget): void {
 // The library: designs stored as script files outside any mod
 // ---------------------------------------------------------------------------
 
+/** Long enough for a Documents path, short enough not to stretch a tooltip. */
+const LIBRARY_PATH_CHARS = 62;
+
+/**
+ * The library row's tooltips. Until px.coaLibraryDir is set the folder is one
+ * the panel picked, so Library and Save say where a design would land and which
+ * button changes it: a modder should not have to open the settings to find out.
+ */
+function updateLibraryButtons(library: LibraryState): void {
+  const dir = middleEllipsis(library.dir, LIBRARY_PATH_CHARS);
+  const unchosen = dir
+    ? `No library folder chosen yet: the folder button picks one. Until then designs go to ${dir}.`
+    : "No library folder chosen yet: the folder button picks one.";
+  $("libImport").dataset.tip = library.chosen ? "Open a design from your library" : unchosen;
+  $("libExport").dataset.tip = library.chosen
+    ? "Save this design to your library, outside any mod"
+    : unchosen;
+  $("libDir").dataset.tip = library.chosen
+    ? `Library folder: ${dir}. Click to change it.`
+    : "Choose the library folder (px.coaLibraryDir). None chosen yet.";
+}
+
 /** The one overlay the page opens itself, closed by Escape, the backdrop or a pick. */
 function overlay(title: string, body: HTMLElement, onClose?: () => void): () => void {
   const backdrop = el("div", "px-dialog-backdrop");
@@ -1975,10 +1999,26 @@ function openModMenu(): void {
   );
 }
 
+const FRAME_TIP = "Preview frame (never written into the script)";
+
+/**
+ * The button says the frame's plain name, because the button is narrow and
+ * shares its row with the tier. Who wears the frame is the tooltip's job, and
+ * every heritage is listed there: the menu's hint only has room for two.
+ */
 function updateFramePicker(): void {
   const cat = designer();
-  const label = frameId ? (cat?.frames.find((f) => f.id === frameId)?.label ?? frameId) : "No frame";
-  $("frame").querySelector(".px-truncate")!.textContent = label;
+  const frame = frameId ? cat?.frames.find((f) => f.id === frameId) : undefined;
+  const btn = $("frame");
+  btn.querySelector(".px-truncate")!.textContent = frameId ? (frame?.label ?? frameId) : "No frame";
+  const names = frame?.heritageNames ?? [];
+  btn.dataset.tip = names.length ? `Worn by the houses of ${listNames(names)} cultures` : FRAME_TIP;
+}
+
+/** "a, b and c": the tooltip reads as a sentence, so the last name gets "and". */
+function listNames(names: string[]): string {
+  if (names.length < 2) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 function openFrameMenu(): void {
@@ -1986,11 +2026,20 @@ function openFrameMenu(): void {
   if (!cat) return;
   menu(
     $("frame"),
-    [{ value: "", label: "No frame" }, ...cat.frames.map((f) => ({ value: f.id, label: f.label }))],
+    [
+      { value: "", label: "No frame" },
+      ...cat.frames.map((f) => ({
+        value: f.id,
+        label: f.label,
+        // The filter reads the hint too, so typing a culture's heritage finds
+        // the frame its houses wear.
+        hint: frameHint(f.heritageNames ?? []),
+      })),
+    ],
     {
       value: frameId,
-      // Wide enough for the heritages a frame is named after.
-      width: 320,
+      // The name, then the heritages beside it.
+      width: 340,
       onPick: (value) => {
         frameId = value;
         uiState = { ...uiState, frame: value };
@@ -2619,6 +2668,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       updateModPicker();
       updateFramePicker();
       updateGridControls();
+      updateLibraryButtons(m.library);
       applyView();
       if (m.target) applyTarget(m.target);
       else refresh(false);
@@ -2639,6 +2689,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       return;
     case "library":
       showLibrary(m.dir, m.items);
+      return;
+    case "libraryDir":
+      updateLibraryButtons({ dir: m.dir, chosen: m.chosen });
       return;
     case "pasted":
       void (async () => {
