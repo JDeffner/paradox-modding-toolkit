@@ -23,12 +23,7 @@
  * Browser code. No DOM, no host, no game knowledge: which keys exist and what
  * they mean arrives from `paradox/definitionForm`.
  */
-import {
-  changedProperties as diffValues,
-  parseBlock,
-  scanItems,
-  type ScriptItem,
-} from "../../shared/scriptBlock";
+import { parseBlock, scanItems, type ScriptItem } from "../../shared/scriptBlock";
 
 export { locKeyFor } from "../../shared/scriptBlock";
 
@@ -253,6 +248,25 @@ export function applyValues(
 }
 
 /**
+ * Two values that say the same thing to the game.
+ *
+ * A builder writes the block its own way: a file's one-line
+ * `is_shown = { has_dlc_feature = x }` comes back out of the condition builder
+ * as three indented lines. That is a change in the text and none in the
+ * script, and reporting it made a save rewrite a line the modder never
+ * touched. A value carrying a `#` is compared verbatim instead, because a
+ * newline ENDS a comment and folding it away would read the line behind it as
+ * part of the comment.
+ */
+function sameScript(a: string | null, b: string | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (a.includes("#") || b.includes("#")) return false;
+  const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
+  return flat(a) === flat(b);
+}
+
+/**
  * The `setProperties` list for an edit: only the keys whose value actually
  * moved, so a save of an untouched form writes nothing at all.
  */
@@ -261,9 +275,12 @@ export function changedProperties(
   next: DefBlock,
   keys: readonly string[]
 ): { key: string; value: string | null }[] {
-  const valuesOf = (def: DefBlock): Map<string, string | null> =>
-    new Map(keys.map((key) => [key, valueOf(def, key)]));
-  return diffValues(valuesOf(original), valuesOf(next));
+  const out: { key: string; value: string | null }[] = [];
+  for (const key of new Set(keys)) {
+    const value = valueOf(next, key);
+    if (!sameScript(valueOf(original, key), value)) out.push({ key, value });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +360,23 @@ export function updateModifierRows(
     out.push({ kind: "row", name: rows[next].name, value: rows[next].value, raw: String(rows[next].value) });
   }
   return out;
+}
+
+/**
+ * What a modifier block contributes to the save: the block the rows write, or
+ * the one the file already had when the rows write nothing.
+ *
+ * An empty block is not a missing key. `tgp_chinese_legacy_3` and
+ * `tgp_chinese_legacy_4` both carry `character_modifier = { }` with a tab-only
+ * line inside (08_tgp_dynasty_perks.txt, measured 2026-09-04), and dropping the
+ * key on save would be an edit the modder never made.
+ */
+export function modifierBlockValue(
+  entries: readonly ModifierEntry[],
+  rows: readonly { name: string; value: number }[],
+  previous: string | null
+): string | null {
+  return writeModifierBlock(updateModifierRows(entries, rows)) ?? previous;
 }
 
 /** The block source for a modifier block, or null when it holds nothing. */
@@ -693,4 +727,20 @@ export function effectKeyFor(perk: string, index: number): string {
 export function perkNameFor(track: string, index: number): string {
   const stem = track.endsWith("_track") ? track.slice(0, -"_track".length) : track;
   return `${stem}_${index + 1}`;
+}
+
+/**
+ * The name a NEW perk gets: the first number of the track's own series that no
+ * perk on the track uses.
+ *
+ * Numbering off the perk COUNT handed a five-perk track whose third perk had
+ * been removed a fifth named `<stem>_5`, which the track already had, and the
+ * modder had to rename it by hand before the form would save.
+ */
+export function freePerkName(track: string, taken: readonly string[]): string {
+  const used = new Set(taken);
+  for (let index = 0; ; index++) {
+    const name = perkNameFor(track, index);
+    if (!used.has(name)) return name;
+  }
 }
