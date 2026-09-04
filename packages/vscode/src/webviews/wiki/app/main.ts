@@ -81,14 +81,26 @@ function row(iconName: IconName, label: string, tip: string | undefined, onOpen:
   return node;
 }
 
+/**
+ * The severity as one coloured symbol with the word on hover: a row that
+ * opened with a file icon and closed with a text badge spent its width on
+ * two things that said nothing about the code.
+ */
+function severityMark(badge: string | undefined): HTMLElement {
+  const level = (badge ?? "").toLowerCase().split("/")[0];
+  const glyph: IconName = level === "error" ? "circleX" : level === "warning" ? "alert" : "info";
+  const mark = el("span", "sev");
+  mark.setAttribute("data-level", level || "info");
+  mark.setAttribute("data-tip", badge ?? "Severity unknown");
+  mark.appendChild(iconEl(glyph));
+  return mark;
+}
+
 function diagRow(article: WikiArticle): HTMLElement {
-  const node = row("fileText", article.title, undefined, () => select(article.id));
-  node.classList.add("diag");
-  if (article.badge) {
-    const badge = el("span", "px-badge", article.badge);
-    badge.setAttribute("data-variant", "outline");
-    node.appendChild(badge);
-  }
+  const node = el("div", "px-item diag");
+  node.appendChild(severityMark(article.badge));
+  node.appendChild(el("span", "px-item-label", article.title));
+  pressable(node, () => select(article.id));
   node.setAttribute("aria-selected", String(article.id === selected));
   return node;
 }
@@ -99,7 +111,7 @@ function renderToc(nav: HTMLElement): void {
   const list = el("div", "px-list");
   nav.appendChild(list);
 
-  const home = row("library", "Wiki", "The front page.", () => select(null));
+  const home = row("library", "Home", "The front page.", () => select(null));
   home.setAttribute("aria-selected", String(selected === null));
   list.appendChild(home);
 
@@ -205,7 +217,7 @@ function renderHub(content: HTMLElement): void {
 }
 
 function renderDiagnosticsIndex(content: HTMLElement): void {
-  renderCrumbs([{ label: "Wiki", to: null }], "Diagnostics");
+  renderCrumbs([{ label: "Home", to: null }], "Diagnostics");
   content.appendChild(el("h1", undefined, "Diagnostics"));
   content.appendChild(
     el(
@@ -229,12 +241,9 @@ function renderDiagnosticsIndex(content: HTMLElement): void {
   for (const article of codes) {
     const tr = el("tr", "link");
     tr.appendChild(el("td", undefined, article.title));
-    const sev = el("td");
-    if (article.badge) {
-      const badge = el("span", "px-badge", article.badge);
-      badge.setAttribute("data-variant", "outline");
-      sev.appendChild(badge);
-    }
+    const sev = el("td", "sevcell");
+    sev.appendChild(severityMark(article.badge));
+    sev.appendChild(el("span", undefined, article.badge ?? ""));
     tr.appendChild(sev);
     tr.appendChild(el("td", undefined, article.summary ?? ""));
     pressable(tr, () => select(article.id));
@@ -245,7 +254,7 @@ function renderDiagnosticsIndex(content: HTMLElement): void {
 }
 
 function renderModReport(content: HTMLElement): void {
-  renderCrumbs([{ label: "Wiki", to: null }], "Mod Report");
+  renderCrumbs([{ label: "Home", to: null }], "Mod Report");
   if (report === null) {
     const pending = el("div", undefined, "Building the report from the live index…");
     pending.id = "pending";
@@ -268,7 +277,7 @@ function renderModReport(content: HTMLElement): void {
 }
 
 function renderArticle(content: HTMLElement, article: WikiArticle): void {
-  const trail = [{ label: "Wiki", to: null as string | null }];
+  const trail = [{ label: "Home", to: null as string | null }];
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
@@ -354,8 +363,8 @@ $("helpBtn").addEventListener("click", () =>
             text: "is the searchable list of every trigger, effect, target, modifier and datafunction, with real examples out of the game's files.",
           },
           {
-            lead: "Format Docs",
-            text: "opens the game's own _*.info format docs for the file you are editing. Only CK3 ships them, so the card is CK3 only.",
+            lead: "Steam Error Codes",
+            text: "lists every result code a Workshop upload can fail with, the number other tools print, and what to do.",
           },
           { lead: "Credits", text: "names every project the toolkit builds on." },
         ],

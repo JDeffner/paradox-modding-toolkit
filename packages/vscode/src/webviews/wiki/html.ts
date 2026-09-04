@@ -5,7 +5,7 @@
  *
  * The article styles are the doc panel's (webviews/docPanel.ts), so a page
  * reads the same whichever surface shows it. The front-page cards are the
- * Credits page's (credits/html.ts).
+ * Credits page (a wiki article, rendered from credits/credits.ts).
  */
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
@@ -30,11 +30,15 @@ ${uiCss}
   /* The ? floats at the top right of the reading pane: this page has no
      toolbar to end. #page reserves the room so an article never runs under it. */
   #helpBtn { position: absolute; top: 8px; right: 12px; z-index: 5; }
+  /* A fixed width, whatever a row holds: a flex item's min-width is its
+     content by default, so a long diagnostic code pushed the sidebar wider
+     each time the codes folded out. */
   #sidebar {
-    flex: 0 0 232px; display: flex; flex-direction: column; min-height: 0;
+    flex: 0 0 232px; width: 232px; min-width: 0; overflow: hidden;
+    display: flex; flex-direction: column; min-height: 0;
     border-right: 1px solid var(--px-border); background: var(--px-sidebar);
   }
-  @media (max-width: 640px) { #sidebar { flex-basis: 168px; } }
+  @media (max-width: 640px) { #sidebar { flex-basis: 168px; width: 168px; } }
   #searchBar { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--px-border); }
   #searchBar .px-input-group { width: 100%; }
   #nav { flex: 1 1 auto; overflow-y: auto; padding: 4px 4px 20px; }
@@ -42,7 +46,18 @@ ${uiCss}
   #nav .px-item { gap: 6px; }
   #nav .px-item[aria-selected="true"] { background: var(--px-muted-strong); }
   #nav .px-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-  #nav .diag { padding-left: 26px; }
+  #nav .px-item { min-width: 0; }
+  #nav .diag { padding-left: 12px; }
+  /* The severity symbol: the theme's own Problems colours, the word on hover. */
+  .sev { display: inline-flex; flex: 0 0 auto; cursor: help; }
+  .sev svg { width: 14px; height: 14px; }
+  .sev[data-level="error"] { color: var(--vscode-problemsErrorIcon-foreground, var(--px-bad)); }
+  .sev[data-level="warning"] { color: var(--vscode-problemsWarningIcon-foreground, #cca700); }
+  .sev[data-level="info"], .sev[data-level="hint"] { color: var(--vscode-problemsInfoIcon-foreground, #3794ff); }
+  #page td.sevcell { white-space: nowrap; }
+  #page td.sevcell .sev { vertical-align: -2px; margin-right: 6px; }
+  #page blockquote { margin: 10px 0; padding: 6px 12px; border-left: 2px solid var(--px-border); color: var(--px-muted-fg); }
+  #page blockquote p { margin: 0; }
   #nav .diag .px-item-label { font-family: var(--px-font-mono); font-size: var(--px-text-sm); }
   #nav .twist { flex: 0 0 auto; display: inline-flex; padding: 2px; border-radius: var(--px-radius-sm); color: var(--px-muted-fg); }
   #nav .twist:hover { background: var(--px-muted); color: var(--px-fg); }

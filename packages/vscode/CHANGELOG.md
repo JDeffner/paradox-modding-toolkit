@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Wiki: Home, Credits and Steam Error Codes inside it, a sidebar that keeps
+  its width, severity as a symbol.** The front page is reached by a Home row
+  and crumb. Credits is a wiki page now (the Project panel's Info row still
+  opens it) and Format Docs left the hub, since it opens a file and not a
+  page. A Steam Error Codes page carries the full table of Workshop result
+  codes, the number other tools print, and what to do about each. The
+  sidebar no longer grows when the diagnostic codes fold out. A diagnostic
+  row leads with one coloured symbol for its severity, in the theme's own
+  Problems colours, with the word on hover, instead of a file icon and a
+  text badge.
 - **Steam Workshop descriptions are Markdown now, converted to BBCode for
   Steam.** The listing folder keeps `description.md` (and
   `translations/<language>/description.md`), so the description edits with

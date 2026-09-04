@@ -17,7 +17,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { hasFormatDocs } from "../../meta";
+import { creditsMarkdown } from "../credits/credits";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -39,7 +39,6 @@ export class WikiPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
-  private meta: GameMeta;
   private deps: WikiDeps;
   private select: string | null;
   private disposables: vscode.Disposable[] = [];
@@ -47,12 +46,11 @@ export class WikiPanel {
 
   private constructor(
     context: vscode.ExtensionContext,
-    meta: GameMeta,
+    _meta: GameMeta,
     deps: WikiDeps,
     select: string | null
   ) {
     this.context = context;
-    this.meta = meta;
     this.deps = deps;
     this.select = select;
     const source = webviewSource(context);
@@ -96,7 +94,6 @@ export class WikiPanel {
   ): void {
     const existing = WikiPanel.instance;
     if (existing) {
-      existing.meta = meta;
       existing.deps = deps;
       existing.panel.reveal(vscode.ViewColumn.Active);
       if (select) existing.post({ type: "select", id: select });
@@ -123,7 +120,7 @@ export class WikiPanel {
       case "ready":
         this.post({
           type: "content",
-          hub: hub(this.meta),
+          hub: hub(),
           articles: readArticles(this.context),
           select: this.select,
         });
@@ -147,7 +144,7 @@ export class WikiPanel {
 }
 
 /** The front-page cards, in reading order, labelled for the active game. */
-function hub(meta: GameMeta): WikiHubEntry[] {
+function hub(): WikiHubEntry[] {
   return [
     {
       label: "Examples Wiki",
@@ -155,17 +152,6 @@ function hub(meta: GameMeta): WikiHubEntry[] {
       tip: "Search every trigger, effect and datafunction, with real examples out of the game's files.",
       target: { command: "px.showExamplesWiki" },
     },
-    // Only CK3 ships _*.info docs; the other games get no docs card.
-    ...(hasFormatDocs(meta.id)
-      ? [
-          {
-            label: "Format Docs",
-            icon: "fileText" as const,
-            tip: "The game's own format docs for the file you are editing.",
-            target: { command: "px.openInfoDocs" },
-          },
-        ]
-      : []),
     {
       label: "Image Guidelines",
       icon: "image",
@@ -185,13 +171,23 @@ function hub(meta: GameMeta): WikiHubEntry[] {
       target: { page: "mod-report" },
     },
     {
+      label: "Steam Error Codes",
+      icon: "cloudUpload",
+      tip: "Every Steam result code a Workshop upload can fail with, and what to do about each.",
+      target: { page: STEAM_ERRORS_ARTICLE },
+    },
+    {
       label: "Credits",
       icon: "heart",
       tip: "Every project the toolkit builds on, with links.",
-      target: { command: "px.openCredits" },
+      target: { page: CREDITS_ARTICLE },
     },
   ];
 }
+
+/** The two pages that are not diagnostics and not the image guidelines. */
+export const STEAM_ERRORS_ARTICLE = "steam-error-codes";
+export const CREDITS_ARTICLE = "credits";
 
 /** `**Severity:** Error · **Source:** ...` opens every diagnostic page. */
 function severity(markdown: string): string | undefined {
@@ -217,6 +213,17 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       markdown: guidelines,
     });
   }
+  // The GitHub wiki's page, shipped in the vsix so it reads offline too.
+  const steam = read(context.asAbsolutePath("media/steam-workshop-error-codes.md"));
+  if (steam) {
+    articles.push({
+      id: STEAM_ERRORS_ARTICLE,
+      title: "Steam Error Codes",
+      section: "Steam Workshop",
+      markdown: steam,
+    });
+  }
+  articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", markdown: creditsMarkdown() });
 
   // Copied from docs/diagnostics by scripts/copy-docs.mjs. README.md is the
   // repo's index page: the Diagnostics page is that index here, so it is skipped.

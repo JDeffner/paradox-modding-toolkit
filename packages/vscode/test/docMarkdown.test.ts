@@ -30,6 +30,12 @@ describe("renderMarkdown", () => {
     );
   });
 
+  it("renders a quote as one blockquote paragraph", () => {
+    expect(renderMarkdown("> upload failed\n> retry once")).toBe(
+      "<blockquote><p>upload failed retry once</p></blockquote>"
+    );
+  });
+
   it("escapes html instead of passing it through", () => {
     expect(renderMarkdown("<script>alert(1)</script>")).toBe("<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>");
   });

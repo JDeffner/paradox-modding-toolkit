@@ -53,8 +53,7 @@ import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
-import { WikiPanel, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
-import { CreditsPanel } from "./webviews/credits/panel";
+import { WikiPanel, CREDITS_ARTICLE, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
@@ -960,8 +959,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openWiki", (arg?: unknown) => {
       WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), typeof arg === "string" && arg ? arg : null);
     }),
+    // The Credits are a wiki page; the Project panel's Info row keeps the command.
     vscode.commands.registerCommand("px.openCredits", () => {
-      CreditsPanel.show();
+      WikiPanel.show(context, metaFor(cfg.gameId), wikiDeps(), CREDITS_ARTICLE);
     }),
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.

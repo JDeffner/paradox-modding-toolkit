@@ -69,6 +69,17 @@ export function renderMarkdown(markdown: string): string {
       continue;
     }
 
+    // A quote: every consecutive `> ` line, as one paragraph.
+    if (line.startsWith(">")) {
+      const quote: string[] = [];
+      while (i < lines.length && lines[i].startsWith(">")) {
+        quote.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote><p>${inline(quote.join(" "))}</p></blockquote>`);
+      continue;
+    }
+
     if (/^[-*]\s/.test(line)) {
       out.push("<ul>");
       while (i < lines.length && /^[-*]\s/.test(lines[i])) {
@@ -85,7 +96,7 @@ export function renderMarkdown(markdown: string): string {
     }
 
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s|```)/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !/^(#|\||[-*]\s|```|>)/.test(lines[i])) {
       para.push(lines[i]);
       i++;
     }
