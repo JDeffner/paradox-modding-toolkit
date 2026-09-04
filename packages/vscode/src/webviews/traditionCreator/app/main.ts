@@ -27,6 +27,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import {
   boolField,
+  infoIcon,
   keyLabel,
   locField,
   multiRefField,
@@ -354,17 +355,35 @@ function numberInput(
   return input;
 }
 
-/** The shared label + control grid row. */
-function fieldRow(spec: TraditionFieldSpec, control: HTMLElement): HTMLElement {
+/** The shared label + control grid row, with the input's guideline when it has one. */
+function fieldRow(spec: TraditionFieldSpec, control: HTMLElement, info?: string): HTMLElement {
   const row = node("div", "px-field");
   const label = keyLabel(spec.key);
   if (spec.doc) {
     label.dataset.tip = spec.doc;
     label.dataset.tipWrap = "";
   }
+  if (info) label.append(infoIcon(info));
   row.append(label, control);
   return row;
 }
+
+/**
+ * What the game expects of a layer picture, behind the (i) on the Icon row.
+ *
+ * Measured in game/gfx/interface/icons/culture_tradition: every file of every
+ * layer folder and subfolder is 545 x 285 and 32-bit with an alpha channel
+ * (73 of the 81 items are exactly that, the other 8 within three pixels), which
+ * is the size of the tile the Add Tradition view draws.
+ */
+const LAYER_INFO =
+  "545 x 285 pixels: the size every layer file of the game's own tradition art is, measured. " +
+  "Transparency is what makes the stack work. The layers are drawn on top of each other, " +
+  "so everything but this layer's own paint has to be see-through. " +
+  "DDS, and any picture format converts to one. " +
+  "Each folder below is one layer, and a value is either a file in it or a subfolder " +
+  "the game picks a file out of at random. To add your own, put the DDS in that folder " +
+  "of your mod under the same path and it shows up in this picker.";
 
 /** A folding section (px-ui rule 7), open unless the caller says otherwise. */
 function sectionEl(title: string, lede: string | undefined, open: boolean): HTMLElement {
@@ -712,7 +731,7 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
   };
 
   paint();
-  const row = fieldRow(spec, block);
+  const row = fieldRow(spec, block, LAYER_INFO);
   row.dataset.rows = "";
   return {
     el: row,

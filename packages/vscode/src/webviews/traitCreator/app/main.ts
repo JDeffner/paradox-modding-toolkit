@@ -120,7 +120,7 @@ const HELP = {
         },
         {
           lead: "Identity.",
-          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom image converts a PNG into the mod under the trait's name.",
+          text: "The two loc values are written into your mod's localization; the icon grid lists the game's own trait icons, and Custom picture takes any image format, asks which folder of your mod it goes into, and writes the DDS under the trait's name.",
         },
         {
           lead: "Modifiers.",
@@ -323,6 +323,26 @@ function placeholderFor(spec: TraitFieldSpec): string | undefined {
   return spec.example ?? spec.sampled?.[0];
 }
 
+/**
+ * What the game expects of a trait's picture, behind the (i) on the icon row.
+ *
+ * Measured in game/gfx/interface/icons/traits: 375 of its 409 .dds files are
+ * exactly 120 x 120, and every one of them is 32-bit with an alpha channel.
+ * The frame under the icon shares that canvas (preview.ts), and the tooltip
+ * draws the pair at 52 x 52 (gui/shared/cooltip.gui). The folder is the form's,
+ * never spelled here.
+ */
+function iconInfo(): string {
+  const folder = form?.iconFolder ?? "the game's trait icon folder";
+  return (
+    "120 x 120 pixels: the size 375 of the game's 409 trait icons are, measured. " +
+    "Transparency matters. The category frame is drawn under the icon on the same canvas, " +
+    "so everything around the emblem has to be see-through. " +
+    "Custom picture… takes PNG, JPEG, WebP, GIF, BMP, TGA or DDS and writes the DDS for you. " +
+    `The game reads ${folder}/<the trait's key>.dds and the tooltip draws it at 52 x 52.`
+  );
+}
+
 function optionsFor(spec: TraitFieldSpec): EventVocabularyItem[] {
   return spec.refKind ? (form?.options[spec.refKind] ?? []) : [];
 }
@@ -398,6 +418,7 @@ function buildField(spec: TraitFieldSpec): Field<FieldValue> {
     case "icon":
       return iconField({
         ...shared,
+        info: iconInfo(),
         items: iconItems,
         value: String(value),
         onCustom: () => post({ type: "convertIcon", name: nameInput.value.trim() }),
@@ -1467,10 +1488,14 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     }
     case "iconWritten": {
+      // A picture the modder sent to a folder of their own is not in the icon
+      // folder, so it is not one of the grid's entries and it is not what the
+      // game will draw for this key: the host has already said so.
+      if (!message.inPlace) break;
       const field = fields.get("icon");
       if (message.url) iconItems.push({ key: message.key, url: message.url });
-      // A custom image lands under the trait's own name, which is exactly the
-      // path the game derives from the key: the block writes no `icon` line.
+      // In place, the picture lands under the trait's own name, which is
+      // exactly the path the game derives from the key: no `icon` line at all.
       if (field) field.set("");
       state.values.icon = "";
       refreshPreview();

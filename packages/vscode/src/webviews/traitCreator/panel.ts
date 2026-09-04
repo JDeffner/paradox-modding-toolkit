@@ -24,7 +24,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
-import { wireImages, type ImageRoot } from "../../creators/images";
+import { importPicture, wireImages, type ImageRoot } from "../../creators/images";
 import {
   applyDefinitionEdits,
   defaultSaveTarget,
@@ -35,7 +35,6 @@ import {
   type SaveTargetChoice,
 } from "../../creators/save";
 import { readModName } from "@px-lsp/protocol/modName";
-import { convertImageToDds } from "../../ddsConvert";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -375,14 +374,20 @@ export class TraitCreatorPanel {
   }
 
   /**
-   * Convert a picked image into the mod's icon folder under the trait's own
-   * name. That is the path the engine derives from the key, so the block needs
-   * no `icon` line at all and the trait keeps working if it is renamed by hand.
+   * A picture of the modder's own, into the mod the definition is saved to.
+   *
+   * The shared `importPicture` owns the whole flow: it takes any format the
+   * toolkit can decode (every Chromium format plus TGA and DDS), asks WHERE the
+   * file goes with the game's own folder as the default, and writes the DDS.
+   * The default is `<icon folder>/<key>.dds`, which is the path the engine
+   * derives from the key, so the block needs no `icon` line at all and the
+   * trait keeps working if it is renamed by hand. Somewhere else in the mod is
+   * allowed and said out loud: the game will not find it by name there.
    */
   private async convertIcon(name: string): Promise<void> {
-    const { cfg } = this.options;
-    const modPath = cfg.modPath ?? cfg.workspaceMods[0];
-    if (!modPath || !this.form?.iconFolder) {
+    const choice = this.targetChoice();
+    const folder = this.form?.iconFolder;
+    if (!choice || !folder) {
       this.post({ type: "toast", message: "No mod folder to write the icon into.", variant: "destructive" });
       return;
     }
@@ -390,30 +395,33 @@ export class TraitCreatorPanel {
       this.post({ type: "toast", message: "Name the trait first: the icon is named after it." });
       return;
     }
-    const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { Images: ["png", "jpg", "jpeg", "webp"] },
-      title: `Image for ${name}`,
-    });
-    if (!picked?.length) return;
-    const dir = path.join(modPath, ...this.form.iconFolder.split("/"));
-    fs.mkdirSync(dir, { recursive: true });
-    const target = vscode.Uri.file(path.join(dir, `${name}.dds`));
+    let written;
     try {
-      await convertImageToDds(picked[0], target);
+      written = await importPicture({
+        modPath: choice.modPath,
+        folder,
+        name,
+        title: `Picture for ${name}`,
+        textures: this.textures,
+      });
     } catch (err) {
-      this.post({ type: "toast", message: `Conversion failed: ${messageOf(err)}`, variant: "destructive" });
+      this.post({ type: "toast", message: `Picture: ${messageOf(err)}`, variant: "destructive" });
       return;
     }
-    const png = this.textures.resolveFile(target.fsPath, THUMB_DIM);
+    if (!written) return; // the modder cancelled at one of the two dialogs
+    const png = this.textures.resolveFile(written.abs, THUMB_DIM);
     this.post({
       type: "iconWritten",
       key: `${name}.dds`,
       url: png ? this.panel.webview.asWebviewUri(vscode.Uri.file(png)).toString() : null,
+      inPlace: written.inPlace,
     });
     this.post({
       type: "toast",
-      message: `Wrote ${name}.dds into ${this.form.iconFolder}. The game finds it by the trait's name.`,
+      message: written.inPlace
+        ? `Wrote ${written.rel}. The game finds it by the trait's name.`
+        : `Wrote ${written.rel}. The game will not find it by the trait's name there: move it into ${folder}, or point a gfx entry at it yourself.`,
+      ...(written.inPlace ? {} : { variant: "destructive" as const }),
     });
   }
 

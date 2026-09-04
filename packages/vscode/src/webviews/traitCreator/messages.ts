@@ -40,8 +40,13 @@ export type HostToApp =
   | { type: "icons"; urls: Record<string, string | null> }
   /** Where the next save lands, sent as the form loads and after every change. */
   | CreatorTargetReply
-  /** A converted custom image is now the trait's icon under this file name. */
-  | { type: "iconWritten"; key: string; url: string | null }
+  /**
+   * A picture of the modder's own was written. `inPlace` is false when they
+   * sent it somewhere other than the icon folder: the game cannot find it by
+   * the trait's name there, so it is neither offered in the grid nor treated
+   * as the trait's icon.
+   */
+  | { type: "iconWritten"; key: string; url: string | null; inPlace: boolean }
   /** A save finished. `ok` false leaves the form exactly as it was. */
   | { type: "saved"; ok: boolean; name: string }
   /**

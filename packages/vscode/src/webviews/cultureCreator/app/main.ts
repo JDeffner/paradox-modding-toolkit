@@ -217,6 +217,23 @@ function pillarImage(value: string, family: string): string | null {
   return firstImage(pillarIcons(value, family), family === ETHOS ? ETHOS_DIM : PILLAR_DIM);
 }
 
+/**
+ * What a pillar's own picture has to be, behind the (i) on its row. A pillar
+ * is picked here rather than drawn, but a modder who writes one needs the file
+ * that goes with it.
+ *
+ * Measured in game/gfx/interface/icons/culture_pillars: the seven ethos files
+ * are 1200 x 260 and the other eight are 120 x 120, all 32-bit with an alpha
+ * channel. The boxes they are drawn in are the culture window's
+ * (window_culture.gui: 400 x 100 for the ethos banner, 44 x 44 for an icon).
+ */
+function pillarArtInfo(family: string): string {
+  const where = `The game reads ${PILLAR_ICONS}/<the pillar's key>.dds, and falls back to ${PILLAR_ICONS}/${family}.dds. DDS, and any picture format converts to one.`;
+  return family === ETHOS
+    ? `1200 x 260 pixels: the size all seven of the game's ethos banners are, measured. The culture window stretches it into a 400 x 100 box and cuts it out with a rough-edge mask, so paint to the edges and let the mask do the shaping. Transparency is kept. ${where}`
+    : `120 x 120 pixels: the size the game's other eight pillar icons are, measured. The window draws it at 44 x 44 and tints the silhouette through its own color table, so give it a transparent background and a solid shape. ${where}`;
+}
+
 /** Fill in every placeholder whose picture has since arrived. */
 function paintImages(): void {
   for (const img of Array.from(document.querySelectorAll<HTMLImageElement>("img[data-rel]"))) {
@@ -901,6 +918,7 @@ function render(): void {
     const field = refField({
       label: label(key),
       doc: docOf(key),
+      info: pillarArtInfo(key),
       items,
       value: raw(key) ?? "",
       placeholder: pickerPlaceholder(exampleOf(key) ?? items[0]?.value),
