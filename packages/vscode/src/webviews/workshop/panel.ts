@@ -107,8 +107,8 @@ export class WorkshopPanel {
   private resourceRoots: vscode.Uri[];
   /** Titles of required items looked up on Steam, so a re-render never re-asks. */
   private readonly itemTitles = new Map<string, string | null>();
-  /** Watches the active mod's listing text; the panel only previews it now. */
-  private listingWatcher: vscode.FileSystemWatcher | undefined;
+  /** Watches the active mod's listing text and changelog; the panel only previews both. */
+  private listingWatchers: vscode.FileSystemWatcher[] = [];
   private listingReload: ReturnType<typeof setTimeout> | undefined;
 
   private constructor(context: vscode.ExtensionContext, options: WorkshopPanelOptions) {
@@ -174,31 +174,48 @@ export class WorkshopPanel {
   }
 
   /**
-   * The description and translation files are edited in the editor, not here,
-   * so the panel follows them: a change to the active mod's listing text
-   * re-posts info, which is the path Reload takes. Re-created whenever the
-   * active mod changes, and once more when the folder is materialised (a
-   * watcher on a folder that did not exist yet reports nothing).
+   * The description, translation and changelog files are edited in the editor,
+   * not here, so the panel follows them: a change to one of them re-posts
+   * info, which is the path Reload takes. Re-created whenever the active mod
+   * or the changelog setting changes, and once more when the folder is
+   * materialised (a watcher on a folder that did not exist yet reports
+   * nothing).
    */
   private watchListing(): void {
-    this.listingWatcher?.dispose();
-    this.listingWatcher = undefined;
+    for (const w of this.listingWatchers.splice(0)) w.dispose();
     const root = this.active;
     if (this.disposed || !root) return;
     const dir = workshopDirFor(root, this.options.meta);
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.file(dir), "{description.*,translations/*/*}")
-    );
     const changed = (): void => {
       clearTimeout(this.listingReload);
       this.listingReload = setTimeout(() => {
         if (!this.uploading) void this.postInfo();
       }, LISTING_RELOAD_MS);
     };
-    watcher.onDidChange(changed);
-    watcher.onDidCreate(changed);
-    watcher.onDidDelete(changed);
-    this.listingWatcher = watcher;
+    // The changelog may sit outside the workshop folder (px.workshop.changelog
+    // takes any path), so it is watched from ITS parent, as both a file and a
+    // folder of entries.
+    const changelog = this.changelogPath(root);
+    const base = path.basename(changelog);
+    for (const pattern of [
+      new vscode.RelativePattern(vscode.Uri.file(dir), "{description.*,translations/*/*}"),
+      new vscode.RelativePattern(vscode.Uri.file(path.dirname(changelog)), `{${base},${base}/*}`),
+    ]) {
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+      watcher.onDidChange(changed);
+      watcher.onDidCreate(changed);
+      watcher.onDidDelete(changed);
+      this.listingWatchers.push(watcher);
+    }
+  }
+
+  /** Where the changenote lookup points: px.workshop.changelog, resolved. */
+  private changelogPath(root: string): string {
+    return path.resolve(
+      workshopDirFor(root, this.options.meta),
+      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
+        DEFAULT_CHANGELOG
+    );
   }
 
   static show(context: vscode.ExtensionContext, options: WorkshopPanelOptions): void {
@@ -221,8 +238,7 @@ export class WorkshopPanel {
     this.disposed = true;
     WorkshopPanel.instance = undefined;
     clearTimeout(this.listingReload);
-    this.listingWatcher?.dispose();
-    this.listingWatcher = undefined;
+    for (const w of this.listingWatchers.splice(0)) w.dispose();
     for (const d of this.disposables.splice(0)) d.dispose();
     this.panel.dispose();
   }
@@ -301,11 +317,18 @@ export class WorkshopPanel {
     void vscode.window.showErrorMessage(`Workshop: ${friendly}`);
   }
 
-  /** The upload result as a toast with the item page one click away, in the Steam client first. */
-  private notifyUploaded(itemId: string, submits: number): void {
+  /**
+   * The upload result as a toast with the item page one click away, in the
+   * Steam client first. It names the mod and the parts that went, since the
+   * panel that said what would go may be behind the editor by now. One line:
+   * a VS Code notification renders no line breaks.
+   */
+  private notifyUploaded(itemId: string, name: string, createdNow: boolean, parts: string[]): void {
     void vscode.window
       .showInformationMessage(
-        `Upload done: item #${itemId} updated (${submits} submit${submits === 1 ? "" : "s"}). Subscribers get it within minutes.`,
+        `Upload complete: ${name} ${createdNow ? "uploaded" : "updated"}. ` +
+          (parts.length ? `Sent: ${parts.join(", ")}. ` : "") +
+          "Subscribers get it within minutes.",
         "Open in Steam",
         "Open in Browser"
       )
@@ -336,11 +359,8 @@ export class WorkshopPanel {
     } catch {
       /* unreadable preview = none */
     }
-    const changelogPath = path.resolve(
-      workshopDir,
-      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
-        DEFAULT_CHANGELOG
-    );
+    const changelogPath = this.changelogPath(root);
+    const changelogRel = path.relative(workshopDir, changelogPath);
     return {
       root,
       gameName: meta.name,
@@ -357,10 +377,13 @@ export class WorkshopPanel {
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
-      changelogPath,
+      changelogDisplay:
+        changelogRel === "" || changelogRel.startsWith("..")
+          ? changelogPath
+          : changelogRel.replace(/\\/g, "/"),
       workshopDirCustom:
         (vscode.workspace.getConfiguration("px").get<string>("workshop.dir") ?? "").trim() !== "",
-      changelogPresent: fs.existsSync(changelogPath),
+      changelogKind: changelogKindOf(changelogPath),
       changelogCandidates: changelogCandidates(root, workshopDir, changelogPath),
       version: info?.version ?? null,
       supportedVersion: info?.supportedVersion ?? null,
@@ -477,7 +500,11 @@ export class WorkshopPanel {
         return;
       case "openPage": {
         const id = root ? readPublishInfo(root, meta)?.publishedId : null;
-        if (id) void vscode.env.openExternal(vscode.Uri.parse(workshopUrl(id)));
+        if (!id) return;
+        // The client's own page beats the browser's when Steam is installed:
+        // it is where subscribing, rating and the change notes already live.
+        const url = findSteamLibraries().length ? workshopSteamUrl(id) : workshopUrl(id);
+        void vscode.env.openExternal(vscode.Uri.parse(url));
         return;
       }
       case "createDescriptor":
@@ -525,6 +552,15 @@ export class WorkshopPanel {
         return;
       case "createChangelog":
         await this.createChangelog();
+        return;
+      case "openChangelogEntry":
+        await this.openChangelogEntry();
+        return;
+      case "openVideo":
+        // The app parses ids out of links; this is still text from a webview.
+        if (/^[\w-]{6,20}$/.test(message.id)) {
+          void vscode.env.openExternal(vscode.Uri.parse(`https://www.youtube.com/watch?v=${message.id}`));
+        }
         return;
       case "setDependencies": {
         if (!root) return;
@@ -677,7 +713,29 @@ export class WorkshopPanel {
     } catch (e) {
       this.notifyError(`Setting px.workshop.changelog failed - ${String(e)}`, e);
     }
+    this.watchListing();
     await this.postInfo();
+  }
+
+  /**
+   * Open the changelog entry the changenote comes from. It resolves the same
+   * way the card's preview did (setting + mod version) and creates nothing:
+   * the button only shows while an entry exists.
+   */
+  private async openChangelogEntry(): Promise<void> {
+    const { meta } = this.options;
+    const root = this.active;
+    if (!root) return;
+    const note = changelogNoteFor(root, meta, readPublishInfo(root, meta)?.version ?? null);
+    if (!note) return;
+    // `source` is the entry relative to the workshop folder, or absolute when
+    // the changelog lives outside it; resolve covers both.
+    const file = path.resolve(workshopDirFor(root, meta), note.source);
+    if (!fs.existsSync(file)) return;
+    await vscode.window.showTextDocument(vscode.Uri.file(file), {
+      viewColumn: vscode.ViewColumn.Beside,
+      preview: false,
+    });
   }
 
   /**
@@ -694,12 +752,7 @@ export class WorkshopPanel {
       this.notify("The mod has no version yet; set one before creating a changelog entry.", "warn");
       return;
     }
-    const workshopDir = workshopDirFor(root, meta);
-    const dir = path.resolve(
-      workshopDir,
-      (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "").trim() ||
-        DEFAULT_CHANGELOG
-    );
+    const dir = this.changelogPath(root);
     if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) {
       await vscode.window.showTextDocument(vscode.Uri.file(dir), { preview: false });
       return;
@@ -1210,7 +1263,15 @@ export class WorkshopPanel {
             if (choice) void vscode.env.openExternal(vscode.Uri.parse(LEGAL_AGREEMENT_URL));
           });
       }
-      this.notifyUploaded(itemId, submits.length);
+      const sent: string[] = [];
+      if (message.content) sent.push("mod files");
+      if (message.details) sent.push("details");
+      if (message.previews) sent.push("previews");
+      if (deps) sent.push("requirements");
+      if (message.languages.length)
+        sent.push(`${message.languages.length} translation${message.languages.length === 1 ? "" : "s"}`);
+      if (message.changeNote.trim()) sent.push("changenote");
+      this.notifyUploaded(itemId, info.name ?? path.basename(root), createdNow, sent);
       await this.postInfo();
     } catch (e) {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);
@@ -1219,6 +1280,15 @@ export class WorkshopPanel {
       this.uploading = false;
       this.endProgress("upload");
     }
+  }
+}
+
+/** What stands at the changelog path: a folder of entries, one file, or nothing. */
+function changelogKindOf(target: string): WorkshopModInfo["changelogKind"] {
+  try {
+    return fs.statSync(target).isDirectory() ? "folder" : "file";
+  } catch {
+    return null;
   }
 }
 

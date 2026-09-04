@@ -155,6 +155,11 @@ ${uiCss}
   #enableAllConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-left: 3px solid var(--px-destructive); font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   #enableAllConfirm[hidden] { display: none; }
   #note { width: 100%; min-height: 56px; resize: vertical; }
+  /* The changenote's three sources: the picked one's body is the only one shown. */
+  #noteSeg { align-self: flex-start; }
+  #noteChangelog, #noteCommit, #noteWrite { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  /* A commit subject is one line: no scroll window, no grip. */
+  #noteCommit .bbprev { min-height: 0; height: auto; resize: none; }
   .section > .px-panel-title { padding: 0; }
   /* Editable tag chips. */
   .tag-chip { display: inline-flex; align-items: center; gap: 3px; }
@@ -167,7 +172,7 @@ ${BBPREV_CSS}
      down for more. The description gets the taller start, a language row the
      shorter one, and each can be dragged back to its min-height. */
   #descPreview { height: 220px; }
-  .lang .bbprev { min-height: 90px; height: 160px; }
+  .lang .bbprev, #noteChangelog .bbprev { min-height: 90px; height: 160px; }
   /* The description files are edited in the editor: an empty one says so. */
   .bbprev.empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Upload confirmation modal rows. */
@@ -183,7 +188,7 @@ ${BBPREV_CSS}
   .gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .gallery .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: var(--px-text-xs); background: color-mix(in srgb, var(--px-bg) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gallery .tile .rm { position: absolute; top: 2px; right: 2px; }
-  .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  .gallery .tile.video { display: flex; align-items: center; justify-content: center; color: var(--px-muted-fg); font-size: var(--px-text-xs); cursor: pointer; }
   /* Pointer-driven reorder: the lifted tile follows the pointer above the
      rest, its slot stays as a dashed placeholder, the others slide (FLIP). */
   .gallery .tile[data-name] { cursor: grab; touch-action: none; }
@@ -215,9 +220,10 @@ ${BBPREV_CSS}
   }
   .dlc-tile .mark .px-icon { width: 11px; height: 11px; }
   .dlc-tile[data-on="1"] .mark { display: flex; }
-  .req-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--px-text-sm); min-width: 0; }
-  .req-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .req-item .id { color: var(--px-muted-fg); font-size: var(--px-text-xs); flex: 0 0 auto; }
+  /* Required items are chips: they fill the row and wrap, rather than one
+     mostly empty line each. The name truncates, the tooltip carries it whole. */
+  #itemsBox .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+  #itemsBox .id { color: var(--px-muted-fg); flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -229,7 +235,7 @@ ${BBPREV_CSS}
     <span id="liveState" class="px-muted px-xs"></span>
     <span id="jobProgress" hidden><span class="step"></span><span class="count"></span><span class="bar"><span></span></span></span>
     <span class="px-grow"></span>
-    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in the browser">${icon("externalLink")}</button>
+    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in Steam (in the browser when Steam is not installed)" data-tip-wrap>${icon("externalLink")}</button>
     <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
@@ -322,11 +328,19 @@ ${BBPREV_CSS}
         <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
         <label class="hdr-switch" data-tip="Send the changenote with the upload; it appears on the item's Change Notes tab." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></span></label>
       </div>
-      <textarea id="note" class="px-textarea" spellcheck="false" placeholder="What changed in this update"></textarea>
-      <div class="hintline">
-        <button id="noteSourceBtn" class="px-btn px-dropdown" data-variant="ghost" data-size="sm" style="width:auto;max-width:340px">${icon("fileText")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
-        <span class="px-grow"></span>
-        <button id="noteHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How changenotes work" data-tip="Type a changenote, or fill it from your changelog or last commit." data-tip-wrap data-tip-side="left">${icon("circleHelp")}</button>
+      <div id="noteSeg" class="px-toggle-group" data-spacing="0">
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="changelog" data-tip="Send the changelog entry that matches the mod version." data-tip-wrap>Changelog</button>
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="commit" data-tip="Send the subject of the mod's last git commit." data-tip-wrap>Last commit</button>
+        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="write" data-tip="Write a note for this upload only." data-tip-wrap>Write</button>
+      </div>
+      <div id="noteChangelog"></div>
+      <div id="noteCommit"></div>
+      <div id="noteWrite">
+        <textarea id="note" class="px-textarea" spellcheck="false" placeholder="A note for this upload. BBCode works: [b], [list], [url=…]."></textarea>
+        <div class="hintline">
+          <span class="hint">Sent with this upload only, not written to a changelog.</span>
+          <button id="noteBBCodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
+        </div>
       </div>
     </div>
     <div class="section" id="previewsSection">
@@ -355,7 +369,7 @@ ${BBPREV_CSS}
       <div class="px-label" style="margin-bottom:4px">Required DLC</div>
       <div id="dlcBox"></div>
       <div class="px-label" style="margin:10px 0 4px">Required items</div>
-      <div id="itemsBox"></div>
+      <div id="itemsBox" class="px-chips"></div>
       <div class="field" style="margin-top:6px">
         <span class="px-label">Add a required item</span>
         <div class="px-row" style="gap:6px;align-items:center">

@@ -77,10 +77,11 @@ export interface WorkshopModInfo {
   changeNoteSuggestion: string;
   /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
   changelogNote: { text: string; source: string } | null;
-  /** Where the changelog lookup pointed (resolved px.workshop.changelog). */
-  changelogPath: string;
-  /** True when that path exists at all (a missing entry reads differently from a missing changelog). */
-  changelogPresent: boolean;
+  /** Where the changelog lookup pointed (resolved px.workshop.changelog),
+   * relative to the workshop folder ("changelog", "CHANGELOG.md"). */
+  changelogDisplay: string;
+  /** What stands at that path; null when nothing does (which reads differently from a missing entry). */
+  changelogKind: "file" | "folder" | null;
   /** Changelogs found in the mod or the workshop folder, to point the setting at. */
   changelogCandidates: ChangelogCandidate[];
   /** The mod's own version (the next update's) and the supported game version. */
@@ -215,6 +216,10 @@ export type AppToHost =
   | { type: "setChangelogSource"; path: string }
   /** Create `<workshopDir>/changelog/<version>.md` and open it. */
   | { type: "createChangelog" }
+  /** Open the resolved changelog entry in the editor (creates nothing). */
+  | { type: "openChangelogEntry" }
+  /** Open one gallery video on YouTube. */
+  | { type: "openVideo"; id: string }
   /** Write dependencies.json (required DLC app ids, required Workshop item ids). */
   | { type: "setDependencies"; apps: number[]; items: string[] }
   /** Pick images to copy into the previews folder (host opens the file dialog). */

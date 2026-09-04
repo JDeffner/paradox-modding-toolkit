@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- **The changenote says where it comes from before you upload it.** The box
+  was prefilled from your changelog or your last commit without saying so,
+  typing into it silently changed the source, and one dropdown mixed filling
+  the box with moving the changelog. The card now offers three sources as a
+  segmented choice, Changelog, Last commit and Write, and the picked one is
+  exactly what uploads: the changelog entry is shown as rendered BBCode with
+  its file named and an Edit file button, the commit subject as the plain text
+  it is sent as, and Write as a box for this upload only. Missing entries say
+  which one is missing and offer to create it; the Publish summary and the
+  upload confirmation name the source.
+
+- **The Workshop panel follows the changelog file too.** Editing the entry in
+  the editor left the panel showing the old text until you pressed Reload.
+  The panel now watches the resolved changelog, wherever
+  `px.workshop.changelog` points.
+
+- **Required items are chips, videos come first and open on click.** Each
+  required item took a whole row for two words, and the gallery showed videos
+  after the images although Steam shows them first. The items now wrap as
+  chips, the video tiles lead the gallery, and clicking one opens it on
+  YouTube.
+
+- **The upload toast names the mod and what was sent.** It said "item
+  #3794588375 updated (1 submit)", which is the bridge's view, not yours. It
+  now reads "Upload complete: <your mod> updated. Sent: mod files, details,
+  changenote." and keeps both buttons to the item page.
+
+- **The panel's page button prefers the Steam client, and its state line says
+  when the item was last uploaded.** The toolbar's external-link button always
+  went to the browser, and the word "live" beside it read as if the item were
+  public, which it need not be. The button opens the Steam client's page when
+  Steam is installed, and the line now says "updated 2 Sep 2026", as Steam
+  reports it.
+
 - **Description previews are a window on the text, not the whole of it.** A
   long description pushed everything under it off the page, and a wide table
   or code block inside one scrolled the whole panel sideways. Every preview
