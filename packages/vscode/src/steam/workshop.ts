@@ -37,6 +37,7 @@ import {
 } from "@px-lsp/protocol/workshopMeta";
 import { explainSteamError } from "./steamErrors";
 import {
+  DEFAULT_LANGUAGE,
   hasListingFiles,
   moveListing,
   readListingFiles,
@@ -130,8 +131,11 @@ export function readPublishInfo(
     translations[lang] = { ...translations[lang], ...t };
   }
   const description = files?.description ?? store?.description ?? null;
-  // A description only workshop.json still holds is pre-0.4.0 BBCode.
-  const markdown = files?.markdown ?? [];
+  // A description only workshop.json still holds is pre-0.4.0 BBCode,
+  // whatever format its folder would write.
+  const markdown = (files?.markdown ?? []).filter((lang) =>
+    lang === DEFAULT_LANGUAGE ? files?.description != null : files?.translations[lang]?.description != null
+  );
   if (meta.descriptor === "mod") {
     let text: string;
     try {

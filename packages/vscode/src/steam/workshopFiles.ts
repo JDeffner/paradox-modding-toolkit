@@ -120,7 +120,7 @@ export function readListingFiles(workshopDir: string): ListingFiles {
       description = read(chosen.file);
       if (title === null && description === null) continue;
     }
-    if (description !== null && chosen.markdown) markdown.push(api);
+    if (chosen.markdown) markdown.push(api);
     translations[api] = {
       ...(title !== null ? { title: title.trim() } : {}),
       ...(description !== null ? { description } : {}),
@@ -128,7 +128,9 @@ export function readListingFiles(workshopDir: string): ListingFiles {
   }
   const chosen = descriptionFile(workshopDir);
   const description = read(chosen.file);
-  if (description !== null && chosen.markdown) markdown.push(DEFAULT_LANGUAGE);
+  // The format is the folder's, not the file's: an empty folder is already
+  // Markdown, because that is what the next write creates.
+  if (chosen.markdown) markdown.push(DEFAULT_LANGUAGE);
   return { description, translations, markdown };
 }
 

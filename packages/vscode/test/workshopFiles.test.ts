@@ -262,6 +262,8 @@ describe("description file choice", () => {
   it("writes Markdown into a folder that has neither file", () => {
     const dir = tmp();
     expect(descriptionFile(dir)).toEqual({ file: path.join(dir, "description.md"), markdown: true });
+    // The format is the folder's: an empty folder already reports Markdown.
+    expect(readListingFiles(dir).markdown).toEqual([""]);
     writeListingFiles(dir, { description: "# Hi", translations: {} });
     expect(fs.existsSync(path.join(dir, "description.bbcode"))).toBe(false);
   });
