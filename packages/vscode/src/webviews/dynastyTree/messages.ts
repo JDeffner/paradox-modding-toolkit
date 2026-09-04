@@ -93,6 +93,20 @@ export interface TraitTip {
   images: Record<string, string | null>;
 }
 
+/**
+ * What a trait's PICKER ROW shows besides its name: the first few things the
+ * trait does, read out of the trait's own block by the host and printed by
+ * shared/modifierLines.ts through the same rules the tooltip uses.
+ */
+export interface TraitStats {
+  /** The trait's first modifier rows, already cut to what a row shows. */
+  modifiers: PreviewInput["modifiers"];
+  formats: Record<string, ModifierFormat>;
+  images: Record<string, string | null>;
+  /** True when a workspace mod, not the game, defines this trait. */
+  mod: boolean;
+}
+
 export type HostToApp =
   | {
       type: "init";
@@ -107,6 +121,12 @@ export type HostToApp =
   | { type: "traitIcons"; urls: Record<string, string | null> }
   /** The tooltip for one trait, or null when the server does not know it. */
   | { type: "traitTip"; name: string; tip: TraitTip | null }
+  /** What each requested trait does, for its picker row; null = nothing read. */
+  | { type: "traitStats"; rows: Record<string, TraitStats | null> }
+  /** How far back and forward the panel's own write journal can go. */
+  | { type: "journal"; undo: number; redo: number }
+  /** A write landed: the inspector says so, instead of the file opening itself. */
+  | { type: "saved"; name: string; file: string; line: number }
   /** Where the next character save lands (saveTarget.ts). */
   | { type: "target"; target: CreatorSaveTarget | null }
   /** The clipboard's text, for the field that asked for it. */
@@ -145,9 +165,22 @@ export type AppToHost =
   | { type: "traitIcons"; names: string[] }
   /** The game's tooltip for one trait; answered once per name per panel. */
   | { type: "traitTip"; name: string }
+  /** What the trait rows on screen do; batched by the app like the pictures. */
+  | { type: "traitStats"; names: string[] }
+  /** Put the panel's last write back, or make it again. */
+  | { type: "undo" }
+  | { type: "redo" }
+  /** Open the `common/dna_data` block this DNA name refers to. */
+  | { type: "dnaOpen"; key: string }
+  /** Copy that block's whole text, so it can be pasted into another mod. */
+  | { type: "dnaCopy"; key: string }
+  /**
+   * Take a DNA off the clipboard: a whole block or a bare `portrait_info` is
+   * written into the mod's own `common/dna_data`, under a key derived from
+   * `character` when the clipboard carries none. A bare name is just taken.
+   */
+  | { type: "dnaPaste"; character: string }
   /** Recompute the save target: `file` = the file the draft already lives in. */
   | { type: "target"; file?: string }
   /** The target line was clicked: open the picker. */
-  | { type: "changeTarget" }
-  | { type: "copy"; text: string }
-  | { type: "paste"; field: "dna" };
+  | { type: "changeTarget" };

@@ -141,6 +141,11 @@ function modLocFiles(cfg: PxConfig, language: string): string[] {
  */
 export function upsertNewModLoc(cfg: PxConfig, key: string, value: string, language?: string): string {
   const lang = language ?? cfg.locLanguage;
+  return upsertIntoYml(newModLocFile(cfg, key, lang), lang, key, value);
+}
+
+/** The pick {@link upsertNewModLoc} writes into, resolved without writing. */
+function newModLocFile(cfg: PxConfig, key: string, lang: string): string {
   const files = modLocFiles(cfg, lang);
   const prefix = key.includes(".") ? key.slice(0, key.indexOf(".") + 1) : key.split("_")[0] + "_";
   const prefixRe = new RegExp(`^\\s*${escapeRegExp(prefix)}[A-Za-z0-9_.\\-]*:\\d*\\s*"`);
@@ -166,7 +171,7 @@ export function upsertNewModLoc(cfg: PxConfig, key: string, value: string, langu
       largest = file;
     }
   }
-  const target =
+  return (
     best ??
     largest ??
     path.join(
@@ -174,8 +179,8 @@ export function upsertNewModLoc(cfg: PxConfig, key: string, value: string, langu
       "localization",
       lang,
       `${sanitizeName(path.basename(cfg.modPath!))}_l_${lang}.yml`
-    );
-  return upsertIntoYml(target, lang, key, value);
+    )
+  );
 }
 
 function sanitizeName(raw: string): string {
@@ -202,6 +207,21 @@ export async function writeLocSmart(
   if (modDef && replaceLocLineValue(modDef.file, modDef.line, value)) return modDef.file;
   if (defs.length > 0) return upsertInReplaceFile(cfg, key, value);
   return upsertNewModLoc(cfg, key, value);
+}
+
+/**
+ * Which file {@link writeLocSmart} will write `key` into, resolved WITHOUT
+ * writing: the same three branches, over the same pickers. A panel that offers
+ * undo needs the file's pre-image, and only this can say which file that is
+ * before the write happens.
+ */
+export async function locTargetFile(cfg: PxConfig, lookup: LocLookup, key: string): Promise<string | null> {
+  if (!cfg.modPath) return null;
+  const defs = await lookup(key);
+  const modDef = defs.find((d) => d.source === "mod");
+  if (modDef) return modDef.file;
+  if (defs.length > 0) return modReplaceFile(cfg);
+  return newModLocFile(cfg, key, cfg.locLanguage);
 }
 
 export async function editLocalizationCommand(
