@@ -53,12 +53,9 @@ describe("coa parser", () => {
   const flags = parseCoaFile(sample);
   const gbr = flags[0];
 
-  it("skips templates and reads the flag", () => {
+  it("skips templates, reads the flag and every color form", () => {
     expect(flags.map((f) => f.name)).toEqual(["GBR"]);
     expect(gbr.pattern).toBe("pattern_gironny_8.dds");
-  });
-
-  it("reads every color form", () => {
     expect(gbr.colors).toEqual([
       { name: "color1", kind: "named", value: "blue" },
       { name: "color2", kind: "ref", value: "color1" },
@@ -79,9 +76,8 @@ describe("coa parser", () => {
     expect(layer.instances[0].position[1]).toBeCloseTo(205 / 512 + 0.001);
     // Missing attributes keep the game's defaults.
     expect(layer.instances[1]).toEqual({ rotation: 0, scale: [0.5, 0.5], position: [0.5, 0.5] });
-  });
 
-  it("reads textured emblems and subs", () => {
+    // The other two layer kinds, whose instances read differently again.
     expect(gbr.layers[1]).toEqual({ kind: "textured_emblem", texture: "te_crow_star.dds", instances: [] });
     expect(gbr.layers[2]).toEqual({
       kind: "sub",
@@ -102,13 +98,10 @@ describe("coa parser", () => {
 });
 
 describe("colors", () => {
-  it("converts hsv360 like the game's named colors", () => {
+  it("parses named_colors, converting hsv360 the way the game does, and follows references once", () => {
     expect(hsv360ToRgb(0, 0, 100)).toEqual([255, 255, 255]);
     expect(hsv360ToRgb(0, 100, 100)).toEqual([255, 0, 0]);
     expect(hsv360ToRgb(120, 100, 50)).toEqual([0, 128, 0]);
-  });
-
-  it("parses named_colors and follows references once", () => {
     const named = parseNamedColors(
       `colors = {\n\tred = hsv360 { 0 100 100 }\n\tgrey = rgb { 0.5 0.5 0.5 }\n}`
     );
@@ -207,17 +200,6 @@ ce_lion.dds = { colors = 2 category = animals }`,
     expect(emblems.map((e) => e.category)).toEqual(["abstract", "animals"]);
   });
 
-  it("reads the palette in list order and a color list's first entry", () => {
-    expect(
-      parseDesignerPalette(`coa_designer_background_colors = {\n\tred = {}\n\torange = {}\n\tblack = {}\n}`)
-    ).toEqual(["red", "orange", "black"]);
-    expect(
-      parseColorLists(
-        `color_lists = {\n\tnormal_colors = {\n\t\t30 = "red"\n\t\t12 = "blue"\n\t}\n\tmetal_colors = {\n\t\t24 = "yellow"\n\t}\n}`
-      )
-    ).toEqual({ normal_colors: "red", metal_colors: "yellow" });
-  });
-
   it("leaves a layout's placeholders unresolved and reads its @ defaults", () => {
     const file = `@color_1 = grey
 @color_2 = white
@@ -249,6 +231,17 @@ coa_designer_single_centre = {
   });
 
   it("resolves a template's list references through the color lists", () => {
+    // The palette is a list in file order; a color list answers with its first
+    // entry, which is what a template's `list "…"` resolves to.
+    expect(
+      parseDesignerPalette(`coa_designer_background_colors = {\n\tred = {}\n\torange = {}\n\tblack = {}\n}`)
+    ).toEqual(["red", "orange", "black"]);
+    expect(
+      parseColorLists(
+        `color_lists = {\n\tnormal_colors = {\n\t\t30 = "red"\n\t\t12 = "blue"\n\t}\n\tmetal_colors = {\n\t\t24 = "yellow"\n\t}\n}`
+      )
+    ).toEqual({ normal_colors: "red", metal_colors: "yellow" });
+
     const templates = parseDesignerTemplates(
       `template = {
 	coa_designer_blank_default = {

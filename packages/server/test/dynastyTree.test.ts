@@ -168,10 +168,7 @@ describe("computeDynastyTree", () => {
     expect(cerdicing?.houseCount).toBe(1);
     // A key with no loc entry reads as the key, never as an invented name.
     expect(result.dynasties.find((d) => d.id === "2004005")?.name).toBe("dynn_Mucel");
-  });
-
-  it("counts the next free ids from every id the index knows", () => {
-    const result = computeDynastyTree(data, {});
+    // The next free ids count from every id the index knows.
     expect(result.nextCharacterId).toBe("306021");
     expect(result.nextDynastyId).toBe("2004006");
   });
@@ -189,6 +186,11 @@ describe("computeDynastyTree", () => {
     ).toEqual(["100", "102", "7627"]);
     // The picker list is not resent with a single dynasty.
     expect(result.dynasties).toEqual([]);
+    // A spouse of another dynasty comes with the tree, marked as not its own.
+    const wife = result.characters?.find((c) => c.id === "306020");
+    expect(wife?.external).toBe(true);
+    expect(wife?.female).toBe(true);
+    expect(wife?.dynasty).toBe("2004005");
   });
 
   it("reads parents, dates, traits and spouses out of the character block", () => {
@@ -211,11 +213,8 @@ describe("computeDynastyTree", () => {
     expect(eadward?.father).toBe("7627");
     expect(eadward?.mother).toBe("306020");
     expect(eadward?.birth).toBe("874.1.1");
-  });
 
-  it("reads the dna and every skill the block sets", () => {
-    const result = computeDynastyTree(data, { dynasty: "1047006" });
-    const alfred = result.characters?.find((c) => c.id === "7627");
+    // The dna and every skill the block sets come with them.
     expect(alfred?.dna).toBe("7627_earl_alfred");
     expect(alfred?.skills).toEqual({
       martial: 11,
@@ -240,14 +239,6 @@ describe("computeDynastyTree", () => {
     expect(record.dna).toBe("109610_shisnand_coimbra");
     // A skill that is not a number is left to the writer's verbatim path.
     expect(record.skills).toEqual({ martial: 5 });
-  });
-
-  it("brings in a spouse from another dynasty, marked as not this tree's", () => {
-    const result = computeDynastyTree(data, { dynasty: "1047006" });
-    const wife = result.characters?.find((c) => c.id === "306020");
-    expect(wife?.external).toBe(true);
-    expect(wife?.female).toBe(true);
-    expect(wife?.dynasty).toBe("2004005");
   });
 
   it("answers an empty list for a dynasty nothing defines", () => {

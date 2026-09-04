@@ -30,9 +30,7 @@ describe("defaultTargetFileName", () => {
   it("falls back to the kind's default name when nothing was loaded", () => {
     expect(defaultTargetFileName({ prefix: "px", kind: "trait" })).toBe("px_traits.txt");
     expect(defaultTargetFileName({ sourceFile: "  ", prefix: "px", kind: "trait" })).toBe("px_traits.txt");
-  });
-
-  it("ignores a source that is not a bare .txt name: a save may not write there", () => {
+    // A source that is not a bare .txt name: a save may not write there.
     expect(defaultTargetFileName({ sourceFile: "../game/00_traits.txt", prefix: "px", kind: "trait" })).toBe(
       "px_traits.txt"
     );
@@ -46,17 +44,12 @@ describe("vanillaNameClash", () => {
     const reason = vanillaNameClash("00_traits.txt", gameFiles, "common/traits");
     expect(reason).toContain("replaces the whole game file");
     expect(reason).toContain("common/traits");
-  });
-
-  it("matches case-insensitively, like the file systems the games run on", () => {
+    // Case-insensitively, like the file systems the games run on.
     expect(vanillaNameClash("00_TRAITS.TXT", gameFiles, "common/traits")).not.toBeNull();
   });
 
-  it("passes a name of the modder's own", () => {
+  it("passes a name of the modder's own, and refuses nothing when the game folder could not be read", () => {
     expect(vanillaNameClash("mymod_traits.txt", gameFiles, "common/traits")).toBeNull();
-  });
-
-  it("refuses nothing when the game folder could not be read", () => {
     expect(vanillaNameClash("00_traits.txt", [], "common/traits")).toBeNull();
   });
 });

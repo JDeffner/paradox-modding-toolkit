@@ -65,17 +65,18 @@ describe("definitionEdit setProperties", () => {
       },
     ]);
     expect(out.applied).toBe(FILE.replace("\tprowess_per_prestige_level = 1\n", ""));
-  });
 
-  it("adds a key the block does not have, with the block's own indentation", () => {
-    const out = run(FILE, [
+    // And adds a key the block does not have, with the block's own indentation.
+    const added = run(FILE, [
       {
         op: "setProperties",
         name: "lifestyle_wayfarer",
         properties: [{ key: "martial", value: "1" }],
       },
     ]);
-    expect(out.applied).toBe(FILE.replace("}\n\nlifestyle_voyager", "\tmartial = 1\n}\n\nlifestyle_voyager"));
+    expect(added.applied).toBe(
+      FILE.replace("}\n\nlifestyle_voyager", "\tmartial = 1\n}\n\nlifestyle_voyager")
+    );
   });
 
   it("edits a block-valued key as a property, which is what script has", () => {
@@ -86,20 +87,18 @@ describe("definitionEdit setProperties", () => {
     expect(out.applied).toBe("px_t = {\n\topposites = { craven lazy }\n}\n");
   });
 
-  it("refuses with a reason when the file has no block of that name", () => {
-    const out = run(FILE, [
+  it("refuses with a reason: no block of that name, or a file that does not parse", () => {
+    const missing = run(FILE, [
       { op: "setProperties", name: "no_such_trait", properties: [{ key: "martial", value: "1" }] },
     ]);
-    expect(out.edits).toEqual([]);
-    expect(out.ops[0].refused).toContain("no_such_trait");
-  });
+    expect(missing.edits).toEqual([]);
+    expect(missing.ops[0].refused).toContain("no_such_trait");
 
-  it("refuses every op in a file that does not parse", () => {
-    const out = run("px_t = {\n\tcategory = personality\n", [
+    const broken = run("px_t = {\n\tcategory = personality\n", [
       { op: "setProperties", name: "px_t", properties: [{ key: "martial", value: "1" }] },
     ]);
-    expect(out.edits).toEqual([]);
-    expect(out.ops[0].refused).toContain("parse error");
+    expect(broken.edits).toEqual([]);
+    expect(broken.ops[0].refused).toContain("parse error");
   });
 });
 
@@ -111,20 +110,17 @@ describe("definitionEdit upsertBlock", () => {
     expect(out.applied).toBe("# Lifestyle traits.\n" + replacement + "\n\n" + VOYAGER);
   });
 
-  it("appends a new block after one blank separator line", () => {
+  it("appends a new block after one blank separator line, whatever the file ends with", () => {
     const block = "px_new = {\n\tcategory = personality\n}";
-    const out = run(FILE, [{ op: "upsertBlock", name: "px_new", text: block }]);
-    expect(out.applied).toBe(FILE + "\n" + block + "\n");
-  });
-
-  it("closes an unterminated last line before the separator", () => {
-    const text = "px_a = { category = personality }";
-    const out = run(text, [{ op: "upsertBlock", name: "px_b", text: "px_b = { category = fame }" }]);
-    expect(out.applied).toBe(text + "\n\npx_b = { category = fame }\n");
-  });
-
-  it("writes the block alone into an empty file (or one holding only its BOM)", () => {
-    const block = "px_new = {\n\tcategory = personality\n}";
+    expect(run(FILE, [{ op: "upsertBlock", name: "px_new", text: block }]).applied).toBe(
+      FILE + "\n" + block + "\n"
+    );
+    // An unterminated last line is closed before the separator.
+    const open = "px_a = { category = personality }";
+    expect(run(open, [{ op: "upsertBlock", name: "px_b", text: "px_b = { category = fame }" }]).applied).toBe(
+      open + "\n\npx_b = { category = fame }\n"
+    );
+    // An empty file (or one holding only its BOM) gets the block alone.
     expect(run("", [{ op: "upsertBlock", name: "px_new", text: block }]).applied).toBe(block + "\n");
     expect(run("﻿", [{ op: "upsertBlock", name: "px_new", text: block }]).applied).toBe("﻿" + block + "\n");
   });
@@ -171,12 +167,11 @@ describe("script dialect of the span model", () => {
     expect(file.errors).toEqual([]);
     expect(file.entries.every((e) => e.kind === "property")).toBe(true);
     expect(file.root.children).toEqual([]);
-  });
 
-  it("reads no declaration markers or slot forms out of script", () => {
-    // `type` and `blockoverride` are ordinary script words, not .gui markers.
-    const file = parseGuiSource("px_t = {\n\ttype = character_event\n}\ntemplate = 3\n", SCRIPT_DIALECT);
-    expect(file.entries.map((e) => e.marker)).toEqual([null, null, null]);
-    expect(file.root.entries.map((e) => e.key)).toEqual(["px_t", "template"]);
+    // And reads no declaration markers or slot forms out of script: `type` and
+    // `blockoverride` are ordinary script words, not .gui markers.
+    const words = parseGuiSource("px_t = {\n\ttype = character_event\n}\ntemplate = 3\n", SCRIPT_DIALECT);
+    expect(words.entries.map((e) => e.marker)).toEqual([null, null, null]);
+    expect(words.root.entries.map((e) => e.key)).toEqual(["px_t", "template"]);
   });
 });

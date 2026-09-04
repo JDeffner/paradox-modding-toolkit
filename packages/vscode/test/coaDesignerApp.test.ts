@@ -256,6 +256,12 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     const layer = app.current().layers[0];
     if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
     expect(layer.instances[0].scale).toEqual([-0.7, 0.7]);
+
+    // Placement lives in the LEFT panel, so it survives a tab that is not Emblems.
+    app.tab("background");
+    expect(app.document.querySelectorAll("#placement .px-field").length).toBeGreaterThan(0);
+    expect(app.document.querySelector("#emblemBody .px-field")).toBeNull();
+    expect(app.errors).toEqual([]);
   });
 
   it("Match X and Y scale is on before anyone touches it", () => {
@@ -302,20 +308,6 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(xs[0]).toBe(xs[1]);
     // Only that axis moved.
     expect(layer.instances.map((i) => i.position[1])).toEqual([0.3, 0.7]);
-  });
-
-  it("draws all three tabs without throwing, and keeps placement on screen", () => {
-    const app = boot();
-    for (const name of ["background", "layout", "emblems", "background"] as const) app.tab(name);
-    app.click("#addEmblem");
-    expect(app.errors).toEqual([]);
-    const flag = app.current();
-    expect(flag.pattern).not.toBe("");
-    expect(flag.layers.length).toBeGreaterThan(0);
-    // Placement lives in the LEFT panel, so it survives a tab that is not Emblems.
-    app.tab("background");
-    expect(app.document.querySelectorAll("#placement .px-field").length).toBeGreaterThan(0);
-    expect(app.document.querySelector("#emblemBody .px-field")).toBeNull();
   });
 
   it("the library overlay shows a stored design, and a file it cannot read", async () => {

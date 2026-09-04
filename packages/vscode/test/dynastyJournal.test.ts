@@ -24,6 +24,10 @@ describe("WriteJournal", () => {
     const files = { "/mod/a.txt": "after" };
     const io = fakeIo(files);
     const journal = new WriteJournal(io);
+    // Nothing recorded yet: neither direction has anything to do.
+    expect(await journal.undo()).toBe(false);
+    expect(await journal.redo()).toBe(false);
+
     journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
     expect(journal.depth).toEqual({ undo: 1, redo: 0 });
 
@@ -48,20 +52,13 @@ describe("WriteJournal", () => {
     // The entry stays: nothing was undone, and the panel says so rather than
     // quietly forgetting the write.
     expect(journal.depth).toEqual({ undo: 1, redo: 0 });
-  });
 
-  it("refuses when the file cannot be read", async () => {
-    const io = fakeIo({});
-    const journal = new WriteJournal(io);
-    journal.record({ file: "/mod/gone.txt", before: "before", after: "after" });
-    expect(await journal.undo()).toBe(false);
-    expect(io.refusals[0]).toContain("gone.txt");
-  });
-
-  it("does nothing when there is nothing to undo or redo", async () => {
-    const journal = new WriteJournal(fakeIo({}));
-    expect(await journal.undo()).toBe(false);
-    expect(await journal.redo()).toBe(false);
+    // A file that is not there at all is the same refusal.
+    const gone = fakeIo({});
+    const missing = new WriteJournal(gone);
+    missing.record({ file: "/mod/gone.txt", before: "before", after: "after" });
+    expect(await missing.undo()).toBe(false);
+    expect(gone.refusals[0]).toContain("gone.txt");
   });
 
   it("ends the redo line at the next write", async () => {

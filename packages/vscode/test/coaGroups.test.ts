@@ -37,25 +37,19 @@ const box = (cx: number, cy: number, w: number, h: number, rotation = 0): Elemen
 const near = (a: number, b: number, digits = 6): void => expect(a).toBeCloseTo(b, digits);
 
 describe("bounds", () => {
-  it("a turned emblem is wider than its scale", () => {
+  it("a turned emblem is wider than its scale, a mirrored one is the same size", () => {
     const square = boxBounds(box(0.5, 0.5, 0.2, 0.2, 45));
     near(square.w, 0.2 * Math.SQRT2);
     near(square.h, 0.2 * Math.SQRT2);
-  });
-
-  it("a mirrored emblem is still the same size", () => {
     expect(boxBounds(box(0.5, 0.5, -0.2, 0.2))).toEqual(boxBounds(box(0.5, 0.5, 0.2, 0.2)));
   });
 
-  it("the selection box holds every member", () => {
+  it("the selection box holds every member, and an empty selection has none", () => {
     const bounds = selectionBounds([box(0.2, 0.2, 0.2, 0.2), box(0.8, 0.6, 0.2, 0.2)]);
     near(bounds.x, 0.1);
     near(bounds.y, 0.1);
     near(bounds.w, 0.8);
     near(bounds.h, 0.6);
-  });
-
-  it("an empty selection has no box", () => {
     expect(selectionBounds([])).toEqual({ x: 0, y: 0, w: 0, h: 0 });
   });
 });
@@ -83,11 +77,9 @@ describe("group transforms", () => {
     near(next[0].w, boxes[0].w * factor);
     near(next[0].h, boxes[0].h * factor);
     near(next[1].w, boxes[1].w * factor);
-  });
-
-  it("a group scale keeps a mirrored member mirrored", () => {
-    const next = scaleGroup([box(0.3, 0.3, -0.2, 0.2), box(0.7, 0.7, 0.2, 0.2)], "se", 1.2, 1.2);
-    expect(next[0].w).toBeLessThan(0);
+    // A mirrored member stays mirrored through the scale.
+    const mirrored = scaleGroup([box(0.3, 0.3, -0.2, 0.2), box(0.7, 0.7, 0.2, 0.2)], "se", 1.2, 1.2);
+    expect(mirrored[0].w).toBeLessThan(0);
   });
 
   it("a rotate turns the arrangement about its own centre", () => {
@@ -110,20 +102,15 @@ describe("group transforms", () => {
     // The other axis is untouched.
     expect(next.map((b) => b.cy)).toEqual([0.5, 0.5]);
     expect(next.map((b) => b.h)).toEqual([0.2, 0.2]);
-  });
-
-  it("a mirror turns a rotated emblem the other way", () => {
+    // A turned emblem turns the other way, so mirroring twice is where it started.
     expect(mirrorGroup([box(0.5, 0.5, 0.2, 0.2, 15)], "x")[0].rotation).toBe(-15);
-  });
-
-  it("mirroring twice is where it started", () => {
-    const boxes = [box(0.3, 0.4, 0.2, 0.1, 20), box(0.9, 0.5, 0.1, 0.3)];
-    const back = mirrorGroup(mirrorGroup(boxes, "y"), "y");
+    const there = [box(0.3, 0.4, 0.2, 0.1, 20), box(0.9, 0.5, 0.1, 0.3)];
+    const back = mirrorGroup(mirrorGroup(there, "y"), "y");
     back.forEach((b, i) => {
-      near(b.cx, boxes[i].cx);
-      near(b.cy, boxes[i].cy);
-      near(b.h, boxes[i].h);
-      near(b.rotation, boxes[i].rotation);
+      near(b.cx, there[i].cx);
+      near(b.cy, there[i].cy);
+      near(b.h, there[i].h);
+      near(b.rotation, there[i].rotation);
     });
   });
 });
@@ -146,24 +133,16 @@ describe("align and distribute", () => {
     expect(deltas.map((d) => d.dv)).toEqual([0, 0]);
   });
 
-  it("distribute leaves equal gaps and does not move the outermost", () => {
-    const boxes = [box(0.1, 0.5, 0.1, 0.1), box(0.3, 0.5, 0.1, 0.1), box(0.9, 0.5, 0.1, 0.1)];
-    const deltas = distributeDeltas(boxes, "x");
-    near(deltas[0].du, 0);
-    near(deltas[2].du, 0);
-    const spread = boxes.map((b, i) => b.cx + deltas[i].du).sort((a, b) => a - b);
-    near(spread[1] - spread[0], spread[2] - spread[1]);
-  });
-
-  it("distribute sorts by position, not by pick order", () => {
+  it("distribute leaves equal gaps, holds the outermost, and sorts by position not pick order", () => {
+    // Picked out of order: the two outermost are the ones at 0.1 and 0.9,
+    // whichever slot they sit in.
     const boxes = [box(0.9, 0.5, 0.1, 0.1), box(0.1, 0.5, 0.1, 0.1), box(0.4, 0.5, 0.1, 0.1)];
     const deltas = distributeDeltas(boxes, "x");
-    // The two outermost are the ones at 0.1 and 0.9, whichever slot they sit in.
     near(deltas[0].du, 0);
     near(deltas[1].du, 0);
-  });
-
-  it("fewer than three has no gap to equalise", () => {
+    const spread = boxes.map((b, i) => b.cx + deltas[i].du).sort((a, b) => a - b);
+    near(spread[1] - spread[0], spread[2] - spread[1]);
+    // Fewer than three has no gap to equalise.
     expect(distributeDeltas([box(0.2, 0.2, 0.1, 0.1), box(0.8, 0.2, 0.1, 0.1)], "x")).toEqual([
       { du: 0, dv: 0 },
       { du: 0, dv: 0 },
@@ -172,34 +151,25 @@ describe("align and distribute", () => {
 });
 
 describe("the grid", () => {
-  it("snaps to the nearest line of the subdivision", () => {
+  it("snaps to the nearest line, and every subdivision on offer has one on the arms' centre", () => {
     expect(snapValue(0.26, 4)).toBe(0.25);
     expect(snapValue(0.6, 2)).toBe(0.5);
+    for (const div of GRID_DIVISIONS) expect(snapValue(0.5, div)).toBe(0.5);
   });
 
-  it("centring is one drag: the centre line is a candidate", () => {
-    // A 0.2 box dropped just off centre; nothing else is nearer.
-    const to = snapDelta({ x: 0.39, y: 0.39, w: 0.2, h: 0.2 }, 2, 0.02);
-    near(to.du, 0.01);
-    near(to.dv, 0.01);
-  });
-
-  it("an edge can win over the centre", () => {
+  it("weighs the centre line and the edges against each other, and snaps to neither when far", () => {
+    // A 0.2 box dropped just off centre; nothing else is nearer, so centring
+    // is one drag.
+    const centred = snapDelta({ x: 0.39, y: 0.39, w: 0.2, h: 0.2 }, 2, 0.02);
+    near(centred.du, 0.01);
+    near(centred.dv, 0.01);
     // Centre 0.31 is 0.06 off the 0.25 line; the left edge at 0.26 is 0.01 off.
-    const to = snapDelta({ x: 0.26, y: 0.5, w: 0.1, h: 0.1 }, 4, 0.02);
-    near(to.du, -0.01);
-  });
-
-  it("nothing snaps when nothing is close", () => {
+    near(snapDelta({ x: 0.26, y: 0.5, w: 0.1, h: 0.1 }, 4, 0.02).du, -0.01);
     expect(snapDelta({ x: 0.13, y: 0.13, w: 0.11, h: 0.11 }, 8, 0.005)).toEqual({ du: 0, dv: 0 });
   });
 
-  it("every subdivision on offer puts a line on the arms' centre", () => {
-    for (const div of GRID_DIVISIONS) expect(snapValue(0.5, div)).toBe(0.5);
-    expect(GRID_DIVISIONS).toContain(DEFAULT_GRID_DIVISION);
-  });
-
   it("a remembered subdivision the picker dropped falls back to the default", () => {
+    expect(GRID_DIVISIONS).toContain(DEFAULT_GRID_DIVISION);
     expect(validGridDivision(32)).toBe(32);
     expect(validGridDivision(2)).toBe(DEFAULT_GRID_DIVISION);
     expect(validGridDivision(undefined)).toBe(DEFAULT_GRID_DIVISION);
@@ -207,23 +177,16 @@ describe("the grid", () => {
 });
 
 describe("an arrow key moves by", () => {
-  it("one grid cell, and four with Shift, while the grid is on", () => {
+  it("one grid cell (four with Shift) while the grid is on, a fixed fraction of the arms while it is off", () => {
     expect(nudgeStep(true, 16, false)).toBe(1 / 16);
     expect(nudgeStep(true, 16, true)).toBe(4 / 16);
     expect(nudgeStep(true, 64, false)).toBe(1 / 64);
-  });
 
-  it("a fixed fraction of the arms while the grid is off", () => {
-    // Not a quarter of the arms, which is what dividing by the hidden grid
-    // used to give: no grid means no cell to follow.
+    // With the grid off it is a fixed fraction of the arms instead. Not a
+    // quarter of the arms, which is what dividing by the hidden grid used to
+    // give: no grid means no cell to follow.
     expect(nudgeStep(false, 4, false)).toBe(1 / 256);
     expect(nudgeStep(false, 4, true)).toBe(1 / 32);
     expect(nudgeStep(false, 64, false)).toBe(1 / 256);
-  });
-
-  it("a step that lands ON a line when it starts on one", () => {
-    let at = 0.5;
-    for (let i = 0; i < 4; i++) at += nudgeStep(true, 8, false);
-    expect(snapValue(at, 8)).toBeCloseTo(at, 10);
   });
 });

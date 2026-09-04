@@ -28,13 +28,12 @@ const FLAG: CoaFlag = {
 };
 
 describe("a library file is named after the design", () => {
-  it("keeps a plain name and adds the extension", () => {
+  it("keeps a plain name, adds the extension once, and falls back rather than making a nameless file", () => {
     expect(libraryFileName("my_house_coa")).toBe("my_house_coa.txt");
     expect(libraryFileName("  spaced  ")).toBe("spaced.txt");
-  });
-
-  it("does not write the extension twice", () => {
     expect(libraryFileName("my_house_coa.txt")).toBe("my_house_coa.txt");
+    expect(libraryFileName("")).toBe("coa.txt");
+    expect(libraryFileName(".txt")).toBe("coa.txt");
   });
 
   it("cannot leave the folder", () => {
@@ -44,11 +43,6 @@ describe("a library file is named after the design", () => {
     expect(libraryFileName("sub/dir")).toBe("sub_dir.txt");
     expect(libraryFileName("C:\\windows\\system32")).toBe("C__windows_system32.txt");
     expect(libraryFileName("..")).toBe("coa.txt");
-  });
-
-  it("falls back rather than making a nameless file", () => {
-    expect(libraryFileName("")).toBe("coa.txt");
-    expect(libraryFileName(".txt")).toBe("coa.txt");
   });
 });
 
@@ -69,14 +63,10 @@ describe("the library round-trips a design", () => {
     expect(fs.readFileSync(path.join(dir, items[0].file), "utf8").startsWith("﻿")).toBe(true);
   });
 
-  it("reports a file it cannot read instead of dropping it", () => {
+  it("reports a file it cannot read instead of dropping it, and lists nothing for a missing folder", () => {
     const dir = tmp();
     fs.writeFileSync(path.join(dir, "notes.txt"), "just some prose", "utf8");
-    const items = readLibrary(dir);
-    expect(items).toEqual([{ name: "notes", file: "notes.txt", flag: null }]);
-  });
-
-  it("lists nothing for a folder that is not there", () => {
-    expect(readLibrary(path.join(tmp(), "missing"))).toEqual([]);
+    expect(readLibrary(dir)).toEqual([{ name: "notes", file: "notes.txt", flag: null }]);
+    expect(readLibrary(path.join(dir, "missing"))).toEqual([]);
   });
 });
