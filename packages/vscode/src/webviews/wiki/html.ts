@@ -39,7 +39,7 @@ ${uiCss}
     border-right: 1px solid var(--px-border); background: var(--px-sidebar);
   }
   @media (max-width: 640px) { #sidebar { flex-basis: 168px; width: 168px; } }
-  #searchBar { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--px-border); }
+  #gameBar, #searchBar { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--px-border); }
   #searchBar .px-input-group { width: 100%; }
   #nav { flex: 1 1 auto; overflow-y: auto; padding: 4px 4px 20px; }
   #nav .px-panel-title { padding: 10px 8px 4px; }
@@ -58,6 +58,8 @@ ${uiCss}
   #page td.sevcell .sev { vertical-align: -2px; margin-right: 6px; }
   #page blockquote { margin: 10px 0; padding: 6px 12px; border-left: 2px solid var(--px-border); color: var(--px-muted-fg); }
   #page blockquote p { margin: 0; }
+  #page a { color: var(--vscode-textLink-foreground, var(--px-primary)); text-decoration: none; }
+  #page a:hover { text-decoration: underline; }
   #nav .diag .px-item-label { font-family: var(--px-font-mono); font-size: var(--px-text-sm); }
   #nav .twist { flex: 0 0 auto; display: inline-flex; padding: 2px; border-radius: var(--px-radius-sm); color: var(--px-muted-fg); }
   #nav .twist:hover { background: var(--px-muted); color: var(--px-fg); }
@@ -112,6 +114,9 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="sidebar">
+    <div id="gameBar">
+      <select id="game" class="px-select" data-size="sm" aria-label="Game" data-tip="The game the wiki shows pages for. The toolkit keeps working on the workspace's game." data-tip-wrap></select>
+    </div>
     <div id="searchBar">
       <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search the wiki…" data-tip="Matches the title and the text of every page." data-tip-wrap /></div>
     </div>

@@ -36,6 +36,16 @@ describe("renderMarkdown", () => {
     );
   });
 
+  it("links only http(s) targets, in tables too", () => {
+    expect(renderMarkdown("See [tiger](https://github.com/amtep/tiger).")).toBe(
+      '<p>See <a href="https://github.com/amtep/tiger">tiger</a>.</p>'
+    );
+    expect(renderMarkdown("[click](javascript:alert(1))")).toBe("<p>[click](javascript:alert(1))</p>");
+    expect(renderMarkdown("| Tool |\n|---|\n| [meckt](http://example.com/a?b=1&c=2) |")).toContain(
+      '<td><a href="http://example.com/a?b=1&amp;c=2">meckt</a></td>'
+    );
+  });
+
   it("escapes html instead of passing it through", () => {
     expect(renderMarkdown("<script>alert(1)</script>")).toBe("<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>");
   });

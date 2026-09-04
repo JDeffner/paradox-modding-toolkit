@@ -50,6 +50,8 @@ ${uiCss}
   p, ul { margin: 8px 0; }
   ul { padding-left: 20px; }
   li { margin: 3px 0; }
+  a { color: var(--vscode-textLink-foreground, var(--px-primary)); text-decoration: none; }
+  a:hover { text-decoration: underline; }
   code { font-family: var(--px-font-mono); font-size: 0.92em; background: var(--px-muted); border-radius: var(--px-radius-sm); padding: 1px 5px; }
   table { border-collapse: collapse; margin: 10px 0; width: 100%; }
   th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--px-border); }

@@ -18,6 +18,12 @@ export interface WikiArticle {
   badge?: string;
   /** The first sentence of the page, for index tables. */
   summary?: string;
+  /**
+   * The game this page belongs to. An article without one shows for every
+   * game; two articles for different games may share an id, so a page id
+   * resolves to the alternate the selected game has.
+   */
+  game?: string;
   markdown: string;
 }
 
@@ -35,7 +41,16 @@ export interface WikiHubEntry {
 }
 
 export type HostToApp =
-  | { type: "content"; hub: WikiHubEntry[]; articles: WikiArticle[]; select: string | null }
+  | {
+      type: "content";
+      hub: WikiHubEntry[];
+      articles: WikiArticle[];
+      /** Every supported game, for the sidebar's switch. */
+      games: { id: string; name: string }[];
+      /** The workspace's game: what the switch starts on. */
+      game: string;
+      select: string | null;
+    }
   | { type: "select"; id: string }
   | { type: "modReport"; markdown: string };
 

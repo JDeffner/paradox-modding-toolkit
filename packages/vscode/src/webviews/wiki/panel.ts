@@ -2,7 +2,13 @@
  * The Wiki panel (px.openWiki): the hub for the toolkit's reference
  * knowledge. Its front page is a set of cards, one per destination: the
  * other reference views (Examples Wiki, Format Docs, Credits) and the pages
- * the wiki holds itself (Image Guidelines, Diagnostics, Mod Report).
+ * the wiki holds itself (Image Guidelines, Diagnostics, Mod Report, Modding
+ * Tools).
+ *
+ * The sidebar carries a game switch, so a user can read another game's pages
+ * without changing the workspace: articles that name a game (Modding Tools)
+ * show only for the selected one, and the switch starts on the workspace's
+ * game.
  *
  * Articles are files the repo already keeps - the image guidelines shipped
  * in media/, the per-diagnostic explanations copied into dist/diagnostics by
@@ -18,6 +24,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { creditsMarkdown } from "../credits/credits";
+import { GAME_METAS } from "../../gameDetect";
+import { MODDING_TOOLS, moddingToolsMarkdown } from "./moddingTools";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -40,18 +48,20 @@ export class WikiPanel {
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
   private deps: WikiDeps;
+  private readonly game: string;
   private select: string | null;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
   private constructor(
     context: vscode.ExtensionContext,
-    _meta: GameMeta,
+    meta: GameMeta,
     deps: WikiDeps,
     select: string | null
   ) {
     this.context = context;
     this.deps = deps;
+    this.game = meta.id;
     this.select = select;
     const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(WikiPanel.viewType, "Wiki", vscode.ViewColumn.Active, {
@@ -122,6 +132,8 @@ export class WikiPanel {
           type: "content",
           hub: hub(),
           articles: readArticles(this.context),
+          games: Object.values(GAME_METAS).map((m) => ({ id: m.id, name: m.name })),
+          game: this.game,
           select: this.select,
         });
         this.select = null;
@@ -177,6 +189,12 @@ function hub(): WikiHubEntry[] {
       target: { page: STEAM_ERRORS_ARTICLE },
     },
     {
+      label: "Modding Tools",
+      icon: "wrench",
+      tip: "Tools other modders built for the game you mod: map editors, translators, audio, history converters, with links.",
+      target: { page: MODDING_TOOLS_ARTICLE },
+    },
+    {
       label: "Credits",
       icon: "heart",
       tip: "Every project the toolkit builds on, with links.",
@@ -185,9 +203,11 @@ function hub(): WikiHubEntry[] {
   ];
 }
 
-/** The two pages that are not diagnostics and not the image guidelines. */
+/** The pages that are not diagnostics and not the image guidelines. */
 export const STEAM_ERRORS_ARTICLE = "steam-error-codes";
 export const CREDITS_ARTICLE = "credits";
+/** One page per game shares this id; the game switch picks which one shows. */
+export const MODDING_TOOLS_ARTICLE = "modding-tools";
 
 /** `**Severity:** Error · **Source:** ...` opens every diagnostic page. */
 function severity(markdown: string): string | undefined {
@@ -224,6 +244,21 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
     });
   }
   articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", markdown: creditsMarkdown() });
+
+  // One alternate per game with a curated list; the app shows the selected
+  // game's. The markdown is built here, not read from a file: the table is a
+  // typed list in moddingTools.ts.
+  for (const id of Object.keys(MODDING_TOOLS)) {
+    const markdown = moddingToolsMarkdown(id, GAME_METAS[id]?.name ?? id);
+    if (!markdown) continue;
+    articles.push({
+      id: MODDING_TOOLS_ARTICLE,
+      title: "Modding Tools",
+      section: "Community",
+      game: id,
+      markdown,
+    });
+  }
 
   // Copied from docs/diagnostics by scripts/copy-docs.mjs. README.md is the
   // repo's index page: the Diagnostics page is that index here, so it is skipped.
