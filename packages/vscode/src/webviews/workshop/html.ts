@@ -326,7 +326,6 @@ ${BBPREV_CSS}
         <span class="px-grow"></span>
         <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
         <label class="hdr-switch" data-tip="Upload the gallery: the images and videos below replace the item's gallery on Steam. The thumbnail belongs to Details." data-tip-wrap data-tip-side="left">Previews <span class="px-switch"><input id="incPreviews" type="checkbox" checked /><span></span></span></label>
-        <button id="previewsHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How previews work" data-tip="How previews work" data-tip-side="left">${icon("circleHelp")}</button>
       </div>
       <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
       <div id="gallery" class="gallery"></div>
@@ -335,7 +334,7 @@ ${BBPREV_CSS}
         <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
       </div>
       <div class="field" style="margin-top:8px">
-        <span class="px-label">Videos</span>
+        <span class="px-label" style="display:inline-flex;align-items:center;gap:4px">Videos <button id="videosHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How to add several videos" data-tip="Several videos: separate the YouTube links or ids with commas. They show on the item in that order." data-tip-wrap>${icon("circleHelp")}</button></span>
         <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
       </div>
     </div>

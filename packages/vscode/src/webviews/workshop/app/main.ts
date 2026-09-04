@@ -1576,7 +1576,6 @@ function openHelp(section?: string): void {
   title?.parentElement?.scrollIntoView({ block: "start" });
 }
 $("helpBtn").addEventListener("click", () => openHelp());
-$("previewsHelp").addEventListener("click", () => openHelp("Previews"));
 
 const HELP: Parameters<typeof helpDialog>[0] = {
   title: "The Steam Workshop panel",
