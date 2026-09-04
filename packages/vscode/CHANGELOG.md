@@ -8,6 +8,11 @@ On top of that, 0.4.0 adds six visual content creators that write CK3 script
 you never have to type, a wiki page listing the other modding tools for your
 game, and a Workshop panel rebuilt around what actually leaves your machine.
 
+- **A first-run note says this is a beta.** The first activation of each
+  minor version shows one notification: the content creators and the Steam
+  Workshop upload are new, check what they write and keep the mod in git,
+  and a Join the Discord button for feedback. Patch releases stay quiet.
+
 - **The Coat of Arms Designer's controls say what they are and fit their
   row.** A frame's label carried every heritage that wears it, which spilled
   out of the picker button and pushed the tier button off screen; the label is
