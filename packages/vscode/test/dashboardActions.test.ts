@@ -48,7 +48,7 @@ describe("visibleActionGroups", () => {
       "px.openCredits",
       "px.showExamplesWiki",
     ]);
-    expect(groups.map((g) => g.label)).toEqual(["View", "Create", "Share", "Info", "Test & Troubleshoot"]);
+    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Create", "Info", "Test & Troubleshoot"]);
     // The wiki rows moved out of View, they are not listed twice.
     const view = groups.find((g) => g.label === "View");
     expect(view?.items.map((it) => it.command)).not.toContain("px.openWiki");
