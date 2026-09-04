@@ -19,8 +19,10 @@
   exactly what uploads: the changelog entry is shown as rendered BBCode with
   its file named and an Edit file button, the commit subject as the plain text
   it is sent as, and Write as a box for this upload only. Missing entries say
-  which one is missing and offer to create it; the Publish summary and the
-  upload confirmation name the source.
+  which one is missing and offer to create it, and a mod with no commit yet
+  says so on the card while the upload simply carries no changenote and the
+  switch stays as you set it; the Publish summary and the upload confirmation
+  name the source.
 
 - **The Workshop panel follows the changelog file too.** Editing the entry in
   the editor left the panel showing the old text until you pressed Reload.

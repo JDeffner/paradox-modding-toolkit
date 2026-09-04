@@ -1033,7 +1033,7 @@ $("enableAllYes").addEventListener("click", () => {
     $<HTMLInputElement>(id).checked = true;
   $<HTMLInputElement>("incLangs").checked = uploadableLanguages().length > 0;
   langsOff.clear();
-  // A source with nothing to send switches its own card back off.
+  // The changenote card still has to redraw: its switch is on again.
   renderNote();
   renderPublish();
 });
@@ -1437,12 +1437,6 @@ function renderNote(): void {
   $("noteWrite").hidden = noteSource !== "write";
   if (noteSource === "changelog") renderChangelogNote();
   else if (noteSource === "commit") renderCommitNote();
-  // Nothing to send from this source: the switch would promise a note the
-  // upload cannot carry.
-  const incNote = $<HTMLInputElement>("incNote");
-  const empty = noteSource === "commit" && (info?.changeNoteSuggestion ?? "").trim() === "";
-  if (empty) incNote.checked = false;
-  incNote.disabled = empty;
 }
 
 /** The location menu: where the changelog is, never what fills the note. */
@@ -1589,7 +1583,14 @@ function renderCommitNote(): void {
   if (!commit) {
     block.classList.add("empty");
     block.textContent = "No git commit found for this mod.";
-    box.append(block);
+    const none = document.createElement("div");
+    none.className = "hintline";
+    const nonetext = document.createElement("span");
+    nonetext.className = "hint";
+    nonetext.textContent =
+      "The upload carries no changenote until the mod has a commit. Changelog and Write are the other sources.";
+    none.append(nonetext);
+    box.append(block, none);
     return;
   }
   block.textContent = commit;
