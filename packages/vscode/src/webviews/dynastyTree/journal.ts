@@ -34,22 +34,37 @@ export interface JournalIo {
   refuse(message: string): void;
 }
 
-/** How many writes back a panel can go. Beyond this the oldest one is dropped. */
+/** How many gestures back a panel can go. Beyond this the oldest one is dropped. */
 const DEFAULT_CAP = 50;
 
+/**
+ * One gesture as the modder made it: a new dynasty is a block AND a loc line,
+ * two files, one undo. Writes of a gesture are put back last-first.
+ */
+type Gesture = JournalWrite[];
+
 export class WriteJournal {
-  private readonly done: JournalWrite[] = [];
-  private readonly undone: JournalWrite[] = [];
+  private readonly done: Gesture[] = [];
+  private readonly undone: Gesture[] = [];
 
   constructor(
     private readonly io: JournalIo,
     private readonly cap: number = DEFAULT_CAP
   ) {}
 
-  /** One write the panel just made. A new write ends the redo line. */
-  record(write: JournalWrite): void {
+  /**
+   * One write the panel just made. A new gesture ends the redo line; `join`
+   * adds the write to the gesture before it (the loc line a block save also
+   * writes), so the two go back together.
+   */
+  record(write: JournalWrite, join = false): void {
     this.undone.length = 0;
-    this.done.push(write);
+    const last = this.done[this.done.length - 1];
+    if (join && last) {
+      last.push(write);
+      return;
+    }
+    this.done.push([write]);
     if (this.done.length > this.cap) this.done.shift();
   }
 
@@ -68,30 +83,36 @@ export class WriteJournal {
 
   /**
    * Put `want` back, but only over the text this journal itself left there
-   * (`have`). A refused step KEEPS its entry: the panel has not undone
-   * anything, and saying so is more use than quietly forgetting the write.
+   * (`have`). Every file of the gesture is checked before any is written, so a
+   * gesture never comes back by half. A refused step KEEPS its entry: the panel
+   * has not undone anything, and saying so is more use than quietly forgetting
+   * the write.
    */
   private async step(
-    from: JournalWrite[],
-    to: JournalWrite[],
+    from: Gesture[],
+    to: Gesture[],
     want: "before" | "after",
     have: "after" | "before"
   ): Promise<boolean> {
-    const entry = from[from.length - 1];
-    if (!entry) return false;
-    const now = await this.io.read(entry.file);
-    const name = path.basename(entry.file);
-    if (now === null) {
-      this.io.refuse(`${name} cannot be read, so nothing was changed.`);
-      return false;
+    const gesture = from[from.length - 1];
+    if (!gesture) return false;
+    for (const entry of gesture) {
+      const now = await this.io.read(entry.file);
+      const name = path.basename(entry.file);
+      if (now === null) {
+        this.io.refuse(`${name} cannot be read, so nothing was changed.`);
+        return false;
+      }
+      if (now !== entry[have]) {
+        this.io.refuse(`${name} has changed since the panel wrote it, so nothing was changed.`);
+        return false;
+      }
     }
-    if (now !== entry[have]) {
-      this.io.refuse(`${name} has changed since the panel wrote it, so nothing was changed.`);
-      return false;
+    for (const entry of [...gesture].reverse()) {
+      if (!(await this.io.write(entry.file, entry[want]))) return false;
     }
-    if (!(await this.io.write(entry.file, entry[want]))) return false;
     from.pop();
-    to.push(entry);
+    to.push(gesture);
     return true;
   }
 }

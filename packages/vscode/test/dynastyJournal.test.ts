@@ -73,6 +73,33 @@ describe("WriteJournal", () => {
     expect(journal.depth).toEqual({ undo: 1, redo: 0 });
   });
 
+  it("takes a joined gesture back as one step, every file checked first", async () => {
+    const files = new Map([
+      ["/mod/a.txt", "after"],
+      ["/mod/loc.yml", "loc after"],
+    ]);
+    const refused: string[] = [];
+    const journal = new WriteJournal({
+      read: async (f) => files.get(f) ?? null,
+      write: async (f, t) => (files.set(f, t), true),
+      refuse: (m) => refused.push(m),
+    });
+    journal.record({ file: "/mod/a.txt", before: "before", after: "after" });
+    journal.record({ file: "/mod/loc.yml", before: "loc before", after: "loc after" }, true);
+    expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+
+    files.set("/mod/loc.yml", "edited elsewhere");
+    expect(await journal.undo()).toBe(false);
+    expect(files.get("/mod/a.txt")).toBe("after");
+    expect(refused).toHaveLength(1);
+
+    files.set("/mod/loc.yml", "loc after");
+    expect(await journal.undo()).toBe(true);
+    expect(files.get("/mod/a.txt")).toBe("before");
+    expect(files.get("/mod/loc.yml")).toBe("loc before");
+    expect(journal.depth).toEqual({ undo: 0, redo: 1 });
+  });
+
   it("keeps only the last writes of a long session", async () => {
     const journal = new WriteJournal(fakeIo({}), 2);
     for (const n of [1, 2, 3]) {

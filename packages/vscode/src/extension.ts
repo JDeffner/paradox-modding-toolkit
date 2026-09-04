@@ -1168,6 +1168,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           fetchModifierFormats: (params) =>
             lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
           lookupLoc,
+          fetchLocText: (params) => lc.sendRequest<LocTextResult>(locTextRequest, params),
         },
         {
           cfg: cfgForActive(),

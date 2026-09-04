@@ -30,6 +30,8 @@ import type {
   ModifierFormat,
   ModifierFormatsParams,
   ModifierFormatsResult,
+  LocTextParams,
+  LocTextResult,
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseScript } from "@px-lsp/server/parser";
@@ -106,6 +108,8 @@ export interface DynastyTreeActions {
   fetchModifierFormats?(params: ModifierFormatsParams): Promise<ModifierFormatsResult | null>;
   /** The player's word for a loc key, for the trait tooltips. */
   lookupLoc?: LocLookup;
+  /** paradox/locText: loc values as the player reads them (optional: an older server has none). */
+  fetchLocText?(params: LocTextParams): Promise<LocTextResult>;
 }
 
 export interface DynastyTreeOptions {
@@ -531,6 +535,29 @@ export class DynastyTreePanel {
   }
 
   /**
+   * A loc value as the player reads it: paradox/locText resolves the game's
+   * own `[GetTrait('x').GetName( ... )]` calls and `$key$` nesting; an older
+   * server, or a key nobody defines, falls back to the raw value with its
+   * markup stripped.
+   */
+  private async locText(key: string): Promise<string> {
+    if (this.actions.fetchLocText) {
+      try {
+        const result = await this.actions.fetchLocText({
+          keys: [key],
+          modRoot: this.options.modRoot ?? undefined,
+        });
+        const hit = result.values[key];
+        if (hit) return hit.text;
+      } catch {
+        /* fall through to the raw value */
+      }
+    }
+    const raw = await this.loc(key);
+    return raw ? plainLoc(raw) : "";
+  }
+
+  /**
    * One trait as the game's own tooltip: the name and description the player
    * reads, the picture, and every `name = number` the trait's block carries
    * that the modifier vocabulary knows (`_traits.info`: an unknown property IS
@@ -649,8 +676,8 @@ export class DynastyTreePanel {
     const nameKey = form.locPatterns.find((p) => !p.includes("desc"));
     const descKey = form.locPatterns.find((p) => p.endsWith("_desc"));
     const [label, desc] = await Promise.all([
-      nameKey ? this.loc(nameKey.replace(/\$/g, name)) : Promise.resolve(""),
-      descKey ? this.loc(descKey.replace(/\$/g, name)) : Promise.resolve(""),
+      nameKey ? this.locText(nameKey.replace(/\$/g, name)) : Promise.resolve(""),
+      descKey ? this.locText(descKey.replace(/\$/g, name)) : Promise.resolve(""),
     ]);
 
     const folder = form.iconFolder;
@@ -658,8 +685,8 @@ export class DynastyTreePanel {
     return {
       tip: {
         key: name,
-        name: label ? plainLoc(label) : name,
-        desc: desc ? plainLoc(desc) : "",
+        name: label || name,
+        desc,
         iconUrl: folder ? this.traitIconUrl(read?.icon || name, folder, TRAIT_TIP_DIM) : null,
         // No frame. The game's own trait tooltip draws the trait's picture at
         // 52px and nothing behind it; the category frame belongs to the
@@ -939,10 +966,14 @@ export class DynastyTreePanel {
     return true;
   }
 
-  /** Journal one write: `text` was there before, whatever is there now is after. */
-  private async remember(abs: string, text: string): Promise<void> {
+  /**
+   * Journal one write: `text` was there before, whatever is there now is after.
+   * `join` files it under the gesture before it (the loc line a block save also
+   * writes), so one undo takes back the whole save.
+   */
+  private async remember(abs: string, text: string, join = false): Promise<void> {
     const after = await this.docText(abs);
-    if (after !== null) this.journal.record({ file: abs, before: text, after });
+    if (after !== null) this.journal.record({ file: abs, before: text, after }, join);
     this.postJournal();
   }
 
@@ -1071,7 +1102,7 @@ export class DynastyTreePanel {
     }
     try {
       const file = await this.actions.writeLoc(key, value);
-      if (predicted && before !== null && samePath(predicted, file)) await this.remember(file, before);
+      if (predicted && before !== null && samePath(predicted, file)) await this.remember(file, before, true);
       this.post({ type: "toast", message: `Wrote ${key} to ${path.basename(file)}.` });
     } catch (err) {
       this.post({
