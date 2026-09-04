@@ -34,6 +34,7 @@ import type {
   FlagEntry,
   FlagTarget,
   HostToApp,
+  LibraryItem,
   ModTarget,
 } from "../messages";
 import { GRID_COLUMNS } from "../messages";
@@ -58,9 +59,12 @@ import {
 import {
   alignDeltas,
   ARMS_RECT,
+  DEFAULT_GRID_DIVISION,
   distributeDeltas,
+  GRID_DIVISIONS,
   mirrorGroup,
   moveGroup,
+  nudgeStep,
   rectCentre,
   rotateGroup,
   scaleGroup,
@@ -68,11 +72,12 @@ import {
   snapDelta,
   snapTolerance,
   snapValue,
+  validGridDivision,
   type AlignMode,
   type Rect,
 } from "./groups";
 import { iconEl } from "../../shared/icons";
-import { sidePanel } from "../../shared/sidePanel";
+import { sidePanel, type SidePanel } from "../../shared/sidePanel";
 import { closePopover, confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
@@ -121,8 +126,13 @@ const locked = new Set<number>();
 let frameId = "";
 /** Which cell of a frame sheet the preview draws, 1-based (see frameCells). */
 let frameTier = 2;
-/** The grid over the arms: drawn and snapped to when on, `div` cells per axis. */
-const grid = { on: false, div: 4 };
+/**
+ * The grid over the arms: drawn and snapped to when on, `div` cells per axis.
+ * ON out of the box, because a coat of arms is built on the arms' own halves
+ * and quarters and every placement gesture in this panel reads better against
+ * lines than against nothing.
+ */
+const grid = { on: true, div: DEFAULT_GRID_DIVISION };
 let emblemCategory = "";
 let opened: { name: string; source: string; file: string } | null = null;
 let target: FlagTarget | undefined;
@@ -287,16 +297,24 @@ function redo(): void {
 function resetHistory(): void {
   past.length = 0;
   future.length = 0;
+  loadedDirty = false;
   snapshot = JSON.stringify(flag);
   updateHistoryButtons();
 }
+
+/**
+ * A design that came from somewhere the mod cannot get it back from (the
+ * library) counts as unsaved even before the first edit, so the discard
+ * question is asked. Not an undo step: undoing to the same design is noise.
+ */
+let loadedDirty = false;
 
 function updateHistoryButtons(): void {
   $<HTMLButtonElement>("undo").disabled = past.length === 0;
   $<HTMLButtonElement>("redo").disabled = future.length === 0;
 }
 
-const dirty = (): boolean => past.length > 0;
+const dirty = (): boolean => past.length > 0 || loadedDirty;
 
 async function confirmDiscard(what: string): Promise<boolean> {
   if (!dirty()) return true;
@@ -1186,10 +1204,23 @@ function renderEmblems(): void {
     }
     body.append(head, pick, grid);
   }
+}
 
-  body.append(el("div", "px-panel-title", "Placement"));
-  body.append(instanceGrid(layer));
-  body.append(detailEdit(layer));
+/**
+ * The Placement section of the LEFT panel: which copy of the emblem is being
+ * edited, and its numbers. It is not part of the Emblems tab because a
+ * placement is what every tab's work ends in, so it must stay on screen while
+ * the pattern or the layout is being picked on the right.
+ */
+function renderPlacement(): void {
+  const host = $("placement");
+  host.replaceChildren();
+  const layer = selectedLayer();
+  if (!layer || layer.kind !== "colored_emblem") {
+    host.append(el("div", "note", "Select an emblem to place it."));
+    return;
+  }
+  host.append(instanceGrid(layer), detailEdit(layer));
 }
 
 /** A raw emblem thumbnail, recolored for reading like the game's own grid. */
@@ -1537,6 +1568,8 @@ function renderPanel(): void {
   if (tab === "background") renderBackground();
   else if (tab === "layout") renderLayout();
   else renderEmblems();
+  // The left panel is always on screen, so it is drawn whichever tab is up.
+  renderPlacement();
 }
 
 function refresh(record = true): void {
@@ -1584,39 +1617,6 @@ function updateOrigin(): void {
   $("target").textContent = [label, from].filter(Boolean).join(" · ");
 }
 
-function randomPick<T>(items: readonly T[]): T | undefined {
-  return items.length ? items[Math.floor(Math.random() * items.length)] : undefined;
-}
-
-/** "Randomize": a visible pattern, palette colors, one emblem in one layout. */
-function randomize(): void {
-  const cat = designer();
-  if (!cat) return;
-  const pattern = randomPick(cat.patterns);
-  const emblem = randomPick(cat.emblems.filter((e) => e.colors > 0));
-  const layout = randomPick(cat.layouts);
-  if (!pattern || !layout) return;
-  const color = (name: string): CoaColor => ({
-    name,
-    kind: "named",
-    value: randomPick(cat.palette)?.name ?? "white",
-  });
-  flag.pattern = pattern.file;
-  flag.colors = COLOR_SLOTS.slice(0, Math.max(pattern.colors, 3)).map(color);
-  flag.layers = substituteLayout(layout.flag, cat.layoutDefaults).layers;
-  for (const layer of flag.layers) {
-    if (layer.kind !== "colored_emblem" || !emblem) continue;
-    layer.texture = emblem.file;
-    layer.colors = COLOR_SLOTS.slice(0, emblem.colors).map(color);
-  }
-  mode = "custom";
-  layerIndex = emblemLayers()[0]?.index ?? -1;
-  instIndex = 0;
-  selection = [];
-  locked.clear();
-  refresh();
-}
-
 function applyTarget(next: FlagTarget): void {
   target = next;
   if (!db) return;
@@ -1637,23 +1637,163 @@ function applyTarget(next: FlagTarget): void {
 }
 
 // ---------------------------------------------------------------------------
-// Side panel, mod picker and frame
+// The library: designs stored as script files outside any mod
 // ---------------------------------------------------------------------------
 
-let uiState: DesignerUiState = { panelWidth: 360, panelCollapsed: false };
-const panel = sidePanel($("side"), {
-  width: uiState.panelWidth,
+/** The one overlay the page opens itself, closed by Escape, the backdrop or a pick. */
+function overlay(title: string, body: HTMLElement, onClose?: () => void): () => void {
+  const backdrop = el("div", "px-dialog-backdrop");
+  const dialog = el("div", "px-dialog");
+  dialog.setAttribute("role", "dialog");
+  dialog.style.maxWidth = "560px";
+  dialog.append(el("div", "px-dialog-title", title), body);
+  let done = false;
+  const close = (): void => {
+    if (done) return;
+    done = true;
+    document.removeEventListener("keydown", onKey, true);
+    backdrop.remove();
+    onClose?.();
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key !== "Escape") return;
+    e.stopPropagation();
+    close();
+  };
+  backdrop.onclick = (e) => {
+    if (e.target === backdrop) close();
+  };
+  document.addEventListener("keydown", onKey, true);
+  backdrop.append(dialog);
+  document.body.append(backdrop);
+  return close;
+}
+
+/** The library, as the previews it actually holds; picking one loads it. */
+function showLibrary(dir: string, items: LibraryItem[]): void {
+  if (!items.length) {
+    const body = el("div", "libEmpty");
+    body.append(
+      el("div", "px-dialog-description", "Nothing here yet. Export a design and it lands in:"),
+      el("div", "note libPath", dir)
+    );
+    overlay("Coat of Arms Library", body);
+    return;
+  }
+  const shelf = el("div");
+  shelf.id = "libGrid";
+  const made: HTMLElement[] = [];
+  let close = (): void => undefined;
+  for (const item of items) {
+    const wrap = el("div", "libItem");
+    const stored = item.flag;
+    if (!stored) {
+      const broken = el("div", "libBroken", "cannot read");
+      broken.dataset.tip = `${item.file} does not hold a coat of arms definition`;
+      wrap.append(broken);
+    } else {
+      const host = makeTile(
+        () => stored,
+        true,
+        item.file,
+        () => {
+          close();
+          loadFromLibrary(stored, item.name);
+        }
+      );
+      wrap.append(host);
+      registerTile(host, textureKeys(stored, db?.definitions ?? {}));
+      made.push(host);
+    }
+    wrap.append(el("span", "px-label px-xs", item.name));
+    shelf.append(wrap);
+  }
+  // The tiles are observed by the lazy-thumbnail observer, which outlives the
+  // overlay: forget them with the markup rather than leaking a growing map.
+  close = overlay("Coat of Arms Library", shelf, () => {
+    for (const host of made) {
+      tiles.delete(host);
+      tileObserver().unobserve(host);
+    }
+  });
+}
+
+/** A library design becomes the current one, named as the library named it. */
+function loadFromLibrary(stored: CoaFlag, name: string): void {
+  opened = null;
+  setFlag({ ...stored, name });
+  mode = "custom";
+  // It is not in the mod yet, so leaving without a save would lose it.
+  loadedDirty = true;
+  refresh(false);
+  toast(`Loaded ${name} from the library.`);
+}
+
+// ---------------------------------------------------------------------------
+// Side panels, mod picker and frame
+// ---------------------------------------------------------------------------
+
+let uiState: DesignerUiState = {
+  panelWidth: 360,
+  panelCollapsed: false,
+  leftWidth: 280,
+  leftCollapsed: false,
+};
+
+/**
+ * The arms are the point of the panel, so neither column may squeeze the stage
+ * past this. Each panel's ceiling is what is left after the other one and the
+ * stage have taken theirs, re-read on every clamp (sidePanel takes a function),
+ * so a drag stops at the edge instead of snapping back after it.
+ */
+const MIN_STAGE = 320;
+
+/** What a panel takes from the layout right now, read off the element: 0 while collapsed. */
+function panelRoom(el: HTMLElement): number {
+  if (el.hasAttribute("data-collapsed")) return 0;
+  return parseInt(el.style.getPropertyValue("--px-sidepanel-width"), 10) || 0;
+}
+// The OTHER panel is read from the DOM rather than held as an object, so the
+// two ceilings can refer to each other without one having to exist first.
+// clientWidth, not innerWidth: innerWidth counts the scrollbar gutter, which
+// the row the panels share does not have.
+const roomFor = (otherId: string): number =>
+  Math.max(160, document.documentElement.clientWidth - MIN_STAGE - panelRoom($(otherId)));
+
+const left = sidePanel($("left"), {
+  min: 200,
+  width: uiState.leftWidth,
+  max: () => roomFor("side"),
   onChange: (state) => {
-    uiState = { ...uiState, ...state };
+    uiState = { ...uiState, leftWidth: state.width, leftCollapsed: state.collapsed };
     send({ type: "uiState", state: uiState });
-    updateToggle();
+    updateToggles();
+  },
+});
+const right = sidePanel($("side"), {
+  width: uiState.panelWidth,
+  max: () => roomFor("left"),
+  onChange: (state) => {
+    uiState = { ...uiState, panelWidth: state.width, panelCollapsed: state.collapsed };
+    send({ type: "uiState", state: uiState });
+    updateToggles();
   },
 });
 
-function updateToggle(): void {
-  const btn = $("togglePanel");
-  btn.replaceChildren(iconEl(panel.collapsed ? "panelRightOpen" : "panelRightClose"));
-  btn.dataset.tip = panel.collapsed ? "Show the panel" : "Hide the panel";
+window.addEventListener("resize", () => {
+  left.reclamp();
+  right.reclamp();
+  draw();
+});
+
+function updateToggles(): void {
+  const set = (id: string, p: SidePanel, side: "Left" | "Right", what: string): void => {
+    const btn = $(id);
+    btn.replaceChildren(iconEl(p.collapsed ? `panel${side}Open` : `panel${side}Close`));
+    btn.dataset.tip = `${p.collapsed ? "Show" : "Hide"} ${what}`;
+  };
+  set("toggleLeft", left, "Left", "the tools");
+  set("toggleRight", right, "Right", "the catalog");
 }
 
 function saveTarget(): ModTarget | undefined {
@@ -1759,12 +1899,14 @@ function updateTierControl(): void {
 /** The grid toggle and its subdivision, both remembered by the host. */
 function updateGridControls(): void {
   const toggle = $("gridToggle");
-  toggle.dataset.tip = grid.on ? "Hide the grid (snapping off)" : "Show the grid and snap to it";
+  toggle.dataset.tip = grid.on
+    ? "Hide the grid (snapping off, and an arrow key moves 1/256 of the arms)"
+    : "Show the grid and snap to it (an arrow key then moves one cell)";
   if (grid.on) toggle.setAttribute("aria-pressed", "true");
   else toggle.removeAttribute("aria-pressed");
   const div = $("gridDiv");
   div.hidden = !grid.on;
-  div.querySelector(".px-truncate")!.textContent = `${grid.div}`;
+  div.querySelector(".px-truncate")!.textContent = `${grid.div} x ${grid.div}`;
 }
 
 function saveGrid(): void {
@@ -2057,12 +2199,22 @@ $("open").onclick = async () => {
 };
 $("paste").onclick = () => send({ type: "paste" });
 $("copy").onclick = () => send({ type: "copy", text: writeFlag(flag) });
-$("random").onclick = randomize;
 $("undo").onclick = undo;
 $("redo").onclick = redo;
 $("mod").onclick = openModMenu;
 $("frame").onclick = openFrameMenu;
-$("togglePanel").onclick = () => panel.toggle();
+$("toggleLeft").onclick = () => left.toggle();
+$("toggleRight").onclick = () => right.toggle();
+$("libImport").onclick = async () => {
+  if (await confirmDiscard("Importing a design")) send({ type: "libraryList" });
+};
+$("libExport").onclick = () => {
+  if (!flag.name.trim()) {
+    toast("Give the arms a name first.", "destructive");
+    return;
+  }
+  send({ type: "libraryExport", name: flag.name.trim(), script: writeFlag(flag) });
+};
 $("gridToggle").onclick = () => {
   grid.on = !grid.on;
   saveGrid();
@@ -2070,14 +2222,12 @@ $("gridToggle").onclick = () => {
 $("gridDiv").onclick = () =>
   menu(
     $("gridDiv"),
-    // The subdivisions a coat of arms is actually built on: halves put a line
-    // on the centre, sixteenths are as fine as a 512px preview reads.
-    [2, 4, 8, 16].map((n) => ({ value: String(n), label: `${n} x ${n}` })),
+    GRID_DIVISIONS.map((n) => ({ value: String(n), label: `${n} x ${n}` })),
     {
       value: String(grid.div),
       width: 140,
       onPick: (value) => {
-        grid.div = Number(value);
+        grid.div = validGridDivision(Number(value));
         saveGrid();
       },
     }
@@ -2140,7 +2290,7 @@ nameInput.oninput = () => {
 };
 nameInput.onchange = commit;
 
-/** One arrow press moves by one grid step; Shift by ten of them. */
+/** Which way each arrow moves; how far is nudgeStep (groups.ts). */
 const NUDGE_ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
   ArrowRight: [1, 0],
@@ -2170,7 +2320,7 @@ document.addEventListener("keydown", (e) => {
   const arrow = NUDGE_ARROWS[e.key];
   if (arrow && !editing && selection.length) {
     e.preventDefault();
-    const step = (e.shiftKey ? 10 : 1) / grid.div;
+    const step = nudgeStep(grid.on, grid.div, e.shiftKey);
     nudgeSelection(arrow[0] * step, arrow[1] * step);
   }
 });
@@ -2193,11 +2343,18 @@ $("help").onclick = () =>
             text: "opens any coat of arms the game or a mod ships. Its structure stays put and you change colors and placement; Customize Design unlocks the rest.",
           },
           { lead: "Paste from Clipboard", text: "reads a definition straight out of the clipboard." },
-          { lead: "Randomize", text: "rolls a pattern, palette colors, a layout and an emblem." },
+          {
+            lead: "Import…",
+            text: "shows the designs you exported, as pictures. Picking one loads it, unsaved, under the name it was stored with.",
+          },
+          {
+            lead: "Export",
+            text: "stores this design as <name>.txt in your library folder, outside any mod. The file holds exactly what Copy puts on the clipboard, so it pastes into a mod as it stands. Set the folder with px.coaLibraryDir.",
+          },
         ],
       },
       {
-        title: "The three tabs",
+        title: "The three tabs (right)",
         items: [
           {
             lead: "Background",
@@ -2209,12 +2366,12 @@ $("help").onclick = () =>
           },
           {
             lead: "Emblems",
-            text: "picks the shape by category, its colors, and where each copy of it sits. Drag the rows to change which emblem is drawn on top.",
+            text: "picks the shape by category and its colors. Drag the rows to change which emblem is drawn on top.",
           },
         ],
       },
       {
-        title: "Placement",
+        title: "Placement (left)",
         items: [
           {
             lead: "On the canvas:",
@@ -2234,7 +2391,7 @@ $("help").onclick = () =>
           },
           {
             lead: "The grid",
-            text: "at the bottom left snaps positions and edges to its lines and to the centre, so centring an emblem is one drag.",
+            text: "on the left snaps positions and edges to its lines and to the centre, so centring an emblem is one drag. It also sets the arrow keys: one press is one cell, Shift is four. With the grid off an arrow moves 1/256 of the arms and Shift 1/32.",
           },
           {
             lead: "By numbers:",
@@ -2252,7 +2409,7 @@ $("help").onclick = () =>
         items: [
           {
             lead: "The frame",
-            text: "at the bottom left shows the arms the way the game frames a dynasty, a house or a title. It is preview only and never written.",
+            text: "on the left shows the arms the way the game frames a dynasty, a house or a title. It is preview only and never written.",
           },
           {
             lead: "The tier",
@@ -2271,7 +2428,7 @@ $("help").onclick = () =>
           { keys: ["Shift", "Click"], does: "Add or remove one emblem from the selection" },
           { keys: ["Ctrl", "A"], does: "Select every unlocked emblem" },
           { keys: ["Esc"], does: "Clear the selection" },
-          { keys: ["←↑→↓"], does: "Nudge by one grid step (Shift: ten)" },
+          { keys: ["←↑→↓"], does: "Nudge one grid cell, Shift four (grid off: 1/256 and 1/32)" },
           { keys: ["Ctrl", "Z"], does: "Undo" },
           { keys: ["Ctrl", "Y"], does: "Redo (Ctrl+Shift+Z too)" },
         ],
@@ -2298,16 +2455,18 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       clearRenderCaches();
       if (first) {
         if (m.ui) {
-          uiState = m.ui;
-          panel.setWidth(m.ui.panelWidth);
-          panel.toggle(m.ui.panelCollapsed);
+          uiState = { ...uiState, ...m.ui };
+          right.setWidth(m.ui.panelWidth);
+          right.toggle(m.ui.panelCollapsed);
+          if (m.ui.leftWidth !== undefined) left.setWidth(m.ui.leftWidth);
+          left.toggle(m.ui.leftCollapsed ?? false);
           if (m.ui.tab) tab = m.ui.tab;
           frameId = m.ui.frame ?? "";
           frameTier = m.ui.frameTier ?? frameTier;
           grid.on = m.ui.grid ?? grid.on;
-          grid.div = m.ui.gridDiv ?? grid.div;
+          if (m.ui.gridDiv !== undefined) grid.div = validGridDivision(m.ui.gridDiv);
         }
-        updateToggle();
+        updateToggles();
         startFromScratch();
       }
       // A remembered frame wins; otherwise the target says what these arms are.
@@ -2328,6 +2487,9 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       return;
     case "opened":
       openDefinition(m.entry, m.flag);
+      return;
+    case "library":
+      showLibrary(m.dir, m.items);
       return;
     case "pasted":
       void (async () => {

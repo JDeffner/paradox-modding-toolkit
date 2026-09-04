@@ -6,7 +6,12 @@
  */
 export interface SidePanelOptions {
   min?: number;
-  max?: number;
+  /**
+   * Upper bound. A FUNCTION is re-read on every clamp, which is what a page
+   * with two panels needs: the room one may take depends on the other's width
+   * and on the window, both of which move while the page is open.
+   */
+  max?: number | (() => number);
   /** Initial state, normally what the owner remembered last time. */
   width?: number;
   collapsed?: boolean;
@@ -19,16 +24,18 @@ export interface SidePanel {
   toggle(collapsed?: boolean): void;
   /** Set the width without a drag (the owner's remembered value arriving late). */
   setWidth(width: number): void;
+  /** Re-apply the bounds, for a `max` whose answer just changed (a window resize). */
+  reclamp(): void;
 }
 
 const DEFAULT_WIDTH = 340;
 
 export function sidePanel(element: HTMLElement, options: SidePanelOptions = {}): SidePanel {
   const min = options.min ?? 220;
-  const max = options.max ?? 640;
+  const maxOf = (): number => (typeof options.max === "function" ? options.max() : (options.max ?? 640));
   const side = element.dataset.side === "left" ? "left" : "right";
   const resizer = element.querySelector<HTMLElement>(".px-sidepanel-resizer");
-  const clamp = (w: number): number => Math.max(min, Math.min(max, Math.round(w)));
+  const clamp = (w: number): number => Math.max(min, Math.min(maxOf(), Math.round(w)));
   let width = clamp(options.width ?? DEFAULT_WIDTH);
   let collapsed = options.collapsed ?? false;
 
@@ -82,6 +89,12 @@ export function sidePanel(element: HTMLElement, options: SidePanelOptions = {}):
     },
     setWidth(w) {
       width = clamp(w);
+      apply();
+    },
+    reclamp() {
+      const next = clamp(width);
+      if (next === width) return;
+      width = next;
       apply();
     },
   };

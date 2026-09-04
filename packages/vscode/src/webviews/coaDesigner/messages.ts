@@ -14,13 +14,30 @@ import type { CreatorSaveTarget } from "../shared/creatorMessages";
 
 export type { FlagDatabase, FlagEntry, FlagTarget, ModTarget };
 
+/**
+ * One file of the designer's library (library.ts reads them). `flag` is null
+ * for a file that does not hold a coat of arms, which the overlay shows as a
+ * tile that says so rather than hiding it: a file the modder put there and
+ * cannot see back is worse than an unreadable tile.
+ */
+export interface LibraryItem {
+  /** The design's name: the definition's key, else the file's stem. */
+  name: string;
+  file: string;
+  flag: CoaFlag | null;
+}
+
 /** Which of the game's three designer tabs the panel is showing. */
 export type DesignerTab = "background" | "layout" | "emblems";
 
 /** Per-user layout the host remembers across sessions. */
 export interface DesignerUiState {
+  /** The RIGHT panel (the Background / Layout / Emblems tabs). */
   panelWidth: number;
   panelCollapsed: boolean;
+  /** The LEFT panel (library, frame, grid and placement). */
+  leftWidth?: number;
+  leftCollapsed?: boolean;
   /** The mod arms are saved into (its path), when the workspace has several. */
   savePath?: string;
   /** The preview frame, "" for none. */
@@ -33,7 +50,7 @@ export interface DesignerUiState {
   frameTier?: number;
   /** The grid over the arms: whether it is drawn and snapped to, and how fine. */
   grid?: boolean;
-  /** Cells per axis: 2, 4, 8 or 16. */
+  /** Cells per axis, one of app/groups.ts GRID_DIVISIONS. */
   gridDiv?: number;
   tab?: DesignerTab;
 }
@@ -47,6 +64,8 @@ export type HostToApp =
   | { type: "textures"; urls: Record<string, string | null>; thumbs: boolean }
   /** Where the next save lands, for the top bar to SHOW (shared/saveTarget.ts). */
   | { type: "target"; target: CreatorSaveTarget | null }
+  /** What the library folder holds, for the Import overlay. `dir` is shown when it is empty. */
+  | { type: "library"; dir: string; items: LibraryItem[] }
   | { type: "toast"; message: string };
 
 export type AppToHost =
@@ -67,6 +86,10 @@ export type AppToHost =
    * built for and an in-page list is not.
    */
   | { type: "open" }
+  /** Read the library folder; the answer is a `library` message. */
+  | { type: "libraryList" }
+  /** Store this design in the library as `<name>.txt`; replacing asks first. */
+  | { type: "libraryExport"; name: string; script: string }
   | { type: "exportPng"; name: string; dataUrl: string };
 
 /** Emblem and pattern grid tiles are decoded small; the game's grid wraps 5. */
