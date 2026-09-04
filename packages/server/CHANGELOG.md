@@ -78,6 +78,10 @@ changes. Before the split it moved inside the extension's version (up to
   `gfx/interface/icons/dynasty`, a perk carries `$_name` (all 105 vanilla perks
   define it, and none defines a desc), and a perk's `traits` entries are trait
   references.
+- CK3 schema: `culture_pillar` states `$_name` (`$_desc`) and `domicile_building`
+  `$_domicile_building` (`$_domicile_building_desc`), measured 160/162 and
+  1620/1620 against the game's english loc, so `paradox/locText` renders a
+  pillar's or a domicile building's name instead of its key.
 
 ## 0.3.0
 
