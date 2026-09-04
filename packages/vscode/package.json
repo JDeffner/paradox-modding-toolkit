@@ -41,6 +41,21 @@
         }
       },
       {
+        "id": "pxignore",
+        "aliases": [
+          "Paradox Toolkit Ignore",
+          ".pxignore"
+        ],
+        "filenames": [
+          ".pxignore"
+        ],
+        "configuration": "./pxignore-language-configuration.json",
+        "icon": {
+          "light": "./media/fileicons/pxignore-light.svg",
+          "dark": "./media/fileicons/pxignore-dark.svg"
+        }
+      },
+      {
         "id": "paradox",
         "aliases": [
           "Paradox Script"
@@ -159,6 +174,11 @@
         "path": "./syntaxes/bbcode.tmLanguage.json"
       },
       {
+        "language": "pxignore",
+        "scopeName": "source.pxignore",
+        "path": "./syntaxes/pxignore.tmLanguage.json"
+      },
+      {
         "language": "paradox",
         "scopeName": "source.paradox",
         "path": "./syntaxes/paradox.tmLanguage.json"
@@ -268,6 +288,11 @@
         "command": "px.jumpToScriptReference",
         "category": "Paradox Localization",
         "title": "Go to Script Usage"
+      },
+      {
+        "command": "px.declareCalendar",
+        "category": "Paradox",
+        "title": "Declare Calendar (Display Calendar)"
       },
       {
         "command": "px.insertDate",
@@ -932,7 +957,7 @@
             "default": null,
             "order": 6,
             "scope": "window",
-            "markdownDescription": "Custom era calendar for total-conversion mods: show how script dates display in game (inlay hints + hover) and enable `Paradox: Insert Date`. Example: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped: set it in the settings of the folder you OPEN (or the `.code-workspace`) and commit it; a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
+            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting. Same shape here: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD` (inlay hints + hover, `Paradox: Insert Date`). Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped, so it can hold one calendar per window and a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -1174,6 +1199,10 @@
         {
           "command": "px.insertDate",
           "when": "px.isCk3Workspace && editorTextFocus"
+        },
+        {
+          "command": "px.declareCalendar",
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.generateCalendarLoc",
@@ -1720,6 +1749,15 @@
       {
         "fileMatch": "**/.metadata/metadata.json",
         "url": "./schemas/pdx-metadata.schema.json"
+      },
+      {
+        "fileMatch": [
+          "**/.px-toolkit/calendar.json",
+          "**/.ck3modding/calendar.json",
+          "**/.vic3modding/calendar.json",
+          "**/.eu5modding/calendar.json"
+        ],
+        "url": "./schemas/calendar.schema.json"
       }
     ],
     "keybindings": [

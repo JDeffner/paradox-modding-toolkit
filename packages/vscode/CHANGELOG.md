@@ -221,6 +221,22 @@
   `description.bbcode`, `item.json` and `dependencies.json` at
   its root; each language lives in `translations/<language>/`. Old root
   language folders are still read and move on the next save.
+- **The display calendar lives in the mod.** A total-conversion mod declares
+  its era system in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare
+  Calendar` writes an editable example), committed with the mod and read
+  wherever the mod is opened: one calendar per mod in a multi-mod window, and
+  bare LSP clients need no settings plumbing because the server reads the file
+  itself. Date hints, hover, Insert Date and Generate Calendar Localization all
+  use it; the hover names the source (`.px-toolkit/calendar.json` or the
+  setting). `px.calendar` stays as the fallback for a mod without the file. A
+  stray declaration in a mod's own `.vscode/settings.json` now offers **Move
+  Into Mod**, which writes the file where it counts. The file is validated
+  against a schema as you edit it.
+- **`.pxignore` is a language.** The upload ignore list gets its own language
+  mode: `#` comments, `!` negation, trailing `/` folder markers, `*` / `**` /
+  `?` globs and character classes each highlighted, `#` toggles a comment, and
+  a slashed-circle file icon.
+
 - **Required DLC and required items in the Workshop panel.** A Requirements
   section lists the game's DLC as Steam reports it (unowned ones marked) and
   the required Workshop items, with installed mods and declared dependencies

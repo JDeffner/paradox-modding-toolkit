@@ -82,6 +82,10 @@ changes. Before the split it moved inside the extension's version (up to
   `$_domicile_building` (`$_domicile_building_desc`), measured 160/162 and
   1620/1620 against the game's english loc, so `paradox/locText` renders a
   pillar's or a domicile building's name instead of its key.
+- Date inlay hints and hover read the owning mod's
+  `<mod>/.px-toolkit/calendar.json` before the `calendar` setting, cached per
+  mod root and dropped when the file changes (the server's own watcher now
+  covers `**/calendar.json`). The hover's rule line names the source.
 
 ## 0.3.0
 

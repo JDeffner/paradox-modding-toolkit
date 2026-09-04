@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { modRootFor, readConfig, type PxConfig } from "./config";
 import { findStrayCalendar } from "./calendarSettingsCheck";
+import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
@@ -57,7 +58,7 @@ import { CreditsPanel } from "./webviews/credits/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
-import { generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
+import { declareCalendarCommand, generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
@@ -267,28 +268,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // A px.calendar declared in a mod's (or mod project's) own .vscode while the
   // OPENED folder has none: VS Code ignores that file, so every calendar
   // feature silently does nothing. The setting is window-scoped; say so once
-  // per workspace and offer to adopt the calendar where it counts.
+  // per workspace and offer to move the calendar into the mod itself
+  // (`.px-toolkit/calendar.json`), which is read wherever the mod is opened.
   if (cfg.isCk3Workspace && !cfg.calendar && !context.workspaceState.get<boolean>("px.strayCalendarNotice")) {
     const stray = findStrayCalendar(
       [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods],
-      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+      (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+      metaFor(cfg.gameId)
     );
     if (stray) {
       void context.workspaceState.update("px.strayCalendarNotice", true);
-      const actions = stray.calendar ? ["Use This Calendar", "Open Settings File"] : ["Open Settings File"];
+      const actions = stray.calendar ? ["Move Into Mod", "Open Settings File"] : ["Open Settings File"];
       void vscode.window
         .showWarningMessage(
           `Paradox Modding Toolkit: ${path.basename(path.dirname(path.dirname(stray.file)))} declares ` +
             "px.calendar in its own .vscode/settings.json, but VS Code only reads that file when the " +
-            "folder itself is opened. Put the calendar in the settings of the folder you open " +
-            "(or the .code-workspace) to activate the date preview.",
+            `folder itself is opened. Declare the calendar in the mod instead: ${metaFor(cfg.gameId).configDirName}/calendar.json ` +
+            "travels with the mod and is read wherever it is opened.",
           ...actions
         )
         .then((choice) => {
-          if (choice === "Use This Calendar") {
-            void vscode.workspace
-              .getConfiguration("px")
-              .update("calendar", stray.calendar, vscode.ConfigurationTarget.Workspace);
+          if (choice === "Move Into Mod" && stray.calendar) {
+            const file = writeCalendarFile(stray.modRoot, metaFor(cfg.gameId), stray.calendar);
+            notifyModFileChanged(file);
+            void vscode.window.showTextDocument(vscode.Uri.file(file));
           } else if (choice === "Open Settings File") {
             void vscode.window.showTextDocument(vscode.Uri.file(stray.file));
           }
@@ -593,13 +596,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log(`watching ${watchRoots.length} root(s) for mod file changes`);
     for (const root of watchRoots) {
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
-      const w = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{txt,yml,gui,mod}")
-      );
-      w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
-      w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
-      modWatchers.push(w);
+      // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
+      // which the server caches per mod until the file changes.
+      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/calendar.json"]) {
+        const w = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(root), glob)
+        );
+        w.onDidChange((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidCreate((uri) => notifyModFileChanged(uri.fsPath));
+        w.onDidDelete((uri) => notifyModFileChanged(uri.fsPath));
+        modWatchers.push(w);
+      }
     }
   };
   wireModWatcher();
@@ -704,7 +711,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openLocalizationSideBySide(lookupLoc, arg)
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", () => jumpToScriptReference(tracker, cfg)),
-    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive().calendar)),
+    vscode.commands.registerCommand("px.declareCalendar", () => declareCalendarCommand(cfgForActive())),
+    vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive())),
     vscode.commands.registerCommand("px.generateCalendarLoc", () =>
       generateCalendarLocCommand(cfgForActive())
     ),

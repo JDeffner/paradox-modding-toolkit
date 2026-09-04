@@ -21,6 +21,7 @@ import type { SchemaEntry } from "../schema/types";
 import type { Scope } from "../scopes/model";
 import { walkStatements } from "../parser";
 import { calendarHints } from "./calendarDates";
+import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 
 const HINT_MAX_LEN = 60;
 
@@ -34,12 +35,14 @@ export function provideInlayHints(
   document: TextDocument,
   range: Range,
   rootScopes: Set<Scope> | null,
-  entry: SchemaEntry | null
+  entry: SchemaEntry | null,
+  /** The mod's own `.px-toolkit/calendar.json` when it has one; defaults to the setting. */
+  calendar: CalendarSetting | undefined = settings.calendar
 ): InlayHint[] {
   if (document.languageId === "paradox-loc") return translationOverlayHints(data, settings, document, range);
   const hints = locPreviewHints(data, document, range);
   if (settings.scopeInlayHints) hints.push(...scopeHints(data, document, range, rootScopes, entry));
-  if (settings.calendar) hints.push(...calendarHints(settings.calendar, document, range));
+  if (calendar) hints.push(...calendarHints(calendar, document, range));
   return hints;
 }
 
