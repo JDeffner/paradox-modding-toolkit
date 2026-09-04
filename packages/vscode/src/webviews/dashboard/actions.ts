@@ -98,6 +98,23 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
     {
+      label: "Share",
+      items: [
+        {
+          label: "Steam Workshop Panel",
+          command: "px.openWorkshopManager",
+          icon: "cloudUpload",
+          tip: "The mod's Workshop listing, and where uploads happen.",
+        },
+        {
+          label: "Open Workshop Page",
+          command: "px.openWorkshopPage",
+          icon: "externalLink",
+          tip: "Open the mod's Workshop page in the browser.",
+        },
+      ],
+    },
+    {
       label: "Create",
       items: [
         {
@@ -129,23 +146,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-      ],
-    },
-    {
-      label: "Share",
-      items: [
-        {
-          label: "Steam Workshop Panel",
-          command: "px.openWorkshopManager",
-          icon: "cloudUpload",
-          tip: "The mod's Workshop listing, and where uploads happen.",
-        },
-        {
-          label: "Open Workshop Page",
-          command: "px.openWorkshopPage",
-          icon: "externalLink",
-          tip: "Open the mod's Workshop page in the browser.",
-        },
       ],
     },
     {
