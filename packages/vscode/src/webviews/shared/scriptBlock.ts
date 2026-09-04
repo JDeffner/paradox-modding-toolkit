@@ -267,9 +267,7 @@ export function statementLines(text: string): string[] {
   );
   return [
     lines[0],
-    ...lines
-      .slice(1)
-      .map((line) => (line.startsWith(common) ? line.slice(common.length) : line.trimStart())),
+    ...lines.slice(1).map((line) => (line.startsWith(common) ? line.slice(common.length) : line.trimStart())),
   ];
 }
 

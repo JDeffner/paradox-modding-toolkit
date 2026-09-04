@@ -30,6 +30,7 @@ import {
   defaultSaveTarget,
   openSaveTarget,
   pickSaveTargetChoice,
+  revealDefinition,
   samePath,
   writeLocValues,
   type SaveTargetChoice,
@@ -268,8 +269,11 @@ export class TraitCreatorPanel {
       case "changeTarget":
         await this.changeTarget();
         return;
-      case "openFile":
+      case "revealSource":
         await openAt(message.file, message.line);
+        return;
+      case "openFile":
+        await this.openInFile(message.name, message.save);
         return;
       case "openExamples":
         // The only names the panel links out with are modifier rows.
@@ -465,9 +469,22 @@ export class TraitCreatorPanel {
 
   // -- saving --------------------------------------------------------------
 
-  private async save(save: TraitSave): Promise<void> {
+  /**
+   * A script box's way out: write the definition, then put the cursor on its
+   * block in the editor. It saves first every time rather than only when the
+   * block is missing, because the point is to hand the modder the file with
+   * what the form says in it; a save that changes nothing writes nothing
+   * (`applyDefinitionEdits` with no edits only opens the document).
+   */
+  private async openInFile(name: string, save: TraitSave): Promise<void> {
+    const abs = await this.save(save);
+    if (abs) await revealDefinition(abs, name);
+  }
+
+  /** The file that was written, or null when nothing was. */
+  private async save(save: TraitSave): Promise<string | null> {
     const { cfg, actions, lookupLoc } = this.options;
-    if (!this.form) return;
+    if (!this.form) return null;
     const folder = this.form.folder;
 
     // No question here: the target has been on screen since the form loaded.
@@ -475,7 +492,7 @@ export class TraitCreatorPanel {
     if (!choice) {
       this.post({ type: "toast", message: "No mod folder to save into.", variant: "destructive" });
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
     const wanted = path.join(choice.modPath, ...folder.split("/"), choice.file);
     const source =
@@ -493,13 +510,13 @@ export class TraitCreatorPanel {
       } catch (err) {
         void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${messageOf(err)}`);
         this.post({ type: "saved", ok: false, name: save.name });
-        return;
+        return null;
       }
     } else {
       const target = await openSaveTarget(cfg, folder, choice);
       if (!target) {
         this.post({ type: "saved", ok: false, name: save.name });
-        return;
+        return null;
       }
       abs = target.abs;
       text = target.text;
@@ -515,11 +532,11 @@ export class TraitCreatorPanel {
     if (refused) {
       void vscode.window.showWarningMessage(`Paradox Modding Toolkit: ${refused}`);
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
     if (!(await applyDefinitionEdits(abs, text, result.edits))) {
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      return null;
     }
 
     let locFiles: string[];
@@ -537,13 +554,15 @@ export class TraitCreatorPanel {
         variant: "destructive",
       });
       this.post({ type: "saved", ok: false, name: save.name });
-      return;
+      // The block IS on disk, so the caller may still open it.
+      return abs;
     }
     // Deduplicated: the name and the description land in the same loc file, and
     // a toast that says its name twice reads as two files.
     const written = [...new Set([path.basename(abs), ...locFiles.map((file) => path.basename(file))])];
     this.post({ type: "toast", message: `Saved ${save.name} into ${written.join(", ")}.` });
     this.post({ type: "saved", ok: true, name: save.name });
+    return abs;
   }
 }
 

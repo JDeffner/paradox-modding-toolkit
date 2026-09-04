@@ -496,6 +496,20 @@ describe("editing a trait the mod already has", () => {
     expect(app.save()!.block).toBe(text);
   });
 
+  it("a script box says it has no completion and offers the file, with the save on it", () => {
+    const text = "px_stoic = {\n\ttriggered_opinion = {\n\t\topinion_modifier = a\n\t}\n}";
+    const app = boot();
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const foot = control(app, "triggered_opinion").querySelector(".px-script-foot")!;
+    expect(foot.textContent).toContain("No completion or highlighting here.");
+    (foot.querySelector("button") as HTMLButtonElement).click();
+    // The host writes the definition before it opens it, so the whole save
+    // rides along rather than only the name.
+    const open = app.posted.filter((m) => m.type === "openFile").at(-1)!;
+    expect(open).toMatchObject({ type: "openFile", name: "px_stoic" });
+    expect((open as { save: TraitSave }).save.block).toBe(text);
+  });
+
   it("a game trait opens as a duplicate under the mod's prefix", () => {
     const app = boot();
     app.send({

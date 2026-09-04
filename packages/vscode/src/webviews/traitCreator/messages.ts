@@ -14,6 +14,7 @@ import type {
   CreatorCopyRequest,
   CreatorImagesReply,
   CreatorImagesRequest,
+  CreatorOpenFileRequest,
   CreatorTargetReply,
 } from "../shared/creatorMessages";
 
@@ -68,7 +69,15 @@ export type AppToHost =
   /** Decode these icon file names to PNG and answer with webview URLs. */
   | { type: "icons"; keys: string[] }
   | { type: "save"; save: TraitSave }
-  | { type: "openFile"; file: string; line: number }
+  /** The toolbar's "open the file this came from", at the block's own line. */
+  | { type: "revealSource"; file: string; line: number }
+  /**
+   * A script box's "Edit in the file": save the definition, then open it in
+   * the editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: TraitSave })
   /** Deep link into the Examples Wiki for a trigger, effect or modifier name. */
   | { type: "openExamples"; name: string }
   /** The script section was clicked, or its copy button. */

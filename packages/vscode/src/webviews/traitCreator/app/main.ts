@@ -27,6 +27,7 @@ import {
   iconField,
   locField,
   multiRefField,
+  scriptFoot,
   textField,
   titleCaseFromName,
   type Field,
@@ -43,7 +44,7 @@ import { saveTargetLine } from "../../shared/saveTarget";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
-import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit } from "../messages";
+import type { AppToHost, HostToApp, SaveMode, TraitCreatorInit, TraitSave } from "../messages";
 import { baseName, writeBlock } from "../../shared/scriptBlock";
 import {
   fillTraitLoc,
@@ -503,7 +504,13 @@ function scriptListField(spec: TraitFieldSpec, values: string[]): Field<string[]
   };
   paint();
   add.style.alignSelf = "flex-start";
-  box.append(list, add);
+  // A textarea has no completion, no hover and no highlighting: the note under
+  // the boxes says so and offers the editor, which has all three.
+  box.append(
+    list,
+    add,
+    scriptFoot(() => void openInFile())
+  );
   return {
     el: fieldRow(spec, box),
     get: () => [...current],
@@ -1297,39 +1304,58 @@ function askForIcons(keys: string[]): void {
 // Saving
 // ---------------------------------------------------------------------------
 
-async function save(): Promise<void> {
-  if (!form) return;
+/**
+ * Everything a save says, or null when the form is not saveable yet (a name the
+ * engine cannot read). Both the Save button and a script box's "Edit in the
+ * file" go through it: the file a modder is sent to has to hold what the form
+ * says.
+ */
+function savePayload(): TraitSave | null {
+  if (!form) return null;
   const name = currentName();
   const problem = nameProblem(name);
   if (problem) {
     toast(problem, "destructive");
-    return;
-  }
-  if (mode === "override") {
-    const ok = await confirmDialog({
-      title: `Override the game's ${name}?`,
-      description:
-        "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
-        "changes from every future game patch. Partial overrides do not exist.",
-      confirmLabel: "Override",
-      destructive: true,
-    });
-    if (!ok) return;
+    return null;
   }
   const changed = mode === "edit" ? changedProperties() : null;
-  post({
-    type: "save",
-    save: {
-      name,
-      mode,
-      block: buildBlock(),
-      ...(changed ? { changed } : {}),
-      loc: locFields
-        .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
-        .filter((pair) => pair.value !== ""),
-      ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
-    },
+  return {
+    name,
+    mode,
+    block: buildBlock(),
+    ...(changed ? { changed } : {}),
+    loc: locFields
+      .map((entry) => ({ key: entry.key, value: entry.field.get().trim() }))
+      .filter((pair) => pair.value !== ""),
+    ...(form.current && mode === "edit" ? { sourceFile: baseName(form.current.file) } : {}),
+  };
+}
+
+/** The override warning, asked once wherever a write is about to happen. */
+function confirmOverride(name: string): Promise<boolean> {
+  return confirmDialog({
+    title: `Override the game's ${name}?`,
+    description:
+      "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +
+      "changes from every future game patch. Partial overrides do not exist.",
+    confirmLabel: "Override",
+    destructive: true,
   });
+}
+
+async function save(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "save", save: payload });
+}
+
+/** The way out of every script box: save, then open the block in the editor. */
+async function openInFile(): Promise<void> {
+  const payload = savePayload();
+  if (!payload) return;
+  if (mode === "override" && !(await confirmOverride(payload.name))) return;
+  post({ type: "openFile", name: payload.name, save: payload });
 }
 
 // ---------------------------------------------------------------------------
@@ -1420,7 +1446,7 @@ byId("open").onclick = () => {
 };
 
 revealButton.onclick = () => {
-  if (form?.current) post({ type: "openFile", file: form.current.file, line: form.current.line });
+  if (form?.current) post({ type: "revealSource", file: form.current.file, line: form.current.line });
 };
 
 function paintPreviewButton(): void {

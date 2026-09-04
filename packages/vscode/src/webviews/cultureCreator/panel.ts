@@ -28,6 +28,7 @@ import {
   defaultSaveTarget,
   openSaveTarget,
   pickSaveTargetChoice,
+  revealDefinition,
   samePath,
   writeLocValues,
   type SaveTargetChoice,
@@ -40,7 +41,7 @@ import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { buildCatalog } from "./catalog";
 import { cultureCreatorHtml } from "./html";
-import type { AppToHost, CultureCatalog, CultureInit, HostToApp } from "./messages";
+import type { AppToHost, CultureCatalog, CultureInit, CultureSave, HostToApp } from "./messages";
 
 /** The definition kind this panel edits; the schema table's own spelling. */
 const KIND = "culture";
@@ -319,21 +320,37 @@ export class CultureCreatorPanel {
       case "save":
         await this.save(msg);
         return;
+      case "openFile":
+        await this.openInFile(msg.name, msg.save);
+        return;
     }
   }
 
-  private async save(msg: Extract<AppToHost, { type: "save" }>): Promise<void> {
+  /**
+   * A script box's way out: write the culture, then put the cursor on its block
+   * in the editor. It saves first every time rather than only when the block is
+   * missing, because the point is to hand the modder the file with what the
+   * form says in it; a save that changes nothing writes nothing
+   * (`applyDefinitionEdits` with no edits only opens the document).
+   */
+  private async openInFile(name: string, save: CultureSave): Promise<void> {
+    const abs = await this.save(save);
+    if (abs) await revealDefinition(abs, name);
+  }
+
+  /** The file that was written, or null when nothing was. */
+  private async save(msg: CultureSave): Promise<string | null> {
     const folder = this.form?.folder;
     if (!folder) {
       this.post({ type: "idle" });
-      return;
+      return null;
     }
     // No question here: the target has been in the top bar since the form
     // loaded, and clicking it is how a modder changes where this lands.
     const choice = this.targetChoice();
     if (!choice) {
       this.post({ type: "error", message: "No mod folder to save into." });
-      return;
+      return null;
     }
     const wanted = path.join(choice.modPath, ...folder.split("/"), choice.file);
     const from = msg.mode === "edit" && this.form?.current?.source === "mod" ? this.form.current.file : null;
@@ -351,13 +368,13 @@ export class CultureCreatorPanel {
         text = (await vscode.workspace.openTextDocument(abs)).getText();
       } catch (err) {
         this.post({ type: "error", message: errorText(err) });
-        return;
+        return null;
       }
     } else {
       const target = await openSaveTarget(this.cfg, folder, choice);
       if (!target) {
         this.post({ type: "idle" });
-        return;
+        return null;
       }
       abs = target.abs;
       text = target.text;
@@ -378,16 +395,16 @@ export class CultureCreatorPanel {
       });
     } catch (err) {
       this.post({ type: "error", message: errorText(err) });
-      return;
+      return null;
     }
     const refused = result.ops.find((o) => o.refused)?.refused;
     if (refused) {
       this.post({ type: "error", message: refused });
-      return;
+      return null;
     }
     if (!(await applyDefinitionEdits(abs, text, result.edits))) {
       this.post({ type: "idle" });
-      return;
+      return null;
     }
     let locFiles: string[];
     try {
@@ -401,7 +418,8 @@ export class CultureCreatorPanel {
       void vscode.window.showWarningMessage(
         `Paradox Modding Toolkit: ${msg.name} was written to ${label}, but its localization was not: ${errorText(err)}`
       );
-      return;
+      // The block IS on disk, so the caller may still open it.
+      return abs;
     }
     this.post({ type: "saved", name: msg.name });
     // The loc FILES by name, not a count: "2 keys saved" left a modder with
@@ -412,6 +430,7 @@ export class CultureCreatorPanel {
     );
     // The form now holds a mod definition: reload so a second save edits it.
     await this.load(msg.name);
+    return abs;
   }
 }
 

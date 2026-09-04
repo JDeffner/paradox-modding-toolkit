@@ -14,6 +14,7 @@ import type {
   CreatorCopyRequest,
   CreatorImagesReply,
   CreatorImagesRequest,
+  CreatorOpenFileRequest,
   CreatorTargetReply,
 } from "../shared/creatorMessages";
 
@@ -141,7 +142,15 @@ export type AppToHost =
   /** Load an existing definition into the form (`current` comes back). */
   | { type: "load"; name: string }
   | { type: "save"; save: TraditionSave }
-  | { type: "openFile"; file: string; line: number }
+  /** The toolbar's "open the file this came from", at the block's own line. */
+  | { type: "revealSource"; file: string; line: number }
+  /**
+   * A script box's "Edit in the file": save the definition, then open it in
+   * the editor at its block. The whole save rides along, because the file the
+   * modder is about to read has to hold what the form says (fields.ts
+   * `scriptFoot`; a textarea has no completion, hover or highlighting).
+   */
+  | (CreatorOpenFileRequest & { save: TraditionSave })
   /** Deep link into the Examples Wiki for a modifier name. */
   | { type: "openExamples"; name: string }
   /** The script section was clicked, or its copy button. */
