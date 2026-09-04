@@ -59,3 +59,16 @@ export interface CreatorTargetReply {
 export interface CreatorChangeTargetRequest {
   type: "changeTarget";
 }
+
+/**
+ * App -> host: open the definition's file in the editor, at its block. A
+ * script area in a webview has no completion, hover or highlighting, so every
+ * one of them offers this way out (fields.ts `scriptFoot`). The host saves
+ * first when the block is not in the file yet; `which` names the target for a
+ * creator that writes more than one file.
+ */
+export interface CreatorOpenFileRequest {
+  type: "openFile";
+  name: string;
+  which?: string;
+}

@@ -194,18 +194,23 @@ function sanitizeName(raw: string): string {
 /**
  * The one entry point for writing a loc value: mod entry → rewrite in place;
  * vanilla-only key → the replace file (that IS the override mechanism);
- * brand-new key → the right mod loc file (upsertNewModLoc).
+ * brand-new key → the right mod loc file (upsertNewModLoc), or `newKeyFile`
+ * when the caller knows where the key's siblings belong (a creator names the
+ * loc file after the script file it just wrote, so a modder finds the trait's
+ * name next to the trait and not in whichever file happened to be largest).
  */
 export async function writeLocSmart(
   cfg: PxConfig,
   lookup: LocLookup,
   key: string,
-  value: string
+  value: string,
+  newKeyFile?: string
 ): Promise<string> {
   const defs = await lookup(key);
   const modDef = defs.find((d) => d.source === "mod");
   if (modDef && replaceLocLineValue(modDef.file, modDef.line, value)) return modDef.file;
   if (defs.length > 0) return upsertInReplaceFile(cfg, key, value);
+  if (newKeyFile) return upsertIntoYml(newKeyFile, cfg.locLanguage, key, value);
   return upsertNewModLoc(cfg, key, value);
 }
 

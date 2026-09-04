@@ -49,6 +49,13 @@ export interface FieldOptions {
    * say nothing is a form nobody can start filling in.
    */
   placeholder?: string;
+  /**
+   * What the game expects of the INPUT, as a paragraph behind an (i) beside
+   * the label: a picture's size, format and path, a number's range. `doc`
+   * says what the key means; this says what to give it. Every image field of
+   * a creator carries one, so the guideline is a hover away everywhere.
+   */
+  info?: string;
 }
 
 /** One `name = value` row of a modifier block. */
@@ -155,8 +162,26 @@ function labelledRow(
     label.dataset.tip = options.doc;
     label.dataset.tipWrap = "";
   }
+  if (options.info) label.append(infoIcon(options.info));
   row.append(label, control);
   return { row, label };
+}
+
+/**
+ * The (i) that carries a field's input guideline. Its own element, not the
+ * label's tip: the label already says what the key MEANS, and a scrubbable
+ * label must stay a drag handle. A creator with a control of its own (a
+ * section head, a picker) appends one the same way.
+ */
+export function infoIcon(text: string): HTMLElement {
+  const info = el("span", "px-field-info");
+  info.dataset.tip = text;
+  info.dataset.tipWrap = "";
+  info.dataset.tipWide = "";
+  info.setAttribute("role", "img");
+  info.setAttribute("aria-label", text);
+  info.append(iconEl("info"));
+  return info;
 }
 
 /**
@@ -223,10 +248,17 @@ function vocabularyItems(items: readonly EventVocabularyItem[]): MenuItem[] {
 function searchPopover(
   anchor: HTMLElement,
   placeholder: string,
-  render: (query: string, body: HTMLElement, close: () => void) => void
+  render: (query: string, body: HTMLElement, close: () => void) => void,
+  opts: {
+    width?: number;
+    /** One control between the search box and the results, outside the scroll. */
+    action?: HTMLElement;
+  } = {}
 ): void {
   const root = el("div", "px-picker");
-  root.style.width = "300px";
+  root.style.width = `${opts.width ?? 300}px`;
+  // Past the popover's 480px cap (ui.css lifts it for a wide picker).
+  if ((opts.width ?? 300) > 480) root.dataset.wide = "";
   const group = el("div", "px-input-group");
   group.append(iconEl("search"));
   const search = document.createElement("input");
@@ -236,7 +268,9 @@ function searchPopover(
   search.spellcheck = false;
   group.append(search);
   const body = el("div", "px-picker-results");
-  root.append(group, body);
+  root.append(group);
+  if (opts.action) root.append(opts.action);
+  root.append(body);
   const close = popover(anchor, root);
   const fill = (): void => render(search.value, body, close);
   search.oninput = fill;
@@ -642,19 +676,31 @@ export interface IconFieldOptions extends FieldOptions {
   /** The pictures of the kind's icon folder, mod entries first. */
   items: readonly IconChoice[];
   value?: string;
-  /** Offered under the grid; the panel owns the file dialog and the encoder. */
+  /** Offered ABOVE the grid; the panel owns the file dialog and the encoder. */
   onCustom?: () => void;
   customLabel?: string;
+  /**
+   * `wide` for pictures that are a strip and not a square (a legacy track's
+   * 4216 x 368 illustration): one per row, wide enough to tell apart, key
+   * under it. A square tile of such a picture is 44 x 4 px of paint.
+   */
+  tile?: "square" | "wide";
 }
 
 /** The kind's icon, picked from the folder the game reads it from. */
 export function iconField(options: IconFieldOptions): Field<string> {
   const { listeners, fire } = emitter<string>();
   let current = options.value ?? "";
+  const wide = options.tile === "wide";
   const row = el("div", "px-row");
   const preview = document.createElement("img");
   preview.className = "px-icontile";
   preview.alt = "";
+  if (wide) {
+    preview.style.width = "160px";
+    preview.style.height = "14px";
+    preview.style.objectFit = "fill";
+  }
   const face = el("span", "px-truncate px-xs px-muted");
   const choose = ghostButton("Choose…", "image");
   const clear = ghostButton("Clear", "x");
@@ -668,44 +714,57 @@ export function iconField(options: IconFieldOptions): Field<string> {
     clear.hidden = current === "";
   };
 
-  choose.onclick = () =>
-    searchPopover(choose, "Search icons…", (query, body, close) => {
-      body.replaceChildren();
-      const q = query.trim().toLowerCase();
-      const matches = options.items.filter((item) => item.key.toLowerCase().includes(q));
-      const grid = el("div", "px-icongrid");
-      for (const item of matches.slice(0, 400)) {
-        const tile = document.createElement("button");
-        tile.className = "px-btn";
-        tile.dataset.variant = "ghost";
-        tile.dataset.tip = item.key;
-        tile.dataset.tipWrap = "";
-        const img = document.createElement("img");
-        img.className = "px-icontile";
-        img.src = item.url;
-        img.alt = item.key;
-        img.loading = "lazy";
-        tile.append(img);
-        tile.onclick = () => {
-          current = item.key;
-          paint();
-          fire(current);
-          close();
-        };
-        grid.append(tile);
-      }
-      if (matches.length === 0) grid.append(el("div", "px-menu-empty", "No match"));
-      body.append(grid);
-      if (options.onCustom) {
-        const custom = ghostButton(options.customLabel ?? "Custom image…", "imageDown");
-        custom.style.width = "100%";
-        custom.onclick = () => {
-          close();
-          options.onCustom?.();
-        };
-        body.append(custom);
-      }
-    });
+  choose.onclick = () => {
+    // The one action that is not a pick stands at the top, under the search
+    // box and outside the scrolling grid: reaching "Custom picture…" used to
+    // mean scrolling past every icon the game ships.
+    let custom: HTMLElement | undefined;
+    if (options.onCustom) {
+      custom = ghostButton(options.customLabel ?? "Custom picture…", "imageDown");
+      custom.className += " px-picker-action";
+    }
+    searchPopover(
+      choose,
+      "Search icons…",
+      (query, body, close) => {
+        if (custom) {
+          custom.onclick = () => {
+            close();
+            options.onCustom?.();
+          };
+        }
+        body.replaceChildren();
+        const q = query.trim().toLowerCase();
+        const matches = options.items.filter((item) => item.key.toLowerCase().includes(q));
+        const grid = el("div", "px-icongrid");
+        if (wide) grid.dataset.wide = "";
+        for (const item of matches.slice(0, 400)) {
+          const tile = document.createElement("button");
+          tile.className = "px-btn";
+          tile.dataset.variant = "ghost";
+          tile.dataset.tip = item.key;
+          tile.dataset.tipWrap = "";
+          const img = document.createElement("img");
+          img.className = "px-icontile";
+          img.src = item.url;
+          img.alt = item.key;
+          img.loading = "lazy";
+          tile.append(img);
+          if (wide) tile.append(el("span", "px-icontile-key", item.key));
+          tile.onclick = () => {
+            current = item.key;
+            paint();
+            fire(current);
+            close();
+          };
+          grid.append(tile);
+        }
+        if (matches.length === 0) grid.append(el("div", "px-menu-empty", "No match"));
+        body.append(grid);
+      },
+      { ...(wide ? { width: 520 } : {}), ...(custom ? { action: custom } : {}) }
+    );
+  };
   clear.onclick = () => {
     current = "";
     paint();
@@ -857,6 +916,26 @@ export function locField(options: LocFieldOptions): Field<string> {
 export interface ScriptFieldOptions extends FieldOptions {
   value?: string;
   rows?: number;
+  /**
+   * Open the definition's file in the editor. A textarea has no completion,
+   * no hover and no highlighting, so a block of any size is better written in
+   * the file; the area says so and offers the way there when a creator gives
+   * it one (the host saves first when the block is not in the file yet).
+   */
+  onOpenFile?: () => void;
+}
+
+/** The note every script area carries under it, with the file as the way out. */
+export function scriptFoot(onOpenFile: () => void): HTMLElement {
+  const foot = el("div", "px-script-foot");
+  foot.append(el("span", "px-grow", "No completion or highlighting here."));
+  const open = ghostButton("Edit in the file", "externalLink");
+  open.dataset.tip =
+    "Save, then open this definition in the editor, where script has completion and hover docs.";
+  open.dataset.tipWrap = "";
+  open.onclick = onOpenFile;
+  foot.append(open);
+  return foot;
 }
 
 /**
@@ -882,8 +961,13 @@ export function scriptField(options: ScriptFieldOptions): Field<string> {
     area.value = area.value.slice(0, start) + "\t" + area.value.slice(end);
     area.selectionStart = area.selectionEnd = start + 1;
   });
+  let control: HTMLElement = area;
+  if (options.onOpenFile) {
+    control = el("div", "px-stack");
+    control.append(area, scriptFoot(options.onOpenFile));
+  }
   return {
-    el: fieldRow(options, area),
+    el: fieldRow(options, control),
     get: () => area.value,
     set: (value) => {
       area.value = value;

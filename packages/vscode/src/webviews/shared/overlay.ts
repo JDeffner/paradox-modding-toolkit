@@ -30,11 +30,24 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
   anchor.setAttribute("aria-expanded", "true");
 
   const a = anchor.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
   const gap = 6;
+  const edge = 8;
+  // The popover takes the side with more room and never runs off the screen:
+  // a menu opened near the bottom of a tall form used to reach past the
+  // viewport with its last rows unreachable. The room it has is handed to its
+  // scrolling body (`--px-popover-max`, read by .px-menu-list and
+  // .px-picker-results), so the LIST shrinks and scrolls, not the page.
+  const below = window.innerHeight - a.bottom - gap - edge;
+  const above = a.top - gap - edge;
+  let r = el.getBoundingClientRect();
+  const flip = r.height > below && above > below;
+  const room = Math.floor(Math.max(60, flip ? above : below));
+  el.style.setProperty("--px-popover-max", `${room}px`);
+  el.style.maxHeight = `${room}px`;
+  r = el.getBoundingClientRect();
   let top = a.bottom + gap;
   let origin = "top";
-  if (top + r.height > window.innerHeight - 8 && a.top - gap - r.height > 8) {
+  if (flip) {
     top = a.top - gap - r.height;
     origin = "bottom";
   }
@@ -42,9 +55,9 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
   // instead of being clamped to the viewport: it stays visually attached to
   // the control that opened it rather than hugging the screen edge.
   let left = a.left;
-  if (left + r.width > window.innerWidth - 8) left = a.right - r.width;
-  left = Math.max(8, Math.min(left, window.innerWidth - 8 - r.width));
-  el.style.top = `${Math.max(8, top)}px`;
+  if (left + r.width > window.innerWidth - edge) left = a.right - r.width;
+  left = Math.max(edge, Math.min(left, window.innerWidth - edge - r.width));
+  el.style.top = `${Math.max(edge, top)}px`;
   el.style.left = `${left}px`;
   el.style.setProperty("--px-origin", `${origin} left`);
 

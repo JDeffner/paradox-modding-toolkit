@@ -291,20 +291,55 @@ export async function applyDefinitionEdits(
 }
 
 /**
+ * The loc file a creator's NEW keys go to: named after the script file the
+ * definition was written to, in the same mod (`common/traits/mymod_traits.txt`
+ * -> `localization/<lang>/mymod_traits_l_<lang>.yml`). It used to be "the
+ * mod's largest loc file", which put a trait's name into a calendar file
+ * where nobody looked for it. From the second save on the keys are found in
+ * place, so the file is only ever created by the first.
+ */
+export function creatorLocFile(cfg: PxConfig, target: { modPath: string; file: string }): string {
+  const stem = target.file.replace(/\.txt$/i, "");
+  return path.join(target.modPath, "localization", cfg.locLanguage, `${stem}_l_${cfg.locLanguage}.yml`);
+}
+
+/**
  * Write a creator's loc values through the normal loc writer: a key the mod
  * already has is rewritten in place, a vanilla-only key goes to
- * `localization/replace/`, a brand-new key joins the mod file holding its
- * siblings. Returns the files written, in order.
+ * `localization/replace/`, a brand-new key goes to `creatorLocFile(target)`
+ * (or, with no target, the mod file holding its siblings). Returns the files
+ * written, in order.
  */
 export async function writeLocValues(
   cfg: PxConfig,
   lookup: LocLookup,
-  pairs: readonly { key: string; value: string }[]
+  pairs: readonly { key: string; value: string }[],
+  target?: { modPath: string; file: string }
 ): Promise<string[]> {
   const files: string[] = [];
+  const newKeyFile = target ? creatorLocFile(cfg, target) : undefined;
   for (const { key, value } of pairs) {
     if (key.trim() === "") continue;
-    files.push(await writeLocSmart(cfg, lookup, key, value));
+    files.push(await writeLocSmart(cfg, lookup, key, value, newKeyFile));
   }
   return files;
+}
+
+/**
+ * Open a definition's file in the editor beside the creator, with the cursor
+ * on its `name = {` line when the file has one. The way out of every script
+ * area: a webview has no completion or hover, the editor has both.
+ */
+export async function revealDefinition(abs: string, name: string): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(abs);
+  // A definition name is `\w+` (the creators refuse anything else), so it
+  // needs no escaping to become a pattern.
+  const match = /^\w+$/.test(name)
+    ? new RegExp(`^[ \\t]*${name}\\s*=\\s*\\{`, "m").exec(doc.getText())
+    : null;
+  const at = match ? doc.positionAt(match.index + match[0].length - 1) : new vscode.Position(0, 0);
+  await vscode.window.showTextDocument(doc, {
+    viewColumn: vscode.ViewColumn.Beside,
+    selection: new vscode.Range(at, at),
+  });
 }

@@ -11,12 +11,25 @@ import * as vscode from "vscode";
 import { encodeDds, hasTransparency, type DdsEncodeFormat } from "@px-lsp/server/dds";
 import { makeNonce } from "./webviews/nonce";
 
+/**
+ * Everything Chromium's <img> decodes, keyed by extension. A creator's
+ * "Custom picture…" takes any of these; the two formats the game itself
+ * writes (DDS, TGA) are handled by the caller, which copies or decodes them.
+ */
 const EXT_MIME: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".bmp": "image/bmp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".svg": "image/svg+xml",
 };
+
+/** The extensions `convertImageToDds` decodes, without the dot, for a file dialog. */
+export const CONVERTIBLE_IMAGE_EXT = Object.keys(EXT_MIME).map((ext) => ext.slice(1));
 
 interface DecodedPixels {
   width: number;
@@ -29,7 +42,7 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
   if (files.length === 0) {
     const picked = await vscode.window.showOpenDialog({
       canSelectMany: true,
-      filters: { Images: ["png", "jpg", "jpeg", "webp"] },
+      filters: { Images: CONVERTIBLE_IMAGE_EXT },
       title: "Select images to convert to DDS",
     });
     if (!picked || picked.length === 0) return;
@@ -131,7 +144,10 @@ export async function convertToDdsCommand(arg?: vscode.Uri, multi?: vscode.Uri[]
  */
 export async function convertImageToDds(source: vscode.Uri, target: vscode.Uri): Promise<void> {
   const ext = extOf(source);
-  if (!(ext in EXT_MIME)) throw new Error(`${ext || "that file"} is not a PNG, JPEG or WebP`);
+  if (!(ext in EXT_MIME))
+    throw new Error(
+      `${ext || "that file"} is not a picture the converter reads (${CONVERTIBLE_IMAGE_EXT.join(", ")})`
+    );
   const decoder = new WebviewDecoder();
   try {
     const bytes = await vscode.workspace.fs.readFile(source);

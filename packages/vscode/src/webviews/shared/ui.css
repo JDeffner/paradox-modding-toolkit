@@ -858,6 +858,13 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   min-width: 0;
   max-width: calc(100vw - 16px);
 }
+/* A picker over wide pictures asks for more than the cap (fields.ts). */
+.px-popover:has(> .px-picker[data-wide]) {
+  max-width: calc(100vw - 16px);
+}
+.px-picker[data-wide] {
+  max-width: 100%;
+}
 .px-popover-title {
   font-weight: 500;
 }
@@ -899,7 +906,10 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   box-shadow: var(--px-shadow-md);
 }
 .px-menu-list {
-  max-height: 280px;
+  /* Capped by the room the popover has under (or over) its anchor: overlay.ts
+     sets --px-popover-max, so a list near a screen edge scrolls instead of
+     running off it. The filter box above it takes about 40px. */
+  max-height: min(280px, calc(var(--px-popover-max, 280px) - 44px));
   overflow: hidden auto;
   display: flex;
   flex-direction: column;
@@ -1470,8 +1480,15 @@ button.px-swatch:focus-visible {
 
 /* The picker popovers fields.ts opens: a search box over a scrolling body. */
 .px-picker-results {
-  max-height: 300px;
+  max-height: min(300px, calc(var(--px-popover-max, 300px) - 64px));
   overflow-y: auto;
+  margin-top: 6px;
+}
+/* The one action a picker offers above its results: "Custom picture…" sits
+   at the top, where it is reached without scrolling past 400 tiles. */
+.px-picker-action {
+  width: 100%;
+  justify-content: flex-start;
   margin-top: 6px;
 }
 
@@ -1491,6 +1508,56 @@ button.px-swatch:focus-visible {
   flex: 0 0 auto;
   object-fit: contain;
   image-rendering: auto;
+}
+/* A picker over WIDE pictures (a legacy track's 4216 x 368 illustration): one
+   picture per row at a width it can be told apart at, its key under it. */
+.px-icongrid[data-wide] {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+.px-icongrid[data-wide] > .px-btn {
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px;
+}
+.px-icongrid[data-wide] .px-icontile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4216 / 368;
+  object-fit: fill;
+}
+.px-icongrid[data-wide] .px-icontile-key {
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The (i) beside a field's label: a hover explains what the game expects of
+   the input (a picture's size, format and path), longer than a label tip. */
+.px-field-info {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: var(--px-muted-fg);
+  cursor: help;
+}
+.px-field-info > .px-icon {
+  width: 12px;
+  height: 12px;
+}
+/* The line under a script area: script typed here gets no completion, so
+   the area says so and offers the file. */
+.px-script-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: var(--px-text-xs);
+  color: var(--px-muted-fg);
 }
 
 /* A culture tradition's composed picture (traditionIcon.ts): the engine stacks
@@ -1672,11 +1739,31 @@ button.px-swatch:focus-visible {
   background: var(--px-muted);
   color: var(--px-fg);
 }
+/* ONE line, always. The mod name keeps its start and the path keeps its end
+   (the file name is the part that matters), each losing its middle to an
+   ellipsis before the chip grows a second line. The path's ellipsis sits at
+   its start through `direction: rtl`: the text is LTR, so its characters keep
+   their order and only the overflow moves to the left. */
+.px-target > .px-target-mod {
+  flex: 0 1 auto;
+  min-width: 4ch;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.px-target > .px-target-sep {
+  flex: 0 0 auto;
+}
 .px-target > .px-target-path {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--px-font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 /* The hidden attribute wins over every component's own display rule, so
