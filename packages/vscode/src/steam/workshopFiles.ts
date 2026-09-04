@@ -5,17 +5,19 @@
  *
  *   <workshopDir>/
  *     item.json                    {"title": "...", "publishedfileid": "..."}
- *     description.md               default-language description
+ *     description.bbcode           default-language description
  *     translations/<steamlang>/title.txt        localized title (optional)
- *     translations/<steamlang>/description.md
+ *     translations/<steamlang>/description.bbcode
  *     previews/                    extra preview images, videos.txt, order.txt
  *     dependencies.json            required DLC and items
  *     changelog/                   changenote sources (see resolveChangeNote)
  *
  * Listings written before 0.4.0 keep `<steamlang>/` at the root; reads fall
  * back to it and the next write moves the language into `translations/`.
- * Descriptions are Markdown; a folder that already keeps `description.bbcode`
- * stays on BBCode (see `descriptionFile`). Steam is sent BBCode either way.
+ * Descriptions are BBCode, the format Steam serves and takes. A folder that
+ * still holds a `description.md` from an earlier version is converted once
+ * when the panel reads it (`migrateMarkdownListing`); until then it reads as
+ * Markdown, and nothing writes a new one.
  *
  * The folder's location is `px.workshop.dir`, resolved against the mod root.
  * Empty (the default) means `<configDir>/workshop` inside the mod, which a
@@ -41,17 +43,47 @@ export const DESCRIPTION_BBCODE = "description.bbcode";
 /**
  * The description file of one folder, and whether it is Markdown.
  *
- * `.md` wins when both exist; a folder with neither gets `.md`, so new
- * listings are Markdown and a modder who already keeps `.bbcode` is never
- * migrated behind their back. Reads and writes both go through this, so the
- * choice cannot drift between them.
+ * `.md` wins when both exist, so a listing written before 0.4.0 keeps reading
+ * the file its author edits; a folder with neither gets `.bbcode`, the format
+ * Steam serves. Reads and writes both go through this, so the choice cannot
+ * drift between them.
  */
 export function descriptionFile(dir: string): { file: string; markdown: boolean } {
   const md = path.join(dir, DESCRIPTION_MD);
   if (fs.existsSync(md)) return { file: md, markdown: true };
-  const bb = path.join(dir, DESCRIPTION_BBCODE);
-  if (fs.existsSync(bb)) return { file: bb, markdown: false };
-  return { file: md, markdown: true };
+  return { file: path.join(dir, DESCRIPTION_BBCODE), markdown: false };
+}
+
+/**
+ * Write one folder's description as the BBCode Steam served (the download
+ * path). A legacy `description.md` beside it is removed: `.md` wins on read,
+ * so leaving it would shadow the text just downloaded.
+ */
+export function writeSteamDescription(dir: string, bbcode: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, DESCRIPTION_BBCODE), bbcode, "utf8");
+  fs.rmSync(path.join(dir, DESCRIPTION_MD), { force: true });
+}
+
+/**
+ * Move a listing written before 0.4.1 off Markdown: every `description.md`
+ * (the root, `translations/<lang>/`, and the pre-0.4.0 `<lang>/` at the root)
+ * becomes `description.bbcode` holding the BBCode the upload sent Steam
+ * anyway, and the `.md` goes. Done once, when the panel reads the folder,
+ * so no later write has to know which format a draft is in. Returns the
+ * folders migrated, relative to `workshopDir`, for the one-time notice.
+ */
+export function migrateMarkdownListing(workshopDir: string): string[] {
+  const moved: string[] = [];
+  const dirs = [workshopDir];
+  for (const { api } of STEAM_LANGUAGES) dirs.push(langDir(workshopDir, api), path.join(workshopDir, api));
+  for (const dir of dirs) {
+    const md = path.join(dir, DESCRIPTION_MD);
+    if (!fs.existsSync(md)) continue;
+    writeSteamDescription(dir, markdownToBBCode(fs.readFileSync(md, "utf8")));
+    moved.push(path.relative(workshopDir, dir) || ".");
+  }
+  return moved;
 }
 
 /** Where one language's files live: `translations/<lang>/`. */
@@ -128,8 +160,8 @@ export function readListingFiles(workshopDir: string): ListingFiles {
   }
   const chosen = descriptionFile(workshopDir);
   const description = read(chosen.file);
-  // The format is the folder's, not the file's: an empty folder is already
-  // Markdown, because that is what the next write creates.
+  // The format is the folder's, not the file's: only a folder that still
+  // holds a description.md reads (and writes) as Markdown.
   if (chosen.markdown) markdown.push(DEFAULT_LANGUAGE);
   return { description, translations, markdown };
 }

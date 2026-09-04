@@ -22,9 +22,11 @@ import { LAUNCHER_TAGS, upsertDescriptorBlock, upsertDescriptorValue } from "@px
 import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import { type ItemDetails, type SubmitSpec } from "../../steam/jobs";
 import {
+  DESCRIPTION_BBCODE,
   descriptionFile,
   hasListingFiles,
   langDir,
+  migrateMarkdownListing,
   PREVIEWS_DIR,
   readDependencies,
   readItemJson,
@@ -33,6 +35,7 @@ import {
   writeDependencies,
   writeListingFiles,
   writePreviewOrder,
+  writeSteamDescription,
   writeVideos,
 } from "../../steam/workshopFiles";
 import { preflight } from "../../steam/preflight";
@@ -86,12 +89,8 @@ export interface WorkshopPanelOptions {
   log: (msg: string) => void;
 }
 
-/**
- * Steam serves BBCode; a folder that keeps its description as Markdown gets
- * Markdown back, so a download never changes the format a modder chose.
- */
-const asStored = (dir: string, bbcode: string): string =>
-  descriptionFile(dir).markdown ? bbcodeToMarkdown(bbcode) : bbcode;
+/** How long the listing files may keep changing before the panel re-reads them. */
+const LISTING_RELOAD_MS = 300;
 
 export class WorkshopPanel {
   private static instance: WorkshopPanel | undefined;
@@ -108,6 +107,9 @@ export class WorkshopPanel {
   private resourceRoots: vscode.Uri[];
   /** Titles of required items looked up on Steam, so a re-render never re-asks. */
   private readonly itemTitles = new Map<string, string | null>();
+  /** Watches the active mod's listing text; the panel only previews it now. */
+  private listingWatcher: vscode.FileSystemWatcher | undefined;
+  private listingReload: ReturnType<typeof setTimeout> | undefined;
 
   private constructor(context: vscode.ExtensionContext, options: WorkshopPanelOptions) {
     this.context = context;
@@ -168,13 +170,45 @@ export class WorkshopPanel {
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.watchListing();
+  }
+
+  /**
+   * The description and translation files are edited in the editor, not here,
+   * so the panel follows them: a change to the active mod's listing text
+   * re-posts info, which is the path Reload takes. Re-created whenever the
+   * active mod changes, and once more when the folder is materialised (a
+   * watcher on a folder that did not exist yet reports nothing).
+   */
+  private watchListing(): void {
+    this.listingWatcher?.dispose();
+    this.listingWatcher = undefined;
+    const root = this.active;
+    if (this.disposed || !root) return;
+    const dir = workshopDirFor(root, this.options.meta);
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(dir), "{description.*,translations/*/*}")
+    );
+    const changed = (): void => {
+      clearTimeout(this.listingReload);
+      this.listingReload = setTimeout(() => {
+        if (!this.uploading) void this.postInfo();
+      }, LISTING_RELOAD_MS);
+    };
+    watcher.onDidChange(changed);
+    watcher.onDidCreate(changed);
+    watcher.onDidDelete(changed);
+    this.listingWatcher = watcher;
   }
 
   static show(context: vscode.ExtensionContext, options: WorkshopPanelOptions): void {
     const existing = WorkshopPanel.instance;
     if (existing) {
       existing.options = options;
-      if (options.active) existing.active = options.active;
+      if (options.active && options.active !== existing.active) {
+        existing.active = options.active;
+        existing.watchListing();
+      }
       existing.panel.reveal();
       void existing.postInfo();
       return;
@@ -186,6 +220,9 @@ export class WorkshopPanel {
     if (this.disposed) return;
     this.disposed = true;
     WorkshopPanel.instance = undefined;
+    clearTimeout(this.listingReload);
+    this.listingWatcher?.dispose();
+    this.listingWatcher = undefined;
     for (const d of this.disposables.splice(0)) d.dispose();
     this.panel.dispose();
   }
@@ -283,6 +320,14 @@ export class WorkshopPanel {
   private async buildInfo(root: string): Promise<WorkshopModInfo> {
     const { meta } = this.options;
     const workshopDir = workshopDirFor(root, meta);
+    // A listing kept as Markdown is moved to BBCode the first time it is read:
+    // the panel previews BBCode only, and a .md preview never looked like Steam.
+    const migrated = hasListingFiles(workshopDir) ? migrateMarkdownListing(workshopDir) : [];
+    if (migrated.length) {
+      this.notify(
+        `Converted description.md to description.bbcode in ${migrated.length === 1 && migrated[0] === "." ? "the listing folder" : migrated.join(", ")}: the listing keeps the format Steam takes.`
+      );
+    }
     const info = readPublishInfo(root, meta, workshopDir);
     const previewPath = info?.previewPath ?? findPreview(root, null);
     let previewTooLarge = false;
@@ -412,6 +457,7 @@ export class WorkshopPanel {
         // The app only offers paths the host listed, but the message is still text from a webview.
         if (!this.options.mods.some((m) => m.path === message.path)) return;
         this.active = message.path;
+        this.watchListing();
         await this.postInfo();
         return;
       case "saveLocal": {
@@ -689,7 +735,14 @@ export class WorkshopPanel {
     return choice === "Create Anyway";
   }
 
-  /** Open (creating if needed) a listing file of the workshop folder. */
+  /**
+   * Open (creating if needed) a listing file of the workshop folder. The
+   * panel only previews this text, so the file has to be reachable even
+   * before the folder exists: it is then written from whatever store is
+   * canonical right now (readPublishInfo = the folder if it exists, else the
+   * pre-0.4.0 workshop.json drafts), item.json included, so nothing drafted
+   * is left behind in the old store.
+   */
   private async openListingFile(lang: string | null): Promise<void> {
     const { meta } = this.options;
     const root = this.active;
@@ -699,11 +752,25 @@ export class WorkshopPanel {
     if (lang !== null && !STEAM_LANGUAGES.some((l) => l.api === lang)) return;
     const dir = workshopDirFor(root, meta);
     if (!hasListingFiles(dir)) {
-      this.notify(
-        `No workshop folder at ${dir} yet - the toolbar's download button creates it, or make the folder yourself (px.workshop.dir moves it).`,
-        "warn"
-      );
-      return;
+      if (!(await this.confirmWorkshopDirPlacement(dir))) return;
+      const drafts = readPublishInfo(root, meta, dir);
+      try {
+        writeListingFiles(dir, {
+          description: drafts?.description ?? "",
+          translations: drafts?.translations ?? {},
+        });
+        upsertItemJson(dir, {
+          ...(drafts?.name ? { title: drafts.name } : {}),
+          ...(drafts?.publishedId ? { publishedfileid: drafts.publishedId } : {}),
+          ...(drafts?.tags.length ? { tags: drafts.tags } : {}),
+        });
+      } catch (e) {
+        this.notifyError(`Creating the workshop folder failed - ${String(e)}`, e);
+        return;
+      }
+      this.notify(`Created the listing folder at ${dir}.`);
+      this.watchListing();
+      await this.postInfo();
     }
     const chosen = descriptionFile(lang ? langDir(dir, lang) : dir);
     if (!fs.existsSync(chosen.file)) {
@@ -873,17 +940,26 @@ export class WorkshopPanel {
             if (title === "" && description === "") continue;
             translations[lang] = {
               ...(title !== "" ? { title } : {}),
-              ...(description !== "" ? { description: asStored(langDir(dir, lang), description) } : {}),
+              ...(description !== "" ? { description } : {}),
             };
           }
           wrote.push(`${Object.keys(translations).length} translation(s)`);
         }
         let description = current?.description ?? "";
         if (parts.description) {
-          description = asStored(dir, item.description);
-          wrote.push(path.basename(descriptionFile(dir).file));
+          description = item.description;
+          wrote.push(DESCRIPTION_BBCODE);
         }
         writeListingFiles(dir, { description, translations });
+        // What Steam served is BBCode, so it lands as .bbcode whatever the
+        // folder held before; a legacy description.md would shadow it on read.
+        if (parts.description) writeSteamDescription(dir, description);
+        if (parts.translations) {
+          for (const [lang, t] of Object.entries(translations)) {
+            if ((t.description ?? "").trim() !== "")
+              writeSteamDescription(langDir(dir, lang), t.description as string);
+          }
+        }
       }
 
       if (parts.previews || parts.thumbnail) step("Images", "downloading images…");
@@ -1002,7 +1078,7 @@ export class WorkshopPanel {
       // a just-created item has nothing on Steam yet.
       const wsDir = workshopDirFor(root, meta);
       const previews = message.previews ? readPreviews(wsDir) : null;
-      const deps = message.details ? readDependencies(wsDir) : null;
+      const deps = message.requirements ? readDependencies(wsDir) : null;
       if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
 

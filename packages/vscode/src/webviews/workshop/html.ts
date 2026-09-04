@@ -112,7 +112,6 @@ ${uiCss}
   .stat .k { display: flex; align-items: center; gap: 3px; color: var(--px-muted-fg); font-size: var(--px-text-xs); min-width: 0; }
   .stat .k .px-icon { width: 11px; height: 11px; flex: 0 0 auto; }
   .stat .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #desc { min-height: 170px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
   .hintline { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .hintline .px-grow { flex: 1 1 auto; }
   #translations { display: flex; flex-direction: column; gap: 6px; }
@@ -126,7 +125,6 @@ ${uiCss}
   .lang > .body { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; }
   .lang[data-collapsed] > .body { display: none; }
   .lang .px-input { width: 100%; }
-  .lang textarea { min-height: 90px; width: 100%; resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
   .lang .livehint { display: flex; align-items: baseline; gap: 6px; color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .lang .livehint .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   #publishRows { display: flex; flex-direction: column; gap: 8px; }
@@ -154,13 +152,6 @@ ${uiCss}
   #enableAllConfirm[hidden] { display: none; }
   #note { width: 100%; min-height: 56px; resize: vertical; }
   .section > .px-panel-title { padding: 0; }
-  /* Edit | Preview segmented toggle (description and translations). */
-  .seg { display: flex; border: 1px solid var(--px-border); border-radius: var(--px-radius-md); overflow: hidden; }
-  .seg button {
-    border: none; background: none; color: var(--px-muted-fg); font: inherit;
-    font-size: var(--px-text-xs); padding: 2px 9px; cursor: pointer;
-  }
-  .seg button.on { background: var(--px-muted); color: var(--px-fg); }
   /* Editable tag chips. */
   .tag-chip { display: inline-flex; align-items: center; gap: 3px; }
   .tag-chip button { border: none; background: none; color: inherit; cursor: pointer; padding: 0; display: flex; opacity: 0.7; }
@@ -169,6 +160,8 @@ ${uiCss}
   #tagAdd input { width: 130px; }
 ${BBPREV_CSS}
   .lang .bbprev { min-height: 90px; }
+  /* The description files are edited in the editor: an empty one says so. */
+  .bbprev.empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Upload confirmation modal rows. */
   .modal-rows { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; text-align: left; }
   .modal-rows .pub-row { min-height: 24px; }
@@ -347,7 +340,11 @@ ${BBPREV_CSS}
       </div>
     </div>
     <div class="section" id="requirementsSection">
-      <div class="px-panel-title">Requirements</div>
+      <div class="px-panel-title">Requirements
+        <span class="px-grow"></span>
+        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+        <label class="hdr-switch" data-tip="Upload the required DLC and items below, replacing what the item declares on Steam." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incRequirements" type="checkbox" checked /><span></span></span></label>
+      </div>
       <div class="px-label" style="margin-bottom:4px">Required DLC</div>
       <div id="dlcBox"></div>
       <div class="px-label" style="margin:10px 0 4px">Required items</div>
@@ -361,19 +358,12 @@ ${BBPREV_CSS}
       </div>
     </div>
     <div class="section wide">
-      <div class="px-panel-title">Description
-        <span class="px-grow"></span>
-        <div class="seg" id="descMode" data-tip="Preview renders the BBCode roughly as the Workshop page will.">
-          <button data-mode="edit" class="on">Edit</button>
-          <button data-mode="preview">Preview</button>
-        </div>
-      </div>
-      <textarea id="desc" class="px-textarea" spellcheck="false" placeholder="The item's description, in Steam's BBCode ([h1], [b], [list], [url=…])."></textarea>
-      <div id="descPreview" class="bbprev" hidden></div>
+      <div class="px-panel-title">Description</div>
+      <div id="descPreview" class="bbprev"></div>
       <div class="hintline">
-        <span id="descFileHint">Saved to the listing file as you type; goes to Steam on Upload.</span>
+        <span>Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
         <span class="px-grow"></span>
-        <button id="openDescFile" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Open file</button>
+        <button id="openDescFile" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Edit file</button>
         <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
         <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
       </div>

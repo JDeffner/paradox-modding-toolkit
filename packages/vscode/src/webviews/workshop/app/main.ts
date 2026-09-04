@@ -1,10 +1,11 @@
 /**
  * The Workshop panel app: the focused mod's Workshop item on one page - what
- * the descriptor and workshop.json say (editable drafts), what Steam says
- * live (fetched through the host), and an Upload that submits the checked
- * parts. Drafts autosave to the workshop folder (or workshop.json while no
- * folder exists); nothing reaches Steam until Upload confirms. Built from the
- * shared px-ui classes; talks to the host only through messages.ts.
+ * the descriptor and the listing files say, what Steam says live (fetched
+ * through the host), and an Upload that submits the checked parts. The
+ * description and the translated descriptions are shown as previews only and
+ * edited in the editor (Edit file); the rest autosaves to the workshop folder.
+ * Nothing reaches Steam until Upload confirms. Built from the shared px-ui
+ * classes; talks to the host only through messages.ts.
  */
 import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../../../steam/jobs";
 import { bbcodeToHtml } from "../bbcode";
@@ -72,9 +73,6 @@ let lastInfoActive: string | null = null;
 const knownLangs = new Set<string>();
 /** Where the changenote box was filled from; typing makes it "manual". */
 let noteSource: "changelog" | "commit" | "manual" = "manual";
-/** Edit vs preview, for the description and per translation language. */
-let descMode: "edit" | "preview" = "edit";
-const langMode = new Map<string, "edit" | "preview">();
 
 const VISIBILITY_LABELS: Record<number, string> = {
   0: "Public",
@@ -123,7 +121,7 @@ function renderAll(): void {
   renderToolbar();
   renderItem();
   renderStats();
-  renderDescriptionHints();
+  renderDescription();
   renderTranslations();
   renderPreviews();
   renderRequirements();
@@ -381,33 +379,22 @@ function renderStats(): void {
 const previewHtml = (text: string, lang: string): string =>
   bbcodeToHtml(info?.markdown.includes(lang) ? markdownToBBCode(text) : text);
 
-/** What the listing folder calls its description file. */
-const descFileName = (): string => (info?.markdown.includes("") ? "description.md" : "description.bbcode");
-
-function renderDescriptionHints(): void {
+/**
+ * The description as the Workshop page will roughly render it. The text
+ * itself is edited in the editor (Edit file), so this is the only view of it
+ * the panel offers.
+ */
+function renderDescription(): void {
   $<HTMLButtonElement>("pullDesc").disabled = !live;
-  renderDescFileButtons();
-  renderDescMode();
+  fillPreview($("descPreview"), draftDescription, "", "No description yet. Edit file writes one.");
 }
 
-function renderDescFileButtons(): void {
-  const name = descFileName();
-  $("openDescFile").style.display = info?.filesPresent ? "" : "none";
-  $("openDescFile").setAttribute("data-tip", `Open the workshop folder's ${name} in the editor`);
-  $("descFileHint").textContent = `Saved to ${name} as you type; goes to Steam on Upload.`;
-  $<HTMLTextAreaElement>("desc").placeholder = info?.markdown.includes("")
-    ? "The item's description, in Markdown (# heading, **bold**, - list, [text](url))."
-    : "The item's description, in Steam's BBCode ([h1], [b], [list], [url=…]).";
-}
-
-function renderDescMode(): void {
-  const preview = descMode === "preview";
-  $("desc").hidden = preview;
-  $("descPreview").hidden = !preview;
-  if (preview) $("descPreview").innerHTML = previewHtml(draftDescription, "");
-  $("descMode")
-    .querySelectorAll("button")
-    .forEach((b) => b.classList.toggle("on", b.dataset.mode === descMode));
+/** One BBCode preview box, or the muted line that stands in for empty text. */
+function fillPreview(box: HTMLElement, text: string, lang: string, empty: string): void {
+  const blank = text.trim() === "";
+  box.classList.toggle("empty", blank);
+  if (blank) box.textContent = empty;
+  else box.innerHTML = previewHtml(text, lang);
 }
 
 function translationRow(lang: string): HTMLElement {
@@ -421,7 +408,7 @@ function translationRow(lang: string): HTMLElement {
   const hasText = (draft.title ?? "").trim() !== "" || (draft.description ?? "").trim() !== "";
   const off = langsOff.has(lang);
   if (off) row.dataset.off = "";
-  // The upload switch sits on the language's own row, left of its editor.
+  // The upload switch sits on the language's own row, left of its name.
   const sw = document.createElement("label");
   sw.className = "px-switch";
   sw.setAttribute(
@@ -451,32 +438,6 @@ function translationRow(lang: string): HTMLElement {
   const state = document.createElement("span");
   state.className = "state px-grow";
   state.textContent = !hasText ? "empty - will not upload" : off ? "not uploaded" : "";
-  const seg = document.createElement("div");
-  seg.className = "seg";
-  seg.addEventListener("click", (e) => e.stopPropagation());
-  for (const mode of ["edit", "preview"] as const) {
-    const b = document.createElement("button");
-    b.textContent = mode === "edit" ? "Edit" : "Preview";
-    b.classList.toggle("on", (langMode.get(lang) ?? "edit") === mode);
-    b.addEventListener("click", () => {
-      langMode.set(lang, mode);
-      renderTranslations();
-    });
-    seg.append(b);
-  }
-  let open: HTMLButtonElement | null = null;
-  if (info?.filesPresent) {
-    open = document.createElement("button");
-    open.className = "px-btn";
-    open.dataset.variant = "ghost";
-    open.dataset.size = "icon-xs";
-    open.setAttribute("data-tip", `Open the ${lang} ${descFileName()} in the editor`);
-    open.append(iconEl("pencil"));
-    open.addEventListener("click", (e) => {
-      e.stopPropagation();
-      send({ type: "openListingFile", lang });
-    });
-  }
   const remove = document.createElement("button");
   remove.className = "px-btn";
   remove.dataset.variant = "ghost";
@@ -505,7 +466,7 @@ function translationRow(lang: string): HTMLElement {
         renderPublish();
       })()
   );
-  head.append(sw, caret, name, state, seg, ...(open ? [open] : []), remove);
+  head.append(sw, caret, name, state, remove);
   head.addEventListener("click", () => {
     if (collapsed.has(lang)) collapsed.delete(lang);
     else collapsed.add(lang);
@@ -524,25 +485,32 @@ function translationRow(lang: string): HTMLElement {
     queueSave();
     renderPublish();
   });
-  const desc = document.createElement("textarea");
-  desc.className = "px-textarea";
-  desc.spellcheck = false;
-  desc.placeholder = `Description in ${langLabel(lang)}, BBCode like the default one`;
-  desc.value = draft.description ?? "";
-  desc.addEventListener("input", () => {
-    draftTranslations[lang] = { ...draftTranslations[lang], description: desc.value };
-    queueSave();
-    renderPublish();
+  const prev = document.createElement("div");
+  prev.className = "bbprev";
+  fillPreview(
+    prev,
+    draft.description ?? "",
+    lang,
+    `No ${langLabel(lang)} description yet. Edit file writes one.`
+  );
+  // The description is edited in its own file, like the default one.
+  const fileRow = document.createElement("div");
+  fileRow.className = "hintline";
+  const grow = document.createElement("span");
+  grow.className = "px-grow";
+  const open = document.createElement("button");
+  open.className = "px-btn";
+  open.dataset.variant = "outline";
+  open.dataset.size = "sm";
+  open.setAttribute("data-tip", `Open translations/${lang}/description.bbcode in the editor`);
+  open.setAttribute("data-tip-wrap", "");
+  open.append(iconEl("pencil"), document.createTextNode(" Edit file"));
+  open.addEventListener("click", (e) => {
+    e.stopPropagation();
+    send({ type: "openListingFile", lang });
   });
-  if ((langMode.get(lang) ?? "edit") === "preview") {
-    const prev = document.createElement("div");
-    prev.className = "bbprev";
-    prev.innerHTML = previewHtml(draft.description ?? "", lang);
-    desc.hidden = true;
-    body.append(title, desc, prev);
-  } else {
-    body.append(title, desc);
-  }
+  fileRow.append(grow, open);
+  body.append(title, prev, fileRow);
 
   const liveT = liveTranslations[lang];
   if (liveT) {
@@ -929,6 +897,7 @@ function renderPublish(): void {
     ["incContent", "modFilesSection"],
     ["incDetails", "itemSection"],
     ["incPreviews", "previewsSection"],
+    ["incRequirements", "requirementsSection"],
     ["incLangs", "translationsSection"],
     ["incNote", "noteSection"],
   ];
@@ -938,6 +907,7 @@ function renderPublish(): void {
   if ($<HTMLInputElement>("incContent").checked) sends.push("mod files");
   if ($<HTMLInputElement>("incDetails").checked) sends.push("details");
   if ($<HTMLInputElement>("incPreviews").checked) sends.push("previews");
+  if ($<HTMLInputElement>("incRequirements").checked) sends.push("requirements");
   if (on.length) sends.push(`${on.length} translation${on.length === 1 ? "" : "s"}`);
   if ($<HTMLInputElement>("incNote").checked && $<HTMLTextAreaElement>("note").value.trim())
     sends.push("changenote");
@@ -953,7 +923,7 @@ function renderPublish(): void {
 }
 $<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 
-for (const id of ["incContent", "incDetails", "incPreviews", "incLangs", "incNote"]) {
+for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incLangs", "incNote"]) {
   $(id).addEventListener("change", renderPublish);
 }
 
@@ -968,7 +938,7 @@ $("enableAllNo").addEventListener("click", () => {
 $("enableAllYes").addEventListener("click", () => {
   $("enableAllConfirm").hidden = true;
   $<HTMLButtonElement>("enableAll").disabled = false;
-  for (const id of ["incContent", "incDetails", "incPreviews", "incNote"])
+  for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incNote"])
     $<HTMLInputElement>(id).checked = true;
   $<HTMLInputElement>("incLangs").checked = uploadableLanguages().length > 0;
   langsOff.clear();
@@ -990,7 +960,6 @@ function applyInfo(next: WorkshopModInfo | null): void {
     pickedVisibility = null;
     collapsed.clear();
     knownLangs.clear();
-    langMode.clear();
     langsOff.clear();
   }
   // A pending autosave means the disk is behind the editor: keep the drafts.
@@ -998,7 +967,6 @@ function applyInfo(next: WorkshopModInfo | null): void {
   if (!pendingEdits) {
     draftDescription = next?.description ?? "";
     draftTranslations = structuredClone(next?.translations ?? {});
-    $<HTMLTextAreaElement>("desc").value = draftDescription;
   }
   for (const lang of Object.keys(draftTranslations)) {
     if (!knownLangs.has(lang)) {
@@ -1122,11 +1090,6 @@ $("visibility").addEventListener("click", () => {
   });
 });
 
-$<HTMLTextAreaElement>("desc").addEventListener("input", () => {
-  draftDescription = $<HTMLTextAreaElement>("desc").value;
-  queueSave();
-});
-
 $("pullDesc").addEventListener(
   "click",
   () =>
@@ -1141,8 +1104,8 @@ $("pullDesc").addEventListener(
         if (!go) return;
       }
       draftDescription = live.description;
-      $<HTMLTextAreaElement>("desc").value = draftDescription;
       queueSave();
+      renderDescription();
     })()
 );
 
@@ -1202,6 +1165,7 @@ $("upload").addEventListener(
         content: picked.content,
         details: picked.details,
         previews: picked.previews,
+        requirements: picked.requirements,
         languages: picked.languages,
         changeNote: $<HTMLInputElement>("incNote").checked ? $<HTMLTextAreaElement>("note").value : "",
         visibility: picked.details ? pickedVisibility : null,
@@ -1213,6 +1177,7 @@ interface UploadChoice {
   content: boolean;
   details: boolean;
   previews: boolean;
+  requirements: boolean;
   languages: string[];
 }
 
@@ -1279,6 +1244,15 @@ async function uploadModal(): Promise<UploadChoice | null> {
     "Translations",
     langs.length ? langs.map(langLabel).join(", ") : "none enabled"
   );
+  const requirements = row(
+    "requirements",
+    $<HTMLInputElement>("incRequirements").checked,
+    !info?.dependencies,
+    "Requirements",
+    info?.dependencies
+      ? "the required DLC and items, replacing what the item declares"
+      : "none declared locally"
+  );
 
   const note = $<HTMLInputElement>("incNote").checked ? $<HTMLTextAreaElement>("note").value.trim() : "";
   const lines = document.createElement("div");
@@ -1314,9 +1288,16 @@ async function uploadModal(): Promise<UploadChoice | null> {
     content: content.checked,
     details: details.checked,
     previews: previews.checked,
+    requirements: requirements.checked,
     languages: translations.checked ? langs : [],
   };
-  if (!choice.content && !choice.details && !choice.previews && !choice.languages.length) {
+  if (
+    !choice.content &&
+    !choice.details &&
+    !choice.previews &&
+    !choice.requirements &&
+    !choice.languages.length
+  ) {
     send({ type: "notify", message: "Nothing was checked - upload skipped.", warn: true });
     return null;
   }
@@ -1324,17 +1305,8 @@ async function uploadModal(): Promise<UploadChoice | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Description modes, changenote, listing download
+// Changenote, listing download
 // ---------------------------------------------------------------------------
-
-$("descMode")
-  .querySelectorAll("button")
-  .forEach((b) =>
-    b.addEventListener("click", () => {
-      descMode = b.dataset.mode === "preview" ? "preview" : "edit";
-      renderDescMode();
-    })
-  );
 
 function renderNoteSource(): void {
   const btn = $<HTMLButtonElement>("noteSourceBtn");
@@ -1463,7 +1435,7 @@ $("pull").addEventListener(
       };
       const inputs = [
         part("details", "Details", "title, tags and visibility into item.json"),
-        part("description", "Description", descFileName()),
+        part("description", "Description", "description.bbcode"),
         part("translations", "Translations", "translations/<language>/ for every translated language"),
         part("previews", "Previews", "the gallery images, videos.txt and order.txt into previews/"),
         part("requirements", "Requirements", "dependencies.json"),
@@ -1609,7 +1581,7 @@ $("previewsHelp").addEventListener("click", () => openHelp("Previews"));
 const HELP: Parameters<typeof helpDialog>[0] = {
   title: "The Steam Workshop panel",
   intro:
-    "Your mod's Workshop item on one page: what the descriptor and your local files say, what Steam serves right now, and an Upload that sends the parts you check. Everything you type is a local draft. Nothing reaches Steam until you confirm an upload.",
+    "Your mod's Workshop item on one page: what the descriptor and your local files say, what Steam serves right now, and an Upload that sends the parts you check. The description texts are edited in the editor, everything else here is a local draft. Nothing reaches Steam until you confirm an upload.",
   sections: [
     {
       title: "The item",
@@ -1642,7 +1614,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       items: [
         {
           lead: "The workshop folder",
-          text: "keeps the listing as files: description.md, translations/<language>/ with title.txt and description.md, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise.",
+          text: "keeps the listing as files: description.bbcode, translations/<language>/ with title.txt and description.bbcode, previews/, dependencies.json and item.json. They diff and version like the rest of your code. The folder is .px-toolkit/workshop inside the mod unless px.workshop.dir says otherwise. Edit file creates the folder from your drafts when it does not exist yet.",
         },
         {
           lead: "The download button",
@@ -1650,7 +1622,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
         },
         {
           lead: "Reload",
-          text: "throws away the panel's unsaved edits and reads the local files again.",
+          text: "throws away the panel's unsaved edits and reads the local files again. Saving a description file in the editor does the same on its own.",
         },
       ],
     },
@@ -1658,12 +1630,16 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       title: "Description and translations",
       items: [
         {
-          lead: "The description is Steam BBCode",
-          text: "([h1], [b], [list], [url=…]). Preview renders it roughly the way the Workshop page will.",
+          lead: "The panel shows previews, not editors.",
+          text: "Edit file opens description.bbcode (a translation's own file for a language row) in the editor; save it and the preview follows. Reload re-reads the files on demand.",
         },
         {
-          lead: "It saves as you type,",
-          text: "locally. Fetch from Steam replaces the draft with what the item currently shows.",
+          lead: "The description is Steam BBCode",
+          text: "([h1], [b], [list], [url=…]). The preview renders it roughly the way the Workshop page will. A .bbcode file also opens as Markdown through Edit as Markdown.",
+        },
+        {
+          lead: "Fetch from Steam",
+          text: "replaces the local text with what the item currently shows.",
         },
         {
           lead: "A translation",
@@ -1707,7 +1683,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       items: [
         {
           lead: "Required DLC and required items",
-          text: "are saved in dependencies.json next to the listing and applied after the upload. Steam shows them on the item page; subscribers see what to get first. The DLC grid is read from your game install, so it lists exactly the DLC a mod can require - Chapter bundles and the Subscription are not among them.",
+          text: "are saved in dependencies.json next to the listing, and the Requirements switch decides whether the upload applies them to the item. Steam shows them on the item page; subscribers see what to get first. The DLC grid is read from your game install, so it lists exactly the DLC a mod can require - Chapter bundles and the Subscription are not among them.",
         },
       ],
     },
@@ -1730,7 +1706,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       items: [
         {
           lead: "The switch in each card's title row",
-          text: "decides whether that part goes: the mod files, the Item details (title, description, visibility, tags, preview, gallery, requirements), the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card sums up what the next upload sends.",
+          text: "decides whether that part goes: the mod files, the Item details (title, description, visibility, tags, preview image), the gallery, the requirements, the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card sums up what the next upload sends.",
         },
         {
           lead: "Enable all",

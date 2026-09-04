@@ -181,6 +181,8 @@ export type AppToHost =
       details: boolean;
       /** The gallery (images + videos), separate from the details and the thumbnail. */
       previews: boolean;
+      /** dependencies.json: the required DLC and items, applied after the submits. */
+      requirements: boolean;
       languages: string[];
       changeNote: string;
       visibility: WorkshopVisibility | null;
