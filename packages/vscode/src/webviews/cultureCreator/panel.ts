@@ -391,7 +391,9 @@ export class CultureCreatorPanel {
     }
     let locFiles: string[];
     try {
-      locFiles = await writeLocValues(this.cfg, this.actions.lookupLoc, msg.loc);
+      // The target, so a NEW key lands in the loc file named after the script
+      // file it belongs to rather than in the mod's largest one.
+      locFiles = await writeLocValues(this.cfg, this.actions.lookupLoc, msg.loc, choice);
     } catch (err) {
       // The block is written; only the loc failed. Say so and let the app go
       // back to idle, or its Save button stays disabled for good.
@@ -402,11 +404,11 @@ export class CultureCreatorPanel {
       return;
     }
     this.post({ type: "saved", name: msg.name });
+    // The loc FILES by name, not a count: "2 keys saved" left a modder with
+    // nowhere to look when the words did not show up in the game.
+    const written = [label, ...new Set(locFiles.map((file) => path.basename(file)))];
     void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: ${msg.name} written to ${label}` +
-        (locFiles.length > 0
-          ? ` and ${locFiles.length} localization ${locFiles.length === 1 ? "key" : "keys"} saved.`
-          : ".")
+      `Paradox Modding Toolkit: ${msg.name} written to ${written.join(", ")}.`
     );
     // The form now holds a mod definition: reload so a second save edits it.
     await this.load(msg.name);

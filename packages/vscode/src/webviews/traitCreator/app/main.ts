@@ -1219,7 +1219,10 @@ function buildLocFields(name: string): void {
         ? "What the tooltip says about the trait. Written into your mod's localization."
         : "What the player sees. Written into your mod's localization.",
     });
-    if (isDesc) field.set("");
+    // BOTH keys start filled, with the name made readable. A save only writes
+    // the keys that have a value, so an empty description used to write no
+    // `trait_<key>_desc` at all and the game printed the raw key where the
+    // sentence should be. A prefilled one is text to replace, not a hole.
     field.onChange(() => refreshPreview());
     return { key, field };
   });

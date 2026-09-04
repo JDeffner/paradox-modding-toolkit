@@ -516,7 +516,10 @@ export class TraitCreatorPanel {
 
     let locFiles: string[];
     try {
-      locFiles = await writeLocValues(cfg, lookupLoc, save.loc);
+      // The target, so a NEW key lands in the loc file named after the script
+      // file it belongs to. Without it the writer put a trait's name into the
+      // mod's largest loc file, which for one mod was a calendar file.
+      locFiles = await writeLocValues(cfg, lookupLoc, save.loc, choice);
     } catch (err) {
       // The block is written; only the loc failed. The app is told the save is
       // over either way, or its Save button stays disabled until it reopens.
@@ -528,7 +531,9 @@ export class TraitCreatorPanel {
       this.post({ type: "saved", ok: false, name: save.name });
       return;
     }
-    const written = [path.basename(abs), ...locFiles.map((file) => path.basename(file))];
+    // Deduplicated: the name and the description land in the same loc file, and
+    // a toast that says its name twice reads as two files.
+    const written = [...new Set([path.basename(abs), ...locFiles.map((file) => path.basename(file))])];
     this.post({ type: "toast", message: `Saved ${save.name} into ${written.join(", ")}.` });
     this.post({ type: "saved", ok: true, name: save.name });
   }

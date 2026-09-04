@@ -1246,7 +1246,9 @@ function buildLocFields(name: string): void {
         ? "What the tooltip says about the tradition. Written into your mod's localization."
         : "What the player sees. Written into your mod's localization.",
     });
-    if (isDesc) field.set("");
+    // BOTH keys start filled, with the name made readable. A save only writes
+    // the keys that have a value, so an empty description used to write no
+    // `<key>_desc` at all and the game printed the raw key in its place.
     field.onChange(() => refreshPreview());
     return { key, field };
   });

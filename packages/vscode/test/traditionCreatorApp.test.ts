@@ -453,7 +453,12 @@ describe("a new tradition saves with a name, a category and a layer", () => {
     );
     // The script panel is the same text, so what a modder reads is what is written.
     expect(app.script()).toBe(save.block);
-    expect(save.loc).toEqual([{ key: "tradition_px_seafarers_name", value: "Tradition Px Seafarers" }]);
+    // BOTH keys, always: a description nobody typed used to write no key at
+    // all, and the game printed `tradition_px_seafarers_desc` at the player.
+    expect(save.loc).toEqual([
+      { key: "tradition_px_seafarers_name", value: "Tradition Px Seafarers" },
+      { key: "tradition_px_seafarers_desc", value: "Tradition Px Seafarers" },
+    ]);
   });
 
   it("writes the parameters block as the switches the game reads", () => {

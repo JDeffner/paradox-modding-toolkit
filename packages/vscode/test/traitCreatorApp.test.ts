@@ -436,14 +436,22 @@ describe("a new trait saves with a name and one stat", () => {
     expect(save.block).toBe("px_stoic = {\n\tcategory = personality\n\tmartial = 3\n}");
     // The script panel is the same text, so what a modder reads is what is written.
     expect(app.script()).toBe(save.block);
-    expect(save.loc).toEqual([{ key: "trait_px_stoic", value: "Px Stoic" }]);
+    // BOTH keys, always: a description nobody typed used to write no key at
+    // all, and the game printed `trait_px_stoic_desc` at the player.
+    expect(save.loc).toEqual([
+      { key: "trait_px_stoic", value: "Px Stoic" },
+      { key: "trait_px_stoic_desc", value: "Px Stoic" },
+    ]);
   });
 
   it("renaming moves the loc keys with the name", () => {
     const app = boot();
     type(app, "#name", "px_iron_willed");
     app.document.querySelector<HTMLButtonElement>("#save")!.click();
-    expect(app.save()!.loc).toEqual([{ key: "trait_px_iron_willed", value: "Px Iron Willed" }]);
+    expect(app.save()!.loc).toEqual([
+      { key: "trait_px_iron_willed", value: "Px Iron Willed" },
+      { key: "trait_px_iron_willed_desc", value: "Px Iron Willed" },
+    ]);
   });
 });
 
