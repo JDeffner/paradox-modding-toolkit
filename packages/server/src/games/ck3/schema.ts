@@ -130,6 +130,11 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
     // (00_ethos.txt `type = ethos`, 00_martial_custom.txt `type =
     // martial_custom`, 00_head_determination.txt `type = head_determination`).
     groupKey: "type",
+    // Measured 2026-09-04 in game/localization/english against the 162 vanilla
+    // pillars: `$_name` 160, `$_desc` 9, bare `$` 4. The _pillars.info doc
+    // names only the generic-desc fallback, so the name pattern is a measurement.
+    requiredLoc: ["$_name"],
+    locPatterns: ["$_name", "$_desc"],
   },
   {
     path: "common/culture/traditions",
@@ -253,7 +258,15 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   // remaining common/ folder with a standard top-level `name = { ... }`
   // layout, verified by parsing vanilla files. Ordered by definition count.
   { path: "common/game_concepts", kind: "game_concept", requiredLoc: ["game_concept_$"] },
-  { path: "common/domiciles/buildings", kind: "domicile_building", rootScopes: ["character", "domicile"] },
+  {
+    path: "common/domiciles/buildings",
+    kind: "domicile_building",
+    rootScopes: ["character", "domicile"],
+    // Measured 2026-09-04: all 1620 vanilla domicile buildings define
+    // `$_domicile_building` (109 also `$_domicile_building_desc`), none a bare `$`.
+    requiredLoc: ["$_domicile_building"],
+    locPatterns: ["$_domicile_building", "$_domicile_building_desc"],
+  },
   { path: "common/domiciles/types", kind: "domicile_type", rootScopes: ["character"] },
   { path: "common/artifacts/features", kind: "artifact_feature" },
   { path: "common/artifacts/feature_groups", kind: "artifact_feature_group" },
