@@ -336,11 +336,8 @@ function placeholderFor(spec: TraitFieldSpec): string | undefined {
 function iconInfo(): string {
   const folder = form?.iconFolder ?? "the game's trait icon folder";
   return (
-    "120 x 120 pixels: the size 375 of the game's 409 trait icons are, measured. " +
-    "Transparency matters. The category frame is drawn under the icon on the same canvas, " +
-    "so everything around the emblem has to be see-through. " +
-    "Custom picture… takes PNG, JPEG, WebP, GIF, BMP, TGA or DDS and writes the DDS for you. " +
-    `The game reads ${folder}/<the trait's key>.dds and the tooltip draws it at 52 x 52.`
+    "120 x 120 px, drawn at 52 x 52. Transparent around the emblem: the frame sits under it.\n" +
+    `${folder}/<trait key>.dds. Any picture format converts to DDS.`
   );
 }
 

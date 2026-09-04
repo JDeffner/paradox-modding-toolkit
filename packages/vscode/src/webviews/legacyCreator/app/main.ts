@@ -438,23 +438,17 @@ const drawn = buildDrawn();
  * game's own files, measured over its 21 tracks (2026-09-04).
  */
 /** What every picture field of this creator says about formats. */
-const IMPORT_NOTE =
-  "The file the game reads is a DDS; a PNG, JPEG, WebP, GIF, BMP, AVIF, ICO, SVG or TGA you pick is converted into one, and transparency is kept.";
+/** One line every picture (i) ends on: what a custom file may be. */
+const IMPORT_NOTE = "Any picture format converts to DDS; transparency is kept.";
 
 const ART_NOTES = {
   icon: {
     doc: "There is no icon path to write into the block, so picking a picture here copies it into your mod under your track's key.",
-    info:
-      "140 x 140 px in the game's own files, drawn at 80 x 80 in the legacy window. " +
-      `${IMPORT_NOTE} ` +
-      "The game builds the path from the track's key, so a pick copies the picture into your mod under that key and you are asked which folder it goes to.",
+    info: `140 x 140 px, drawn at 80 x 80.\nSaved under the track's key; a custom file asks for its folder.\n${IMPORT_NOTE}`,
   },
   illustration: {
     doc: "The window's wide picture, stretched under the whole row of perks. Picking one copies it into your mod under your track's key.",
-    info:
-      "4216 x 368 px in the game's own 21 files. The window draws it twice behind the perks, each pass masked to 2108 x 184, so a picture that is not that wide is stretched to it. " +
-      `${IMPORT_NOTE} ` +
-      "The game builds the path from the track's key, so a pick copies the picture into your mod under that key and you are asked which folder it goes to.",
+    info: `4216 x 368 px, stretched behind the perk row and masked.\nSaved under the track's key; a custom file asks for its folder.\n${IMPORT_NOTE}`,
   },
 };
 

@@ -378,13 +378,9 @@ function fieldRow(spec: TraditionFieldSpec, control: HTMLElement, info?: string)
  * is the size of the tile the Add Tradition view draws.
  */
 const LAYER_INFO =
-  "545 x 285 pixels: the size every layer file of the game's own tradition art is, measured. " +
-  "Transparency is what makes the stack work. The layers are drawn on top of each other, " +
-  "so everything but this layer's own paint has to be see-through. " +
-  "DDS, and any picture format converts to one. " +
-  "Each folder below is one layer, and a value is either a file in it or a subfolder " +
-  "the game picks a file out of at random. To add your own, put the DDS in that folder " +
-  "of your mod under the same path and it shows up in this picker.";
+  "545 x 285 px per layer, transparent except this layer's own paint.\n" +
+  "A value is a file in the layer's folder, or a subfolder the game picks from at random.\n" +
+  "Your own DDS in the same folder of your mod shows up here.";
 
 /** A folding section (px-ui rule 7), open unless the caller says otherwise. */
 function sectionEl(title: string, lede: string | undefined, open: boolean): HTMLElement {

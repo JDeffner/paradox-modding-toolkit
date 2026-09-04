@@ -229,10 +229,10 @@ function pillarImage(value: string, family: string): string | null {
  * (window_culture.gui: 400 x 100 for the ethos banner, 44 x 44 for an icon).
  */
 function pillarArtInfo(family: string): string {
-  const where = `The game reads ${PILLAR_ICONS}/<the pillar's key>.dds, and falls back to ${PILLAR_ICONS}/${family}.dds. DDS, and any picture format converts to one.`;
+  const where = `${PILLAR_ICONS}/<pillar key>.dds, else ${family}.dds. Any picture format converts to DDS.`;
   return family === ETHOS
-    ? `1200 x 260 pixels: the size all seven of the game's ethos banners are, measured. The culture window stretches it into a 400 x 100 box and cuts it out with a rough-edge mask, so paint to the edges and let the mask do the shaping. Transparency is kept. ${where}`
-    : `120 x 120 pixels: the size the game's other eight pillar icons are, measured. The window draws it at 44 x 44 and tints the silhouette through its own color table, so give it a transparent background and a solid shape. ${where}`;
+    ? `1200 x 260 px, stretched to 400 x 100 under a rough-edge mask: paint to the edges.\n${where}`
+    : `120 x 120 px, drawn at 44 x 44 and tinted: a solid shape on a transparent background.\n${where}`;
 }
 
 /** Fill in every placeholder whose picture has since arrived. */
