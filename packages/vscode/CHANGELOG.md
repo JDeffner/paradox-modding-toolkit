@@ -8,6 +8,25 @@ On top of that, 0.4.0 adds six visual content creators that write CK3 script
 you never have to type, a wiki page listing the other modding tools for your
 game, and a Workshop panel rebuilt around what actually leaves your machine.
 
+- **The Coat of Arms Designer selects emblems with a dragged box.** Drag
+  over empty ground and every unlocked emblem the box touches is selected,
+  Shift keeps what was selected before; the group then moves, scales and
+  turns as one. The placement numbers scrub again: the one-letter labels
+  that the compact rows introduced had shrunk the drag handle to a few
+  pixels and Depth had none, so each label now fills its input's height,
+  Depth has its own, and a locked Scale drag no longer drops out after the
+  first step.
+- **Emblem edges no longer show a magenta rim.** The preview recoloured a
+  placeholder by nearest match with a tolerance and left every other pixel
+  raw, so the anti-aliased rim of a two-colour emblem whose edge pixels carry
+  the third placeholder (ce_religion_taoism) showed the texture's own
+  magenta. The recolour is now the game's shader formula (a lerp weighted by
+  the green then red channel, blue as overlay shading; the pattern's three
+  channels in turn), and a pattern mask weighs the emblem's alpha the way
+  the game's mask pass does, so edges blend as they do in the game.
+- **The Coat of Arms Designer opens in House Frame 03.** A house target, a
+  character target and a design with no target wear it; dynasty and title
+  targets keep their own frames.
 - **The Coat of Arms Designer's preview puts the arms where the game does.**
   The title, house and dynasty frames drew the arms too large and centred,
   while the game's widgets draw them as a smaller icon inside the frame and,

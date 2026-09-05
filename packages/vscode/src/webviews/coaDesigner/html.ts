@@ -88,8 +88,11 @@ ${uiCss}
   .prow[data-row="position"], .prow[data-row="rotation"] { grid-template-columns: 58px minmax(0, 1fr) auto minmax(0, 1fr); }
   .prow > .cap { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   .prow > .px-field { grid-template-columns: auto minmax(0, 1fr); gap: 4px; }
-  .prow .px-label:empty { display: none; }
-  .prow[data-row="position"] > .px-field:nth-child(2) { grid-column: 2 / 4; }
+  /* The label is the whole drag handle, so a one-letter one still fills the
+     input's height and a thumb's width, and shows that it grabs. */
+  .prow .px-label { align-self: stretch; display: flex; align-items: center; justify-content: center; min-width: 20px; padding: 0 4px; border-radius: var(--px-radius-sm); }
+  .prow .px-label:hover, .prow .px-label[data-scrubbing] { background: color-mix(in oklch, var(--px-fg) 10%, transparent); }
+  .prow[data-row="position"] > .px-field:nth-child(2), .prow[data-row="rotation"] > .px-field:nth-child(2) { grid-column: 2 / 4; }
 
   /* Tabs sit at the top of the panel body, above the tab's own scroller. */
   #tabsRow { display: flex; padding: 6px 10px 4px; }

@@ -62,6 +62,7 @@ import {
 import {
   alignDeltas,
   ARMS_RECT,
+  boxBounds,
   DEFAULT_GRID_DIVISION,
   distributeDeltas,
   GRID_DIVISIONS,
@@ -574,6 +575,7 @@ function draw(overlay = true): void {
     paintGrid(ctx);
     paintArmsEdge(ctx, icon, rect);
     paintSelection(ctx);
+    paintMarquee(ctx);
   }
   updateTierControl();
 }
@@ -1691,11 +1693,16 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }).el
   );
 
+  // Each scale number mirrors into the other's box when the lock is on.
+  // Rebuilding the panel here instead would drop the label being dragged,
+  // and with it the drag.
   const y = numberField("Y", inst.scale[1], 0.01, (v) => {
     inst.scale[1] = v;
-    if (scaleMatched(ref)) inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
+    if (scaleMatched(ref)) {
+      inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
+      x.input.value = String(inst.scale[0]);
+    }
     draw();
-    if (scaleMatched(ref)) renderPanel();
   });
   const x = numberField("X", inst.scale[0], 0.01, (v) => {
     inst.scale[0] = v;
@@ -1734,8 +1741,7 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
       inst.rotation = v;
       draw();
     }).el,
-    el("span", "cap", "Depth"),
-    numberField("", inst.depth ?? 0, 0.01, (v) => {
+    numberField("Depth", inst.depth ?? 0, 0.01, (v) => {
       // 0 is what an instance with no `depth` means, so writing 0 drops the key.
       if (v === 0) delete inst.depth;
       else inst.depth = v;
@@ -2228,9 +2234,13 @@ function saveGrid(): void {
  */
 function defaultFrame(label: string | undefined): string {
   const kind = /\(([^)]+)\)\s*$/.exec(label ?? "")?.[1] ?? "";
+  // A dynasty or title target wears its own frame; anything else, a house
+  // target or no target, opens in house_frame_03 (the maintainer's pick over
+  // the engine's `house`, which stands in when a mod removes it).
   const wanted =
-    kind === "dynasty" ? "dynasty" : kind === "house" || kind === "character" ? "house" : "title";
-  return designer()?.frames.some((f) => f.id === wanted) ? wanted : "";
+    kind === "dynasty" ? ["dynasty"] : kind === "title" ? ["title"] : ["house_frame_03", "house"];
+  const frames = designer()?.frames ?? [];
+  return wanted.find((id) => frames.some((f) => f.id === id)) ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -2354,6 +2364,63 @@ interface Gesture {
 
 let gesture: Gesture | null = null;
 
+/**
+ * A box dragged over empty ground: every unlocked element it touches becomes
+ * the selection, on top of what Shift held. The panel follows as the box
+ * grows, so the count and numbers read live.
+ */
+interface Marquee {
+  u0: number;
+  v0: number;
+  u1: number;
+  v1: number;
+  /** What Shift keeps: the selection as it stood when the press landed. */
+  base: ElementRef[];
+  startX: number;
+  startY: number;
+  started: boolean;
+}
+
+let marquee: Marquee | null = null;
+
+function marqueeRect(m: Marquee): Rect {
+  return {
+    x: Math.min(m.u0, m.u1),
+    y: Math.min(m.v0, m.v1),
+    w: Math.abs(m.u1 - m.u0),
+    h: Math.abs(m.v1 - m.v0),
+  };
+}
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+function applyMarquee(m: Marquee): void {
+  const r = marqueeRect(m);
+  const inside = allElements().filter((ref) =>
+    overlaps(r, boxBounds(boxOf(flag.layers[ref.layer], ref.instance)))
+  );
+  const before = selection.map((s) => `${s.layer}:${s.instance}`).join(",");
+  selectMany([...m.base.filter((ref) => !inside.some((i) => sameRef(i, ref))), ...inside]);
+  if (selection.map((s) => `${s.layer}:${s.instance}`).join(",") !== before) renderPlacement();
+}
+
+function paintMarquee(ctx: CanvasRenderingContext2D): void {
+  if (!marquee?.started) return;
+  const r = marqueeRect(marquee);
+  const [x0, y0] = toCanvas(r.x, r.y);
+  const [x1, y1] = toCanvas(r.x + r.w, r.y + r.h);
+  const f = screenFactor();
+  ctx.save();
+  ctx.fillStyle = "rgba(79,193,255,0.12)";
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.setLineDash([4 / f, 3 / f]);
+  ctx.lineWidth = 1 / f;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.restore();
+}
+
 /** The pointer, snapped to the grid when the grid is on. */
 function snapped(u: number, v: number): [number, number] {
   if (!grid.on) return [u, v];
@@ -2412,6 +2479,18 @@ canvas.addEventListener("pointerdown", (e) => {
       renderPanel();
     }
     draw();
+    e.preventDefault();
+    marquee = {
+      u0: u,
+      v0: v,
+      u1: u,
+      v1: v,
+      base: selection.slice(),
+      startX: e.clientX,
+      startY: e.clientY,
+      started: false,
+    };
+    canvas.setPointerCapture(e.pointerId);
     return;
   }
   e.preventDefault();
@@ -2430,6 +2509,17 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   const [u, v] = unitAt(e);
+  if (marquee) {
+    if (!marquee.started) {
+      if (Math.hypot(e.clientX - marquee.startX, e.clientY - marquee.startY) < DRAG_THRESHOLD) return;
+      marquee.started = true;
+    }
+    marquee.u1 = u;
+    marquee.v1 = v;
+    applyMarquee(marquee);
+    draw();
+    return;
+  }
   if (!gesture) {
     const corner = groupCornerUnder(u, v) ?? cornerUnder(u, v);
     canvas.style.cursor = onRotateGrip(u, v)
@@ -2475,6 +2565,16 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 const endGesture = (e: PointerEvent): void => {
+  if (marquee) {
+    const boxed = marquee.started;
+    marquee = null;
+    canvas.releasePointerCapture(e.pointerId);
+    if (boxed) {
+      renderPanel();
+      draw();
+    }
+    return;
+  }
   if (!gesture) return;
   const moved = gesture.started;
   gesture = null;
@@ -2678,7 +2778,7 @@ $("help").onclick = () =>
           },
           {
             lead: "Several at once:",
-            text: "shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
+            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
           },
           {
             lead: "The tools under the numbers",
