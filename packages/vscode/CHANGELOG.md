@@ -18,6 +18,10 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   placement numbers keep their labels above the boxes, where the label is
   the drag handle, and a locked Scale drag no longer drops out after the
   first step.
+- **The CK3 agent skill left this repository.** `packages/vscode/skills/`
+  and its generator script are gone; the vsix never carried them. Agent
+  skills for modding with an AI live in their own repository,
+  [paradox-ai-modding](https://github.com/JDeffner/paradox-ai-modding).
 - **The Coat of Arms Designer's placement tools say what they do.** The row
   under the placement numbers is now two captioned groups, Align and
   Duplicate, and every button carries its word beside its glyph instead of

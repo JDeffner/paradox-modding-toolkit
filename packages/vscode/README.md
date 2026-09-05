@@ -145,8 +145,9 @@ bottom says exactly where they stop.
   file icon (the crown for Crusader Kings III, the PX box for the others) and
   the status bar names the game, e.g. "Paradox Script (Victoria 3)". Snippets
   follow the same line, so CK3 effects stay out of a Victoria 3 file.
-- **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Claude-Skill)**
-  ships in `skills/ck3-modding/` for AI-assisted modding.
+- **Modding with an AI agent** is a separate project: the agent skills for
+  Crusader Kings III and Victoria 3 live in
+  [paradox-ai-modding](https://github.com/JDeffner/paradox-ai-modding).
 - **Not tied to VS Code**: the language server is standard LSP over `--stdio`
   and runs from neovim, Zed, Helix or your own application — see
   [Outside VS Code](#outside-vs-code).
@@ -255,7 +256,6 @@ live, and it is deliberately blunt about them.
 | Sidebar views, event graph, event simulator, mod report, coverage | yes | yes | yes |
 | `.gui` language support and Widget Tree | yes | yes | yes |
 | `.gui` pixel-accurate visual editor (drag, resize, inspector writes) | yes | yes (measured in-game 2026-08) | no (not calibrated yet) |
-| Bundled AI modding skill | yes | no (CK3 content) | no (CK3 content) |
 | Mod descriptor | `descriptor.mod` | `.metadata/metadata.json` | `.metadata/metadata.json` |
 
 **Existing CK3 users need to change nothing.** `px.gameId` defaults to `auto`
