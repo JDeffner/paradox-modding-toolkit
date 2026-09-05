@@ -208,6 +208,25 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   select the webview left half-styled; it now opens the same menu the other
   panels use.
 
+- **Move Mod takes a mod back into its project folder.** Moving a mod to the
+  game folder keeps the project folder for its git history and notes, and
+  moving it back was then refused because that folder "already exists". Only
+  the content folder has to be free now, so a round trip works. Move Workshop
+  Listing no longer offers "next to the mod" for a mod in the game's own mod
+  folder, where the sibling would be one folder shared by every installed
+  mod; it says why instead.
+
+- **Insert Date is in the command palette again.** Its palette entry
+  required the editor to have focus, which the palette itself takes away, so
+  the command never listed; the palette now shows it whenever the workspace
+  is a CK3 one, and the command still needs an open editor to write into.
+
+- **Download from Steam into files finishes what it can.** A gallery image
+  Steam answers 404 for (its CDN keeps a dead link for a while after the
+  gallery is replaced) stopped the whole download before the requirements
+  were written; the image is now reported as not downloaded and every other
+  part still lands.
+
 - **A first-run note says this is a beta.** The first activation of each
   minor version shows one notification: the content creators and the Steam
   Workshop upload are new, check what they write and keep the mod in git,

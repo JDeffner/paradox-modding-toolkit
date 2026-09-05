@@ -1227,7 +1227,7 @@
         },
         {
           "command": "px.insertDate",
-          "when": "px.isCk3Workspace && editorTextFocus"
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.declareCalendar",

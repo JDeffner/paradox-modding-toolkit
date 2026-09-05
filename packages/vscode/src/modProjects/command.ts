@@ -371,8 +371,12 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
     if (!projects) return;
     linkName = path.basename(content);
     const destRoot = path.join(projects, projectFolderName(readModName(content)));
-    if (!claimDest(destRoot)) {
-      void vscode.window.showErrorMessage(`${PREFIX}: ${destRoot} already exists.`);
+    // The project folder may already be there: a move to the game layout
+    // keeps it for its git history and notes, and the mod moves back into it.
+    // Only the content folder has to be free.
+    const destContent = path.join(destRoot, PROJECT_CONTENT_DIR);
+    if (!claimDest(destContent)) {
+      void vscode.window.showErrorMessage(`${PREFIX}: ${destContent} already exists.`);
       return;
     }
     plan = planMove({
