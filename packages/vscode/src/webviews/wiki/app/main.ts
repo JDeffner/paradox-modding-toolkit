@@ -302,7 +302,7 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.outro) {
     const outro = el("div");
     outro.innerHTML = renderMarkdown(article.outro);
-    content.append(...outro.childNodes);
+    content.append(...Array.from(outro.childNodes));
   }
 }
 
