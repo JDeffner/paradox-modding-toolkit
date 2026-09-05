@@ -283,7 +283,7 @@ ${BBPREV_CSS}
         <div class="px-panel-title">Details
           <span class="px-grow"></span>
           <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-          <label class="hdr-switch" data-tip="Upload the details: title, description, visibility, tags and the preview image." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
+          <label class="hdr-switch" data-tip="Upload the details: title, visibility, tags and the preview image. The description has its own switch." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
         </div>
         <div id="itemGrid">
           <div id="previewBox" style="position:relative">
@@ -330,7 +330,11 @@ ${BBPREV_CSS}
         <div id="statsSection" hidden><div id="stats"></div></div>
       </div>
       <div class="section" id="descriptionSection">
-        <div class="px-panel-title">Description</div>
+        <div class="px-panel-title">Description
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Upload the description below, replacing the item's on Steam. Off, the item keeps the description it has." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incDescription" type="checkbox" checked /><span></span></span></label>
+        </div>
         <div class="bbprev-box">
           <div id="descPreview" class="bbprev"></div>
           <button id="descPreviewEdit" class="px-btn bbprev-edit" data-variant="ghost" data-size="icon-xs" aria-label="Edit description.bbcode" data-tip="Edit description.bbcode">${icon("pencil")}</button>

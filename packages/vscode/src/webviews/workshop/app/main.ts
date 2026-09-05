@@ -1006,7 +1006,7 @@ function enabledLanguages(): string[] {
 
 /** One part of an upload: its switch on the page, and what it sends right now. */
 interface UploadPart {
-  key: "content" | "details" | "previews" | "requirements" | "translations" | "note";
+  key: "content" | "details" | "description" | "previews" | "requirements" | "translations" | "note";
   name: string;
   on: boolean;
   /** Nothing to send, so the modal shows the row without a live switch. */
@@ -1015,7 +1015,7 @@ interface UploadPart {
 }
 
 /**
- * The six parts as the page has them set, each with the sentence that says
+ * The seven parts as the page has them set, each with the sentence that says
  * what it sends: the Publish card lists them, and the confirmation reads the
  * same list back before the upload goes.
  */
@@ -1039,7 +1039,15 @@ function uploadParts(): UploadPart[] {
       key: "details",
       name: "Details",
       on: checked("incDetails"),
-      what: "title, description, visibility, tags and the thumbnail",
+      what: "title, visibility, tags and the thumbnail",
+    },
+    {
+      key: "description",
+      name: "Description",
+      on: checked("incDescription"),
+      what: draftDescription.trim()
+        ? "replaces the item's description"
+        : "empty: clears the item's description",
     },
     {
       key: "previews",
@@ -1092,6 +1100,7 @@ function renderPublish(): void {
   const owned: [string, string][] = [
     ["incContent", "modFilesSection"],
     ["incDetails", "itemSection"],
+    ["incDescription", "descriptionSection"],
     ["incPreviews", "previewsSection"],
     ["incRequirements", "requirementsSection"],
     ["incLangs", "translationsSection"],
@@ -1125,7 +1134,15 @@ function renderPublish(): void {
 }
 $<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 
-for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incLangs", "incNote"]) {
+for (const id of [
+  "incContent",
+  "incDetails",
+  "incDescription",
+  "incPreviews",
+  "incRequirements",
+  "incLangs",
+  "incNote",
+]) {
   $(id).addEventListener("change", renderPublish);
 }
 
@@ -1140,7 +1157,14 @@ $("enableAllNo").addEventListener("click", () => {
 $("enableAllYes").addEventListener("click", () => {
   $("enableAllConfirm").hidden = true;
   $<HTMLButtonElement>("enableAll").disabled = false;
-  for (const id of ["incContent", "incDetails", "incPreviews", "incRequirements", "incNote"])
+  for (const id of [
+    "incContent",
+    "incDetails",
+    "incDescription",
+    "incPreviews",
+    "incRequirements",
+    "incNote",
+  ])
     $<HTMLInputElement>(id).checked = true;
   $<HTMLInputElement>("incLangs").checked = uploadableLanguages().length > 0;
   langsOff.clear();
@@ -1357,6 +1381,7 @@ $("upload").addEventListener(
       // Mirror the modal's last word back into the Publish switches.
       $<HTMLInputElement>("incContent").checked = picked.content;
       $<HTMLInputElement>("incDetails").checked = picked.details;
+      $<HTMLInputElement>("incDescription").checked = picked.description;
       $<HTMLInputElement>("incPreviews").checked = picked.previews;
       $<HTMLInputElement>("incLangs").checked = picked.languages.length > 0;
       renderPublish();
@@ -1365,6 +1390,7 @@ $("upload").addEventListener(
         type: "upload",
         content: picked.content,
         details: picked.details,
+        description: picked.description,
         previews: picked.previews,
         requirements: picked.requirements,
         languages: picked.languages,
@@ -1377,6 +1403,7 @@ $("upload").addEventListener(
 interface UploadChoice {
   content: boolean;
   details: boolean;
+  description: boolean;
   previews: boolean;
   requirements: boolean;
   languages: string[];
@@ -1487,6 +1514,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
   const choice: UploadChoice = {
     content: on("content"),
     details: on("details"),
+    description: on("description"),
     previews: on("previews"),
     requirements: on("requirements"),
     languages: on("translations") ? langs : [],
@@ -1494,6 +1522,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
   if (
     !choice.content &&
     !choice.details &&
+    !choice.description &&
     !choice.previews &&
     !choice.requirements &&
     !choice.languages.length

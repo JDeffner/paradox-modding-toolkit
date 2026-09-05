@@ -26,6 +26,11 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   the green then red channel, blue as overlay shading; the pattern's three
   channels in turn), and a pattern mask weighs the emblem's alpha the way
   the game's mask pass does, so edges blend as they do in the game.
+- **The Workshop panel's description has its own upload switch.** The
+  Description card carries a switch like the other parts, so a details pass
+  (title, visibility, tags, thumbnail) can leave a description edited on
+  Steam alone, and a text tweak can go without the rest. The Publish summary
+  and the upload confirmation list it as a part of its own.
 - **The Coat of Arms Designer's colors have Copy and Paste.** Every color
   row, on the background and on an emblem, carries a Copy and a Paste button:
   copy one slot and paste it onto any other, so an emblem takes the

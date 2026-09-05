@@ -1138,7 +1138,7 @@ export class WorkshopPanel {
     const steps: string[] = [];
     if (!itemId) steps.push("Create item");
     if (message.content) steps.push("Mod files");
-    if (message.details) steps.push("Details");
+    if (message.details || message.description) steps.push("Details");
     if (message.previews) steps.push("Previews");
     if (message.languages.length) steps.push("Translations");
     const stepOf = (name: string): number => Math.max(0, steps.indexOf(name));
@@ -1171,7 +1171,7 @@ export class WorkshopPanel {
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
 
       const submits: SubmitSpec[] = [];
-      if (message.content || message.details || message.previews) {
+      if (message.content || message.details || message.description || message.previews) {
         const main: SubmitSpec = {};
         if (message.previews && previews) {
           step("Previews", "listing the gallery…");
@@ -1202,7 +1202,6 @@ export class WorkshopPanel {
             tool: "px-toolkit",
           });
           main.title = info.name ?? undefined;
-          main.description = descriptionBBCode(info, "", info.description ?? "");
           if (info.tags.length) main.tags = info.tags;
           if (message.visibility !== null) main.visibility = message.visibility;
           const preview = info.previewPath;
@@ -1216,6 +1215,9 @@ export class WorkshopPanel {
             );
           }
         }
+        // Its own switch: a text tweak can go without touching the details,
+        // and a details pass can leave a description edited on Steam alone.
+        if (message.description) main.description = descriptionBBCode(info, "", info.description ?? "");
         if (message.content) {
           step("Mod files", "preparing files…");
           if (ensurePxIgnore(root)) this.explainPxIgnore(root);
@@ -1293,6 +1295,7 @@ export class WorkshopPanel {
       const sent: string[] = [];
       if (message.content) sent.push("mod files");
       if (message.details) sent.push("details");
+      if (message.description) sent.push("description");
       if (message.previews) sent.push("previews");
       if (deps) sent.push("requirements");
       if (message.languages.length)
