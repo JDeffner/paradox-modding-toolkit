@@ -110,22 +110,6 @@ export function rotateGroup(boxes: readonly ElementBox[], degrees: number): Elem
 }
 
 /**
- * Mirror the selection about its own centre line. A mirrored instance is a
- * NEGATIVE scale on that axis, which is how the game writes one
- * (`scale = { -0.61 0.61 }` in 01_landed_titles.txt), and the rotation turns
- * the other way with it.
- */
-export function mirrorGroup(boxes: readonly ElementBox[], axis: "x" | "y"): ElementBox[] {
-  const bounds = selectionBounds(boxes);
-  const [gx, gy] = rectCentre(bounds);
-  return boxes.map((box) =>
-    axis === "x"
-      ? { ...box, cx: 2 * gx - box.cx, w: -box.w, rotation: -box.rotation }
-      : { ...box, cy: 2 * gy - box.cy, h: -box.h, rotation: -box.rotation }
-  );
-}
-
-/**
  * How far each member moves to line up on `frame`: the arms rectangle when one
  * emblem is selected (there is nothing else to line it up on) and the
  * selection's own bounding box when several are.
@@ -148,37 +132,6 @@ export function alignDeltas(boxes: readonly ElementBox[], mode: AlignMode, frame
         return { du: 0, dv: frame.y + frame.h / 2 - (r.y + r.h / 2) };
     }
   });
-}
-
-/**
- * How far each member moves to leave EQUAL GAPS along one axis. The two
- * outermost stay where they are (they define the span), and the order is the
- * members' own along that axis, not the order they were selected in. Fewer
- * than three have no gap to equalise.
- */
-export function distributeDeltas(boxes: readonly ElementBox[], axis: "x" | "y"): Delta[] {
-  const none: Delta = { du: 0, dv: 0 };
-  const deltas: Delta[] = boxes.map(() => none);
-  if (boxes.length < 3) return deltas;
-  const rects = boxes.map(boxBounds);
-  const lo = (r: Rect): number => (axis === "x" ? r.x : r.y);
-  const size = (r: Rect): number => (axis === "x" ? r.w : r.h);
-
-  const order = rects.map((_, i) => i).sort((a, b) => lo(rects[a]) - lo(rects[b]));
-  const first = rects[order[0]];
-  const last = rects[order[order.length - 1]];
-  const span = lo(last) + size(last) - lo(first);
-  let filled = 0;
-  for (const r of rects) filled += size(r);
-  const gap = (span - filled) / (rects.length - 1);
-
-  let at = lo(first);
-  for (const i of order) {
-    const delta = at - lo(rects[i]);
-    deltas[i] = axis === "x" ? { du: delta, dv: 0 } : { du: 0, dv: delta };
-    at += size(rects[i]) + gap;
-  }
-  return deltas;
 }
 
 /** The nearest grid line, the grid dividing the arms into `div` cells per axis. */

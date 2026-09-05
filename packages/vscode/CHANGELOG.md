@@ -18,6 +18,12 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   placement numbers keep their labels above the boxes, where the label is
   the drag handle, and a locked Scale drag no longer drops out after the
   first step.
+- **The Coat of Arms Designer's placement tools say what they do.** The row
+  under the placement numbers is now two captioned groups, Align and
+  Duplicate, and every button carries its word beside its glyph instead of
+  the glyph alone. Mirror is gone (a flip is a negative scale, which the
+  Scale numbers already write) and so is Distribute, which needed three
+  emblems selected and sat greyed out the rest of the time.
 - **The Coat of Arms Designer and the Flag Builder stack emblems the way
   the game does.** The in-game designer writes `depth` on every instance as
   its draw index, and the index runs across layers: a design pasted from the

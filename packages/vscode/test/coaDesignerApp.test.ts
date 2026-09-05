@@ -280,18 +280,9 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(layer.colors.map((c) => c.name)).toEqual(["color1"]);
   });
 
-  it("Mirror horizontally writes a negative scale on that axis alone", () => {
+  it("the placement panel survives a tab that is not Emblems", () => {
     const app = boot();
     app.tab("emblems");
-    const flip = [...app.document.querySelectorAll<HTMLElement>("#placement .selTools button")].find(
-      (b) => b.dataset.tip === "Mirror horizontally"
-    );
-    if (!flip) throw new Error("no mirror tool");
-    flip.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
-    const layer = app.current().layers[0];
-    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
-    expect(layer.instances[0].scale).toEqual([-0.7, 0.7]);
-
     // Placement lives in the LEFT panel, so it survives a tab that is not Emblems.
     app.tab("background");
     expect(app.document.querySelectorAll("#placement .px-field").length).toBeGreaterThan(0);

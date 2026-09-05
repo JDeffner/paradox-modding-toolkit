@@ -64,9 +64,7 @@ import {
   ARMS_RECT,
   boxBounds,
   DEFAULT_GRID_DIVISION,
-  distributeDeltas,
   GRID_DIVISIONS,
-  mirrorGroup,
   moveGroup,
   nudgeStep,
   rectCentre,
@@ -184,9 +182,9 @@ function allElements(): ElementRef[] {
 
 /**
  * What the tools act on: the selection, or, with nothing selected, the one
- * element the placement panel is showing. The panel's numbers already edited
- * that element with nothing selected; a mirror button beside them that did
- * nothing read as broken.
+ * element the placement panel is showing. The panel's numbers already edit that
+ * element with nothing selected, so a tool beside them that did nothing would
+ * read as broken.
  */
 function actedOn(): ElementRef[] {
   if (selection.length > 0) return selection;
@@ -1599,21 +1597,14 @@ function nudgeSelection(du: number, dv: number): void {
 }
 
 /**
- * Align and distribute the selection. One selected emblem has nothing to line
- * up against but the arms themselves, so that is the frame it gets; several
- * line up on the box they share, the way every layout tool does it.
+ * Align the selection. One selected emblem has nothing to line up against but
+ * the arms themselves, so that is the frame it gets; several line up on the box
+ * they share, the way every layout tool does it.
  */
 function alignSelection(mode: AlignMode): void {
   editSelection((boxes) => {
     const frame = boxes.length === 1 ? ARMS_RECT : selectionBounds(boxes);
     const deltas = alignDeltas(boxes, mode, frame);
-    return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
-  });
-}
-
-function distributeSelection(axis: "x" | "y"): void {
-  editSelection((boxes) => {
-    const deltas = distributeDeltas(boxes, axis);
     return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
   });
 }
@@ -1638,53 +1629,43 @@ function duplicateSelection(): void {
   refresh();
 }
 
-/** The tools that act on the selection rather than on one number. */
 /**
- * The tools under the numbers: align, distribute, mirror, duplicate, as four
- * groups in one row with a gap between them. The groups read from the glyphs
- * and the gaps; every button's tooltip names what it does and to what.
+ * The tools under the numbers: align and duplicate, each group under its own
+ * caption. Every button carries its glyph AND its word, so the row says what it
+ * does without a hover; the tooltip adds what it acts against.
  */
 function selectionTools(): HTMLElement {
   const host = el("div", "selTools");
   let row: HTMLElement = host;
   const group = (caption: string): void => {
-    row = el("div", "toolGroup");
-    row.setAttribute("aria-label", caption);
-    host.append(row);
+    const wrap = el("div", "toolGroup", el("span", "px-label", caption));
+    row = el("div", "selToolRow");
+    wrap.append(row);
+    host.append(wrap);
   };
-  const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
-    const b = button(label, run, "outline", "icon-sm");
+  const tool = (label: string, tip: string, run: () => void): void => {
+    const b = button(label, run, "outline", "sm");
     b.dataset.tip = tip;
-    b.disabled = !enabled;
     row.append(b);
   };
   const many = selection.length >= 2;
   const against = many ? "the selection" : "the arms";
   group(`Align to ${against}`);
   const aligns: [string, AlignMode, string][] = [
-    ["⇤", "left", "Left edges"],
-    ["⇔", "hcenter", "Centre horizontally"],
-    ["⇥", "right", "Right edges"],
-    ["⇡", "top", "Top edges"],
-    ["⇕", "vcenter", "Centre vertically"],
-    ["⇣", "bottom", "Bottom edges"],
+    ["⇤ Left", "left", "Left edges"],
+    ["⇔ Centre", "hcenter", "Centre horizontally"],
+    ["⇥ Right", "right", "Right edges"],
+    ["⇡ Top", "top", "Top edges"],
+    ["⇕ Middle", "vcenter", "Centre vertically"],
+    ["⇣ Bottom", "bottom", "Bottom edges"],
   ];
-  for (const [label, mode, tip] of aligns)
-    tool(label, `${tip}, to ${against}`, true, () => alignSelection(mode));
-  group("Distribute");
-  tool("↔", "Equal gaps left to right (three or more selected)", selection.length >= 3, () =>
-    distributeSelection("x")
-  );
-  tool("↕", "Equal gaps top to bottom (three or more selected)", selection.length >= 3, () =>
-    distributeSelection("y")
-  );
-  group("Mirror");
-  tool("⇄", "Mirror horizontally", true, () => editSelection((b) => mirrorGroup(b, "x")));
-  tool("⇅", "Mirror vertically", true, () => editSelection((b) => mirrorGroup(b, "y")));
+  for (const [label, mode, tip] of aligns) tool(label, `${tip}, to ${against}`, () => alignSelection(mode));
   group("Duplicate");
-  const dup = iconButton("copy", "Duplicate in place", duplicateSelection);
+  const dup = el("button", "px-btn", iconEl("copy"), "Duplicate");
   dup.dataset.variant = "outline";
-  dup.dataset.size = "icon-sm";
+  dup.dataset.size = "sm";
+  dup.dataset.tip = "Duplicate in place";
+  dup.onclick = duplicateSelection;
   row.append(dup);
   return host;
 }
@@ -1770,8 +1751,8 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     draw();
   });
   // The lock stands between the two numbers it ties together, the way a
-  // graphics editor draws it; a flip is the mirror tool below, so no checkbox
-  // repeats it here.
+  // graphics editor draws it. A flip is a negative scale, typed into the number
+  // itself, so no checkbox repeats it here.
   const lock = iconButton(
     matched ? "lock" : "unlock",
     matched ? "X and Y scale move together" : "X and Y scale move apart",
@@ -2838,7 +2819,7 @@ $("help").onclick = () =>
           },
           {
             lead: "The tools under the numbers",
-            text: "align, distribute, mirror and duplicate the selection. One emblem lines up against the arms, several against the box they share.",
+            text: "align and duplicate the selection. One emblem lines up against the arms, several against the box they share.",
           },
           {
             lead: "Lock a row",
@@ -2852,7 +2833,6 @@ $("help").onclick = () =>
             lead: "By numbers:",
             text: "position and scale are fractions of the arms, rotation is degrees. Drag a number's LABEL sideways to scrub it; the box itself is for typing.",
           },
-          { lead: "Flip X or Y", text: "mirrors the emblem, which the game writes as a negative scale." },
           {
             lead: "Depth",
             text: "is the z value the in-game designer writes. It is kept so a design round-trips; the preview draws in row order.",

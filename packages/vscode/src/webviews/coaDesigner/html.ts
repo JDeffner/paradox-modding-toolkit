@@ -162,10 +162,13 @@ ${uiCss}
   }
   .libEmpty { display: flex; flex-direction: column; gap: 6px; }
   .libPath { overflow-wrap: anywhere; font-family: var(--px-mono, monospace); }
-  /* The tools that act on the selection, four groups in one row: align,
-     distribute, mirror, duplicate. A gap separates the groups. */
-  .selTools { display: flex; flex-wrap: wrap; gap: 4px 10px; padding-top: 2px; }
-  .toolGroup { display: flex; gap: 2px; }
+  /* The tools that act on the selection: align and duplicate, each group under
+     its own caption. The labelled buttons wrap, so a narrow panel breaks the
+     six align buttons into rows of three instead of clipping them. */
+  .selTools { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+  .toolGroup { display: flex; flex-direction: column; gap: 3px; }
+  .selToolRow { display: flex; flex-wrap: wrap; gap: 3px; }
+  .selToolRow > .px-btn { flex: 1 1 auto; min-width: 74px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .adjustedNote { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 </style>
