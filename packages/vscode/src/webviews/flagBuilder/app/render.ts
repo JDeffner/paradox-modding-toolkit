@@ -220,6 +220,14 @@ export function renderFlag(
     ctx.drawImage(painted, rect.x, rect.y, rect.w, rect.h);
   }
 
+  // Every instance draws in the designer's z order: `depth` ascending across
+  // layers, file order among equals, a missing depth counting as 0 (coa.ts).
+  // The in-game designer writes depth as a draw index and it spans layers
+  // (01_landed_titles.txt d_samarra: a sabre at 0, the octagon frame at 1.01,
+  // the second sabre at 2.01), so file order alone puts the frame over both
+  // sabres. A definition with no depth anywhere draws in file order as before.
+  const items: { z: number; order: number; draw: () => void }[] = [];
+  let order = 0;
   for (const layer of flag.layers) {
     if (layer.kind === "sub") {
       const parent = rc.definitions[layer.parent];
@@ -231,12 +239,18 @@ export function renderFlag(
           w: rect.w * inst.scale[0],
           h: rect.h * inst.scale[1],
         };
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(sub.x, sub.y, sub.w, sub.h);
-        ctx.clip();
-        if (!renderFlag(ctx, parent, sub, rc, depth + 1)) complete = false;
-        ctx.restore();
+        items.push({
+          z: 0,
+          order: order++,
+          draw: () => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(sub.x, sub.y, sub.w, sub.h);
+            ctx.clip();
+            if (!renderFlag(ctx, parent, sub, rc, depth + 1)) complete = false;
+            ctx.restore();
+          },
+        });
       }
       continue;
     }
@@ -246,27 +260,39 @@ export function renderFlag(
       if (layer.texture) complete = false;
       continue;
     }
-    if (layer.kind === "textured_emblem") {
-      drawInstances(ctx, img, layer.instances, rect);
-      continue;
+    const painted: CanvasImageSource =
+      layer.kind === "textured_emblem"
+        ? img
+        : recolor(tag + key, img, slotsOf(layer.colors, flag, rc.namedColors), true);
+    const mask =
+      layer.kind === "colored_emblem" && layer.mask >= 1 && layer.mask <= 3 && pattern && patternKey
+        ? maskCanvas(tag + patternKey, pattern, layer.mask)
+        : null;
+    for (const inst of layer.instances.length ? layer.instances : [DEFAULT_INSTANCE]) {
+      items.push({
+        z: inst.depth ?? 0,
+        order: order++,
+        draw: () => {
+          if (!mask) {
+            drawInstances(ctx, painted, [inst], rect);
+            return;
+          }
+          // Mask in flag space: draw the instance on a scratch canvas the size
+          // of the flag rectangle, keep only what lies on the masked pattern pixels.
+          const scratch = document.createElement("canvas");
+          scratch.width = Math.max(1, Math.round(rect.w));
+          scratch.height = Math.max(1, Math.round(rect.h));
+          const sctx = scratch.getContext("2d")!;
+          drawInstances(sctx, painted, [inst], { x: 0, y: 0, w: scratch.width, h: scratch.height });
+          sctx.globalCompositeOperation = "destination-in";
+          sctx.drawImage(mask, 0, 0, scratch.width, scratch.height);
+          ctx.drawImage(scratch, rect.x, rect.y, rect.w, rect.h);
+        },
+      });
     }
-    const painted = recolor(tag + key, img, slotsOf(layer.colors, flag, rc.namedColors), true);
-    const masked = layer.mask >= 1 && layer.mask <= 3 && pattern && patternKey;
-    if (!masked) {
-      drawInstances(ctx, painted, layer.instances, rect);
-      continue;
-    }
-    // Mask in flag space: draw the instances on a scratch canvas the size of
-    // the flag rectangle, keep only what lies on the masked pattern pixels.
-    const scratch = document.createElement("canvas");
-    scratch.width = Math.max(1, Math.round(rect.w));
-    scratch.height = Math.max(1, Math.round(rect.h));
-    const sctx = scratch.getContext("2d")!;
-    drawInstances(sctx, painted, layer.instances, { x: 0, y: 0, w: scratch.width, h: scratch.height });
-    sctx.globalCompositeOperation = "destination-in";
-    sctx.drawImage(maskCanvas(tag + patternKey, pattern, layer.mask), 0, 0, scratch.width, scratch.height);
-    ctx.drawImage(scratch, rect.x, rect.y, rect.w, rect.h);
   }
+  items.sort((a, b) => a.z - b.z || a.order - b.order);
+  for (const item of items) item.draw();
   return complete;
 }
 

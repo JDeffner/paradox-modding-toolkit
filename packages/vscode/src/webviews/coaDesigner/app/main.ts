@@ -206,14 +206,27 @@ function writeBoxes(boxes: readonly ElementBox[]): void {
   });
 }
 
+/**
+ * Every element bottom to top as the canvas draws them (render.ts): `depth`
+ * ascending across layers, file order among equals, no depth = 0.
+ */
+function drawOrder(): ElementRef[] {
+  const items: { ref: ElementRef; z: number; order: number }[] = [];
+  let order = 0;
+  flag.layers.forEach((layer, l) => {
+    for (let i = 0; i < instanceCount(layer); i++) {
+      const inst = layer.kind === "sub" ? undefined : layer.instances[i];
+      items.push({ ref: { layer: l, instance: i }, z: inst?.depth ?? 0, order: order++ });
+    }
+  });
+  return items.sort((a, b) => a.z - b.z || a.order - b.order).map((item) => item.ref);
+}
+
 /** The topmost element under the point, skipping locked layers. */
 function hitUnlocked(u: number, v: number): ElementRef | null {
-  for (let l = flag.layers.length - 1; l >= 0; l--) {
-    if (locked.has(l)) continue;
-    const layer = flag.layers[l];
-    for (let i = instanceCount(layer) - 1; i >= 0; i--) {
-      if (containsPoint(boxOf(layer, i), u, v)) return { layer: l, instance: i };
-    }
+  for (const ref of drawOrder().reverse()) {
+    if (locked.has(ref.layer)) continue;
+    if (containsPoint(boxOf(flag.layers[ref.layer], ref.instance), u, v)) return ref;
   }
   return null;
 }

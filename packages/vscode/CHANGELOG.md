@@ -18,6 +18,14 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   placement numbers keep their labels above the boxes, where the label is
   the drag handle, and a locked Scale drag no longer drops out after the
   first step.
+- **The Coat of Arms Designer and the Flag Builder stack emblems the way
+  the game does.** The in-game designer writes `depth` on every instance as
+  its draw index, and the index runs across layers: a design pasted from the
+  game can put one layer's emblem between two emblems of another layer. The
+  preview drew layers in file order and ignored the key, so such a design
+  showed the wrong emblem on top. Every instance now draws in `depth` order,
+  file order among equals, and a click on the canvas picks the emblem that
+  is really on top. A definition with no `depth` draws exactly as before.
 - **Emblem edges no longer show a magenta rim.** The preview recoloured a
   placeholder by nearest match with a tolerance and left every other pixel
   raw, so the anti-aliased rim of a two-colour emblem whose edge pixels carry
