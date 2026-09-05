@@ -20,12 +20,13 @@
  * No `vscode` import: this is plain Node, driven by the panel.
  */
 import {
+  defaultLayer,
   gameScriptFiles as scriptFiles,
   layerPaths,
   readGameText as readText,
   resolveLayer,
 } from "../../creators/traditionLayers";
-import { innerOf, scanItems } from "../shared/scriptBlock";
+import { innerOf, readQuoted, scanItems } from "../shared/scriptBlock";
 import type { CultureCatalog, TraditionInfo } from "./messages";
 
 /** Loc lookups are cheap but there are hundreds; asked in batches, not one file. */
@@ -63,15 +64,19 @@ function readTraditions(roots: readonly string[], dirs: readonly string[]): Reco
         const items = scanItems(inner);
         const category = scalarOf(items, "category");
         const layersItem = items.find((i) => i.key === "layers" && i.block);
-        const layers: string[] = [];
+        const named = new Map<number, string>();
         const body = layersItem ? innerOf(layersItem.value) : null;
         for (const layer of body ? scanItems(body) : []) {
           const index = Number(layer.key);
-          const dir = Number.isInteger(index) ? dirs[index] : undefined;
-          if (!dir) continue;
-          const rel = resolveLayer(roots, dir, layer.value);
-          if (rel) layers.push(rel);
+          if (Number.isInteger(index) && dirs[index])
+            named.set(index, readQuoted(layer.value) ?? layer.value);
         }
+        // One slot per layer folder: a named layer resolved, a left-out one
+        // the folder's stand-in for the random file the game draws there.
+        const layers = dirs.map((dir, index) => {
+          const value = named.get(index);
+          return (value ? resolveLayer(roots, dir, value) : defaultLayer(roots, dir)) ?? "";
+        });
         out[name] = { ...(category ? { category } : {}), layers };
       }
     }

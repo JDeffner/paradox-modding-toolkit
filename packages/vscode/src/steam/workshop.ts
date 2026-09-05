@@ -24,7 +24,7 @@ import * as cp from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { PxConfig } from "../config";
+import { gameDocsSubdir, type PxConfig } from "../config";
 import { metaFor } from "../meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseDescriptor, readDescriptorBlock, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
@@ -200,14 +200,7 @@ export function makeStagingDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "px-toolkit-workshop-"));
 }
 
-/** Subject of the mod's last git commit, as a changenote suggestion. */
-export function lastCommitSubject(root: string): Promise<string> {
-  return new Promise((resolve) => {
-    cp.execFile("git", ["log", "-1", "--format=%s"], { cwd: root, windowsHide: true }, (err, stdout) =>
-      resolve(err ? "" : stdout.trim())
-    );
-  });
-}
+export { lastCommitSubject, latestRelease } from "./gitNotes";
 
 /** One description as Steam takes it: BBCode, converted when the file is Markdown. */
 export function descriptionBBCode(info: PublishInfo, language: string, text: string): string {
@@ -366,24 +359,42 @@ export function registerWorkshop(
       const inMod = path.join(resolveConfigDir(root, meta), "workshop");
       const sibling = path.resolve(root, SIBLING_WORKSHOP_DIR);
       const isInMod = path.resolve(current).toLowerCase() === inMod.toLowerCase();
+      // A mod directly in the game's mod folder has no sibling of its own:
+      // "../workshop" would be one folder shared by every installed mod.
+      const gameModDir = gameDocsSubdir(meta, "mod");
+      const inGameModFolder =
+        gameModDir !== null &&
+        path.resolve(path.dirname(root)).toLowerCase() === path.resolve(gameModDir).toLowerCase();
       type Item = vscode.QuickPickItem & { to: string };
-      const pick = await vscode.window.showQuickPick<Item>(
-        [
-          {
-            label: `Into the mod: ${meta.configDirName}/workshop`,
-            description: isInMod ? "already there" : undefined,
-            detail: "Everything in one folder; toolkit uploads leave it out.",
-            to: inMod,
-          },
-          {
-            label: "Next to the mod: ../workshop",
-            description: !isInMod && path.resolve(current) === sibling ? "already there" : undefined,
-            detail: `The mod-projects layout: ${sibling}`,
-            to: sibling,
-          },
-        ].filter((i) => i.description === undefined),
-        { title: "Move Workshop Listing", placeHolder: `Now at ${current}` }
-      );
+      const items: Item[] = [
+        {
+          label: `Into the mod: ${meta.configDirName}/workshop`,
+          description: isInMod ? "already there" : undefined,
+          detail: "Everything in one folder; toolkit uploads leave it out.",
+          to: inMod,
+        },
+        {
+          label: "Next to the mod: ../workshop",
+          description: inGameModFolder
+            ? "not in the game's mod folder"
+            : !isInMod && path.resolve(current) === sibling
+              ? "already there"
+              : undefined,
+          detail: `The mod-projects layout: ${sibling}`,
+          to: sibling,
+        },
+      ].filter((i) => i.description === undefined);
+      if (items.length === 0) {
+        void vscode.window.showInformationMessage(
+          `Paradox Modding Toolkit: the listing is at ${current}, the one place for a mod in the game's mod folder. ` +
+            "Paradox: Move Mod moves the whole mod to the projects layout."
+        );
+        return;
+      }
+      const pick = await vscode.window.showQuickPick<Item>(items, {
+        title: "Move Workshop Listing",
+        placeHolder: `Now at ${current}`,
+      });
       if (!pick) return;
       const info = readPublishInfo(root, meta, current);
       try {

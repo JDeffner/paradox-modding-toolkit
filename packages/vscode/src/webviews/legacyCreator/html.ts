@@ -40,6 +40,13 @@ ${uiCss}
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
   #body { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px 40px; min-width: 0; container-type: inline-size; }
   #sections { max-width: 860px; display: flex; flex-direction: column; gap: 4px; }
+  /* The form sits centred in its pane rather than hugging its left edge, its
+     label column is wide enough for the game's own field names, and a
+     single-line control stops at a readable width instead of stretching to
+     the pane; a block control (a text, a picture strip) keeps the full width. */
+  #body #sections { margin: 0 auto; width: 100%; }
+  #body .px-field { grid-template-columns: 148px minmax(0, 1fr); }
+  #body .px-field > .px-input, #body .px-field > .px-dropdown, #body .px-field > .px-select { max-width: 520px; }
   /* Under the width a label column and a control both need, the track's
      fields stack the way the perk editor's always do; a label beside a 200px
      control clipped the input and the loc key under it. A container query and

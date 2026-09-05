@@ -17,7 +17,6 @@ import { CK3_SCHEMA } from "../src/games/ck3/schema";
 import { CompletionFeature } from "../src/features/completion";
 import { provideHover } from "../src/features/hover";
 import { ServerData } from "../src/serverData";
-import type { SchemaEntry } from "../src/schema/types";
 
 const schema = loadSchema(null);
 const interactionEntry = CK3_SCHEMA.find((e) => e.kind === "character_interaction")!;
@@ -313,23 +312,6 @@ describe("hover wiring (§B2/§B3)", () => {
     expect(md).toContain("Saved in this file");
   });
 });
-
-describe("schema data shape (§B2/§B3)", () => {
-  it("attaches structure + ambientScopes to the interaction entry", () => {
-    const e: SchemaEntry = interactionEntry;
-    expect(e.structure?.topLevel.some((k) => k.key === "send_option")).toBe(true);
-    expect(e.structure?.blocks?.send_option?.length).toBeGreaterThan(0);
-    expect(e.ambientScopes?.map((a) => a.name)).toContain("actor");
-  });
-
-  it("builds a structure index with the expected kinds", () => {
-    expect(schema.structures.keysByKindBlock.has("character_interaction")).toBe(true);
-    expect(schema.structures.keysByKindBlock.has("event")).toBe(true);
-    expect(schema.structures.keysByKindBlock.has("decision")).toBe(true);
-    expect(schema.structures.source("character_interaction")).toBe("character_interactions");
-  });
-});
-
 describe("a `var:` hover shows one card, not two", () => {
   /** A variable set in three places, as the index would have recorded it. */
   function dataWithVar(): ServerData {

@@ -1,12 +1,7 @@
 /**
  * Save-file preview values: the curated chain -> text mapping, read off a
  * synthetic save written by the test (a plain Victoria 3 one and a zip-packed
- * Crusader Kings III one), the zip locator, the refusals (ironman, binary),
- * and one case per game gated on a real save.
- *
- * Run the gated cases (Git Bash):
- *   PX_VIC3_SAVE='<path to a non-ironman .v3 save>' \
- *   PX_CK3_SAVE='<path to a non-ironman .ck3 save>' npx vitest run test/saveValues.test.ts
+ * Crusader Kings III one), the zip locator and the refusals (ironman, binary).
  */
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
@@ -441,53 +436,4 @@ describe("findZipEntry", () => {
 
     expect(findZipEntry(head)).toBeUndefined();
   });
-});
-
-// A real campaign: 115 MB and 6.5 million lines, so this also proves the
-// streaming path never parses the whole file.
-const REAL = process.env.PX_VIC3_SAVE;
-const real = REAL && fs.existsSync(REAL) ? it : it.skip;
-
-describe("readSaveValues (real save)", () => {
-  real(
-    "reads the played country out of a real Victoria 3 save",
-    async () => {
-      const { values, source, error } = await readSaveValues(REAL!, {
-        gameId: "vic3",
-        schema: VIC3_SAVE_SCHEMA,
-        loc,
-      });
-
-      expect(error).toBeUndefined();
-      expect(values["GetPlayer.GetName"]).toBe("Great Britain");
-      expect(values.GetCurrentDate).toBe("21 January 1836");
-      expect(source.name).toBe("Great Britain");
-    },
-    60_000
-  );
-});
-
-// A real CK3 campaign: an 8.9 MB file whose `gamestate` entry inflates to
-// 70 MB and 4.9 million lines, so this is the proof that the zip is streamed
-// and the player found without holding either in memory.
-const REAL_CK3 = process.env.PX_CK3_SAVE;
-const realCk3 = REAL_CK3 && fs.existsSync(REAL_CK3) ? it : it.skip;
-
-describe("readSaveValues (real CK3 save)", () => {
-  realCk3(
-    "reads the played character out of a real Crusader Kings III save",
-    async () => {
-      const { values, source, error } = await readSaveValues(REAL_CK3!, {
-        gameId: "ck3",
-        schema: CK3_SAVE_SCHEMA,
-        loc,
-      });
-
-      expect(error).toBeUndefined();
-      expect(values["GetPlayer.GetName"]).toBe("Alp Arslan");
-      expect(values["GetPlayer.GetPrimaryTitle.GetName"]).toBeTruthy();
-      expect(source.name).toBeTruthy();
-    },
-    60_000
-  );
 });

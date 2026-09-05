@@ -214,7 +214,9 @@ function readIndexed(blockValue: string): LayerPicks | null {
   const picks: LayerPicks = {};
   for (const item of scanItems(inner)) {
     if (item.key === null || item.op !== "=" || item.block) return null;
-    picks[item.key] = item.value;
+    // Vanilla's support files are named "rec1 copy 2.dds": quoted in the file,
+    // the pick is the name the folder lists.
+    picks[item.key] = readQuoted(item.value) ?? item.value;
   }
   return picks;
 }
@@ -336,7 +338,9 @@ export function fieldLines(spec: TraditionFieldSpec, value: FieldValue): string[
       const rows = Object.keys(picks)
         .filter((index) => picks[index] !== "")
         .sort((a, b) => Number(a) - Number(b))
-        .map((index) => `${index} = ${picks[index]}`);
+        // A file name with a space breaks the engine's reader unquoted
+        // ("Left was not a number: copy", error.log on a bare rec1 copy 2.dds).
+        .map((index) => `${index} = ${quoteIfNeeded(picks[index])}`);
       return nestedBlock(spec.key, rows);
     }
     case "cost": {

@@ -37,6 +37,7 @@ import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseScript } from "@px-lsp/server/parser";
 import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../../config";
+import { calendarForMod } from "../../calendarInsert";
 import {
   applyDefinitionEdits,
   defaultSaveTarget,
@@ -235,12 +236,15 @@ export class DynastyTreePanel {
 
   private async onMessage(msg: AppToHost): Promise<void> {
     switch (msg.type) {
-      case "ready":
+      case "ready": {
+        const { calendar } = calendarForMod(this.options.cfg);
         this.post({
           type: "init",
           gameName: this.options.meta.name,
           mods: this.options.mods,
-          ...(this.options.cfg.calendar ? { calendar: this.options.cfg.calendar } : {}),
+          // The mod's own .px-toolkit/calendar.json first, the px.calendar
+          // setting second: the same answer the hints and Insert Date give.
+          ...(calendar ? { calendar } : {}),
           setupProblem: this.options.setupProblem,
         });
         this.postTarget();
@@ -252,6 +256,8 @@ export class DynastyTreePanel {
           await this.loadTree(dynasty);
         }
         return;
+      }
+
       case "list":
         await this.loadList();
         return;

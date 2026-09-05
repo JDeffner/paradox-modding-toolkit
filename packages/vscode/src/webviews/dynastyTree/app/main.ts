@@ -12,8 +12,9 @@ import {
   convertDisplayInput,
   displayDate,
   displayYear,
+  ENGINE_MONTH_DAYS,
   isValidScriptDate,
-  monthsOf,
+  monthNames,
   parseScriptDate,
   type CalendarSetting,
 } from "@px-lsp/protocol/calendar";
@@ -40,6 +41,10 @@ import { layoutTree, NODE_H, NODE_W, type Layout, type LayoutCharacter } from ".
 /** What the panel remembers between openings; the host keeps it for us. */
 interface AppState {
   sideWidth?: number;
+  /** Dates shown as the game writes them (year.month.day) instead of through the mod's calendar. */
+  scriptDates?: boolean;
+  /** The dynasty last opened in this panel, offered first next time. */
+  lastDynasty?: string;
 }
 
 declare function acquireVsCodeApi(): {
@@ -98,8 +103,10 @@ interface State {
   mods: ModTarget[];
   setupProblem?: string;
   gameName: string;
-  /** `px.calendar`, when the workspace declares one; undefined = script dates. */
+  /** The mod's calendar, when it has one; undefined = script dates. */
   calendar?: CalendarSetting;
+  /** The Dates toggle: read every date as the game writes it, calendar or not. */
+  scriptDates: boolean;
   /** The open form edits a game character: the save is an override in the mod. */
   overriding?: boolean;
   /** The character the inspector shows, or null for the dynasty itself. */
@@ -123,6 +130,7 @@ interface State {
 
 const state: State = {
   supported: true,
+  scriptDates: vscode.getState?.()?.scriptDates ?? false,
   dynasties: [],
   tree: null,
   options: { culture: [], religion: [], trait: [] },
@@ -259,6 +267,30 @@ function year(date: string | undefined): string {
   return date ? date.split(".")[0] : "";
 }
 
+/**
+ * The years a card shows: "1016–1069" as the files write them, or through the
+ * mod's calendar, the era named once when both ends share it ("368–396 AI")
+ * and on each end when they do not ("12 BI–30 AI").
+ */
+function yearSpan(birth: string | undefined, death: string | undefined): string {
+  const cal = activeCalendar();
+  const plain = (date: string | undefined, blank: string): string => year(date) || blank;
+  if (!cal) return `${plain(birth, "?")}–${plain(death, "")}`;
+  // The era a script year falls in, and the year without it: displayYear
+  // writes "<year> <era>", and the era label itself may hold a space.
+  const shown = (date: string | undefined): { text: string; era: string } | null => {
+    const parsed = date ? parseScriptDate(date) : null;
+    const text = parsed ? displayYear(cal, parsed.y) : null;
+    if (!parsed || !text) return null;
+    return { text, era: parsed.y >= cal.epoch ? cal.after : (cal.before ?? "") };
+  };
+  const b = shown(birth);
+  const d = shown(death);
+  if (!b || !d) return `${b?.text ?? plain(birth, "?")}–${d?.text ?? plain(death, "")}`;
+  const bare = (s: { text: string; era: string }): string => s.text.slice(0, -s.era.length - 1);
+  return b.era === d.era ? `${bare(b)}–${bare(d)} ${b.era}` : `${b.text}–${d.text}`;
+}
+
 /** `Y.M.D` as one comparable number; an undated entry sorts last. */
 function dateOrder(date: string | undefined): number {
   const parsed = date ? parseScriptDate(date) : null;
@@ -270,34 +302,42 @@ function dateProblem(value: string): string | null {
   if (value.trim() === "") return null;
   const parsed = parseScriptDate(value.trim());
   if (!parsed) return "A date reads Y.M.D, like 1066.9.28.";
-  return isValidScriptDate(ENGINE_CALENDAR, parsed.y, parsed.m, parsed.d)
-    ? null
-    : "That month or day does not exist.";
+  return isValidScriptDate(parsed.y, parsed.m, parsed.d) ? null : "That month or day does not exist.";
 }
 
 // ---------------------------------------------------------------------------
 // dates, read and written through the mod's own calendar
 // ---------------------------------------------------------------------------
 
+/**
+ * The calendar dates read through right now: the mod's, unless the Dates
+ * toggle asks for the game's own form, or the mod has none.
+ */
+function activeCalendar(): CalendarSetting | undefined {
+  return state.scriptDates ? undefined : state.calendar;
+}
+
 /** The calendar a control's months and days come from; the engine's by default. */
 function calendarOf(): CalendarSetting {
-  return state.calendar ?? ENGINE_CALENDAR;
+  return activeCalendar() ?? ENGINE_CALENDAR;
 }
 
 /** The year of a script date as the modder reads it: "1000 BC", "8074 AD". */
 function displayYearOf(date: string | undefined): string {
   const parsed = date ? parseScriptDate(date) : null;
   if (!parsed) return "";
-  if (!state.calendar) return String(parsed.y);
-  return displayYear(state.calendar, parsed.y) ?? String(parsed.y);
+  const cal = activeCalendar();
+  if (!cal) return String(parsed.y);
+  return displayYear(cal, parsed.y) ?? String(parsed.y);
 }
 
 /** A whole date as the modder reads it; the script date when no calendar maps it. */
 function displayDateOf(date: string | undefined): string {
   const parsed = date ? parseScriptDate(date) : null;
   if (!parsed) return date ?? "";
-  if (!state.calendar) return date!;
-  return displayDate(state.calendar, parsed.y, parsed.m, parsed.d) ?? date!;
+  const cal = activeCalendar();
+  if (!cal) return date!;
+  return displayDate(cal, parsed.y, parsed.m, parsed.d) ?? date!;
 }
 
 /** The parts a date control shows for a script date, and their era. */
@@ -309,7 +349,7 @@ interface DateParts {
 }
 
 function splitDate(date: string | undefined): DateParts {
-  const cal = state.calendar;
+  const cal = activeCalendar();
   const parsed = date ? parseScriptDate(date) : null;
   if (!parsed) return { era: cal?.after ?? "", year: null, month: 1, day: 1 };
   if (!cal) return { era: "", year: parsed.y, month: parsed.m, day: parsed.d };
@@ -329,13 +369,13 @@ function splitDate(date: string | undefined): DateParts {
  */
 function joinDate(parts: DateParts): { script?: string; error?: string } {
   if (parts.year === null) return {};
-  const cal = state.calendar;
+  const cal = activeCalendar();
   if (cal) {
     const result = convertDisplayInput(cal, `${parts.year} ${parts.era} ${parts.month} ${parts.day}`);
     return result.ok ? { script: result.script } : { error: result.error };
   }
   if (parts.year < 1) return { error: "years start at 1 (no year zero)" };
-  if (!isValidScriptDate(ENGINE_CALENDAR, parts.year, parts.month, parts.day)) {
+  if (!isValidScriptDate(parts.year, parts.month, parts.day)) {
     return { error: "that month or day does not exist" };
   }
   return { script: `${parts.year}.${parts.month}.${parts.day}` };
@@ -370,8 +410,8 @@ function dateControl(
   const parts = splitDate(get());
   const box = node("div", "dparts");
   const note = node("div", "dnote");
-  const cal = state.calendar;
-  const months = monthsOf(calendarOf());
+  const cal = activeCalendar();
+  const months = monthNames(calendarOf());
 
   const face = (btn: HTMLButtonElement, text: string): void => {
     (btn.firstElementChild as HTMLElement).textContent = text;
@@ -386,7 +426,7 @@ function dateControl(
     set(result.script);
   };
   const clampDay = (): void => {
-    const days = months[parts.month - 1]?.days ?? 31;
+    const days = ENGINE_MONTH_DAYS[parts.month - 1] ?? 31;
     if (parts.day > days) parts.day = days;
     face(dayBtn, String(parts.day));
   };
@@ -425,16 +465,16 @@ function dateControl(
   });
   box.append(yearInput);
 
-  const monthBtn = partMenu(months[parts.month - 1]?.name ?? String(parts.month), "month", (btn) =>
+  const monthBtn = partMenu(months[parts.month - 1] ?? String(parts.month), "month", (btn) =>
     menu(
       btn,
-      months.map((m, i) => ({ value: String(i + 1), label: m.name })),
+      months.map((m, i) => ({ value: String(i + 1), label: m })),
       {
         value: String(parts.month),
         width: 180,
         onPick: (picked) => {
           parts.month = Number(picked);
-          face(btn, months[parts.month - 1].name);
+          face(btn, months[parts.month - 1]);
           clampDay();
           commit();
         },
@@ -442,7 +482,7 @@ function dateControl(
     )
   );
   const dayBtn = partMenu(String(parts.day), "day", (btn) => {
-    const days = months[parts.month - 1]?.days ?? 31;
+    const days = ENGINE_MONTH_DAYS[parts.month - 1] ?? 31;
     menu(
       btn,
       Array.from({ length: days }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
@@ -735,10 +775,10 @@ function renderPicker(): void {
   );
   const shown = matches.slice(0, 400);
   $picker.replaceChildren();
-  for (const dynasty of shown) {
-    const row = node("div", "px-item");
-    row.setAttribute("role", "button");
-    row.tabIndex = 0;
+  const row = (dynasty: DynastySummary): HTMLElement => {
+    const item = node("div", "px-item");
+    item.setAttribute("role", "button");
+    item.tabIndex = 0;
     const name = node("span", "dname", dynasty.name || dynasty.nameKey);
     const key = node("span", "dkey", `${dynasty.id}${dynasty.culture ? ` · ${dynasty.culture}` : ""}`);
     const count = node(
@@ -747,13 +787,29 @@ function renderPicker(): void {
       `${dynasty.characterCount} character${dynasty.characterCount === 1 ? "" : "s"}` +
         (dynasty.houseCount ? `, ${dynasty.houseCount} house${dynasty.houseCount === 1 ? "" : "s"}` : "")
     );
-    if (dynasty.source === "mod") row.append(chip("this mod"));
-    row.append(name, key, count);
-    row.addEventListener("click", () => post({ type: "open", dynasty: dynasty.id }));
-    row.addEventListener("keydown", (ev) => {
+    item.append(name, key, count);
+    item.addEventListener("click", () => post({ type: "open", dynasty: dynasty.id }));
+    item.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") post({ type: "open", dynasty: dynasty.id });
     });
-    $picker.append(row);
+    return item;
+  };
+  // The list leads with what the modder came for: the dynasty opened last
+  // time, then the mod's own dynasties, then the game's, each under a heading.
+  // With a search typed, the groups hold only what matches.
+  const lastId = vscode.getState?.()?.lastDynasty;
+  // Found among every match, not the 400 shown: the dynasty opened last is
+  // the one row the list must not lose to the cap.
+  const last = lastId ? matches.find((d) => d.id === lastId) : undefined;
+  const groups: [string, DynastySummary[]][] = [
+    ["Last opened", last ? [last] : []],
+    ["Your mod", shown.filter((d) => d.source === "mod" && d !== last)],
+    ["Game", shown.filter((d) => d.source !== "mod" && d !== last)],
+  ];
+  for (const [title, list] of groups) {
+    if (list.length === 0) continue;
+    $picker.append(node("div", "px-panel-title", title));
+    for (const dynasty of list) $picker.append(row(dynasty));
   }
   $pickerNote.textContent = !state.supported
     ? `${state.gameName} has no dynasties in its files, so there is no family tree to draw.`
@@ -902,12 +958,13 @@ function drawTree(): void {
     card.setAttribute("data-source", char.source);
     card.setAttribute("data-id", char.id);
     if (char.external) card.setAttribute("data-external", "");
+    card.setAttribute("data-sex", char.female ? "female" : "male");
     if (state.selected === char.id) card.setAttribute("data-selected", "");
     card.append(svg("rect", { class: "cbg", width: NODE_W, height: NODE_H, rx: 8 }));
     card.append(svg("rect", { class: "cring", x: -3, y: -3, width: NODE_W + 6, height: NODE_H + 6, rx: 11 }));
     card.append(svgText("csex", 10, 20, char.female ? "♀" : "♂"));
     card.append(svgText("cname", 24, 20, char.name));
-    card.append(svgText("cdates", 10, 36, `${year(char.birth) || "?"}–${year(char.death) || ""}`));
+    card.append(svgText("cdates", 10, 36, yearSpan(char.birth, char.death)));
     card.append(svgText("cid", NODE_W - 10, 36, char.id, "end"));
     const tag = belonging(char);
     if (tag) {
@@ -1260,13 +1317,30 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   name.placeholder = tree?.characters[0]?.name || tree?.dynasty.name || tree?.dynasty.id || "";
   body.append(field("Name", name));
 
-  const sex = document.createElement("label");
-  sex.className = "px-switch";
-  const box = document.createElement("input");
-  box.type = "checkbox";
-  box.checked = form.female;
-  box.addEventListener("change", () => (form.female = box.checked));
-  sex.append(box, node("span"), node("span", undefined, "Female"));
+  // Two named choices, not a switch: a switch reads as on/off, and "off" is
+  // not a sex. The glyphs match the ones the cards wear.
+  const sex = node("div", "px-toggle-group");
+  sex.dataset.spacing = "0";
+  const choices: [string, boolean][] = [
+    ["\u2642 Male", false],
+    ["\u2640 Female", true],
+  ];
+  for (const [label, female] of choices) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "px-toggle";
+    button.dataset.variant = "outline";
+    button.dataset.size = "sm";
+    button.dataset.sex = female ? "female" : "male";
+    button.textContent = label;
+    button.setAttribute("aria-pressed", String(form.female === female));
+    button.addEventListener("click", () => {
+      form.female = female;
+      for (const other of Array.from(sex.querySelectorAll("button")))
+        other.setAttribute("aria-pressed", String(other === button));
+    });
+    sex.append(button);
+  }
   body.append(field("Sex", sex));
 
   if (tree) {
@@ -1644,6 +1718,25 @@ window.addEventListener("keydown", (ev) => {
   renderInspector();
 });
 el("fit").addEventListener("click", fit);
+
+/** The Dates toggle: which of its two buttons is pressed, and whether it shows at all. */
+function renderDateMode(): void {
+  const group = el("dateMode");
+  group.hidden = !state.calendar;
+  for (const button of Array.from(group.querySelectorAll<HTMLButtonElement>("button"))) {
+    button.setAttribute("aria-pressed", String((button.dataset.mode === "script") === state.scriptDates));
+  }
+}
+for (const button of Array.from(el("dateMode").querySelectorAll<HTMLButtonElement>("button"))) {
+  button.addEventListener("click", () => {
+    state.scriptDates = button.dataset.mode === "script";
+    vscode.setState?.({ ...vscode.getState?.(), scriptDates: state.scriptDates });
+    renderDateMode();
+    // Every date on screen reads through the calendar: the cards, the inspector, an open form.
+    if (!$canvasWrap.hidden) drawTree();
+    renderInspector();
+  });
+}
 const centre = (): { x: number; y: number } => {
   const rect = $canvas.getBoundingClientRect();
   return { x: rect.width / 2, y: rect.height / 2 };
@@ -1704,6 +1797,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       state.mods = msg.mods;
       state.gameName = msg.gameName;
       state.calendar = msg.calendar;
+      renderDateMode();
       state.setupProblem = msg.setupProblem;
       $banner.hidden = !msg.setupProblem;
       if (msg.setupProblem) $banner.textContent = msg.setupProblem;
@@ -1754,6 +1848,8 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       state.tree = msg.tree;
       state.selected = null;
       state.draft = null;
+      // Next time the picker opens, this dynasty is the first row.
+      vscode.setState?.({ ...vscode.getState?.(), lastDynasty: msg.tree.dynasty.id });
       showTree();
       $title.textContent = `${msg.tree.dynasty.name || msg.tree.dynasty.nameKey} · ${msg.tree.characters.length} characters`;
       drawTree();

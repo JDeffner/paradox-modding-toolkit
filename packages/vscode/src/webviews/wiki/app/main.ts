@@ -18,9 +18,10 @@
  */
 import { renderMarkdown } from "../../markdown";
 import { iconEl, type IconName } from "../../shared/icons";
-import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "../messages";
+import type { AppToHost, HostToApp, WikiArticle, WikiCard, WikiHubEntry } from "../messages";
 import { installTips } from "../../shared/tips";
 import { helpDialog } from "../../shared/help";
+import { menu } from "../../shared/overlay";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -44,6 +45,8 @@ let query = "";
 let diagOpen = false;
 /** The last report the host sent; null while one is being built. */
 let report: string | null = null;
+/** The kind filter of the page being read, or null for all. Reset on every page. */
+let cardKind: string | null = null;
 
 /** The articles of the selected game: one without a game belongs to all. */
 const visible = (): WikiArticle[] => articles.filter((a) => !a.game || a.game === game);
@@ -51,7 +54,11 @@ const diagnostics = (): WikiArticle[] => visible().filter((a) => a.section === D
 const isDiagnostic = (id: string | null): boolean => diagnostics().some((a) => a.id === id);
 
 function matchesArticle(article: WikiArticle, needle: string): boolean {
-  return article.title.toLowerCase().includes(needle) || article.markdown.toLowerCase().includes(needle);
+  const cards = (article.cards ?? []).flatMap((c) => [c.title, c.kind, c.text, c.meta ?? ""]);
+  return [article.title, article.markdown, article.outro ?? "", ...cards]
+    .join("\n")
+    .toLowerCase()
+    .includes(needle);
 }
 
 function el(tag: string, className?: string, text?: string): HTMLElement {
@@ -291,6 +298,80 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
+  if (article.cards) renderCards(content, article.cards);
+  if (article.outro) {
+    const outro = el("div");
+    outro.innerHTML = renderMarkdown(article.outro);
+    content.append(...outro.childNodes);
+  }
+}
+
+/**
+ * The cards of a reference page as ONE grid, the way the front page lays out
+ * its destinations, so a long list of projects or tools uses the pane's
+ * width. Only the cards for the game the switch is on are drawn. Each card
+ * wears its kind as an icon; the kinds are the filter chips above the grid.
+ */
+function renderCards(content: HTMLElement, cards: WikiCard[]): void {
+  const link = (label: string, url: string): HTMLAnchorElement => {
+    const a = el("a", undefined, label) as HTMLAnchorElement;
+    a.href = url;
+    return a;
+  };
+  const distinct = <T>(values: T[]): T[] => [...new Set(values)];
+  const filterRow = (
+    options: { value: string; icon?: IconName }[],
+    current: string | null,
+    pick: (value: string | null) => void
+  ): HTMLElement => {
+    const row = el("div", "filters");
+    const chip = (label: string, value: string | null, icon?: IconName): void => {
+      const button = el("button", "px-badge", label);
+      button.dataset.variant = "outline";
+      button.setAttribute("aria-pressed", String(value === current));
+      if (icon) button.prepend(iconEl(icon));
+      button.addEventListener("click", () => pick(value));
+      row.appendChild(button);
+    };
+    chip("All", null);
+    for (const option of options) chip(option.value, option.value, option.icon);
+    return row;
+  };
+  const forGame = cards.filter((c) => !c.games || c.games.includes(game));
+  const kinds = distinct(forGame.map((c) => c.kind)).map((kind) => ({
+    value: kind,
+    icon: forGame.find((c) => c.kind === kind)!.icon,
+  }));
+  const filters = el("div", "filterbar");
+  filters.appendChild(
+    filterRow(kinds, cardKind, (value) => {
+      cardKind = value;
+      renderPage();
+    })
+  );
+  content.appendChild(filters);
+
+  const grid = el("div", "cards");
+  const shown = forGame.filter((c) => cardKind === null || c.kind === cardKind);
+  for (const card of shown) {
+    const node = el("div", "card info");
+    const head = el("div", "head");
+    const icon = iconEl(card.icon);
+    icon.setAttribute("data-tip", card.kind);
+    head.appendChild(icon);
+    head.appendChild(link(card.title, card.url));
+    node.appendChild(head);
+    if (card.meta) node.appendChild(el("div", "meta", card.meta));
+    node.appendChild(el("div", "tip", card.text));
+    if (card.links?.length) {
+      const row = el("div", "links");
+      for (const entry of card.links) row.appendChild(link(entry.label, entry.url));
+      node.appendChild(row);
+    }
+    grid.appendChild(node);
+  }
+  if (shown.length === 0) grid.appendChild(el("div", "px-muted", "Nothing of this kind for this game."));
+  content.appendChild(grid);
 }
 
 function renderPage(): void {
@@ -308,6 +389,7 @@ function renderPage(): void {
 
 function select(id: string | null): void {
   selected = id;
+  cardKind = null;
   if (isDiagnostic(id)) diagOpen = true;
   if (id === MOD_REPORT) {
     report = null;
@@ -321,16 +403,9 @@ function select(id: string | null): void {
 const known = (id: string): boolean =>
   id === DIAGNOSTICS || id === MOD_REPORT || visible().some((a) => a.id === id);
 
-/** The switch: one option per supported game, on the selected one. */
+/** The switch shows the selected game; the menu it opens lists the rest. */
 function renderGames(): void {
-  const node = $<HTMLSelectElement>("game");
-  node.textContent = "";
-  for (const entry of games) {
-    const option = el("option", undefined, entry.name) as HTMLOptionElement;
-    option.value = entry.id;
-    node.appendChild(option);
-  }
-  node.value = game;
+  $("game").querySelector(".px-truncate")!.textContent = games.find((g) => g.id === game)?.name ?? game;
 }
 
 window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
@@ -356,12 +431,21 @@ input.addEventListener("input", () => {
   renderNav();
 });
 
-const gameSelect = $<HTMLSelectElement>("game");
-gameSelect.addEventListener("change", () => {
-  game = gameSelect.value;
-  // A page the new game has no article for falls back to the front page.
-  select(selected !== null && known(selected) ? selected : null);
-});
+$("game").addEventListener("click", () =>
+  menu(
+    $("game"),
+    games.map((g) => ({ value: g.id, label: g.name })),
+    {
+      value: game,
+      onPick: (value) => {
+        game = value;
+        renderGames();
+        // A page the new game has no article for falls back to the front page.
+        select(selected !== null && known(selected) ? selected : null);
+      },
+    }
+  )
+);
 
 $("helpBtn").addEventListener("click", () =>
   helpDialog({
@@ -386,7 +470,7 @@ $("helpBtn").addEventListener("click", () =>
           },
           {
             lead: "Modding Tools",
-            text: "lists tools other modders built for the game: map editors, translators, audio tools, history converters. Each row links to the tool.",
+            text: "lists tools other modders built for the game the switch is on: map editors, translators, audio tools, history converters. Each card wears its type as an icon; the chips above the cards filter by type.",
           },
         ],
       },

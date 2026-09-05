@@ -20,6 +20,9 @@ export interface CreditEntry {
   authorUrl?: string;
 }
 
+import type { IconName } from "../shared/icons";
+import type { WikiCard } from "../wiki/messages";
+
 export interface CreditSection {
   title: string;
   entries: CreditEntry[];
@@ -133,26 +136,35 @@ export const CREDIT_SECTIONS: CreditSection[] = [
   },
 ];
 
+/** The icon each credit group wears on its cards. */
+const GROUP_ICONS: Record<string, IconName> = {
+  "Tools and data": "wrench",
+  "Design and icons": "palette",
+  Libraries: "package",
+};
+
 /**
  * The same list as a wiki page (the Wiki hub renders it; the standalone
- * Credits panel is gone). One line per project: the name as a link, who it is
- * by, the license, then what the toolkit uses it for.
+ * Credits panel is gone): one card per project, its group as the kind the
+ * page filters by, the name as a link, the license beside it, what the
+ * toolkit uses it for, and who it is by.
  */
-export function creditsMarkdown(): string {
-  const lines = [
-    "# Credits",
-    "",
+export function creditsPage(): { markdown: string; cards: WikiCard[] } {
+  const markdown =
+    "# Credits\n\n" +
     "Every project the toolkit builds on. The full license texts and the provenance are in " +
-      "[THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md).",
-  ];
-  for (const section of CREDIT_SECTIONS) {
-    lines.push("", `## ${section.title}`, "");
-    for (const entry of section.entries) {
-      const by = entry.author
-        ? ` by ${entry.authorUrl ? `[${entry.author}](${entry.authorUrl})` : entry.author}`
-        : "";
-      lines.push(`- **[${entry.name}](${entry.url})**${by}, ${entry.license}. ${entry.usedFor}`);
-    }
-  }
-  return lines.join("\n") + "\n";
+    "[THIRD-PARTY-NOTICES.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/THIRD-PARTY-NOTICES.md).\n";
+  const cards = CREDIT_SECTIONS.flatMap((section) =>
+    section.entries.map((entry) => ({
+      title: entry.name,
+      url: entry.url,
+      kind: section.title,
+      icon: GROUP_ICONS[section.title] ?? "heart",
+      // A person we could link is a link; a name alone sits beside the license.
+      meta: entry.author && !entry.authorUrl ? `by ${entry.author}, ${entry.license}` : entry.license,
+      text: entry.usedFor,
+      ...(entry.authorUrl ? { links: [{ label: `by ${entry.author}`, url: entry.authorUrl }] } : {}),
+    }))
+  );
+  return { markdown, cards };
 }

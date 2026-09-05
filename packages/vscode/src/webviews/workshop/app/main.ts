@@ -72,7 +72,7 @@ const collapsed = new Set<string>();
 let lastInfoActive: string | null = null;
 const knownLangs = new Set<string>();
 /** What the changenote is taken from. The picked source IS what uploads. */
-type NoteSource = "changelog" | "commit" | "write";
+type NoteSource = "changelog" | "release" | "commit" | "write";
 /** The source the user picked, per mod. Unpicked mods follow `defaultNoteSource`. */
 const noteSourceByMod = new Map<string, NoteSource>();
 let noteSource: NoteSource = "write";
@@ -172,13 +172,10 @@ function renderToolbar(): void {
   // What Steam reported, not a verdict on the item: "live" read as if the
   // item were public, which it need not be.
   const state = $("liveState");
-  let tip = liveError ?? "";
+  const tip = liveError ?? "";
   if (fetching) state.textContent = "asking Steam…";
   else if (liveError) state.textContent = "Steam unreachable";
-  else if (live?.timeUpdated) {
-    state.textContent = `updated ${uploadedOn(live.timeUpdated)}`;
-    tip = "When the item was last uploaded, as Steam reports it. The refresh button asks again.";
-  } else state.textContent = "";
+  else state.textContent = "";
   state.setAttribute("data-tip", tip);
   state.toggleAttribute("data-tip-wrap", tip !== "");
 
@@ -187,13 +184,6 @@ function renderToolbar(): void {
   $<HTMLButtonElement>("refresh").disabled = fetching || !info?.publishedId;
   $<HTMLButtonElement>("pull").disabled = busy || fetching || !info?.publishedId;
   $("busy").classList.toggle("on", fetching && !busy);
-}
-
-/** A Steam timestamp (Unix seconds) as a short local date, or "today". */
-function uploadedOn(seconds: number): string {
-  const when = new Date(seconds * 1000);
-  if (when.toDateString() === new Date().toDateString()) return "today";
-  return when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
 function renderItem(): void {
@@ -225,6 +215,13 @@ function renderItem(): void {
     info.previewTooLarge ? "1 MB or larger: Steam rejects it, uploads keep the current one." : ""
   );
   if (info.previewTooLarge) $("previewName").textContent += " (too large!)";
+  $("previewInfo").toggleAttribute("data-warn", info.previewTooLarge);
+  $("previewInfo").setAttribute(
+    "data-tip",
+    info.previewTooLarge
+      ? "This image is 1 MB or larger: Steam rejects it, uploads keep the current one."
+      : "A square image, 512x512 or larger, PNG or JPG, under 1 MB."
+  );
 
   const visBtn = $<HTMLButtonElement>("visibility");
   const vis = pickedVisibility ?? live?.visibility ?? null;
@@ -433,8 +430,43 @@ function previewBox(editTip: string, onEdit: () => void): { box: HTMLElement; pr
   edit.append(iconEl("pencil"));
   edit.addEventListener("click", onEdit);
   box.append(preview, edit);
+  attachGrip(preview);
   return { box, preview };
 }
+
+/**
+ * The panel's own resize handle under a preview box. Chromium's native grip
+ * (CSS resize) is drawn inside the scrollbar's corner square once the box
+ * scrolls, and against a rounded border that read as a broken corner; a strip
+ * of our own sits below the box and cannot collide with anything.
+ */
+function attachGrip(preview: HTMLElement): void {
+  const grip = document.createElement("div");
+  grip.className = "bbprev-grip";
+  grip.setAttribute("role", "separator");
+  grip.setAttribute("aria-orientation", "horizontal");
+  grip.setAttribute("data-tip", "Drag to resize");
+  const min = parseFloat(getComputedStyle(preview).minHeight) || 60;
+  grip.addEventListener("pointerdown", (down) => {
+    down.preventDefault();
+    grip.setPointerCapture(down.pointerId);
+    const startY = down.clientY;
+    const startHeight = preview.getBoundingClientRect().height;
+    const move = (ev: PointerEvent): void => {
+      preview.style.height = `${Math.max(min, startHeight + ev.clientY - startY)}px`;
+    };
+    const up = (): void => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
+  });
+  preview.insertAdjacentElement("afterend", grip);
+}
+attachGrip($("descPreview"));
 
 /**
  * The row under a preview: what the file is, then Edit file, Reload and (for
@@ -972,17 +1004,89 @@ function enabledLanguages(): string[] {
   return uploadableLanguages().filter((l) => !langsOff.has(l));
 }
 
+/** One part of an upload: its switch on the page, and what it sends right now. */
+interface UploadPart {
+  key: "content" | "details" | "previews" | "requirements" | "translations" | "note";
+  name: string;
+  on: boolean;
+  /** Nothing to send, so the modal shows the row without a live switch. */
+  disabled?: boolean;
+  what: string;
+}
+
+/**
+ * The six parts as the page has them set, each with the sentence that says
+ * what it sends: the Publish card lists them, and the confirmation reads the
+ * same list back before the upload goes.
+ */
+function uploadParts(): UploadPart[] {
+  const checked = (id: string): boolean => $<HTMLInputElement>(id).checked;
+  const langs = uploadableLanguages();
+  const on = enabledLanguages();
+  const previews = info?.previews;
+  const apps = info?.dependencies?.apps ?? live?.appDependencies ?? [];
+  const items = info?.dependencies?.items ?? live?.children ?? [];
+  const note = noteText().trim();
+  const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
+  return [
+    {
+      key: "content",
+      name: "Mod files",
+      on: checked("incContent"),
+      what: "every file of the mod, replacing what subscribers have",
+    },
+    {
+      key: "details",
+      name: "Details",
+      on: checked("incDetails"),
+      what: "title, description, visibility, tags and the thumbnail",
+    },
+    {
+      key: "previews",
+      name: "Previews",
+      on: checked("incPreviews"),
+      what: previews
+        ? `${plural(previews.images.length, "image")} and ${plural(previews.videos.length, "video")} replace the gallery`
+        : "no previews folder: the gallery on Steam stays",
+    },
+    {
+      key: "requirements",
+      name: "Requirements",
+      on: checked("incRequirements"),
+      disabled: !info?.dependencies,
+      what: info?.dependencies
+        ? `${plural(apps.length, "DLC")} and ${plural(items.length, "item")} replace what the item declares`
+        : "none declared locally",
+    },
+    {
+      key: "translations",
+      name: "Translations",
+      on: on.length > 0,
+      disabled: langs.length === 0,
+      what: !langs.length
+        ? "none drafted"
+        : on.length
+          ? `${on.map(langLabel).join(", ")}`
+          : "all switched off",
+    },
+    {
+      key: "note",
+      name: "Changenote",
+      on: checked("incNote") && note !== "",
+      what: note ? `from ${noteOrigin()}` : `${noteOrigin()} is empty`,
+    },
+  ];
+}
+
 function renderPublish(): void {
   const langs = uploadableLanguages();
   const incLangs = $<HTMLInputElement>("incLangs");
   incLangs.disabled = !langs.length;
   if (!langs.length) incLangs.checked = false;
   const on = enabledLanguages();
-  $("langCount").textContent = !langs.length
-    ? "Upload (none drafted)"
-    : on.length === langs.length
-      ? `Upload all ${langs.length}`
-      : `Upload ${on.length} of ${langs.length}`;
+  // The switch alone says on or off; the count appears only for a partial pick.
+  $("langCount").textContent =
+    langs.length && on.length !== langs.length ? `${on.length} of ${langs.length}` : "";
 
   // Each switch owns the card it sits in; the summary says what an upload sends.
   const owned: [string, string][] = [
@@ -995,22 +1099,29 @@ function renderPublish(): void {
   ];
   for (const [input, section] of owned)
     $(section).toggleAttribute("data-off", !$<HTMLInputElement>(input).checked);
-  const sends: string[] = [];
-  if ($<HTMLInputElement>("incContent").checked) sends.push("mod files");
-  if ($<HTMLInputElement>("incDetails").checked) sends.push("details");
-  if ($<HTMLInputElement>("incPreviews").checked) sends.push("previews");
-  if ($<HTMLInputElement>("incRequirements").checked) sends.push("requirements");
-  if (on.length) sends.push(`${on.length} translation${on.length === 1 ? "" : "s"}`);
-  if ($<HTMLInputElement>("incNote").checked && noteText().trim()) sends.push(`changenote (${noteOrigin()})`);
+  const parts = uploadParts();
   const summary = $("publishSummary");
   summary.replaceChildren();
-  const lead = document.createElement("span");
-  lead.className = "sub";
-  lead.textContent = sends.length ? "Sends: " : "";
-  summary.append(
-    lead,
-    document.createTextNode(sends.length ? sends.join(", ") : "Nothing: every part is off.")
-  );
+  const going = parts.filter((p) => p.on).length;
+  const lead = document.createElement("div");
+  lead.id = "publishLead";
+  lead.textContent = going
+    ? `The next upload sends ${going} of ${parts.length} parts:`
+    : "Nothing: every part is off.";
+  summary.append(lead);
+  for (const part of parts) {
+    const row = document.createElement("div");
+    row.className = "pub-row";
+    row.toggleAttribute("data-off", !part.on);
+    const lbl = document.createElement("span");
+    lbl.className = "lbl";
+    lbl.textContent = part.name;
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    sub.textContent = part.on ? part.what : "not uploaded";
+    row.append(iconEl(part.on ? "check" : "x"), lbl, sub);
+    summary.append(row);
+  }
 }
 $<HTMLTextAreaElement>("note").addEventListener("input", renderPublish);
 
@@ -1280,106 +1391,105 @@ async function uploadModal(): Promise<UploadChoice | null> {
   if (!info) return null;
   const isNew = !info.publishedId;
   const langs = enabledLanguages();
+  const name = info.name ?? "this mod";
 
-  const wrap = document.createElement("div");
-  wrap.className = "modal-rows";
-  const row = (id: string, checked: boolean, disabled: boolean, label: string, sub: string) => {
-    const r = document.createElement("div");
-    r.className = "pub-row";
+  const body = document.createElement("div");
+  body.className = "modal-body";
+
+  // The parts, each with a switch: the last place to leave one out.
+  const head = document.createElement("div");
+  head.className = "modal-head";
+  const headLead = document.createElement("span");
+  headLead.textContent = "What goes";
+  const headCount = document.createElement("span");
+  head.append(headLead, headCount);
+  const rows = document.createElement("div");
+  rows.className = "modal-rows";
+  const inputs = new Map<UploadPart["key"], HTMLInputElement>();
+  const paint = (): void => {
+    let going = 0;
+    for (const [key, input] of inputs) {
+      rows.querySelector(`[data-part="${key}"]`)?.toggleAttribute("data-off", !input.checked);
+      if (input.checked) going++;
+    }
+    headCount.textContent = `${going} of ${inputs.size} parts`;
+  };
+  for (const part of uploadParts()) {
+    if (part.key === "note") continue;
+    const row = document.createElement("div");
+    row.className = "pub-row";
+    row.dataset.part = part.key;
     const sw = document.createElement("label");
     sw.className = "px-switch";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.id = `modal-${id}`;
-    input.checked = checked && !disabled;
-    input.disabled = disabled;
-    const knob = document.createElement("span");
-    sw.append(input, knob);
-    const text = document.createElement("span");
-    text.className = "lbl";
-    text.append(document.createTextNode(label));
-    const subEl = document.createElement("span");
-    subEl.className = "sub";
-    subEl.textContent = ` - ${sub}`;
-    text.append(subEl);
-    r.append(sw, text);
-    wrap.append(r);
-    return input;
-  };
-  const content = row(
-    "content",
-    $<HTMLInputElement>("incContent").checked,
-    false,
-    "Mod files",
-    "every file of the mod, replacing what subscribers have"
-  );
-  const details = row(
-    "details",
-    $<HTMLInputElement>("incDetails").checked,
-    false,
-    "Details",
-    "title, description, visibility, tags, preview image"
-  );
-  const previews = row(
-    "previews",
-    $<HTMLInputElement>("incPreviews").checked,
-    false,
-    "Previews",
-    "the gallery images and videos, replacing the item's gallery"
-  );
-  const translations = row(
-    "translations",
-    langs.length > 0,
-    langs.length === 0,
-    "Translations",
-    langs.length ? langs.map(langLabel).join(", ") : "none enabled"
-  );
-  const requirements = row(
-    "requirements",
-    $<HTMLInputElement>("incRequirements").checked,
-    !info?.dependencies,
-    "Requirements",
-    info?.dependencies
-      ? "the required DLC and items, replacing what the item declares"
-      : "none declared locally"
-  );
+    input.checked = part.on && !part.disabled;
+    input.disabled = !!part.disabled;
+    input.addEventListener("change", paint);
+    sw.append(input, document.createElement("span"));
+    const lbl = document.createElement("span");
+    lbl.className = "lbl";
+    lbl.textContent = part.name;
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    sub.textContent = part.what;
+    row.append(sw, lbl, sub);
+    rows.append(row);
+    inputs.set(part.key, input);
+  }
+  paint();
 
+  // The changenote as Steam will show it, or the plain fact that none goes.
+  const noteBox = document.createElement("div");
+  noteBox.className = "modal-changenote";
+  const noteHead = document.createElement("div");
+  noteHead.className = "modal-head";
   const note = $<HTMLInputElement>("incNote").checked ? noteText().trim() : "";
-  const lines = document.createElement("div");
-  lines.className = "modal-line";
-  const vis = pickedVisibility ?? live?.visibility ?? null;
-  lines.textContent =
-    (isNew ? "Creates a NEW item, PRIVATE until you change its visibility. " : "") +
-    (vis !== null && details.checked ? `Visibility: ${VISIBILITY_LABELS[vis]}. ` : "") +
-    (note
-      ? `Changenote: "${note.split("\n")[0].slice(0, 80)}${note.length > 80 ? "…" : ""}"`
-      : "No changenote.");
-  wrap.append(lines);
+  if (note) {
+    const lead = document.createElement("span");
+    lead.textContent = "Changenote";
+    const from = document.createElement("span");
+    from.textContent = `from ${noteOrigin()}`;
+    noteHead.append(lead, from);
+    const preview = document.createElement("div");
+    preview.className = "bbprev";
+    preview.innerHTML = bbcodeToHtml(note);
+    noteBox.append(noteHead, preview);
+  } else {
+    const lead = document.createElement("span");
+    lead.textContent = "No changenote goes with this upload";
+    noteHead.append(lead);
+    noteBox.append(noteHead);
+  }
 
+  // One plain sentence about what an upload is, no stripe: it is a fact, not an alarm.
   const warn = document.createElement("div");
   warn.className = "modal-note";
-  warn.textContent =
-    "An update reaches subscribers within minutes and there is no rollback: Steam keeps no previous " +
-    "version, and the toolkit cannot recover anything an upload overwrote or broke. Check the parts " +
-    "above carefully before you continue.";
-  wrap.append(warn);
+  const warnText = document.createElement("span");
+  warnText.textContent =
+    "Subscribers get an update within minutes, and Steam keeps no previous version: nothing an upload overwrites can be brought back.";
+  warn.append(iconEl("alert"), warnText);
 
+  body.append(head, rows, noteBox, warn);
+
+  const vis = pickedVisibility ?? live?.visibility ?? null;
   const go = await confirmDialog({
-    title: isNew
-      ? `Publish "${info.name ?? "this mod"}" to the Steam Workshop?`
-      : `Upload to the Steam Workshop?`,
-    content: wrap,
-    confirmLabel: "Upload",
-    destructive: !isNew,
+    title: isNew ? `Publish "${name}" to the Steam Workshop` : `Upload "${name}" to the Steam Workshop`,
+    description: isNew
+      ? "A new item. It starts private until you change its visibility."
+      : `Item #${info.publishedId}${vis !== null ? ` \u00b7 ${VISIBILITY_LABELS[vis]}` : ""}`,
+    content: body,
+    confirmLabel: isNew ? "Publish" : "Upload",
     wide: true,
   });
   if (!go) return null;
+  const on = (key: UploadPart["key"]): boolean => inputs.get(key)?.checked ?? false;
   const choice: UploadChoice = {
-    content: content.checked,
-    details: details.checked,
-    previews: previews.checked,
-    requirements: requirements.checked,
-    languages: translations.checked ? langs : [],
+    content: on("content"),
+    details: on("details"),
+    previews: on("previews"),
+    requirements: on("requirements"),
+    languages: on("translations") ? langs : [],
   };
   if (
     !choice.content &&
@@ -1388,7 +1498,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
     !choice.requirements &&
     !choice.languages.length
   ) {
-    send({ type: "notify", message: "Nothing was checked - upload skipped.", warn: true });
+    send({ type: "notify", message: "Nothing was switched on - upload skipped.", warn: true });
     return null;
   }
   return choice;
@@ -1405,6 +1515,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
  */
 function defaultNoteSource(): NoteSource {
   if (info?.changelogNote) return "changelog";
+  if (info?.releaseNote?.text) return "release";
   if ((info?.changeNoteSuggestion ?? "").trim()) return "commit";
   return "write";
 }
@@ -1412,6 +1523,7 @@ function defaultNoteSource(): NoteSource {
 /** The text this upload's changenote carries, from the picked source. */
 function noteText(): string {
   if (noteSource === "changelog") return info?.changelogNote?.text ?? "";
+  if (noteSource === "release") return info?.releaseNote?.text ?? "";
   if (noteSource === "commit") return info?.changeNoteSuggestion ?? "";
   return $<HTMLTextAreaElement>("note").value;
 }
@@ -1419,6 +1531,7 @@ function noteText(): string {
 /** How the Publish summary names the picked source. */
 function noteOrigin(): string {
   if (noteSource === "changelog") return info?.changelogNote?.source ?? "changelog";
+  if (noteSource === "release") return info?.releaseNote ? `release ${info.releaseNote.tag}` : "the release";
   return noteSource === "commit" ? "last commit" : "written here";
 }
 
@@ -1433,9 +1546,11 @@ function renderNote(): void {
   for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>("#noteSeg .px-toggle")))
     b.setAttribute("aria-pressed", String(b.dataset.src === noteSource));
   $("noteChangelog").hidden = noteSource !== "changelog";
+  $("noteRelease").hidden = noteSource !== "release";
   $("noteCommit").hidden = noteSource !== "commit";
   $("noteWrite").hidden = noteSource !== "write";
   if (noteSource === "changelog") renderChangelogNote();
+  else if (noteSource === "release") renderReleaseNote();
   else if (noteSource === "commit") renderCommitNote();
 }
 
@@ -1533,7 +1648,7 @@ function changelogEmptyState(): HTMLElement[] {
   const version = info?.version;
   if (!version) {
     line.textContent =
-      "The descriptor has no version, so no changelog entry can match. Set one in the Item card.";
+      "The descriptor has no version, so no changelog entry can match. Set one in the Details card.";
     return [line];
   }
   const where = changelogWhere();
@@ -1572,6 +1687,35 @@ function actionButton(
   b.append(iconEl(icon), document.createTextNode(` ${label}`));
   b.addEventListener("click", onClick);
   return b;
+}
+
+/** The latest GitHub release's notes, rendered as the BBCode they are sent as. */
+function renderReleaseNote(): void {
+  const box = $("noteRelease");
+  box.replaceChildren();
+  const note = info?.releaseNote ?? null;
+  const block = document.createElement("div");
+  block.className = "bbprev";
+  const hint = document.createElement("div");
+  hint.className = "hintline";
+  const text = document.createElement("span");
+  text.className = "hint";
+  hint.append(text);
+  if (!note) {
+    block.classList.add("empty");
+    block.textContent = "No GitHub release to read.";
+    text.textContent =
+      "Needs the gh CLI signed in and a release on the mod's GitHub repository; Reload asks again. Changelog, Last commit and Write are the other sources.";
+  } else if (!note.text) {
+    block.classList.add("empty");
+    block.textContent = `Release ${note.name} has no notes.`;
+    text.textContent =
+      "Write the release notes on GitHub and Reload; the upload carries no changenote until then.";
+  } else {
+    block.innerHTML = bbcodeToHtml(note.text);
+    text.textContent = `The notes of release ${note.name} (${note.tag}), converted from Markdown to BBCode.`;
+  }
+  box.append(block, hint);
 }
 
 function renderCommitNote(): void {
@@ -1617,7 +1761,15 @@ $("pull").addEventListener(
     void (async () => {
       if (!info?.publishedId || busy || fetching) return;
       const wrap = document.createElement("div");
-      wrap.className = "modal-rows";
+      wrap.className = "modal-body";
+      const head = document.createElement("div");
+      head.className = "modal-head";
+      const headLead = document.createElement("span");
+      headLead.textContent = "What is written";
+      head.append(headLead);
+      const rows = document.createElement("div");
+      rows.className = "modal-rows";
+      wrap.append(head, rows);
       const part = (id: keyof PullParts, label: string, sub: string) => {
         const r = document.createElement("div");
         r.className = "pub-row";
@@ -1626,16 +1778,16 @@ $("pull").addEventListener(
         const input = document.createElement("input");
         input.type = "checkbox";
         input.checked = true;
+        input.addEventListener("change", () => r.toggleAttribute("data-off", !input.checked));
         sw.append(input, document.createElement("span"));
-        const text = document.createElement("span");
-        text.className = "lbl";
-        text.append(document.createTextNode(label));
+        const lbl = document.createElement("span");
+        lbl.className = "lbl";
+        lbl.textContent = label;
         const subEl = document.createElement("span");
         subEl.className = "sub";
-        subEl.textContent = ` - ${sub}`;
-        text.append(subEl);
-        r.append(sw, text);
-        wrap.append(r);
+        subEl.textContent = sub;
+        r.append(sw, lbl, subEl);
+        rows.append(r);
         return [id, input] as const;
       };
       const inputs = [
@@ -1648,12 +1800,14 @@ $("pull").addEventListener(
       ];
       const warn = document.createElement("div");
       warn.className = "modal-note";
-      warn.textContent =
-        `Overwrites the matching files in ${info.workshopDir} and replaces the local drafts. ` +
-        "Local text never uploaded to Steam is lost - commit or copy it first if it matters.";
+      const warnText = document.createElement("span");
+      warnText.textContent =
+        "Replaces the local drafts with what the item shows on Steam. Local text never uploaded is lost: commit or copy it first if it matters.";
+      warn.append(iconEl("alert"), warnText);
       wrap.append(warn);
       const go = await confirmDialog({
-        title: "Download from Steam into files?",
+        title: "Download from Steam into files",
+        description: `Into ${info.workshopDir}`,
         content: wrap,
         confirmLabel: "Download & overwrite",
         destructive: true,
@@ -1906,6 +2060,10 @@ const HELP: Parameters<typeof helpDialog>[0] = {
           lead: "Change… and Create changelog",
           text: "only move the location: they point the setting at a changelog the mod already has, or make the folder and this version's entry and open it.",
         },
+        {
+          lead: "Release",
+          text: "sends the notes of the mod's latest GitHub release, converted from Markdown to BBCode. It reads the release through the gh CLI, signed in as you; a tag alone carries no text.",
+        },
         { lead: "Last commit", text: "sends the mod's last git commit subject, as plain text." },
         {
           lead: "Write",
@@ -1918,7 +2076,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
       items: [
         {
           lead: "The switch in each card's title row",
-          text: "decides whether that part goes: the mod files, the Item details (title, description, visibility, tags, preview image), the gallery, the requirements, the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card sums up what the next upload sends.",
+          text: "decides whether that part goes: the mod files, the details (title, description, visibility, tags, preview image), the gallery, the requirements, the translations (all, or one by one behind the chevron) and the changenote. A card switched off is dimmed and marked Not uploaded; the Publish card lists every part with what it sends.",
         },
         {
           lead: "Enable all",

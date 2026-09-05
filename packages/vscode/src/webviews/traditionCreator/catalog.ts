@@ -22,7 +22,7 @@
  */
 import * as path from "path";
 import { gameScriptFiles, layerChoices, layerPaths, readGameText } from "../../creators/traditionLayers";
-import { innerOf, scanItems } from "../shared/scriptBlock";
+import { innerOf, readQuoted, scanItems } from "../shared/scriptBlock";
 import type { TraditionCatalog, TraditionEntry, TraditionLayerFolder } from "./messages";
 
 /** The folder the traditions themselves live in; the schema's own path. */
@@ -127,7 +127,7 @@ function readTraditions(
         const layers: Record<string, string> = {};
         const body = blockOf(items, "layers");
         for (const layer of body ? scanItems(body) : []) {
-          if (layer.key !== null && !layer.block) layers[layer.key] = layer.value;
+          if (layer.key !== null && !layer.block) layers[layer.key] = readQuoted(layer.value) ?? layer.value;
         }
         traditions[name] = { ...(category ? { category } : {}), layers };
 

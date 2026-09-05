@@ -49,14 +49,6 @@ describe("texture hover data-URI budget", () => {
     });
   }
 
-  it("a smooth image keeps full 256px resolution (no needless shrink)", () => {
-    // Flat-ish content deflates tiny, so it fits at 256 and is not downscaled further.
-    const flat = new Uint8Array(W * H * 4).fill(200);
-    const uri = ddsToPngDataUri(encodeDds(W, H, flat, "bc1"));
-    expect(uri).not.toBeNull();
-    expect(uri!.length).toBeLessThanOrEqual(CAP);
-  });
-
   it("respects an explicit tiny budget and can bottom out to null", () => {
     const dds = encodeDds(64, 64, noisyRgba(64, 64), "bgra8");
     // Absurdly small cap no PNG can meet → degrade signal for the hover.

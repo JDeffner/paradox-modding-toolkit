@@ -22,6 +22,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import { parseNamedColors } from "@px-lsp/server/coa/coaParse";
 import type { PxConfig } from "../../config";
+import { calendarForMod } from "../../calendarInsert";
 import { type ImageRoot, wireImages } from "../../creators/images";
 import {
   applyDefinitionEdits,
@@ -39,6 +40,7 @@ import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { GuiTextureCache } from "../guiEditor/textureCache";
 import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
+import { TraditionCreatorPanel } from "../traditionCreator/panel";
 import { buildCatalog } from "./catalog";
 import { cultureCreatorHtml } from "./html";
 import type { AppToHost, CultureCatalog, CultureInit, CultureSave, HostToApp } from "./messages";
@@ -108,6 +110,8 @@ export class CultureCreatorPanel {
   private catalog: CultureCatalog | undefined;
   /** Where the modder said the next save goes; null means the default rules. */
   private chosen: SaveTargetChoice | null = null;
+  /** "New tradition" was pressed here: the tradition saved next joins this culture. */
+  private addSavedTradition = false;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
@@ -157,6 +161,9 @@ export class CultureCreatorPanel {
       (message: AppToHost) => void this.onMessage(message),
       undefined,
       this.disposables
+    );
+    this.disposables.push(
+      TraditionCreatorPanel.onDidSave((saved) => void this.onTraditionSaved(saved.name, saved.blank))
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
   }
@@ -214,13 +221,14 @@ export class CultureCreatorPanel {
       return;
     }
     this.form = form;
+    const { calendar } = calendarForMod(this.cfg);
     const init: CultureInit = {
       form,
       locLanguage: this.cfg.locLanguage,
       prefix: scaffoldPrefix(this.cfg),
       namedColors: readNamedColors(this.cfg),
       catalog: await this.readCatalog(form),
-      ...(this.cfg.calendar ? { calendar: this.cfg.calendar } : {}),
+      ...(calendar ? { calendar } : {}),
       noMod: this.cfg.modPath === null && this.cfg.workspaceMods.length === 0,
       noGame: this.cfg.gamePath === null,
     };
@@ -280,6 +288,37 @@ export class CultureCreatorPanel {
     return this.catalog;
   }
 
+  /**
+   * The Tradition Creator saved `name`. Its file is on disk (the save writes
+   * the document), so the picker gets the new tradition without reopening the
+   * panel, and one started blank from this culture's row joins the culture.
+   */
+  private async onTraditionSaved(name: string, blank: boolean): Promise<void> {
+    if (!this.form) return;
+    // Only a tradition started blank can be the one this culture asked for;
+    // a saved existing one clears a New tradition press that went nowhere.
+    const add = this.addSavedTradition && blank;
+    this.addSavedTradition = false;
+    let options = this.form.options.culture_tradition ?? [];
+    try {
+      const fresh = await this.actions.fetchForm({ kind: KIND, modRoot: this.cfg.modPath });
+      if (fresh?.options.culture_tradition) options = fresh.options.culture_tradition;
+    } catch {
+      // The list the panel has still serves; the saved name is added below.
+    }
+    // The server indexes the save a moment later; the name is a fact either way.
+    if (!options.some((item) => item.value === name)) options = [...options, { value: name, hint: "mod" }];
+    this.form.options.culture_tradition = options;
+    // Only the new tradition's description is asked for; the rest is kept.
+    const read = await buildCatalog(loadOrder(this.cfg), [name], this.actions.lookupLoc);
+    this.catalog = {
+      traditions: read.traditions,
+      descs: { ...(this.catalog?.descs ?? {}), ...read.descs },
+      dlcFlags: read.dlcFlags,
+    };
+    this.post({ type: "traditions", options, catalog: this.catalog, ...(add ? { add: name } : {}) });
+  }
+
   /** Where a picture may come from, game first: `resolveImage` takes the last. */
   private imageRoots(): ImageRoot[] {
     return loadOrder(this.cfg).map((root) => ({ label: path.basename(root), path: root }));
@@ -304,6 +343,7 @@ export class CultureCreatorPanel {
         return;
       case "editTradition":
         // The Tradition Creator is its own panel and command; an empty name opens it blank.
+        this.addSavedTradition = msg.name === "";
         await vscode.commands.executeCommand("px.createTradition", msg.name || undefined);
         return;
       case "openExamples":

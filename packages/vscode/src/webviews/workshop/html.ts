@@ -57,21 +57,30 @@ ${uiCss}
      Project sidebar (about 1000 to 1500px). One column until both cards get
      about 560px (2 * 560 + gap + padding = 1164px); capped and centered when
      the sidebar is closed. */
-  #page {
-    max-width: 1400px; margin: 0 auto; padding: 12px 16px 40px;
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start;
-  }
+  /* One reading order on a narrow pane; two INDEPENDENT columns on a wide one.
+     The columns are flex stacks, not grid rows, so a tall card never opens a
+     hole beside a short one: each column packs its own cards and simply ends
+     where it ends. Narrow panes flatten the wrappers (display: contents) and
+     let the order property put the cards back in reading order. */
+  #page { max-width: 1400px; margin: 0 auto; padding: 12px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+  .cols, .col { display: contents; }
+  #noDescriptor { order: 0; }
+  #itemSection { order: 1; }
+  #publishSection { order: 2; }
+  #modFilesSection { order: 3; }
+  #noteSection { order: 4; }
+  #descriptionSection { order: 5; }
+  #previewsSection { order: 6; }
+  #requirementsSection { order: 7; }
+  #translationsSection { order: 8; }
   @media (min-width: 1164px) {
-    #page { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* The tall Item card on the left; Publish, Mod files and Changenote stack beside it. */
-    #itemSection { grid-row: span 3; }
-    #modFilesSection, #noteSection { grid-column: 2; }
+    .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   }
   .section {
     display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); background: var(--px-card, transparent);
   }
-  .section.wide, #noDescriptor { grid-column: 1 / -1; }
   .section[hidden] { display: none; }
   #noDescriptor { display: none; flex-direction: row; align-items: center; gap: 10px; padding: 12px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); }
@@ -89,12 +98,16 @@ ${uiCss}
     color: var(--px-muted-fg); font-size: var(--px-text-xs);
   }
   #previewName { max-width: 168px; }
+  /* The image rules, over the picture's corner: a chip on its own ground so it
+     reads on a light thumbnail; destructive when the picture breaks a rule. */
   #previewInfo {
     position: absolute; top: 4px; left: 4px; z-index: 1; display: flex;
-    padding: 2px; border-radius: var(--px-radius-md); color: var(--px-muted-fg);
-    opacity: 0.55; transition: opacity var(--px-ease); cursor: help;
+    padding: 3px; border-radius: var(--px-radius-md); color: var(--px-fg);
+    background: color-mix(in oklch, var(--px-bg) 80%, transparent); border: 1px solid var(--px-border);
+    opacity: 0.9; transition: opacity var(--px-ease); cursor: help;
   }
   #previewInfo:hover, #previewInfo:focus-visible { opacity: 1; background: var(--px-muted); }
+  #previewInfo[data-warn] { color: var(--px-destructive); border-color: var(--px-destructive); opacity: 1; }
   #previewInfo .px-icon { width: 13px; height: 13px; }
   #fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* Stacked label: the label on its own line above the control. */
@@ -132,9 +145,14 @@ ${uiCss}
   .lang[data-collapsed] > .body { display: none; }
   .lang .px-input { width: 100%; }
   #publishRows { display: flex; flex-direction: column; gap: 8px; }
-  .pub-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
-  .pub-row .lbl { min-width: 0; }
-  .pub-row .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
+  /* One row per part of the upload: its state as an icon and a word, what it sends. */
+  .pub-row { display: flex; align-items: baseline; gap: 8px; min-height: 22px; font-size: var(--px-text-sm); }
+  .pub-row .px-icon { width: 13px; height: 13px; flex: 0 0 auto; align-self: center; }
+  .pub-row .lbl { min-width: 0; flex: 0 0 auto; font-weight: 500; }
+  .pub-row .sub { color: var(--px-muted-fg); font-size: var(--px-text-xs); min-width: 0; }
+  .pub-row[data-off] { color: var(--px-muted-fg); }
+  .pub-row[data-off] .lbl { font-weight: 400; }
+  #publishLead { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   /* A card with a publish switch in its title row: off = the body dimmed,
      inert, and a "Not uploaded" chip beside the switch. */
   .hdr-switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: var(--px-text-xs); color: var(--px-muted-fg); text-transform: none; letter-spacing: 0; cursor: pointer; }
@@ -157,9 +175,7 @@ ${uiCss}
   #note { width: 100%; min-height: 56px; resize: vertical; }
   /* The changenote's three sources: the picked one's body is the only one shown. */
   #noteSeg { align-self: flex-start; }
-  #noteChangelog, #noteCommit, #noteWrite { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  /* A commit subject is one line: no scroll window, no grip. */
-  #noteCommit .bbprev { min-height: 0; height: auto; resize: none; }
+  #noteChangelog, #noteRelease, #noteCommit, #noteWrite { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .section > .px-panel-title { padding: 0; }
   /* Editable tag chips. */
   .tag-chip { display: inline-flex; align-items: center; gap: 3px; }
@@ -168,21 +184,34 @@ ${uiCss}
   .tag-chip button .px-icon { width: 11px; height: 11px; }
   #tagAdd input { width: 130px; }
 ${BBPREV_CSS}
-  /* A starting height, not the final one: the reader drags the bottom edge
-     down for more. The description gets the taller start, a language row the
-     shorter one, and each can be dragged back to its min-height. */
-  #descPreview { height: 220px; }
-  .lang .bbprev, #noteChangelog .bbprev { min-height: 90px; height: 160px; }
+  /* A starting height on every preview, the description the taller one, and
+     the panel's own drag strip under each (attachGrip): the native grip lives
+     in the scrollbar's corner square and broke the rounded corner as soon as
+     a box scrolled. The description wraps instead of scrolling sideways. */
+  #descPreview { min-height: 120px; height: 220px; max-height: none; overflow-x: hidden; }
+  .lang .bbprev, #noteChangelog .bbprev, #noteRelease .bbprev { min-height: 90px; height: 160px; max-height: none; }
+  .bbprev-grip { height: 10px; display: flex; align-items: center; justify-content: center; cursor: ns-resize; touch-action: none; }
+  .bbprev-grip::before { content: ""; width: 40px; height: 3px; border-radius: 2px; background: var(--px-border); transition: background-color var(--px-ease); }
+  .bbprev-grip:hover::before, .bbprev-grip:active::before { background: var(--px-muted-fg); }
   /* The description files are edited in the editor: an empty one says so. */
   .bbprev.empty { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
-  /* Upload confirmation modal rows. */
-  .modal-rows { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; text-align: left; }
-  .modal-rows .pub-row { min-height: 24px; }
-  .modal-note {
-    border-left: 3px solid var(--px-destructive); padding: 6px 10px; margin-top: 6px;
-    color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left;
+  /* Upload confirmation: the parts as rows with their switches, the changenote
+     as Steam renders it, one plain note about what an upload is. */
+  .modal-body { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    font-size: var(--px-text-xs); color: var(--px-muted-fg); text-transform: uppercase; letter-spacing: 0.04em;
   }
-  .modal-line { color: var(--px-muted-fg); font-size: var(--px-text-xs); text-align: left; }
+  .modal-rows { display: flex; flex-direction: column; gap: 6px; }
+  .modal-rows .pub-row { min-height: 24px; align-items: center; }
+  .modal-rows .px-switch { transform: scale(0.85); transform-origin: left center; flex: 0 0 auto; }
+  .modal-changenote { display: flex; flex-direction: column; gap: 4px; }
+  .modal-changenote .bbprev { min-height: 0; height: auto; max-height: 140px; padding: 8px 10px; }
+  .modal-note {
+    display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--px-radius-md);
+    background: var(--px-muted); color: var(--px-muted-fg); font-size: var(--px-text-xs);
+  }
+  .modal-note .px-icon { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; }
   .gallery { position: relative; display: flex; flex-wrap: wrap; gap: 8px; }
   .gallery .tile { position: relative; width: 112px; height: 84px; border: 1px solid var(--px-border); border-radius: var(--px-radius); overflow: hidden; background: var(--px-muted); }
   .gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -248,149 +277,157 @@ ${BBPREV_CSS}
       <button id="createDescriptor" class="px-btn" data-variant="outline" data-size="sm">Create Descriptor</button>
     </div>
 
-    <div class="section" id="itemSection">
-      <div class="px-panel-title">Item
-        <span class="px-grow"></span>
-        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Upload the details: title, description, visibility, tags and the preview image." data-tip-wrap data-tip-side="left">Details <span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
-      </div>
-      <div id="itemGrid">
-        <div id="previewBox" style="position:relative">
-          <span id="previewInfo" tabindex="0" data-tip="A square image, 512x512 or larger, PNG or JPG, under 1 MB." data-tip-wrap>${icon("alert")}</span>
-          <img id="preview" alt="Preview image" hidden />
-          <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
-          <span id="previewName" class="px-muted px-xs px-truncate"></span>
-          <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image, copied into the mod.">${icon("image")} Change…</button>
-          <div id="itemIdent">
-            <span class="px-label">ID</span>
-            <div id="itemIdBox" class="px-row" style="gap:6px;align-items:center"></div>
-            <div id="itemMeta"></div>
-          </div>
+    <div class="cols">
+      <div class="col">
+      <div class="section" id="itemSection">
+        <div class="px-panel-title">Details
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Upload the details: title, description, visibility, tags and the preview image." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
         </div>
-        <div id="fields">
-          <div class="field">
-            <span class="px-label">Title</span>
-            <input id="title" class="px-input" spellcheck="false" data-tip="The item's title, from the descriptor. Editing here writes it." />
-          </div>
-          <div class="field-pair">
-            <div class="field">
-              <span class="px-label">Mod version</span>
-              <input id="version" class="px-input" spellcheck="false" data-tip="Your mod's own version, from the descriptor." data-tip-wrap />
-            </div>
-            <div class="field">
-              <span class="px-label">Game version</span>
-              <input id="supported" class="px-input" spellcheck="false" data-tip="The game version the mod declares it works with." data-tip-wrap />
+        <div id="itemGrid">
+          <div id="previewBox" style="position:relative">
+            <span id="previewInfo" tabindex="0" data-tip="A square image, 512x512 or larger, PNG or JPG, under 1 MB." data-tip-wrap>${icon("alert")}</span>
+            <img id="preview" alt="Preview image" hidden />
+            <div id="previewEmpty">No preview image.<br/>Add a thumbnail.png to the mod.</div>
+            <span id="previewName" class="px-muted px-xs px-truncate"></span>
+            <button id="changePreview" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Pick a new preview image, copied into the mod.">${icon("image")} Change…</button>
+            <div id="itemIdent">
+              <span class="px-label">ID</span>
+              <div id="itemIdBox" class="px-row" style="gap:6px;align-items:center"></div>
+              <div id="itemMeta"></div>
             </div>
           </div>
-          <div class="field">
-            <span class="px-label">Visibility</span>
-            <button id="visibility" class="px-btn px-dropdown" data-variant="outline" style="width:auto;min-width:180px;align-self:flex-start"><span></span>${icon("chevronDown")}</button>
-          </div>
-          <div class="field">
-            <span class="px-label">Tags</span>
-            <div id="tags" style="align-items:center"></div>
-          </div>
-          <div class="field">
-            <span class="px-label">Files <span id="filesBadge"></span></span>
-            <div id="filesBox" class="px-muted px-xs px-truncate"></div>
+          <div id="fields">
+            <div class="field">
+              <span class="px-label">Title</span>
+              <input id="title" class="px-input" spellcheck="false" data-tip="The item's title, from the descriptor. Editing here writes it." />
+            </div>
+            <div class="field-pair">
+              <div class="field">
+                <span class="px-label">Mod version</span>
+                <input id="version" class="px-input" spellcheck="false" data-tip="Your mod's own version, from the descriptor." data-tip-wrap />
+              </div>
+              <div class="field">
+                <span class="px-label">Game version</span>
+                <input id="supported" class="px-input" spellcheck="false" data-tip="The game version the mod declares it works with." data-tip-wrap />
+              </div>
+            </div>
+            <div class="field">
+              <span class="px-label">Visibility</span>
+              <button id="visibility" class="px-btn px-dropdown" data-variant="outline" style="width:auto;min-width:180px;align-self:flex-start"><span></span>${icon("chevronDown")}</button>
+            </div>
+            <div class="field">
+              <span class="px-label">Tags</span>
+              <div id="tags" style="align-items:center"></div>
+            </div>
+            <div class="field">
+              <span class="px-label">Files <span id="filesBadge"></span></span>
+              <div id="filesBox" class="px-muted px-xs px-truncate"></div>
+            </div>
           </div>
         </div>
+        <div id="statsSection" hidden><div id="stats"></div></div>
       </div>
-      <div id="statsSection" hidden><div id="stats"></div></div>
-    </div>
-    <div class="section">
-      <div class="px-panel-title">Publish</div>
-      <div id="checks"></div>
-      <div id="publishRows">
-        <div id="publishSummary"></div>
-        <div id="enableAllBox">
-          <button id="enableAll" class="px-btn" data-variant="outline" data-size="sm" data-tip="Switch every part on, translations included">${icon("check")} Enable all</button>
-          <div id="enableAllConfirm" hidden>
-            <span>This uploads every part, including translations and the changenote. Continue?</span>
-            <button id="enableAllYes" class="px-btn" data-variant="default" data-size="sm">Yes</button>
-            <button id="enableAllNo" class="px-btn" data-variant="ghost" data-size="sm">Cancel</button>
-          </div>
+      <div class="section" id="descriptionSection">
+        <div class="px-panel-title">Description</div>
+        <div class="bbprev-box">
+          <div id="descPreview" class="bbprev"></div>
+          <button id="descPreviewEdit" class="px-btn bbprev-edit" data-variant="ghost" data-size="icon-xs" aria-label="Edit description.bbcode" data-tip="Edit description.bbcode">${icon("pencil")}</button>
         </div>
-      </div>
-    </div>
-    <div class="section" id="modFilesSection">
-      <div class="px-panel-title">Mod files
-        <span class="px-grow"></span>
-        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Upload every file of the mod, replacing what subscribers have." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></span></label>
-      </div>
-      <div id="modRoot" class="px-truncate"></div>
-      <div class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
-    </div>
-    <div class="section" id="noteSection">
-      <div class="px-panel-title">Changenote
-        <span class="px-grow"></span>
-        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Send the changenote with the upload; it appears on the item's Change Notes tab." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></span></label>
-      </div>
-      <div id="noteSeg" class="px-toggle-group" data-spacing="0">
-        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="changelog" data-tip="Send the changelog entry that matches the mod version." data-tip-wrap>Changelog</button>
-        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="commit" data-tip="Send the subject of the mod's last git commit." data-tip-wrap>Last commit</button>
-        <button class="px-toggle" data-variant="outline" data-size="sm" data-src="write" data-tip="Write a note for this upload only." data-tip-wrap>Write</button>
-      </div>
-      <div id="noteChangelog"></div>
-      <div id="noteCommit"></div>
-      <div id="noteWrite">
-        <textarea id="note" class="px-textarea" spellcheck="false" placeholder="A note for this upload. BBCode works: [b], [list], [url=…]."></textarea>
         <div class="hintline">
-          <span class="hint">Sent with this upload only, not written to a changelog.</span>
-          <button id="noteBBCodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
+          <span class="hint">Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
+          <button id="bbcodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
+          <span class="px-grow"></span>
+          <button id="openDescFile" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Edit file</button>
+          <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
+          <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
         </div>
       </div>
-    </div>
-    <div class="section" id="previewsSection">
-      <div class="px-panel-title">Previews
-        <span class="px-grow"></span>
-        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Upload the gallery: the images and videos below replace the item's gallery on Steam. The thumbnail belongs to Details." data-tip-wrap data-tip-side="left">Previews <span class="px-switch"><input id="incPreviews" type="checkbox" checked /><span></span></span></label>
-      </div>
-      <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
-      <div id="gallery" class="gallery"></div>
-      <div class="hintline" style="margin-top:6px">
-        <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
-        <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
-      </div>
-      <div class="field" style="margin-top:8px">
-        <span class="px-label" style="display:inline-flex;align-items:center;gap:4px">Videos <button id="videosHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How to add several videos" data-tip="Several videos: separate the YouTube links or ids with commas. They show on the item in that order." data-tip-wrap>${icon("circleHelp")}</button></span>
-        <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
-      </div>
-    </div>
-    <div class="section" id="requirementsSection">
-      <div class="px-panel-title">Requirements
-        <span class="px-grow"></span>
-        <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
-        <label class="hdr-switch" data-tip="Upload the required DLC and items below, replacing what the item declares on Steam." data-tip-wrap data-tip-side="left">Upload <span class="px-switch"><input id="incRequirements" type="checkbox" checked /><span></span></span></label>
-      </div>
-      <div class="px-label" style="margin-bottom:4px">Required DLC</div>
-      <div id="dlcBox"></div>
-      <div class="px-label" style="margin:10px 0 4px">Required items</div>
-      <div id="itemsBox" class="px-chips"></div>
-      <div class="field" style="margin-top:6px">
-        <span class="px-label">Add a required item</span>
-        <div class="px-row" style="gap:6px;align-items:center">
-          <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link, then Enter" style="flex:1 1 auto;min-width:0;max-width:360px" />
-          <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;flex:0 0 auto" data-tip="Pick an installed Workshop mod">${icon("plus")} Installed${icon("chevronDown")}</button>
+      <div class="section" id="previewsSection">
+        <div class="px-panel-title">Previews
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Upload the gallery: the images and videos below replace the item's gallery on Steam. The thumbnail belongs to Details." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incPreviews" type="checkbox" checked /><span></span></span></label>
+        </div>
+        <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
+        <div id="gallery" class="gallery"></div>
+        <div class="hintline" style="margin-top:6px">
+          <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
+          <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <span class="px-label" style="display:inline-flex;align-items:center;gap:4px">Videos <button id="videosHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="How to add several videos" data-tip="Several videos: separate the YouTube links or ids with commas. They show on the item in that order." data-tip-wrap>${icon("circleHelp")}</button></span>
+          <input id="videos" class="px-input" spellcheck="false" placeholder="YouTube links or ids, comma separated" data-tip="Saved to previews/videos.txt. Enter or leaving the field writes it." data-tip-wrap />
         </div>
       </div>
-    </div>
-    <div class="section wide">
-      <div class="px-panel-title">Description</div>
-      <div class="bbprev-box">
-        <div id="descPreview" class="bbprev"></div>
-        <button id="descPreviewEdit" class="px-btn bbprev-edit" data-variant="ghost" data-size="icon-xs" aria-label="Edit description.bbcode" data-tip="Edit description.bbcode">${icon("pencil")}</button>
       </div>
-      <div class="hintline">
-        <span class="hint">Edit description.bbcode in the editor; the preview is roughly how the Workshop page renders it.</span>
-        <button id="bbcodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
-        <span class="px-grow"></span>
-        <button id="openDescFile" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open the workshop folder's description.bbcode in the editor">${icon("pencil")} Edit file</button>
-        <button id="reloadLocal" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Re-read the description and translations from the local files" data-tip-wrap>${icon("rotate")} Reload</button>
-        <button id="pullDesc" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Replace the draft with the description currently on Steam" disabled>${icon("arrowDown")} Fetch from Steam</button>
+      <div class="col">
+      <div class="section" id="publishSection">
+        <div class="px-panel-title">Publish</div>
+        <div id="checks"></div>
+        <div id="publishRows">
+          <div id="publishSummary"></div>
+          <div id="enableAllBox">
+            <button id="enableAll" class="px-btn" data-variant="outline" data-size="sm" data-tip="Switch every part on, translations included">${icon("check")} Enable all</button>
+            <div id="enableAllConfirm" hidden>
+              <span>This uploads every part, including translations and the changenote. Continue?</span>
+              <button id="enableAllYes" class="px-btn" data-variant="default" data-size="sm">Yes</button>
+              <button id="enableAllNo" class="px-btn" data-variant="ghost" data-size="sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section" id="modFilesSection">
+        <div class="px-panel-title">Mod files
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Upload every file of the mod, replacing what subscribers have." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></span></label>
+        </div>
+        <div id="modRoot" class="px-truncate"></div>
+        <div class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
+      </div>
+      <div class="section" id="noteSection">
+        <div class="px-panel-title">Changenote
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Send the changenote with the upload; it appears on the item's Change Notes tab." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incNote" type="checkbox" checked /><span></span></span></label>
+        </div>
+        <div id="noteSeg" class="px-toggle-group" data-spacing="0">
+          <button class="px-toggle" data-variant="outline" data-size="sm" data-src="changelog" data-tip="Send the changelog entry that matches the mod version." data-tip-wrap>Changelog</button>
+          <button class="px-toggle" data-variant="outline" data-size="sm" data-src="release" data-tip="Send the notes of the mod's latest GitHub release, read through the gh CLI." data-tip-wrap>Release</button>
+          <button class="px-toggle" data-variant="outline" data-size="sm" data-src="commit" data-tip="Send the subject of the mod's last git commit." data-tip-wrap>Last commit</button>
+          <button class="px-toggle" data-variant="outline" data-size="sm" data-src="write" data-tip="Write a note for this upload only." data-tip-wrap>Write</button>
+        </div>
+        <div id="noteChangelog"></div>
+        <div id="noteRelease"></div>
+        <div id="noteCommit"></div>
+        <div id="noteWrite">
+          <textarea id="note" class="px-textarea" spellcheck="false" placeholder="A note for this upload. BBCode works: [b], [list], [url=…]."></textarea>
+          <div class="hintline">
+            <span class="hint">Sent with this upload only, not written to a changelog.</span>
+            <button id="noteBBCodeHelp" class="px-btn" data-variant="ghost" data-size="icon-xs" aria-label="BBCode help" data-tip="The tags Steam renders">${icon("circleHelp")}</button>
+          </div>
+        </div>
+      </div>
+      <div class="section" id="requirementsSection">
+        <div class="px-panel-title">Requirements
+          <span class="px-grow"></span>
+          <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
+          <label class="hdr-switch" data-tip="Upload the required DLC and items below, replacing what the item declares on Steam." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incRequirements" type="checkbox" checked /><span></span></span></label>
+        </div>
+        <div class="px-label" style="margin-bottom:4px">Required DLC</div>
+        <div id="dlcBox"></div>
+        <div class="px-label" style="margin:10px 0 4px">Required items</div>
+        <div id="itemsBox" class="px-chips"></div>
+        <div class="field" style="margin-top:6px">
+          <span class="px-label">Add a required item</span>
+          <div class="px-row" style="gap:6px;align-items:center">
+            <input id="itemIdInput" class="px-input" spellcheck="false" placeholder="Workshop id or link, then Enter" style="flex:1 1 auto;min-width:0;max-width:360px" />
+            <button id="addItem" class="px-btn px-dropdown" data-variant="outline" data-size="sm" style="width:auto;flex:0 0 auto" data-tip="Pick an installed Workshop mod">${icon("plus")} Installed${icon("chevronDown")}</button>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
     <div class="section wide" id="translationsSection">

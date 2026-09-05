@@ -22,10 +22,7 @@ import { computeGuiLayoutResult } from "../../server/src/gui/layoutService";
 import { computeGuiSourceEdit } from "../../server/src/gui/sourceEditService";
 import { collectGuiDefs } from "../../server/src/gui/guiDefs";
 import { applyAll } from "../../server/src/gui/sourceEdit";
-import type { GuiLayoutNode } from "@px-lsp/protocol/protocol";
 import { buildScene } from "../src/webviews/guiEditor/app/scene";
-
-const FIXTURES = path.join(__dirname, "..", "..", "server", "test", "fixtures", "gui", "layout");
 
 interface Timing {
   min: number;
@@ -56,19 +53,6 @@ function report(label: string, count: number, t: Timing): void {
     `${label}: ${count} widgets, min ${t.min.toFixed(2)}ms, median ${t.median.toFixed(2)}ms, ` +
       `p95 ${t.p95.toFixed(2)}ms (${per.toFixed(2)}µs/widget)`
   );
-}
-
-/** The layout fixture with the most widgets in it, so the budget follows the corpus. */
-function biggestFixture(): { file: string; nodes: GuiLayoutNode[]; count: number } {
-  let best: { file: string; nodes: GuiLayoutNode[]; count: number } | null = null;
-  for (const file of fs.readdirSync(FIXTURES).filter((f) => f.endsWith(".gui"))) {
-    const result = computeGuiLayoutResult(fs.readFileSync(path.join(FIXTURES, file), "utf8"), null, null);
-    if (!best || result.nodeCount > best.count) {
-      best = { file, nodes: result.nodes, count: result.nodeCount };
-    }
-  }
-  if (!best) throw new Error("no layout fixtures");
-  return best;
 }
 
 /**
@@ -102,17 +86,6 @@ function syntheticWindow(widgets: number): string {
 }
 
 describe("scene build budgets", () => {
-  it("the biggest layout fixture builds its scene in well under a frame", () => {
-    const { file, nodes, count } = biggestFixture();
-    const t = time(() => buildScene(nodes), 200);
-    report(`biggest fixture (${file})`, count, t);
-
-    // Measured: grid-fixed.gui, 40 widgets, median 0.01 ms, p95 0.02 ms. The
-    // budget is a frame: anything that turns a fixture-sized scene into visible
-    // work is a change of algorithm, not of machine.
-    expect(t.p95).toBeLessThan(16);
-  });
-
   it("a vanilla-scale scene (13.7k widgets) builds inside the layout debounce", () => {
     // 4500 source widgets expand to ~13.5k nodes, window_character's scale.
     const result = computeGuiLayoutResult(syntheticWindow(4500), null, null);

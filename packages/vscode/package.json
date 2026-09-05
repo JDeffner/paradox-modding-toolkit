@@ -667,7 +667,7 @@
         "command": "px.openBBCodePreview",
         "category": "Paradox",
         "title": "Open BBCode Preview",
-        "icon": "$(eye)"
+        "icon": "$(preview)"
       },
       {
         "command": "px.openBBCodePreviewSide",
@@ -1227,7 +1227,7 @@
         },
         {
           "command": "px.insertDate",
-          "when": "px.isCk3Workspace && editorTextFocus"
+          "when": "px.isCk3Workspace"
         },
         {
           "command": "px.declareCalendar",
@@ -1632,7 +1632,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "px.editBBCodeAsMarkdown",
+          "command": "px.openBBCodePreview",
           "when": "editorLangId == bbcode || resourceExtname == .bbcode",
           "group": "navigation@2"
         },

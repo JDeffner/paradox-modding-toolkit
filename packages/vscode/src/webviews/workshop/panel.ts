@@ -51,6 +51,7 @@ import {
   findPreview,
   friendlyError,
   lastCommitSubject,
+  latestRelease,
   LEGAL_AGREEMENT_URL,
   makeStagingDir,
   persistPublishedId,
@@ -62,7 +63,7 @@ import {
   workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
-import { bbcodeToMarkdown } from "../../steam/bbcodeMarkdown";
+import { bbcodeToMarkdown, markdownToBBCode } from "../../steam/bbcodeMarkdown";
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -91,6 +92,17 @@ export interface WorkshopPanelOptions {
 
 /** How long the listing files may keep changing before the panel re-reads them. */
 const LISTING_RELOAD_MS = 300;
+
+/** The latest GitHub release as the panel shows it: notes already in BBCode. */
+async function releaseNoteFor(root: string): Promise<{ tag: string; name: string; text: string } | null> {
+  const release = await latestRelease(root);
+  if (!release) return null;
+  return {
+    tag: release.tag,
+    name: release.name,
+    text: release.body.trim() ? markdownToBBCode(release.body) : "",
+  };
+}
 
 export class WorkshopPanel {
   private static instance: WorkshopPanel | undefined;
@@ -376,6 +388,7 @@ export class WorkshopPanel {
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
+      releaseNote: await releaseNoteFor(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
       changelogDisplay:
         changelogRel === "" || changelogRel.startsWith("..")
@@ -976,6 +989,7 @@ export class WorkshopPanel {
       if (done.action !== "query" || !done.item) throw new Error("Steam returned no item details");
       const item = done.item;
       const wrote: string[] = [];
+      const skipped: string[] = [];
 
       if (parts.details || parts.description || parts.translations) {
         step("Text", "writing text…");
@@ -1036,8 +1050,14 @@ export class WorkshopPanel {
             path.basename(p.originalFileName || "", ext) || `steam-${String(i + 1).padStart(2, "0")}`;
           const name = `${base}${ext}`;
           step("Images", `downloading ${name} (${i + 1}/${images.length})…`);
-          fs.writeFileSync(path.join(previewsDir, name), await download(p.urlOrVideoId));
-          names.push(name);
+          // One dead CDN link (Steam answers 404 for a gallery image for a
+          // while after it is replaced) must not cost the parts after it.
+          try {
+            fs.writeFileSync(path.join(previewsDir, name), await download(p.urlOrVideoId));
+            names.push(name);
+          } catch (e) {
+            skipped.push(`${name} (${e instanceof Error ? e.message : String(e)})`);
+          }
         }
         if (names.length) writePreviewOrder(dir, names);
         writeVideos(
@@ -1048,8 +1068,12 @@ export class WorkshopPanel {
       }
       if (parts.thumbnail && item.previewUrl) {
         const target = info?.previewPath ?? path.join(root, "thumbnail.png");
-        fs.writeFileSync(target, await download(item.previewUrl));
-        wrote.push(path.basename(target));
+        try {
+          fs.writeFileSync(target, await download(item.previewUrl));
+          wrote.push(path.basename(target));
+        } catch (e) {
+          skipped.push(`${path.basename(target)} (${e instanceof Error ? e.message : String(e)})`);
+        }
       }
 
       if (parts.requirements) {
@@ -1057,9 +1081,12 @@ export class WorkshopPanel {
         writeDependencies(dir, { apps: item.appDependencies, items: item.children });
         wrote.push("dependencies.json");
       }
-      this.notify(
-        wrote.length ? `Wrote ${wrote.join(", ")} to ${dir}.` : "Nothing was selected to download."
-      );
+      const summary = wrote.length
+        ? `Wrote ${wrote.join(", ")} to ${dir}.`
+        : "Nothing was selected to download.";
+      if (skipped.length)
+        this.notifyError(`${summary} Not downloaded: ${skipped.join("; ")}`, new Error(skipped.join("; ")));
+      else this.notify(summary);
     } catch (e) {
       this.notifyError(`Pulling the listing failed - ${friendlyError(e, meta)}`, e);
     } finally {

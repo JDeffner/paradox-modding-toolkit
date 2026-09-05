@@ -54,7 +54,7 @@ export function readCalendarFile(modRoot: string, names: ConfigDirNames): Calend
       file,
       error:
         'not a usable calendar: needs a whole-number "epoch" (1 or more), a non-empty "after" era label, ' +
-        'a "before" label different from "after" when present, and distinct "months" with 1 to 999 days each',
+        'a "before" label different from "after" when present, and, when "months" is given, exactly twelve distinct names',
     };
   }
   return { file, calendar };

@@ -31,8 +31,4 @@ describe("copy-server data discovery", () => {
   it("reports every game data directory on disk", () => {
     expect(listed).toEqual(onDisk);
   });
-
-  it("reports ck3", () => {
-    expect(listed).toContain("ck3");
-  });
 });

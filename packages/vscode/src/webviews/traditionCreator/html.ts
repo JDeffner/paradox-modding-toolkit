@@ -53,6 +53,13 @@ ${uiCss}
   #sections {
     max-width: 760px; padding: 12px 16px 60px; display: flex; flex-direction: column; gap: 6px;
   }
+  /* The form sits centred in its pane rather than hugging its left edge, its
+     label column is wide enough for the game's own field names, and a
+     single-line control stops at a readable width instead of stretching to
+     the pane; a block control (a text, a picture strip) keeps the full width. */
+  #form #sections { margin: 0 auto; width: 100%; }
+  #form .px-field { grid-template-columns: 148px minmax(0, 1fr); }
+  #form .px-field > .px-input, #form .px-field > .px-dropdown, #form .px-field > .px-select { max-width: 520px; }
 
   /* A folding section (px-ui rule 7: sections fold, with a caret in the head). */
   .fold { display: flex; flex-direction: column; border-bottom: 1px solid var(--px-border); }
@@ -100,6 +107,15 @@ ${uiCss}
     border-radius: var(--px-radius-sm);
   }
   .layerthumb[data-empty] { border: 1px dashed var(--px-border); }
+  /* The files a row's draw can land on, under the row and aligned with its
+     slot: small, so a folder of eight fits on one line. */
+  .layeroptions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 102px; margin-top: -2px; }
+  .layeroptions > .px-xs:first-child { width: 100%; }
+  .layeroptions .layerthumb { width: 92px; height: 48px; }
+  .layeroption {
+    padding: 0; border: 1px solid transparent; border-radius: var(--px-radius-sm); background: none; cursor: pointer;
+  }
+  .layeroption:hover, .layeroption:focus-visible { border-color: var(--px-ring); }
   /* The live composed tile, and the same box empty while nothing is picked. */
   .iconlive { position: relative; width: 220px; height: 120px; }
   .iconlive > .px-tradicon { position: absolute; inset: 0; width: 100%; height: 100%; }

@@ -15,14 +15,8 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseScript, decode } from "../src/parser";
 import { scanRoot } from "../src/index/indexer";
-import { loadSchema } from "../src/schema/loader";
-import { CK3_SCHEMA } from "../src/games/ck3/schema";
-import { CompletionFeature } from "../src/features/completion";
-import { provideHover } from "../src/features/hover";
-import { ServerData } from "../src/serverData";
 import { devPath } from "../../../scripts/devPaths";
 
 const CORPUS = devPath("corpusPath");
@@ -100,52 +94,4 @@ run("mod corpus (AGOT)", () => {
     expect(def, "known documented effect indexed").toBeDefined();
     expect(def!.doc, "doc prose captured").toContain("disburse_tour_activity_rewards");
   }, 120000);
-});
-
-// Smoke tests for the §B2/§B3 wiring. Synthetic documents — always run.
-describe("character_interaction completion & hover smoke (§B2/§B3)", () => {
-  const schema = loadSchema(null);
-  const interactionEntry = CK3_SCHEMA.find((e) => e.kind === "character_interaction")!;
-  const data = new ServerData();
-  const completion = new CompletionFeature(data, () => schema);
-  // Unique uri per document: the parse cache keys by uri+version, so reusing one
-  // uri with different content would serve a stale parse.
-  let n = 0;
-  const uri = () => `file:///mod/common/character_interactions/smoke-${n++}.txt`;
-
-  it("empty-prefix top-level completion offers is_shown and desc among the first items", () => {
-    const text = "my_interaction = {\n\t\n}";
-    const doc = TextDocument.create(uri(), "paradox", 1, text);
-    const offset = text.indexOf("\n\t") + 2;
-    const { items } = completion.provide(doc, offset, new Set(["character"]), interactionEntry);
-    // Sort as VS Code would (by sortText) and take the leading window.
-    const sorted = [...items].sort((a, b) => (a.sortText ?? a.label).localeCompare(b.sortText ?? b.label));
-    const firstLabels = sorted.slice(0, 40).map((i) => i.label);
-    expect(firstLabels).toContain("is_shown");
-    expect(firstLabels).toContain("desc");
-  });
-
-  it("completion after scope: offers actor / recipient / secondary_recipient", () => {
-    const text = "my_interaction = {\n\tis_shown = { scope: }\n}";
-    const doc = TextDocument.create(uri(), "paradox", 1, text);
-    const offset = text.indexOf("scope:") + "scope:".length;
-    const { items } = completion.provide(doc, offset, new Set(["character"]), interactionEntry);
-    const labels = items.map((i) => i.label);
-    expect(labels).toEqual(expect.arrayContaining(["actor", "recipient", "secondary_recipient"]));
-  });
-
-  it("hover on a structure key returns the doc", () => {
-    const text = "my_interaction = {\n\tis_shown = { }\n}";
-    const doc = TextDocument.create(uri(), "paradox", 1, text);
-    const hover = provideHover(
-      data,
-      doc,
-      { line: 1, character: 2 },
-      new Set(["character"]),
-      interactionEntry,
-      () => schema
-    );
-    expect(hover).not.toBeNull();
-    expect((hover!.contents as { value: string }).value).toContain("character_interactions");
-  });
 });

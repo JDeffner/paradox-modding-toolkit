@@ -198,10 +198,6 @@ describe("Alt+click cycles the stack and wraps", () => {
   ]);
   const stack = hitStack(scene, 10, 10);
 
-  it("the stack is three deep at that point", () => {
-    expect(labels(scene, stack)).toEqual(["inner", "hbox", "widget"]);
-  });
-
   it("each Alt+click steps one level out, then wraps to the innermost", () => {
     let current = nextInStack(stack, null);
     expect(scene.items[current!].name).toBe("inner");

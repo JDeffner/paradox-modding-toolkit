@@ -17,7 +17,7 @@
  * hover.
  */
 import type { DefinitionFormKey, EventVocabularyItem } from "@px-lsp/protocol/protocol";
-import { isValidScriptDate, parseScriptDate, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import { isValidScriptDate, parseScriptDate } from "@px-lsp/protocol/calendar";
 import { iconEl } from "../../shared/icons";
 import { menu, popover, toast } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
@@ -25,7 +25,7 @@ import { scriptSection } from "../../shared/scriptSection";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
 import { clampToViewport, installTips } from "../../shared/tips";
-import { traditionIcon as traditionIconEl } from "../../shared/traditionIcon";
+import { stackLayers, traditionIcon as traditionIconEl } from "../../shared/traditionIcon";
 import {
   colorField,
   enumField,
@@ -147,6 +147,8 @@ let loadedDlcRows: DlcTradition[] = [];
 /** What the preview draws, kept as the fields change so it never re-reads them. */
 let pillarPicks = new Map<string, string>();
 let traditionPicks: string[] = [];
+/** The traditions field of the current form, so a tradition saved elsewhere can join it. */
+let tradField: ReturnType<typeof traditionsField> | null = null;
 
 const nameInput = $<HTMLInputElement>("name");
 
@@ -253,11 +255,7 @@ function paintImages(): void {
  */
 function traditionIcon(name: string, size: number): HTMLElement {
   const layers = init?.catalog.traditions[name]?.layers ?? [];
-  return traditionIconEl(
-    layers.map((rel) => ({ rel })),
-    size,
-    (rel) => imageUrl(rel, TRADITION_DIM)
-  );
+  return traditionIconEl(stackLayers(layers), size, (rel) => imageUrl(rel, TRADITION_DIM));
 }
 
 // ---------------------------------------------------------------------------
@@ -421,7 +419,7 @@ function searchPopover(
 function traditionsField(
   values: readonly string[],
   onChange: () => void
-): { el: HTMLElement; read(): string[] } {
+): { el: HTMLElement; read(): string[]; add(value: string): void } {
   let current = [...values];
   const box = el("div", "px-chips");
   const add = ghost("Add tradition", "plus");
@@ -504,7 +502,16 @@ function traditionsField(
       }
     });
   paint();
-  return { el: fieldRow("Traditions", docOf("traditions"), box), read: () => [...current] };
+  return {
+    el: fieldRow("Traditions", docOf("traditions"), box),
+    read: () => [...current],
+    add: (value) => {
+      if (current.includes(value)) return;
+      current.push(value);
+      paint();
+      onChange();
+    },
+  };
 }
 
 /**
@@ -938,12 +945,13 @@ function render(): void {
   const traditions = section("traditions");
   traditions.replaceChildren();
   traditionPicks = tokensOf(raw("traditions"));
-  const tradField = traditionsField(traditionPicks, () => {
-    traditionPicks = tradField.read();
+  const field = traditionsField(traditionPicks, () => {
+    traditionPicks = field.read();
     refresh();
   });
-  bind("traditions", () => multiList(tradField.read()));
-  traditions.append(tradField.el);
+  tradField = field;
+  bind("traditions", () => multiList(field.read()));
+  traditions.append(field.el);
   loadedDlcRows = dlcTraditionsOf(source);
   dlcRows = loadedDlcRows.map((row) => ({ ...row }));
   traditions.append(dlcTraditionRows(refresh).el);
@@ -1012,12 +1020,9 @@ function render(): void {
   const checkCreated = (): void => {
     const text = created.get();
     const date = text === "" ? null : parseScriptDate(text);
-    // Only the month/day bounds are read here (monthsOf), never the era
-    // labels, so a workspace with no px.calendar gets the standard months
-    // isValidScriptDate falls back to anyway.
-    const cal: CalendarSetting = init?.calendar ?? { epoch: 1, after: "AD" };
+    // The engine's own bounds: a display calendar only renames months.
     createdNote.textContent =
-      text !== "" && (date === null || !isValidScriptDate(cal, date.y, date.m, date.d))
+      text !== "" && (date === null || !isValidScriptDate(date.y, date.m, date.d))
         ? `${text} is not a date the game reads. Write it as year.month.day, e.g. 650.1.1.`
         : "";
     refresh();
@@ -1290,7 +1295,7 @@ function prefetch(): void {
     imageUrl(`${PILLAR_ICONS}/${item.value}.dds`, dim);
   }
   for (const trad of Object.values(init?.catalog.traditions ?? {})) {
-    for (const rel of trad.layers) imageUrl(rel, TRADITION_DIM);
+    for (const rel of trad.layers) if (rel) imageUrl(rel, TRADITION_DIM);
   }
 }
 
@@ -1344,6 +1349,15 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       loaded = values();
       loadedDlcRows = dlcRows.map((row) => ({ ...row }));
       refresh();
+      break;
+    case "traditions":
+      if (!init) break;
+      init.form.options.culture_tradition = msg.options;
+      init.catalog = msg.catalog;
+      if (msg.add) {
+        tradField?.add(msg.add);
+        toast(`Added ${labelOf(msg.add)} to the culture.`);
+      } else refresh();
       break;
     case "idle":
       break;
