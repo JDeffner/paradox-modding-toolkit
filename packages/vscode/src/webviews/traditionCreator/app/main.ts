@@ -755,6 +755,10 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
       caption.dataset.tipWrap = "";
       const value = current[index] ?? "";
       const choice = folder.choices.find((c) => c.value === value);
+      // A value the picker does not list (a path into a subfolder, which the
+      // file may hold) still names one file: drawn as that file, never as a
+      // layer left out.
+      const rel = choice ? choice.rel : value ? `${folder.path}/${value}` : null;
       const trigger = dropdown(value, `No ${layerName(folder)}`);
       trigger.onclick = () => {
         askFor(
@@ -788,13 +792,16 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
           },
         });
       };
-      row.append(caption, layerSlot(choice ? choice.rel : null), trigger);
+      row.append(caption, layerSlot(rel), trigger);
       rows.append(row);
-      const options = layerOptions(folder, choice, (picked) => {
-        current[index] = picked;
-        paint();
-        emit();
-      });
+      const options =
+        value && !choice
+          ? null
+          : layerOptions(folder, choice, (picked) => {
+              current[index] = picked;
+              paint();
+              emit();
+            });
       if (options) rows.append(options);
     }
     if (layerFolders().length === 0) {
@@ -1181,7 +1188,7 @@ function buildBlock(): string {
 function layerFiles(picks: LayerPicks): (string | null)[] {
   return layerFolders().map((folder) => {
     const value = picks[String(folder.index)];
-    if (value) return folder.choices.find((c) => c.value === value)?.rel ?? null;
+    if (value) return folder.choices.find((c) => c.value === value)?.rel ?? `${folder.path}/${value}`;
     return (folder.choices.find((c) => !c.folder) ?? folder.choices[0])?.rel ?? null;
   });
 }

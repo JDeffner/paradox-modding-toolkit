@@ -19,30 +19,52 @@ export function lastCommitSubject(root: string): Promise<string> {
   return git(root, ["log", "-1", "--format=%s"]);
 }
 
-/**
- * The mod's latest GitHub release, read through the gh CLI, which finds the
- * repository on the git remote and uses the user's own login: its tag, title
- * and notes (Markdown). Null when gh is missing or signed out, the mod has no
- * GitHub remote, or nothing is released; a release with empty notes comes
- * back with an empty body so the panel can say that rather than fall back
- * silently. A tag alone carries no text, which is why the release is read.
- */
-export function latestRelease(root: string): Promise<{ tag: string; name: string; body: string } | null> {
+/** One gh command in the mod, its parsed JSON, or null when gh says no. */
+function gh<T>(root: string, args: string[]): Promise<T | null> {
   return new Promise((resolve) => {
-    cp.execFile(
-      "gh",
-      ["release", "view", "--json", "tagName,name,body"],
-      { cwd: root, windowsHide: true, timeout: 15_000 },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        try {
-          const json = JSON.parse(stdout) as { tagName?: string; name?: string; body?: string };
-          if (!json.tagName) return resolve(null);
-          resolve({ tag: json.tagName, name: json.name || json.tagName, body: json.body ?? "" });
-        } catch {
-          resolve(null);
-        }
+    cp.execFile("gh", args, { cwd: root, windowsHide: true, timeout: 15_000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try {
+        resolve(JSON.parse(stdout) as T);
+      } catch {
+        resolve(null);
       }
-    );
+    });
   });
+}
+
+/**
+ * The mod's newest GitHub release, read through the gh CLI, which finds the
+ * repository on the git remote and uses the user's own login: its tag, title
+ * and notes (Markdown). Newest by publication, a pre-release included: `gh
+ * release view` with no tag answers only GitHub's "latest", which skips
+ * pre-releases, and a mod that only ever tagged pre-releases would read as
+ * having none. Null when gh is missing or signed out, the mod has no GitHub
+ * remote, or nothing is released; a release with empty notes comes back with
+ * an empty body so the panel can say that rather than fall back silently. A
+ * tag alone carries no text, which is why the release is read.
+ */
+export async function latestRelease(
+  root: string
+): Promise<{ tag: string; name: string; body: string } | null> {
+  const list = await gh<{ tagName?: string }[]>(root, [
+    "release",
+    "list",
+    "--exclude-drafts",
+    "--limit",
+    "1",
+    "--json",
+    "tagName",
+  ]);
+  const tag = list?.[0]?.tagName;
+  if (!tag) return null;
+  const json = await gh<{ tagName?: string; name?: string; body?: string }>(root, [
+    "release",
+    "view",
+    tag,
+    "--json",
+    "tagName,name,body",
+  ]);
+  if (!json?.tagName) return null;
+  return { tag: json.tagName, name: json.name || json.tagName, body: json.body ?? "" };
 }

@@ -581,6 +581,29 @@ describe("editing a tradition the mod already has", () => {
     expect(save.block).toBe(CURRENT.text.replace("prestige = 300", "prestige = 500"));
   });
 
+  it("a layer named as a file inside its subfolder draws as that file, not as a layer left out", () => {
+    const app = boot();
+    // Vanilla never writes a path, so the picker does not list one; the file
+    // still names one picture, and the row must not read as a random draw.
+    const text = [
+      "tradition_px_seafarers = {",
+      "\tcategory = regional",
+      "\tlayers = {",
+      '\t\t0 = "martial/martial2.dds"',
+      "\t}",
+      "}",
+    ].join("\n");
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const trigger = layerTrigger(app, "0-background");
+    expect(trigger.textContent).toBe("martial/martial2.dds");
+    expect(trigger.closest(".layerrow")!.querySelector("img")?.dataset.rel).toBe(
+      `${ICONS}/0-background/martial/martial2.dds`
+    );
+    // No strip of candidate files under the row: the draw is not random.
+    expect(trigger.closest(".layerrow")!.nextElementSibling?.classList.contains("layeroptions")).toBe(false);
+    expect(app.script()).toContain('0 = "martial/martial2.dds"');
+  });
+
   it("keeps a cost the form cannot stand for exactly as the file writes it", () => {
     const app = boot();
     // What 195 of 197 vanilla traditions write: a script value block, not a

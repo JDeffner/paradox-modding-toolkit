@@ -798,7 +798,9 @@ function renderPicker(): void {
   // time, then the mod's own dynasties, then the game's, each under a heading.
   // With a search typed, the groups hold only what matches.
   const lastId = vscode.getState?.()?.lastDynasty;
-  const last = lastId ? shown.find((d) => d.id === lastId) : undefined;
+  // Found among every match, not the 400 shown: the dynasty opened last is
+  // the one row the list must not lose to the cap.
+  const last = lastId ? matches.find((d) => d.id === lastId) : undefined;
   const groups: [string, DynastySummary[]][] = [
     ["Last opened", last ? [last] : []],
     ["Your mod", shown.filter((d) => d.source === "mod" && d !== last)],

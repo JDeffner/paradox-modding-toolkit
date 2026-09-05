@@ -43,8 +43,11 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   layer gets a random file of its folder, so the tile now shows a stand-in for
   each left-out layer, says which layers the game will pick at random, and
   lists under each such row the files the game can land on, large enough to
-  tell apart; a file of a left-out layer is picked with one click on it. The
-  Culture Creator's tradition tiles follow the same rules.
+  tell apart; a file of a left-out layer is picked with one click on it. A
+  layer written as a file inside a subfolder (`0 = "martial/martial2.dds"`,
+  a form vanilla never writes) still draws as that file instead of reading
+  as a layer left out. The Culture Creator's tradition tiles follow the same
+  rules.
 
 - **Credits and Modding Tools are card pages.** Both wiki pages listed one
   project or tool per line down the pane; they now lay them out as one grid
@@ -63,8 +66,10 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   active segment pressed, in place of a toggle plus a dropdown.
 
 - **The Dynasty Tree's picker leads with your dynasties.** The list opens
-  with the dynasty you had open last, then the mod's own dynasties, then the
-  game's, each under a heading, and a search narrows every group.
+  with the dynasty you had open last in this panel, then the mod's own
+  dynasties, then the game's, each under a heading, and a search narrows
+  every group. The last-opened row is found among every dynasty, not only
+  the 400 the list shows, so a dynasty late in the alphabet is not lost.
 
 - **The Coat of Arms Designer fits the arms into a house frame the way the
   culture wearing it does.** The game's house widget takes its offset and
@@ -169,12 +174,14 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   thumbnail's image-rules hint sits on its own chip and turns red when the
   image is too large.
 
-- **A changenote can come from the mod's latest GitHub release.** A fourth
-  source, Release, sends the notes of the latest release, read through the gh
-  CLI signed in as you and converted from Markdown to BBCode; it is the
-  default when the mod has no changelog entry for the version but has a
-  release with notes. A tag alone carries no text, which is why the release
-  is read and not the tag.
+- **A changenote can come from the mod's newest GitHub release.** A fourth
+  source, Release, sends the notes of the newest release, a pre-release
+  included, read through the gh CLI signed in as you and converted from
+  Markdown to BBCode; it is the default when the mod has no changelog entry
+  for the version but has a release with notes. A tag alone carries no text,
+  which is why the release is read and not the tag, and the release is found
+  through gh's list rather than its "latest", which skips pre-releases and
+  read a mod that only ever tagged pre-releases as having none.
 
 - **BBCode previews draw dividers and headings the way the Workshop page
   does.** An `[hr]` rule was drawn in the border color on a box of that same
