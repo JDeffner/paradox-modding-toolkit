@@ -30,7 +30,7 @@ const ENV_SUFFIX = {
   modPath: "MOD_PATH",
   /** A large third-party mod used as eval corpus (rank-eval, modCorpus tests). */
   corpusPath: "MOD_CORPUS",
-  /** The tiger binary, for gen-skill's `<tiger>` placeholder. */
+  /** The tiger binary. */
   tigerPath: "TIGER_PATH",
 } as const;
 

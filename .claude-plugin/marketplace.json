@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "paradox-modding-toolkit",
+  "description": "Skills from the Paradox Modding Toolkit: Crusader Kings III and Victoria 3 modding assistants.",
+  "owner": {
+    "name": "Joël Deffner",
+    "url": "https://github.com/JDeffner"
+  },
+  "plugins": [
+    {
+      "name": "paradox-modding-skills",
+      "description": "Agent skills for Crusader Kings III and Victoria 3 modding: ground truth from the installed game, script_docs lookups, tiger validation, and per-system recipes.",
+      "source": "./",
+      "category": "gaming",
+      "keywords": ["paradox", "crusader-kings", "ck3", "victoria-3", "vic3", "modding"]
+    }
+  ]
+}

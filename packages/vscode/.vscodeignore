@@ -2,7 +2,6 @@
 node_modules/**
 src/**
 test/**
-skills/**
 **/*.map
 *.vsix
 tsconfig.json

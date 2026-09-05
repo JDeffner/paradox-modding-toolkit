@@ -145,8 +145,9 @@ bottom says exactly where they stop.
   file icon (the crown for Crusader Kings III, the PX box for the others) and
   the status bar names the game, e.g. "Paradox Script (Victoria 3)". Snippets
   follow the same line, so CK3 effects stay out of a Victoria 3 file.
-- **A [Claude/agent skill for CK3 modding](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Claude-Skill)**
-  ships in `skills/ck3-modding/` for AI-assisted modding.
+- **[Agent skills for CK3 and Victoria 3 modding](https://github.com/JDeffner/paradox-modding-toolkit/tree/main/skills)**
+  install into Claude Code, Cursor, Codex and most other agents with
+  `npx skills add JDeffner/paradox-modding-toolkit`.
 - **Not tied to VS Code**: the language server is standard LSP over `--stdio`
   and runs from neovim, Zed, Helix or your own application — see
   [Outside VS Code](#outside-vs-code).

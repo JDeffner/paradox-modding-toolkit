@@ -96,7 +96,7 @@ applied:
 | `packages/*/test/` | Vitest suites. `vscodeFuzzy.ts` = port of VS Code's suggest scoring; `rankEvalCore.ts` = ranking eval; `lspSmoke.test.ts` forks the real bundle over node IPC |
 | `scripts/` | Build-time harvests, evals, packaging (`package-test.mjs`), brand generation |
 | `packages/vscode/media/` | Icon, walkthrough pages, banner, `image-guidelines.md`. `media/` ships in the vsix; `docs/` does not |
-| `packages/vscode/skills/ck3-modding/` | Agent skill for CK3 modding itself. Machine-agnostic; excluded from the vsix |
+| `skills/` | Agent skills for CK3 and Victoria 3 modding (`ck3-modding`, `vic3-modding`), installable into any agent; not part of the vsix. Install recipes in `skills/README.md` |
 | `packages/vscode/syntaxes/` | TextMate grammars |
 | `docs/` | Tracked: `diagnostics/`, `gui-designer/`, `release/` (read by release.yml), `PROTOCOL.md`, `EMBEDDING.md`, `PERFORMANCE.md`, `deferred-features.md`, `RELEASING.md`, `file-icons.md`, `webviews.md`. Everything else under `docs/` is gitignored and should not exist |
 

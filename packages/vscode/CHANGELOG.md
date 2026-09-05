@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **The agent skills install anywhere with one command.** The CK3 skill and
+  a new Victoria 3 skill now live in `skills/` at the repo root, in the open
+  Agent Skills format: `npx skills add JDeffner/paradox-modding-toolkit`
+  installs them into Claude Code, Cursor, Codex and about seventy other
+  agents, and the repo doubles as a Claude Code plugin marketplace
+  (`/plugin marketplace add JDeffner/paradox-modding-toolkit`). The CK3 skill
+  gained `scripts/ck3_docs.py`: it finds the game, the logs, the mod folder
+  and ck3-tiger on any machine, prints the patch, the DLC and the age of the
+  `script_docs` dumps, checks whether a script identifier exists in the
+  installed build (1905 effects, 1784 triggers, 742 modifiers on 1.19), and
+  points at a folder's `_*.info` doc. The machine-specific skill generator is
+  gone; every path is resolved at run time instead.
+
 ## 0.4.0 (beta) - the visual creators release
 
 Everything the 0.3.5 and 0.3.6 pre-releases carried is now a normal release:

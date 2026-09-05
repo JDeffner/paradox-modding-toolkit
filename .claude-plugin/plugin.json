@@ -1,0 +1,15 @@
+{
+  "name": "paradox-modding-skills",
+  "displayName": "Paradox Modding Skills",
+  "version": "1.0.0",
+  "description": "Agent skills for Crusader Kings III and Victoria 3 modding: ground truth from the installed game, script_docs lookups, tiger validation, and per-system recipes.",
+  "author": {
+    "name": "Joël Deffner",
+    "url": "https://github.com/JDeffner"
+  },
+  "homepage": "https://github.com/JDeffner/paradox-modding-toolkit/tree/main/skills",
+  "repository": "https://github.com/JDeffner/paradox-modding-toolkit",
+  "license": "GPL-3.0-or-later",
+  "keywords": ["paradox", "crusader-kings", "ck3", "victoria-3", "vic3", "modding", "jomini"],
+  "skills": "./skills/"
+}
