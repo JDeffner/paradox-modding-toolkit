@@ -299,6 +299,31 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     expect(app.errors).toEqual([]);
   });
 
+  it("Copy on a background color and Paste on an emblem slot carries the color over", () => {
+    const app = boot();
+    const byTip = (host: string, tip: string): HTMLButtonElement => {
+      const b = [...app.document.querySelectorAll<HTMLButtonElement>(`${host} .colorRow button`)].find((x) =>
+        x.dataset.tip?.startsWith(tip)
+      );
+      if (!b) throw new Error(`no ${tip} button in ${host}`);
+      return b;
+    };
+    app.tab("emblems");
+    // Nothing held yet: Paste is inert.
+    expect(byTip("#emblemBody", "Paste").disabled).toBe(true);
+    app.tab("background");
+    byTip("#bgColors", "Copy").dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+    app.tab("emblems");
+    const paste = byTip("#emblemBody", "Paste");
+    expect(paste.disabled).toBe(false);
+    paste.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+    const flag = app.current();
+    const layer = flag.layers[0];
+    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
+    expect(layer.colors[0]).toEqual({ ...flag.colors[0], name: "color1" });
+    expect(app.errors).toEqual([]);
+  });
+
   it("the scale lock is closed before anyone touches it", () => {
     const app = boot();
     app.tab("emblems");

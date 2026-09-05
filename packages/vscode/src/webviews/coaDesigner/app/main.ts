@@ -893,7 +893,13 @@ function openPalette(
   popover(anchor, root);
 }
 
-/** One labelled swatch button per color slot the entry declares. */
+/**
+ * The one color Copy holds, for Paste on any other slot: a background color
+ * onto an emblem, one emblem's onto another. Lives as long as the page.
+ */
+let heldColor: CoaColor | null = null;
+
+/** One labelled swatch button per color slot the entry declares, with Copy and Paste beside it. */
 function colorRows(
   host: HTMLElement,
   colors: CoaColor[],
@@ -920,18 +926,39 @@ function colorRows(
             : "unset";
     };
     paint();
-    btn.onclick = () =>
-      openPalette(btn, colors[slot], (c) => {
-        const name = COLOR_SLOTS[slot];
-        ensureSlot(colors, slot, { name, kind: "named", value: "white" });
-        colors[slot] = { ...c, name };
-        paint();
-        onChange();
-      });
+    const set = (c: CoaColor): void => {
+      const name = COLOR_SLOTS[slot];
+      ensureSlot(colors, slot, { name, kind: "named", value: "white" });
+      colors[slot] = { ...c, name };
+      paint();
+      onChange();
+    };
+    btn.onclick = () => openPalette(btn, colors[slot], set);
+    const copy = iconButton("copy", "Copy this color", () => {
+      if (!colors[slot]) return;
+      heldColor = { ...colors[slot] };
+      // Every Paste on the page wakes up at once.
+      for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>(".colorRow [data-paste]")))
+        armPaste(b);
+    });
+    const paste = iconButton("paste", "", () => {
+      if (heldColor) set(heldColor);
+    });
+    paste.dataset.paste = "";
+    armPaste(paste);
     const row = el("div", "colorRow");
-    row.append(el("span", "px-label", labels[slot] ?? COLOR_SLOTS[slot]), btn);
+    row.append(el("span", "px-label", labels[slot] ?? COLOR_SLOTS[slot]), btn, copy, paste);
     host.append(row);
   }
+}
+
+/** A Paste button is live only while a color is held, and says which. */
+function armPaste(b: HTMLButtonElement): void {
+  b.disabled = !heldColor;
+  const rgb = rgbOf(heldColor ?? undefined);
+  b.dataset.tip = !heldColor
+    ? "Paste (copy a color first)"
+    : `Paste ${heldColor.kind === "named" ? heldColor.value : rgb ? rgbToHex(rgb) : heldColor.value}`;
 }
 
 /** The game's own names for the five color slots (coa_designer_l_english.yml). */

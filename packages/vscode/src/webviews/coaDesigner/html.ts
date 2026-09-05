@@ -112,8 +112,11 @@ ${uiCss}
   .gridScroll { flex: 1 1 auto; min-height: 120px; overflow: auto; scrollbar-width: none; align-content: start; }
   .gridScroll::-webkit-scrollbar { display: none; }
 
-  /* Color rows: a labelled swatch button per slot the pattern or emblem shows. */
-  .colorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+  /* Color rows: a labelled swatch button per slot the pattern or emblem shows,
+     then Copy and Paste for moving one color between slots. */
+  .colorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; }
+  .colorRow .px-btn[data-size="icon-xs"] { opacity: 0.75; }
+  .colorRow .px-btn[data-size="icon-xs"]:hover:not(:disabled) { opacity: 1; }
   .colorRow .px-label { white-space: nowrap; }
   .swatchBtn { width: 46px; padding: 0 6px; }
   .swatchBtn .px-swatch { width: 100%; height: 14px; border-radius: 3px; }

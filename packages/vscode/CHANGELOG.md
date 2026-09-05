@@ -24,6 +24,11 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
   the green then red channel, blue as overlay shading; the pattern's three
   channels in turn), and a pattern mask weighs the emblem's alpha the way
   the game's mask pass does, so edges blend as they do in the game.
+- **The Coat of Arms Designer's colors have Copy and Paste.** Every color
+  row, on the background and on an emblem, carries a Copy and a Paste button:
+  copy one slot and paste it onto any other, so an emblem takes the
+  background's primary in two clicks. Paste is inert until a color is held
+  and its tooltip names the color it holds.
 - **The Coat of Arms Designer opens in House Frame 03.** A house target, a
   character target and a design with no target wear it; dynasty and title
   targets keep their own frames.
