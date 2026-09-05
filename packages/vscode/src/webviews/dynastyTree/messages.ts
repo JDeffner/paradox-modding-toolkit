@@ -112,7 +112,7 @@ export type HostToApp =
       type: "init";
       gameName: string;
       mods: ModTarget[];
-      /** `px.calendar`, when the workspace declares one: how a date READS. */
+      /** The mod's calendar (calendar.json, else `px.calendar`), when there is one: how a date READS. */
       calendar?: CalendarSetting;
       /** Set when the workspace cannot be written to yet; the app says so. */
       setupProblem?: string;

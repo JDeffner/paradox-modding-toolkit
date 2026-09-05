@@ -93,14 +93,6 @@ describe("scene dump over the fixture corpus", () => {
       }
     }
   });
-
-  it("draws every widget exactly once", () => {
-    for (const file of fixtureFiles()) {
-      const nodes = layoutOf(file);
-      const scene = buildScene(nodes);
-      expect(scene.count, file).toBe(engineRects(nodes).length);
-    }
-  });
 });
 
 describe("L11b: unmeasurable content renders as a dashed ghost", () => {

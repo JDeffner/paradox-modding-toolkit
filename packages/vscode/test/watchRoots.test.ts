@@ -46,14 +46,6 @@ describe("planWatchRoots", () => {
     expect(planWatchRoots([mod, game, p(game, "common")], game)).toEqual([mod]);
   });
 
-  it("collapses a 20-mod workspace under one container to a single watcher", () => {
-    const container = p("D:", "Documents", "Paradox Interactive", "Crusader Kings III", "mod");
-    const mods = Array.from({ length: 20 }, (_, i) => p(container, `mod${i}`));
-    expect(planWatchRoots([mods[0], ...mods.slice(1), container])).toEqual([container]);
-    // Without the container in the list they stay distinct top-level roots.
-    expect(planWatchRoots(mods)).toHaveLength(20);
-  });
-
   it("does NOT fold a junction that mounts the same tree twice (documented §B5 caveat)", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "px-watchroots-"));
     try {

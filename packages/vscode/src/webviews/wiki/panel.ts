@@ -23,9 +23,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { creditsMarkdown } from "../credits/credits";
+import { creditsPage } from "../credits/credits";
 import { GAME_METAS } from "../../gameDetect";
-import { MODDING_TOOLS, moddingToolsMarkdown } from "./moddingTools";
+import { MODDING_TOOLS, moddingToolsPage } from "./moddingTools";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -259,22 +259,19 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       markdown: bbcode,
     });
   }
-  articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", markdown: creditsMarkdown() });
+  articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", ...creditsPage() });
 
-  // One alternate per game with a curated list; the app shows the selected
-  // game's. The markdown is built here, not read from a file: the table is a
-  // typed list in moddingTools.ts.
-  for (const id of Object.keys(MODDING_TOOLS)) {
-    const markdown = moddingToolsMarkdown(id, GAME_METAS[id]?.name ?? id);
-    if (!markdown) continue;
-    articles.push({
-      id: MODDING_TOOLS_ARTICLE,
-      title: "Modding Tools",
-      section: "Community",
-      game: id,
-      markdown,
-    });
-  }
+  // One page for every game, each card tagged with the games its tool serves.
+  // Built here, not read from a file: the list is typed in moddingTools.ts.
+  const gameNames = Object.fromEntries(
+    Object.keys(MODDING_TOOLS).map((id) => [id, GAME_METAS[id]?.name ?? id])
+  );
+  articles.push({
+    id: MODDING_TOOLS_ARTICLE,
+    title: "Modding Tools",
+    section: "Community",
+    ...moddingToolsPage(gameNames),
+  });
 
   // Copied from docs/diagnostics by scripts/copy-docs.mjs. README.md is the
   // repo's index page: the Diagnostics page is that index here, so it is skipped.

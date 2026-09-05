@@ -11,6 +11,7 @@
   },
   "scripts": {
     "compile": "pnpm --filter px-toolkit run compile",
+    "perf:history": "node --experimental-strip-types packages/server/test/perf/profileWorkspace.ts",
     "package:test": "node scripts/package-test.mjs",
     "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
     "watch:webviews": "node scripts/compile-webviews.mjs --watch",

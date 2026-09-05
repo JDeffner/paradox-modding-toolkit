@@ -39,6 +39,7 @@ import type {
   ModTarget,
 } from "../messages";
 import { GRID_COLUMNS } from "../messages";
+import { edgeStrips, placeArms, type Box } from "../frameGeometry";
 import { frameHint } from "../../flagBuilder/messages";
 import { targetAction } from "../../flagBuilder/target";
 import { middleEllipsis } from "../../flagBuilder/app/paths";
@@ -61,10 +62,9 @@ import {
 import {
   alignDeltas,
   ARMS_RECT,
+  boxBounds,
   DEFAULT_GRID_DIVISION,
-  distributeDeltas,
   GRID_DIVISIONS,
-  mirrorGroup,
   moveGroup,
   nudgeStep,
   rectCentre,
@@ -105,7 +105,9 @@ let flag: CoaFlag = { name: "new_coa", pattern: "", colors: [], layers: [] };
 /**
  * The game's two modes. "adjusted" is what "Adjust Existing Design" gives:
  * the structure of the opened design stays and only its colors and instances
- * move (COA_DESIGNER_BACKGROUND_PATTERN_DISABLED_IN_ADJUSTED_MODE).
+ * move (COA_DESIGNER_BACKGROUND_PATTERN_DISABLED_IN_ADJUSTED_MODE). The game
+ * locks the emblem textures there too; this editor does not, because a modder
+ * opening arms from a file to swap one emblem should not have to rebuild them.
  */
 let mode: "custom" | "adjusted" = "custom";
 let tab: DesignerTab = "background";
@@ -180,9 +182,9 @@ function allElements(): ElementRef[] {
 
 /**
  * What the tools act on: the selection, or, with nothing selected, the one
- * element the placement panel is showing. The panel's numbers already edited
- * that element with nothing selected; a mirror button beside them that did
- * nothing read as broken.
+ * element the placement panel is showing. The panel's numbers already edit that
+ * element with nothing selected, so a tool beside them that did nothing would
+ * read as broken.
  */
 function actedOn(): ElementRef[] {
   if (selection.length > 0) return selection;
@@ -202,14 +204,27 @@ function writeBoxes(boxes: readonly ElementBox[]): void {
   });
 }
 
+/**
+ * Every element bottom to top as the canvas draws them (render.ts): `depth`
+ * ascending across layers, file order among equals, no depth = 0.
+ */
+function drawOrder(): ElementRef[] {
+  const items: { ref: ElementRef; z: number; order: number }[] = [];
+  let order = 0;
+  flag.layers.forEach((layer, l) => {
+    for (let i = 0; i < instanceCount(layer); i++) {
+      const inst = layer.kind === "sub" ? undefined : layer.instances[i];
+      items.push({ ref: { layer: l, instance: i }, z: inst?.depth ?? 0, order: order++ });
+    }
+  });
+  return items.sort((a, b) => a.z - b.z || a.order - b.order).map((item) => item.ref);
+}
+
 /** The topmost element under the point, skipping locked layers. */
 function hitUnlocked(u: number, v: number): ElementRef | null {
-  for (let l = flag.layers.length - 1; l >= 0; l--) {
-    if (locked.has(l)) continue;
-    const layer = flag.layers[l];
-    for (let i = instanceCount(layer) - 1; i >= 0; i--) {
-      if (containsPoint(boxOf(layer, i), u, v)) return { layer: l, instance: i };
-    }
+  for (const ref of drawOrder().reverse()) {
+    if (locked.has(ref.layer)) continue;
+    if (containsPoint(boxOf(flag.layers[ref.layer], ref.instance), u, v)) return ref;
   }
   return null;
 }
@@ -370,56 +385,38 @@ function renderContext(): Parameters<typeof renderFlag>[3] {
 }
 
 /**
- * How much of a frame CELL the arms fill, per gui type. The game draws the
- * arms as the `coat_of_arms_icon` beside the frame inside one widget, so the
- * share is the icon's size over the frame's own drawn size (measured on 1.19,
- * gui/shared/coat_of_arms.gui: coa_house_huge draws coa_house_frame at
- * size 156 over a 120 icon, coa_dynasty_huge draws coa_dynasty_frame at
- * size 172 over the same 120; both sheets are framesize 160). The frame fills
- * the preview, so the arms are that share of it.
- */
-const ARMS_IN_FRAME: Record<string, number> = { house: 120 / 156, dynasty: 120 / 172 };
-
-/**
  * Where the arms sit on the canvas. Every mapping between pointer, selection
- * outline and pixels goes through this one rect.
+ * outline and pixels goes through the `arms` rect; the mask is drawn at
+ * `icon`, which the arms shrink and move inside (frameGeometry.ts). No frame:
+ * both are the whole canvas.
  */
-type Box = { x: number; y: number; w: number; h: number };
-
-/** A square share of the canvas, centred: how the game anchors both halves. */
-function centredBox(ratio: number): Box {
-  const w = canvas.width * ratio;
-  const h = canvas.height * ratio;
-  return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
-}
-
-function armsRect(): Box {
-  const mask = frameId ? images.get(`masks/${frameId}`) : null;
-  const frame = frameId ? images.get(`frames/${frameId}`) : null;
-  // The gui sizes the frames the cultures name, which is all of them but the
-  // two engine defaults: family comes from `house_coa_frame` in
-  // common/culture/cultures (flagBuilder/database.ts).
-  const family = frameId ? designer()?.frames.find((f) => f.id === frameId)?.family : undefined;
-  if (family && ARMS_IN_FRAME[family]) return centredBox(ARMS_IN_FRAME[family]);
-  const cell = frame ? frame.naturalWidth / frameCells(frame) : 0;
-  // A mask smaller than the cell says how far the arms sit in (the title
-  // pair, title_mask.dds 88 px inside title_86.dds 96 px); a mask the size of
-  // the cell says nothing, and the frame's own hole is measured instead.
-  if (frame && mask && cell > mask.naturalWidth) return centredBox(mask.naturalWidth / cell);
+function frameGeometry(): { icon: Box; arms: Box } {
+  const cell: Box = { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  if (!frameId) return { icon: cell, arms: cell };
+  const known = designer()?.frames.find((f) => f.id === frameId);
+  // A house frame's arms are scaled and raised as its cultures declare
+  // (house_coa_mask_scale / _offset), which the game's widget reads off the
+  // culture; the defaults otherwise.
+  if (known?.family)
+    return placeArms(cell, known.family, { scale: known.maskScale, offset: known.maskOffset });
+  // A frame no gui type is known for (flagBuilder/database.ts GUI_FRAMES and
+  // the cultures name every vanilla one): fit the mask's painted shape to the
+  // frame's own hole, so the arms land where the hole is.
+  const mask = images.get(`masks/${frameId}`);
+  const frame = images.get(`frames/${frameId}`);
   const hole = frame ? frameHole(frame) : null;
   const shape = mask ? maskShape(`masks/${frameId}`, mask) : null;
-  if (!hole || !shape) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  // The rect the whole mask is drawn at so that its painted shape lands on
-  // the hole: the arms are clipped to the mask, so they land there too.
-  const w = (hole.w / shape.w) * canvas.width;
-  const h = (hole.h / shape.h) * canvas.height;
-  return {
+  if (!hole || !shape) return { icon: cell, arms: cell };
+  const box: Box = {
     x: (hole.x - shape.x * (hole.w / shape.w)) * canvas.width,
     y: (hole.y - shape.y * (hole.h / shape.h)) * canvas.height,
-    w,
-    h,
+    w: (hole.w / shape.w) * canvas.width,
+    h: (hole.h / shape.h) * canvas.height,
   };
+  return { icon: box, arms: box };
 }
+
+const armsRect = (): Box => frameGeometry().arms;
 
 /**
  * Where the arms go in a frame cell: the bounding box of the transparent
@@ -546,7 +543,7 @@ function frameCellIndex(cells: number): number {
 function draw(overlay = true): void {
   if (!db) return;
   const ctx = canvas.getContext("2d")!;
-  const rect = armsRect();
+  const { icon, arms: rect } = frameGeometry();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const mask = frameId ? images.get(`masks/${frameId}`) : null;
   const frame = frameId ? images.get(`frames/${frameId}`) : null;
@@ -567,8 +564,14 @@ function draw(overlay = true): void {
     const sctx = scratch.getContext("2d")!;
     sctx.clearRect(0, 0, scratch.width, scratch.height);
     complete = renderFlag(sctx, flag, rect, renderContext());
+    // The band between the arms and the mask shows the arms' edge pixels
+    // stretched, as the game's clamp-to-edge sampling shows them
+    // (frameGeometry.ts edgeStrips). Same canvas as source and destination:
+    // the spec copies the source first, so a strip never reads itself.
+    for (const e of edgeStrips(rect, icon))
+      sctx.drawImage(scratch, e.sx, e.sy, e.sw, e.sh, e.dx, e.dy, e.dw, e.dh);
     sctx.globalCompositeOperation = "destination-in";
-    sctx.drawImage(mask, rect.x, rect.y, rect.w, rect.h);
+    sctx.drawImage(mask, icon.x, icon.y, icon.w, icon.h);
     sctx.globalCompositeOperation = "source-over";
     ctx.drawImage(scratch, 0, 0);
     if (frame) drawFrame(ctx, frame);
@@ -581,7 +584,9 @@ function draw(overlay = true): void {
   $("hint").textContent = missing.length ? `Missing textures: ${missing.join(", ")}` : "";
   if (overlay) {
     paintGrid(ctx);
+    paintArmsEdge(ctx, icon, rect);
     paintSelection(ctx);
+    paintMarquee(ctx);
   }
   updateTierControl();
 }
@@ -625,6 +630,22 @@ function paintGrid(ctx: CanvasRenderingContext2D): void {
     ctx.lineTo(arms.x + arms.w, y);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/**
+ * The arms' edge when the grid is not there to show it and a frame leaves a
+ * band outside it: what lies past the line is stretched edge, not arms, and an
+ * emblem placed across it streaks in the game.
+ */
+function paintArmsEdge(ctx: CanvasRenderingContext2D, icon: Box, arms: Box): void {
+  if (grid.on || (icon.x === arms.x && icon.y === arms.y && icon.w === arms.w && icon.h === arms.h)) return;
+  const f = screenFactor();
+  ctx.save();
+  ctx.setLineDash([4 / f, 4 / f]);
+  ctx.lineWidth = 1 / f;
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeRect(arms.x, arms.y, arms.w, arms.h);
   ctx.restore();
 }
 
@@ -806,6 +827,23 @@ function numberField(
 // Colors
 // ---------------------------------------------------------------------------
 
+/**
+ * A pattern tile's colors: the design's, and a grey for every slot the design
+ * has not set. Unset, the texture's own placeholder (yellow for the second
+ * slot) showed through and the tiles read as miscoloured.
+ */
+const NEUTRAL_SLOTS: Rgb[] = [
+  [214, 214, 214],
+  [132, 132, 132],
+  [72, 72, 72],
+];
+function tileColors(colors: CoaColor[]): CoaColor[] {
+  return COLOR_SLOTS.slice(0, 3).map(
+    (name, i) =>
+      colors.find((c) => c.name === name) ?? { name, kind: "rgb" as const, value: NEUTRAL_SLOTS[i] }
+  );
+}
+
 function rgbOf(color: CoaColor | undefined): Rgb | null {
   if (!color || !db) return null;
   return colorToRgb(color, db.namedColors, flag.colors);
@@ -866,7 +904,13 @@ function openPalette(
   popover(anchor, root);
 }
 
-/** One labelled swatch button per color slot the entry declares. */
+/**
+ * The one color Copy holds, for Paste on any other slot: a background color
+ * onto an emblem, one emblem's onto another. Lives as long as the page.
+ */
+let heldColor: CoaColor | null = null;
+
+/** One labelled swatch button per color slot the entry declares, with Copy and Paste beside it. */
 function colorRows(
   host: HTMLElement,
   colors: CoaColor[],
@@ -893,18 +937,39 @@ function colorRows(
             : "unset";
     };
     paint();
-    btn.onclick = () =>
-      openPalette(btn, colors[slot], (c) => {
-        const name = COLOR_SLOTS[slot];
-        ensureSlot(colors, slot, { name, kind: "named", value: "white" });
-        colors[slot] = { ...c, name };
-        paint();
-        onChange();
-      });
+    const set = (c: CoaColor): void => {
+      const name = COLOR_SLOTS[slot];
+      ensureSlot(colors, slot, { name, kind: "named", value: "white" });
+      colors[slot] = { ...c, name };
+      paint();
+      onChange();
+    };
+    btn.onclick = () => openPalette(btn, colors[slot], set);
+    const copy = iconButton("copy", "Copy this color", () => {
+      if (!colors[slot]) return;
+      heldColor = { ...colors[slot] };
+      // Every Paste on the page wakes up at once.
+      for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>(".colorRow [data-paste]")))
+        armPaste(b);
+    });
+    const paste = iconButton("paste", "", () => {
+      if (heldColor) set(heldColor);
+    });
+    paste.dataset.paste = "";
+    armPaste(paste);
     const row = el("div", "colorRow");
-    row.append(el("span", "px-label", labels[slot] ?? COLOR_SLOTS[slot]), btn);
+    row.append(el("span", "px-label", labels[slot] ?? COLOR_SLOTS[slot]), btn, copy, paste);
     host.append(row);
   }
+}
+
+/** A Paste button is live only while a color is held, and says which. */
+function armPaste(b: HTMLButtonElement): void {
+  b.disabled = !heldColor;
+  const rgb = rgbOf(heldColor ?? undefined);
+  b.dataset.tip = !heldColor
+    ? "Paste (copy a color first)"
+    : `Paste ${heldColor.kind === "named" ? heldColor.value : rgb ? rgbToHex(rgb) : heldColor.value}`;
 }
 
 /** The game's own names for the five color slots (coa_designer_l_english.yml). */
@@ -1079,7 +1144,7 @@ function renderBackground(): void {
   for (const entry of cat.patterns) {
     const key = `patterns/${entry.file}`;
     const host = makeTile(
-      () => ({ name: "", pattern: entry.file, colors: flag.colors, layers: [] }),
+      () => ({ name: "", pattern: entry.file, colors: tileColors(flag.colors), layers: [] }),
       true,
       entry.file,
       () => {
@@ -1202,13 +1267,21 @@ function emblemLabel(texture: string): string {
     .replace(/_/g, " ");
 }
 
+/** Every emblem of layer `index`, in instance order. */
+function layerRefs(index: number): ElementRef[] {
+  return Array.from({ length: instanceCount(flag.layers[index]) }, (_, i) => ({ layer: index, instance: i }));
+}
+
 function renderLayerList(): void {
   const list = $("layerList");
   list.replaceChildren();
   for (const { layer, index } of emblemLayers()) {
     if (layer.kind !== "colored_emblem") continue;
     const row = el("div", "px-item");
-    if (index === layerIndex) row.setAttribute("aria-selected", "true");
+    // A row reads selected when any of its emblems is; with nothing selected,
+    // the row whose numbers the panel shows.
+    const held = selection.some((r) => r.layer === index);
+    if (held || (selection.length === 0 && index === layerIndex)) row.setAttribute("aria-selected", "true");
     if (locked.has(index)) row.dataset.locked = "";
     row.append(el("span", "px-item-kind", iconEl("shapes")));
     row.append(el("span", "px-item-label", emblemLabel(layer.texture) || "no emblem"));
@@ -1233,11 +1306,7 @@ function renderLayerList(): void {
         refresh(false);
       }),
       iconButton("trash", "Remove this emblem", () => {
-        flag.layers.splice(index, 1);
-        // Locks are held by index, so the ones above the hole move down with it.
-        const kept = [...locked].filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
-        locked.clear();
-        for (const i of kept) locked.add(i);
+        removeLayer(index);
         selection = [];
         clampSelection();
         refresh();
@@ -1247,9 +1316,25 @@ function renderLayerList(): void {
     row.onclick = (e) => {
       if ((e.target as HTMLElement).closest("button")) return;
       if (locked.has(index)) return;
+      // A list's usual keys. Shift takes every layer from the last picked one
+      // to this one, both included, with all their emblems; Ctrl adds or
+      // removes this one layer; a plain click picks it. The clicked layer is
+      // the primary either way.
+      if (e.shiftKey) {
+        const order = emblemLayers().map((l) => l.index);
+        const from = order.indexOf(layerIndex);
+        const to = order.indexOf(index);
+        const [lo, hi] = from < 0 ? [to, to] : [Math.min(from, to), Math.max(from, to)];
+        const others = order.slice(lo, hi + 1).filter((l) => l !== index);
+        selectMany([...others.flatMap(layerRefs), ...layerRefs(index)]);
+      } else if (e.ctrlKey || e.metaKey) {
+        const all = layerRefs(index);
+        const held = all.every(isSelected);
+        selection = selection.filter((r) => r.layer !== index);
+        if (!held) selection.push(...all);
+      } else select({ layer: index, instance: 0 }, false);
       layerIndex = index;
       instIndex = 0;
-      select({ layer: index, instance: 0 }, e.shiftKey);
       refresh(false);
       draw();
     };
@@ -1295,7 +1380,8 @@ function renderEmblems(): void {
   body.append(el("div", "px-panel-title", "Colors"), colorsHost);
 
   // The catalog, one category at a time: 1577 emblems never all reach the DOM.
-  if (mode !== "adjusted") {
+  // Offered in both modes: see the note on `mode`.
+  {
     const head = el("div", "px-panel-title", "Textures");
     const pick = el("button", "px-btn px-dropdown");
     pick.dataset.variant = "outline";
@@ -1408,11 +1494,19 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
   const count = Math.max(1, layer.instances.length);
   for (let i = 0; i < count; i++) {
     const tile = el("div", "instTile", String(i + 1));
-    tile.dataset.tip = "Click to edit, shift-click to add to the selection, right-click to remove";
+    tile.dataset.tip =
+      "Click to edit, Shift-click for every instance up to here, Ctrl-click to add or remove, right-click to remove";
     if (isSelected({ layer: layerIndex, instance: i })) tile.setAttribute("aria-selected", "true");
     tile.onclick = (e) => {
+      const ref = (n: number): ElementRef => ({ layer: layerIndex, instance: n });
+      if (e.shiftKey) {
+        // The run from the last picked instance to this one, this one primary.
+        const [lo, hi] = [Math.min(instIndex, i), Math.max(instIndex, i)];
+        const others: ElementRef[] = [];
+        for (let n = lo; n <= hi; n++) if (n !== i) others.push(ref(n));
+        selectMany([...others, ref(i)]);
+      } else select(ref(i), e.ctrlKey || e.metaKey);
       instIndex = i;
-      select({ layer: layerIndex, instance: i }, e.shiftKey);
       refresh(false);
       draw();
     };
@@ -1441,6 +1535,36 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
   };
   grid.append(add);
   return grid;
+}
+
+/** Drop a layer and keep the locks, which are held by index, on the layers they were on. */
+function removeLayer(index: number): void {
+  flag.layers.splice(index, 1);
+  const kept = [...locked].filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
+  locked.clear();
+  for (const i of kept) locked.add(i);
+}
+
+/**
+ * Delete: the selected placements go; an emblem left with none goes with
+ * them, as its trash button would take it. Highest index first on both axes,
+ * so an earlier splice cannot move a later one.
+ */
+function removeSelection(): void {
+  if (selection.length === 0) return;
+  const byLayer = new Map<number, Set<number>>();
+  for (const ref of selection)
+    byLayer.set(ref.layer, (byLayer.get(ref.layer) ?? new Set()).add(ref.instance));
+  for (const [index, instances] of [...byLayer].sort((a, b) => b[0] - a[0])) {
+    const layer = flag.layers[index];
+    materialize(layer);
+    for (const i of [...instances].sort((a, b) => b - a)) layer.instances.splice(i, 1);
+    if (layer.instances.length === 0) removeLayer(index);
+  }
+  selection = [];
+  instIndex = 0;
+  clampSelection();
+  refresh();
 }
 
 /** An implicit default instance becomes a real one before anything edits it. */
@@ -1473,21 +1597,14 @@ function nudgeSelection(du: number, dv: number): void {
 }
 
 /**
- * Align and distribute the selection. One selected emblem has nothing to line
- * up against but the arms themselves, so that is the frame it gets; several
- * line up on the box they share, the way every layout tool does it.
+ * Align the selection. One selected emblem has nothing to line up against but
+ * the arms themselves, so that is the frame it gets; several line up on the box
+ * they share, the way every layout tool does it.
  */
 function alignSelection(mode: AlignMode): void {
   editSelection((boxes) => {
     const frame = boxes.length === 1 ? ARMS_RECT : selectionBounds(boxes);
     const deltas = alignDeltas(boxes, mode, frame);
-    return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
-  });
-}
-
-function distributeSelection(axis: "x" | "y"): void {
-  editSelection((boxes) => {
-    const deltas = distributeDeltas(boxes, axis);
     return boxes.map((box, i) => ({ ...box, cx: box.cx + deltas[i].du, cy: box.cy + deltas[i].dv }));
   });
 }
@@ -1512,55 +1629,43 @@ function duplicateSelection(): void {
   refresh();
 }
 
-/** The tools that act on the selection rather than on one number. */
 /**
- * The tools under the numbers, in captioned groups: a row of twelve arrow
- * glyphs with nothing but hovers to tell them apart read as a puzzle. Each
- * group names what its buttons do to the selection (or to the shown emblem).
+ * The tools under the numbers: align and duplicate, each group under its own
+ * caption. Every button carries its glyph AND its word, so the row says what it
+ * does without a hover; the tooltip adds what it acts against.
  */
 function selectionTools(): HTMLElement {
   const host = el("div", "selTools");
   let row: HTMLElement = host;
   const group = (caption: string): void => {
-    const box = el("div", "toolGroup");
-    box.append(el("span", "cap", caption));
-    row = el("div", "toolRow");
-    box.append(row);
-    host.append(box);
+    const wrap = el("div", "toolGroup", el("span", "px-label", caption));
+    row = el("div", "selToolRow");
+    wrap.append(row);
+    host.append(wrap);
   };
-  const tool = (label: string, tip: string, enabled: boolean, run: () => void): void => {
-    const b = button(label, run, "outline", "icon-sm");
+  const tool = (label: string, tip: string, run: () => void): void => {
+    const b = button(label, run, "outline", "sm");
     b.dataset.tip = tip;
-    b.disabled = !enabled;
     row.append(b);
   };
   const many = selection.length >= 2;
   const against = many ? "the selection" : "the arms";
   group(`Align to ${against}`);
   const aligns: [string, AlignMode, string][] = [
-    ["⇤", "left", "Left edges"],
-    ["⇔", "hcenter", "Centre horizontally"],
-    ["⇥", "right", "Right edges"],
-    ["⇡", "top", "Top edges"],
-    ["⇕", "vcenter", "Centre vertically"],
-    ["⇣", "bottom", "Bottom edges"],
+    ["⇤ Left", "left", "Left edges"],
+    ["⇔ Centre", "hcenter", "Centre horizontally"],
+    ["⇥ Right", "right", "Right edges"],
+    ["⇡ Top", "top", "Top edges"],
+    ["⇕ Middle", "vcenter", "Centre vertically"],
+    ["⇣ Bottom", "bottom", "Bottom edges"],
   ];
-  for (const [label, mode, tip] of aligns)
-    tool(label, `${tip}, to ${against}`, true, () => alignSelection(mode));
-  group("Distribute");
-  tool("↔", "Equal gaps left to right (three or more selected)", selection.length >= 3, () =>
-    distributeSelection("x")
-  );
-  tool("↕", "Equal gaps top to bottom (three or more selected)", selection.length >= 3, () =>
-    distributeSelection("y")
-  );
-  group("Mirror");
-  tool("⇄", "Mirror horizontally", true, () => editSelection((b) => mirrorGroup(b, "x")));
-  tool("⇅", "Mirror vertically", true, () => editSelection((b) => mirrorGroup(b, "y")));
-  group("Copy");
-  const dup = iconButton("copy", "Duplicate in place", duplicateSelection);
+  for (const [label, mode, tip] of aligns) tool(label, `${tip}, to ${against}`, () => alignSelection(mode));
+  group("Duplicate");
+  const dup = el("button", "px-btn", iconEl("copy"), "Duplicate");
   dup.dataset.variant = "outline";
-  dup.dataset.size = "icon-sm";
+  dup.dataset.size = "sm";
+  dup.dataset.tip = "Duplicate in place";
+  dup.onclick = duplicateSelection;
   row.append(dup);
   return host;
 }
@@ -1626,11 +1731,16 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
   );
 
   const scale = el("div", "pair scale");
+  // Each scale number mirrors into the other's box when the lock is on.
+  // Rebuilding the panel here instead would drop the label being dragged,
+  // and with it the drag.
   const y = numberField("Scale Y", inst.scale[1], 0.01, (v) => {
     inst.scale[1] = v;
-    if (scaleMatched(ref)) inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
+    if (scaleMatched(ref)) {
+      inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
+      x.input.value = String(inst.scale[0]);
+    }
     draw();
-    if (scaleMatched(ref)) renderPanel();
   });
   const x = numberField("Scale X", inst.scale[0], 0.01, (v) => {
     inst.scale[0] = v;
@@ -1641,8 +1751,8 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     draw();
   });
   // The lock stands between the two numbers it ties together, the way a
-  // graphics editor draws it; a flip is the mirror tool below, so no checkbox
-  // repeats it here.
+  // graphics editor draws it. A flip is a negative scale, typed into the number
+  // itself, so no checkbox repeats it here.
   const lock = iconButton(
     matched ? "lock" : "unlock",
     matched ? "X and Y scale move together" : "X and Y scale move apart",
@@ -1722,8 +1832,28 @@ function refresh(record = true): void {
 // Documents
 // ---------------------------------------------------------------------------
 
+/**
+ * An emblem color written as a reference (`color1 = color2`: the game's blank
+ * template, and a third of the vanilla emblems) becomes the flag color it
+ * names. The game's own designer holds concrete colors only: a definition
+ * pasted into it with a reference came out in the fallback red, not in the
+ * color the panel showed. Resolved here, the panel shows and writes what the
+ * game draws, and this is the form the game's own Copy writes too.
+ */
+function concreteColors(next: CoaFlag): void {
+  for (const layer of next.layers) {
+    if (layer.kind !== "colored_emblem") continue;
+    layer.colors = layer.colors.map((c) => {
+      if (c.kind !== "ref") return c;
+      const base = next.colors.find((b) => b.name === c.value);
+      return base && base.kind !== "ref" ? { ...base, name: c.name } : c;
+    });
+  }
+}
+
 function setFlag(next: CoaFlag): void {
   flag = JSON.parse(JSON.stringify(next));
+  concreteColors(flag);
   $<HTMLInputElement>("name").value = flag.name;
   layerIndex = emblemLayers()[0]?.index ?? -1;
   instIndex = 0;
@@ -2082,17 +2212,47 @@ function updateTierControl(): void {
     );
 }
 
-/** The grid toggle and its subdivision, both remembered by the host. */
+/**
+ * The grid control: one segmented row, Off and every subdivision side by
+ * side, the active one pressed. Every choice is visible at once, and whether
+ * the grid is on reads from which segment is lit. Remembered by the host.
+ */
 function updateGridControls(): void {
-  const toggle = $("gridToggle");
-  toggle.dataset.tip = grid.on
-    ? "Hide the grid (snapping off, and an arrow key moves 1/256 of the arms)"
-    : "Show the grid and snap to it (an arrow key then moves one cell)";
-  if (grid.on) toggle.setAttribute("aria-pressed", "true");
-  else toggle.removeAttribute("aria-pressed");
-  const div = $("gridDiv");
-  div.hidden = !grid.on;
-  div.querySelector(".px-truncate")!.textContent = `${grid.div} x ${grid.div}`;
+  const group = $("gridPick");
+  if (group.childElementCount === 0) {
+    const segment = (label: string, value: number, tip: string): void => {
+      const button = document.createElement("button");
+      button.className = "px-toggle";
+      button.dataset.variant = "outline";
+      button.dataset.size = "sm";
+      button.dataset.grid = String(value);
+      button.dataset.tip = tip;
+      button.dataset.tipWrap = "";
+      if (value === 0) button.append(iconEl("grid"));
+      button.append(label);
+      button.onclick = () => {
+        if (value === 0) grid.on = false;
+        else {
+          grid.on = true;
+          grid.div = validGridDivision(value);
+        }
+        saveGrid();
+      };
+      group.append(button);
+    };
+    segment("Off", 0, "No grid: nothing snaps, and an arrow key moves 1/256 of the arms.");
+    for (const n of GRID_DIVISIONS) {
+      segment(
+        String(n),
+        n,
+        `A ${n} x ${n} grid: placements snap to its cells, and an arrow key moves one cell.`
+      );
+    }
+  }
+  for (const button of Array.from(group.querySelectorAll<HTMLButtonElement>("button"))) {
+    const value = Number(button.dataset.grid);
+    button.setAttribute("aria-pressed", String(grid.on ? value === grid.div : value === 0));
+  }
 }
 
 function saveGrid(): void {
@@ -2111,9 +2271,13 @@ function saveGrid(): void {
  */
 function defaultFrame(label: string | undefined): string {
   const kind = /\(([^)]+)\)\s*$/.exec(label ?? "")?.[1] ?? "";
+  // A dynasty or title target wears its own frame; anything else, a house
+  // target or no target, opens in house_frame_03 (the maintainer's pick over
+  // the engine's `house`, which stands in when a mod removes it).
   const wanted =
-    kind === "dynasty" ? "dynasty" : kind === "house" || kind === "character" ? "house" : "title";
-  return designer()?.frames.some((f) => f.id === wanted) ? wanted : "";
+    kind === "dynasty" ? ["dynasty"] : kind === "title" ? ["title"] : ["house_frame_03", "house"];
+  const frames = designer()?.frames ?? [];
+  return wanted.find((id) => frames.some((f) => f.id === id)) ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -2237,6 +2401,63 @@ interface Gesture {
 
 let gesture: Gesture | null = null;
 
+/**
+ * A box dragged over empty ground: every unlocked element it touches becomes
+ * the selection, on top of what Shift held. The panel follows as the box
+ * grows, so the count and numbers read live.
+ */
+interface Marquee {
+  u0: number;
+  v0: number;
+  u1: number;
+  v1: number;
+  /** What Shift keeps: the selection as it stood when the press landed. */
+  base: ElementRef[];
+  startX: number;
+  startY: number;
+  started: boolean;
+}
+
+let marquee: Marquee | null = null;
+
+function marqueeRect(m: Marquee): Rect {
+  return {
+    x: Math.min(m.u0, m.u1),
+    y: Math.min(m.v0, m.v1),
+    w: Math.abs(m.u1 - m.u0),
+    h: Math.abs(m.v1 - m.v0),
+  };
+}
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+function applyMarquee(m: Marquee): void {
+  const r = marqueeRect(m);
+  const inside = allElements().filter((ref) =>
+    overlaps(r, boxBounds(boxOf(flag.layers[ref.layer], ref.instance)))
+  );
+  const before = selection.map((s) => `${s.layer}:${s.instance}`).join(",");
+  selectMany([...m.base.filter((ref) => !inside.some((i) => sameRef(i, ref))), ...inside]);
+  if (selection.map((s) => `${s.layer}:${s.instance}`).join(",") !== before) renderPlacement();
+}
+
+function paintMarquee(ctx: CanvasRenderingContext2D): void {
+  if (!marquee?.started) return;
+  const r = marqueeRect(marquee);
+  const [x0, y0] = toCanvas(r.x, r.y);
+  const [x1, y1] = toCanvas(r.x + r.w, r.y + r.h);
+  const f = screenFactor();
+  ctx.save();
+  ctx.fillStyle = "rgba(79,193,255,0.12)";
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.setLineDash([4 / f, 3 / f]);
+  ctx.lineWidth = 1 / f;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.restore();
+}
+
 /** The pointer, snapped to the grid when the grid is on. */
 function snapped(u: number, v: number): [number, number] {
   if (!grid.on) return [u, v];
@@ -2295,6 +2516,18 @@ canvas.addEventListener("pointerdown", (e) => {
       renderPanel();
     }
     draw();
+    e.preventDefault();
+    marquee = {
+      u0: u,
+      v0: v,
+      u1: u,
+      v1: v,
+      base: selection.slice(),
+      startX: e.clientX,
+      startY: e.clientY,
+      started: false,
+    };
+    canvas.setPointerCapture(e.pointerId);
     return;
   }
   e.preventDefault();
@@ -2313,6 +2546,17 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   const [u, v] = unitAt(e);
+  if (marquee) {
+    if (!marquee.started) {
+      if (Math.hypot(e.clientX - marquee.startX, e.clientY - marquee.startY) < DRAG_THRESHOLD) return;
+      marquee.started = true;
+    }
+    marquee.u1 = u;
+    marquee.v1 = v;
+    applyMarquee(marquee);
+    draw();
+    return;
+  }
   if (!gesture) {
     const corner = groupCornerUnder(u, v) ?? cornerUnder(u, v);
     canvas.style.cursor = onRotateGrip(u, v)
@@ -2358,6 +2602,16 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 const endGesture = (e: PointerEvent): void => {
+  if (marquee) {
+    const boxed = marquee.started;
+    marquee = null;
+    canvas.releasePointerCapture(e.pointerId);
+    if (boxed) {
+      renderPanel();
+      draw();
+    }
+    return;
+  }
   if (!gesture) return;
   const moved = gesture.started;
   gesture = null;
@@ -2409,23 +2663,6 @@ $("libExport").onclick = () => {
   }
   send({ type: "libraryExport", name: flag.name.trim(), script: writeFlag(flag) });
 };
-$("gridToggle").onclick = () => {
-  grid.on = !grid.on;
-  saveGrid();
-};
-$("gridDiv").onclick = () =>
-  menu(
-    $("gridDiv"),
-    GRID_DIVISIONS.map((n) => ({ value: String(n), label: `${n} x ${n}` })),
-    {
-      value: String(grid.div),
-      width: 140,
-      onPick: (value) => {
-        grid.div = validGridDivision(Number(value));
-        saveGrid();
-      },
-    }
-  );
 $("addEmblem").onclick = () => {
   const cat = designer();
   const empty = cat?.emptyEmblem;
@@ -2511,6 +2748,11 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     return;
   }
+  if ((e.key === "Delete" || e.key === "Backspace") && !editing && selection.length) {
+    e.preventDefault();
+    removeSelection();
+    return;
+  }
   const arrow = NUDGE_ARROWS[e.key];
   if (arrow && !editing && selection.length) {
     e.preventDefault();
@@ -2573,11 +2815,11 @@ $("help").onclick = () =>
           },
           {
             lead: "Several at once:",
-            text: "shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
+            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. In the layer list and the instance tiles, Shift-click takes everything from the last pick to the click and Ctrl-click adds or removes one. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
           },
           {
             lead: "The tools under the numbers",
-            text: "align, distribute, mirror and duplicate the selection. One emblem lines up against the arms, several against the box they share.",
+            text: "align and duplicate the selection. One emblem lines up against the arms, several against the box they share.",
           },
           {
             lead: "Lock a row",
@@ -2591,7 +2833,6 @@ $("help").onclick = () =>
             lead: "By numbers:",
             text: "position and scale are fractions of the arms, rotation is degrees. Drag a number's LABEL sideways to scrub it; the box itself is for typing.",
           },
-          { lead: "Flip X or Y", text: "mirrors the emblem, which the game writes as a negative scale." },
           {
             lead: "Depth",
             text: "is the z value the in-game designer writes. It is kept so a design round-trips; the preview draws in row order.",
@@ -2603,7 +2844,7 @@ $("help").onclick = () =>
         items: [
           {
             lead: "The frame",
-            text: "on the left shows the arms the way the game frames a dynasty, a house or a title. It is preview only and never written.",
+            text: "on the left shows the arms the way the game frames a dynasty, a house or a title: a smaller square inside the frame, and on the title shield shrunk and moved down a little more, as the game's gui does. The band between that square and the frame is the arms' edge stretched, which is what the game shows there too; an emblem across the edge streaks. The grid's border, or the dashed line with the grid off, is the edge. The frame is preview only and never written.",
           },
           {
             lead: "The tier",
@@ -2622,6 +2863,7 @@ $("help").onclick = () =>
           { keys: ["Shift", "Click"], does: "Add or remove one emblem from the selection" },
           { keys: ["Ctrl", "A"], does: "Select every unlocked emblem" },
           { keys: ["Esc"], does: "Clear the selection" },
+          { keys: ["Del"], does: "Remove the selected placements (Backspace too)" },
           { keys: ["←↑→↓"], does: "Nudge one grid cell, Shift four (grid off: 1/256 and 1/32)" },
           { keys: ["Ctrl", "Z"], does: "Undo" },
           { keys: ["Ctrl", "Y"], does: "Redo (Ctrl+Shift+Z too)" },

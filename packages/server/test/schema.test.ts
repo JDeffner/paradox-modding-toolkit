@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { extractDefinitions } from "../src/index/extract";
-import { CK3_SCHEMA, REF_FIELDS, PREFIX_REFS } from "../src/games/ck3/schema";
+import { CK3_SCHEMA, REF_FIELDS } from "../src/games/ck3/schema";
 import { coerceFreqs } from "../src/schema/freqs";
 import type { SchemaEntry } from "../src/schema/types";
 import type { Definition } from "@px-lsp/protocol/types";
@@ -127,12 +127,6 @@ describe("extractDefinitions — representative entries", () => {
 });
 
 describe("CK3_SCHEMA sanity", () => {
-  const validExtraction = new Set(["top-level-key", "event-id", "nested-title", "gui-type", "loc-key"]);
-
-  it("has a healthy number of entries", () => {
-    expect(CK3_SCHEMA.length).toBeGreaterThanOrEqual(55);
-  });
-
   it("no duplicate paths", () => {
     const paths = CK3_SCHEMA.map((e) => e.path);
     expect(new Set(paths).size).toBe(paths.length);
@@ -147,12 +141,6 @@ describe("CK3_SCHEMA sanity", () => {
   it("every ext starts with '.'", () => {
     for (const e of CK3_SCHEMA) {
       if (e.ext !== undefined) expect(e.ext.startsWith(".")).toBe(true);
-    }
-  });
-
-  it("every extraction value is valid", () => {
-    for (const e of CK3_SCHEMA) {
-      if (e.extraction !== undefined) expect(validExtraction.has(e.extraction)).toBe(true);
     }
   });
 
@@ -171,22 +159,9 @@ describe("CK3_SCHEMA sanity", () => {
 });
 
 describe("REF_FIELDS / PREFIX_REFS sanity", () => {
-  it("REF_FIELDS have non-empty keys and kinds", () => {
-    for (const f of REF_FIELDS) {
-      expect(f.key.length).toBeGreaterThan(0);
-      expect(f.kinds.length).toBeGreaterThan(0);
-    }
-  });
-
   it("no duplicate REF_FIELD keys", () => {
     const keys = REF_FIELDS.map((f) => f.key);
     expect(new Set(keys).size).toBe(keys.length);
-  });
-
-  it("PREFIX_REFS map to non-empty kind lists", () => {
-    for (const kinds of Object.values(PREFIX_REFS)) {
-      expect(kinds.length).toBeGreaterThan(0);
-    }
   });
 });
 

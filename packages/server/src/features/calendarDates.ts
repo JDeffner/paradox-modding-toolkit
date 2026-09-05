@@ -12,7 +12,7 @@ import {
   type Range,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { displayDate, isValidScriptDate, monthsOf, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import { displayDate, isValidScriptDate, type CalendarSetting } from "@px-lsp/protocol/calendar";
 import { getLineText, isScriptLanguage } from "../documents";
 
 interface DateToken {
@@ -47,7 +47,7 @@ export function dateTokensOnLine(cal: CalendarSetting, lineText: string): DateTo
     const quotesBefore = (code.slice(0, match.index).match(/"/g) ?? []).length;
     if (quotesBefore % 2 === 1) continue;
     const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
-    if (!isValidScriptDate(cal, y, m, d)) continue;
+    if (!isValidScriptDate(y, m, d)) continue;
     tokens.push({ start: match.index, end: match.index + match[0].length, y, m, d });
   }
   return tokens;
@@ -93,7 +93,7 @@ export function provideDateHover(
   const eras = cal.before ? `${cal.before} / ${cal.after}` : cal.after;
   const value =
     `\`${script}\` → **${display}**\n\n` +
-    `*${source}: epoch ${cal.epoch} (${eras}), ${monthsOf(cal).length} months*`;
+    `*${source}: epoch ${cal.epoch} (${eras})${cal.months ? ", the mod's month names" : ""}*`;
   return {
     contents: { kind: MarkupKind.Markdown, value },
     range: {

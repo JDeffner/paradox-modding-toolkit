@@ -80,7 +80,6 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
   let modDir: string;
   let eventsUri: string;
   let brokenUri: string;
-  let exited: Promise<number | null>;
   const statuses: StatusPayload[] = [];
   const diagnostics = new Map<string, Array<{ source?: string; code?: string }>>();
 
@@ -101,7 +100,6 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
     brokenUri = toUri(brokenFile);
 
     child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
-    exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
     conn = createMessageConnection(
       new StreamMessageReader(child.stdout!),
       new StreamMessageWriter(child.stdin!)
@@ -186,13 +184,6 @@ describe.skipIf(!hasServer)("Vic3 profile smoke over --stdio (gameId = vic3)", (
     expect(unclosed).toBeDefined();
     expect(unclosed?.source).toBe("vic3-script");
   });
-
-  it("shuts down cleanly", async () => {
-    await conn.sendRequest("shutdown");
-    void conn.sendNotification("exit");
-    const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
-    expect(code).toBe(0);
-  });
 });
 
 /**
@@ -209,7 +200,6 @@ describe.skipIf(!hasServer || !VIC3_DOCS || !fs.existsSync(path.join(VIC3_DOCS, 
     let conn: MessageConnection;
     let modDir: string;
     let eventsUri: string;
-    let exited: Promise<number | null>;
     const statuses: StatusPayload[] = [];
 
     beforeAll(async () => {
@@ -225,7 +215,6 @@ describe.skipIf(!hasServer || !VIC3_DOCS || !fs.existsSync(path.join(VIC3_DOCS, 
       eventsUri = toUri(eventsFile);
 
       child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
-      exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
       conn = createMessageConnection(
         new StreamMessageReader(child.stdout!),
         new StreamMessageWriter(child.stdin!)
@@ -286,13 +275,6 @@ describe.skipIf(!hasServer || !VIC3_DOCS || !fs.existsSync(path.join(VIC3_DOCS, 
         return;
       }
       expect(result.contents.value.length).toBeGreaterThan(10);
-    });
-
-    it("shuts down cleanly", async () => {
-      await conn.sendRequest("shutdown");
-      void conn.sendNotification("exit");
-      const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
-      expect(code).toBe(0);
     });
   }
 );

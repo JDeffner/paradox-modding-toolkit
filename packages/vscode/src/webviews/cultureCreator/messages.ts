@@ -5,7 +5,7 @@
  * drawn to be written, and the host does both.
  */
 import type { CalendarSetting } from "@px-lsp/protocol/calendar";
-import type { DefinitionForm } from "@px-lsp/protocol/protocol";
+import type { DefinitionForm, EventVocabularyItem } from "@px-lsp/protocol/protocol";
 import type {
   CreatorChangeTargetRequest,
   CreatorCopyRequest,
@@ -25,11 +25,13 @@ export interface TraditionInfo {
   /** `category = combat`: how the game's own Add Tradition view groups them. */
   category?: string;
   /**
-   * The icon layers as game-relative FILES, in the index order the engine
-   * stacks them (the folders come from CULTURE_TRADITION_LAYER_PATHS in
-   * common/defines/00_defines.txt). An index that names a folder rather than a
-   * file is one the game randomizes; the host resolves it to that folder's
-   * first entry so the picture is stable while the form is open.
+   * The icon layers as game-relative FILES, ONE PER LAYER FOLDER in the index
+   * order the engine stacks them (CULTURE_TRADITION_LAYER_PATHS in
+   * common/defines/00_defines.txt), "" where the folder holds nothing. The
+   * game draws every layer: an index that names a folder, and an index the
+   * tradition leaves out, are ones it picks a random file for, and the host
+   * resolves both to a first file so the picture is stable while the form is
+   * open.
    */
   layers: string[];
 }
@@ -79,7 +81,7 @@ export interface CultureInit {
   namedColors: Record<string, [number, number, number]>;
   /** What the game's own files say about the pillars and traditions offered. */
   catalog: CultureCatalog;
-  /** px.calendar, when the workspace configures one: `created` is checked against it. */
+  /** The mod's calendar (calendar.json, else px.calendar), when there is one: how `created` reads. */
   calendar?: CalendarSetting;
   /** No mod folder in the workspace: nothing can be written yet. */
   noMod: boolean;
@@ -92,6 +94,12 @@ export type HostToApp =
   | { type: "loading" }
   /** The save landed; the app clears its "changed" marks. */
   | { type: "saved"; name: string }
+  /**
+   * The Tradition Creator saved a tradition: the picker's list and catalog as
+   * they now stand, and `add` when the tradition was started blank from this
+   * culture's row, so it joins the culture without a second trip.
+   */
+  | { type: "traditions"; options: EventVocabularyItem[]; catalog: CultureCatalog; add?: string }
   /** The save did not happen (cancelled at the file pick, or refused). */
   | { type: "idle" }
   | { type: "error"; message: string }

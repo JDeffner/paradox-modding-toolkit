@@ -64,23 +64,28 @@ ${uiCss}
   #stageInfo { right: 8px; }
   #zoom, #hint { padding: 0 6px; }
   #hint:empty { display: none; }
-  #frame, #tier, #gridDiv { width: auto; min-width: 0; }
+  #frame, #tier { width: auto; min-width: 0; }
   /* The frame name is long and the tier is two words: the frame gives up its
      width first, so "Tier 1" stays readable however narrow the panel is. */
   #frame { flex: 1 1 auto; }
   #tier { flex: 0 0 auto; }
-  #gridToggle[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
+  /* The grid segments: Off and the subdivisions in one row, the active one pressed. */
+  #gridPick { flex: 0 0 auto; }
+  #gridPick .px-toggle { min-width: 30px; padding-left: 6px; padding-right: 6px; }
+  #gridPick .px-toggle .px-icon { width: 12px; height: 12px; }
 
-  /* The left panel's own body: same rhythm as a tab body on the right. */
-  #leftBody { display: flex; flex-direction: column; gap: 10px; padding: 4px 10px 14px; }
-  #leftBody .px-panel-title { padding: 0; }
+  /* The left panel's own body: the rows carry no headings, the controls say
+     what they are (a frame name, a grid glyph, Library and Save). */
+  #leftBody { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 14px; }
+  #leftBody > .px-separator { margin: 2px 0; }
   .toolRow { display: flex; align-items: center; gap: 4px; }
   .toolRow > .px-btn { flex: 1 1 auto; min-width: 0; }
   .toolRow > .px-btn[data-size="icon-sm"] { flex: 0 0 auto; }
   #placement { display: flex; flex-direction: column; gap: 8px; }
   /* Two number fields per row in a column that can be dragged narrow: the
      shared field's 112px label track leaves nothing for the box, so the label
-     goes above its input here. */
+     goes above its input here. The label is the drag handle (scrub.ts), and
+     above the box it is as wide as the box. */
   #placement .px-field { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 
   /* Tabs sit at the top of the panel body, above the tab's own scroller. */
@@ -107,8 +112,11 @@ ${uiCss}
   .gridScroll { flex: 1 1 auto; min-height: 120px; overflow: auto; scrollbar-width: none; align-content: start; }
   .gridScroll::-webkit-scrollbar { display: none; }
 
-  /* Color rows: a labelled swatch button per slot the pattern or emblem shows. */
-  .colorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+  /* Color rows: a labelled swatch button per slot the pattern or emblem shows,
+     then Copy and Paste for moving one color between slots. */
+  .colorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; }
+  .colorRow .px-btn[data-size="icon-xs"] { opacity: 0.75; }
+  .colorRow .px-btn[data-size="icon-xs"]:hover:not(:disabled) { opacity: 1; }
   .colorRow .px-label { white-space: nowrap; }
   .swatchBtn { width: 46px; padding: 0 6px; }
   .swatchBtn .px-swatch { width: 100%; height: 14px; border-radius: 3px; }
@@ -154,12 +162,13 @@ ${uiCss}
   }
   .libEmpty { display: flex; flex-direction: column; gap: 6px; }
   .libPath { overflow-wrap: anywhere; font-family: var(--px-mono, monospace); }
-  /* The tools that act on the selection: align, distribute, mirror, duplicate. */
-  /* Captioned groups of tools: the caption names what the row does. */
-  .selTools { display: flex; flex-wrap: wrap; gap: 8px 12px; padding-top: 4px; }
-  .toolGroup { display: flex; flex-direction: column; gap: 2px; }
-  .toolGroup > .cap { font-size: var(--px-text-xs); color: var(--px-muted-fg); white-space: nowrap; }
-  .toolGroup > .toolRow { display: flex; gap: 2px; }
+  /* The tools that act on the selection: align and duplicate, each group under
+     its own caption. The labelled buttons wrap, so a narrow panel breaks the
+     six align buttons into rows of three instead of clipping them. */
+  .selTools { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+  .toolGroup { display: flex; flex-direction: column; gap: 3px; }
+  .selToolRow { display: flex; flex-wrap: wrap; gap: 3px; }
+  .selToolRow > .px-btn { flex: 1 1 auto; min-width: 74px; }
   .note { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   .adjustedNote { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 </style>
@@ -195,23 +204,19 @@ ${uiCss}
       <div class="px-sidepanel-resizer"></div>
       <div class="px-sidepanel-body">
         <div id="leftBody">
-          <div class="px-panel-title">Library</div>
           <div class="toolRow">
             <button id="libImport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Open a design from your library" data-tip-wrap>${icon("library")} Library</button>
             <button id="libExport" class="px-btn" data-variant="outline" data-size="sm" data-tip="Save this design to your library, outside any mod" data-tip-wrap>${icon("save")} Save</button>
             <button id="libDir" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Choose the library folder (px.coaLibraryDir)" data-tip-wrap>${icon("folderOpen")}</button>
           </div>
-          <div class="px-panel-title">Frame</div>
           <div class="toolRow">
             <button id="frame" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Preview frame (never written into the script)" data-tip-wrap>${icon("squareDashed")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
             <button id="tier" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip-wrap hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
           </div>
-          <div class="px-panel-title">Grid</div>
           <div class="toolRow">
-            <button id="gridToggle" class="px-btn" data-variant="outline" data-size="icon-sm" data-tip="Show the grid and snap to it" data-tip-wrap>${icon("grid")}</button>
-            <button id="gridDiv" class="px-btn px-dropdown" data-variant="outline" data-size="sm" data-tip="Grid subdivisions" hidden><span class="px-truncate"></span>${icon("chevronDown")}</button>
+            <div id="gridPick" class="px-toggle-group" data-spacing="0" role="group" aria-label="Grid"></div>
           </div>
-          <div class="px-panel-title">Placement</div>
+          <div class="px-separator"></div>
           <div id="placement"></div>
         </div>
       </div>

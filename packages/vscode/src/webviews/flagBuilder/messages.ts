@@ -19,14 +19,25 @@ export interface DesignerFrame {
   label: string;
   /**
    * The gui type that draws the frame, from the cultures that name it
-   * (`house_coa_frame` / `dynasty_coa_frame`). It decides how much of the frame
-   * cell the arms fill; absent when no culture names the frame.
+   * (`house_coa_frame` / `dynasty_coa_frame`) or, for the engine's own default
+   * frames and the title pair, from the gui itself. It decides how much of the
+   * frame cell the arms fill (coaDesigner/frameGeometry.ts); absent for a frame
+   * nothing names.
    */
-  family?: "house" | "dynasty";
+  family?: "house" | "dynasty" | "title";
   /** Heritage ids of the cultures wearing it, most cultures first: the picker's words. */
   heritages?: string[];
   /** The same heritages once the loc index has named them, in the same order. */
   heritageNames?: string[];
+  /**
+   * How the house widget fits the arms into this frame: its `coat_of_arms_offset`
+   * and `_scale`, read from the cultures that wear the frame (their
+   * `house_coa_mask_offset` and `_scale`; gui/shared/coat_of_arms.gui takes
+   * them from CultureTemplateData). Fractions of the icon, y down. Absent = the
+   * defines' 0 and 1.
+   */
+  maskOffset?: [number, number];
+  maskScale?: [number, number];
 }
 
 /** How many heritage names a frame's menu hint shows before it counts the rest. */

@@ -116,12 +116,18 @@ const CALENDAR = {
   after: "AC",
   before: "BC",
   months: [
-    { name: "First Moon", days: 30 },
-    { name: "Second Moon", days: 30 },
-    { name: "Third Moon", days: 31 },
-    { name: "Fourth Moon", days: 30 },
-    { name: "Fifth Moon", days: 31 },
-    { name: "Sixth Moon", days: 30 },
+    "First Moon",
+    "Second Moon",
+    "Third Moon",
+    "Fourth Moon",
+    "Fifth Moon",
+    "Sixth Moon",
+    "Seventh Moon",
+    "Eighth Moon",
+    "Ninth Moon",
+    "Tenth Moon",
+    "Eleventh Moon",
+    "Twelfth Moon",
   ],
 };
 
@@ -307,8 +313,17 @@ describe("the Dynasty Tree app", () => {
     app.send({ type: "tree", tree: TREE, ms: 4 });
     const side = app.window.document.getElementById("sideBody")!;
     click(app, card(app, "1"));
-    // Script 1000.1.1 is 7000 years before the epoch, so it READS as 7000 BC.
+    // Script 1000.1.1 is 7000 years before the epoch, so it READS as 7000 BC,
+    // on the card as in the inspector; the Dates toggle shows the file's own
+    // year and back.
     expect(side.textContent).toContain("7000 BC");
+    expect(card(app, "1").textContent).toContain("7000");
+    const doc = app.window.document;
+    doc.querySelector<HTMLButtonElement>('#dateMode [data-mode="script"]')!.click();
+    expect(card(app, "1").textContent).toContain("1000–");
+    expect(side.textContent).not.toContain("7000 BC");
+    doc.querySelector<HTMLButtonElement>('#dateMode [data-mode="calendar"]')!.click();
+    expect(card(app, "1").textContent).toContain("7000");
 
     click(app, card(app, "1").querySelector('.cact[data-act="edit"]')!);
     const parts = side.querySelector(".dparts")!;
@@ -328,7 +343,7 @@ describe("the Dynasty Tree app", () => {
       if (!item) throw new Error(`no ${label} to pick`);
       (item as HTMLElement).click();
     };
-    expect(open("button.month")).toEqual(CALENDAR.months.map((m) => m.name));
+    expect(open("button.month")).toEqual(CALENDAR.months);
     pick("Third Moon");
     expect(open("button.day")).toHaveLength(31);
     pick("31");
@@ -345,6 +360,32 @@ describe("the Dynasty Tree app", () => {
     // Editing an existing character re-asks where a save would land, so the
     // top bar names the file that character is already in.
     expect(app.posted).toContainEqual({ type: "target", file: "c.txt" });
+  });
+
+  it("names the era once on a card whose ends share it, even a two-word era", () => {
+    const app = boot();
+    // "Third Age" holds a space, so the era cannot be split off the display
+    // year at its last space; it is known from the epoch instead.
+    app.send({
+      type: "init",
+      gameName: "Crusader Kings III",
+      mods: [],
+      calendar: { epoch: 8000, after: "Third Age", before: "BC" },
+    });
+    const dated = {
+      ...TREE,
+      characters: TREE.characters.map((c) =>
+        c.id === "1"
+          ? { ...c, birth: "8010.1.1", death: "8040.1.1" }
+          : c.id === "2"
+            ? { ...c, birth: undefined }
+            : c
+      ),
+    };
+    app.send({ type: "tree", tree: dated, ms: 4 });
+    expect(card(app, "1").querySelector(".cdates")!.textContent).toBe("11–41 Third Age");
+    // An undated birth still reads as a question mark, calendar or not.
+    expect(card(app, "2").querySelector(".cdates")!.textContent?.startsWith("?–")).toBe(true);
   });
 
   it("carries the dna and the skills it read back to the host", () => {

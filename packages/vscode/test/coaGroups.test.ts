@@ -1,7 +1,6 @@
 /**
  * The Coat of Arms Designer's group geometry (app/groups.ts): what a
- * multi-selection does when it is scaled, rotated, mirrored, aligned,
- * distributed or snapped.
+ * multi-selection does when it is scaled, rotated, aligned or snapped.
  *
  * Pure arithmetic in arms fractions, so every case is an assertion rather than
  * a mouse. The sibling suite for one element is flagBuilderElements.test.ts.
@@ -13,9 +12,7 @@ import {
   ARMS_RECT,
   boxBounds,
   DEFAULT_GRID_DIVISION,
-  distributeDeltas,
   GRID_DIVISIONS,
-  mirrorGroup,
   moveGroup,
   nudgeStep,
   rotateGroup,
@@ -92,30 +89,9 @@ describe("group transforms", () => {
     near(next[1].cy, 0.7);
     expect(next.map((b) => b.rotation)).toEqual([90, 90]);
   });
-
-  it("a mirror is a negative scale and a swapped position", () => {
-    const boxes = [box(0.3, 0.5, 0.2, 0.2), box(0.7, 0.5, 0.2, 0.2)];
-    const next = mirrorGroup(boxes, "x");
-    near(next[0].cx, 0.7);
-    near(next[1].cx, 0.3);
-    expect(next[0].w).toBe(-0.2);
-    // The other axis is untouched.
-    expect(next.map((b) => b.cy)).toEqual([0.5, 0.5]);
-    expect(next.map((b) => b.h)).toEqual([0.2, 0.2]);
-    // A turned emblem turns the other way, so mirroring twice is where it started.
-    expect(mirrorGroup([box(0.5, 0.5, 0.2, 0.2, 15)], "x")[0].rotation).toBe(-15);
-    const there = [box(0.3, 0.4, 0.2, 0.1, 20), box(0.9, 0.5, 0.1, 0.3)];
-    const back = mirrorGroup(mirrorGroup(there, "y"), "y");
-    back.forEach((b, i) => {
-      near(b.cx, there[i].cx);
-      near(b.cy, there[i].cy);
-      near(b.h, there[i].h);
-      near(b.rotation, there[i].rotation);
-    });
-  });
 });
 
-describe("align and distribute", () => {
+describe("align", () => {
   it("one emblem lines up against the arms themselves", () => {
     // Its box runs 0.3..0.5, so "left" pulls it to the arms' own edge.
     const one = [box(0.4, 0.4, 0.2, 0.2)];
@@ -131,22 +107,6 @@ describe("align and distribute", () => {
     near(deltas[0].du, 0);
     near(deltas[1].du, -0.4);
     expect(deltas.map((d) => d.dv)).toEqual([0, 0]);
-  });
-
-  it("distribute leaves equal gaps, holds the outermost, and sorts by position not pick order", () => {
-    // Picked out of order: the two outermost are the ones at 0.1 and 0.9,
-    // whichever slot they sit in.
-    const boxes = [box(0.9, 0.5, 0.1, 0.1), box(0.1, 0.5, 0.1, 0.1), box(0.4, 0.5, 0.1, 0.1)];
-    const deltas = distributeDeltas(boxes, "x");
-    near(deltas[0].du, 0);
-    near(deltas[1].du, 0);
-    const spread = boxes.map((b, i) => b.cx + deltas[i].du).sort((a, b) => a - b);
-    near(spread[1] - spread[0], spread[2] - spread[1]);
-    // Fewer than three has no gap to equalise.
-    expect(distributeDeltas([box(0.2, 0.2, 0.1, 0.1), box(0.8, 0.2, 0.1, 0.1)], "x")).toEqual([
-      { du: 0, dv: 0 },
-      { du: 0, dv: 0 },
-    ]);
   });
 });
 

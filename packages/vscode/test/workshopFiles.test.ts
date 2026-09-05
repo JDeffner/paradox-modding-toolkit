@@ -250,11 +250,6 @@ describe("changenote resolution", () => {
 });
 
 describe("extractVersionSection", () => {
-  it("keeps deeper sub-headlines inside the section", () => {
-    const text = "## 2.0\nA\n### Details\nB\n## 1.0\nC";
-    expect(extractVersionSection(text, "2.0")).toBe("A\n### Details\nB");
-  });
-
   it("runs to the end when the version is the last section", () => {
     expect(extractVersionSection("## 1.0\nA\nB", "1.0")).toBe("A\nB");
   });

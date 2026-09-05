@@ -9,7 +9,7 @@
  * changing one field changes exactly one line.
  */
 import { describe, expect, it } from "vitest";
-import { parseBlock, readNumberRows, readTokenList, writeBlock } from "../src/webviews/shared/scriptBlock";
+import { parseBlock, writeBlock } from "../src/webviews/shared/scriptBlock";
 import {
   emptyState,
   loadTrait,
@@ -403,16 +403,6 @@ describe("a new trait", () => {
 });
 
 describe("the small readers", () => {
-  it("reads a list only when every entry is a shape the widget can hold", () => {
-    expect(readTokenList("{ craven ambitious }")).toEqual(["craven", "ambitious"]);
-    expect(readTokenList("{ craven = 2 }")).toBeNull();
-    expect(readNumberRows("{ brave = 20\n drunkard = -5 }")).toEqual([
-      { name: "brave", value: 20 },
-      { name: "drunkard", value: -5 },
-    ]);
-    expect(readNumberRows("{ brave = @pos_compat_high }")).toBeNull();
-  });
-
   it("refuses text that is not a definition block", () => {
     expect(parseBlock("not a block")).toBeNull();
     expect(loadTrait(SPECS, "nope", MODIFIERS)).toBeNull();

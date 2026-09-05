@@ -57,11 +57,7 @@ describe("generateCalendarLoc", () => {
   it("custom months override the engine month keys, sharing a key when long == short", () => {
     const cal: CalendarSetting = {
       ...HEGEMONIA,
-      months: [
-        { name: "Narwain", days: 30 },
-        { name: "Ninui", days: 30 },
-        { name: "Lothron", days: 30 },
-      ],
+      months: ["Narwain", "Ninui", "Lothron", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
     };
     const { byPath } = fileMap(cal);
     const replace = byPath.get("localization/replace/english/px_calendar_dates_l_english.yml")!;
@@ -70,20 +66,6 @@ describe("generateCalendarLoc", () => {
     // CW_DATE_May doubles as its own short key: exactly one line for it.
     expect(replace.split("CW_DATE_May").length - 1).toBe(1);
     expect(replace).toContain(' CW_DATE_May:0 "Lothron"');
-  });
-
-  it("skips month names when the count does not match the engine's", () => {
-    const cal: CalendarSetting = {
-      ...HEGEMONIA,
-      months: [
-        { name: "Only", days: 400 },
-        { name: "Other", days: 65 },
-      ],
-    };
-    const { byPath, notes } = fileMap(cal);
-    const replace = byPath.get("localization/replace/english/px_calendar_dates_l_english.yml")!;
-    expect(replace).not.toContain("CW_DATE_");
-    expect(notes.some((n) => n.includes("exactly 3 months"))).toBe(true);
   });
 
   it("generates for the requested language", () => {

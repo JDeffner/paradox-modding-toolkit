@@ -221,7 +221,7 @@ ${BBPREV_CSS}
   /* The whole file, not a capped box: this page IS the preview, so it scrolls. */
   #page .bbprev {
     border: none; background: none; padding: 0;
-    height: auto; min-height: 0; resize: none; overflow: visible;
+    height: auto; min-height: 0; max-height: none; overflow: visible;
   }
 </style>
 </head>

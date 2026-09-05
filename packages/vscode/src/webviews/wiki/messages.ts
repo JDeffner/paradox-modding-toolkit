@@ -25,6 +25,31 @@ export interface WikiArticle {
    */
   game?: string;
   markdown: string;
+  /**
+   * Cards drawn after the markdown as one filterable grid (the Credits and
+   * Modding Tools pages): the kinds on them become the filter chips.
+   */
+  cards?: WikiCard[];
+  /** Markdown drawn after the cards (a closing note). */
+  outro?: string;
+}
+
+/** One card of a reference page: a project or a tool, what it does, where it is. */
+export interface WikiCard {
+  title: string;
+  /** Where the title leads. */
+  url: string;
+  /** What kind of thing it is (a tool category, a credit group): a filter, and the icon's tip. */
+  kind: string;
+  /** The kind's icon (shared/icons.ts), drawn before the title. */
+  icon: IconName;
+  /** Dimmer words beside the title: a license, who it is by. */
+  meta?: string;
+  text: string;
+  /** Game ids the card is for; shown only while the switch is on one of them. Absent = every game. */
+  games?: string[];
+  /** Further links under the text, each named. */
+  links?: { label: string; url: string }[];
 }
 
 /**

@@ -14,6 +14,13 @@
  *
  * Usage (from the repo root, after `pnpm run compile`):
  *   node --experimental-strip-types packages/server/test/perf/profileWorkspace.ts <workspace.code-workspace> [outDir] [--cpu-prof]
+ *     [--server <path/to/server.js>] [--label <version>] [--history <history.json>]
+ *
+ * `--server` profiles another build of the server (a release tag built in a
+ * worktree) with this driver, so versions are compared by one instrument; its
+ * bundled data is taken from beside that bundle. `--label` and `--history`
+ * append the run to the version history the performance doc is drawn from
+ * (`pnpm run perf:history` is the shipped form of that call).
  */
 import { fork, spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
@@ -22,18 +29,28 @@ import * as path from "path";
 import { createMessageConnection, IPCMessageReader, IPCMessageWriter } from "vscode-jsonrpc/node";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
-const SERVER = path.join(HERE, "..", "..", "dist", "server.js");
-const WIKIDOCS = path.join(HERE, "..", "..", "data", "ck3", "wikidocs");
-
+/** `--flag value` out of argv, or undefined. */
+function flag(name: string): string | undefined {
+  const at = process.argv.indexOf(`--${name}`);
+  return at >= 0 ? process.argv[at + 1] : undefined;
+}
+const SERVER = path.resolve(flag("server") ?? path.join(HERE, "..", "..", "dist", "server.js"));
+// The bundle's own data: <package>/dist/server.js sits beside <package>/data.
+const WIKIDOCS = path.join(path.dirname(SERVER), "..", "data", "ck3", "wikidocs");
 const wsFile = process.argv[2];
-if (!wsFile) {
-  console.error("usage: profileWorkspace.ts <workspace.code-workspace> [outDir] [--cpu-prof]");
+if (!wsFile || wsFile.startsWith("--")) {
+  console.error(
+    "usage: profileWorkspace.ts <workspace.code-workspace> [outDir] [--cpu-prof] [--server server.js] [--label v] [--history file]"
+  );
   process.exit(2);
 }
-const outDir = process.argv[3]?.startsWith("--")
-  ? path.join(os.tmpdir(), "px-ws-profile")
-  : (process.argv[3] ?? path.join(os.tmpdir(), "px-ws-profile"));
+const outDir =
+  process.argv[3]?.startsWith("--") || !process.argv[3]
+    ? path.join(os.tmpdir(), "px-ws-profile")
+    : process.argv[3];
 const cpuProf = process.argv.includes("--cpu-prof");
+const label = flag("label");
+const historyFile = flag("history");
 fs.mkdirSync(outDir, { recursive: true });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -68,14 +85,22 @@ const wsDir = path.dirname(path.resolve(wsFile));
 const folders = ws.folders.map((f) => (path.isAbsolute(f.path) ? f.path : path.resolve(wsDir, f.path)));
 
 const gamePath = folders.find(looksLikeGameDir) ?? null;
-const modRoots = folders.filter((f) => f !== gamePath);
 
-const excluded = (ws.settings?.["px.excludedMods"] as string[] | undefined) ?? [];
+// `px.excludedMods` drops a folder from indexing entirely (config.ts), so the
+// run indexes what the user's window indexes. A mod folder is the folder that
+// holds the descriptor, which may be a `mod/` child of the workspace folder.
+const excluded = ((ws.settings?.["px.excludedMods"] as string[] | undefined) ?? []).map((p) =>
+  path.resolve(p).toLowerCase()
+);
+const isExcluded = (f: string): boolean => {
+  const lower = path.resolve(f).toLowerCase();
+  return excluded.some((e) => e === lower || e.startsWith(lower + path.sep));
+};
+const modRoots = folders.filter((f) => f !== gamePath && !isExcluded(f));
 const declaredParents = (ws.settings?.["px.parentMods"] as string[] | undefined) ?? [];
-if (excluded.length > 0 || declaredParents.length > 0) {
+if (declaredParents.length > 0) {
   console.warn(
-    `NOTE: this workspace sets px.excludedMods=${excluded.length} px.parentMods=${declaredParents.length}; ` +
-      "the round-3 baseline assumes both are empty."
+    `NOTE: this workspace sets px.parentMods=${declaredParents.length}; they are indexed as full roots here.`
   );
 }
 
@@ -289,6 +314,30 @@ console.log(`  rss  peak (sampled)    ${results.peakRssMb} MB over ${results.rss
 fs.writeFileSync(path.join(outDir, "results.json"), JSON.stringify(results, null, 2));
 fs.writeFileSync(path.join(outDir, "server.log"), logs.join("\n"));
 console.log(`\nwrote ${outDir}/results.json and server.log`);
+
+// The version history: one row per run, the doc's table is drawn from it.
+if (historyFile) {
+  const file = path.resolve(historyFile);
+  const history: unknown[] = fs.existsSync(file)
+    ? (JSON.parse(fs.readFileSync(file, "utf8")) as unknown[])
+    : [];
+  history.push({
+    label: label ?? "unlabelled",
+    recordedAt: new Date().toISOString().slice(0, 10),
+    workspace: path.basename(wsFile),
+    roots: modRoots.length + (gamePath ? 1 : 0),
+    server: SERVER,
+    machine: {
+      cpu: os.cpus()[0]?.model ?? "?",
+      totalMemGb: Math.round(os.totalmem() / 1073741824),
+      node: process.version,
+    },
+    results,
+  });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(history, null, 2) + "\n");
+  console.log(`appended ${label ?? "a run"} to ${file}`);
+}
 
 try {
   await conn.sendRequest("shutdown");

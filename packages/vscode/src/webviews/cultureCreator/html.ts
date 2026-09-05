@@ -72,6 +72,13 @@ ${uiCss}
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
   #form { flex: 1 1 auto; overflow-y: auto; padding: 10px 14px 40px; }
   #inner { max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+  /* The form sits centred in its pane rather than hugging its left edge, its
+     label column is wide enough for the game's own field names, and a
+     single-line control stops at a readable width instead of stretching to
+     the pane; a block control (a text, a picture strip) keeps the full width. */
+  #form #inner { margin: 0 auto; width: 100%; }
+  #form .px-field { grid-template-columns: 148px minmax(0, 1fr); }
+  #form .px-field > .px-input, #form .px-field > .px-dropdown, #form .px-field > .px-select { max-width: 520px; }
   .sec { display: flex; flex-direction: column; }
   .sec > .body { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 10px; }
   .sec > .body > .rows { display: flex; flex-direction: column; gap: 6px; }
@@ -104,7 +111,7 @@ ${uiCss}
     display: flex; flex-direction: column; gap: 4px; padding: 6px 8px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
   }
-  .dlcrow .px-field { grid-template-columns: 104px minmax(0, 1fr); }
+  #form .dlcrow .px-field { grid-template-columns: 104px minmax(0, 1fr); }
   .dlchead { display: flex; align-items: center; gap: 6px; }
   .dlchead > span { flex: 1 1 auto; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
 

@@ -97,17 +97,30 @@ ${uiCss}
   #page tr.link { cursor: pointer; }
   #page tr.link td:first-child { font-family: var(--px-font-mono); font-size: var(--px-text-sm); white-space: nowrap; }
   /* Front-page cards: as many per row as the width allows, one column on narrow panes. */
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 6px; }
   .card {
-    display: flex; flex-direction: column; gap: 6px; min-height: 96px; padding: 12px;
+    display: flex; flex-direction: column; gap: 6px; min-height: 96px; min-width: 0; padding: 12px;
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md);
     background: var(--px-sidebar); cursor: pointer; text-align: left; font: inherit; color: inherit;
   }
   .card:hover { background: var(--px-muted); }
   .card:focus-visible { outline: 1px solid var(--px-ring); outline-offset: 1px; }
-  .card .head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .card .head svg { width: 16px; height: 16px; flex: 0 0 auto; }
+  .card .head { display: flex; align-items: flex-start; gap: 8px; font-weight: 600; }
+  .card .head svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 2px; }
+  .card .head > a, .card .head > span { min-width: 0; overflow-wrap: anywhere; }
   .card .tip { color: var(--px-muted-fg); font-size: var(--px-text-sm); }
+  /* Reference cards (Credits, Modding Tools): text with links in it, not a button. */
+  .card.info { cursor: default; }
+  .card.info:hover { background: var(--px-sidebar); }
+  .card .meta { margin-top: -4px; color: var(--px-muted-fg); font-size: var(--px-text-sm); }
+  .card .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; font-size: var(--px-text-sm); }
+  /* The filter row above a card grid: one chip per kind, with its icon. */
+  .filterbar { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 4px; }
+  .filters .px-badge { cursor: pointer; font: inherit; font-size: var(--px-text-xs); font-weight: 500; }
+  .filters .px-badge svg { width: 12px; height: 12px; }
+  .filters .px-badge[aria-pressed="true"] { background: var(--px-primary); color: var(--px-primary-fg); border-color: transparent; }
+  .filters .px-badge:focus-visible { outline: 1px solid var(--px-ring); outline-offset: 1px; }
   #pending { display: flex; align-items: center; gap: 8px; color: var(--px-muted-fg); padding: 12px 0; }
 </style>
 </head>
@@ -115,7 +128,7 @@ ${uiCss}
 <div id="app">
   <div id="sidebar">
     <div id="gameBar">
-      <select id="game" class="px-select" data-size="sm" aria-label="Game" data-tip="The game the wiki shows pages for. The toolkit keeps working on the workspace's game." data-tip-wrap></select>
+      <button id="game" class="px-btn px-dropdown" data-variant="outline" data-size="sm" aria-label="Game" data-tip="The game the wiki shows pages for. The toolkit keeps working on the workspace's game." data-tip-wrap><span class="px-truncate"></span>${icon("chevronDown")}</button>
     </div>
     <div id="searchBar">
       <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search the wiki…" data-tip="Matches the title and the text of every page." data-tip-wrap /></div>

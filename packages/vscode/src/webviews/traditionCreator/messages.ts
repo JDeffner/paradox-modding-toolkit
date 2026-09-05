@@ -41,6 +41,8 @@ export interface TraditionLayerChoice {
   rel: string;
   /** True when `value` names a folder the engine picks a random file out of. */
   folder: boolean;
+  /** For a folder: every file it holds, `rel` being the first. The game draws one of them. */
+  files?: string[];
 }
 
 /** One layer of the picture, as the `layers` block indexes it. */

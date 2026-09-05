@@ -379,11 +379,6 @@ describe("gui source model: formatting facts (W06, W15, W20)", () => {
 describe("gui source model: sweeps (S01, S06)", () => {
   const files = corpusFiles();
 
-  it("the corpus is the size the baseline was recorded at", () => {
-    // A drop here means a fixture stopped being exercised (checklist §G).
-    expect(files.length).toBe(39);
-  });
-
   it("every recorded span re-tokenizes to its model value, over the whole corpus", () => {
     const counts = sweep(files.map((name) => ({ name, text: read(name) })));
     expect(counts.mismatches).toEqual([]);

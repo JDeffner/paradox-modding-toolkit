@@ -4,15 +4,14 @@
  * of ui.css (the px-* variables).
  */
 export const BBPREV_CSS = `
-  /* A capped window on the text, not the whole text: the box scrolls, and
-     resize puts a drag grip on its bottom edge (Chromium draws one only when
-     overflow is not visible). Both axes scroll, so a wide table or code
-     block stays inside the box instead of widening the page. A host that
-     wants the full text instead (the standalone preview) resets height,
-     min-height, resize and overflow. */
+  /* The box takes the height of its text up to a cap the host sets, then
+     scrolls; no drag grip, which Chromium drew as a broken corner over the
+     rounded border. Both axes scroll, so a wide table or code block stays
+     inside the box instead of widening the page. A host that wants the whole
+     text (the standalone preview) resets max-height and overflow. */
   .bbprev {
     border: 1px solid var(--px-border); border-radius: var(--px-radius-md); padding: 12px 14px;
-    min-height: 170px; overflow: auto; resize: vertical; overflow-wrap: anywhere;
+    min-height: 44px; max-height: 320px; overflow: auto; overflow-wrap: anywhere;
     background: var(--px-muted); font-size: var(--px-text-sm); line-height: 1.55;
   }
   /* The preview plus the edit button pinned over its top left corner: the
@@ -24,14 +23,19 @@ export const BBPREV_CSS = `
     background: var(--px-muted); opacity: 0.65; transition: opacity var(--px-ease);
   }
   .bbprev-edit:hover, .bbprev-edit:focus-visible { opacity: 1; }
-  .bbprev .bb-h1 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
-  .bbprev .bb-h2 { font-size: 15px; font-weight: 600; margin: 8px 0 4px; }
+  .bbprev .bb-h1 { font-size: 19px; font-weight: 600; margin: 10px 0 6px; }
+  .bbprev .bb-h2 { font-size: 16px; font-weight: 600; margin: 10px 0 4px; }
   .bbprev .bb-h3 { font-size: 13px; font-weight: 600; margin: 6px 0 2px; }
   .bbprev .bb-h1:first-child, .bbprev .bb-h2:first-child, .bbprev .bb-h3:first-child { margin-top: 0; }
   .bbprev .bb-u { text-decoration: underline; }
   .bbprev a.bb-url { color: var(--vscode-textLink-foreground, #4daafc); text-decoration: none; }
   .bbprev a.bb-url:hover { text-decoration: underline; }
-  .bbprev .bb-hr { border: none; border-top: 1px solid var(--px-border); margin: 8px 0; }
+  /* As the Workshop page draws them (checked against a live listing): [hr] is
+     one thin bright line, and a heading is blue with no rule of its own. The
+     line is drawn from the text color, not the border color, because on the
+     muted box the border color is the box itself. */
+  .bbprev .bb-hr { border: none; border-top: 1px solid color-mix(in oklch, var(--px-fg) 85%, transparent); margin: 14px 0; }
+  .bbprev .bb-h1, .bbprev .bb-h2, .bbprev .bb-h3 { color: var(--vscode-textLink-foreground, #4daafc); }
   .bbprev .bb-list { margin: 4px 0; padding-left: 22px; }
   .bbprev .bb-quote { border-left: 3px solid var(--px-border); margin: 6px 0; padding: 4px 10px; color: var(--px-muted-fg); }
   .bbprev .bb-quote-author { font-size: var(--px-text-xs); font-weight: 600; margin-bottom: 2px; }

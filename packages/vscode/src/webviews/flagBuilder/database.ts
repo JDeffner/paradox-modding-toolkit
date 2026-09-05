@@ -146,6 +146,17 @@ const FRAMES_DIR = ["gfx", "interface", "coat_of_arms", "frames"];
 const CULTURES_DIR = ["common", "culture", "cultures"];
 /** The title frame is the one pair that sits above frames/ (gui/shared/coat_of_arms.gui). */
 const TITLE_FRAME = { texture: "title_86.dds", mask: "title_mask.dds" };
+/**
+ * The frames no culture names: the engine's defaults for a culture that
+ * states no frame (DEFAULT_HOUSE_COA_FRAME_NAME and DEFAULT_DYNASTY_COA_FRAME_NAME
+ * in common/defines/graphic/00_graphics.txt) and the title pair, each drawn by
+ * its own gui type.
+ */
+const GUI_FRAMES: Record<string, DesignerFrame["family"]> = {
+  house: "house",
+  dynasty: "dynasty",
+  title: "title",
+};
 /** The frames a modder reaches for first, ahead of the numbered house series. */
 const FRAME_ORDER = ["title", "dynasty", "house"];
 // "Optional, will assume maximum number of colors if missing" (both catalog
@@ -225,6 +236,9 @@ export interface CultureFrames {
   heritage: string;
   house?: string;
   dynasty?: string;
+  /** `house_coa_mask_offset` / `house_coa_mask_scale`: how the house widget fits the arms into this frame. */
+  houseOffset?: [number, number];
+  houseScale?: [number, number];
 }
 
 /** What the cultures say about one frame: which gui widget draws it, and for whom. */
@@ -233,6 +247,16 @@ export interface FrameUse {
   family: "house" | "dynasty";
   /** Heritage ids, most cultures first, ties by id. */
   heritages: string[];
+  /**
+   * The `coat_of_arms_offset` and `_scale` the house widget applies with this
+   * frame: what the cultures wearing it declare as `house_coa_mask_offset` and
+   * `house_coa_mask_scale`, the pair most of them agree on. Measured on 1.19:
+   * every vanilla house frame's cultures declare one pair (house_frame_22 sits
+   * 0.11 down at 0.85, house_frame_12 0.04 up at 0.95), and no culture declares
+   * a dynasty pair, so those keep the defines' 0 and 1.
+   */
+  maskOffset?: [number, number];
+  maskScale?: [number, number];
 }
 
 /**
@@ -272,6 +296,13 @@ function parseCultureFrames(text: string): [string, CultureFrames][] {
       if (pair?.[1] === "heritage") culture.heritage = pair[2];
       else if (pair?.[1] === "house_coa_frame") culture.house = pair[2];
       else if (pair?.[1] === "dynasty_coa_frame") culture.dynasty = pair[2];
+      const fit =
+        /^\s*(house_coa_mask_offset|house_coa_mask_scale)\s*=\s*\{\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\}/.exec(line);
+      if (fit) {
+        const value: [number, number] = [Number(fit[2]), Number(fit[3])];
+        if (fit[1] === "house_coa_mask_offset") culture.houseOffset = value;
+        else culture.houseScale = value;
+      }
     }
     for (const ch of line) {
       if (ch === "{") depth++;
@@ -289,15 +320,31 @@ function parseCultureFrames(text: string): [string, CultureFrames][] {
 
 /** Which cultures wear each frame, keyed by frame id. */
 export function frameUsage(cultures: Iterable<CultureFrames>): Map<string, FrameUse> {
-  const counts = new Map<string, { family: "house" | "dynasty"; heritages: Map<string, number> }>();
+  interface Count {
+    family: "house" | "dynasty";
+    heritages: Map<string, number>;
+    /** "ox oy sx sy" -> how many cultures declare that fit with this frame. */
+    fits: Map<string, number>;
+  }
+  const counts = new Map<string, Count>();
   for (const culture of cultures) {
     for (const [family, frame] of [
       ["house", culture.house],
       ["dynasty", culture.dynasty],
     ] as const) {
       if (!frame || !culture.heritage) continue;
-      const use = counts.get(frame) ?? { family, heritages: new Map<string, number>() };
+      const use = counts.get(frame) ?? {
+        family,
+        heritages: new Map<string, number>(),
+        fits: new Map<string, number>(),
+      };
       use.heritages.set(culture.heritage, (use.heritages.get(culture.heritage) ?? 0) + 1);
+      if (family === "house" && (culture.houseOffset || culture.houseScale)) {
+        const offset = culture.houseOffset ?? [0, 0];
+        const scale = culture.houseScale ?? [1, 1];
+        const key = [...offset, ...scale].join(" ");
+        use.fits.set(key, (use.fits.get(key) ?? 0) + 1);
+      }
       counts.set(frame, use);
     }
   }
@@ -306,7 +353,13 @@ export function frameUsage(cultures: Iterable<CultureFrames>): Map<string, Frame
     const heritages = [...use.heritages]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([heritage]) => heritage);
-    out.set(frame, { family: use.family, heritages });
+    const fit = [...use.fits].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+    const numbers = fit?.split(" ").map(Number);
+    out.set(frame, {
+      family: use.family,
+      heritages,
+      ...(numbers ? { maskOffset: [numbers[0], numbers[1]], maskScale: [numbers[2], numbers[3]] } : {}),
+    });
   }
   return out;
 }
@@ -351,10 +404,14 @@ function designerFrames(dirs: { dir: string }[], usage: Map<string, FrameUse>): 
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .map((id) => {
       const use = usage.get(id);
+      const family = use?.family ?? GUI_FRAMES[id];
       return {
         id,
         label: frameLabel(id),
-        ...(use ? { family: use.family, heritages: use.heritages } : {}),
+        ...(family ? { family } : {}),
+        ...(use ? { heritages: use.heritages } : {}),
+        ...(use?.maskOffset ? { maskOffset: use.maskOffset } : {}),
+        ...(use?.maskScale ? { maskScale: use.maskScale } : {}),
       };
     });
 }

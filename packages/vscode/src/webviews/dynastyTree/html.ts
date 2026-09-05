@@ -34,6 +34,8 @@ ${uiCss}
   /* The picker: one scrolling list, mod dynasties first. */
   #pickerPane { flex: 1 1 auto; overflow-y: auto; min-width: 0; }
   #picker { padding: 6px; }
+  #picker > .px-panel-title { padding: 10px 6px 4px; }
+  #picker > .px-panel-title:first-child { padding-top: 4px; }
   #picker .px-item { align-items: center; gap: 8px; }
   #picker .dname { flex: 0 0 auto; font-weight: 500; }
   #picker .dkey { flex: 1 1 auto; min-width: 0; color: var(--px-muted-fg); font-family: var(--px-font-mono);
@@ -59,7 +61,20 @@ ${uiCss}
   .card[data-selected] .cring { opacity: 1; }
   .card .cname { font-size: 12px; font-weight: 600; fill: var(--px-fg); }
   .card[data-external] .cname { fill: var(--px-muted-fg); }
-  .card .csex { font-size: 11px; fill: var(--px-muted-fg); }
+  /* Sex as colour, the same two hues on the cards and in the Sex picker:
+     a rose for women, a blue for men, mixed into the card so the tree stays
+     readable and the theme's greys still carry the rest. */
+  #canvas, #side { --px-female: #c9648c; --px-male: #4f86d6; }
+  .card .csex { font-size: 11px; font-weight: 600; fill: var(--px-muted-fg); }
+  .card[data-sex="female"] .csex { fill: var(--px-female); }
+  .card[data-sex="male"] .csex { fill: var(--px-male); }
+  .card[data-sex="female"] .cbg { fill: color-mix(in oklch, var(--px-muted) 82%, var(--px-female)); stroke: color-mix(in oklch, var(--px-border) 45%, var(--px-female)); }
+  .card[data-sex="male"] .cbg { fill: color-mix(in oklch, var(--px-muted) 82%, var(--px-male)); stroke: color-mix(in oklch, var(--px-border) 45%, var(--px-male)); }
+  .card[data-source="mod"][data-sex="female"] .cbg { fill: color-mix(in oklch, var(--px-muted-strong) 78%, var(--px-female)); }
+  .card[data-source="mod"][data-sex="male"] .cbg { fill: color-mix(in oklch, var(--px-muted-strong) 78%, var(--px-male)); }
+  .card[data-external] .cbg { fill: transparent; }
+  .px-toggle[data-sex="female"][aria-pressed="true"] { background: var(--px-female); border-color: var(--px-female); color: #fff; }
+  .px-toggle[data-sex="male"][aria-pressed="true"] { background: var(--px-male); border-color: var(--px-male); color: #fff; }
   .card .cdates, .card .cid { font-size: 10px; fill: var(--px-muted-fg); }
   .card .cid { font-family: var(--px-font-mono); }
   .card .ctag { fill: var(--px-bg); stroke: var(--px-border); stroke-width: 1; }
@@ -180,6 +195,10 @@ ${uiCss}
     <button id="fit" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Fit the whole tree">${icon("maximize")}</button>
     <button id="zoomOut" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Zoom out">${icon("zoomOut")}</button>
     <button id="zoomIn" class="px-btn" data-variant="ghost" data-size="icon-sm" hidden data-tip="Zoom in">${icon("zoomIn")}</button>
+    <div id="dateMode" class="px-toggle-group" data-spacing="0" hidden data-tip="How dates read: through the mod's calendar, or as the game writes them (year.month.day)" data-tip-wrap>
+      <button class="px-toggle" data-variant="outline" data-size="sm" data-mode="calendar">Calendar</button>
+      <button class="px-toggle" data-variant="outline" data-size="sm" data-mode="script">Script</button>
+    </div>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="Read the game and mod files again">${icon("rotate")}</button>
   </div>
   <div id="banner" hidden></div>

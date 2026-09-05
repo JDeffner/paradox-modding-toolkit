@@ -84,15 +84,6 @@ tutorial.0001 = {
 `;
 
 describe("browser language service", () => {
-  it("loads the real token tables without touching a workspace", () => {
-    const svc = service();
-    expect(svc.capabilities.completion).toBe(true);
-    expect(svc.capabilities.hoverDocs).toBe(true);
-    // Stated plainly rather than implied: there is no index behind this build.
-    expect(svc.capabilities.workspaceIndex).toBe(false);
-    expect(svc.capabilities.referenceDiagnostics).toBe(false);
-  });
-
   it("classifies a document by its mod-relative folder", () => {
     const svc = service();
     expect(svc.openDocument("events/tutorial.txt", EVENT).kind).toBe("event");

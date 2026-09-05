@@ -64,7 +64,12 @@ const CATALOG: TraditionCatalog = {
       path: `${ICONS}/0-background`,
       label: "0-background",
       choices: [
-        { value: "martial", rel: `${ICONS}/0-background/martial/martial1.dds`, folder: true },
+        {
+          value: "martial",
+          rel: `${ICONS}/0-background/martial/martial1.dds`,
+          folder: true,
+          files: [`${ICONS}/0-background/martial/martial1.dds`, `${ICONS}/0-background/martial/martial2.dds`],
+        },
         { value: "learning", rel: `${ICONS}/0-background/learning/learning1.dds`, folder: true },
       ],
     },
@@ -74,7 +79,13 @@ const CATALOG: TraditionCatalog = {
       label: "1-pattern",
       choices: [{ value: "western", rel: `${ICONS}/1-pattern/western/western1.dds`, folder: true }],
     },
-    { index: 2, path: `${ICONS}/2-support`, label: "2-support", choices: [] },
+    {
+      index: 2,
+      path: `${ICONS}/2-support`,
+      label: "2-support",
+      // Vanilla's support files really are named with spaces.
+      choices: [{ value: "rec1 copy 2.dds", rel: `${ICONS}/2-support/rec1 copy 2.dds`, folder: false }],
+    },
     {
       index: 3,
       path: `${ICONS}/3-stroke`,
@@ -352,16 +363,32 @@ describe("every list is a picker over what the game has", () => {
 });
 
 describe("the preview is the game's own tile", () => {
-  it("stacks the picked layers, drawing the pattern twice the way the gui does", () => {
+  it("stacks every layer the game draws: the picks, and the folder's first file for the rest", () => {
     const app = boot();
     const martial = `${ICONS}/0-background/martial/martial1.dds`;
+    const western = `${ICONS}/1-pattern/western/western1.dds`;
+    const support = `${ICONS}/2-support/rec1 copy 2.dds`;
+    const stroke = `${ICONS}/3-stroke/1.dds`;
+    const boat = `${ICONS}/4-items/boat.dds`;
     pickFrom(app, layerTrigger(app, "0-background"), "martial");
     // The composed tile sits in the Icon section too, at the game's own 220x120.
+    // Only the background is picked, and the game still draws the other four
+    // from a random file of each folder (_traditions.info), so the tile shows a
+    // stand-in for each: the pattern twice (the second mirrored, as
+    // widget_tradition_icon draws it) and the stroke at 90%.
     const live = [...app.document.querySelectorAll<HTMLImageElement>(".iconlive .px-tradicon > img")];
-    expect(live.map((img) => img.dataset.rel)).toEqual([martial]);
-    // Full-size decodes are asked for the chosen file alone, never a folder.
+    expect(live.map((img) => img.dataset.rel)).toEqual([martial, western, western, support, stroke, boat]);
+    expect(live[2].style.transform).toContain("scaleX(-1)");
+    expect(live[4].style.transform).toContain("scale(0.9)");
+    // Full-size decodes are asked for those files, never a folder.
     const full = app.posted.filter((m) => m.type === "images" && m.maxDim === 0);
-    expect(full.flatMap((m) => (m.type === "images" ? m.keys : []))).toEqual([martial]);
+    expect([...new Set(full.flatMap((m) => (m.type === "images" ? m.keys : [])))]).toEqual([
+      martial,
+      western,
+      support,
+      stroke,
+      boat,
+    ]);
     // A full-size answer paints the tile; the row's slot keeps its thumbnail.
     app.send({ type: "images", urls: { [martial]: "https://host/full.png" }, maxDim: 0 });
     expect(live[0].src).toBe("https://host/full.png");
@@ -371,16 +398,10 @@ describe("the preview is the game's own tile", () => {
     app.send({ type: "images", urls: { [martial]: "https://host/thumb.png" }, maxDim: 256 });
     expect(slot.src).toBe("https://host/thumb.png");
 
+    // The tooltip preview is the same stack.
     pickFrom(app, layerTrigger(app, "1-pattern"), "western");
     const drawn = [...app.document.querySelectorAll<HTMLImageElement>("#tip .px-tradicon > img")];
-    // background, pattern, pattern mirrored: `widget_tradition_icon` draws the
-    // pattern layer a second time with `mirror = horizontal`.
-    expect(drawn.map((img) => img.dataset.rel)).toEqual([
-      `${ICONS}/0-background/martial/martial1.dds`,
-      `${ICONS}/1-pattern/western/western1.dds`,
-      `${ICONS}/1-pattern/western/western1.dds`,
-    ]);
-    expect(drawn[2].style.transform).toContain("scaleX(-1)");
+    expect(drawn.map((img) => img.dataset.rel)).toEqual([martial, western, western, support, stroke, boat]);
   });
 
   it("prints a modifier the way the game prints it, under the block it is in", () => {
@@ -434,6 +455,46 @@ describe("a new tradition saves with a name, a category and a layer", () => {
       { key: "tradition_px_seafarers_name", value: "Tradition Px Seafarers" },
       { key: "tradition_px_seafarers_desc", value: "Tradition Px Seafarers" },
     ]);
+  });
+
+  it("shows the files a folder pick or a left-out layer can land on, under the row", () => {
+    const app = boot();
+    pickFrom(app, layerTrigger(app, "0-background"), "martial");
+    const strips = [...app.document.querySelectorAll(".layeroptions")].map((strip) => ({
+      label: strip.querySelector(".px-xs")?.textContent,
+      files: [...strip.querySelectorAll("img")].map((img) => img.dataset.rel),
+    }));
+    // The picked folder's two files; the items layer, left out, its two top-level
+    // files. Pattern, support and stroke offer one file or none: no draw, no strip.
+    expect(strips).toEqual([
+      {
+        label: "One of 2",
+        files: [`${ICONS}/0-background/martial/martial1.dds`, `${ICONS}/0-background/martial/martial2.dds`],
+      },
+      { label: "Left out: one of 2", files: [`${ICONS}/4-items/boat.dds`, `${ICONS}/4-items/fight.dds`] },
+    ]);
+    // A left-out layer's tile is a pick: one click names that file.
+    app.document.querySelectorAll<HTMLButtonElement>(".layeroptions .layeroption")[1].click();
+    expect(layerTrigger(app, "4-items").textContent).toBe("fight.dds");
+  });
+
+  it("quotes a layer file whose name has spaces, and says when a layer is a random folder", () => {
+    const app = boot();
+    type(app, "#name", "tradition_px_shields");
+    pickEnum(app, "category", "regional");
+    pickFrom(app, layerTrigger(app, "0-background"), "martial");
+    pickFrom(app, layerTrigger(app, "2-support"), "rec1 copy 2.dds");
+    // Bare, the engine reads `2 = rec1` and then chokes on `copy` (error.log:
+    // "Left was not a number: copy"), and the icon loses the layer.
+    expect(app.script()).toContain('\t\t2 = "rec1 copy 2.dds"\n');
+    // The background is a folder the game picks from and three layers are left
+    // out, and the preview says which ones the game will draw at random.
+    const note = [...app.document.querySelectorAll(".iconblock .px-xs")].find((n) =>
+      n.textContent?.includes("random file")
+    );
+    expect(note?.textContent).toBe(
+      "The game draws the background, pattern, stroke and items from a random file of the folder; this shows the first."
+    );
   });
 
   it("writes the keys in the order the game's own traditions write them", () => {
@@ -518,6 +579,29 @@ describe("editing a tradition the mod already has", () => {
     expect(save.sourceFile).toBe("px_culture_traditions.txt");
     // The whole block travels too, byte-identical apart from the one value.
     expect(save.block).toBe(CURRENT.text.replace("prestige = 300", "prestige = 500"));
+  });
+
+  it("a layer named as a file inside its subfolder draws as that file, not as a layer left out", () => {
+    const app = boot();
+    // Vanilla never writes a path, so the picker does not list one; the file
+    // still names one picture, and the row must not read as a random draw.
+    const text = [
+      "tradition_px_seafarers = {",
+      "\tcategory = regional",
+      "\tlayers = {",
+      '\t\t0 = "martial/martial2.dds"',
+      "\t}",
+      "}",
+    ].join("\n");
+    app.send({ type: "form", form: { ...FORM, current: { ...CURRENT, text } } });
+    const trigger = layerTrigger(app, "0-background");
+    expect(trigger.textContent).toBe("martial/martial2.dds");
+    expect(trigger.closest(".layerrow")!.querySelector("img")?.dataset.rel).toBe(
+      `${ICONS}/0-background/martial/martial2.dds`
+    );
+    // No strip of candidate files under the row: the draw is not random.
+    expect(trigger.closest(".layerrow")!.nextElementSibling?.classList.contains("layeroptions")).toBe(false);
+    expect(app.script()).toContain('0 = "martial/martial2.dds"');
   });
 
   it("keeps a cost the form cannot stand for exactly as the file writes it", () => {

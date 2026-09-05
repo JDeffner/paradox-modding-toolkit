@@ -24,6 +24,9 @@ type Category =
   | "General"
   | "Libraries";
 
+import type { IconName } from "../shared/icons";
+import type { WikiCard } from "./messages";
+
 export interface ModdingTool {
   name: string;
   category: Category;
@@ -341,33 +344,69 @@ export const MODDING_TOOLS: Record<string, GameToolList> = {
   },
 };
 
-/** The tool cell: the name links to the first entry, the rest by their label. */
-function toolCell(tool: ModdingTool): string {
-  return tool.links.map((link, i) => `[${i === 0 ? tool.name : link.label}](${link.url})`).join(" · ");
-}
+/** The icon each category wears on its cards, and in the filter row. */
+const CATEGORY_ICONS: Record<Category, IconName> = {
+  Validation: "shield",
+  Localization: "globe",
+  "Map modding": "map",
+  "History modding": "fileText",
+  Audio: "activity",
+  "Art and 3D models": "palette",
+  General: "wrench",
+  Libraries: "package",
+};
 
-/** The page for one game, or undefined for a game with no curated list. */
-export function moddingToolsMarkdown(gameId: string, gameName: string): string | undefined {
-  const list = MODDING_TOOLS[gameId];
-  if (!list) return undefined;
-  const out = [
+/**
+ * ONE page for every game: a tool that serves several games (PDX DeepL, the
+ * tiger family) is one card naming each, rather than a copy per game, and the
+ * app shows the cards of the game its switch is on. Cards come in category
+ * order, the category as the kind the page filters by. `gameNames` names the
+ * games in the sources line.
+ */
+export function moddingToolsPage(gameNames: Record<string, string>): {
+  markdown: string;
+  cards: WikiCard[];
+  outro: string;
+} {
+  const ids = Object.keys(MODDING_TOOLS);
+  const sources = ids.map((id) => `[${gameNames[id] ?? id}](${MODDING_TOOLS[id].source.url})`).join(", ");
+  const markdown = [
     "# Modding Tools",
     "",
-    `Tools other modders built for ${gameName}, picked from the ${list.source.label} list. Tools the toolkit does the job of are left out.`,
+    "Tools other modders built for the game the switch is on, picked from each game wiki's own tools list. " +
+      "Tools the toolkit does the job of are left out.",
     "",
-    `Source: [${list.source.label}](${list.source.url}).`,
-  ];
-  for (const category of CATEGORIES) {
-    const tools = list.tools.filter((t) => t.category === category);
-    if (tools.length === 0) continue;
-    out.push("", `## ${category}`, "", "| Tool | What it does |", "|---|---|");
-    for (const tool of tools) out.push(`| ${toolCell(tool)} | ${tool.what} |`);
+  ].join("\n");
+  // Merged by name, so a shared tool is one card that names every game it
+  // serves; the page shows the cards of the game the switch is on.
+  const merged = new Map<string, { tool: ModdingTool; games: string[] }>();
+  for (const id of ids) {
+    for (const tool of MODDING_TOOLS[id].tools) {
+      const entry = merged.get(tool.name);
+      if (entry) entry.games.push(id);
+      else merged.set(tool.name, { tool, games: [id] });
+    }
   }
-  out.push(
-    "",
+  // The name links to the first entry; the rest stand under the text by their label.
+  const cards: WikiCard[] = CATEGORIES.flatMap((category) =>
+    [...merged.values()]
+      .filter((e) => e.tool.category === category)
+      .map(({ tool, games }) => ({
+        title: tool.name,
+        url: tool.links[0].url,
+        kind: category,
+        icon: CATEGORY_ICONS[category],
+        text: tool.what,
+        games,
+        ...(tool.links.length > 1 ? { links: tool.links.slice(1) } : {}),
+      }))
+  );
+  const outro = [
     "## Add a tool",
     "",
-    "Built something that does what the toolkit does not? Tell me on [Discord](https://discord.gg/DfEJ2H9hj4) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues). I add the tools that fill a gap."
-  );
-  return out.join("\n");
+    "Built something that does what the toolkit does not? Tell me on [Discord](https://discord.gg/DfEJ2H9hj4) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues). I add the tools that fill a gap.",
+    "",
+    `Sources: ${sources}.`,
+  ].join("\n");
+  return { markdown, cards, outro };
 }

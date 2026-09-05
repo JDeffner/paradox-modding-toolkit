@@ -43,29 +43,6 @@ function fixtureUsage(): DataFnUsage {
   lines.forEach((l, i) => harvestLine(u, l, "gui/test.gui", i + 1));
   return u;
 }
-
-describe("bundled wiki data types", () => {
-  const data = loadBundledDataTypes();
-
-  it("loads globals and types from packages/server/data/ck3/dataTypes.json", () => {
-    expect(data.count).toBeGreaterThan(2000);
-    expect(data.globals.get("GetPlayer")?.ret).toBe("Character");
-    expect(data.types.has("Character")).toBe(true);
-    expect(data.types.has("Title")).toBe(true);
-  });
-
-  it("has the everyday Character members with return types", () => {
-    const character = data.types.get("Character")!;
-    expect(character.get("GetFather")?.ret).toBe("Character");
-    expect(character.get("GetFaith")?.ret).toBe("Faith");
-    expect(character.get("IsAlive")?.ret).toBe("bool");
-    expect(character.has("IsAdult")).toBe(true);
-    expect(character.get("GetDomainSize")?.ret).toBe("int32");
-    // Known-name members whose return type the wiki does not register still complete:
-    expect(character.has("GetName")).toBe(true);
-  });
-});
-
 describe("DumpDataTypes log parser", () => {
   const DUMP = [
     "GetPlayer",

@@ -1,0 +1,341 @@
+{
+  "note": "One row per profileWorkspace.ts run (pnpm run perf:history) over cultivation.code-workspace: the CK3 install plus five workspace mods, Agent Courier excluded by px.excludedMods. Warm file cache, two runs per version, UV_THREADPOOL_SIZE=16, heap ceiling 4096 MB. Add a row for every release; docs/PERFORMANCE.md carries the medians.",
+  "runs": [
+    {
+      "version": "0.3.0",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8852,
+        "definitions": 473227,
+        "completionCold": 1638,
+        "completionWarm": 7,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 1526,
+        "tokensAfterSave": 1,
+        "heapMb": 321,
+        "rssAtBuildMb": 699,
+        "internedIdentifiers": 551591,
+        "peakRssMb": 769,
+        "rssSamples": 28
+      }
+    },
+    {
+      "version": "0.3.2",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8070,
+        "definitions": 473227,
+        "completionCold": 1640,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 1572,
+        "tokensAfterSave": 1,
+        "heapMb": 323,
+        "rssAtBuildMb": 711,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 804,
+        "rssSamples": 26
+      }
+    },
+    {
+      "version": "0.3.4",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8859,
+        "definitions": 473227,
+        "completionCold": 1563,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 1539,
+        "tokensAfterSave": 1,
+        "heapMb": 323,
+        "rssAtBuildMb": 710,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 812,
+        "rssSamples": 28
+      }
+    },
+    {
+      "version": "0.3.6",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7562,
+        "definitions": 473227,
+        "completionCold": 190,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 171,
+        "tokensAfterSave": 1,
+        "heapMb": 266,
+        "rssAtBuildMb": 712,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 856,
+        "rssSamples": 19
+      }
+    },
+    {
+      "version": "0.4.0",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8679,
+        "definitions": 473227,
+        "completionCold": 277,
+        "completionWarm": 11,
+        "semanticTokens": 1,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 175,
+        "tokensAfterSave": 1,
+        "heapMb": 267,
+        "rssAtBuildMb": 716,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 865,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "0.4.0 + realign-coa-editor",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7841,
+        "definitions": 473227,
+        "completionCold": 224,
+        "completionWarm": 8,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 165,
+        "tokensAfterSave": 1,
+        "heapMb": 267,
+        "rssAtBuildMb": 710,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 843,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "0.3.0",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8099,
+        "definitions": 473227,
+        "completionCold": 1597,
+        "completionWarm": 9,
+        "semanticTokens": 2,
+        "hover": 5,
+        "documentSymbol": 1,
+        "completionAfterSave": 1533,
+        "tokensAfterSave": 1,
+        "heapMb": 321,
+        "rssAtBuildMb": 699,
+        "internedIdentifiers": 551591,
+        "peakRssMb": 776,
+        "rssSamples": 26
+      }
+    },
+    {
+      "version": "0.3.2",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8358,
+        "definitions": 473227,
+        "completionCold": 1656,
+        "completionWarm": 10,
+        "semanticTokens": 1,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 2447,
+        "tokensAfterSave": 2,
+        "heapMb": 323,
+        "rssAtBuildMb": 710,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 809,
+        "rssSamples": 27
+      }
+    },
+    {
+      "version": "0.3.4",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 9696,
+        "definitions": 473227,
+        "completionCold": 1712,
+        "completionWarm": 9,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 1665,
+        "tokensAfterSave": 1,
+        "heapMb": 323,
+        "rssAtBuildMb": 710,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 781,
+        "rssSamples": 28
+      }
+    },
+    {
+      "version": "0.3.6",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7833,
+        "definitions": 473227,
+        "completionCold": 208,
+        "completionWarm": 9,
+        "semanticTokens": 2,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 200,
+        "tokensAfterSave": 1,
+        "heapMb": 266,
+        "rssAtBuildMb": 714,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 857,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "0.4.0",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of the tag, built in a worktree",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7619,
+        "definitions": 473227,
+        "completionCold": 228,
+        "completionWarm": 9,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 194,
+        "tokensAfterSave": 1,
+        "heapMb": 267,
+        "rssAtBuildMb": 703,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 839,
+        "rssSamples": 19
+      }
+    },
+    {
+      "version": "0.4.0 + realign-coa-editor",
+      "recordedAt": "2026-09-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7852,
+        "definitions": 473227,
+        "completionCold": 226,
+        "completionWarm": 7,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 169,
+        "tokensAfterSave": 1,
+        "heapMb": 267,
+        "rssAtBuildMb": 715,
+        "internedIdentifiers": 551647,
+        "peakRssMb": 858,
+        "rssSamples": 20
+      }
+    }
+  ]
+}

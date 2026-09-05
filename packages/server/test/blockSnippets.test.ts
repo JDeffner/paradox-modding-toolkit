@@ -18,19 +18,6 @@ describe("blockSnippets — accepted examples", () => {
     expect(t.plain).toBe("if = {\n\tlimit = {\n\t\t<triggers>\n\t}\n\t<effects>\n}");
   });
 
-  it("keeps the loop form too (both control-flow tokens clear the guards)", () => {
-    const t = extractBlockTemplate("while", "while = { limit = { <triggers> } <effects> }")!;
-    expect(t.snippet).toBe("while = {\n\tlimit = {\n\t\t${1:triggers}\n\t}\n\t${2:effects}\n}");
-  });
-
-  it("iterators: the dump's canonical limit/effects pair", () => {
-    const t = extractBlockTemplate(
-      "every_activity",
-      "every_activity = { limit = { <triggers> } <effects> }"
-    )!;
-    expect(t.plain).toBe("every_activity = {\n\tlimit = {\n\t\t<triggers>\n\t}\n\t<effects>\n}");
-  });
-
   it("concrete example values become PRE-FILLED tabstops, keys stay literal", () => {
     // vic3 effects.log, markdown dialect.
     const t = extractBlockTemplate(

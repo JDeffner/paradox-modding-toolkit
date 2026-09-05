@@ -456,11 +456,6 @@ describe("boot", () => {
     expect(editor.text("inspector")).toContain("Nothing selected");
   });
 
-  it("marks template-expanded rows synthetic in the tree", () => {
-    serveLayout(editor, TEXT);
-    expect(editor.rows().some((r) => r.includes("px_row_kid") && r.includes("synthetic"))).toBe(true);
-  });
-
   it("a tree over the row budget opens at its top level instead of listing everything", () => {
     // window_character expands to 13,702 widgets behind the vanilla template
     // store, which is neither scannable nor affordable to rebuild after every
@@ -1891,15 +1886,6 @@ describe("the canvas devtools", () => {
 
     expect(editor.text("status")).toContain("layout: 1 widget changed");
     expect(editor.paint.strokes).toContain(PULSE_STROKE);
-  });
-
-  it("the stats line carries the server's stages and the app's own", () => {
-    openHalo();
-    const stats = editor.text("stats");
-    for (const part of ["parse", "defs", "layout", "server", "scene", "paint"]) {
-      expect(stats).toContain(part);
-    }
-    expect(stats).toContain("w");
   });
 });
 

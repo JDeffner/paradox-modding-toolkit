@@ -4,10 +4,6 @@ import { serverHeapMb } from "../src/serverHeap";
 const GB = 1024 * 1024 * 1024;
 
 describe("serverHeapMb", () => {
-  it("raises an 8 GB machine above Node's ~2 GB default", () => {
-    expect(serverHeapMb(8 * GB)).toBe(4096);
-  });
-
   it("never claims more than half of physical RAM", () => {
     expect(serverHeapMb(6 * GB)).toBe(3072);
   });

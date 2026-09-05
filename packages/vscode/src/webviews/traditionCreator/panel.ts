@@ -90,6 +90,9 @@ export interface TraditionCreatorOptions {
 export class TraditionCreatorPanel {
   private static instance: TraditionCreatorPanel | undefined;
   private static readonly viewType = "px.traditionCreator";
+  private static readonly saved = new vscode.EventEmitter<{ name: string; blank: boolean }>();
+  /** Every tradition a save wrote, and whether its form started blank: the Culture Creator listens. */
+  static readonly onDidSave = TraditionCreatorPanel.saved.event;
 
   private readonly panel: vscode.WebviewPanel;
   private readonly textures: GuiTextureCache;
@@ -474,6 +477,7 @@ export class TraditionCreatorPanel {
     const written = [...new Set([path.basename(abs), ...locFiles.map((file) => path.basename(file))])];
     this.post({ type: "toast", message: `Saved ${save.name} into ${written.join(", ")}.` });
     this.post({ type: "saved", ok: true, name: save.name });
+    TraditionCreatorPanel.saved.fire({ name: save.name, blank: this.options.name === undefined });
     return abs;
   }
 }

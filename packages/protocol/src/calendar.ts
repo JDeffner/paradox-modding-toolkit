@@ -11,13 +11,6 @@
  * Node.
  */
 
-export interface CalendarMonth {
-  /** Display name ("March", "Narvinye"). */
-  name: string;
-  /** Day count; the engine has no leap years, so one number per month. */
-  days: number;
-}
-
 export interface CalendarSetting {
   /** Script year displayed as year 1 of the `after` era (no year zero). */
   epoch: number;
@@ -26,13 +19,20 @@ export interface CalendarSetting {
   /** Era label for script years < epoch ("BC"). Omitted = single-era
    * calendar: years before the epoch get no display form. */
   before?: string;
-  /** Custom month names and day counts, first month first. Omitted = the
-   * standard 12 months (Feb 28: the engine has no leap years). */
-  months?: CalendarMonth[];
+  /**
+   * The engine's twelve months under the mod's own names, first month first.
+   * Omitted = January to December. Only the NAMES are the mod's: the game has
+   * twelve months of fixed length (31 28 31 30 31 30 31 31 30 31 30 31, no
+   * leap years) and no script can change that, so a date's month and day are
+   * always the engine's and only read differently.
+   */
+  months?: string[];
 }
 
-const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-export const GREGORIAN_MONTHS: CalendarMonth[] = [
+/** Days per engine month; what a script date's day is bounded by. */
+export const ENGINE_MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export const GREGORIAN_MONTHS: string[] = [
   "January",
   "February",
   "March",
@@ -45,9 +45,10 @@ export const GREGORIAN_MONTHS: CalendarMonth[] = [
   "October",
   "November",
   "December",
-].map((name, i) => ({ name, days: DAYS[i] }));
+];
 
-export function monthsOf(cal: CalendarSetting): CalendarMonth[] {
+/** The month names a date reads with: the mod's twelve, or the engine's. */
+export function monthNames(cal: CalendarSetting): string[] {
   return cal.months ?? GREGORIAN_MONTHS;
 }
 
@@ -69,17 +70,19 @@ export function sanitizeCalendar(raw: unknown): CalendarSetting | undefined {
   // collision would resolve silently to the wrong one: not a usable calendar.
   if (cal.before && cal.before.toLowerCase() === cal.after.toLowerCase()) return undefined;
   if (Array.isArray(o.months) && o.months.length > 0) {
-    const months: CalendarMonth[] = [];
+    // Exactly the engine's twelve. A name may still arrive as the older
+    // `{ name, days }` object; its day count never meant anything to the
+    // game and is dropped.
+    if (o.months.length !== GREGORIAN_MONTHS.length) return undefined;
+    const months: string[] = [];
     const seen = new Set<string>();
     for (const m of o.months) {
-      if (typeof m !== "object" || m === null) return undefined;
-      const { name, days } = m as Record<string, unknown>;
+      const name = typeof m === "string" ? m : ((m as Record<string, unknown> | null)?.name ?? null);
       if (typeof name !== "string" || name.trim() === "") return undefined;
-      if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 999) return undefined;
       const key = name.trim().toLowerCase();
       if (seen.has(key)) return undefined;
       seen.add(key);
-      months.push({ name: name.trim(), days });
+      months.push(name.trim());
     }
     cal.months = months;
   }
@@ -93,10 +96,9 @@ export function parseScriptDate(text: string): { y: number; m: number; d: number
   return { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
 }
 
-/** Month/day within the calendar's bounds (year just has to be positive). */
-export function isValidScriptDate(cal: CalendarSetting, y: number, m: number, d: number): boolean {
-  const months = monthsOf(cal);
-  return y >= 1 && m >= 1 && m <= months.length && d >= 1 && d <= months[m - 1].days;
+/** A date the engine reads: a positive year, one of its twelve months, a day that month has. */
+export function isValidScriptDate(y: number, m: number, d: number): boolean {
+  return y >= 1 && m >= 1 && m <= ENGINE_MONTH_DAYS.length && d >= 1 && d <= ENGINE_MONTH_DAYS[m - 1];
 }
 
 /** Era-mapped year: "1000 BC". Null for pre-epoch years of a single-era calendar. */
@@ -111,11 +113,11 @@ export function displayYear(cal: CalendarSetting, y: number): string | null {
  * date does not fit the calendar.
  */
 export function displayDate(cal: CalendarSetting, y: number, m: number, d: number): string | null {
-  if (!isValidScriptDate(cal, y, m, d)) return null;
+  if (!isValidScriptDate(y, m, d)) return null;
   const year = displayYear(cal, y);
   if (!year) return null;
   if (m === 1 && d === 1) return year;
-  return `${d} ${monthsOf(cal)[m - 1].name} ${year}`;
+  return `${d} ${monthNames(cal)[m - 1]} ${year}`;
 }
 
 export type ConvertResult = { ok: true; script: string; display: string } | { ok: false; error: string };
@@ -123,12 +125,10 @@ export type ConvertResult = { ok: true; script: string; display: string } | { ok
 /** Case-insensitive month lookup: exact name, else unique prefix. */
 function monthByName(cal: CalendarSetting, text: string): number | null {
   const needle = text.toLowerCase();
-  const months = monthsOf(cal);
-  const exact = months.findIndex((m) => m.name.toLowerCase() === needle);
+  const months = monthNames(cal);
+  const exact = months.findIndex((m) => m.toLowerCase() === needle);
   if (exact >= 0) return exact + 1;
-  const prefixed = months
-    .map((m, i) => ({ m, i }))
-    .filter(({ m }) => m.name.toLowerCase().startsWith(needle));
+  const prefixed = months.map((m, i) => ({ m, i })).filter(({ m }) => m.toLowerCase().startsWith(needle));
   return prefixed.length === 1 ? prefixed[0].i + 1 : null;
 }
 
@@ -174,11 +174,10 @@ export function convertDisplayInput(cal: CalendarSetting, input: string): Conver
   if (year < 1) return { ok: false, error: "years start at 1 (no year zero)" };
   const y = era === cal.after ? year + cal.epoch - 1 : cal.epoch - year;
   if (y < 1) return { ok: false, error: `${year} ${era} is before script year 1 (epoch ${cal.epoch})` };
-  if (!isValidScriptDate(cal, y, m, d)) {
-    const months = monthsOf(cal);
-    return m >= 1 && m <= months.length
-      ? { ok: false, error: `${months[m - 1].name} has ${months[m - 1].days} days` }
-      : { ok: false, error: `this calendar has ${months.length} months` };
+  if (!isValidScriptDate(y, m, d)) {
+    return m >= 1 && m <= ENGINE_MONTH_DAYS.length
+      ? { ok: false, error: `${monthNames(cal)[m - 1]} has ${ENGINE_MONTH_DAYS[m - 1]} days` }
+      : { ok: false, error: `the game has ${ENGINE_MONTH_DAYS.length} months` };
   }
   return { ok: true, script: `${y}.${m}.${d}`, display: displayDate(cal, y, m, d)! };
 }

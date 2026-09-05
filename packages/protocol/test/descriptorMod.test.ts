@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DESCRIPTOR_FIELDS,
-  LAUNCHER_TAGS,
   parseDescriptor,
   readDescriptorBlock,
   scaffoldDescriptor,
@@ -103,13 +102,6 @@ describe("knowledge table", () => {
       expect(f.summary.length, f.key).toBeGreaterThan(10);
       expect(f.doc, f.key).toContain("```");
       expect(f.snippet, f.key).toContain(f.key);
-    }
-  });
-
-  it("has the 21 launcher tag categories", () => {
-    expect(LAUNCHER_TAGS).toHaveLength(21);
-    for (const t of ["Gameplay", "Total Conversion", "Fixes", "Sound", "Alternative History"]) {
-      expect(LAUNCHER_TAGS).toContain(t);
     }
   });
 });

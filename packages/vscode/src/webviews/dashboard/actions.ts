@@ -115,6 +115,35 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
     {
+      label: "Info",
+      items: [
+        {
+          label: "Join the Discord",
+          command: "px.openDiscord",
+          icon: "messageSquare",
+          tip: "Open the toolkit's Discord invite in your browser.",
+        },
+        {
+          label: "Wiki",
+          command: "px.openWiki",
+          icon: "library",
+          tip: "The hub: format docs, image guidelines, diagnostics, mod report and the Examples Wiki.",
+        },
+        {
+          label: "Credits",
+          command: "px.openCredits",
+          icon: "heart",
+          tip: "Every project the toolkit builds on, with links.",
+        },
+        {
+          label: "Examples Wiki",
+          command: "px.showExamplesWiki",
+          icon: "bookOpen",
+          tip: "Search every trigger, effect and datafunction the game has.",
+        },
+      ],
+    },
+    {
       label: "Create",
       items: [
         {
@@ -146,35 +175,6 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-      ],
-    },
-    {
-      label: "Info",
-      items: [
-        {
-          label: "Join the Discord",
-          command: "px.openDiscord",
-          icon: "messageSquare",
-          tip: "Open the toolkit's Discord invite in your browser.",
-        },
-        {
-          label: "Wiki",
-          command: "px.openWiki",
-          icon: "library",
-          tip: "The hub: format docs, image guidelines, diagnostics, mod report and the Examples Wiki.",
-        },
-        {
-          label: "Credits",
-          command: "px.openCredits",
-          icon: "heart",
-          tip: "Every project the toolkit builds on, with links.",
-        },
-        {
-          label: "Examples Wiki",
-          command: "px.showExamplesWiki",
-          icon: "bookOpen",
-          tip: "Search every trigger, effect and datafunction the game has.",
-        },
       ],
     },
     // Translation launchers live on the Localization Coverage view's title

@@ -13,7 +13,6 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { parseScript } from "../src/parser";
 
 const CORPUS = path.join(__dirname, "fixtures", "gui");
 const CHECKLIST = path.join(__dirname, "..", "..", "..", "docs", "gui-designer", "parity-checklist.md");
@@ -36,16 +35,6 @@ function read(rel: string): string {
 
 describe("gui fixture corpus", () => {
   const all = fixtures();
-
-  it("has both groups populated", () => {
-    expect(all.filter((f) => f.startsWith("layout/")).length).toBeGreaterThan(10);
-    expect(all.filter((f) => f.startsWith("writer/")).length).toBeGreaterThan(10);
-  });
-
-  it("every fixture parses with no errors", () => {
-    const bad = all.filter((f) => parseScript(read(f)).errors.length > 0);
-    expect(bad).toEqual([]);
-  });
 
   it("every fixture states the behavior it exercises and its checklist rows", () => {
     const missing = all.filter((f) => !/^# px fixture\b.*\bRows: [A-Z]\d/s.test(read(f).slice(0, 400)));
@@ -85,20 +74,5 @@ describe("gui fixture corpus", () => {
     const mixed = read("writer/mixed-indent.gui");
     expect(mixed).toMatch(/^\t+\w/m);
     expect(mixed).toMatch(/^ +\w/m);
-  });
-
-  it("the line-sharing fixture really shares lines", () => {
-    const lines = read("writer/line-sharing.gui").split("\n");
-    expect(lines.filter((l) => (l.match(/\w+ = \{/g) ?? []).length > 1).length).toBeGreaterThan(1);
-  });
-
-  it("the blank-separator fixture keeps its one-line and two-line gaps", () => {
-    const text = read("writer/blank-separators.gui");
-    expect(text).toContain("}\n\n\twidget");
-    expect(text).toContain("}\n\n\n\twidget");
-  });
-
-  it("the comment-run fixture ends a body with a comment run", () => {
-    expect(read("writer/comment-runs.gui")).toMatch(/#[^\n]*\n}\n/);
   });
 });

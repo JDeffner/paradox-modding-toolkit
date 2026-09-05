@@ -176,6 +176,59 @@ measured 121 B down to 27 B per reference on a model, about 710 MB here, and
 would move those bytes into ArrayBuffers where the 4096 MB heap ceiling does
 not bind. Both are larger changes than this round took on.
 
+## Version history
+
+The rounds above each measured one change on one workspace. This table is the
+same instrument run over every release, so a regression shows up as a row, not
+as a field report. The workspace is `cultivation.code-workspace`: the CK3
+install plus five workspace mods (Cultivation Mod, Custom Name Lists, Gesta,
+Hide Decisions, Mod Testing), a sixth excluded by `px.excludedMods`, 473,227
+definitions. Warm file cache, two runs per version, medians shown; the raw rows
+are in `packages/server/test/perf/history.json`. Recorded 2026-09-05 on the
+machine named at the top of this page.
+
+| version | time to indexed | completion, cold | completion, after save | completion, warm | heap after index | peak RSS |
+|---|---|---|---|---|---|---|
+| 0.3.0 | 8.5 s | 1618 ms | 1530 ms | 8 ms | 321 MB | 772 MB |
+| 0.3.2 | 8.2 s | 1648 ms | 2010 ms | 9 ms | 323 MB | 806 MB |
+| 0.3.4 | 9.3 s | 1638 ms | 1602 ms | 8 ms | 323 MB | 796 MB |
+| 0.3.6 | 7.7 s | 199 ms | 186 ms | 8 ms | 266 MB | 856 MB |
+| 0.4.0 | 8.1 s | 252 ms | 184 ms | 10 ms | 267 MB | 852 MB |
+| 0.4.0 + realign-coa-editor | 7.8 s | 225 ms | 167 ms | 8 ms | 267 MB | 850 MB |
+
+What the rows say:
+
+- **Completion after an index change dropped from 1.6 s to 0.2 s between 0.3.4
+  and 0.3.6.** That is round 2 (the per-file config memoization and the
+  call-site tracking) reaching a release. It is the difference a modder feels
+  on every save.
+- **Heap fell from 323 MB to 266 MB in the same step**, round 3's compacted
+  buckets. Peak RSS moved the other way by about 50 MB, which is the fused
+  single-pass scan holding both extractors' output at once; on this workspace
+  the heap ceiling is nowhere near.
+- **Time to indexed is flat at about 8 s.** The 25 s figure a cold-cache run
+  of the same build produced is not in the table: the first run after the game
+  files leave the page cache pays for the disk, every run after it does not.
+- **0.4.0 and the working branch are within noise of each other.** The branch
+  changes webviews only; the server is byte-identical in what it does.
+
+Warm completion, hover and semantic tokens sit at 1 to 11 ms on every version
+and are not the numbers to watch.
+
+### Adding a row
+
+After `pnpm run compile`, from the repo root:
+
+```bash
+pnpm run perf:history -- "<path>/cultivation.code-workspace" <outDir> --label <version> --history packages/server/test/perf/history.json
+```
+
+Run it twice and let the doc carry the median. To measure a past release, build
+its server in a worktree (`git worktree add --detach <dir> v<x>`, then
+`pnpm install --no-frozen-lockfile --ignore-scripts` and `pnpm -C packages/server run compile`
+inside it) and pass `--server <dir>/packages/server/dist/server.js`. Any
+`.code-workspace` works; a row is only comparable with rows on the same one.
+
 ## Configuring a big workspace
 
 In rough order of effect:

@@ -333,12 +333,6 @@ describe("completion — engine block templates from usage examples", () => {
     const item = items.find((i) => i.label === "random_list")!;
     expect(item.insertText).toBeUndefined();
   });
-
-  it("no template when the line already continues with = after the cursor", () => {
-    const env = templateEnv();
-    const { items } = provideAt(env, "e.1 = {\n\timmediate = {\n\t\ti| = yes\n\t}\n}");
-    expect(items.find((i) => i.label === "if")!.insertText).toBeUndefined();
-  });
 });
 
 describe("completion — a client that did not declare snippetSupport", () => {

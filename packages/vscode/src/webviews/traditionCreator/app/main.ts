@@ -47,13 +47,14 @@ import { scriptSection } from "../../shared/scriptSection";
 import { scrubbable } from "../../shared/scrub";
 import { sidePanel } from "../../shared/sidePanel";
 import { installTips } from "../../shared/tips";
-import { traditionIcon, type TraditionLayerImage } from "../../shared/traditionIcon";
+import { stackLayers, traditionIcon, type TraditionLayerImage } from "../../shared/traditionIcon";
 import {
   costLocKey,
   type AppToHost,
   type HostToApp,
   type SaveMode,
   type TraditionCreatorInit,
+  type TraditionLayerChoice,
   type TraditionLayerFolder,
   type TraditionSave,
 } from "../messages";
@@ -378,9 +379,9 @@ function fieldRow(spec: TraditionFieldSpec, control: HTMLElement, info?: string)
  * is the size of the tile the Add Tradition view draws.
  */
 const LAYER_INFO =
-  "545 x 285 px per layer, transparent except this layer's own paint.\n" +
-  "A value is a file in the layer's folder, or a subfolder the game picks from at random.\n" +
-  "Your own DDS in the same folder of your mod shows up here.";
+  "545 x 285 px, transparent except this layer's own paint.\n" +
+  "A file draws as is. A folder, or a layer left out, is one of the files shown under the row, picked by the game.\n" +
+  "Your own DDS in the layer's folder of your mod shows up here.";
 
 /** A folding section (px-ui rule 7), open unless the caller says otherwise. */
 function sectionEl(title: string, lede: string | undefined, open: boolean): HTMLElement {
@@ -633,6 +634,53 @@ function layerName(folder: TraditionLayerFolder): string {
   return folder.label.replace(/^\d+-/, "");
 }
 
+/** How many of a folder's files the strip shows before it counts the rest. */
+const OPTIONS_SHOWN = 8;
+
+/**
+ * The files the game can land on for a row: a folder pick's files, or, for a
+ * layer left out, the files at the top of the layer's folder. The game draws
+ * one of them at random, so the row shows the set rather than only the first.
+ * Nothing for a file pick, or for a set of one, where there is no draw.
+ */
+function layerOptions(
+  folder: TraditionLayerFolder,
+  choice: TraditionLayerChoice | undefined,
+  onPick: (value: string) => void
+): HTMLElement | null {
+  // A left-out layer's files are picks in their own right (`4 = boat.dds`),
+  // so those tiles are buttons; a folder's files cannot be named one by one
+  // in the script, so those are pictures with the file name as their tip.
+  const options: { rel: string; value?: string }[] = choice
+    ? choice.folder
+      ? (choice.files ?? []).map((rel) => ({ rel }))
+      : []
+    : folder.choices.filter((c) => !c.folder).map((c) => ({ rel: c.rel, value: c.value }));
+  if (options.length < 2) return null;
+  const strip = node("div", "layeroptions");
+  strip.append(node("span", "px-muted px-xs", `${choice ? "One of" : "Left out: one of"} ${options.length}`));
+  for (const option of options.slice(0, OPTIONS_SHOWN)) {
+    const thumb = layerSlot(option.rel);
+    const file = option.rel.slice(option.rel.lastIndexOf("/") + 1);
+    if (option.value === undefined) {
+      thumb.dataset.tip = `${file}: one the game may draw`;
+      strip.append(thumb);
+      continue;
+    }
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "layeroption";
+    pick.dataset.tip = `Pick ${file}`;
+    pick.append(thumb);
+    const value = option.value;
+    pick.onclick = () => onPick(value);
+    strip.append(pick);
+  }
+  if (options.length > OPTIONS_SHOWN)
+    strip.append(node("span", "px-muted px-xs", `+${options.length - OPTIONS_SHOWN}`));
+  return strip;
+}
+
 /** The picked file's slot in a layer row: the thumbnail, or a dashed empty box the same size. */
 function layerSlot(rel: string | null): HTMLElement {
   if (rel === null) {
@@ -661,7 +709,23 @@ function liveTile(picks: LayerPicks): HTMLElement {
   );
   if (layers.length > 0) box.append(traditionIcon(layers, null, fullUrl));
   else box.append(node("div", "noicon", "No layer picked yet"));
-  return box;
+  // A folder pick or a left-out layer is "one of these" to the game, so the
+  // tile cannot be the game's exact picture; it says so instead of looking
+  // like a promise.
+  const random = randomLayers(picks);
+  if (random.length === 0) return box;
+  const wrap = node("div", "px-stack");
+  const names =
+    random.length === 1 ? random[0] : `${random.slice(0, -1).join(", ")} and ${random[random.length - 1]}`;
+  wrap.append(
+    box,
+    node(
+      "div",
+      "px-muted px-xs",
+      `The game draws the ${names} from a random file of the folder; this shows the first.`
+    )
+  );
+  return wrap;
 }
 
 /**
@@ -691,6 +755,10 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
       caption.dataset.tipWrap = "";
       const value = current[index] ?? "";
       const choice = folder.choices.find((c) => c.value === value);
+      // A value the picker does not list (a path into a subfolder, which the
+      // file may hold) still names one file: drawn as that file, never as a
+      // layer left out.
+      const rel = choice ? choice.rel : value ? `${folder.path}/${value}` : null;
       const trigger = dropdown(value, `No ${layerName(folder)}`);
       trigger.onclick = () => {
         askFor(
@@ -698,7 +766,11 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
           THUMB_DIM
         );
         const items: MenuItem[] = [
-          { value: "", label: "None", hint: "the layer is left out" },
+          {
+            value: "",
+            label: "None",
+            hint: "the game picks one at random",
+          },
           ...folder.choices.map((c) => ({
             value: c.value,
             label: c.value,
@@ -720,8 +792,17 @@ function layersField(spec: TraditionFieldSpec, picks: LayerPicks): Field<LayerPi
           },
         });
       };
-      row.append(caption, layerSlot(choice ? choice.rel : null), trigger);
+      row.append(caption, layerSlot(rel), trigger);
       rows.append(row);
+      const options =
+        value && !choice
+          ? null
+          : layerOptions(folder, choice, (picked) => {
+              current[index] = picked;
+              paint();
+              emit();
+            });
+      if (options) rows.append(options);
     }
     if (layerFolders().length === 0) {
       rows.append(node("div", "lede", "No game folder is set, so the layer folders could not be read."));
@@ -1097,27 +1178,34 @@ function buildBlock(): string {
 }
 
 /**
- * The layers the preview draws. `window_culture.gui`'s `widget_tradition_icon`
- * draws the pattern layer TWICE (the second mirrored) and the stroke at 90%,
- * which is why those two indices produce more than one image each.
+ * The file each layer folder shows for the picks. The game draws ALL the
+ * layers: one the tradition leaves out gets a random file of its folder
+ * (`_traditions.info`), which is why a vanilla tradition naming only a
+ * background, a pattern and an item still wears a support frame and a stroke
+ * in game. A left-out layer shows the folder's first file, a folder pick its
+ * first file; `randomLayers` names both, for the note under the tile.
  */
-const PATTERN_INDEX = 1;
-const STROKE_INDEX = 3;
-const STROKE_SCALE = 0.9;
+function layerFiles(picks: LayerPicks): (string | null)[] {
+  return layerFolders().map((folder) => {
+    const value = picks[String(folder.index)];
+    if (value) return folder.choices.find((c) => c.value === value)?.rel ?? `${folder.path}/${value}`;
+    return (folder.choices.find((c) => !c.folder) ?? folder.choices[0])?.rel ?? null;
+  });
+}
+
+/** The layers the game picks a random file for: folder picks and left-out layers. */
+function randomLayers(picks: LayerPicks): string[] {
+  return layerFolders()
+    .filter((folder) => {
+      const value = picks[String(folder.index)];
+      if (!value) return folder.choices.length > 0;
+      return folder.choices.find((c) => c.value === value)?.folder === true;
+    })
+    .map((folder) => layerName(folder));
+}
 
 function layersFrom(picks: LayerPicks): TraditionLayerImage[] {
-  const out: TraditionLayerImage[] = [];
-  for (const folder of layerFolders()) {
-    const value = picks[String(folder.index)];
-    const choice = value ? folder.choices.find((c) => c.value === value) : undefined;
-    if (!choice) continue;
-    out.push({
-      rel: choice.rel,
-      ...(folder.index === STROKE_INDEX ? { scale: STROKE_SCALE } : {}),
-    });
-    if (folder.index === PATTERN_INDEX) out.push({ rel: choice.rel, mirrored: true });
-  }
-  return out;
+  return stackLayers(layerFiles(picks));
 }
 
 function previewLayers(): TraditionLayerImage[] {

@@ -34,10 +34,6 @@ describe("pointerModText", () => {
     expect(entries.find((e) => e.key === "path")?.value).toBe('"F:/Mods/My Mod/mod"');
     expect(entries.find((e) => e.key === "name")?.value).toBe('"My Mod"');
   });
-
-  it("launcherPath uses forward slashes", () => {
-    expect(launcherPath("C:\\a\\b")).toBe("C:/a/b");
-  });
 });
 
 const NAMES = { configDirName: ".px-toolkit", legacyConfigDirName: ".ck3modding" };

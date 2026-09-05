@@ -54,8 +54,13 @@ const CATALOG = {
   traditions: {
     tradition_mubarizuns: {
       category: "combat",
+      // One slot per layer folder; the host fills a left-out layer with the
+      // folder's first file, "" when the folder has none.
       layers: [
         "gfx/interface/icons/culture_tradition/0-background/martial/martial1.dds",
+        "",
+        "gfx/interface/icons/culture_tradition/2-support/rec1 copy 2.dds",
+        "",
         "gfx/interface/icons/culture_tradition/4-items/duel.dds",
       ],
     },
@@ -185,9 +190,9 @@ describe("culture creator app", () => {
     expect(tiles).toHaveLength(1);
     expect(tiles[0].textContent).toContain("tradition_mubarizuns");
     expect(document.getElementById("pvCount")!.textContent).toBe("1 tradition");
-    // Both layers the catalog gave are stacked, in index order.
+    // The layers the catalog gave are stacked, in index order, empty slots skipped.
     const layers = [...tiles[0].querySelectorAll("img")].map((i) => i.getAttribute("data-rel"));
-    expect(layers).toEqual(CATALOG.traditions.tradition_mubarizuns.layers);
+    expect(layers).toEqual(CATALOG.traditions.tradition_mubarizuns.layers.filter(Boolean));
 
     // The chip's own button opens the tradition, and "New tradition" a blank form.
     const edit = document.querySelector<HTMLButtonElement>('.px-chip button[data-tip*="Tradition Creator"]');
@@ -200,6 +205,30 @@ describe("culture creator app", () => {
     expect(create).toBeDefined();
     create!.click();
     expect(posted.at(-1)).toEqual({ type: "editTradition", name: "" });
+  });
+
+  it("a tradition saved in the Tradition Creator joins the picker, and the culture when started from here", () => {
+    const { window, document } = boot();
+    const options = [...(form.options.culture_tradition ?? []), { value: "tradition_px_new", hint: "mod" }];
+    const catalog = {
+      ...CATALOG,
+      traditions: { ...CATALOG.traditions, tradition_px_new: { category: "realm", layers: [] } },
+    };
+    window.dispatchEvent(
+      new window.MessageEvent("message", {
+        data: { type: "traditions", options, catalog, add: "tradition_px_new" },
+      })
+    );
+    const chips = [...document.querySelectorAll(".px-chip")].map((c) => c.textContent);
+    expect(chips.some((t) => t?.includes("tradition_px_new"))).toBe(true);
+    expect(document.getElementById("pvCount")!.textContent).toBe("1 tradition");
+    // The same message again does not add it twice.
+    window.dispatchEvent(
+      new window.MessageEvent("message", {
+        data: { type: "traditions", options, catalog, add: "tradition_px_new" },
+      })
+    );
+    expect(document.querySelectorAll(".px-chip")).toHaveLength(1);
   });
 
   it("writes a named color when one is picked, not three components", () => {

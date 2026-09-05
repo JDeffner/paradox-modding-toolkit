@@ -27,6 +27,21 @@ describe("frameUsage", () => {
     });
   });
 
+  it("carries the fit the frame's cultures declare, the pair most of them agree on", () => {
+    const use = frameUsage([
+      { heritage: "a", house: "house_frame_22", houseOffset: [0, 0.11], houseScale: [0.85, 0.85] },
+      { heritage: "b", house: "house_frame_22", houseOffset: [0, 0.11], houseScale: [0.85, 0.85] },
+      { heritage: "c", house: "house_frame_22", houseOffset: [0, 0], houseScale: [1, 1] },
+      { heritage: "d", house: "house_frame_11" },
+      { heritage: "e", dynasty: "dynasty_frame_02", houseOffset: [0, 0.5], houseScale: [0.5, 0.5] },
+    ]);
+    expect(use.get("house_frame_22")).toMatchObject({ maskOffset: [0, 0.11], maskScale: [0.85, 0.85] });
+    // No culture declares a fit for it: the widget's defaults, so nothing is carried.
+    expect(use.get("house_frame_11")).toEqual({ family: "house", heritages: ["d"] });
+    // A dynasty frame never takes the house pair.
+    expect(use.get("dynasty_frame_02")).toEqual({ family: "dynasty", heritages: ["e"] });
+  });
+
   it("tells the two gui types apart and ignores a culture with no frame", () => {
     const use = frameUsage([
       culture("heritage_latin", "house_frame_22"),

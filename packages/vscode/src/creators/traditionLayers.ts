@@ -39,6 +39,8 @@ export interface TraditionLayerChoice {
   rel: string;
   /** True when `value` names a folder the engine picks a random file out of. */
   folder: boolean;
+  /** For a folder: every file it holds, `rel` being the first. The game draws one of them. */
+  files?: string[];
 }
 
 /** A game script or defines file's text, BOM stripped, or null. */
@@ -90,18 +92,47 @@ export function layerPaths(roots: readonly string[]): string[] {
  */
 export function resolveLayer(roots: readonly string[], dir: string, value: string): string | null {
   if (IMAGE_RE.test(value)) return `${dir}/${value}`;
+  return folderFiles(roots, dir, value)[0] ?? null;
+}
+
+/**
+ * Every picture file of a layer subfolder, over the whole load order (a mod
+ * adds to a folder, it does not replace it), sorted by name, as game-relative
+ * files. What the game randomizes over for `0 = martial`.
+ */
+export function folderFiles(roots: readonly string[], dir: string, value: string): string[] {
+  const names = new Set<string>();
+  for (const root of roots) {
+    try {
+      for (const f of fs.readdirSync(path.join(root, ...dir.split("/"), value)))
+        if (IMAGE_RE.test(f)) names.add(f);
+    } catch {
+      // this root has no such subfolder
+    }
+  }
+  return [...names].sort().map((f) => `${dir}/${value}/${f}`);
+}
+
+/**
+ * The file a layer the tradition does not name shows as. "By leaving out the
+ * index, it'll use a random icon from the folder" (`_traditions.info`): the
+ * game always draws all five layers, and State Ransoming's dark inner frame
+ * and border are a support and a stroke its definition never names. The first
+ * file directly in the folder stands for the random one, last root first.
+ */
+export function defaultLayer(roots: readonly string[], dir: string): string | null {
   for (let i = roots.length - 1; i >= 0; i--) {
-    const abs = path.join(roots[i], ...dir.split("/"), value);
     let files: string[];
     try {
       files = fs
-        .readdirSync(abs)
-        .filter((f) => IMAGE_RE.test(f))
+        .readdirSync(path.join(roots[i], ...dir.split("/")), { withFileTypes: true })
+        .filter((e) => e.isFile() && IMAGE_RE.test(e.name))
+        .map((e) => e.name)
         .sort();
     } catch {
       continue;
     }
-    if (files.length > 0) return `${dir}/${value}/${files[0]}`;
+    if (files.length > 0) return `${dir}/${files[0]}`;
   }
   return null;
 }
@@ -126,8 +157,8 @@ export function layerChoices(roots: readonly string[], dir: string): TraditionLa
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const value = entry.name;
       if (entry.isDirectory()) {
-        const rel = resolveLayer(roots, dir, value);
-        if (rel) byValue.set(value, { value, rel, folder: true });
+        const files = folderFiles(roots, dir, value);
+        if (files.length > 0) byValue.set(value, { value, rel: files[0], folder: true, files });
       } else if (IMAGE_RE.test(value)) {
         byValue.set(value, { value, rel: `${dir}/${value}`, folder: false });
       }

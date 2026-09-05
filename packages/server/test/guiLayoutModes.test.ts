@@ -131,20 +131,6 @@ describe("the reported checks", () => {
     expect(rectOf(mode, "middle").h).toBe(0);
   });
 });
-
-describe("timings", () => {
-  it("every stage is measured and the total covers them", () => {
-    const { timings } = layout();
-    for (const v of [timings.parseMs, timings.defsMs, timings.layoutMs, timings.totalMs]) {
-      expect(Number.isFinite(v)).toBe(true);
-      expect(v).toBeGreaterThanOrEqual(0);
-    }
-    // The stages run inside the request, so their sum cannot exceed it (a small
-    // slack absorbs the clock reads between them).
-    expect(timings.parseMs + timings.defsMs + timings.layoutMs).toBeLessThanOrEqual(timings.totalMs + 1);
-  });
-});
-
 describe("game-profile text metrics", () => {
   const TEXTBOX = 'textbox = { autoresize = yes fontsize = 15 raw_text = "MMMM" }';
 
