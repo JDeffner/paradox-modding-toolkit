@@ -200,14 +200,7 @@ export function makeStagingDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "px-toolkit-workshop-"));
 }
 
-/** Subject of the mod's last git commit, as a changenote suggestion. */
-export function lastCommitSubject(root: string): Promise<string> {
-  return new Promise((resolve) => {
-    cp.execFile("git", ["log", "-1", "--format=%s"], { cwd: root, windowsHide: true }, (err, stdout) =>
-      resolve(err ? "" : stdout.trim())
-    );
-  });
-}
+export { lastCommitSubject, latestRelease } from "./gitNotes";
 
 /** One description as Steam takes it: BBCode, converted when the file is Markdown. */
 export function descriptionBBCode(info: PublishInfo, language: string, text: string): string {

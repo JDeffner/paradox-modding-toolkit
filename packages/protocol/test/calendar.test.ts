@@ -15,9 +15,18 @@ const SHIRE: CalendarSetting = {
   epoch: 1,
   after: "TA",
   months: [
-    { name: "Afteryule", days: 30 },
-    { name: "Solmath", days: 30 },
-    { name: "Rethe", days: 30 },
+    "Afteryule",
+    "Solmath",
+    "Rethe",
+    "Astron",
+    "Thrimidge",
+    "Forelithe",
+    "Afterlithe",
+    "Wedmath",
+    "Halimath",
+    "Winterfilth",
+    "Blotmath",
+    "Foreyule",
   ],
 };
 
@@ -45,11 +54,11 @@ describe("displayDate", () => {
   it("rejects dates outside the calendar", () => {
     expect(displayDate(HEGEMONIA, 3000, 13, 1)).toBeNull();
     expect(displayDate(HEGEMONIA, 3000, 2, 29)).toBeNull(); // no leap years
-    expect(displayDate(SHIRE, 5, 4, 1)).toBeNull(); // only 3 months declared
+    expect(displayDate(SHIRE, 5, 13, 1)).toBeNull(); // the engine has twelve months
   });
 
   it("uses custom month names and day counts", () => {
-    expect(displayDate(SHIRE, 5, 2, 30)).toBe("30 Solmath 5 TA");
+    expect(displayDate(SHIRE, 5, 2, 28)).toBe("28 Solmath 5 TA");
   });
 });
 
@@ -96,8 +105,8 @@ describe("convertDisplayInput", () => {
   });
 
   it("custom months by name", () => {
-    const r = convertDisplayInput(SHIRE, "5 TA Solmath 30");
-    expect(r).toEqual({ ok: true, script: "5.2.30", display: "30 Solmath 5 TA" });
+    const r = convertDisplayInput(SHIRE, "5 TA Solmath 28");
+    expect(r).toEqual({ ok: true, script: "5.2.28", display: "28 Solmath 5 TA" });
   });
 });
 
@@ -110,7 +119,11 @@ describe("sanitizeCalendar", () => {
     expect(sanitizeCalendar(null)).toBeUndefined();
     expect(sanitizeCalendar({ epoch: 0, after: "AD" })).toBeUndefined();
     expect(sanitizeCalendar({ epoch: 4000, after: "" })).toBeUndefined();
-    expect(sanitizeCalendar({ epoch: 4000, after: "AD", months: [{ name: "X", days: 0 }] })).toBeUndefined();
+    // Fewer or more than the engine's twelve months: the file cannot mean anything.
+    expect(sanitizeCalendar({ epoch: 4000, after: "AD", months: ["Only", "Two"] })).toBeUndefined();
+    expect(
+      sanitizeCalendar({ epoch: 4000, after: "AD", months: [...SHIRE.months!, "Thirteenth"] })
+    ).toBeUndefined();
   });
 
   it("rejects labels and month names that cannot be told apart", () => {
@@ -119,12 +132,19 @@ describe("sanitizeCalendar", () => {
       sanitizeCalendar({
         epoch: 4000,
         after: "TA",
-        months: [
-          { name: "Moon", days: 30 },
-          { name: " moon ", days: 30 },
-        ],
+        months: ["Moon", " moon ", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
       })
     ).toBeUndefined();
+  });
+
+  it("reads an older file's { name, days } months as their names; the day count never reached the game", () => {
+    const legacy = SHIRE.months!.map((name) => ({ name, days: 30 }));
+    expect(sanitizeCalendar({ epoch: 1, after: "TA", months: legacy })).toEqual(SHIRE);
+    // The engine's day counts bound the date, whatever an older file claimed.
+    expect(convertDisplayInput(SHIRE, "5 TA Solmath 30")).toEqual({
+      ok: false,
+      error: "Solmath has 28 days",
+    });
   });
 
   it("drops an empty months array back to the default calendar", () => {

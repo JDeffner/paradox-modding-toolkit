@@ -10,6 +10,11 @@ changes. Before the split it moved inside the extension's version (up to
 
 Ships with the toolkit's 0.4.0 release.
 
+- Date hints and hover validate a script date against the engine's twelve
+  months and their fixed lengths, whatever the calendar file declares; the
+  hover's footer says when the month names are the mod's instead of counting
+  months.
+
 - Block templates: a `usage:` example whose `#` comments only mark fields
   optional now produces TWO templates instead of none. `snippet`/`plain` carry
   the required fields, the new `BlockTemplate.full` carries every field, and

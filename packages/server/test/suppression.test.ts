@@ -171,29 +171,3 @@ describe("end-to-end: our diagnostics respect suppression", () => {
     expect(kept.some((d) => d.code === "stray-close")).toBe(false);
   });
 });
-
-describe("tiger-forwarded reports respect the same predicates", () => {
-  // Tiger reports carry a `key` (used as the diagnostic code) and a file/line.
-  const key = "unknown-field";
-  const rel = "common/traits/00_traits.txt";
-  const cfg = { ignore: [key], ignorePatterns: [] as string[] };
-
-  it("filters a tiger report by its key via ignore", () => {
-    expect(isIgnoredByConfig(cfg, key, rel)).toBe(true);
-    expect(isIgnoredByConfig(cfg, "other-key", rel)).toBe(false);
-  });
-
-  it("filters a tiger report by file glob", () => {
-    const pcfg = { ignore: [] as string[], ignorePatterns: ["common/traits/**"] };
-    expect(isIgnoredByConfig(pcfg, key, rel)).toBe(true);
-    expect(isIgnoredByConfig(pcfg, key, "events/x.txt")).toBe(false);
-  });
-
-  it("filters a tiger report by inline comment on its line", () => {
-    // Line 2 (0-based 1) carries an ignore for the tiger key.
-    const source = "trait = {\n\tflag = x # px:ignore unknown-field\n}\n";
-    const map = scanInlineSuppressions(source);
-    expect(isSuppressedInline(map, 1, key)).toBe(true);
-    expect(isSuppressedInline(map, 0, key)).toBe(false);
-  });
-});

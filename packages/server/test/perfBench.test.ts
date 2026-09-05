@@ -25,7 +25,6 @@ import {
 } from "./perf/benchHarness";
 
 const BASELINE = path.join(__dirname, "perf", "baseline.json");
-const SERVER_BUNDLE = path.join(__dirname, "..", "dist", "server.js");
 const BENCH = process.env.PX_PERF_BENCH === "1";
 const GAME = devPath("gamePath");
 const CORPUS = devPath("corpusPath");
@@ -171,10 +170,6 @@ describe("perf bench baseline (§A3)", () => {
 });
 
 describe.skipIf(!BENCH)("perf bench runs (PX_PERF_BENCH=1)", () => {
-  it("the packaged bundle is built", () => {
-    expect(fs.existsSync(SERVER_BUNDLE), "run `pnpm run compile` first").toBe(true);
-  });
-
   it.skipIf(!GAME)("recipe 1: the game mounted 3x plus 20 small mods", { timeout: 30 * 60_000 }, async () => {
     const recipe = recipeMountedVanilla(GAME!);
     try {

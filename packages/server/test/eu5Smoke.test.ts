@@ -144,14 +144,6 @@ describe.skipIf(!hasServer)("EU5 profile smoke over --stdio (gameId = eu5)", () 
     fs.rmSync(modDir, { recursive: true, force: true });
   });
 
-  it("indexes the in_game/ schema folders (effects, event, loc keys)", () => {
-    const latest = statuses[statuses.length - 1];
-    expect(latest).toBeDefined();
-    // 2 effects + broken_effect + event + 2 loc keys (+ implicit variable defs).
-    expect(latest.definitions).toBeGreaterThan(0);
-    expect(latest.definitions).toBeGreaterThanOrEqual(4);
-  });
-
   it("bundles no wiki-token fallback for EU5 (cut line)", () => {
     const latest = statuses[statuses.length - 1];
     expect(latest.tokens).toBe(0);

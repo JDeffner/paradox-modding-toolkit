@@ -489,7 +489,7 @@ function buildHtml(): string {
 <title>Paradox Project</title>
 <style>
 ${uiCss}
-  body { min-height: 100%; user-select: none; }
+  body { min-height: 100%; user-select: none; overflow-x: hidden; }
   /* The top strip: the game row plus the ? that explains the whole panel. The
      button sits OUTSIDE the row, which is itself a click target. */
   #top { display: flex; align-items: center; gap: 2px; margin: 4px 4px 0; }
@@ -523,7 +523,7 @@ ${uiCss}
   .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
   .path-row .path-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .path-row .path-value {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     direction: rtl; text-align: left;
     color: var(--px-muted-fg); font-size: var(--px-text-xs); font-family: var(--vscode-editor-font-family, monospace);
   }
@@ -543,6 +543,10 @@ ${uiCss}
     content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
   }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
+  /* The mod the views are on: its row is lit and its name is bold, so the pin
+     reads from across the panel and not only from a 14px ring. */
+  .px-item.focused { background: var(--px-muted); }
+  .px-item.focused .px-item-label { font-weight: 600; color: var(--px-fg); }
 </style>
 </head>
 <body>
@@ -782,7 +786,7 @@ function renderMods() {
   const showFocusUi = included.length > 1;
 
   if (showFocusUi) {
-    const row = el("div", "px-item follow-row");
+    const row = el("div", "px-item follow-row" + (following ? " focused" : ""));
     row.appendChild(radio(following,
       "Let the sidebar views follow the file you are editing.",
       () => vscode.postMessage({ type: "focus", root: null })));
@@ -794,6 +798,7 @@ function renderMods() {
   for (const mod of state.mods) {
     const row = el("div", "px-item mod-row" + (mod.excluded ? " excluded" : "") + (mod.missing ? " missing" : ""));
     if (showFocusUi && !mod.excluded) {
+      if (state.pinnedRoot === mod.root || (following && state.focusRoot === mod.root)) row.classList.add("focused");
       row.appendChild(radio(state.pinnedRoot === mod.root,
         "Pin the sidebar views to this mod.",
         () => vscode.postMessage({ type: "focus", root: mod.root })));
@@ -810,6 +815,8 @@ function renderMods() {
       row.appendChild(badge("missing", "The folder is gone. Switch on to forget it."));
     } else if (!mod.excluded && following && state.focusRoot === mod.root && showFocusUi) {
       row.appendChild(badge("showing", "The sidebar views show this mod."));
+    } else if (!mod.excluded && state.pinnedRoot === mod.root && showFocusUi) {
+      row.appendChild(badge("pinned", "The sidebar views are pinned to this mod."));
     }
 
     const sw = el("label", "px-switch");

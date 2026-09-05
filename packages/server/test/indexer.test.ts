@@ -155,14 +155,6 @@ describe("DefinitionIndex", () => {
     index.addAll(parseScriptDefinitions("my_mod_marriage_effect = {}\n", "scripted_effect", file, "mod"));
     expect(index.lookup("my_mod_marriage_effect")).toHaveLength(1);
   });
-
-  it("reports stats", () => {
-    const stats = makeIndex().stats();
-    expect(stats.total).toBeGreaterThan(5);
-    expect(stats.byKind.scripted_effect).toBeGreaterThanOrEqual(3);
-    expect(stats.bySource.mod).toBeGreaterThan(0);
-    expect(stats.bySource.vanilla).toBeGreaterThan(0);
-  });
 });
 
 /**

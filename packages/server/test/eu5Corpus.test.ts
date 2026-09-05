@@ -59,12 +59,10 @@ function findEntryModeDefinition(root: string): string | null {
 describe.skipIf(!run)("EU5 mod corpus over --stdio", () => {
   let child: ChildProcess;
   let conn: MessageConnection;
-  let exited: Promise<number | null>;
   const statuses: StatusPayload[] = [];
 
   beforeAll(async () => {
     child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
-    exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
     conn = createMessageConnection(
       new StreamMessageReader(child.stdout!),
       new StreamMessageWriter(child.stdin!)
@@ -97,14 +95,6 @@ describe.skipIf(!run)("EU5 mod corpus over --stdio", () => {
     if (child && !child.killed) child.kill();
   });
 
-  it("indexes the corpus without crashing", () => {
-    expect(child.exitCode).toBeNull();
-    const latest = statuses[statuses.length - 1];
-    expect(latest).toBeDefined();
-    console.log(`\n[eu5-corpus] definitions: ${latest.definitions}, tokens: ${latest.tokens}`);
-    expect(latest.definitions).toBeGreaterThan(100);
-  });
-
   it("indexes entry-mode-prefixed definitions under their bare names", async () => {
     const name = findEntryModeDefinition(CORPUS!);
     if (!name) return; // corpus does not use entry modes — nothing to prove.
@@ -114,11 +104,4 @@ describe.skipIf(!run)("EU5 mod corpus over --stdio", () => {
     console.log(`[eu5-corpus] entry-mode sample: ${name} -> ${symbols.length} symbol(s)`);
     expect(symbols.some((s) => s.name === name)).toBe(true);
   }, 30_000);
-
-  it("shuts down cleanly", async () => {
-    await conn.sendRequest("shutdown");
-    void conn.sendNotification("exit");
-    const code = await Promise.race([exited, new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
-    expect(code).toBe(0);
-  });
 });

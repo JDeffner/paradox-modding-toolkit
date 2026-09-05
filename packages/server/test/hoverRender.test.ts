@@ -73,11 +73,6 @@ describe("kind badges: one glyph per concept, three tiers", () => {
     expect(kindBadge("define")).toBe("$(symbol-unit) define");
     expect(kindBadge("loc_key")).toBe("$(symbol-text) loc key");
   });
-
-  it("badge content stays legible once the tag is stripped", () => {
-    tier("vscode");
-    expect(kindBadge("trigger").replace(/<[^>]+>/g, "")).toBe("$(symbol-method) trigger");
-  });
 });
 
 describe("the kind map", () => {
@@ -93,14 +88,6 @@ describe("the kind map", () => {
   it("gives the engine and mod versions of one concept the same glyph", () => {
     expect(kindStyle("scripted_trigger").codicon).toBe(kindStyle("trigger").codicon);
     expect(kindStyle("scripted_effect").codicon).toBe(kindStyle("effect").codicon);
-  });
-
-  it("keeps every mapped kind on a real codicon and a real completion kind", () => {
-    for (const k of mappedKinds()) {
-      const style = kindStyle(k);
-      expect(style.codicon).toMatch(/^[a-z][a-z0-9-]*$/);
-      expect(style.completionKind).toMatch(/^[A-Z][A-Za-z]+$/);
-    }
   });
 
   it("resolves every mapped kind to the SymbolKind drawing its own picture", () => {

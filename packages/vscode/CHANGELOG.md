@@ -8,6 +8,199 @@ On top of that, 0.4.0 adds six visual content creators that write CK3 script
 you never have to type, a wiki page listing the other modding tools for your
 game, and a Workshop panel rebuilt around what actually leaves your machine.
 
+- **The Coat of Arms Designer's preview puts the arms where the game does.**
+  The title, house and dynasty frames drew the arms too large and centred,
+  while the game's widgets draw them as a smaller icon inside the frame and,
+  on the title shield, shrink them to 0.9 and move them down by 0.04 of the
+  icon (the gui's coat_of_arms_scale and coat_of_arms_offset, measured on
+  1.19). The preview now follows those numbers per frame, so a design lines up
+  with the game's own designer previews, and the band between the arms and the
+  frame shows the arms' edge stretched the way the game's texture sampling
+  shows it, so an emblem placed across the edge streaks here as it does there.
+  The grid's border marks the edge; with the grid off a dashed line does.
+  Delete or Backspace removes the
+  selected placements, and an emblem whose last placement goes leaves with it.
+  An emblem color written as a reference (the blank template's
+  `color1 = color2`) is now held as the color it names, because a definition
+  pasted into the game's designer with a reference came out red instead of in
+  the color the panel showed.
+
+- **A tradition saved in the Tradition Creator reaches the Culture Creator at
+  once.** The culture's Add tradition picker read its list when the panel
+  opened, so a tradition made from its New tradition button was not offered
+  until the panel was reopened. The picker now refreshes on every Tradition
+  Creator save, and a tradition started blank from the culture's row is added
+  to that culture as it saves.
+
+- **The Tradition Creator writes a layer file with spaces in its name so the
+  game can read it.** The game's own support layer files are named like
+  `rec1 copy 2.dds`; written bare, the engine read `2 = rec1`, logged "Left
+  was not a number: copy" and drew the tradition without that layer. The value
+  is now quoted, and a quoted value in an existing tradition is read back as
+  the pick it is. The preview also draws what the game draws: every layer,
+  not only the named ones. A tradition that names a background, a pattern and
+  an item still wears a support frame and a stroke in game, because a left-out
+  layer gets a random file of its folder, so the tile now shows a stand-in for
+  each left-out layer, says which layers the game will pick at random, and
+  lists under each such row the files the game can land on, large enough to
+  tell apart; a file of a left-out layer is picked with one click on it. The
+  Culture Creator's tradition tiles follow the same rules.
+
+- **Credits and Modding Tools are card pages.** Both wiki pages listed one
+  project or tool per line down the pane; they now lay them out as one grid
+  of cards, each wearing its type as an icon, with the name as the link, the
+  license or the author beside it and what it does under it, so the pane's
+  width is used and the search still reads every card. Chips above the grid
+  filter by type. Modding Tools shows the tools of the game the switch is on,
+  and a tool that serves several games is one card rather than a copy per
+  game.
+
+- **The Coat of Arms Designer lets you swap an emblem's texture on opened
+  arms.** The Textures list was hidden whenever a design came from a file
+  (the game's own Adjust mode locks textures), so arms opened to change one
+  emblem could not have it changed; the list is there in both modes now. The
+  grid control is one segmented row, Off beside 4, 8, 16, 32 and 64, the
+  active segment pressed, in place of a toggle plus a dropdown.
+
+- **The Dynasty Tree's picker leads with your dynasties.** The list opens
+  with the dynasty you had open last, then the mod's own dynasties, then the
+  game's, each under a heading, and a search narrows every group.
+
+- **The Coat of Arms Designer fits the arms into a house frame the way the
+  culture wearing it does.** The game's house widget takes its offset and
+  scale from the culture (`house_coa_mask_offset` and `_scale`), not from the
+  defines the preview assumed to be zero and one. The scale shrinks the arms
+  inside the icon and the offset raises them (house_frame_22 draws the arms
+  at 0.85 of the icon and 0.11 of it higher, house_frame_12 at 0.95 and 0.04
+  higher). The preview reads both off the cultures that wear each frame, so an
+  emblem sits where the game puts it instead of larger and lower. The band
+  between the arms and the mask is filled the way the game fills it, with the
+  arms' own edge stretched; the preview had stretched the anti-aliased
+  outermost pixel row and painted it dark. Measured on a checkerboard coat of
+  arms on the game's own house frame at 100 percent UI scale: the board 0.9 of
+  the icon, its top row against the frame's hole and clipped by it.
+
+- **The designer's pattern tiles show greys for colours the design has not
+  set.** A design with one colour showed every pattern tile in the texture's
+  own yellow and white placeholders; the unset slots now render as three
+  greys, so the tiles read as patterns.
+
+- **The designer's left panel says less and fits more.** The Library, Frame
+  and Grid headings are gone (the buttons name themselves), a thin rule
+  separates the placement numbers, and those numbers sit as one row per
+  quantity: Position X Y, Scale X lock Y, Rotation and Depth, each number
+  behind a one-letter label that is also its drag handle. The align,
+  distribute, mirror and duplicate tools are one row of four groups with no
+  captions; every button's tooltip says what it does and to what.
+
+- **The download confirmation matches.** Download from Steam into files lists
+  what it writes in the same rows, with the sentence beside each part wrapping
+  instead of running out of the box, and its note about lost local drafts is a
+  plain note; the folder it writes into sits under the title.
+
+- **The upload confirmation reads as a last check, not an alarm.** It lists
+  the five parts with their switches and the sentence each carries on the
+  Publish card, counts what goes as switches move, shows the changenote
+  rendered the way Steam will show it with where it comes from, and states in
+  a plain note that Steam keeps no previous version. The red stripe and the
+  red button are gone; the button says Publish for a new item and Upload for
+  an existing one, and the description under the title names the item and its
+  visibility.
+
+- **The focused mod stands out in the Project panel.** The Workspace Mods
+  row the views are on is lit and its name is bold, and a pinned mod carries a
+  "pinned" tag the way a followed one carries "showing"; the 14-pixel radio
+  ring alone was easy to miss.
+
+- **The Dynasty Tree's cards read their years through the mod's calendar,
+  and a Dates toggle switches back.** A card said "1016–1069" while the
+  inspector beside it said "332–385 AI"; the cards now read the same way,
+  the era named once for the pair. A Calendar / Script toggle in the toolbar,
+  shown when the mod has a calendar, puts every date on screen (cards,
+  inspector, an open form) in the game's own year.month.day and back, and
+  the panel remembers the choice.
+
+- **The creators use their width better.** In the Trait, Legacy, Culture and
+  Tradition creators the form sits centred in its pane instead of hugging the
+  left edge, the label column is wide enough for the game's field names
+  (Name order convention, Head determination) to stay on one line, and a
+  single-line control stops at a readable width instead of stretching a
+  dropdown across the whole pane; text and picture blocks keep the full
+  width.
+
+- **The Workshop panel lays its cards out in two independent columns.** The
+  Details card used to span three grid rows beside Publish, Mod files and
+  Changenote, so whichever side was shorter left a hole and the Previews card
+  landed wherever the grid put it. On a wide pane the cards now stack in two
+  columns that each pack their own: Details, Description and Previews on the
+  left, Publish, Mod files, Changenote and Requirements on the right,
+  Translations across the bottom. A narrow pane reads them top to bottom in
+  that order. The preview boxes are resized by a drag strip of the panel's
+  own under each box: the browser's native grip is drawn inside the
+  scrollbar's corner square once a box scrolls, which broke the rounded
+  corner of the description as soon as it was long enough to scroll.
+
+- **The Dynasty Tree and the Culture Creator read the mod's calendar file.**
+  Both panels took the calendar from the `px.calendar` setting only, so a mod
+  that declared its calendar in `.px-toolkit/calendar.json`, the way Declare
+  Calendar writes it, saw plain script dates in the creators while the hints
+  and Insert Date already read the file. The panels now resolve the calendar
+  the same way: the mod's file first, the setting second.
+
+- **A custom calendar names the months and nothing else.** The `months` list is
+  twelve names now. The old `{ "name", "days" }` objects still read, with the
+  day count dropped, because the game's twelve month lengths cannot be modded
+  and a day count only made the editor accept dates the game does not, or
+  refuse ones it does. The schema behind `calendar.json` says so.
+
+- **The Dynasty Tree colours its cards by sex.** Women's cards carry a rose
+  tint and men's a blue one, on the fill, the outline and the sex glyph, so a
+  line of the tree reads at a glance. The character panel's Sex field is two
+  named buttons in those colours instead of a switch, because a switch reads
+  as on and off.
+
+- **The Workshop panel says what an upload does, part by part.** The Publish
+  card lists the six parts with a check or a cross and what each sends right
+  now (how many previews replace the gallery, which DLC and items, how many
+  translations, where the changenote comes from) instead of one summary
+  line. The card switches carry no word beside them; the card title and the
+  Not uploaded chip already say it. The Item card is named Details, which is
+  the part its switch sends. The top bar's "updated <date>" is gone. The
+  thumbnail's image-rules hint sits on its own chip and turns red when the
+  image is too large.
+
+- **A changenote can come from the mod's latest GitHub release.** A fourth
+  source, Release, sends the notes of the latest release, read through the gh
+  CLI signed in as you and converted from Markdown to BBCode; it is the
+  default when the mod has no changelog entry for the version but has a
+  release with notes. A tag alone carries no text, which is why the release
+  is read and not the tag.
+
+- **BBCode previews draw dividers and headings the way the Workshop page
+  does.** An `[hr]` rule was drawn in the border color on a box of that same
+  color, so it did not show; it is now the one thin bright line Steam draws,
+  headings are blue with no rule of their own, as on Steam, and the heading
+  sizes stand further apart. Both the Workshop panel's preview and the .bbcode
+  file preview use these styles.
+
+- **A .bbcode file's title bar opens the preview two ways, like a Markdown
+  file.** Open BBCode Preview to the Side keeps its button; Open BBCode Preview,
+  which renders in the same editor group, has one now, with the codicon
+  preview glyph. The Edit as Markdown button is gone from the title bar; the
+  command stays in the palette, and the Markdown face keeps Back to BBCode.
+
+- **The Project panel no longer scrolls sideways.** The path rows, laid out
+  right-to-left so a path truncates from its left, reached the page's scroll
+  width and gave the panel a horizontal scrollbar; the panel now clips it.
+
+- **The Project panel lists Info above Create.** The Discord, Wiki, Credits
+  and Examples Wiki rows sit before the creators, so the reference links are
+  reached without scrolling past the list of creators.
+
+- **The Wiki's game switch is the toolkit's own dropdown.** It was a native
+  select the webview left half-styled; it now opens the same menu the other
+  panels use.
+
 - **A first-run note says this is a beta.** The first activation of each
   minor version shows one notification: the content creators and the Steam
   Workshop upload are new, check what they write and keep the mod in git,

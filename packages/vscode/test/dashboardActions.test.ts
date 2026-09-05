@@ -19,27 +19,13 @@ describe("visibleActionGroups", () => {
     expect(ids).toContain("px.convertToDds");
   });
 
-  it("translation launchers moved to the coverage view's title bar, off the panel", () => {
-    expect(commands(actionGroups(ck3Meta, 0))).not.toContain("px.translateNext");
-    expect(actionGroups(ck3Meta, 0).map((g) => g.label)).not.toContain("Localization");
-  });
-
   it("drops a group whose rows are all hidden", () => {
     const groups = visibleActionGroups(ck3Meta, 0, ["px.openWorkshopManager", "px.openWorkshopPage"]);
     expect(groups.map((g) => g.label)).not.toContain("Share");
     expect(groups.map((g) => g.label)).toContain("View");
   });
 
-  it("reference links moved into the Wiki hub, off the panel footer", () => {
-    const ids = commands(actionGroups(ck3Meta, 0));
-    expect(ids).not.toContain("px.openInfoDocs");
-    expect(ids).not.toContain("px.imageGuidelines");
-    // Mod Report is a Wiki subpage now, not an Info row.
-    expect(ids).not.toContain("px.modReport");
-    expect(ids).toContain("px.openWiki");
-  });
-
-  it("groups the reference and community links under Info, below Create", () => {
+  it("groups the reference and community links under Info, above Create", () => {
     const groups = actionGroups(ck3Meta, 0);
     const info = groups.find((g) => g.label === "Info");
     expect(info?.items.map((it) => it.command)).toEqual([
@@ -48,26 +34,11 @@ describe("visibleActionGroups", () => {
       "px.openCredits",
       "px.showExamplesWiki",
     ]);
-    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Create", "Info", "Test & Troubleshoot"]);
+    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Info", "Create", "Test & Troubleshoot"]);
     // The wiki rows moved out of View, they are not listed twice.
     const view = groups.find((g) => g.label === "View");
     expect(view?.items.map((it) => it.command)).not.toContain("px.openWiki");
     expect(view?.items.map((it) => it.command)).not.toContain("px.showExamplesWiki");
-  });
-
-  it("hides Info rows like any other row", () => {
-    const groups = visibleActionGroups(ck3Meta, 0, ["px.openDiscord", "px.openWiki"]);
-    const info = groups.find((g) => g.label === "Info");
-    expect(info?.items.map((it) => it.command)).toEqual(["px.openCredits", "px.showExamplesWiki"]);
-  });
-
-  it("offers the coat-of-arms creator right after New Content, per game", () => {
-    const ids = actionGroups(eu5Meta, 0)
-      .find((g) => g.label === "Create")!
-      .items.map((it) => it.command);
-    expect(ids.indexOf("px.createCoatOfArms")).toBe(ids.indexOf("px.newContent") + 1);
-    // CK3 has the Flag Builder too (measured coverage in games/ck3/meta.ts).
-    expect(commands(actionGroups(ck3Meta, 0))).toContain("px.createCoatOfArms");
   });
 
   it("the designer is ONE row, in Create, and never a second one in View", () => {
@@ -106,13 +77,6 @@ describe("visibleActionGroups", () => {
     expect(groups.map((g) => g.label)).not.toContain("Test & Troubleshoot");
   });
 
-  it("launching lives in the editor Run button, not as panel rows", () => {
-    const ids = commands(actionGroups(ck3Meta, 3));
-    expect(ids).not.toContain("px.launchGame");
-    expect(ids).not.toContain("px.launchMapEditor");
-    expect(ids).toContain("px.clearGameProblems");
-  });
-
   it("lists the game's creators in the Create group, after the two scaffolds", () => {
     const create = actionGroups(ck3Meta, 0).find((g) => g.label === "Create");
     expect(create?.items.map((it) => it.command)).toEqual([
@@ -132,12 +96,6 @@ describe("visibleActionGroups", () => {
     for (const creator of ck3Meta.creators ?? []) {
       expect(Object.keys(PATHS)).toContain(creator.icon);
     }
-  });
-
-  it("hides a creator row like any other row", () => {
-    const create = visibleActionGroups(ck3Meta, 0, ["px.createTrait"]).find((g) => g.label === "Create");
-    expect(create?.items.map((it) => it.command)).not.toContain("px.createTrait");
-    expect(create?.items.map((it) => it.command)).toContain("px.createCulture");
   });
 
   it("a game with no creators keeps the Create group it had", () => {

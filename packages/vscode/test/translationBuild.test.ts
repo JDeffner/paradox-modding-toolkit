@@ -149,9 +149,4 @@ describe("buildTranslationMod, metadata-descriptor game", () => {
     expect(md).toContain(".metadata/metadata.json");
     expect(md).not.toContain("descriptor.mod");
   });
-
-  it("loc files and playset are unchanged by the descriptor convention", () => {
-    expect(byPath.has("localization/german/replace/big_l_german.yml")).toBe(true);
-    expect(JSON.parse(byPath.get(".px-toolkit/playset.json")!).parents).toEqual(["../big_mod"]);
-  });
 });

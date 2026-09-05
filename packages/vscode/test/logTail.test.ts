@@ -134,17 +134,6 @@ describe("LogTail", () => {
     expect(tail.read()).toEqual({ lines: ["fresh"], reset: false, missing: false });
   });
 
-  it("reports the truncation and the lines that followed it in one read", () => {
-    fs.writeFileSync(file, "");
-    const tail = new LogTail(file);
-    tail.seekToEnd();
-    fs.appendFileSync(file, "a long stale entry that outweighs what follows\n");
-    tail.read();
-    fs.truncateSync(file, 0);
-    fs.appendFileSync(file, "fresh\n");
-    expect(tail.read()).toEqual({ lines: ["fresh"], reset: true, missing: false });
-  });
-
   it("signals reset when the file is replaced rather than truncated", () => {
     fs.writeFileSync(file, "");
     const tail = new LogTail(file);

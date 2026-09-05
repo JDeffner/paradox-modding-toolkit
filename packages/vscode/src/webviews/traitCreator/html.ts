@@ -45,6 +45,13 @@ ${uiCss}
   #sections {
     max-width: 760px; padding: 12px 16px 60px; display: flex; flex-direction: column; gap: 6px;
   }
+  /* The form sits centred in its pane rather than hugging its left edge, its
+     label column is wide enough for the game's own field names, and a
+     single-line control stops at a readable width instead of stretching to
+     the pane; a block control (a text, a picture strip) keeps the full width. */
+  #form #sections { margin: 0 auto; width: 100%; }
+  #form .px-field { grid-template-columns: 148px minmax(0, 1fr); }
+  #form .px-field > .px-input, #form .px-field > .px-dropdown, #form .px-field > .px-select { max-width: 520px; }
 
   /* A folding section (px-ui rule 7: sections fold, with a caret in the head). */
   .fold { display: flex; flex-direction: column; border-bottom: 1px solid var(--px-border); }

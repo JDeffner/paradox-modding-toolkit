@@ -77,8 +77,8 @@ bottom says exactly where they stop.
   editing, a coverage view, and scaffolds for whole translation mods.
 - **Custom calendars**: total-conversion mods declare their era system once in
   the mod itself (`<mod>/.px-toolkit/calendar.json`, written by **Declare
-  Calendar**, or the `px.calendar` setting; custom month names and lengths if
-  the mod has them), so it is committed with the mod and read by bare LSP
+  Calendar**, or the `px.calendar` setting; custom month names if the mod
+  has them), so it is committed with the mod and read by bare LSP
   clients too, and every script date shows its in-game form: `3000.1.1` reads `1000 BC`
   as an inlay hint and on hover, and **Insert Date** converts "1000 BC
   March 15" into the `3000.3.15` the game logic needs.

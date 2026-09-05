@@ -151,6 +151,10 @@ node scripts/check-game-boundary.mjs   # run whenever you touch packages/server/
   and CK3 `freqs.json` regenerating byte-identical.
 - Protocol additions extend `lspSmoke.test.ts`. Scaffold/writer changes get
   validated against real ck3-tiger on a scratch mod.
+- Every release adds a row to the performance history: `pnpm run perf:history`
+  over a real `.code-workspace` (recipe in `docs/PERFORMANCE.md`, rows in
+  `packages/server/test/perf/history.json`). Server changes that touch the
+  index or completion add a row before and after.
 
 **Test builds finish extension work.** When a change alters what the editor
 does, end with:

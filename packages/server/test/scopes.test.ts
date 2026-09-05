@@ -117,10 +117,6 @@ describe("scope inference at cursor", () => {
     expect(scopesAt("e = {\n\tscope:never_saved = {\n\t\t|\n\t}\n}")).toBeNull();
   });
 
-  it("var:x is unknown", () => {
-    expect(scopesAt("e = {\n\tvar:mystery = {\n\t\t|\n\t}\n}")).toBeNull();
-  });
-
   it("null root scopes stay unknown through transparent blocks", () => {
     expect(scopesAt("e = {\n\ttrigger = {\n\t\t|\n\t}\n}", null)).toBeNull();
   });

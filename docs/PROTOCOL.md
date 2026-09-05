@@ -87,7 +87,7 @@ interface ParadoxSettings {
                                //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
                                //   that mod; the server reads it itself and re-reads it when the file changes
                                //   { epoch: number; after: string; before?: string;
-                               //     months?: { name: string; days: number }[] }
+                               //     months?: string[] }   // the engine's 12 months under the mod's names
                                //   script year >= epoch displays as (year-epoch+1) <after>,
                                //   year < epoch as (epoch-year) <before>; sanitized on intake
   diagnosticsIgnore: string[];         // diagnostic codes to suppress

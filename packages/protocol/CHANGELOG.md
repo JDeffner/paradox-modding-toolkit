@@ -10,6 +10,12 @@ version (up to 0.3.2); that history is in the extension changelog
 
 Ships with the toolkit's 0.4.0 release.
 
+- `CalendarSetting.months` is `string[]`: the engine's twelve month names in
+  order. `sanitizeCalendar` still reads the older `{ name, days }` objects and
+  drops the day count, and rejects a list that is not twelve long.
+  `isValidScriptDate(y, m, d)` lost its calendar parameter: the bounds are the
+  engine's (`ENGINE_MONTH_DAYS`), and `monthsOf` is `monthNames`.
+
 - `protocol`: `paradox/locText` (`LocTextParams`, `LocTextResult`,
   `LocTextValue`) — a localization value rendered to plain text, with `raw`,
   `text` and `resolved` per key; a key the loc index cannot find is absent.

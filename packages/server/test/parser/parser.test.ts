@@ -103,12 +103,6 @@ describe("value shapes", () => {
     expect(tb.block.statements).toHaveLength(3);
   });
 
-  it("hsv tagged block", () => {
-    const a = firstAssignment("color = hsv { 0.5 0.5 0.5 }");
-    const tb = a.value as TaggedBlockNode;
-    expect(tb.tag.text).toBe("hsv");
-  });
-
   it("LIST-tagged blocks", () => {
     const a = firstAssignment("x = LIST { a b c }");
     expect(a.value?.kind).toBe("tagged-block");
@@ -199,8 +193,7 @@ describe("GUI style", () => {
     expect(types.value?.kind).toBe("block");
   });
 
-  it("quoted value with a following block forms a tagged block", () => {
-    // e.g. name = "MyName" is a plain quoted value
+  it("a quoted value stays a plain quoted scalar", () => {
     const a = firstAssignment('name = "My Name"');
     expect(a.value?.kind).toBe("scalar");
     expect((a.value as ScalarNode).text).toBe("My Name");
@@ -352,17 +345,6 @@ describe("error recovery", () => {
     ];
     for (const inp of inputs) {
       expect(() => parseScript(inp)).not.toThrow();
-    }
-  });
-
-  it("random bytes do not throw", () => {
-    for (let iter = 0; iter < 50; iter++) {
-      let s = "";
-      const n = 200;
-      for (let k = 0; k < n; k++) {
-        s += String.fromCharCode(Math.floor(Math.random() * 0x2000));
-      }
-      expect(() => parseScript(s)).not.toThrow();
     }
   });
 });

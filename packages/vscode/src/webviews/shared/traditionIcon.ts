@@ -25,6 +25,27 @@ export interface TraditionLayerImage {
   scale?: number;
 }
 
+/** `widget_tradition_icon`: the pattern is drawn twice, the second mirrored. */
+const PATTERN_INDEX = 1;
+/** `widget_tradition_icon`: the stroke is `size = { 90% 90% }`, centred. */
+const STROKE_INDEX = 3;
+const STROKE_SCALE = 0.9;
+
+/**
+ * The files of a tradition, one per layer folder in index order (null or ""
+ * where none), as the images `widget_tradition_icon` draws for them. Both
+ * creators go through this so a tile reads the same in each.
+ */
+export function stackLayers(rels: readonly (string | null | undefined)[]): TraditionLayerImage[] {
+  const out: TraditionLayerImage[] = [];
+  rels.forEach((rel, index) => {
+    if (!rel) return;
+    out.push({ rel, ...(index === STROKE_INDEX ? { scale: STROKE_SCALE } : {}) });
+    if (index === PATTERN_INDEX) out.push({ rel, mirrored: true });
+  });
+  return out;
+}
+
 /**
  * The stacked picture. `size` sets the box in px when the caller has one;
  * without it the box takes its size from CSS, which is what a non-square tile

@@ -202,12 +202,44 @@ function boot(): Booted {
 }
 
 describe("the Coat of Arms Designer boots on the game's own catalog", () => {
-  it("Start From Scratch is the game's blank template", () => {
+  it("Start From Scratch is the game's blank template, its emblem color made concrete", () => {
     const app = boot();
     const flag = app.current();
     expect(flag.pattern).toBe(TEMPLATE.pattern);
     expect(flag.colors).toEqual(TEMPLATE.colors);
-    expect(flag.layers).toEqual(TEMPLATE.layers);
+    // The template writes `color1 = color2`; the panel holds the yellow that
+    // names, as the game's designer does, so a paste into it stays yellow.
+    const layer = flag.layers[0];
+    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
+    expect(layer.colors).toEqual([{ name: "color1", kind: "named", value: "yellow" }]);
+    expect(layer.instances).toEqual(
+      TEMPLATE.layers[0].kind === "colored_emblem" ? TEMPLATE.layers[0].instances : []
+    );
+  });
+
+  it("Delete removes the selected placement, and the emblem once its last one goes", () => {
+    const app = boot();
+    app.tab("layout");
+    // Two placements of the one emblem, at 0.3 and at 0.7.
+    app.click("#layoutGrid .tile");
+    app.tab("emblems");
+    const press = (): void => {
+      app.document.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    };
+    // Nothing selected: the key does nothing.
+    press();
+    expect(app.current().layers).toHaveLength(1);
+
+    app.click("#placement .instances .instTile");
+    press();
+    const layer = app.current().layers[0];
+    if (layer.kind !== "colored_emblem") throw new Error("expected a colored emblem");
+    expect(layer.instances.map((i) => i.position)).toEqual([[0.7, 0.7]]);
+
+    app.click("#placement .instances .instTile");
+    press();
+    expect(app.current().layers).toHaveLength(0);
+    expect(app.errors).toEqual([]);
   });
 
   it("picking a layout replaces the layers and keeps the pattern and colors", () => {
@@ -272,10 +304,9 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     app.tab("emblems");
     expect(app.document.querySelector("#scaleLock")?.getAttribute("aria-pressed")).toBe("true");
     // And it bites: one axis pulls the other with it.
-    const scaleY = [...app.document.querySelectorAll<HTMLElement>("#placement .px-field")].find((f) =>
-      f.querySelector(".px-label")?.textContent?.startsWith("Scale")
-    );
-    const input = scaleY!.querySelector<HTMLInputElement>("input")!;
+    // The Scale row: X, the lock, Y; typing into X pulls Y with it.
+    const scaleRow = app.document.querySelector<HTMLElement>('#placement .prow[data-row="scale"]')!;
+    const input = scaleRow.querySelector<HTMLInputElement>(".px-field input")!;
     input.value = "0.4";
     input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
     const layer = app.current().layers[0];

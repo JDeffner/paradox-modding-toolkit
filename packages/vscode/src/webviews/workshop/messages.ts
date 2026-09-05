@@ -75,6 +75,13 @@ export interface WorkshopModInfo {
   /** Steam rejects preview images of 1 MB or more; uploads then keep the current one. */
   previewTooLarge: boolean;
   changeNoteSuggestion: string;
+  /**
+   * The mod's latest GitHub release: its tag, its title and its notes as
+   * BBCode (converted from the Markdown GitHub holds). Null when no release
+   * can be read (no gh, no GitHub remote, none released); an empty text when
+   * the release has no notes.
+   */
+  releaseNote: { tag: string; name: string; text: string } | null;
   /** Changenote resolved from the changelog (px.workshop.changelog), if any. */
   changelogNote: { text: string; source: string } | null;
   /** Where the changelog lookup pointed (resolved px.workshop.changelog),

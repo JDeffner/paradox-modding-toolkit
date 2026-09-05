@@ -10,7 +10,6 @@
  * from the GameProfile, so no game knowledge lives here.
  */
 import type { CalendarSetting } from "./calendar";
-import { monthsOf } from "./calendar";
 
 /**
  * The loc keys a game formats dates through, verified against the game's
@@ -128,24 +127,18 @@ export function generateCalendarLoc(
   }
 
   if (cal.months) {
-    const months = monthsOf(cal);
+    const months = cal.months;
     if (!spec.monthKeys) {
       notes.push("This game's month-name keys are not mapped yet; custom month names were not generated.");
-    } else if (months.length !== spec.monthKeys.length) {
-      notes.push(
-        `The engine has exactly ${spec.monthKeys.length} months; your calendar declares ${months.length}, ` +
-          "so month names were not generated (the month count itself cannot be modded)."
-      );
     } else {
+      // The calendar carries the engine's twelve names (sanitizeCalendar); the
+      // spec lists the keys of the months it knows, first month first.
       overrideLines.push(" # Engine month names (long and abbreviated forms both get the custom name).");
-      months.forEach((m, i) => {
-        const [long, short] = spec.monthKeys![i];
-        overrideLines.push(` ${long}:0 "${m.name.replace(/"/g, '\\"')}"`);
-        if (short !== long) overrideLines.push(` ${short}:0 "${m.name.replace(/"/g, '\\"')}"`);
+      spec.monthKeys.forEach(([long, short], i) => {
+        const name = months[i].replace(/"/g, '\\"');
+        overrideLines.push(` ${long}:0 "${name}"`);
+        if (short !== long) overrideLines.push(` ${short}:0 "${name}"`);
       });
-      notes.push(
-        "Month day counts are engine-fixed (31/28/31...); custom day counts only affect the editor's display."
-      );
     }
   }
 

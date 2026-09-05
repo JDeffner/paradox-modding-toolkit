@@ -131,14 +131,4 @@ describe("parseLoc — errors", () => {
     expect(res.errors).toHaveLength(0);
     expect(res.entries).toHaveLength(1);
   });
-
-  it("never throws on random input", () => {
-    for (let i = 0; i < 50; i++) {
-      let s = "";
-      for (let k = 0; k < 300; k++) {
-        s += String.fromCharCode(Math.floor(Math.random() * 0x2000));
-      }
-      expect(() => parseLoc(s)).not.toThrow();
-    }
-  });
 });

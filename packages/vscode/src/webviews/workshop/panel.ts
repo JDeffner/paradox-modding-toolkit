@@ -51,6 +51,7 @@ import {
   findPreview,
   friendlyError,
   lastCommitSubject,
+  latestRelease,
   LEGAL_AGREEMENT_URL,
   makeStagingDir,
   persistPublishedId,
@@ -62,7 +63,7 @@ import {
   workshopSteamUrl,
   workshopUrl,
 } from "../../steam/workshop";
-import { bbcodeToMarkdown } from "../../steam/bbcodeMarkdown";
+import { bbcodeToMarkdown, markdownToBBCode } from "../../steam/bbcodeMarkdown";
 import { gameDocsSubdir } from "../../config";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -91,6 +92,17 @@ export interface WorkshopPanelOptions {
 
 /** How long the listing files may keep changing before the panel re-reads them. */
 const LISTING_RELOAD_MS = 300;
+
+/** The latest GitHub release as the panel shows it: notes already in BBCode. */
+async function releaseNoteFor(root: string): Promise<{ tag: string; name: string; text: string } | null> {
+  const release = await latestRelease(root);
+  if (!release) return null;
+  return {
+    tag: release.tag,
+    name: release.name,
+    text: release.body.trim() ? markdownToBBCode(release.body) : "",
+  };
+}
 
 export class WorkshopPanel {
   private static instance: WorkshopPanel | undefined;
@@ -376,6 +388,7 @@ export class WorkshopPanel {
       previewName: previewPath ? path.basename(previewPath) : null,
       previewTooLarge,
       changeNoteSuggestion: await lastCommitSubject(root),
+      releaseNote: await releaseNoteFor(root),
       changelogNote: changelogNoteFor(root, meta, info?.version ?? null),
       changelogDisplay:
         changelogRel === "" || changelogRel.startsWith("..")
