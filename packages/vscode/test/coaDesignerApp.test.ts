@@ -304,9 +304,11 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     app.tab("emblems");
     expect(app.document.querySelector("#scaleLock")?.getAttribute("aria-pressed")).toBe("true");
     // And it bites: one axis pulls the other with it.
-    // The Scale row: X, the lock, Y; typing into X pulls Y with it.
-    const scaleRow = app.document.querySelector<HTMLElement>('#placement .prow[data-row="scale"]')!;
-    const input = scaleRow.querySelector<HTMLInputElement>(".px-field input")!;
+    // Scale X, the lock, Scale Y; typing into X pulls Y with it.
+    const scaleX = [...app.document.querySelectorAll<HTMLElement>("#placement .px-field")].find((f) =>
+      f.querySelector(".px-label")?.textContent?.startsWith("Scale X")
+    );
+    const input = scaleX!.querySelector<HTMLInputElement>("input")!;
     input.value = "0.4";
     input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
     const layer = app.current().layers[0];

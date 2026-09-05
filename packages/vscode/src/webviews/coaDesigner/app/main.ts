@@ -1235,7 +1235,10 @@ function renderLayerList(): void {
   for (const { layer, index } of emblemLayers()) {
     if (layer.kind !== "colored_emblem") continue;
     const row = el("div", "px-item");
-    if (index === layerIndex) row.setAttribute("aria-selected", "true");
+    // A row reads selected when any of its emblems is; with nothing selected,
+    // the row whose numbers the panel shows.
+    const held = selection.some((r) => r.layer === index);
+    if (held || (selection.length === 0 && index === layerIndex)) row.setAttribute("aria-selected", "true");
     if (locked.has(index)) row.dataset.locked = "";
     row.append(el("span", "px-item-kind", iconEl("shapes")));
     row.append(el("span", "px-item-label", emblemLabel(layer.texture) || "no emblem"));
@@ -1272,7 +1275,14 @@ function renderLayerList(): void {
       if (locked.has(index)) return;
       layerIndex = index;
       instIndex = 0;
-      select({ layer: index, instance: 0 }, e.shiftKey);
+      // Shift or Ctrl adds the whole layer to the selection, or takes it out
+      // again, so several layers move as one; a plain click picks the layer.
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        const all = Array.from({ length: instanceCount(layer) }, (_, i) => ({ layer: index, instance: i }));
+        const held = all.every(isSelected);
+        selection = selection.filter((r) => r.layer !== index);
+        if (!held) selection.push(...all);
+      } else select({ layer: index, instance: 0 }, false);
       refresh(false);
       draw();
     };
@@ -1647,56 +1657,41 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }).el;
   };
 
-  // One row per quantity: its name once, then the numbers beside X and Y.
-  const prow = (caption: string, key: string, ...controls: HTMLElement[]): HTMLElement => {
-    const row = el("div", "prow");
-    row.dataset.row = key;
-    row.append(el("span", "cap", caption), ...controls);
-    return row;
-  };
-
   if (many) {
     body.append(el("div", "note", `${selection.length} emblems selected. Numbers move all of them.`));
-    body.append(
-      prow(
-        "Position",
-        "position",
-        spread("X", inst.position[0], 0.01, (b, d) => ({ ...b, cx: b.cx + d })),
-        spread("Y", inst.position[1], 0.01, (b, d) => ({ ...b, cy: b.cy + d }))
-      ),
-      prow(
-        "Scale",
-        "scale",
-        spread("X", inst.scale[0], 0.01, (b, d) => ({ ...b, w: b.w + Math.sign(b.w || 1) * d })),
-        spread("Y", inst.scale[1], 0.01, (b, d) => ({ ...b, h: b.h + Math.sign(b.h || 1) * d }))
-      ),
-      prow(
-        "Rotation",
-        "rotation",
-        spread("°", inst.rotation, 1, (b, d) => ({ ...b, rotation: b.rotation + d }))
-      ),
-      selectionTools()
+    const position = el("div", "pair");
+    position.append(
+      spread("Position X", inst.position[0], 0.01, (b, d) => ({ ...b, cx: b.cx + d })),
+      spread("Position Y", inst.position[1], 0.01, (b, d) => ({ ...b, cy: b.cy + d }))
     );
+    const scale = el("div", "pair");
+    scale.append(
+      spread("Scale X", inst.scale[0], 0.01, (b, d) => ({ ...b, w: b.w + Math.sign(b.w || 1) * d })),
+      spread("Scale Y", inst.scale[1], 0.01, (b, d) => ({ ...b, h: b.h + Math.sign(b.h || 1) * d }))
+    );
+    const rest = el("div", "pair");
+    rest.append(spread("Rotation", inst.rotation, 1, (b, d) => ({ ...b, rotation: b.rotation + d })));
+    body.append(position, scale, rest, selectionTools());
     return body;
   }
 
-  const position = prow(
-    "Position",
-    "position",
-    numberField("X", inst.position[0], 0.01, (v) => {
+  const position = el("div", "pair");
+  position.append(
+    numberField("Position X", inst.position[0], 0.01, (v) => {
       inst.position[0] = v;
       draw();
     }).el,
-    numberField("Y", inst.position[1], 0.01, (v) => {
+    numberField("Position Y", inst.position[1], 0.01, (v) => {
       inst.position[1] = v;
       draw();
     }).el
   );
 
+  const scale = el("div", "pair scale");
   // Each scale number mirrors into the other's box when the lock is on.
   // Rebuilding the panel here instead would drop the label being dragged,
   // and with it the drag.
-  const y = numberField("Y", inst.scale[1], 0.01, (v) => {
+  const y = numberField("Scale Y", inst.scale[1], 0.01, (v) => {
     inst.scale[1] = v;
     if (scaleMatched(ref)) {
       inst.scale[0] = Math.sign(inst.scale[0] || 1) * Math.abs(v);
@@ -1704,7 +1699,7 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
     }
     draw();
   });
-  const x = numberField("X", inst.scale[0], 0.01, (v) => {
+  const x = numberField("Scale X", inst.scale[0], 0.01, (v) => {
     inst.scale[0] = v;
     if (scaleMatched(ref)) {
       inst.scale[1] = Math.sign(inst.scale[1] || 1) * Math.abs(v);
@@ -1732,12 +1727,11 @@ function detailEdit(layer: EmblemLayer): HTMLElement {
   lock.dataset.variant = "outline";
   lock.dataset.size = "icon-sm";
   lock.setAttribute("aria-pressed", String(matched));
-  const scale = prow("Scale", "scale", x.el, lock, y.el);
+  scale.append(x.el, lock, y.el);
 
-  const rest = prow(
-    "Rotation",
-    "rotation",
-    numberField("°", inst.rotation, 1, (v) => {
+  const rest = el("div", "pair");
+  rest.append(
+    numberField("Rotation", inst.rotation, 1, (v) => {
       inst.rotation = v;
       draw();
     }).el,
@@ -2778,7 +2772,7 @@ $("help").onclick = () =>
           },
           {
             lead: "Several at once:",
-            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
+            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Shift- or Ctrl-click a layer in the list to add all of its emblems, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
           },
           {
             lead: "The tools under the numbers",

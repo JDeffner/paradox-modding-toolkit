@@ -8,13 +8,13 @@ On top of that, 0.4.0 adds six visual content creators that write CK3 script
 you never have to type, a wiki page listing the other modding tools for your
 game, and a Workshop panel rebuilt around what actually leaves your machine.
 
-- **The Coat of Arms Designer selects emblems with a dragged box.** Drag
-  over empty ground and every unlocked emblem the box touches is selected,
-  Shift keeps what was selected before; the group then moves, scales and
-  turns as one. The placement numbers scrub again: the one-letter labels
-  that the compact rows introduced had shrunk the drag handle to a few
-  pixels and Depth had none, so each label now fills its input's height,
-  Depth has its own, and a locked Scale drag no longer drops out after the
+- **The Coat of Arms Designer selects emblems with a dragged box, and
+  whole layers from the list.** Drag over empty ground and every unlocked
+  emblem the box touches is selected, Shift keeps what was selected before;
+  Shift- or Ctrl-click a layer in the list to add all of its emblems, again
+  to take them out; the group then moves, scales and turns as one. The
+  placement numbers keep their labels above the boxes, where the label is
+  the drag handle, and a locked Scale drag no longer drops out after the
   first step.
 - **Emblem edges no longer show a magenta rim.** The preview recoloured a
   placeholder by nearest match with a tolerance and left every other pixel

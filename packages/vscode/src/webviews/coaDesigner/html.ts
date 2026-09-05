@@ -82,17 +82,11 @@ ${uiCss}
   .toolRow > .px-btn { flex: 1 1 auto; min-width: 0; }
   .toolRow > .px-btn[data-size="icon-sm"] { flex: 0 0 auto; }
   #placement { display: flex; flex-direction: column; gap: 8px; }
-  /* A placement row: the quantity's name once, then its numbers, each behind a
-     one-letter label that is also the drag handle. */
-  .prow { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
-  .prow[data-row="position"], .prow[data-row="rotation"] { grid-template-columns: 58px minmax(0, 1fr) auto minmax(0, 1fr); }
-  .prow > .cap { font-size: var(--px-text-xs); color: var(--px-muted-fg); }
-  .prow > .px-field { grid-template-columns: auto minmax(0, 1fr); gap: 4px; }
-  /* The label is the whole drag handle, so a one-letter one still fills the
-     input's height and a thumb's width, and shows that it grabs. */
-  .prow .px-label { align-self: stretch; display: flex; align-items: center; justify-content: center; min-width: 20px; padding: 0 4px; border-radius: var(--px-radius-sm); }
-  .prow .px-label:hover, .prow .px-label[data-scrubbing] { background: color-mix(in oklch, var(--px-fg) 10%, transparent); }
-  .prow[data-row="position"] > .px-field:nth-child(2), .prow[data-row="rotation"] > .px-field:nth-child(2) { grid-column: 2 / 4; }
+  /* Two number fields per row in a column that can be dragged narrow: the
+     shared field's 112px label track leaves nothing for the box, so the label
+     goes above its input here. The label is the drag handle (scrub.ts), and
+     above the box it is as wide as the box. */
+  #placement .px-field { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 
   /* Tabs sit at the top of the panel body, above the tab's own scroller. */
   #tabsRow { display: flex; padding: 6px 10px 4px; }
@@ -140,6 +134,10 @@ ${uiCss}
   .instTile[aria-selected="true"] { border-color: var(--px-primary); color: var(--px-fg); }
   .detail { display: flex; flex-direction: column; gap: 6px; }
   .detail .px-field { min-width: 0; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  /* Scale X, the lock, Scale Y: the lock sits level with the two inputs. */
+  .pair.scale { grid-template-columns: 1fr auto 1fr; align-items: end; }
+  #scaleLock { margin-bottom: 2px; }
   #scaleLock[aria-pressed="true"] { background: var(--px-muted); color: var(--px-fg); }
   .detail .px-input { width: 100%; min-width: 0; }
   /* The layers stay in view: the emblem body takes the rest of the tab and
