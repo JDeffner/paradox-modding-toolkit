@@ -1256,6 +1256,11 @@ function emblemLabel(texture: string): string {
     .replace(/_/g, " ");
 }
 
+/** Every emblem of layer `index`, in instance order. */
+function layerRefs(index: number): ElementRef[] {
+  return Array.from({ length: instanceCount(flag.layers[index]) }, (_, i) => ({ layer: index, instance: i }));
+}
+
 function renderLayerList(): void {
   const list = $("layerList");
   list.replaceChildren();
@@ -1300,16 +1305,25 @@ function renderLayerList(): void {
     row.onclick = (e) => {
       if ((e.target as HTMLElement).closest("button")) return;
       if (locked.has(index)) return;
-      layerIndex = index;
-      instIndex = 0;
-      // Shift or Ctrl adds the whole layer to the selection, or takes it out
-      // again, so several layers move as one; a plain click picks the layer.
-      if (e.shiftKey || e.ctrlKey || e.metaKey) {
-        const all = Array.from({ length: instanceCount(layer) }, (_, i) => ({ layer: index, instance: i }));
+      // A list's usual keys. Shift takes every layer from the last picked one
+      // to this one, both included, with all their emblems; Ctrl adds or
+      // removes this one layer; a plain click picks it. The clicked layer is
+      // the primary either way.
+      if (e.shiftKey) {
+        const order = emblemLayers().map((l) => l.index);
+        const from = order.indexOf(layerIndex);
+        const to = order.indexOf(index);
+        const [lo, hi] = from < 0 ? [to, to] : [Math.min(from, to), Math.max(from, to)];
+        const others = order.slice(lo, hi + 1).filter((l) => l !== index);
+        selectMany([...others.flatMap(layerRefs), ...layerRefs(index)]);
+      } else if (e.ctrlKey || e.metaKey) {
+        const all = layerRefs(index);
         const held = all.every(isSelected);
         selection = selection.filter((r) => r.layer !== index);
         if (!held) selection.push(...all);
       } else select({ layer: index, instance: 0 }, false);
+      layerIndex = index;
+      instIndex = 0;
       refresh(false);
       draw();
     };
@@ -1469,11 +1483,19 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
   const count = Math.max(1, layer.instances.length);
   for (let i = 0; i < count; i++) {
     const tile = el("div", "instTile", String(i + 1));
-    tile.dataset.tip = "Click to edit, shift-click to add to the selection, right-click to remove";
+    tile.dataset.tip =
+      "Click to edit, Shift-click for every instance up to here, Ctrl-click to add or remove, right-click to remove";
     if (isSelected({ layer: layerIndex, instance: i })) tile.setAttribute("aria-selected", "true");
     tile.onclick = (e) => {
+      const ref = (n: number): ElementRef => ({ layer: layerIndex, instance: n });
+      if (e.shiftKey) {
+        // The run from the last picked instance to this one, this one primary.
+        const [lo, hi] = [Math.min(instIndex, i), Math.max(instIndex, i)];
+        const others: ElementRef[] = [];
+        for (let n = lo; n <= hi; n++) if (n !== i) others.push(ref(n));
+        selectMany([...others, ref(i)]);
+      } else select(ref(i), e.ctrlKey || e.metaKey);
       instIndex = i;
-      select({ layer: layerIndex, instance: i }, e.shiftKey);
       refresh(false);
       draw();
     };
@@ -2799,7 +2821,7 @@ $("help").onclick = () =>
           },
           {
             lead: "Several at once:",
-            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Shift- or Ctrl-click a layer in the list to add all of its emblems, Ctrl+A takes everything unlocked, Esc clears. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
+            text: "drag a box over empty ground to take everything it touches, shift-click adds and removes, Ctrl+A takes everything unlocked, Esc clears. In the layer list and the instance tiles, Shift-click takes everything from the last pick to the click and Ctrl-click adds or removes one. With more than one selected the dashed box moves, scales and turns them together, and the numbers write the same change into all of them.",
           },
           {
             lead: "The tools under the numbers",

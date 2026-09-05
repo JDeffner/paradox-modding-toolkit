@@ -10,9 +10,11 @@ game, and a Workshop panel rebuilt around what actually leaves your machine.
 
 - **The Coat of Arms Designer selects emblems with a dragged box, and
   whole layers from the list.** Drag over empty ground and every unlocked
-  emblem the box touches is selected, Shift keeps what was selected before;
-  Shift- or Ctrl-click a layer in the list to add all of its emblems, again
-  to take them out; the group then moves, scales and turns as one. The
+  emblem the box touches is selected, Shift keeps what was selected before.
+  The layer list and the instance tiles pick like any list: Shift-click
+  takes every layer (or instance) from the last pick to the click, emblems
+  and all, Ctrl-click adds or removes one; the group then moves, scales and
+  turns as one. The
   placement numbers keep their labels above the boxes, where the label is
   the drag handle, and a locked Scale drag no longer drops out after the
   first step.
