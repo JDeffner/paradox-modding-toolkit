@@ -317,16 +317,20 @@ console.log(`\nwrote ${outDir}/results.json and server.log`);
 
 // The version history: one row per run, the doc's table is drawn from it.
 if (historyFile) {
+  // The file is `{ note, runs: [...] }`, one row per run, keyed the way
+  // history.json already is (version + build), so the doc's table reads it.
   const file = path.resolve(historyFile);
-  const history: unknown[] = fs.existsSync(file)
-    ? (JSON.parse(fs.readFileSync(file, "utf8")) as unknown[])
-    : [];
-  history.push({
-    label: label ?? "unlabelled",
+  const history: { note?: string; runs: unknown[] } = fs.existsSync(file)
+    ? (JSON.parse(fs.readFileSync(file, "utf8")) as { note?: string; runs: unknown[] })
+    : { runs: [] };
+  history.runs.push({
+    version: label ?? "unlabelled",
     recordedAt: new Date().toISOString().slice(0, 10),
     workspace: path.basename(wsFile),
     roots: modRoots.length + (gamePath ? 1 : 0),
-    server: SERVER,
+    build: SERVER.includes("worktree")
+      ? `dist/server.js of a worktree (${SERVER})`
+      : "working tree dist/server.js",
     machine: {
       cpu: os.cpus()[0]?.model ?? "?",
       totalMemGb: Math.round(os.totalmem() / 1073741824),

@@ -125,9 +125,10 @@ docs, image guidelines, diagnostics, mod report and credits.*
   `<mod>/.px-toolkit/calendar.json`, committed with the mod, and every script
   date shows its in-game form: `3000.1.1` reads `1000 BC` on hover and as an
   inlay hint.
-- **A wiki that lists the other tools.** A Modding Tools page per game
-  collects the validators, translators and editors other modders built, with
-  the ones the toolkit replaces left out.
+- **A wiki that lists the guides and the other tools.** A Modding Guides
+  page per game links every modding page of that game's wiki, and a Modding
+  Tools page collects the validators, translators and editors other modders
+  built, with the ones the toolkit replaces left out.
 - **Large workspaces are the design case.** A game install plus five Workshop
   mods, all indexed, opens in 61 s cold where it used to take 143, and one
   command stops VS Code itself crawling the game's textures and audio.

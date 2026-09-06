@@ -220,7 +220,7 @@ export function constantHints(document: TextDocument, range: Range): InlayHint[]
   const lastLine = Math.min(range.end.line, document.lineCount - 1);
   for (let line = range.start.line; line <= lastLine; line++) {
     const text = getLineText(document, line).split("#")[0];
-    const re = /@([A-Za-z0-9_]+)(?![A-Za-z0-9_!\[])/g;
+    const re = /@([A-Za-z0-9_]+)(?![A-Za-z0-9_![])/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       const decl = decls.get(m[1]);

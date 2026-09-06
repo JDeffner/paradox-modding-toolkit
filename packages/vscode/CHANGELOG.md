@@ -1,16 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 (beta) - file constants and modding guides
 
-- **Hover and Go to Definition work on `@name` constants.** `@duration = 1825`
-  at the top of a file, then `days = @duration` further down: the hover shows
-  the value, the declaring line and how often the file uses it, and F12 jumps
-  to the declaration. The same goes for a bare name inside `@[ ... ]` inline
+- **`@name` constants get hover, Go to Definition, completion and an inlay
+  hint.** `@duration = 1825` at the top of a file, then `days = @duration`
+  further down: the hover shows the value, the declaring line and how often
+  the file uses it, F12 jumps to the declaration, typing `@` offers the
+  file's constants with their values, and every use carries its value as a
+  grey inlay hint. The same goes for a bare name inside `@[ ... ]` inline
   math, and a value that is inline math shows what it comes to
-  (`= @[base / 20] → 1`). A constant standing for a script value
-  (`@cost = major_gold_value`) shows that definition on the same card. The game substitutes these while
-  reading the file, so they only exist in that file: the hover says so, and
-  nothing is indexed across files. Script and gui files alike, every game.
+  (`= @[base / 20] → 1`); all 575 such declarations in the CK3 buildings,
+  men-at-arms, script value and gui files evaluate. A constant standing for
+  a script value (`@cost = major_gold_value`) shows that definition on the
+  same card. The game substitutes these while reading the file, so they only
+  exist in that file: nothing is indexed across files. Script and gui files
+  alike, every game.
 - **Wiki: a Modding Guides page per game.** The game wiki's modding pages
   for the game the switch is on, one card per page with a line on what the
   page covers, grouped as the wiki groups them (basics, script reference,

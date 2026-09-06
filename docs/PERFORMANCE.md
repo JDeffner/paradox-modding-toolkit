@@ -184,8 +184,9 @@ as a field report. The workspace is `cultivation.code-workspace`: the CK3
 install plus five workspace mods (Cultivation Mod, Custom Name Lists, Gesta,
 Hide Decisions, Mod Testing), a sixth excluded by `px.excludedMods`, 473,227
 definitions. Warm file cache, two runs per version, medians shown; the raw rows
-are in `packages/server/test/perf/history.json`. Recorded 2026-09-05 on the
-machine named at the top of this page.
+are in `packages/server/test/perf/history.json`. Recorded 2026-09-05 (0.4.1 on
+2026-09-06, after the workspace mods grew by 30 definitions) on the machine
+named at the top of this page.
 
 | version | time to indexed | completion, cold | completion, after save | completion, warm | heap after index | peak RSS |
 |---|---|---|---|---|---|---|
@@ -195,6 +196,7 @@ machine named at the top of this page.
 | 0.3.6 | 7.7 s | 199 ms | 186 ms | 8 ms | 266 MB | 856 MB |
 | 0.4.0 | 8.1 s | 252 ms | 184 ms | 10 ms | 267 MB | 852 MB |
 | 0.4.0 + realign-coa-editor | 7.8 s | 225 ms | 167 ms | 8 ms | 267 MB | 850 MB |
+| 0.4.1 | 5.9 s | 150 ms | 138 ms | 7 ms | 268 MB | 813 MB |
 
 What the rows say:
 
