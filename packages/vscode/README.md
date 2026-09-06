@@ -17,7 +17,7 @@ overview, and a localization workflow no other tool has.
 
 </div>
 
-> **Beta (0.3.x).** This is a young project and things will change. It is
+> **Beta.** This is a young project and things will change. It is
 > already useful day to day, but you will hit rough edges. Feedback is not just
 > welcome, it is the point: see [Contributing](#contributing--feedback) below.
 

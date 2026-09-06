@@ -24,7 +24,7 @@ localization workflow no other tool has.
 
 </div>
 
-> **Beta (0.3.x).** Young project, useful day to day, rough edges included.
+> **Beta.** Young project, useful day to day, rough edges included.
 > Bug reports and missing-feature complaints are the point, not a nuisance:
 > open an [issue](https://github.com/JDeffner/paradox-modding-toolkit/issues).
 

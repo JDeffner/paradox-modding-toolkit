@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+- **Hover and Go to Definition work on `@name` constants.** `@duration = 1825`
+  at the top of a file, then `days = @duration` further down: the hover shows
+  the value, the declaring line and how often the file uses it, and F12 jumps
+  to the declaration. The same goes for a bare name inside `@[ ... ]` inline
+  math. A constant standing for a script value (`@cost = major_gold_value`)
+  shows that definition on the same card. The game substitutes these while
+  reading the file, so they only exist in that file: the hover says so, and
+  nothing is indexed across files. Script and gui files alike, every game.
+- **Wiki: a Modding Guides page per game.** The game wiki's modding pages
+  for the game the switch is on, one card per page with a line on what the
+  page covers, grouped as the wiki groups them (basics, script reference,
+  scripting, interface and localization, map, graphics, audio, guides).
+  45 pages for CK3, 55 for Vic3, 52 for EU5, taken from each wiki's Modding
+  navbox; the chips filter by group.
+- **The Workshop panel manages mods outside the workspace.** Its mod menu
+  now also lists the mods in your projects folder and in the game's own mod
+  folder, each marked with where it comes from, and ends with "Browse for a
+  mod folder" for any other place on disk. The menu shows even when the
+  workspace holds a single mod. A picked mod without a descriptor gets the
+  same "Create Descriptor" offer as before, and that button now writes the
+  descriptor into the mod the panel is on; it used to write into the focused
+  workspace mod whichever mod the panel showed.
+
 ## 0.4.0 (beta) - the visual creators release
 
 Everything the 0.3.5 and 0.3.6 pre-releases carried is now a normal release:

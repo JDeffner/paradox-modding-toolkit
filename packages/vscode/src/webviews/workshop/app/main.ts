@@ -38,6 +38,8 @@ installTips();
 // ---------------------------------------------------------------------------
 
 let mods: ModChoice[] = [];
+/** The menu value that opens the folder dialog instead of picking a mod. */
+const BROWSE = ":browse";
 let active: string | null = null;
 let info: WorkshopModInfo | null = null;
 let live: ItemDetails | null = null;
@@ -167,7 +169,6 @@ function renderToolbar(): void {
   const modBtn = $<HTMLButtonElement>("mod");
   const label = mods.find((m) => m.path === active)?.label ?? "(no mod)";
   modBtn.querySelector("span.px-truncate")!.textContent = label;
-  modBtn.style.display = mods.length > 1 ? "" : "none";
 
   // What Steam reported, not a verdict on the item: "live" read as if the
   // item were public, which it need not be.
@@ -1275,14 +1276,21 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
 $("mod").addEventListener("click", () => {
   menu(
     $("mod"),
-    mods.map<MenuItem>((m) => ({ value: m.path, label: m.label, description: m.path })),
+    [
+      ...mods.map<MenuItem>((m) => ({ value: m.path, label: m.label, hint: m.hint, description: m.path })),
+      {
+        value: BROWSE,
+        label: "Browse for a mod folder…",
+        description: "Any mod on disk, in the workspace or not",
+      },
+    ],
     {
       value: active ?? undefined,
       width: 380,
       onPick: (path) => {
         if (path === active) return;
         flushSave();
-        send({ type: "selectMod", path });
+        send(path === BROWSE ? { type: "browseMod" } : { type: "selectMod", path });
       },
     }
   );

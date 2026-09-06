@@ -32,7 +32,7 @@ import {
 
 const PREFIX = "Paradox Modding Toolkit";
 
-function modProjectsDirSetting(): string | null {
+export function modProjectsDirSetting(): string | null {
   const v = (vscode.workspace.getConfiguration("px").get<string>("modProjectsDir") ?? "").trim();
   return v === "" ? null : v;
 }
