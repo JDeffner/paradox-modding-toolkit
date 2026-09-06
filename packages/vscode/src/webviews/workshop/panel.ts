@@ -502,14 +502,14 @@ export class WorkshopPanel {
           canSelectFiles: false,
           canSelectFolders: true,
           canSelectMany: false,
-          title: "Pick the mod folder to publish",
-          openLabel: "Manage This Mod",
+          title: "Pick a mod folder outside the workspace to upload",
+          openLabel: "Upload This Mod",
         });
         const dir = picked?.[0]?.fsPath;
         if (!dir) return;
         // A folder with no descriptor is taken too: the panel then offers to create one.
         if (!this.options.mods.some((m) => m.path === dir)) {
-          this.options.mods.push({ label: readModName(dir), path: dir, hint: "browsed" });
+          this.options.mods.push({ label: readModName(dir), path: dir, hint: "outside the workspace" });
         }
         this.active = dir;
         this.watchListing();

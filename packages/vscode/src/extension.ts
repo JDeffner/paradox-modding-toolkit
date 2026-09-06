@@ -16,7 +16,7 @@ import {
   type LanguageClientOptions,
   type ServerOptions,
 } from "vscode-languageclient/node";
-import { gameDocsSubdir, looksLikeMod, modRootFor, readConfig, type PxConfig } from "./config";
+import { modRootFor, readConfig, type PxConfig } from "./config";
 import { findStrayCalendar } from "./calendarSettingsCheck";
 import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
@@ -85,26 +85,12 @@ import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { insertSnippetCommand } from "./insertSnippet";
-import { createModCommand, modProjectsDirSetting, moveModCommand } from "./modProjects/command";
+import { createModCommand, moveModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
 import { registerBBCodeSupport } from "./bbcodeSupport";
 import { WorkshopPanel } from "./webviews/workshop/panel";
-import type { ModChoice } from "./webviews/workshop/messages";
 import * as fs from "fs";
-
-/** The mod folders directly inside `dir`, for the Workshop panel's mod picker. */
-function modFoldersIn(dir: string): string[] {
-  try {
-    return fs
-      .readdirSync(dir, { withFileTypes: true })
-      .filter((e) => e.isDirectory() || e.isSymbolicLink())
-      .map((e) => path.join(dir, e.name))
-      .filter(looksLikeMod);
-  } catch {
-    return [];
-  }
-}
 import {
   allClientCommandIds,
   configChangedNotification,
@@ -1341,28 +1327,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.openWorkshopManager", () => {
-      const meta = metaFor(cfg.gameId);
-      const mods: ModChoice[] = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
+      // Workspace mods only: listing the projects folder or the game's mod
+      // folder here confused which mod was about to be uploaded. A mod
+      // outside the workspace is picked through the panel's own entry.
+      const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)
         .map((p) => ({ label: readModName(p), path: p }));
-      // Mods outside the workspace too: the projects folder and the game's own
-      // mod folder, so a mod can be published without opening it first. The
-      // panel's Browse entry covers every other place.
-      const known = new Set(mods.map((m) => m.path.toLowerCase()));
-      for (const [dir, hint] of [
-        [modProjectsDirSetting(), "projects folder"],
-        [gameDocsSubdir(meta, "mod"), "game mod folder"],
-      ] as const) {
-        if (!dir) continue;
-        for (const child of modFoldersIn(dir)) {
-          if (known.has(child.toLowerCase())) continue;
-          known.add(child.toLowerCase());
-          mods.push({ label: readModName(child), path: child, hint });
-        }
-      }
       WorkshopPanel.show(context, {
         gamePath: cfg.gamePath,
-        meta,
+        meta: metaFor(cfg.gameId),
         mods,
         active: views.focusRoot() ?? cfg.modPath,
         log,

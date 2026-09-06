@@ -26,7 +26,7 @@ export interface TranslationDraft {
 export interface ModChoice {
   label: string;
   path: string;
-  /** Where the mod comes from when it is not a workspace folder: the projects folder, the game's mod folder, a browsed folder. */
+  /** Said beside the name when the mod is not a workspace folder (picked through the Upload entry). */
   hint?: string;
 }
 

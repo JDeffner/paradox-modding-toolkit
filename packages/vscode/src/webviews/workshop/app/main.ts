@@ -1280,8 +1280,8 @@ $("mod").addEventListener("click", () => {
       ...mods.map<MenuItem>((m) => ({ value: m.path, label: m.label, hint: m.hint, description: m.path })),
       {
         value: BROWSE,
-        label: "Browse for a mod folder…",
-        description: "Any mod on disk, in the workspace or not",
+        label: "Upload a mod that is not in this workspace…",
+        description: "Pick its folder on disk; it joins this list for the session",
       },
     ],
     {

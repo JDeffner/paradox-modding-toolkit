@@ -17,14 +17,14 @@
   scripting, interface and localization, map, graphics, audio, guides).
   45 pages for CK3, 55 for Vic3, 52 for EU5, taken from each wiki's Modding
   navbox; the chips filter by group.
-- **The Workshop panel manages mods outside the workspace.** Its mod menu
-  now also lists the mods in your projects folder and in the game's own mod
-  folder, each marked with where it comes from, and ends with "Browse for a
-  mod folder" for any other place on disk. The menu shows even when the
-  workspace holds a single mod. A picked mod without a descriptor gets the
-  same "Create Descriptor" offer as before, and that button now writes the
-  descriptor into the mod the panel is on; it used to write into the focused
-  workspace mod whichever mod the panel showed.
+- **The Workshop panel uploads mods outside the workspace.** Its mod menu
+  lists the workspace mods as before and ends with "Upload a mod that is not
+  in this workspace", which picks any mod folder on disk and adds it to the
+  menu for the session, marked as outside the workspace. The menu shows even
+  when the workspace holds a single mod. A picked mod without a descriptor
+  gets the same "Create Descriptor" offer as before, and that button now
+  writes the descriptor into the mod the panel is on; it used to write into
+  the focused workspace mod whichever mod the panel showed.
 
 ## 0.4.0 (beta) - the visual creators release
 
