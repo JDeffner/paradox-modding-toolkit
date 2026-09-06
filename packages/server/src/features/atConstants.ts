@@ -65,6 +65,86 @@ function useCount(text: string, name: string, declared: boolean): number {
   return declared ? all - 1 : all;
 }
 
+/**
+ * The number a constant's value comes to, following `@[ ... ]` inline math and
+ * `@other` references through the file's own declarations; null when a value
+ * is not numeric (`= major_gold_value`, a path), an operand is undeclared, or
+ * the math divides by zero. Depth-capped so `@a = @b` / `@b = @a` ends.
+ */
+export function evaluateConstant(value: string, decls: Map<string, ConstantDecl>, depth = 0): number | null {
+  if (depth > 16) return null;
+  const v = value.trim();
+  if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(v)) return Number(v);
+  if (/^@[A-Za-z0-9_]+$/.test(v)) {
+    const d = decls.get(v.slice(1));
+    return d ? evaluateConstant(d.value, decls, depth + 1) : null;
+  }
+  const math = /^@\[(.*)\]$/.exec(v);
+  if (!math) return null;
+  // Recursive descent over + - * / and parentheses; operands are numbers or
+  // names declared in this file.
+  const src = math[1];
+  let i = 0;
+  const skip = () => {
+    while (i < src.length && src[i] === " ") i++;
+  };
+  const atom = (): number | null => {
+    skip();
+    if (src[i] === "(") {
+      i++;
+      const inner = sum();
+      skip();
+      if (src[i] !== ")") return null;
+      i++;
+      return inner;
+    }
+    if (src[i] === "-") {
+      i++;
+      const n = atom();
+      return n === null ? null : -n;
+    }
+    const m = /^(\d+\.?\d*|\.\d+|[A-Za-z_][A-Za-z0-9_]*)/.exec(src.slice(i));
+    if (!m) return null;
+    i += m[0].length;
+    if (/^[\d.]/.test(m[0])) return Number(m[0]);
+    const d = decls.get(m[0]);
+    return d ? evaluateConstant(d.value, decls, depth + 1) : null;
+  };
+  const product = (): number | null => {
+    let left = atom();
+    for (;;) {
+      skip();
+      const op = src[i];
+      if (op !== "*" && op !== "/") return left;
+      i++;
+      const right = atom();
+      if (left === null || right === null) return null;
+      if (op === "/" && right === 0) return null;
+      left = op === "*" ? left * right : left / right;
+    }
+  };
+  const sum = (): number | null => {
+    let left = product();
+    for (;;) {
+      skip();
+      const op = src[i];
+      if (op !== "+" && op !== "-") return left;
+      i++;
+      const right = product();
+      if (left === null || right === null) return null;
+      left = op === "+" ? left + right : left - right;
+    }
+  };
+  const result = sum();
+  skip();
+  return i === src.length && result !== null && Number.isFinite(result) ? result : null;
+}
+
+/** At most four decimals, no trailing zeros: what a modder would type. */
+function formatNumber(n: number): string {
+  return String(Math.round(n * 10000) / 10000);
+}
+
 /** null when the cursor is not on a constant; the caller then goes on to its usual hover. */
 export function provideConstantHover(
   data: ServerData,
@@ -75,21 +155,31 @@ export function provideConstantHover(
   const ref = constantRefAt(lineText, position.character);
   if (!ref) return null;
   const text = document.getText();
-  const decl = constantDeclarations(text).get(ref.name);
+  const decls = constantDeclarations(text);
+  const decl = decls.get(ref.name);
   const uses = useCount(text, ref.name, decl !== undefined);
-  const where = decl
-    ? decl.line === position.line
-      ? "Declared here"
-      : `Declared on line ${decl.line + 1}`
-    : "Not declared in this file";
+  const usesText = `used ${uses} ${uses === 1 ? "time" : "times"} in this file`;
+  // The value, and what it comes to when it is inline math or another constant.
+  let headTail: string | undefined;
+  if (decl) {
+    headTail = `= ${decl.value}`;
+    const n = evaluateConstant(decl.value, decls);
+    if (n !== null && String(n) !== decl.value) headTail += ` → ${formatNumber(n)}`;
+  }
+  // What a constant IS is said where it is declared, and where it is missing:
+  // a resolved use only needs the value, the line and the count.
+  const what = "Text the game substitutes while reading this file, so the name only works in this file.";
+  const doc = !decl
+    ? `Not declared in this file · ${usesText}.\n\n${what}`
+    : decl.line === position.line
+      ? `${what}\n\nDeclared here · ${usesText}.`
+      : `Declared on line ${decl.line + 1} · ${usesText}.`;
   const card: CardInput = {
     kind: "local_constant",
     badgeLabel: "constant",
     name: `@${ref.name}`,
-    headTail: decl ? `= ${decl.value}` : undefined,
-    doc:
-      "Text the game substitutes while reading this file, so the name only works in this file.\n\n" +
-      `${where} · used ${uses} ${uses === 1 ? "time" : "times"} in this file.`,
+    headTail,
+    doc,
   };
   const cards = [card];
   // A constant standing for a script value (`= major_gold_value`) leads on to it.

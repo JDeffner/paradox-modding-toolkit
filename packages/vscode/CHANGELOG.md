@@ -6,8 +6,9 @@
   at the top of a file, then `days = @duration` further down: the hover shows
   the value, the declaring line and how often the file uses it, and F12 jumps
   to the declaration. The same goes for a bare name inside `@[ ... ]` inline
-  math. A constant standing for a script value (`@cost = major_gold_value`)
-  shows that definition on the same card. The game substitutes these while
+  math, and a value that is inline math shows what it comes to
+  (`= @[base / 20] → 1`). A constant standing for a script value
+  (`@cost = major_gold_value`) shows that definition on the same card. The game substitutes these while
   reading the file, so they only exist in that file: the hover says so, and
   nothing is indexed across files. Script and gui files alike, every game.
 - **Wiki: a Modding Guides page per game.** The game wiki's modding pages

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { constantRefAt, provideConstantDefinition, provideConstantHover } from "../src/features/atConstants";
+import {
+  constantDeclarations,
+  constantRefAt,
+  evaluateConstant,
+  provideConstantDefinition,
+  provideConstantHover,
+} from "../src/features/atConstants";
 import { ServerData } from "../src/serverData";
 
 // Shape of game/events/scheme_events/agent_events.txt: declared once at the
@@ -83,5 +89,48 @@ describe("@ constants", () => {
       value: string;
     };
     expect(md.value).toContain("Not declared in this file");
+  });
+});
+
+describe("@ constants: value arithmetic and doc placement", () => {
+  const MATH = [
+    "@base = 20",
+    "@spacing = @[base / 20]",
+    "@half = @[ (base + 10) * 0.5 - 1 ]",
+    "@alias = @base",
+    "@broken = @[base / 0]",
+    "@unknown = @[nope * 2]",
+    "@loop_a = @loop_b",
+    "@loop_b = @loop_a",
+    "x = @spacing",
+  ].join("\n");
+
+  it("computes inline math over the file's own declarations", () => {
+    const decls = constantDeclarations(MATH);
+    expect(evaluateConstant("@[base / 20]", decls)).toBe(1);
+    expect(evaluateConstant("@[ (base + 10) * 0.5 - 1 ]", decls)).toBe(14);
+    expect(evaluateConstant("@[base * -1]", decls)).toBe(-20);
+    expect(evaluateConstant("@base", decls)).toBe(20);
+    expect(evaluateConstant("1825", decls)).toBe(1825);
+    // Not a number: a script value name, a division by zero, an undeclared operand, a cycle.
+    expect(evaluateConstant("major_gold_value", decls)).toBeNull();
+    expect(evaluateConstant("@[base / 0]", decls)).toBeNull();
+    expect(evaluateConstant("@[nope * 2]", decls)).toBeNull();
+    expect(evaluateConstant("@loop_a", decls)).toBeNull();
+  });
+
+  it("shows the computed number after the expression, and the explanation only where it helps", () => {
+    const d = TextDocument.create("file:///m/gui/x.gui", "paradox-gui", 1, MATH);
+    const md = (line: number, character: number) =>
+      (provideConstantHover(new ServerData(), d, { line, character })!.contents as { value: string }).value;
+    // A use: value, computed number, line and count. No lecture.
+    expect(md(8, 6)).toContain("= @[base / 20] → 1");
+    expect(md(8, 6)).not.toContain("substitutes");
+    // The declaration carries the explanation; a plain number is not repeated after an arrow.
+    expect(md(0, 3)).toContain("substitutes");
+    expect(md(0, 3)).toContain("= 20\n");
+    expect(md(0, 3)).not.toContain("→");
+    // Nothing to compute: the expression stands alone.
+    expect(md(4, 3)).toContain("= @[base / 0]\n");
   });
 });

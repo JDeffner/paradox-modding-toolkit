@@ -12,7 +12,8 @@ changes. Before the split it moved inside the extension's version (up to
   and `provideConstantDefinition` (`features/atConstants.ts`) answer from the
   open document alone, before the usual script and gui providers run. They
   cover `@name` uses, declarations and bare operands inside `@[ ... ]`; the
-  hover card carries the value, the declaring line and the in-file use
+  hover card carries the value (with the number an `@[ ... ]` expression
+  comes to, via `evaluateConstant`), the declaring line and the in-file use
   count, plus the indexed definition when the value is a script name.
 
 ## 0.3.1
