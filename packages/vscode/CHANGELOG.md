@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.1 (beta) - file constants and modding guides
+
+- **`@name` constants get hover, Go to Definition, completion and an inlay
+  hint.** `@duration = 1825` at the top of a file, then `days = @duration`
+  further down: the hover shows the value, the declaring line and how often
+  the file uses it, F12 jumps to the declaration, typing `@` offers the
+  file's constants with their values, and every use carries its value as a
+  grey inlay hint. The same goes for a bare name inside `@[ ... ]` inline
+  math, and a value that is inline math shows what it comes to
+  (`= @[base / 20] → 1`); all 575 such declarations in the CK3 buildings,
+  men-at-arms, script value and gui files evaluate. A constant standing for
+  a script value (`@cost = major_gold_value`) shows that definition on the
+  same card. The game substitutes these while reading the file, so they only
+  exist in that file: nothing is indexed across files. Script and gui files
+  alike, every game.
+- **Wiki: a Modding Guides page per game.** The game wiki's modding pages
+  for the game the switch is on, one card per page with a line on what the
+  page covers, grouped as the wiki groups them (basics, script reference,
+  scripting, interface and localization, map, graphics, audio, guides).
+  45 pages for CK3, 55 for Vic3, 52 for EU5, taken from each wiki's Modding
+  navbox; the chips filter by group.
+- **The Workshop panel uploads mods outside the workspace.** Its mod menu
+  lists the workspace mods as before and ends with "Upload a mod that is not
+  in this workspace", which picks any mod folder on disk and adds it to the
+  menu for the session, marked as outside the workspace. The menu shows even
+  when the workspace holds a single mod. A picked mod without a descriptor
+  gets the same "Create Descriptor" offer as before, and that button now
+  writes the descriptor into the mod the panel is on; it used to write into
+  the focused workspace mod whichever mod the panel showed.
+
 ## 0.4.0 (beta) - the visual creators release
 
 Everything the 0.3.5 and 0.3.6 pre-releases carried is now a normal release:

@@ -26,6 +26,8 @@ export interface TranslationDraft {
 export interface ModChoice {
   label: string;
   path: string;
+  /** Said beside the name when the mod is not a workspace folder (picked through the Upload entry). */
+  hint?: string;
 }
 
 /**
@@ -175,6 +177,8 @@ export type DlcSource = "game" | "steam" | "none";
 export type AppToHost =
   | { type: "ready" }
   | { type: "selectMod"; path: string }
+  /** Pick any mod folder on disk, in or out of the workspace; the host adds it to the choices. */
+  | { type: "browseMod" }
   /** Ask Steam for the item + these languages' text. */
   | { type: "refresh"; languages: string[] }
   /** Persist the local drafts into <configDir>/workshop.json. */

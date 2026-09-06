@@ -6,7 +6,8 @@
  * Tools).
  *
  * The sidebar carries a game switch, so a user can read another game's pages
- * without changing the workspace: articles that name a game (Modding Tools)
+ * without changing the workspace: articles that name a game (Modding Guides,
+ * Modding Tools)
  * show only for the selected one, and the switch starts on the workspace's
  * game.
  *
@@ -26,6 +27,7 @@ import type { GameMeta } from "@px-lsp/server/games/profile";
 import { creditsPage } from "../credits/credits";
 import { GAME_METAS } from "../../gameDetect";
 import { MODDING_TOOLS, moddingToolsPage } from "./moddingTools";
+import { moddingGuidesPage } from "./moddingGuides";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -195,6 +197,12 @@ function hub(): WikiHubEntry[] {
       target: { page: STEAM_BBCODE_ARTICLE },
     },
     {
+      label: "Modding Guides",
+      icon: "bookOpen",
+      tip: "The game wiki's modding pages for the game you mod: events, map, sound, interface, compatibility, with what each covers.",
+      target: { page: MODDING_GUIDES_ARTICLE },
+    },
+    {
       label: "Modding Tools",
       icon: "wrench",
       tip: "Tools other modders built for the game you mod: map editors, translators, audio, history converters, with links.",
@@ -215,6 +223,7 @@ export const STEAM_BBCODE_ARTICLE = "steam-bbcode";
 export const CREDITS_ARTICLE = "credits";
 /** One page per game shares this id; the game switch picks which one shows. */
 export const MODDING_TOOLS_ARTICLE = "modding-tools";
+export const MODDING_GUIDES_ARTICLE = "modding-guides";
 
 /** `**Severity:** Error · **Source:** ...` opens every diagnostic page. */
 function severity(markdown: string): string | undefined {
@@ -271,6 +280,12 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
     title: "Modding Tools",
     section: "Community",
     ...moddingToolsPage(gameNames),
+  });
+  articles.push({
+    id: MODDING_GUIDES_ARTICLE,
+    title: "Modding Guides",
+    section: "Community",
+    ...moddingGuidesPage(gameNames),
   });
 
   // Copied from docs/diagnostics by scripts/copy-docs.mjs. README.md is the

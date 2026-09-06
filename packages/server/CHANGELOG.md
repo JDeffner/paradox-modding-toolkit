@@ -6,6 +6,21 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## 0.3.2
+
+Ships with the toolkit's 0.4.1 release.
+
+- `@name` file constants get hover, definition, completion and inlay hints
+  (`features/atConstants.ts`), answered from the open document alone before
+  the usual script and gui providers run. They cover `@name` uses,
+  declarations and bare operands inside `@[ ... ]`; the hover card carries
+  the value (with the number an `@[ ... ]` expression comes to, via
+  `evaluateConstant`), the declaring line and the in-file use count, plus the
+  indexed definition when the value is a script name. `@` is a completion
+  trigger character; after it only the file's constants are offered, each
+  item replacing from the `@`. Every use of a declared constant gets an
+  inlay hint with its value. The LSP smoke suite covers all four requests.
+
 ## 0.3.1
 
 Ships with the toolkit's 0.4.0 release.

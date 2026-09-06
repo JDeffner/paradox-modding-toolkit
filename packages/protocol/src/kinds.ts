@@ -166,6 +166,8 @@ const SCRIPT: Record<string, KindStyle> = {
 
   // grey: syntax and everything else.
   scope_word: c("symbol-constant", "Constant"),
+  // `@name = value` file constants: a hover badge only, they are never indexed.
+  local_constant: c("symbol-constant", "Constant"),
   structure_key: c("symbol-struct", "Struct"),
   descriptor_field: c("symbol-struct", "Struct"),
   keyword: c("symbol-keyword", "Keyword"),

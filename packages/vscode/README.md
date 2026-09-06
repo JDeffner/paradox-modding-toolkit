@@ -17,7 +17,7 @@ overview, and a localization workflow no other tool has.
 
 </div>
 
-> **Beta (0.3.x).** This is a young project and things will change. It is
+> **Beta.** This is a young project and things will change. It is
 > already useful day to day, but you will hit rough edges. Feedback is not just
 > welcome, it is the point: see [Contributing](#contributing--feedback) below.
 
@@ -126,10 +126,11 @@ bottom says exactly where they stop.
   the game's own art and text as the preview. Every indexed value is a picker,
   the localization is written for you, and reopening something you already
   have rewrites only the lines you changed.
-- **The wiki lists the other tools too**: a **Modding Tools** page per game
-  collects the validators, translators, map and history editors other modders
-  built, curated from that game's own wiki list, with the ones the toolkit
-  replaces left out.
+- **The wiki lists the guides and the other tools too**: a **Modding
+  Guides** page per game links every modding page of that game's wiki with a
+  line on what it covers, and a **Modding Tools** page collects the
+  validators, translators, map and history editors other modders built, with
+  the ones the toolkit replaces left out.
 - **Multi-mod workspaces**: every workspace mod is a first-class mod, indexed
   together, with per-mod tiger baselines and no "primary mod" to configure.
 - **Built for the big workspaces**: a game install plus five Workshop mods,

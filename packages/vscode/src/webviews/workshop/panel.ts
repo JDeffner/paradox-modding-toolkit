@@ -40,7 +40,8 @@ import {
 } from "../../steam/workshopFiles";
 import { preflight } from "../../steam/preflight";
 import { readGameDlc } from "../../steam/gameDlc";
-import { detectGameVersion } from "../../descriptorMod";
+import { createDescriptorFile, detectGameVersion } from "../../descriptorMod";
+import { readModName } from "@px-lsp/protocol/modName";
 import { findSteamLibraries } from "../../steamDetect";
 import { declaredDependencies, dependencyCandidates } from "../../dependencyScan";
 import { changelogCandidates, DEFAULT_CHANGELOG } from "../../steam/workshopFiles";
@@ -483,7 +484,7 @@ export class WorkshopPanel {
   }
 
   private async onMessage(message: AppToHost): Promise<void> {
-    const { meta } = this.options;
+    const { meta, log } = this.options;
     const root = this.active;
     switch (message.type) {
       case "ready":
@@ -496,6 +497,25 @@ export class WorkshopPanel {
         this.watchListing();
         await this.postInfo();
         return;
+      case "browseMod": {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+          title: "Pick a mod folder outside the workspace to upload",
+          openLabel: "Upload This Mod",
+        });
+        const dir = picked?.[0]?.fsPath;
+        if (!dir) return;
+        // A folder with no descriptor is taken too: the panel then offers to create one.
+        if (!this.options.mods.some((m) => m.path === dir)) {
+          this.options.mods.push({ label: readModName(dir), path: dir, hint: "outside the workspace" });
+        }
+        this.active = dir;
+        this.watchListing();
+        await this.postInit();
+        return;
+      }
       case "saveLocal": {
         if (!root) return;
         // The folder is the canonical store; workshop.json keeps only ids.
@@ -520,10 +540,14 @@ export class WorkshopPanel {
         void vscode.env.openExternal(vscode.Uri.parse(url));
         return;
       }
-      case "createDescriptor":
-        await vscode.commands.executeCommand("px.createDescriptor");
+      case "createDescriptor": {
+        // For the mod this panel is on, which need not be the focused one or in the workspace at all.
+        if (!root) return;
+        const file = createDescriptorFile(root, meta.id, this.options.gamePath, log);
         await this.postInfo();
+        await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(vscode.Uri.file(file)));
         return;
+      }
       case "setField":
         await this.setField(message.field, message.value);
         return;

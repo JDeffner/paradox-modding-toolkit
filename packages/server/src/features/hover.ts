@@ -334,7 +334,7 @@ function atKeyPosition(document: TextDocument, position: Position): boolean {
  * The name-wide reference count renders once, on the first card, because it is
  * a property of the name, not of any one definition.
  */
-function definitionCards(
+export function definitionCards(
   data: ServerData,
   defs: Array<ReturnType<ServerData["index"]["lookup"]>[number]>,
   at?: { uri: string; line: number; character: number }

@@ -535,6 +535,50 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(refs.some((r) => r.uri.includes("smoke_events.txt") && r.range.start.line === 33)).toBe(true);
   });
 
+  it("@name constants: hover, completion, definition and inlay hints answer from the open file", async () => {
+    const text = [
+      "namespace = smoke_const",
+      "@px_smoke_days = 1825",
+      "@px_smoke_half = @[px_smoke_days / 2]",
+      "smoke_const.1 = {",
+      "	immediate = {",
+      "		add_gold = @px_smoke_half",
+      "		add_prestige = @px_",
+      "	}",
+      "}",
+    ].join("\n");
+    const uri = toUri(path.join(modDir, "events", "smoke_constants.txt"));
+    void conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text },
+    });
+    const hover = (await conn.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: { line: 5, character: 20 },
+    })) as { contents: { value: string } } | null;
+    expect(hover!.contents.value).toContain("@px_smoke_half");
+    expect(hover!.contents.value).toContain("= @[px_smoke_days / 2] → 912.5");
+
+    const completion = (await conn.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 6, character: 21 },
+    })) as { items: Array<{ label: string; detail?: string }> };
+    expect(completion.items.map((i) => i.label)).toEqual(["@px_smoke_days", "@px_smoke_half"]);
+    expect(completion.items[0].detail).toBe("= 1825");
+
+    const defs = (await conn.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 5, character: 20 },
+    })) as Array<{ uri: string; range: { start: { line: number } } }>;
+    expect(defs).toHaveLength(1);
+    expect(defs[0].range.start.line).toBe(2);
+
+    const hints = (await conn.sendRequest("textDocument/inlayHint", {
+      textDocument: { uri },
+      range: { start: { line: 0, character: 0 }, end: { line: 8, character: 0 } },
+    })) as Array<{ position: { line: number }; label: string }>;
+    expect(hints.filter((h) => h.position.line === 5).map((h) => h.label)).toEqual(["= 912.5"]);
+  });
+
   it("completion offers the parent-mod effect", async () => {
     const result = (await conn.sendRequest("textDocument/completion", {
       textDocument: { uri: eventsUri },

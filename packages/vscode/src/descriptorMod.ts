@@ -205,6 +205,46 @@ export interface DescriptorModFeature extends vscode.Disposable {
   refresh(): void;
 }
 
+/**
+ * The descriptor a mod root lacks, scaffolded from the folder name and the
+ * installed game version; an existing one is left alone. Returns the file
+ * path either way. Shared by the px.createDescriptor command (the focused
+ * mod) and the Workshop panel (whichever mod it is on).
+ */
+export function createDescriptorFile(
+  root: string,
+  gameId: string,
+  gamePath: string | null,
+  log: (msg: string) => void
+): string {
+  const meta = metaFor(gameId);
+  const file = path.join(root, ...descriptorRelPath(gameId));
+  if (fs.existsSync(file)) return file;
+  const folderName = path.basename(root);
+  const modName = folderName.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  const detected = detectGameVersion(gamePath);
+  const version = (detected && wildcardVersion(detected)) ?? "1.*";
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    meta.descriptor === "metadata"
+      ? scaffoldMetadata({ name: modName, id: folderName, supportedGameVersion: version })
+      : scaffoldDescriptor(modName, version),
+    "utf8"
+  );
+  log(`created ${file}`);
+  // A metadata mod also needs a square thumbnail.png in its root: the
+  // launcher lists the mod without one, the Workshop upload refuses. We do
+  // not fabricate an image, so say it once, here.
+  if (meta.descriptor === "metadata" && !fs.existsSync(path.join(root, "thumbnail.png"))) {
+    void vscode.window.showInformationMessage(
+      `Paradox Modding Toolkit: ${descriptorRelPath(gameId).join("/")} created. ` +
+        `Add a square thumbnail.png to the mod root as well: ${meta.name} needs one for the Workshop upload.`
+    );
+  }
+  return file;
+}
+
 export function registerDescriptorMod(
   context: vscode.ExtensionContext,
   getConfig: () => PxConfig,
@@ -340,32 +380,7 @@ export function registerDescriptorMod(
       );
       return;
     }
-    const meta = metaFor(cfg.gameId);
-    const file = path.join(cfg.modPath, ...descriptorRelPath(cfg.gameId));
-    if (!fs.existsSync(file)) {
-      const folderName = path.basename(cfg.modPath);
-      const modName = folderName.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
-      const detected = detectGameVersion(cfg.gamePath);
-      const version = (detected && wildcardVersion(detected)) ?? "1.*";
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(
-        file,
-        meta.descriptor === "metadata"
-          ? scaffoldMetadata({ name: modName, id: folderName, supportedGameVersion: version })
-          : scaffoldDescriptor(modName, version),
-        "utf8"
-      );
-      log(`created ${file}`);
-      // A metadata mod also needs a square thumbnail.png in its root: the
-      // launcher lists the mod without one, the Workshop upload refuses. We do
-      // not fabricate an image, so say it once, here.
-      if (meta.descriptor === "metadata" && !fs.existsSync(path.join(cfg.modPath, "thumbnail.png"))) {
-        void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: ${descriptorRelPath(cfg.gameId).join("/")} created. ` +
-            `Add a square thumbnail.png to the mod root as well: ${meta.name} needs one for the Workshop upload.`
-        );
-      }
-    }
+    const file = createDescriptorFile(cfg.modPath, cfg.gameId, cfg.gamePath, log);
     refresh();
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
     await vscode.window.showTextDocument(doc);

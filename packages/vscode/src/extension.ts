@@ -1327,15 +1327,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("px.openWorkshopManager", () => {
+      // Workspace mods only: listing the projects folder or the game's mod
+      // folder here confused which mod was about to be uploaded. A mod
+      // outside the workspace is picked through the panel's own entry.
       const mods = [...(cfg.modPath ? [cfg.modPath] : []), ...cfg.workspaceMods]
         .filter((p, i, all) => all.indexOf(p) === i)
         .map((p) => ({ label: readModName(p), path: p }));
-      if (!mods.length) {
-        void vscode.window.showWarningMessage(
-          "Paradox Modding Toolkit: open a mod folder as a workspace folder first."
-        );
-        return;
-      }
       WorkshopPanel.show(context, {
         gamePath: cfg.gamePath,
         meta: metaFor(cfg.gameId),
