@@ -21,6 +21,7 @@ import type { SchemaEntry } from "../schema/types";
 import type { Scope } from "../scopes/model";
 import { walkStatements } from "../parser";
 import { calendarHints } from "./calendarDates";
+import { constantHints } from "./atConstants";
 import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 
 const HINT_MAX_LEN = 60;
@@ -41,6 +42,7 @@ export function provideInlayHints(
 ): InlayHint[] {
   if (document.languageId === "paradox-loc") return translationOverlayHints(data, settings, document, range);
   const hints = locPreviewHints(data, document, range);
+  hints.push(...constantHints(document, range));
   if (settings.scopeInlayHints) hints.push(...scopeHints(data, document, range, rootScopes, entry));
   if (calendar) hints.push(...calendarHints(calendar, document, range));
   return hints;

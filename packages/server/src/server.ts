@@ -175,7 +175,12 @@ import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calenda
 import { isCalendarFile, readCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
-import { provideConstantDefinition, provideConstantHover } from "./features/atConstants";
+import {
+  declaresConstants,
+  provideConstantCompletion,
+  provideConstantDefinition,
+  provideConstantHover,
+} from "./features/atConstants";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
 import { provideInlayHints } from "./features/inlayHints";
 import { computeScopeAt } from "./features/scopeAt";
@@ -1440,7 +1445,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         change: TextDocumentSyncKind.Incremental,
         save: true,
       },
-      completionProvider: { resolveProvider: true, triggerCharacters: [":", ".", "[", "'", "|", "#", "/"] },
+      completionProvider: {
+        resolveProvider: true,
+        triggerCharacters: [":", ".", "[", "'", "|", "#", "/", "@"],
+      },
       signatureHelpProvider: { triggerCharacters: ["{", "("], retriggerCharacters: ["=", ","] },
       hoverProvider: true,
       definitionProvider: true,
@@ -1913,6 +1921,11 @@ connection.onCompletion((params) =>
   indexRead(`completion ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
+    // After `@`, only the file's own constants can follow: script and gui alike.
+    if (declaresConstants(doc.languageId)) {
+      const constants = provideConstantCompletion(doc, params.position);
+      if (constants) return constants;
+    }
     if (doc.languageId === "paradox-gui") {
       const result = provideGuiCompletion(data, doc, doc.offsetAt(params.position), settings);
       return { isIncomplete: result.isIncomplete, items: result.items };
@@ -1947,7 +1960,7 @@ connection.onHover((params) =>
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
     // `@name` file constants come first: script and gui files declare them alike.
-    if (doc.languageId === "paradox-gui" || isScriptLanguage(doc.languageId)) {
+    if (declaresConstants(doc.languageId)) {
       const constant = provideConstantHover(data, doc, params.position);
       if (constant) return constant;
     }

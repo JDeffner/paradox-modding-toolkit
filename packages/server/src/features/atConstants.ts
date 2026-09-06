@@ -7,10 +7,19 @@
  * alone. Engine-wide: measured in every supported game's events/, common/ and
  * gui/ trees, declared the same way in each, so there is no GameProfile gate.
  */
-import { MarkupKind, type Hover, type Location, type Position } from "vscode-languageserver/node";
+import {
+  CompletionItemKind,
+  MarkupKind,
+  type CompletionList,
+  type Hover,
+  type InlayHint,
+  type Location,
+  type Position,
+  type Range,
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { ServerData } from "../serverData";
-import { getLineText } from "../documents";
+import { getLineText, isScriptLanguage } from "../documents";
 import { wordRangeAt } from "../wordAt";
 import { definitionCards } from "./hover";
 import { renderHoverMarkdown, type CardInput } from "./hoverRender";
@@ -145,6 +154,89 @@ function formatNumber(n: number): string {
   return String(Math.round(n * 10000) / 10000);
 }
 
+/** True for the languages that declare `@name` constants: script and gui, not loc. */
+export function declaresConstants(languageId: string): boolean {
+  return isScriptLanguage(languageId) || languageId === "paradox-gui";
+}
+
+/** `= 1825`, or `= @[base / 20] → 1` when the value is math or another constant. */
+function valueTail(decl: ConstantDecl, decls: Map<string, ConstantDecl>): string {
+  const n = evaluateConstant(decl.value, decls);
+  return n !== null && String(n) !== decl.value ? `= ${decl.value} → ${formatNumber(n)}` : `= ${decl.value}`;
+}
+
+/**
+ * Completion after `@`, and for a bare operand inside `@[ ... ]`: the file's
+ * own constants and nothing else, since nothing else can stand there. null
+ * when the cursor is in neither place, so the usual provider runs.
+ */
+export function provideConstantCompletion(document: TextDocument, position: Position): CompletionList | null {
+  const before = getLineText(document, position.line).slice(0, position.character);
+  const at = /@([A-Za-z0-9_]*)$/.exec(before);
+  let bare = false;
+  let partialLength: number;
+  if (at) {
+    partialLength = at[0].length;
+  } else {
+    const open = before.lastIndexOf("@[");
+    if (open === -1 || before.slice(open + 2).includes("]")) return null;
+    bare = true;
+    partialLength = /[A-Za-z0-9_]*$/.exec(before)![0].length;
+  }
+  const decls = constantDeclarations(document.getText());
+  // The replaced range starts at the `@` (or the operand's first letter) so the
+  // client filters `@sch` against the `@`-prefixed labels.
+  const range: Range = {
+    start: { line: position.line, character: position.character - partialLength },
+    end: position,
+  };
+  let order = 0;
+  const items = [...decls].map(([name, decl]) => {
+    const label = bare ? name : `@${name}`;
+    return {
+      label,
+      kind: CompletionItemKind.Constant,
+      detail: valueTail(decl, decls),
+      // Declaration order, the order the file's author chose.
+      sortText: String(order++).padStart(4, "0"),
+      textEdit: { range, newText: label },
+    };
+  });
+  return { isIncomplete: false, items };
+}
+
+const HINT_MAX = 40;
+
+/**
+ * The value beside every `@name` use in `range`, as an inlay hint: `= 1825`,
+ * or the computed number for math and chained constants. Declarations and
+ * undeclared names get none; the comment part of a line is skipped.
+ */
+export function constantHints(document: TextDocument, range: Range): InlayHint[] {
+  if (!declaresConstants(document.languageId)) return [];
+  const decls = constantDeclarations(document.getText());
+  if (decls.size === 0) return [];
+  const hints: InlayHint[] = [];
+  const lastLine = Math.min(range.end.line, document.lineCount - 1);
+  for (let line = range.start.line; line <= lastLine; line++) {
+    const text = getLineText(document, line).split("#")[0];
+    const re = /@([A-Za-z0-9_]+)(?![A-Za-z0-9_!\[])/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const decl = decls.get(m[1]);
+      if (!decl || (decl.line === line && decl.character === m.index)) continue;
+      const n = evaluateConstant(decl.value, decls);
+      const shown = n !== null ? formatNumber(n) : decl.value;
+      hints.push({
+        position: { line, character: m.index + m[0].length },
+        label: `= ${shown.length > HINT_MAX ? shown.slice(0, HINT_MAX - 1) + "…" : shown}`,
+        paddingLeft: true,
+      });
+    }
+  }
+  return hints;
+}
+
 /** null when the cursor is not on a constant; the caller then goes on to its usual hover. */
 export function provideConstantHover(
   data: ServerData,
@@ -160,12 +252,7 @@ export function provideConstantHover(
   const uses = useCount(text, ref.name, decl !== undefined);
   const usesText = `used ${uses} ${uses === 1 ? "time" : "times"} in this file`;
   // The value, and what it comes to when it is inline math or another constant.
-  let headTail: string | undefined;
-  if (decl) {
-    headTail = `= ${decl.value}`;
-    const n = evaluateConstant(decl.value, decls);
-    if (n !== null && String(n) !== decl.value) headTail += ` → ${formatNumber(n)}`;
-  }
+  const headTail = decl ? valueTail(decl, decls) : undefined;
   // What a constant IS is said where it is declared, and where it is missing:
   // a resolved use only needs the value, the line and the count.
   const what = "Text the game substitutes while reading this file, so the name only works in this file.";

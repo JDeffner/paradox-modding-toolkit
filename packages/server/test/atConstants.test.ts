@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   constantDeclarations,
+  constantHints,
   constantRefAt,
   evaluateConstant,
+  provideConstantCompletion,
   provideConstantDefinition,
   provideConstantHover,
 } from "../src/features/atConstants";
@@ -132,5 +134,44 @@ describe("@ constants: value arithmetic and doc placement", () => {
     expect(md(0, 3)).not.toContain("→");
     // Nothing to compute: the expression stands alone.
     expect(md(4, 3)).toContain("= @[base / 0]\n");
+  });
+});
+
+describe("@ constants: completion and inlay hints", () => {
+  const TEXT = [
+    "@duration = 1825",
+    "@cost = @[duration / 365]",
+    "@label = major_gold_value",
+    "e.1 = {",
+    "\tdays = @dur",
+    "\tgold = @[ du",
+    "\tvalue = @cost # was @duration",
+    "\tother = @nope",
+    "}",
+  ].join("\n");
+  const d = TextDocument.create("file:///m/events/c.txt", "paradox", 1, TEXT);
+
+  it("after @ offers the file's constants with their values, replacing from the @", () => {
+    const list = provideConstantCompletion(d, { line: 4, character: 12 })!;
+    expect(list.items.map((i) => i.label)).toEqual(["@duration", "@cost", "@label"]);
+    expect(list.items[1].detail).toBe("= @[duration / 365] → 5");
+    expect(list.items[0].textEdit).toEqual({
+      range: { start: { line: 4, character: 8 }, end: { line: 4, character: 12 } },
+      newText: "@duration",
+    });
+    // Inside @[ ... ] the names go bare; elsewhere the usual provider runs.
+    expect(provideConstantCompletion(d, { line: 5, character: 13 })!.items[0].label).toBe("duration");
+    expect(provideConstantCompletion(d, { line: 4, character: 4 })).toBeNull();
+  });
+
+  it("hints the value beside each use, never on the declaration, an unknown name or a comment", () => {
+    const hints = constantHints(d, { start: { line: 0, character: 0 }, end: { line: 8, character: 0 } });
+    // Line 1's operand sits inside @[ ... ] without an @: no hint there, by design.
+    expect(hints.map((h) => [h.position.line, h.label])).toEqual([[6, "= 5"]]);
+    // Loc files never declare constants.
+    const loc = TextDocument.create("file:///m/l_english.yml", "paradox-loc", 1, TEXT);
+    expect(constantHints(loc, { start: { line: 0, character: 0 }, end: { line: 8, character: 0 } })).toEqual(
+      []
+    );
   });
 });
