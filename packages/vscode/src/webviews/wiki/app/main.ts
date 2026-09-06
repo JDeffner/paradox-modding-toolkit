@@ -469,6 +469,10 @@ $("helpBtn").addEventListener("click", () =>
             text: "is built when you open it, from the live index of the focused mod: content counts, problems, localization coverage and overrides. Rebuild makes a fresh one.",
           },
           {
+            lead: "Modding Guides",
+            text: "lists the game wiki's modding pages for the game the switch is on, one card per page with a line on what it covers, grouped the way the wiki groups them. The chips filter by group.",
+          },
+          {
             lead: "Modding Tools",
             text: "lists tools other modders built for the game the switch is on: map editors, translators, audio tools, history converters. Each card wears its type as an icon; the chips above the cards filter by type.",
           },
