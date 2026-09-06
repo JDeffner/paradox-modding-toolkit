@@ -175,6 +175,7 @@ import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calenda
 import { isCalendarFile, readCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { provideTextureHover } from "./features/textureHover";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
+import { provideConstantDefinition, provideConstantHover } from "./features/atConstants";
 import { SEMANTIC_LEGEND, provideSemanticTokens } from "./features/semanticTokens";
 import { provideInlayHints } from "./features/inlayHints";
 import { computeScopeAt } from "./features/scopeAt";
@@ -1945,6 +1946,11 @@ connection.onHover((params) =>
   indexRead(`hover ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
+    // `@name` file constants come first: script and gui files declare them alike.
+    if (doc.languageId === "paradox-gui" || isScriptLanguage(doc.languageId)) {
+      const constant = provideConstantHover(data, doc, params.position);
+      if (constant) return constant;
+    }
     if (doc.languageId === "paradox-gui") {
       const texture = provideTextureHover(settings, doc, params.position);
       if (texture) return texture;
@@ -2025,6 +2031,8 @@ connection.onDefinition((params) =>
     // Plain loc-key jumps stay with the client-side script-usage provider.
     if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position);
     if (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui") return [];
+    const constant = provideConstantDefinition(doc, params.position);
+    if (constant) return constant;
     if (doc.languageId === "paradox-gui") {
       // Types, templates and blockoverride targets resolve through the FIOS
       // store first (what the game actually uses); loc keys etc. fall through.

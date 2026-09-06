@@ -6,6 +6,15 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `@name` file constants get hover and definition: `provideConstantHover`
+  and `provideConstantDefinition` (`features/atConstants.ts`) answer from the
+  open document alone, before the usual script and gui providers run. They
+  cover `@name` uses, declarations and bare operands inside `@[ ... ]`; the
+  hover card carries the value, the declaring line and the in-file use
+  count, plus the indexed definition when the value is a script name.
+
 ## 0.3.1
 
 Ships with the toolkit's 0.4.0 release.

@@ -6,6 +6,12 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- `kinds.ts` names `local_constant` (the `@name = value` file constants'
+  hover badge: `symbol-constant`, grey). Never indexed, so no completion or
+  tree consumer sees it.
+
 ## 0.2.1
 
 Ships with the toolkit's 0.4.0 release.
