@@ -17,6 +17,7 @@ import type { CompletionItem, Diagnostic, Hover } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Definition } from "@px-lsp/protocol/types";
 import { setActiveProfile, activeProfile } from "../games/active";
+import { clientCapabilities, resolveClientCapabilities, setClientCapabilities } from "../clientMode";
 import { resolveProfile } from "../games/registry";
 import { ServerData } from "../serverData";
 import { loadSchema, type SchemaData } from "../schema/loader";
@@ -144,10 +145,23 @@ export function createBrowserLanguageService(options: BrowserServiceOptions): Br
    * middle (they are all synchronous).
    */
   const profile = resolveProfile(options.gameId ?? options.tokens.gameId);
+  const browserCaps = resolveClientCapabilities(
+    {},
+    {
+      textDocument: { completion: { completionItem: { snippetSupport: true } } },
+    }
+  );
   setActiveProfile(profile);
   function enter<T>(op: () => T): T {
+    const previousCaps = clientCapabilities();
     setActiveProfile(profile);
-    return op();
+    setClientCapabilities(browserCaps);
+    try {
+      return op();
+    } finally {
+      // A browser service can share a realm with another host's feature calls.
+      setClientCapabilities(previousCaps);
+    }
   }
 
   const modRoot = options.modRoot ?? "/mod";

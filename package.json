@@ -30,7 +30,7 @@
     "@px-lsp/server": "workspace:*",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^26.1.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.91.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.3.0",
@@ -47,5 +47,6 @@
     "vscode-jsonrpc": "^9.0.1",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12"
-  }
+  },
+  "packageManager": "pnpm@11.25.0"
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Confirmation prompts keep Cancel safe when Enter is pressed, shared menus expose keyboard focus to screen readers, and the GUI save/undo controls have a separate module. Require VS Code 1.91, check the minimum editor and Windows launcher, fix the CK3 decision scaffold's picture block, and refresh onboarding and the feature guide.
+
 ## 0.4.1 (beta) - file constants and modding guides
 
 - **`@name` constants get hover, Go to Definition, completion and an inlay

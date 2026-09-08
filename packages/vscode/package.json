@@ -10,7 +10,7 @@
   "license": "GPL-3.0-or-later",
   "private": true,
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",

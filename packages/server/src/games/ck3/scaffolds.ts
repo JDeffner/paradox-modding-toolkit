@@ -61,6 +61,7 @@ export const CK3_SCAFFOLDS: ScaffoldTemplate[] = [
   },
   {
     id: "decision",
+    // CK3 1.19 common/decisions/_decisions.info: picture contains a reference path.
     label: "$(checklist) Decision",
     detail: "common/decisions/ (+ loc stubs)",
     nameLabel: "decision",
@@ -68,7 +69,9 @@ export const CK3_SCAFFOLDS: ScaffoldTemplate[] = [
     scriptPath: "common/decisions/$PREFIX$_decisions.txt",
     cursorMarker: "# effects that run when the decision is taken",
     block: `$NAME$ = {
-	picture = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
 
 	desc = $NAME$_desc
 

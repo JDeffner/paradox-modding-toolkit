@@ -137,6 +137,9 @@ describe("decision, default profile", () => {
 
   it("contains the expected decision structure", () => {
     const c = scriptFile(r).content;
+    expect(c).toContain(
+      'picture = {\n\t\treference = "gfx/interface/illustrations/decisions/decision_misc.dds"'
+    );
     expect(c).toContain("is_shown = {");
     expect(c).toContain("is_valid_showing_failures_only = {");
     expect(c).toContain("effect = {");

@@ -6,6 +6,10 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- Browser hovers use plain Markdown without VS Code commands, icons or HTML, while preserving completion snippets and restoring the enclosing host capabilities. Fix the CK3 decision scaffold's picture block from the current game documentation. Add packed npm consumer and Node 18 transport checks.
+
 ## 0.3.2
 
 Ships with the toolkit's 0.4.1 release.

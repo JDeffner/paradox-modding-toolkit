@@ -1095,6 +1095,14 @@ body:not(.vscode-light) .px-tab[aria-selected="true"] {
   font-weight: 600;
   font-size: 14px;
 }
+.px-confirmation {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
 .px-dialog-description {
   color: var(--px-muted-fg);
 }

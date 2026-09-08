@@ -11,8 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           # jsdom (the webview tests) declares node ^22.22.2 || ^24.15.0 || >=26,
@@ -63,3 +61,43 @@ jobs:
             test -f "$root/$f" || { echo "zip is missing $f"; exit 1; }
           done
           grep -qF '@"%~dp0node.exe" "%~dp0dist\server.js" --stdio %*' "$root/px-lsp.cmd"
+
+      - name: Packed npm consumer
+        run: node scripts/test-packed-consumer.mjs
+      - name: Minimum VS Code host
+        run: xvfb-run -a node scripts/test-minimum-vscode.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Locate minimum standalone runtime
+        shell: bash
+        run: echo "PX_LSP_NODE=$(command -v node)" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Standalone server on Node 18
+        run: pnpm exec vitest run packages/server/test/stdioSmoke.test.ts
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run compile
+      - name: Run the Windows release launcher from an extracted zip
+        shell: pwsh
+        run: |
+          node scripts/build-server-zip.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $archive = Get-ChildItem px-lsp-win-x64-*.zip | Select-Object -First 1
+          $target = Join-Path $env:RUNNER_TEMP 'px zip smoke'
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $target
+          $payload = Get-ChildItem -LiteralPath $target -Directory | Select-Object -First 1
+          $env:PX_LSP_SERVER = Join-Path $payload.FullName 'dist/server.js'
+          $env:PX_LSP_LAUNCHER = Join-Path $payload.FullName 'px-lsp.cmd'
+          pnpm exec vitest run packages/server/test/stdioSmoke.test.ts

@@ -35,7 +35,7 @@ like `px-lsp --stdio`. `px-lsp --version` prints the server version and exits
 without a handshake, for install scripts and health checks.
 
 ```
-node /path/to/px-lsp-server-0.3.0/dist/server.js --stdio
+node /path/to/px-lsp-server-<version>/dist/server.js --stdio
 ```
 
 The Windows zip ships `px-lsp.cmd`, which is exactly that line against the
@@ -534,6 +534,8 @@ that ships `script_docs` (add `-- --game <id>` for one). They carry
 a version that `createBrowserLanguageService` checks, so a payload baked by a
 different server version fails loudly at startup instead of producing subtly
 wrong answers.
+
+Browser hovers use plain Markdown without VS Code command links, HTML spans, theme variables or codicons. Completion items retain snippet tabstops for the host to expand. Each synchronous browser feature call restores the surrounding host's output capabilities before it returns.
 
 ### What a browser build cannot know
 
