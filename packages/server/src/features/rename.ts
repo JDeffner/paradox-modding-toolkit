@@ -46,6 +46,14 @@ function targetAt(data: ServerData, document: TextDocument, position: Position):
     );
   }
   const foreign = defs.find((d) => d.source !== "mod");
+  if (
+    defs.some((d) => activeProfile().schema.some((e) => e.extraction === "named-block" && e.kind === d.kind))
+  ) {
+    throw new ResponseError(
+      0,
+      "Asset rename is unavailable because not all graphics reference forms are indexed."
+    );
+  }
   if (foreign) {
     throw new ResponseError(
       0,

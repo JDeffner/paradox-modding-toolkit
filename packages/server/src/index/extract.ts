@@ -85,6 +85,17 @@ export function extractDefinitionsParsed(
   const modePrefix = entryModes?.length ? new RegExp(`^(${entryModes.join("|")}):`) : null;
 
   switch (extraction) {
+    case "named-block":
+      for (const stmt of root.statements) {
+        if (stmt.kind !== "assignment" || stmt.value?.kind !== "block") continue;
+        const name = stmt.value.statements.find(
+          (s) => s.kind === "assignment" && !s.key.quoted && s.key.text === "name"
+        );
+        if (name?.kind !== "assignment" || name.value?.kind !== "scalar") continue;
+        if (!DEF_NAME.test(name.value.text)) continue;
+        push(name.value.text, name.value.range.start, stmt.key.text);
+      }
+      break;
     case "top-level-key":
       for (const stmt of root.statements) {
         if (stmt.kind !== "assignment" || stmt.key.quoted) continue;

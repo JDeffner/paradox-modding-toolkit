@@ -19,9 +19,11 @@
  * No `vscode` imports here: unit-tested in plain Node.
  */
 import * as fs from "fs";
+import * as path from "path";
 import type { DefSource, Reference } from "@px-lsp/protocol/types";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { isStructuralKeyword } from "../contextKeywords";
+import { activeProfile } from "../games/active";
 
 export interface LazyRefRoot {
   root: string;
@@ -44,13 +46,15 @@ const yieldNow = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 export class LazyReferenceScanner {
   private roots: LazyRefRoot[] = [];
+  private indexAssets = true;
   private isEngineToken?: (name: string) => boolean;
   private fileLists = new Map<string, string[]>();
   private cache = new Map<string, Promise<Reference[]>>();
 
   /** Reconfigure (on reindex/settings change): drops all memoized results. */
-  setRoots(roots: LazyRefRoot[], isEngineToken?: (name: string) => boolean): void {
+  setRoots(roots: LazyRefRoot[], isEngineToken?: (name: string) => boolean, indexAssets = true): void {
     this.roots = roots;
+    this.indexAssets = indexAssets;
     this.isEngineToken = isEngineToken;
     this.fileLists.clear();
     this.cache.clear();
@@ -86,7 +90,16 @@ export class LazyReferenceScanner {
 
   private filesOf(root: string): string[] {
     let files = this.fileLists.get(root);
-    if (!files) this.fileLists.set(root, (files = listFiles(root, ".txt")));
+    if (!files) {
+      files = listFiles(root, ".txt");
+      for (const entry of activeProfile().schema) {
+        if (!this.indexAssets && entry.ext?.toLowerCase() === ".asset") continue;
+        if (entry.extraction === "named-block" && entry.ext && entry.ext !== ".txt") {
+          files.push(...listFiles(path.join(root, entry.path), entry.ext));
+        }
+      }
+      this.fileLists.set(root, files);
+    }
     return files;
   }
 

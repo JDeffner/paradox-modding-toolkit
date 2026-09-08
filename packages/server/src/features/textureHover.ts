@@ -12,7 +12,7 @@ import * as path from "path";
 import { ddsFormatInfo, ddsToPngDataUri } from "../dds";
 import { getLineText } from "../documents";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
-import { assetRoots, bareNameBaseDirs } from "./assetPaths";
+import { assetRoots, bareNameBaseDirs, resolveAssetPath, assetFileAt } from "./assetPaths";
 import { fileLink, renderHoverMarkdown, type CardInput } from "./hoverRender";
 
 const DDS_PATH = /[A-Za-z0-9_\-./\\]+\.dds/gi;
@@ -73,6 +73,8 @@ export function provideTextureHover(
   position: Position,
   entryKind?: string | null
 ): Hover | null {
+  const isAsset = document.uri.toLowerCase().endsWith(".asset");
+  if (isAsset && !assetFileAt(document, position)) return null;
   const lineText = getLineText(document, position.line);
   DDS_PATH.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -92,8 +94,12 @@ export function provideTextureHover(
     ...(settings.parentPaths ?? []).map((p) => ({ root: p as string | null, label: "parent" })),
     { root: settings.gamePath, label: "vanilla" },
   ];
-  let resolved: { fsPath: string; label: string } | null = null;
+  let resolved: { fsPath: string; label: string } | null = isAsset
+    ? resolveAssetPath(settings, document.uri, rel)
+    : null;
+  if (isAsset && !resolved) return null;
   for (const { root, label } of candidates) {
+    if (resolved) break;
     if (!root) continue;
     const full = path.join(root, ...rel.split("/"));
     if (fs.existsSync(full)) {

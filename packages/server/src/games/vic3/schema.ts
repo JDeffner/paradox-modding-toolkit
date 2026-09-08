@@ -29,7 +29,11 @@
 import type { SchemaEntry, RefField } from "../../schema/types";
 import { JOMINI_VARIABLE_BLOCK_REFS } from "../jomini/variables";
 
+import { ASSET_SCHEMA } from "../jomini/assets";
+import assetVocabulary from "../../../data/vic3/assetVocabulary.json";
+
 export const VIC3_SCHEMA: SchemaEntry[] = [
+  { ...ASSET_SCHEMA, assetVocabulary },
   // --- Core script surfaces ---
   // Events use `namespace = x` declarations and ns.N ids like CK3. Root scope
   // varies by event type (country/state/character), so none is claimed.

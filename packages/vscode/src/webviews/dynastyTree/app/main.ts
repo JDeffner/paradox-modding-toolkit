@@ -1143,17 +1143,20 @@ function renderCharacter(root: HTMLElement, char: DynastyCharacter): void {
   // DNA is the one fact with a way out of the panel: the name points at a
   // block in common/dna_data, which the buttons open or copy whole. A line
   // that only printed the name left the modder asking where the DNA was.
-  const dnaRow = node("div", "px-row");
+  const dnaRow = node("div", "px-row dna-row");
   if (char.dna) {
     const key = char.dna;
     dnaRow.append(node("code", "px-mono px-sm", key));
     const open = button("Open", "folderOpen", "ghost");
     open.dataset.tip = "Open this DNA's block in common/dna_data";
     open.addEventListener("click", () => post({ type: "dnaOpen", key }));
-    const copy = button("Copy", "copy", "ghost");
+    const copy = button("Copy block", "copy", "ghost");
     copy.dataset.tip = "Copy the whole DNA block, to paste into another character";
     copy.addEventListener("click", () => post({ type: "dnaCopy", key }));
-    dnaRow.append(open, copy);
+    const gameCopy = button("Copy for game", "copy", "ghost");
+    gameCopy.dataset.tip = "Copy DNA for CK3's Ruler Designer or portrait editor";
+    gameCopy.addEventListener("click", () => post({ type: "dnaCopyGame", key, female: char.female }));
+    dnaRow.append(open, copy, gameCopy);
   } else {
     dnaRow.append(node("span", "px-sm px-muted", "none; Edit pastes one from the portrait editor"));
   }
@@ -1435,7 +1438,7 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
   // it points at is opened, copied whole, or written into the mod from the
   // clipboard, because "dna = eadgar_dna" without that block is a portrait
   // nobody else can see.
-  const dnaRow = node("div", "px-row");
+  const dnaRow = node("div", "px-row dna-row");
   const dna = textInput(form.dna ?? "", (v) => (form.dna = v.trim() || undefined));
   dna.placeholder = "from the portrait editor";
   const dnaButton = (label: string, glyph: IconName, tip: string, run: () => void): HTMLButtonElement => {
@@ -1451,6 +1454,11 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     if (key) run(key);
     else toast("This character has no DNA name yet.");
   };
+  const copyForGame = button("Copy for game", "copy", "ghost");
+  copyForGame.addEventListener(
+    "click",
+    named((key) => post({ type: "dnaCopyGame", key, female: form.female }))
+  );
   dnaRow.append(
     dna,
     dnaButton(
@@ -1465,6 +1473,7 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
       "Copy this DNA's whole block",
       named((key) => post({ type: "dnaCopy", key }))
     ),
+    copyForGame,
     dnaButton("Paste DNA", "paste", "Take a DNA off the clipboard", () =>
       post({ type: "dnaPaste", character: form.id })
     )

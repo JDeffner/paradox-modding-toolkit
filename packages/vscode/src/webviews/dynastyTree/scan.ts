@@ -14,6 +14,8 @@
  * No `vscode` imports: unit-tested in plain Node (test/dynastyScan.test.ts).
  */
 
+import { parseScript } from "@px-lsp/server/parser";
+
 /** One top-level `key = { … }`, with the offsets it occupies in the text. */
 export interface ScriptBlock {
   key: string;
@@ -126,7 +128,15 @@ export function parseDnaPaste(clipboard: string): DnaPaste | null {
   // A whole definition: the one that carries a portrait, else the first, so a
   // block written in a shape this panel has not seen is still pasted verbatim.
   const block = blocks.find((b) => b.text.includes("portrait_info")) ?? blocks[0];
-  return { kind: "block", key: block.key, body: braces(block.text) };
+  const body = braces(block.text);
+  // CK3's persistent clipboard format has genes directly under its root;
+  // common/dna_data requires those portrait fields inside portrait_info.
+  const fields = scanBlocks(body.slice(1, -1));
+  return {
+    kind: "block",
+    key: block.key,
+    body: fields.has("genes") && !fields.has("portrait_info") ? `{\n\tportrait_info = ${body}\n}` : body,
+  };
 }
 
 /** `key = { … }` reduced to its `{ … }`. */
@@ -136,18 +146,38 @@ function braces(block: string): string {
 }
 
 /**
- * The script a paste writes, under the key it was given. A whole block keeps
- * its own body verbatim; a bare `portrait_info` is wrapped in one. `enabled =
+ * The script a paste writes, under the key it was given. Gene text is kept
+ * verbatim; clipboard-only metadata is removed and bare `portrait_info` wrapped.
+ * `enabled =
  * yes` is NOT added: 296 of the 431 vanilla `common/dna_data` blocks write it
  * and 135 do not (measured, CK3 1.19), so it is optional and inventing it
  * would be writing game knowledge nobody asked for.
  */
 export function dnaPasteBlock(key: string, paste: DnaPaste): string | null {
   if (paste.kind === "name") return null;
-  if (paste.kind === "block") return `${key} = ${paste.body}`;
-  const body = paste.body
-    .split(/\r?\n/)
-    .map((line) => (line.trim() === "" ? line : `\t${line}`))
-    .join("\n");
-  return `${key} = {\n${body}\n}`;
+  const body =
+    paste.kind === "block"
+      ? paste.body
+      : `{\n${paste.body
+          .split(/\r?\n/)
+          .map((line) => (line.trim() === "" ? line : `\t${line}`))
+          .join("\n")}\n}`;
+  let text = `${key} = ${body}`;
+  // These clipboard fields are absent from vanilla common/dna_data and are
+  // rejected there by CK3 1.19 tiger. Keep all genes and portrait overrides.
+  const metadata = new Set(["type", "id", "random_seed", "age"]);
+  const outer = parseScript(text).root.statements[0];
+  if (outer?.kind === "assignment" && outer.value?.kind === "block") {
+    const portrait = outer.value.statements.find(
+      (s) => s.kind === "assignment" && s.key.text === "portrait_info"
+    );
+    if (portrait?.kind === "assignment" && portrait.value?.kind === "block") {
+      for (const s of [...portrait.value.statements].reverse()) {
+        if (s.kind === "assignment" && metadata.has(s.key.text)) {
+          text = text.slice(0, s.range.start) + text.slice(s.range.end);
+        }
+      }
+    }
+  }
+  return text;
 }

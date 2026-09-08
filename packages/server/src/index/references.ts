@@ -106,6 +106,41 @@ export function extractReferencesParsed(
   const implicitDefs: Definition[] = [];
   const namespaces: string[] = [];
 
+  // Named asset blocks contain graphics properties, never script call sites.
+  const normalizedFile = file.replace(/\\/g, "/").toLowerCase();
+  const namedEntry = schema.entries.find(
+    (e) =>
+      e.extraction === "named-block" &&
+      normalizedFile.endsWith(e.ext ?? ".txt") &&
+      normalizedFile.includes(`/${e.path}/`)
+  );
+  if (namedEntry) {
+    walkStatements(root, (stmt, ancestors) => {
+      if (stmt.kind !== "assignment" || stmt.value?.kind !== "scalar") return;
+      const context = ancestors
+        .filter((a) => a.kind === "assignment")
+        .map((a) => a.key.text)
+        .join("/");
+      const rule =
+        namedEntry.assetFields?.[`${context}/${stmt.key.text}`] ?? namedEntry.assetFields?.[`${context}/*`];
+      if (!rule?.target || rule.target.owner) return;
+      const kinds = [rule.target.kind ?? namedEntry.kind];
+      const value = stmt.value;
+      if (!NAME_OK.test(value.text)) return;
+      const pos = lines.positionAt(value.range.start + (value.quoted ? 1 : 0));
+      references.push({
+        name: value.text,
+        kinds,
+        file,
+        line: pos.line,
+        startChar: pos.character,
+        endChar: pos.character + value.text.length,
+      });
+    });
+    shareReferenceStrings(references);
+    return { references, implicitDefs, namespaces };
+  }
+
   const pushRef = (name: string, kinds: string[], startOffset: number, call?: boolean, chain?: string) => {
     if (!NAME_OK.test(name) || NOT_A_NAME.has(name)) return;
     const pos = lines.positionAt(startOffset);

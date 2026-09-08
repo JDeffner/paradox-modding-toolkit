@@ -31,6 +31,7 @@ import { EU5_SCHEMA } from "./schema.generated";
  * `remove_trait`, which take a trait *scope* in EU5 (`scope[trait]`), not a
  * trait definition name, so wiring them would be a pure false-positive source.
  */
+// Asset indexing is not enabled until its file layout is verified against an install.
 const EU5_REF_FIELDS: RefField[] = [
   // Events & on_actions. Both trigger_event_* effects take either a bare event
   // id or a block (`{ id = X }` / `{ on_action = X }`); only the scalar form

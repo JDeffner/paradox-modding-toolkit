@@ -8,6 +8,18 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+## 0.3.3
+
+Ships with the toolkit's 0.4.2 release.
+
+- Resolve graphics asset fields by context: mesh-local blend shapes and animations, entity states, shader effects and CK3 accessory variations. Harvest nested keyword completion from vanilla assets; keep binary shape names separate from script definitions.
+
+- Add `indexAssets` (default on) to toggle graphics `.asset` indexing across mods, dependencies and vanilla without restarting. Keep open-file features and texture previews available when indexing is off.
+
+- Fold comment sections headed by three or more `#` characters through the next heading or the end of the file, regardless of closing braces or indentation. Give sections priority over crossing brace folds.
+
+- Index named graphics blocks in CK3 and Victoria 3 `.asset` files, with file navigation, local filename completion and DDS hover previews. Meshes and animations stay unloaded during indexing.
+
 - Browser hovers use plain Markdown without VS Code commands, icons or HTML, while preserving completion snippets and restoring the enclosing host capabilities. Fix the CK3 decision scaffold's picture block from the current game documentation. Add packed npm consumer and Node 18 transport checks.
 
 ## 0.3.2

@@ -269,7 +269,8 @@ export function scanRoot(root: string, source: DefSource, opts: ScanOptions): De
 // older caches lack them and must rebuild.
 // Bumped to 6 when event files started contributing inline
 // scripted_trigger/scripted_effect declarations (#5); older caches lack them.
-const INDEX_CACHE_FORMAT = 6;
+// Named .asset definitions are absent from older caches.
+const INDEX_CACHE_FORMAT = 8;
 
 /** Compact "absent" marker inside cache rows. */
 type Absent = 0;

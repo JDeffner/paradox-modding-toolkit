@@ -113,6 +113,9 @@ docs, image guidelines, diagnostics, mod report and credits.*
   editing, a coverage view, and scaffolding for entire translation mods.
 - **DDS tooling.** Inline texture previews on hover, a zoomable viewer with
   PNG export, image-to-DDS conversion, and measured size guidelines.
+- **Graphics assets** (CK3, Vic3). Index `.asset` files, complete graphics keywords, follow mesh and shader references, and preview textures. Toggle scanning with `px.indexAssets`.
+- **Comment sections.** Fold `### Title` headings through the next heading or the end of the file, across closing braces.
+- **Dynasty DNA** (CK3). Copy DNA for mod files or the game, resolve it across dependency mods, and paste portrait-editor DNA into the selected mod.
 - **Steam Workshop publishing.** Create or update your mod's Workshop item
   through the running Steam client, no Paradox launcher involved. New items
   start private and the id is written back into `descriptor.mod`. A Workshop

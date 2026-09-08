@@ -215,6 +215,7 @@ record. Do not create notes under `docs/`.
 
 | Script | Output | What it does |
 |---|---|---|
+| `build-asset-vocabulary.ts [--game]` | `data/<id>/assetVocabulary.json` | Context-specific graphics properties and usage counts from vanilla `.asset` files; no binaries |
 | `build-structures-json.ts` | `data/ck3/structures.json` | Harvests every `_*.info` doc (CK3-only) |
 | `build-gui-schema.ts [--game]` | `data/<id>/guiSchema.json` | Widget types + property counts from vanilla `gui/` |
 | `build-freqs.ts [--game]` | `data/<id>/freqs.json` | Per-context usage counts. CK3 regen stays byte-identical modulo `meta.generated` unless the game patched |

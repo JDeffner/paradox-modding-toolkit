@@ -174,6 +174,7 @@ import { provideDateHover } from "./features/calendarDates";
 import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
 import { isCalendarFile, readCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { provideTextureHover } from "./features/textureHover";
+import { assetDefinitions, assetHover } from "./features/assetLanguage";
 import { provideDefinition, provideLocDefinition } from "./features/definition";
 import {
   declaresConstants,
@@ -298,6 +299,7 @@ function defaultSettings(): ParadoxSettings {
     workspaceMods: [],
     locLanguage: "english",
     scopeInlayHints: false,
+    indexAssets: true,
     hoverDetail: "standard",
     diagnosticsIgnore: [],
     diagnosticsIgnorePatterns: [],
@@ -317,6 +319,8 @@ let indexing = false;
 let scanGeneration = 0;
 /** Bundled schema merged with the workspace overlay; reloaded on path changes. */
 let schema: SchemaData = loadSchema(null);
+/** Index selection is separate from the schema used by open-file features. */
+let indexSchema: SchemaData = schema;
 /** namespace declarations per mod file, folded into data.modNamespaces. */
 const namespacesByFile = new Map<string, string[]>();
 
@@ -342,7 +346,7 @@ function refreshLazyRefs(): void {
     source: "parent" as const,
   }));
   if (settings.gamePath) roots.push({ root: settings.gamePath, source: "vanilla" });
-  lazyRefs.setRoots(roots, isEngineToken);
+  lazyRefs.setRoots(roots, isEngineToken, settings.indexAssets !== false);
 }
 
 /** Bundled frequency tables: completion ranks with them, the Examples Wiki
@@ -1031,7 +1035,7 @@ async function scanRootChunked(
   const defs: Definition[] = [];
   const work: Array<{ entry: SchemaData["entries"][number]; files: string[] }> = [];
   let totalFiles = 0;
-  for (const entry of schema.entries) {
+  for (const entry of indexSchema.entries) {
     const dir = path.join(root, ...entry.path.split("/"));
     // The listing shares the read loop's yield budget below. It used to run to
     // completion first, and for its whole duration the server answered no
@@ -1090,7 +1094,7 @@ async function scanModRootBoth(root: string, generation: number): Promise<number
   if (faultScan) injectScanFault();
   const t0 = Date.now();
   const result = await scanModRootFused(root, {
-    schema,
+    schema: indexSchema,
     // Both callers are workspace mods; dependency parents never reach here.
     source: "mod",
     locLanguage: settings.locLanguage,
@@ -1157,6 +1161,10 @@ async function buildIndex(): Promise<void> {
   clearPathCaches();
   calendarByRoot.clear();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
+  indexSchema =
+    settings.indexAssets === false
+      ? { ...schema, entries: schema.entries.filter((e) => e.ext?.toLowerCase() !== ".asset") }
+      : schema;
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),
     "saved_scope",
@@ -1217,7 +1225,7 @@ async function buildIndex(): Promise<void> {
       const version = detectGameVersion(gamePath);
       const cacheFile = path.join(
         storageDir,
-        `vanillaIndex${activeProfile().cacheSuffix}-${settings.locLanguage}.json`
+        `vanillaIndex${activeProfile().cacheSuffix}-${settings.locLanguage}${settings.indexAssets === false ? "-no-assets" : ""}.json`
       );
       let defs = loadIndexCache(cacheFile, version);
       if (defs) {
@@ -1318,6 +1326,7 @@ function contentDigest(content: string | null): string {
 
 function rescanModFile(fsPath: string): void {
   const lower = fsPath.toLowerCase();
+  if (settings.indexAssets === false && lower.endsWith(".asset")) return;
   const wsRoot = workspaceRootOf(fsPath);
   const parentRoot = wsRoot ? null : parentRoots().find((r) => lower.startsWith(r.toLowerCase()));
   if (!wsRoot && !parentRoot) return;
@@ -1325,7 +1334,7 @@ function rescanModFile(fsPath: string): void {
   const source = wsRoot ? ("mod" as const) : ("parent" as const);
 
   const entry = classifyFile(root, fsPath, schema.entries);
-  const isScript = lower.endsWith(".txt");
+  const isScript = lower.endsWith(".txt") || entry?.extraction === "named-block";
   if (!entry && !isScript) return;
   if (entry?.kind === "loc_key" && !isWantedLocFile(path.relative(root, fsPath), settings.locLanguage))
     return;
@@ -1488,6 +1497,7 @@ connection.onInitialized(() => {
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
       watchers: [
         { globPattern: "**/*.{txt,yml,gui,mod}" },
+        { globPattern: "**/gfx/**/*.asset" },
         { globPattern: "**/metadata.json" },
         { globPattern: "**/calendar.json" },
       ],
@@ -1531,6 +1541,7 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
     JSON.stringify(newSettings.diagnosticsIgnorePatterns) !==
       JSON.stringify(settings.diagnosticsIgnorePatterns) ||
     newSettings.diagnosticsVanilla !== settings.diagnosticsVanilla;
+  const assetIndexChanged = (newSettings.indexAssets !== false) !== (settings.indexAssets !== false);
   settings = newSettings;
   setHoverDetail(settings.hoverDetail ?? "standard");
   settings.calendar = sanitizeCalendar(settings.calendar);
@@ -1539,6 +1550,8 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
     log("paths changed; rebuilding data...");
     loadDocs(false);
     startIndexBuild("paths changed");
+  } else if (assetIndexChanged) {
+    startIndexBuild("asset indexing changed");
   }
   // Re-validate open documents so suppression/vanilla changes apply immediately.
   if (diagChanged || pathsChanged) {
@@ -2000,6 +2013,7 @@ connection.onHover((params) =>
     if (dateHover) return dateHover;
     const texture = provideTextureHover(settings, doc, params.position, entry?.kind);
     if (texture) return texture;
+    if (entry?.extraction === "named-block") return assetHover(data, settings, doc, params.position, entry);
     return provideHover(
       data,
       doc,
@@ -2046,6 +2060,9 @@ connection.onDefinition((params) =>
     if (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui") return [];
     const constant = provideConstantDefinition(doc, params.position);
     if (constant) return constant;
+    const assetEntry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+    if (assetEntry?.extraction === "named-block")
+      return assetDefinitions(data, settings, doc, params.position, assetEntry);
     if (doc.languageId === "paradox-gui") {
       // Types, templates and blockoverride targets resolve through the FIOS
       // store first (what the game actually uses); loc keys etc. fall through.

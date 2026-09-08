@@ -82,6 +82,7 @@ interface ParadoxSettings {
   workspaceMods?: string[];    // mods being EDITED (reference indexing + diagnostics)
   locLanguage: string;         // "english", ...
   scopeInlayHints: boolean;
+  indexAssets?: boolean;      // default true; index .asset definitions and references
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
   calendar?: CalendarSetting;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
                                //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
@@ -95,6 +96,8 @@ interface ParadoxSettings {
   diagnosticsVanilla: boolean;         // false (default) = never diagnose game files
 }
 ```
+
+`indexAssets` defaults to `true`. Set it to `false` to skip `.asset` definition and reference indexing across workspace mods, dependency mods and vanilla, including on-demand reference searches. Changing it through `paradox/configChanged` rebuilds the index without a restart. Open-file syntax features and on-demand texture previews remain available. Support for `.asset` indexing comes from the active game profile.
 
 Every capability in `client` is independent and defaults to **off**, so a
 client declares exactly what it implements and the server tailors its output

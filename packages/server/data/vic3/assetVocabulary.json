@@ -1,0 +1,179 @@
+{
+  "": {
+    "arrowType": 6,
+    "entity": 2447,
+    "pdxmesh": 1683
+  },
+  "arrowType": {
+    "effect": 6,
+    "effectname": 6,
+    "line_smoothing": 6,
+    "name": 6,
+    "overlay": 4,
+    "size": 6,
+    "subdivisions": 6,
+    "texture": 6
+  },
+  "entity": {
+    "attach": 418,
+    "attribute": 3944,
+    "clone": 151,
+    "cull_radius": 94,
+    "default_state": 368,
+    "game_data": 996,
+    "get_state_from_parent": 16,
+    "group": 5,
+    "locator": 786,
+    "meshsettings": 1,
+    "name": 2447,
+    "pdxmesh": 2193,
+    "scale": 110,
+    "state": 1425
+  },
+  "entity/attribute": {
+    "additive_animation": 71,
+    "blend_shape": 3873,
+    "default": 71,
+    "name": 3944
+  },
+  "entity/game_data": {
+    "portrait_entity_user_data": 996
+  },
+  "entity/game_data/portrait_entity_user_data": {
+    "color_mask_remap_interval": 157,
+    "portrait_accessory": 844,
+    "portrait_decal": 4
+  },
+  "entity/game_data/portrait_entity_user_data/color_mask_remap_interval": {
+    "interval": 157
+  },
+  "entity/game_data/portrait_entity_user_data/portrait_accessory": {
+    "pattern_mask": 844,
+    "variation": 844
+  },
+  "entity/game_data/portrait_entity_user_data/portrait_decal": {
+    "body_part": 4
+  },
+  "entity/group": {
+    "attach": 18,
+    "name": 5
+  },
+  "entity/group/attach": {
+    "chance": 18
+  },
+  "entity/locator": {
+    "name": 786,
+    "position": 782,
+    "rotation": 482,
+    "scale": 185
+  },
+  "entity/meshsettings": {
+    "shader": 1,
+    "shader_file": 1,
+    "texture_diffuse": 1,
+    "texture_normal": 1,
+    "texture_specular": 1
+  },
+  "entity/state": {
+    "animation": 611,
+    "animation_blend_time": 10,
+    "animation_speed": 9,
+    "chance": 375,
+    "event": 1210,
+    "looping": 874,
+    "name": 1425,
+    "next_state": 180,
+    "propagate_state": 22,
+    "start_event": 523,
+    "state_time": 595,
+    "time_offset": 95
+  },
+  "entity/state/event": {
+    "attachment_id": 14,
+    "entity": 25,
+    "entity_fade_speed": 19,
+    "keep_entity": 3,
+    "keep_particle": 774,
+    "keep_sound": 646,
+    "life": 11,
+    "node": 679,
+    "particle": 825,
+    "remove_attachment": 7,
+    "skip_forward": 190,
+    "sound": 786,
+    "soundparameter": 60,
+    "time": 1121,
+    "trigger_once": 896,
+    "use_parent_nodes": 6
+  },
+  "entity/state/event/sound": {
+    "soundeffect": 786
+  },
+  "entity/state/start_event": {
+    "attachment_id": 6,
+    "entity": 39,
+    "entity_fade_speed": 3,
+    "keep_particle": 314,
+    "keep_sound": 136,
+    "light": 10,
+    "node": 361,
+    "particle": 331,
+    "remove_attachment": 3,
+    "skip_forward": 2,
+    "sound": 150,
+    "state": 6,
+    "time": 364,
+    "trigger_once": 370
+  },
+  "entity/state/start_event/sound": {
+    "soundeffect": 150
+  },
+  "pdxmesh": {
+    "additive_animation": 71,
+    "animation": 1676,
+    "blend_shape": 1867,
+    "cull_distance": 4,
+    "file": 1683,
+    "lod_percentages": 733,
+    "meshsettings": 7212,
+    "name": 1683,
+    "scale": 223
+  },
+  "pdxmesh/additive_animation": {
+    "id": 71,
+    "type": 71
+  },
+  "pdxmesh/animation": {
+    "id": 1676,
+    "type": 1676
+  },
+  "pdxmesh/blend_shape": {
+    "id": 1867,
+    "type": 1867
+  },
+  "pdxmesh/lod_percentages": {
+    "lod": 1883
+  },
+  "pdxmesh/lod_percentages/lod": {
+    "index": 1883,
+    "percent": 1883
+  },
+  "pdxmesh/meshsettings": {
+    "additional_shader_defines": 3783,
+    "index": 7198,
+    "name": 7206,
+    "shader": 7197,
+    "shader_file": 6976,
+    "shadow_shader": 32,
+    "subpass": 1891,
+    "texture": 2277,
+    "texture_diffuse": 6901,
+    "texture_normal": 6855,
+    "texture_specular": 6859
+  },
+  "pdxmesh/meshsettings/texture": {
+    "file": 2277,
+    "index": 2277,
+    "srgb": 252
+  }
+}

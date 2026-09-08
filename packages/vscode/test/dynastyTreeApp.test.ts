@@ -395,8 +395,16 @@ describe("the Dynasty Tree app", () => {
     click(app, card(app, "3"));
     expect(side.textContent).toContain("3_smokelet");
     expect(side.textContent).toContain("martial 7");
+    sideButton(app, "Copy block").click();
+    expect(app.posted).toContainEqual({ type: "dnaCopy", key: "3_smokelet" });
+    sideButton(app, "Copy for game").click();
+    expect(app.posted).toContainEqual({ type: "dnaCopyGame", key: "3_smokelet", female: false });
 
     click(app, card(app, "3").querySelector('.cact[data-act="edit"]')!);
+    side.querySelector<HTMLButtonElement>('button[aria-label="Copy DNA"]')!.click();
+    expect(app.posted.filter((m) => m.type === "dnaCopy")).toHaveLength(2);
+    sideButton(app, "Copy for game").click();
+    expect(app.posted.filter((m) => m.type === "dnaCopyGame")).toHaveLength(2);
     const prowess = [...side.querySelectorAll(".skills .px-field")].find(
       (f) => f.querySelector(".px-label")?.textContent === "prowess"
     )!;

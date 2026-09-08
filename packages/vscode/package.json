@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -980,6 +980,12 @@
             "default": false,
             "order": 1,
             "markdownDescription": "Show the inferred scope (e.g. `character`) after scope-changing block openers like `every_vassal = {`. Best-effort inference; display only."
+          },
+          "px.indexAssets": {
+            "type": "boolean",
+            "default": true,
+            "scope": "window",
+            "markdownDescription": "Index definitions and references in graphics `.asset` files for supported games, across mods, dependencies and vanilla. Disable to reduce indexing time and memory. Changing this rebuilds the index automatically. Syntax highlighting, folding and on-demand texture previews remain available."
           },
           "px.calendar": {
             "type": "object",

@@ -23,6 +23,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 
 - **Completion and navigation:** scope-aware ranking, definitions, references, rename, symbols and block skeletons. Items outside the inferred scope are annotated rather than hidden.
 - **Documentation from the game:** hover descriptions, scope information, localized text and texture previews, plus searchable vanilla examples.
+- **Graphics assets:** CK3 and Victoria 3 `.asset` indexing, context-specific completion, reference navigation and DDS previews. Use `px.indexAssets` to toggle scanning.
+- **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
 
@@ -35,6 +37,8 @@ The **Event Simulator** walks an event and its options beside the source. The **
 The **GUI Editor** lets you select, move and resize widgets, inspect inherited properties and save source-preserving edits. Its preview models supported layout rules; runtime bindings still need an in-game check. CK3 also has forms for traits, cultures, traditions, legacies, dynasties and coats of arms. Victoria 3 and EU5 have the Flag Builder.
 
 ![CK3 Trait Creator with editable values, a game-style preview and generated script](media/screenshots/trait-creator.png)
+
+The **Dynasty Tree** supports copying DNA for mod files or the game, including lookup in dependency mods and pasting portrait-editor DNA.
 
 The Project panel also opens DDS conversion, game launch options, custom calendars, multi-mod indexing and the **Steam Workshop Panel**. Workshop uploads use your running Steam client and show the parts being uploaded before confirmation.
 

@@ -190,6 +190,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     parentPaths: c.parentPaths,
     workspaceMods: c.workspaceMods,
     locLanguage: c.locLanguage,
+    indexAssets: c.indexAssets,
     scopeInlayHints: c.scopeInlayHints,
     calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
@@ -619,7 +620,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
       // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
       // which the server caches per mod until the file changes.
-      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/calendar.json"]) {
+      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/gfx/**/*.asset", "**/calendar.json"]) {
         const w = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(vscode.Uri.file(root), glob)
         );

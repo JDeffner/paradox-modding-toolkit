@@ -166,6 +166,8 @@ concrete:
 - **`locLanguage`** selects the localization language for inlay previews and
   coverage.
 
+Set `indexAssets: false` to skip graphics `.asset` definition and reference indexing in all roots. It defaults to `true` for profiles that support `.asset` files. Send the changed settings through `paradox/configChanged` to rebuild the index without a restart. This does not disable open-file syntax features or on-demand texture previews.
+
 The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`,
 `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in
 `docs/PROTOCOL.md`. Push the whole settings object again as

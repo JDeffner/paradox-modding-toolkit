@@ -11,6 +11,7 @@ import { DECL_MARKERS, SLOT_KEYS } from "../gui/declMarkers";
 import { PROPERTY_BLOCKS } from "../gui/layoutEngine";
 import { getLocParse, getParse } from "../parseCache";
 import { lspSymbolKind } from "./symbolKind";
+import { activeProfile } from "../games/active";
 
 function toLspRange(lines: LineIndex, range: Range): LspRange {
   return { start: lines.positionAt(range.start), end: lines.positionAt(range.end) };
@@ -176,6 +177,9 @@ function scriptSymbols(document: TextDocument, defKind: string | null): Document
   // so a breadcrumb and a hover badge on the same name draw the same picture.
   const fileKind = defKind ? lspSymbolKind(defKind) : null;
   const symbols: DocumentSymbol[] = [];
+  const namedBlocks = activeProfile().schema.some(
+    (e) => e.kind === defKind && e.extraction === "named-block"
+  );
   for (const stmt of result.root.statements) {
     if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
     const name = stmt.key.text;
@@ -184,8 +188,8 @@ function scriptSymbols(document: TextDocument, defKind: string | null): Document
     const stmts = childBlockStatements(stmt);
     const detail = isEvent ? childScalar(stmts, "type") : childScalar(stmts, "name");
     symbols.push({
-      name,
-      detail: detail ? unquote(detail) : undefined,
+      name: namedBlocks && detail ? unquote(detail) : name,
+      detail: namedBlocks ? name : detail ? unquote(detail) : undefined,
       kind: fileKind ?? (isEvent ? EVENT_SYMBOL_KIND : SymbolKind.Function),
       range: toLspRange(lineIndex, stmt.range),
       selectionRange: toLspRange(lineIndex, stmt.key.range),
