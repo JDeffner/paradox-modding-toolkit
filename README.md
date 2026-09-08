@@ -18,7 +18,7 @@ For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 </div>
 
-**Build with the language server:** [Editor setup](packages/server/README.md#install) · [Embed in an application](docs/EMBEDDING.md) · [Wire protocol](docs/PROTOCOL.md)
+**Build with the language server:** [Install the server](packages/server/README.md#install) · [Embed in an application](docs/EMBEDDING.md) · [Wire protocol](docs/PROTOCOL.md)
 
 > **Beta.** Young project, useful day to day, rough edges included.
 > Bug reports and missing-feature complaints are the point, not a nuisance:

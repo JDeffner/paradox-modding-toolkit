@@ -13,7 +13,7 @@ For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 </div>
 
-**Build with the language server:** [Editor setup](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/README.md#install) · [Embed in an application](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/EMBEDDING.md) · [Wire protocol](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PROTOCOL.md)
+**Build with the language server:** [Install the server](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/README.md#install) · [Embed in an application](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/EMBEDDING.md) · [Wire protocol](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PROTOCOL.md)
 
 ## Start editing
 

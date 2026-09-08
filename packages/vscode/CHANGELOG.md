@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Use the same banner in the GitHub and Marketplace READMEs, remove the repeated title and vague LSP badge, and link directly to editor setup, embedding and protocol guides.
+- Use the same banner in the GitHub and Marketplace READMEs, remove the repeated title and vague LSP badge, and link directly to server installation, embedding and protocol guides.
 
 ## 0.4.2 (beta) - graphics assets, DNA copying and section folding
 
