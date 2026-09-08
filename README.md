@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packages/vscode/media/icon.png" alt="PX TK" width="96">
+<img src=".github/assets/github-banner.png" alt="Paradox Modding Toolkit: script completion, Steam Workshop uploads and visual editors for Crusader Kings III, Victoria 3 and Europa Universalis V." width="1200">
 
 # Paradox Modding Toolkit
 
