@@ -174,6 +174,8 @@ export type AppToHost =
   | { type: "dnaOpen"; key: string }
   /** Copy that block's whole text, so it can be pasted into another mod. */
   | { type: "dnaCopy"; key: string }
+  /** Copy persistent DNA for CK3, or the encoded string for its portrait editor. */
+  | { type: "dnaCopyGame"; key: string; female: boolean }
   /**
    * Take a DNA off the clipboard: a whole block or a bare `portrait_info` is
    * written into the mod's own `common/dna_data`, under a key derived from

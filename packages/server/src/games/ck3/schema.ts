@@ -16,7 +16,55 @@ import { JOMINI_VARIABLE_BLOCK_REFS } from "../jomini/variables";
 import { STRUCTURES } from "./structures";
 import { AMBIENT_SCOPES } from "./ambientScopes";
 
+import { ASSET_SCHEMA } from "../jomini/assets";
+import assetVocabulary from "../../../data/ck3/assetVocabulary.json";
+
 const CK3_SCHEMA_BASE: SchemaEntry[] = [
+  {
+    ...ASSET_SCHEMA,
+    assetVocabulary,
+    assetFields: {
+      ...ASSET_SCHEMA.assetFields,
+      // male_head/male_head.asset and female_head/female_head.asset share animation sets.
+      "pdxmesh/import/name": {
+        doc: "Shared skeletal animation set imported by this mesh.",
+        target: { block: "skeletal_animation_set" },
+      },
+      "pdxmesh/import/type": { doc: "Imported asset type, such as skeletal_animation_set." },
+      "skeletal_animation_set/reference_skeleton": {
+        doc: "Mesh used as the reference skeleton for this animation set.",
+        target: { block: "pdxmesh" },
+      },
+      "skeletal_animation_set/animation/type": {
+        doc: "Animation file for this shared animation ID.",
+        files: [".anim"],
+      },
+      "entity/state/animation": {
+        doc: "Animation ID declared by the entity's mesh or its imported skeletal animation set.",
+        target: {
+          owner: "pdxmesh",
+          via: "pdxmesh",
+          block: "animation",
+          key: "id",
+          imports: { block: "import", typeKey: "type", nameKey: "name", type: "skeletal_animation_set" },
+        },
+      },
+      "entity/game_data/portrait_entity_user_data/portrait_accessory/pattern_mask": {
+        doc: "Four-channel texture mask. Each channel selects a pattern from the variation block (vanilla portrait asset comments).",
+        files: [".dds"],
+      },
+      "entity/game_data/portrait_entity_user_data/portrait_accessory/variation": {
+        doc: "Named variation from gfx/portraits/accessory_variations (vanilla portrait asset comments).",
+        target: { kind: "accessory_variation", block: "variation" },
+      },
+    },
+  },
+  {
+    path: "gfx/portraits/accessory_variations",
+    kind: "accessory_variation",
+    extraction: "named-block",
+    completable: false,
+  },
   // --- Core script folders (already wired in v0.3; keep as-is) ---
   { path: "common/scripted_effects", kind: "scripted_effect" },
   { path: "common/scripted_triggers", kind: "scripted_trigger" },
@@ -375,7 +423,7 @@ export const CK3_SCHEMA: SchemaEntry[] = CK3_SCHEMA_BASE.map((entry) => {
 //    (867.1.1 = { ... }); the identity comes from the filename, so standard
 //    extraction would index garbage.
 //  - music/ (.asset format), dlc_metadata, reader_export, and the remaining
-//    gfx/ art-config folders (map styles, unit states, accessory_variations,
+//    gfx/ art-config folders (map styles, unit states,
 //    hud_skins, loading_screens): art/engine data, not script-referenced.
 //    (Full gap list: scripts/audit-schema-coverage.ts.)
 

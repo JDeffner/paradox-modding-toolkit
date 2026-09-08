@@ -53,6 +53,7 @@ import { characterBlock, dynastyBlock, houseBlock, unquotableValue } from "./blo
 import { dynastyTreeHtml } from "./html";
 import { WriteJournal } from "./journal";
 import { dnaPasteBlock, parseDnaPaste, scanBlocks, uniqueKey, type ScriptBlock } from "./scan";
+import { dnaFiles, gameDnaCopy } from "./dna";
 import type { AppToHost, HostToApp, ModTarget, OptionSets, TraitStats, TraitTip } from "./messages";
 import { plainLoc, type PreviewModifier } from "../traitCreator/app/preview";
 import { GuiTextureCache } from "../guiEditor/textureCache";
@@ -288,6 +289,9 @@ export class DynastyTreePanel {
         return;
       case "dnaCopy":
         await this.copyDna(msg.key);
+        return;
+      case "dnaCopyGame":
+        await this.copyDna(msg.key, msg.female);
         return;
       case "dnaPaste":
         await this.pasteDna(msg.character);
@@ -587,6 +591,10 @@ export class DynastyTreePanel {
    * row can show what a trait does without a request per row.
    */
   private fileBlocks(file: string): Map<string, ScriptBlock> {
+    const open = vscode.workspace.textDocuments.find(
+      (doc) => doc.uri.scheme === "file" && samePath(doc.uri.fsPath, file)
+    );
+    if (open) return scanBlocks(open.getText());
     let mtimeMs: number;
     try {
       mtimeMs = fs.statSync(file).mtimeMs;
@@ -744,10 +752,19 @@ export class DynastyTreePanel {
   }
 
   /** Every DNA file the workspace can see, the mods' own first (they win). */
-  private dnaFiles(): string[] {
-    const roots = this.options.mods.map((m) => m.path);
-    if (this.options.cfg.gamePath) roots.push(this.options.cfg.gamePath);
-    return roots.flatMap((root) => listScripts(this.dnaDir(root)));
+  private dnaFiles(roots?: string[]): string[] {
+    const { cfg } = this.options;
+    return dnaFiles(
+      roots ?? [
+        ...(cfg.gamePath ? [cfg.gamePath] : []),
+        ...cfg.parentPaths,
+        ...cfg.workspaceMods,
+        ...this.options.mods.map((m) => m.path).reverse(),
+        ...(cfg.modPath ? [cfg.modPath] : []),
+      ],
+      this.dnaFolder(),
+      vscode.workspace.textDocuments.filter((doc) => doc.uri.scheme === "file").map((doc) => doc.uri.fsPath)
+    );
   }
 
   private findDna(key: string): { file: string; block: ScriptBlock } | null {
@@ -769,17 +786,35 @@ export class DynastyTreePanel {
 
   /**
    * The whole block, so it can be pasted into another mod or another
-   * character. A name nothing defines still copies as a name: that is what the
-   * field holds, and refusing to copy it would help nobody.
+   * character. An unresolved name is not DNA and must not replace the clipboard.
    */
-  private async copyDna(key: string): Promise<void> {
+  private async copyDna(key: string, gameFemale?: boolean): Promise<void> {
     const found = this.findDna(key);
-    await vscode.env.clipboard.writeText(found ? found.block.text : key);
+    if (!found) {
+      this.post({
+        type: "toast",
+        message: `DNA ${key} was not found in ${this.dnaFolder()}. Check the game and dependency mod paths. Clipboard unchanged.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const gameCopy = gameFemale === undefined ? null : gameDnaCopy(found.block.text, gameFemale);
+    if (gameFemale !== undefined && !gameCopy) {
+      this.post({
+        type: "toast",
+        message: `DNA ${key} has no complete portrait or DNA string to copy. Clipboard unchanged.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    await vscode.env.clipboard.writeText(gameCopy?.text ?? found.block.text);
     this.post({
       type: "toast",
-      message: found
-        ? `Copied ${key} from ${path.basename(found.file)}.`
-        : `No ${key} in ${this.dnaFolder()}, so only the name was copied.`,
+      message: gameCopy
+        ? gameCopy.format === "persistent"
+          ? "Copied persistent DNA. Use Paste DNA in Ruler Designer or Paste Persistent DNA in the portrait editor."
+          : "Copied DNA string. Use Paste DNA in the portrait editor, then Copy Persistent DNA for Ruler Designer."
+        : `Copied ${key} from ${path.basename(found.file)}.`,
     });
   }
 
@@ -804,14 +839,14 @@ export class DynastyTreePanel {
       this.post({ type: "pasted", field: "dna", text: paste.name });
       return;
     }
-    const modPath = this.options.mods[0]?.path ?? this.options.cfg.modPath;
+    const modPath = this.targetChoice()?.modPath ?? this.options.mods[0]?.path ?? this.options.cfg.modPath;
     if (!modPath) {
       this.post({ type: "toast", message: "No mod to write the DNA into.", variant: "destructive" });
       return;
     }
 
     const dir = this.dnaDir(modPath);
-    const mine = listScripts(dir);
+    const mine = this.dnaFiles([modPath]);
     const taken = new Set<string>();
     for (const file of mine) for (const key of this.fileBlocks(file).keys()) taken.add(key);
     const key = uniqueKey(paste.kind === "block" ? paste.key : `${character}_dna`, taken);
@@ -1165,19 +1200,6 @@ export function readTraitBlock(
     }
   }
   return out;
-}
-
-/** The `.txt` files of one folder, sorted, or none when it is not there. */
-function listScripts(dir: string): string[] {
-  try {
-    return fs
-      .readdirSync(dir)
-      .filter((name) => name.toLowerCase().endsWith(".txt"))
-      .sort()
-      .map((name) => path.join(dir, name));
-  } catch {
-    return [];
-  }
 }
 
 /** A mod folder's name as a file name may spell it. */

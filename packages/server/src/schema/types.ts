@@ -15,6 +15,8 @@
 export type NameExtraction =
   /** One definition per top-level assignment key (`my_thing = { ... }`). */
   | "top-level-key"
+  /** Repeated top-level blocks whose identity is their direct `name` field. */
+  | "named-block"
   /** Event files: only `namespace.NNN` top-level keys are definitions. */
   | "event-id"
   /** Landed titles: keys matching /^[ekdcb]_/ at any nesting depth. */
@@ -94,6 +96,11 @@ export interface AmbientScope {
 }
 
 export interface SchemaEntry {
+  /** Graphics property vocabulary harvested from this game's .asset corpus. */
+  assetVocabulary?: Record<string, Record<string, number>>;
+  /** Context path + field -> graphics-specific meaning and target namespace. */
+  assetFields?: Record<string, AssetField>;
+  assetEnginePaths?: string[];
   /** Folder relative to the game/mod root, forward slashes, no trailing slash. */
   path: string;
   /** Definition kind, singular snake_case (e.g. "trait", "decision"). */
@@ -102,6 +109,10 @@ export interface SchemaEntry {
   ext?: string;
   /** Name extraction mode, default "top-level-key". */
   extraction?: NameExtraction;
+  /** Named-block fields that refer to another named block, rather than script calls. */
+  referenceKeys?: string[];
+  /** File-valued fields and allowed extensions, verified in the game's asset files. */
+  fileFields?: Record<string, string[]>;
   /**
    * Loc keys the game requires per definition; `$` is the definition name
    * (e.g. "trait_$", "$_desc"). Used for conservative missing-loc diagnostics
@@ -144,6 +155,22 @@ export interface SchemaEntry {
   structure?: StructureSpec;
   /** Engine-provided saved scopes for this kind (v1.1 §B3). Not yet overlayable (F5). */
   ambientScopes?: AmbientScope[];
+}
+
+export interface AssetField {
+  doc: string;
+  files?: string[];
+  target?: {
+    kind?: string;
+    block: string;
+    /** A declaration local to this owning block, reached via a named reference if needed. */
+    owner?: string;
+    via?: string;
+    key?: string;
+    imports?: { block: string; typeKey: string; nameKey: string; type: string };
+  };
+  /** Effect names are local to the shader file named by this sibling property. */
+  shaderFile?: string;
 }
 
 /** Form a cross-reference field takes. */

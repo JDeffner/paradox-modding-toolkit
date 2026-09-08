@@ -38,6 +38,8 @@ ${uiCss}
   #picker > .px-panel-title:first-child { padding-top: 4px; }
   #picker .px-item { align-items: center; gap: 8px; }
   #picker .dname { flex: 0 0 auto; font-weight: 500; }
+  .dna-row { flex-wrap: wrap; }
+  .dna-row > code, .dna-row > input { flex: 1 0 100%; min-width: 0; overflow-wrap: anywhere; }
   #picker .dkey { flex: 1 1 auto; min-width: 0; color: var(--px-muted-fg); font-family: var(--px-font-mono);
     font-size: var(--px-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #picker .dcount { flex: 0 0 auto; color: var(--px-muted-fg); font-size: var(--px-text-xs); }

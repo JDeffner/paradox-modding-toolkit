@@ -23,6 +23,7 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   dependenciesRequest,
+  configChangedNotification,
   dynastyTreeRequest,
   type DynastyTreeParams,
   type DynastyTreeResult,
@@ -181,6 +182,16 @@ const GUI_TXT = `widget = {
 }
 `;
 
+const ASSET_TXT = `pdxmesh = {
+  name = "smoke_asset_mesh_a"
+  file = "smoke.mesh"
+}
+entity = {
+  name = "smoke_asset_entity"
+  pdxmesh = "smoke_asset_mesh_a"
+}
+`;
+
 // The one door .gui has into script, plus the loc keys a panel names: the
 // subject of paradox/guiDependencies and of `dependencies` with `guiUses`.
 const SGUI_TXT = `smoke_open_gui = {
@@ -283,6 +294,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let child: ChildProcess;
   let conn: MessageConnection;
   let modDir: string;
+  let assetFile: string;
   let parentDir: string;
   let depDir: string;
   let eventsFile: string;
@@ -305,6 +317,8 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       return full;
     };
     const fx = (rel: string, content: string) => fxIn(modDir, rel, content);
+    assetFile = fx("gfx/models/smoke.asset", ASSET_TXT);
+    fx("gfx/models/smoke.mesh", "binary placeholder, never parsed");
     fxIn(parentDir, "common/scripted_effects/parent_effects.txt", PARENT_EFFECTS_TXT);
     fxIn(parentDir, "events/parent_events.txt", PARENT_EVENTS_TXT);
     fxIn(depDir, "data_binding/px_smoke_macros.txt", DEP_MACRO_TXT);
@@ -405,6 +419,132 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(latest.tokens).toBeGreaterThan(500); // bundled wiki tokens loaded
     expect(latest.definitions).toBeGreaterThanOrEqual(5); // 2 effects + event + 2 loc keys
   });
+
+  it("indexes assets, navigates names and files, and handles standard watcher create/edit/delete", async () => {
+    const uri = toUri(assetFile);
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text: ASSET_TXT },
+    });
+    const request = (method: string, line: number, character: number) =>
+      conn.sendRequest(method, {
+        textDocument: { uri },
+        position: { line, character },
+        context: { includeDeclaration: false },
+      });
+    const defs = (await request("textDocument/definition", 6, 17)) as Array<{
+      uri: string;
+      range: { start: { line: number } };
+    }>;
+    expect(defs[0].range.start.line).toBe(1);
+    const mesh = (await request("textDocument/definition", 2, 13)) as Array<{ uri: string }>;
+    expect(mesh[0].uri).toContain("smoke.mesh");
+    const completion = (await request("textDocument/completion", 6, 8)) as {
+      items: Array<{ label: string }>;
+    };
+    expect(completion.items.map((i) => i.label)).toContain("pdxmesh");
+    const values = (await request("textDocument/completion", 6, 16)) as { items: Array<{ label: string }> };
+    expect(values.items.map((i) => i.label)).toContain("smoke_asset_mesh_a");
+    const hover = await request("textDocument/hover", 6, 5);
+    expect(JSON.stringify(hover)).toContain("References a pdxmesh declaration");
+    const refs = (await request("textDocument/references", 1, 14)) as unknown[];
+    expect(refs).toHaveLength(1);
+    const symbols = (await conn.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri },
+    })) as Array<{ name: string }>;
+    expect(symbols.map((s) => s.name)).toEqual(["smoke_asset_mesh_a", "smoke_asset_entity"]);
+
+    const extra = path.join(modDir, "gfx/models/extra.asset");
+    const extraUri = toUri(extra);
+    const notify = (type: number) =>
+      conn.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: extraUri, type }] });
+    const search = (query: string) => conn.sendRequest("workspace/symbol", { query }) as Promise<unknown[]>;
+    fs.writeFileSync(extra, 'entity = { name = "smoke_new_asset" pdxmesh = "smoke_asset_mesh_a" }');
+    await notify(1);
+    expect(await search("smoke_new_asset")).toHaveLength(1);
+    expect(await request("textDocument/references", 1, 14)).toHaveLength(2);
+    fs.writeFileSync(extra, 'entity = { name = "smoke_changed_asset" pdxmesh = "different_mesh" }');
+    await notify(2);
+    expect(await search("smoke_new_asset")).toHaveLength(0);
+    expect(await search("smoke_changed_asset")).toHaveLength(1);
+    expect(await request("textDocument/references", 1, 14)).toHaveLength(1);
+    fs.unlinkSync(extra);
+    await notify(3);
+    expect(await search("smoke_changed_asset")).toHaveLength(0);
+  });
+
+  it("toggles asset indexing live across roots, watcher updates and vanilla caches", async () => {
+    const game = path.join(depDir, "fake-game");
+    const files = [
+      path.join(parentDir, "gfx/models/workspace.asset"),
+      path.join(depDir, "gfx/models/dependency.asset"),
+      path.join(game, "gfx/models/vanilla.asset"),
+    ];
+    for (const [i, file] of files.entries()) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `entity = { name = "toggle_asset_${i}" pdxmesh = "smoke_asset_mesh_a" }`);
+    }
+    const configure = async (indexAssets?: boolean, gamePath: string | null = game) => {
+      const start = statuses.length;
+      await conn.sendNotification(configChangedNotification, {
+        gamePath,
+        logsPath: null,
+        modPath: modDir,
+        parentPaths: [parentDir, depDir],
+        workspaceMods: [parentDir],
+        locLanguage: "english",
+        scopeInlayHints: false,
+        diagnosticsIgnore: [],
+        diagnosticsIgnorePatterns: [],
+        diagnosticsVanilla: false,
+        ...(indexAssets === undefined ? {} : { indexAssets }),
+      });
+      await expect
+        .poll(
+          () => {
+            const updates = statuses.slice(start);
+            const began = updates.findIndex((s) => s.indexing);
+            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
+          },
+          { timeout: 20_000 }
+        )
+        .toBe(true);
+    };
+    const symbols = (query: string) => conn.sendRequest("workspace/symbol", { query });
+    const references = () =>
+      conn.sendRequest("textDocument/references", {
+        textDocument: { uri: toUri(assetFile) },
+        position: { line: 1, character: 14 },
+        context: { includeDeclaration: false },
+      });
+    try {
+      // Enabled builds the vanilla cache and populates lazy reference results.
+      await configure(true);
+      expect(await symbols("toggle_asset_")).toHaveLength(3);
+      expect(await references()).toHaveLength(4);
+      await configure(false);
+      expect(await symbols("toggle_asset_")).toHaveLength(0);
+      expect(await symbols("smoke_asset_mesh_a")).toHaveLength(0);
+      expect(await references()).toHaveLength(0);
+      fs.writeFileSync(files[0], 'entity = { name = "toggle_asset_edited" pdxmesh = "smoke_asset_mesh_a" }');
+      await conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: toUri(files[0]), type: 2 }],
+      });
+      expect(await symbols("toggle_asset_edited")).toHaveLength(0);
+      // Omitting the setting restores its default and reuses the enabled cache.
+      await configure();
+      expect(await symbols("toggle_asset_")).toHaveLength(3);
+      expect(await symbols("toggle_asset_edited")).toHaveLength(1);
+      expect(await references()).toHaveLength(4);
+      // Now reuse the disabled cache too; enabled definitions must not leak.
+      await configure(false);
+      expect(await symbols("toggle_asset_")).toHaveLength(0);
+      expect(await references()).toHaveLength(0);
+      expect(await symbols("my_smoke_effect")).toHaveLength(1);
+    } finally {
+      for (const file of files) fs.unlinkSync(file);
+      await configure(undefined, null);
+    }
+  }, 60_000);
 
   it("completion inside immediate: CompletionList with the mod effect and engine effects", async () => {
     // Position: inside the immediate block (line 5 = "\t\tmy_smoke_effect = yes"; use start of line 6 area).

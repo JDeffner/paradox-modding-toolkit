@@ -177,8 +177,19 @@ export async function scanModRootFused(root: string, deps: FusedScanDeps): Promi
       for (let k = 0; k < batch.length; k++) {
         const content = contents[k];
         if (content === null) continue;
-        // Not `.txt`: nothing shares this parse, so the plain extractor.
-        pushAll(defsByEntry[index], extractDefinitions(content, entry, batch[k], deps.source));
+        if (entry.extraction === "named-block") {
+          const { root: cst } = parseScript(content);
+          const lines = new LineIndex(content);
+          pushAll(
+            defsByEntry[index],
+            extractDefinitionsParsed(content, cst, lines, entry, batch[k], deps.source)
+          );
+          const extracted = extractReferencesParsed(cst, lines, batch[k], deps.source, deps.schema);
+          deps.addReferences(extracted.references);
+          references += extracted.references.length;
+        } else {
+          pushAll(defsByEntry[index], extractDefinitions(content, entry, batch[k], deps.source));
+        }
       }
       done += batch.length;
       report(entry.path);

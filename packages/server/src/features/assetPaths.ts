@@ -12,6 +12,13 @@
 import { CompletionItemKind, type CompletionItem } from "vscode-languageserver/node";
 import * as fs from "fs";
 import * as path from "path";
+import { URI } from "vscode-uri";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import type { Position } from "vscode-languageserver/node";
+import { getParse } from "../parseCache";
+import { walkStatements } from "../parser";
+import { activeProfile } from "../games/active";
+import type { SchemaEntry } from "../schema/types";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import type { CompletionResult } from "./completion";
 
@@ -43,9 +50,110 @@ interface Root {
 export function assetRoots(settings: ParadoxSettings): Root[] {
   const roots: Root[] = [];
   if (settings.modPath) roots.push({ root: settings.modPath, label: "mod" });
-  for (const p of settings.parentPaths ?? []) roots.push({ root: p, label: "parent" });
+  for (const p of [...(settings.workspaceMods ?? [])]
+    .reverse()
+    .concat([...(settings.parentPaths ?? [])].reverse())) {
+    if (!roots.some((r) => r.root === p)) roots.push({ root: p, label: "parent" });
+  }
   if (settings.gamePath) roots.push({ root: settings.gamePath, label: "vanilla" });
+  if (settings.gamePath) {
+    for (const relative of activeProfile().schema.find((e) => e.assetEnginePaths)?.assetEnginePaths ?? []) {
+      roots.push({ root: path.resolve(settings.gamePath, relative), label: "engine" });
+    }
+  }
   return roots;
+}
+
+/** Directories corresponding to the document's folder, in content overlay order. */
+function localAssetRoots(settings: ParadoxSettings, documentUri: string): Root[] {
+  const docDir = path.dirname(URI.parse(documentUri).fsPath);
+  const roots = assetRoots(settings);
+  const owner = roots.find(({ root }) => {
+    const rel = path.relative(root, docDir);
+    return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  });
+  return owner
+    ? roots.map(({ root, label }) => ({ root: path.join(root, path.relative(owner.root, docDir)), label }))
+    : [{ root: docDir, label: "relative" }];
+}
+
+/** Resolve asset-local filenames through the same content overlay as root-relative paths. */
+export function resolveAssetPath(
+  settings: ParadoxSettings,
+  documentUri: string,
+  relative: string
+): { fsPath: string; label: string } | null {
+  const rel = relative.replace(/\\/g, "/");
+  if (path.isAbsolute(rel) || rel.split("/").includes("..")) return null;
+  const rooted = ASSET_ROOTS.has(rel.split("/")[0].toLowerCase());
+  const roots = rooted ? assetRoots(settings) : localAssetRoots(settings, documentUri);
+  for (const { root, label } of roots) {
+    const full = path.join(root, rel);
+    try {
+      if (fs.statSync(full).isFile()) return { fsPath: full, label };
+    } catch {
+      /* absent in this root */
+    }
+  }
+  return null;
+}
+
+/** Only filename-shaped scalar values qualify; comments never become links. */
+export function assetFileAt(document: TextDocument, position: Position): string | null {
+  const { result } = getParse(document);
+  const offset = document.offsetAt(position);
+  let hit: string | null = null;
+  walkStatements(result.root, (stmt) => {
+    if (stmt.kind !== "assignment" || stmt.value?.kind !== "scalar") return;
+    const value = stmt.value;
+    if (offset >= value.range.start && offset < value.range.end && /\.[a-z0-9]+$/i.test(value.text))
+      hit = value.text;
+  });
+  return hit;
+}
+
+/** Local filename completion reads one directory per content root, never the binary files. */
+export function provideAssetFileCompletion(
+  settings: ParadoxSettings,
+  document: TextDocument,
+  linePrefix: string,
+  entry: SchemaEntry
+): CompletionResult {
+  const rooted = assetDirContext(linePrefix);
+  if (rooted !== null && rooted.includes("/")) return provideAssetDirCompletion(settings, rooted);
+  const match = /([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?([A-Za-z0-9_.\-/]*)$/.exec(linePrefix);
+  const extensions = match ? entry.fileFields?.[match[1]] : null;
+  if (!match || !extensions)
+    return rooted !== null ? provideAssetDirCompletion(settings, rooted) : { isIncomplete: false, items: [] };
+  const prefix = match[2];
+  if (prefix.split("/").includes("..")) return { isIncomplete: false, items: [] };
+  const dirs = localAssetRoots(settings, document.uri);
+  const slash = prefix.lastIndexOf("/");
+  const partial = prefix.slice(slash + 1).toLowerCase();
+  const parent = slash >= 0 ? prefix.slice(0, slash) : "";
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+  for (const { root, label } of dirs) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(path.join(root, parent), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const file of entries) {
+      const low = file.name.toLowerCase();
+      if (!low.startsWith(partial) || seen.has(low)) continue;
+      if (!file.isDirectory() && !extensions.includes(path.extname(low))) continue;
+      seen.add(low);
+      items.push({
+        label: file.name,
+        kind: file.isDirectory() ? CompletionItemKind.Folder : CompletionItemKind.File,
+        insertText: file.name + (file.isDirectory() ? "/" : ""),
+        detail: label,
+      });
+    }
+  }
+  return { isIncomplete: true, items };
 }
 
 /** Base dirs a bare `.dds` field resolves against, or null when the key is not mapped. */

@@ -136,6 +136,7 @@ const settings = {
   workspaceMods: [...modRoots],
   locLanguage: "english",
   scopeInlayHints: false,
+  indexAssets: ws.settings?.["px.indexAssets"] !== false,
   diagnosticsIgnore: [],
   diagnosticsIgnorePatterns: [],
   diagnosticsVanilla: false,

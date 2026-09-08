@@ -36,6 +36,7 @@ export interface PxConfig {
   /** `px.excludedMods`: workspace mod roots skipped entirely (sanitized). */
   excludedMods: string[];
   locLanguage: string;
+  indexAssets: boolean;
   scopeInlayHints: boolean;
   hoverDetail: "compact" | "standard" | "full";
   /** `px.calendar`: custom era calendar for date display, or undefined. */
@@ -310,6 +311,7 @@ export function readConfig(): PxConfig {
     excludedMods,
     locLanguage: (cfg.get<string>("locLanguage") ?? "english").trim().toLowerCase() || "english",
     scopeInlayHints: cfg.get<boolean>("scopeInlayHints") ?? false,
+    indexAssets: cfg.get<boolean>("indexAssets") ?? true,
     hoverDetail: cfg.get<"compact" | "standard" | "full">("hover.detail") ?? "standard",
     calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,

@@ -2,7 +2,21 @@
 
 ## Unreleased
 
+## 0.4.2 (beta) - graphics assets, DNA copying and section folding
+
+- Fix `.asset` navigation and completion for mesh-local names, states, shader effects and CK3 accessory variations. Suggest graphics keywords from vanilla files and resolve engine shader paths.
+
+- Add separate Dynasty Tree DNA copy actions for mod blocks and CK3's Ruler Designer or portrait editor, with persistent-DNA paste support. Fix dependency, nested-folder and unsaved-file lookup, respect overrides, keep the clipboard unchanged when DNA is missing, and paste into the selected mod.
+
+- Add the `px.indexAssets` setting to turn graphics `.asset` indexing on or off. Changes rebuild the index automatically; highlighting, folding and on-demand texture previews remain available.
+
+- Collapse script, GUI, asset and localization sections headed by `### Title` or longer hash headings. Sections end before the next heading or at the end of the file, regardless of closing braces or indentation.
+
+- Recognize graphics `.asset` files, index their named blocks and update them on save. Add navigation to referenced files, local filename completion and DDS previews with mod texture overrides.
+
 - Confirmation prompts keep Cancel safe when Enter is pressed, shared menus expose keyboard focus to screen readers, and the GUI save/undo controls have a separate module. Require VS Code 1.91, check the minimum editor and Windows launcher, fix the CK3 decision scaffold's picture block, and refresh onboarding and the feature guide.
+
+- Update the GitHub banner and social preview to show the toolkit's editing and publishing workflows.
 
 ## 0.4.1 (beta) - file constants and modding guides
 

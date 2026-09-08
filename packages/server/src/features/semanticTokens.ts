@@ -127,6 +127,10 @@ export function provideSemanticTokens(
   };
 
   walkStatements(result.root, (stmt, ancestors) => {
+    if (entry?.extraction === "named-block") {
+      if (stmt.kind === "assignment" && !stmt.key.quoted) pushAs(stmt.key, "property", 0);
+      return;
+    }
     if (stmt.kind === "assignment") {
       pushScalar(stmt.key);
       if (stmt.value?.kind === "scalar") {

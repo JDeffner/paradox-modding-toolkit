@@ -29,6 +29,8 @@ export interface ParadoxSettings {
    * reference diagnostics, on top of the parent definition scan. */
   workspaceMods?: string[];
   locLanguage: string;
+  /** Index .asset definitions and references across all roots. Default true. */
+  indexAssets?: boolean;
   /** Show inferred scope after scope-changing block openers (off by default). */
   scopeInlayHints: boolean;
   /**

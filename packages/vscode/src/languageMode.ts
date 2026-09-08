@@ -28,6 +28,7 @@ export async function ensureFileAssociations(cfg: PxConfig): Promise<void> {
   const script = scriptLangFor(cfg.gameId);
   const wanted: Record<string, string> = {
     "*.txt": script,
+    "**/gfx/**/*.asset": script,
     "*.gui": "paradox-gui",
     "*.mod": "paradox-mod",
     "**/localization/**/*.yml": "paradox-loc",
@@ -72,7 +73,7 @@ export function wireLanguageDetection(
       // persisted association from an older version (or from a workspace for a
       // different game) leaves behind on the open editors.
       if (
-        lower.endsWith(".txt") &&
+        (lower.endsWith(".txt") || (lower.endsWith(".asset") && /[\\/]gfx[\\/]/.test(lower))) &&
         (doc.languageId === "plaintext" || (isScriptLang(doc.languageId) && doc.languageId !== script))
       ) {
         await vscode.languages.setTextDocumentLanguage(doc, script);

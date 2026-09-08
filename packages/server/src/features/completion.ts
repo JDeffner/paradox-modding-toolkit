@@ -70,6 +70,7 @@ import { inferenceContextFor, variableTypes } from "../scopes/varTypes";
 import type { Scope } from "../scopes/model";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion } from "./assetPaths";
+import { assetCompletion } from "./assetLanguage";
 import { snippetSupport } from "../clientMode";
 import { blockTemplateFor } from "./blockSnippets";
 import { skeletonsAt } from "./definitionSkeletons";
@@ -338,6 +339,12 @@ export class CompletionFeature {
       start: { line: pos.line, character: 0 },
       end: { line: pos.line, character: pos.character },
     });
+
+    if (entry?.extraction === "named-block") {
+      return this.settings
+        ? assetCompletion(this.data, this.settings, document, pos, entry)
+        : { isIncomplete: false, items: [] };
+    }
 
     // `define:NS|CONST` (pipe form) → namespaces, then that namespace's constants.
     const defineMatch = DEFINE_POSITION.exec(linePrefix);

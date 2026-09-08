@@ -1,5 +1,5 @@
 {
-  "note": "One row per profileWorkspace.ts run (pnpm run perf:history) over cultivation.code-workspace: the CK3 install plus five workspace mods, Agent Courier excluded by px.excludedMods. Warm file cache, two runs per version, UV_THREADPOOL_SIZE=16, heap ceiling 4096 MB. Add a row for every release; docs/PERFORMANCE.md carries the medians.",
+  "note": "Release rows use cultivation.code-workspace: the CK3 install plus five workspace mods, Agent Courier excluded by px.excludedMods. Warm file cache, two runs per version, UV_THREADPOOL_SIZE=16, heap ceiling 4096 MB. The asset-* comparison rows use assets.code-workspace: CK3 plus Cultivation only, before and after graphics asset indexing. The first asset-before run includes uncontrolled disk-cache warmup; compare asset-before3/4 with asset-after1/2. Add a row for every release; docs/PERFORMANCE.md carries the release medians.",
   "runs": [
     {
       "version": "0.3.0",
@@ -391,6 +391,373 @@
         "internedIdentifiers": 551751,
         "peakRssMb": 816,
         "rssSamples": 16
+      }
+    },
+    {
+      "version": "asset-before",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 25564,
+        "definitions": 467986,
+        "completionCold": 201,
+        "completionWarm": 9,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 149,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 717,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 817,
+        "rssSamples": 49
+      }
+    },
+    {
+      "version": "asset-before",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7733,
+        "definitions": 467986,
+        "completionCold": 187,
+        "completionWarm": 8,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 180,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 648,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 704,
+        "rssSamples": 16
+      }
+    },
+    {
+      "version": "asset-before3",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 9928,
+        "definitions": 467986,
+        "completionCold": 128,
+        "completionWarm": 6,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 178,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 718,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 810,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "asset-after1",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7811,
+        "definitions": 474700,
+        "completionCold": 166,
+        "completionWarm": 7,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 144,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 719,
+        "internedIdentifiers": 543495,
+        "peakRssMb": 809,
+        "rssSamples": 17
+      }
+    },
+    {
+      "version": "asset-before4",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7797,
+        "definitions": 467986,
+        "completionCold": 224,
+        "completionWarm": 12,
+        "semanticTokens": 2,
+        "hover": 5,
+        "documentSymbol": 1,
+        "completionAfterSave": 231,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 646,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 715,
+        "rssSamples": 16
+      }
+    },
+    {
+      "version": "asset-after2",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 11707,
+        "definitions": 474700,
+        "completionCold": 260,
+        "completionWarm": 10,
+        "semanticTokens": 2,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 282,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 705,
+        "internedIdentifiers": 543495,
+        "peakRssMb": 800,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "asset-toggle-before",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 11092,
+        "definitions": 474700,
+        "completionCold": 239,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 196,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 706,
+        "internedIdentifiers": 543495,
+        "peakRssMb": 804,
+        "rssSamples": 22
+      }
+    },
+    {
+      "version": "asset-toggle-off",
+      "note": "Indexing disabled. Tests and lint ran concurrently; use the isolated runs for comparison.",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets-off.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 10169,
+        "definitions": 467986,
+        "completionCold": 248,
+        "completionWarm": 11,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 166,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 712,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 805,
+        "rssSamples": 19
+      }
+    },
+    {
+      "version": "asset-toggle-off-isolated",
+      "note": "Same CK3 plus Cultivation roots as assets.code-workspace, with px.indexAssets=false. Single run; startup timings vary with disk activity.",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets-off.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 10552,
+        "definitions": 467986,
+        "completionCold": 226,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 185,
+        "tokensAfterSave": 1,
+        "heapMb": 252,
+        "rssAtBuildMb": 647,
+        "internedIdentifiers": 536777,
+        "peakRssMb": 716,
+        "rssSamples": 20
+      }
+    },
+    {
+      "version": "asset-toggle-on-isolated",
+      "note": "Same build and roots as asset-toggle-off-isolated, with asset indexing enabled by default. Single run; warm completion 8 ms in both modes, retained heap 255 MB enabled versus 252 MB disabled.",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8781,
+        "definitions": 474700,
+        "completionCold": 204,
+        "completionWarm": 8,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 165,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 716,
+        "internedIdentifiers": 543495,
+        "peakRssMb": 809,
+        "rssSamples": 18
+      }
+    },
+    {
+      "version": "asset-language-before",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 8366,
+        "definitions": 474700,
+        "completionCold": 155,
+        "completionWarm": 5,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 113,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 721,
+        "internedIdentifiers": 543495,
+        "peakRssMb": 833,
+        "rssSamples": 21
+      }
+    },
+    {
+      "version": "asset-language-after",
+      "recordedAt": "2026-09-08",
+      "workspace": "assets.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7073,
+        "definitions": 476065,
+        "completionCold": 153,
+        "completionWarm": 7,
+        "semanticTokens": 2,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 120,
+        "tokensAfterSave": 1,
+        "heapMb": 255,
+        "rssAtBuildMb": 713,
+        "internedIdentifiers": 544587,
+        "peakRssMb": 798,
+        "rssSamples": 16
+      }
+    },
+    {
+      "version": "0.4.2",
+      "recordedAt": "2026-09-08",
+      "workspace": "release-0.4.2.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7290,
+        "definitions": 481227,
+        "completionCold": 137,
+        "completionWarm": 5,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 128,
+        "tokensAfterSave": 0,
+        "heapMb": 259,
+        "rssAtBuildMb": 726,
+        "internedIdentifiers": 551461,
+        "peakRssMb": 787,
+        "rssSamples": 17
       }
     }
   ]
