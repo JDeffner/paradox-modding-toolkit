@@ -96,8 +96,7 @@ Radius 10 / 8 / 6. Text 13 / 12 / 11. Motion 120ms (`--px-ease`).
    edge-highlight drop markers.
 7. **Sections fold.** Repeating blocks (instances, layers of a group) get a
    caret in their header.
-8. **Destructive or lossy steps confirm** with `confirmDialog`, never with
-   `window.confirm` (unavailable in webviews) and never silently.
+8. **Destructive or lossy steps confirm** with `confirmDialog`, an action toast with Cancel focused first. It keeps the action details visible and leaves the page usable. Starting another action dismisses the prompt. Only the confirmation button authorizes the action; Enter follows the focused control.
 9. **Hover is quiet.** A muted background lift, 120ms; no borders appearing,
    no color changes on text, no scale. Focus is the 3px soft ring.
 10. **Nothing decorative.** No gradients, no glows, no emoji, no badges that

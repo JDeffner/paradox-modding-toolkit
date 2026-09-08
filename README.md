@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packages/vscode/media/banner.png" alt="Paradox Modding Toolkit">
+<img src="packages/vscode/media/icon.png" alt="PX TK" width="96">
 
 # Paradox Modding Toolkit
 

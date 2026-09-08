@@ -276,7 +276,7 @@ reports this on `capabilities`. `docs/EMBEDDING.md` has the full contract.
 
 | | CK3 | Victoria 3 | EU5 |
 |---|---|---|---|
-| Schema (folder → definition kind) | 156 entries, verified against a live install | 72 entries, verified against a live install | 518 entries, imported from [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config), **unverified against a live install** |
+| Schema (folder → definition kind) | 156 entries, verified against a live install | verified against a live install | 518 entries, imported from [cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config), **unverified against a live install** |
 | Engine tokens with no `script_docs` dump | bundled wiki fallback + bundled dump snapshot | bundled dump snapshot | none (thin until you dump) |
 | `script_docs` location / format | `logs/`, classic text | `docs/`, markdown | `docs/`, markdown |
 | Completion frequency ranking | bundled (vanilla + corpus) | bundled (vanilla) | none |

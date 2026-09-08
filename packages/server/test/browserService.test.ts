@@ -14,6 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { createBrowserLanguageService } from "../src/browser";
+import { clientCapabilities, resolveClientCapabilities, setClientCapabilities } from "../src/clientMode";
 import { BROWSER_DATA_VERSION, type BakedDocs, type BakedToken, type BakedTokens } from "../src/browser/data";
 import { loadTokenDataFromLogs, parseOnActionsLog } from "../src/data/docsParser";
 import { loadWikiTokens, mergeWikiTokens } from "../src/data/wikiDocs";
@@ -84,6 +85,21 @@ tutorial.0001 = {
 `;
 
 describe("browser language service", () => {
+  it("renders browser hovers without host commands and restores the enclosing host", () => {
+    const before = clientCapabilities();
+    const rich = resolveClientCapabilities({ clientCommands: true });
+    setClientCapabilities(rich);
+    const doc = service().openDocument("events/tutorial.txt", EVENT);
+    try {
+      const text = JSON.stringify(doc.hover(EVENT.indexOf("add_gold") + 2));
+      expect(text.toLowerCase()).toContain("adds gold");
+      expect(text).not.toMatch(/command:|\$\(|--vscode-|<span/);
+      expect(clientCapabilities()).toBe(rich);
+    } finally {
+      doc.dispose();
+      setClientCapabilities(before);
+    }
+  });
   it("classifies a document by its mod-relative folder", () => {
     const svc = service();
     expect(svc.openDocument("events/tutorial.txt", EVENT).kind).toBe("event");

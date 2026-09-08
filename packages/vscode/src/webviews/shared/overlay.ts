@@ -69,7 +69,9 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
     document.removeEventListener("pointerdown", onPointer, true);
     document.removeEventListener("keydown", onKey, true);
     anchor.removeAttribute("aria-expanded");
+    const restoreFocus = el.contains(document.activeElement);
     el.remove();
+    if (restoreFocus && anchor.isConnected) anchor.focus();
     onClose?.();
   };
   const onPointer = (ev: PointerEvent): void => {
@@ -85,6 +87,7 @@ export function popover(anchor: HTMLElement, content: HTMLElement, onClose?: () 
   // Deferred so the click that opened it does not close it. A resize moves
   // the anchor out from under the popover: close rather than float loose.
   setTimeout(() => {
+    if (openPopover !== close) return;
     document.addEventListener("pointerdown", onPointer, true);
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", close, { once: true });
@@ -142,6 +145,8 @@ export interface MenuOptions {
 const CHECK =
   '<svg class="px-icon check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
+let menuSerial = 0;
+
 /** Open a list of items under `anchor`; arrows, Enter, Escape and typing work. */
 export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOptions): void {
   // The trigger toggles: a second click closes what the first opened.
@@ -164,7 +169,20 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
   }
   const list = document.createElement("div");
   list.className = "px-menu-list";
+  list.id = `px-menu-${++menuSerial}`;
   list.setAttribute("role", "listbox");
+  list.setAttribute(
+    "aria-label",
+    anchor.getAttribute("aria-label") || anchor.dataset.tip || anchor.textContent?.trim() || "Options"
+  );
+  list.tabIndex = -1;
+  if (input) {
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-label", "Filter options");
+    input.setAttribute("aria-controls", list.id);
+    input.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-autocomplete", "list");
+  }
   root.append(list);
 
   let rows: HTMLElement[] = [];
@@ -173,6 +191,9 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
     rows[active]?.removeAttribute("data-active");
     active = Math.max(0, Math.min(rows.length - 1, i));
     const row = rows[active];
+    const focusTarget = input ?? list;
+    if (row) focusTarget.setAttribute("aria-activedescendant", row.id);
+    else focusTarget.removeAttribute("aria-activedescendant");
     if (row) {
       row.setAttribute("data-active", "");
       row.scrollIntoView({ block: "nearest" });
@@ -190,6 +211,7 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
       if (q && !item.label.toLowerCase().includes(q) && !item.hint?.toLowerCase().includes(q)) continue;
       const row = document.createElement("div");
       row.className = "px-menu-item";
+      row.id = `${list.id}-option-${rows.length}`;
       row.setAttribute("role", "option");
       if (item.value === options.value) row.setAttribute("aria-selected", "true");
       row.innerHTML = CHECK;
@@ -249,17 +271,13 @@ export function menu(anchor: HTMLElement, items: MenuItem[], options: MenuOption
     else if (ev.key === "End") setActive(rows.length - 1);
     else return;
     ev.preventDefault();
+    ev.stopPropagation();
   };
   root.addEventListener("keydown", onKey);
   if (input) input.oninput = fill;
   fill();
-  const close = popover(anchor, root, () => document.removeEventListener("keydown", onKeyOutside, true));
-  // Without a search box the list itself takes the keys.
-  const onKeyOutside = (ev: KeyboardEvent): void => {
-    if (!root.contains(ev.target as Node)) onKey(ev);
-  };
-  document.addEventListener("keydown", onKeyOutside, true);
-  if (input) input.focus();
+  const close = popover(anchor, root);
+  (input ?? list).focus();
 }
 
 export interface ConfirmOptions {
@@ -272,23 +290,26 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
-  /** Wider dialog for content-carrying modals. */
+  /** Wider confirmation for an upload summary. */
   wide?: boolean;
 }
 
-/** A modal yes/no; resolves true on confirm. (window.confirm is unavailable in a webview.) */
+let cancelConfirmation: (() => void) | null = null;
+
+/** Action toast. A new action dismisses it; only its confirmation button authorizes the action. */
 export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
+  cancelConfirmation?.();
   return new Promise((resolve) => {
-    const backdrop = document.createElement("div");
-    backdrop.className = "px-dialog-backdrop";
+    const previousFocus = document.activeElement;
     const dialog = document.createElement("div");
-    dialog.className = "px-dialog";
-    dialog.setAttribute("role", "alertdialog");
+    dialog.className = "px-dialog px-confirmation";
+    dialog.setAttribute("role", "region");
+    dialog.setAttribute("aria-label", o.title);
     const title = document.createElement("div");
     title.className = "px-dialog-title";
     title.textContent = o.title;
     dialog.append(title);
-    if (o.wide) dialog.style.maxWidth = "460px";
+    if (o.wide) dialog.style.width = "min(540px, calc(100vw - 32px))";
     if (o.description) {
       const d = document.createElement("div");
       d.className = "px-dialog-description";
@@ -312,35 +333,50 @@ export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
     const actions = document.createElement("div");
     actions.className = "px-dialog-actions";
     const cancel = document.createElement("button");
+    cancel.type = "button";
     cancel.className = "px-btn";
     cancel.dataset.variant = "outline";
     cancel.textContent = o.cancelLabel ?? "Cancel";
     const ok = document.createElement("button");
+    ok.type = "button";
     ok.className = "px-btn";
     ok.dataset.variant = o.destructive ? "destructive" : "default";
     ok.textContent = o.confirmLabel ?? "Continue";
     actions.append(cancel, ok);
     dialog.append(actions);
-    backdrop.append(dialog);
     const done = (value: boolean): void => {
-      document.removeEventListener("keydown", onKey, true);
-      backdrop.remove();
+      if (cancelConfirmation !== cancelCurrent) return;
+      cancelConfirmation = null;
+      document.removeEventListener("pointerdown", onOutside, true);
+      document.removeEventListener("keydown", onOutside, true);
+      const restoreFocus = dialog.contains(document.activeElement);
+      dialog.remove();
+      if (restoreFocus && previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
       resolve(value);
     };
+    const cancelCurrent = (): void => done(false);
+    const onOutside = (ev: Event): void => {
+      // The rest of the page remains usable, but a changed selection/form must
+      // not inherit consent from an earlier summary.
+      if (!dialog.contains(ev.target as Node)) done(false);
+    };
     const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key === "Escape") done(false);
-      else if (ev.key === "Enter") done(true);
-      else return;
       ev.stopPropagation();
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        done(false);
+      }
     };
     cancel.onclick = () => done(false);
     ok.onclick = () => done(true);
-    backdrop.onclick = (e) => {
-      if (e.target === backdrop) done(false);
-    };
-    document.addEventListener("keydown", onKey, true);
-    document.body.append(backdrop);
-    ok.focus();
+    dialog.addEventListener("keydown", onKey);
+    cancelConfirmation = cancelCurrent;
+    document.addEventListener("pointerdown", onOutside, true);
+    document.addEventListener("keydown", onOutside, true);
+    document.body.append(dialog);
+    cancel.focus();
   });
 }
 

@@ -28,6 +28,9 @@ import { statusNotification, type StatusPayload } from "@px-lsp/protocol/protoco
 // extracted release tarball with the exact same flow.
 const SERVER = process.env.PX_LSP_SERVER ?? path.join(__dirname, "..", "dist", "server.js");
 const hasServer = fs.existsSync(SERVER);
+if (process.env.PX_LSP_SERVER && !hasServer) {
+  throw new Error(`Packaged server is missing: ${SERVER}`);
+}
 
 const EFFECTS_TXT = `# Grants a stipend.
 my_stdio_effect = {
@@ -68,7 +71,12 @@ describe.skipIf(!hasServer)("LSP smoke over --stdio with bare-client fallbacks",
     const eventsFile = fx("events/stdio_events.txt", EVENTS_TXT);
     eventsUri = toUri(eventsFile);
 
-    child = spawn(process.execPath, [SERVER, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+    const launcher = process.env.PX_LSP_LAUNCHER;
+    child = launcher
+      ? spawn(`"${launcher}"`, [], { shell: true, stdio: ["pipe", "pipe", "pipe"] })
+      : spawn(process.env.PX_LSP_NODE ?? process.execPath, [SERVER, "--stdio"], {
+          stdio: ["pipe", "pipe", "pipe"],
+        });
     exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
     conn = createMessageConnection(
       new StreamMessageReader(child.stdout!),

@@ -70,13 +70,13 @@ import type {
   SavedPreset,
   TextureEntry,
 } from "../messages";
+import { createSessionToolbar } from "./sessionToolbar";
 import { connectHost } from "./host";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import {
   closePopover,
   confirmDialog,
-  isPopoverAnchor,
   menu,
   popover,
   toast as pxToast,
@@ -580,6 +580,7 @@ function button(label: string, onClick: () => void, o: ButtonOptions = {}): HTML
   if (label) node.appendChild(document.createTextNode(label));
   if (o.tip) {
     node.dataset.tip = o.tip;
+    if (!label) node.setAttribute("aria-label", o.tip);
     if (o.tip.length > 40) node.dataset.tipWrap = "";
   }
   node.addEventListener("click", onClick);
@@ -2477,7 +2478,7 @@ function awaitVerdict(build: (id: number) => AppToHost, onVerdict: (verdict: Edi
   // is where the session change log records it (once the verdict says it went in).
   const label = commitLabelOf(message);
   pendingEdits.set(id, (verdict) => {
-    if (label !== null && !verdict.refused) recordChange(label);
+    if (label !== null && !verdict.refused) sessionToolbar.recordChange(label);
     onVerdict(verdict);
   });
   host.send(message);
@@ -2854,8 +2855,7 @@ const host = connectHost((message) => {
       // same law the server laid the widgets out with.
       setLineHeightRatio(message.lineHeightRatio);
       showSaveSource(message.save);
-      docDirty = message.dirty ?? false;
-      syncChanges();
+      sessionToolbar.setDirty(message.dirty ?? false);
       onLayout(
         message.result,
         message.textures,
@@ -2877,8 +2877,7 @@ const host = connectHost((message) => {
       return;
     case "saved":
       if (message.ok) {
-        docDirty = false;
-        syncChanges();
+        sessionToolbar.setDirty(false);
         toast(`Saved ${file}`, "info");
       } else {
         toast("The editor could not save the file.", "refused");
@@ -5291,7 +5290,7 @@ window.addEventListener("keydown", (ev) => {
     }
     if (key === "s") {
       ev.preventDefault();
-      saveEl.click();
+      sessionToolbar.save();
       return;
     }
   }
@@ -5449,118 +5448,15 @@ async function deleteSelectionConfirmed(): Promise<void> {
 
 // ---- toolbar ---------------------------------------------------------------
 
-// The session change log and the Save button. Edits land in the in-memory
-// document only (rule one: the host owns the text, undo is the document's),
-// so Save is how a session reaches disk. The log lists what this panel
-// committed, and each row undoes back to before that change by running the
-// document's own undo the right number of times, which is the only honest
-// way to take back change i of n from a single linear history.
-const saveEl = document.getElementById("save") as HTMLButtonElement;
-const changesEl = document.getElementById("changes") as HTMLButtonElement;
-const undoBtn = document.getElementById("undo") as HTMLButtonElement;
-const redoBtn = document.getElementById("redo") as HTMLButtonElement;
-/** Labels of this panel's committed changes, oldest first, and the undone ones. */
-const sessionChanges: string[] = [];
-const undoneChanges: string[] = [];
-let docDirty = false;
-
-function syncChanges(): void {
-  const count = sessionChanges.length;
-  changesEl.disabled = count === 0;
-  changesEl.querySelector(".count")!.textContent = String(count);
-  changesEl.dataset.tip =
-    count === 0
-      ? "No changes yet this session"
-      : `List the ${count} change${count === 1 ? "" : "s"} made here, newest last; each row can be undone`;
-  if (count === 0 && isPopoverAnchor(changesEl)) closePopover();
-  // Undo and redo are SCOPED TO THIS PANEL'S SESSION: with nothing of ours to
-  // take back, the buttons are off, so the panel can never walk into the
-  // document's older history (edits made in the text editor before or beside
-  // this session stay that editor's to undo).
-  undoBtn.disabled = count === 0;
-  undoBtn.dataset.tip =
-    count === 0
-      ? "Nothing from this panel to undo. The text editor's own history stays its own"
-      : `Undo ${sessionChanges[count - 1]}`;
-  redoBtn.disabled = undoneChanges.length === 0;
-  redoBtn.dataset.tip =
-    undoneChanges.length === 0 ? "Nothing to redo" : `Redo ${undoneChanges[undoneChanges.length - 1]}`;
-  saveEl.disabled = !docDirty;
-  saveEl.dataset.tip = !docDirty
-    ? "Nothing to save: the file on disk already matches"
-    : count > 0
-      ? "Write the changes to the .gui file on disk (Ctrl+S)"
-      : "Write the document to disk (Ctrl+S). These changes came from outside this panel";
-}
-
-function recordChange(label: string): void {
-  sessionChanges.push(label);
-  undoneChanges.length = 0;
-  docDirty = true;
-  syncChanges();
-}
-
-/** Undo the last `count` changes through the document's own history. */
-function undoBack(count: number): void {
-  for (let i = 0; i < count && sessionChanges.length > 0; i++) {
-    undoneChanges.push(sessionChanges.pop()!);
-    host.send({ type: "undo" });
-  }
-  syncChanges();
-}
-
-changesEl.addEventListener("click", () => {
-  if (isPopoverAnchor(changesEl)) {
-    closePopover();
-    return;
-  }
-  const list = el("div", "px-list");
-  list.id = "changeList";
-  sessionChanges.forEach((label, index) => {
-    const row = el("div", "px-item");
-    row.title = label;
-    const after = sessionChanges.length - 1 - index;
-    row.appendChild(el("span", "what", label));
-    row.appendChild(
-      button(
-        "",
-        () => {
-          closePopover();
-          undoBack(sessionChanges.length - index);
-        },
-        {
-          icon: "undo",
-          variant: "ghost",
-          size: "icon-xs",
-          tip: after === 0 ? "Undo this change" : `Undo this change and the ${after} after it`,
-        }
-      )
-    );
-    list.appendChild(row);
-  });
-  popover(changesEl, list);
-});
-
-saveEl.addEventListener("click", () => {
-  if (saveEl.disabled) return;
-  host.send({ type: "save" });
-});
-
-undoBtn.addEventListener("click", () => {
-  // Session-scoped: only a change this panel made is ever taken back, so the
-  // button never reaches the document's pre-session history. Best effort past
-  // that: the log cannot see keystrokes typed in the text editor in between.
-  if (sessionChanges.length === 0) return;
-  undoneChanges.push(sessionChanges.pop()!);
-  syncChanges();
-  host.send({ type: "undo" });
-});
-redoBtn.addEventListener("click", () => {
-  if (undoneChanges.length === 0) return;
-  sessionChanges.push(undoneChanges.pop()!);
-  syncChanges();
-  host.send({ type: "redo" });
-});
+const sessionToolbar = createSessionToolbar(
+  {
+    save: document.getElementById("save") as HTMLButtonElement,
+    changes: document.getElementById("changes") as HTMLButtonElement,
+    undo: document.getElementById("undo") as HTMLButtonElement,
+    redo: document.getElementById("redo") as HTMLButtonElement,
+  },
+  (type) => host.send({ type })
+);
 
 document
   .getElementById("zoomOutBtn")!

@@ -27,7 +27,7 @@ importers:
         specifier: ^26.1.0
         version: 26.1.1
       '@types/vscode':
-        specifier: ^1.90.0
+        specifier: ^1.91.0
         version: 1.125.0
       '@vscode/codicons':
         specifier: 0.0.46-24
