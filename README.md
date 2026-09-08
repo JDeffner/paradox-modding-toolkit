@@ -1,28 +1,24 @@
 <div align="center">
 
-<img src=".github/assets/github-banner.png" alt="Paradox Modding Toolkit: script completion, Steam Workshop uploads and visual editors for Crusader Kings III, Victoria 3 and Europa Universalis V." width="1200">
+<img src=".github/assets/github-banner.png" alt="Paradox Modding Toolkit" width="1200">
 
-# Paradox Modding Toolkit
+**Script editing, visual tools and Steam Workshop publishing for Paradox mods.**
 
-**A language workbench for Paradox mods.** Crusader Kings III, Victoria 3 and
-Europa Universalis V: a real script parser, scope-aware completion, instant
-diagnostics for the bugs the game swallows in silence, deep
-[tiger](https://github.com/amtep/tiger) integration, a visual GUI editor, an
-event graph laid out in firing order, a coat-of-arms Flag Builder, and a
-localization workflow no other tool has.
+For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 ![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)
 [![VS Code extension](https://img.shields.io/badge/VS%20Code-Paradox%20Modding%20Toolkit-007ACC.svg?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit)
 [![npm @px-lsp/server](https://img.shields.io/npm/v/@px-lsp/server?logo=npm&label=%40px-lsp%2Fserver)](https://www.npmjs.com/package/@px-lsp/server)
-![Editor agnostic](https://img.shields.io/badge/also-any%20LSP%20client-brightgreen.svg)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/DfEJ2H9hj4)
 
 [Install](#install) · [What you get](#what-you-get) ·
-[Outside VS Code](#not-just-vs-code) · [Repo layout](#repo-layout) ·
+[Use the LSP](#use-the-language-server) · [Repo layout](#repo-layout) ·
 [Docs](https://github.com/JDeffner/paradox-modding-toolkit/wiki)
 
 </div>
+
+**Build with the language server:** [Editor setup](packages/server/README.md#install) · [Embed in an application](docs/EMBEDDING.md) · [Wire protocol](docs/PROTOCOL.md)
 
 > **Beta.** Young project, useful day to day, rough edges included.
 > Bug reports and missing-feature complaints are the point, not a nuisance:
@@ -153,7 +149,7 @@ CK3 is where the toolkit grew up and where every feature exists. The exact
 per-game limits, the detection ladder and the EU5 honesty note are on
 [Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games).
 
-## Not just VS Code
+## Use the language server
 
 The language server is standard LSP over `--stdio` and runs from neovim, Zed,
 Helix or your own application. It is on npm:

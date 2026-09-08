@@ -1,13 +1,19 @@
-<img src="media/icon.png" alt="PX TK" width="80" align="left">
+<div align="center">
 
-# Paradox Modding Toolkit
+<img src="https://raw.githubusercontent.com/JDeffner/paradox-modding-toolkit/main/.github/assets/github-banner.png" alt="Paradox Modding Toolkit" width="1200">
 
-Write, check and build mods for **Crusader Kings III**, **Victoria 3** and **Europa Universalis V** in VS Code.
+**Script editing, visual tools and Steam Workshop publishing for Paradox mods.**
+
+For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 ![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)
 ![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.91-007ACC.svg?logo=visualstudiocode)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/DfEJ2H9hj4)
+
+</div>
+
+**Build with the language server:** [Editor setup](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/README.md#install) · [Embed in an application](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/EMBEDDING.md) · [Wire protocol](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/docs/PROTOCOL.md)
 
 ## Start editing
 

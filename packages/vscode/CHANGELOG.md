@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use the same banner in the GitHub and Marketplace READMEs, remove the repeated title and vague LSP badge, and link directly to editor setup, embedding and protocol guides.
+
 ## 0.4.2 (beta) - graphics assets, DNA copying and section folding
 
 - Fix `.asset` navigation and completion for mesh-local names, states, shader effects and CK3 accessory variations. Suggest graphics keywords from vanilla files and resolve engine shader paths.
