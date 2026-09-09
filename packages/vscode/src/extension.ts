@@ -48,6 +48,7 @@ import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
+import { registerCompatch } from "./compatch/view";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
@@ -346,6 +347,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.commands.executeCommand("setContext", "px.isCk3Workspace", cfg.isCk3Workspace);
     // Context keys for anything a `when` clause may want to gate on later.
     void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.compatchSemanticSupported",
+      metaFor(cfg.gameId).compatch !== null
+    );
     void vscode.commands.executeCommand(
       "setContext",
       "px.guiEditorSupported",
@@ -763,6 +769,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(errorLog);
   const focus = new FocusMod(context.workspaceState, () => cfg);
   const views = registerPxViews(context, lc, () => cfg, focus);
+  registerCompatch(context, () => cfg);
   // Hoisted: the Wiki commands above are registered before `views` exists, but
   // they only call this once the user opens the panel.
   function wikiDeps(): WikiDeps {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a Compatch Workspace with cross-file CK3 event and localization comparisons, file diffs for all games, an optional base, editable result files, and saved reviews that flag source updates. Event output uses full files; localization output checks vanilla ownership before choosing its folder.
+
 - Use the same banner in the GitHub and Marketplace READMEs, remove the repeated title and vague LSP badge, and link directly to server installation, embedding and protocol guides.
 
 ## 0.4.2 (beta) - graphics assets, DNA copying and section folding

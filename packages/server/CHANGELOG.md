@@ -8,6 +8,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Declare verified CK3 event and localization folders for the client's Compatch Workspace; other game profiles explicitly use file comparisons only.
+
 ## 0.3.3
 
 Ships with the toolkit's 0.4.2 release.

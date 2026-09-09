@@ -7,6 +7,7 @@ import { VIC3_SCAFFOLDS } from "./scaffolds";
 
 export const vic3Meta: GameMeta = {
   id: "vic3",
+  compatch: null,
   name: "Victoria 3",
   shortName: "Vic3",
   engine: "jomini",
