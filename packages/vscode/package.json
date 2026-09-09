@@ -721,6 +721,59 @@
         "category": "Paradox",
         "title": "Extension Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openCompatch",
+        "title": "Open Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.newCompatch",
+        "title": "New Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "px.refreshCompatch",
+        "title": "Refresh Compatch Sources",
+        "category": "Paradox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "px.filterCompatch",
+        "title": "Filter Compatch Entries",
+        "category": "Paradox",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "px.compatchActions",
+        "title": "Compatch Entry Actions",
+        "category": "Paradox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "px.compareCompatch",
+        "title": "Compare Compatch Entry",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchScanNotes",
+        "title": "Show Compatch Scan Notes",
+        "category": "Paradox",
+        "icon": "$(output)"
+      },
+      {
+        "command": "px.compatchLanguage",
+        "title": "Choose Compatch Localization Language",
+        "category": "Paradox",
+        "icon": "$(globe)",
+        "enablement": "px.compatchSemanticSupported"
+      },
+      {
+        "command": "px.compatchPage",
+        "title": "Change Compatch Page",
+        "category": "Paradox"
       }
     ],
     "customEditors": [
@@ -1146,6 +1199,13 @@
           "icon": "media/px-view.svg",
           "visibility": "collapsed",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "id": "px.compatch",
+          "name": "Compatch",
+          "icon": "media/px-view.svg",
+          "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
         }
       ]
     },
@@ -1466,6 +1526,42 @@
         {
           "command": "px.openSettings",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "false"
+        },
+        {
+          "command": "px.compareCompatch",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "px.isCk3Workspace && px.compatchSemanticSupported"
+        },
+        {
+          "command": "px.compatchPage",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -1543,6 +1639,31 @@
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
           "group": "1_configure@2"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "view == px.compatch",
+          "group": "2_notes"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "view == px.compatch && px.compatchSemanticSupported",
+          "group": "2_language"
         }
       ],
       "view/item/context": [
@@ -1605,6 +1726,11 @@
           "command": "px.nextProblemInFile",
           "when": "view == px.problems && viewItem == px.problemFile",
           "group": "1_navigate@2"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "view == px.compatch && viewItem == px.compatchEntry",
+          "group": "inline"
         }
       ],
       "editor/context": [
@@ -1900,6 +2026,17 @@
         "command": "px.insertSnippet",
         "key": "ctrl+alt+i",
         "when": "editorTextFocus && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
+      },
+      {
+        "command": "px.openCompatch",
+        "key": "ctrl+alt+m",
+        "when": "px.isCk3Workspace && !inputFocus"
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "px.compatch",
+        "contents": "Compare mods or game versions and edit a separate result mod.\n[Open Compatch Workspace](command:px.openCompatch)"
       }
     ]
   },

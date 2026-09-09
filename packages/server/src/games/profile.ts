@@ -98,6 +98,8 @@ export interface GameMeta {
   dlcIconDir?: string;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
+  /** Verified identity matching for the client compatch browser. Null = file diffs only. */
+  compatch: { events: string; localization: string } | null;
   /**
    * Subfolder of docsFolderName the ENGINE writes error.log into. Absent =
    * "logs", which is where both live installs checked (2026-08-12) write it.
