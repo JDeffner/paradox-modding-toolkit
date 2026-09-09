@@ -141,6 +141,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "bookOpen",
           tip: "Search every trigger, effect and datafunction the game has.",
         },
+        {
+          label: "Export Generated Snippets",
+          command: "px.exportSnippets",
+          icon: "download",
+          tip: "Open a searchable HTML catalogue with snippet previews, copying and printing.",
+        },
       ],
     },
     {

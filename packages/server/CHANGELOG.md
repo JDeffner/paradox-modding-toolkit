@@ -6,7 +6,15 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.3.4
+
+Ships with the toolkit's 0.4.3 release.
+
+- Add `paradox/snippetCatalogue` for uncapped exports of engine templates, definition skeletons and effective scripted calls, including every variant and its preview.
+
+- Show insertion previews and expected-value descriptions in completion details, using game documentation and scripted-effect `@param` comments. Keep preview hints out of inserted code and label undocumented types explicitly.
+
+- Add selectable keyword insertion modes: Minimal (the default), Examples and Names. Minimal keeps documented fields with blank values and Tab stops, omitting fields marked optional. Generated templates use the snippet icon; clients without snippet support receive plain text.
 
 ## 0.3.3
 

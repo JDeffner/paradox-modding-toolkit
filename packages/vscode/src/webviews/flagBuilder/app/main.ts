@@ -6,6 +6,7 @@
  * edit and every committed field value is one step. Built from the shared
  * px-ui classes; talks to the host only through messages.ts.
  */
+import { viewerBackground } from "../../shared/viewerBackground";
 import {
   COLOR_SLOTS,
   colorToRgb,
@@ -1242,6 +1243,10 @@ function updateModPicker(): void {
 // ---------------------------------------------------------------------------
 
 const stage = $("stage");
+const background = viewerBackground(stage, $("stageTools"), (value) => {
+  uiState = { ...uiState, background: value };
+  send({ type: "uiState", state: uiState });
+});
 const viewport = $("viewport");
 const view = { x: 0, y: 0, scale: 1 };
 
@@ -1622,6 +1627,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       if (first) {
         if (m.ui) {
           uiState = m.ui;
+          background.restore(uiState.background);
           panel.setWidth(m.ui.panelWidth);
           panel.toggle(m.ui.panelCollapsed);
           applyView();

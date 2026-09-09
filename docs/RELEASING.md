@@ -76,6 +76,81 @@ For testers who should try a build before it is released, send them the vsix
 file directly; they install it via Extensions panel → `…` menu →
 "Install from VSIX".
 
+## Major game update checklist
+
+Use a fresh copy of this checklist for each major CK3, Victoria 3 or EU5 update. Record the game, previous and new game versions, enabled DLC, toolkit commit and test workspace in the update PR. Keep local paths in `dev-paths.json` or environment variables. Leave tasks unchecked until verified; record a reason for anything that does not apply.
+
+Reloading game documentation updates runtime language knowledge and generated snippets. It does not rebuild bundled harvests or update fixed snippets and file templates. Check all three sources below.
+
+### Establish the baseline
+
+- [ ] Create an update branch and save the previous game documentation and generated snippet export before replacing them. Use `Paradox: Export Generated Snippets (HTML / Print)` for the catalogue.
+- [ ] Read the game's official patch notes for script, GUI, localization, asset, save-format and mod-loading changes. Record the changes that could affect the toolkit, with source links.
+- [ ] Confirm the selected game install and logs belong to the new version. Update the ignored development paths, and use a scratch mod for writer and game tests.
+- [ ] Capture completion ranking and index performance before changing toolkit code or bundled data. Keep the workspace and corpus consistent for the comparison; record any unavoidable game-file changes.
+
+### Refresh game documentation
+
+- [ ] Generate fresh `script_docs` from the updated game in debug mode. Check timestamps, nonempty output and parser coverage for effects, triggers, event targets and modifiers, plus on-actions where available.
+- [ ] Generate fresh `DumpDataTypes` output where supported. Check that the loader finds the game's output location and format, including a sibling logs directory when script docs are in a docs directory.
+- [ ] Run `Paradox: Reload Game Data (script_docs)`. Confirm added, changed and removed names match the fresh dumps, and that fallback wiki data does not restore removed names in a covered category.
+- [ ] Check documentation format changes against the parsers. Add focused fixtures for changed syntax, parameter descriptions and optional-field markers.
+- [ ] Review bundled documentation used without local dumps. Refresh the relevant source snapshots and attribution deliberately; check fallback behavior with local logs unavailable.
+
+### Update profiles and bundled data
+
+- [ ] Audit new, renamed and moved vanilla folders with `audit-schema-coverage.ts --game <id>`. Resolve or document every gap before harvesting definition skeletons.
+- [ ] Check the affected GameProfile's definition kinds, root keys and scopes, references, value vocabularies and supported tools against the updated game sources. Keep game-specific rules inside the profile boundary.
+- [ ] Regenerate completion frequencies, definition skeletons, GUI schema and asset vocabulary for the affected game. Confirm its game path exists first: the skeleton generator can write an empty table without it.
+- [ ] For CK3, regenerate structure documentation from `_*.info`. If refreshing bundled datatype documentation, update its source snapshot before running `build-data-types-json.ts`.
+- [ ] For EU5, decide whether the pinned CWT schema needs updating. If it does, inspect the importer's uncovered types and update the source pin and notices together.
+- [ ] Review harvest counts and diffs for missing folders, empty output, removed entries and changed common fields. Repeat generation against unchanged inputs and confirm deterministic output apart from timestamps.
+
+### Check snippets and file templates
+
+- [ ] Export the refreshed generated snippet catalogue after indexing finishes. Compare it with the baseline for added, changed and removed commands and definitions.
+- [ ] Spot-check minimal insertion for changed commands: braces and assignment signs, documented required fields, optional fields omitted, useful cursor positions and tab order. Do not treat a field's common occurrence in vanilla as proof that it is required.
+- [ ] Check example and all-fields variants against fresh sources. Confirm nested blocks, alternatives, defaults and optional fields produce useful code rather than pasted explanatory prose.
+- [ ] Check completion previews and datatype hints against the new docs. Keep unknown types explicit; do not invent a type or default when the source does not establish one.
+- [ ] Audit fixed VS Code snippets in `packages/vscode/snippets/` and GameProfile scaffolds against the updated game. They need manual review even when generated snippets have refreshed.
+- [ ] Check Minimal, Examples and Names completion modes, snippet icons in VS Code, and plain-text insertion for clients without snippet support. Check any aliases or migrated templates for missing or duplicate suggestions.
+- [ ] Generate representative files in the scratch mod. Validate their syntax with the supported tiger tool and load them in the game where needed; check BOM, localization naming and event namespace requirements.
+
+### Check editor and tool behavior
+
+- [ ] Try completion, hover, navigation, references and structural diagnostics on representative updated vanilla definitions and mod overrides. Keep vanilla read-only and free of diagnostics; scope inference must annotate rather than hide candidates.
+- [ ] Check localization lookup, new-key writing and vanilla-key replacement, including language headers, filenames, BOM and override order.
+- [ ] Check changed GUI widget properties, datafunctions and layout behavior with real game examples. Verify GUI editing and previews against the updated game.
+- [ ] Open representative DDS textures and check format decoding, alpha and export. Check flag and coat-of-arms assets and editors for games whose profiles support them.
+- [ ] Check event graphs, file creators and other tools affected by changed definitions. Review save schemas, descriptors, launch options and log discovery when the patch changes them.
+- [ ] Reindex an existing mod workspace and check cache refresh, game selection and multi-mod override order. Confirm changed vanilla content is visible without stale entries.
+- [ ] Check tiger compatibility and diagnostics integration for each supported profile. Record any tool or feature that does not yet support the new game version.
+
+### Verify and prepare the toolkit release
+
+- [ ] Run focused tests for changed parsers and features, typecheck, lint and the full suite for the major update. Compile first when tests exercise a bundled server; run `node scripts/check-game-boundary.mjs` for server changes.
+- [ ] Compare before/after `fuzzy-diag` and `rank-eval` results for completion or frequency changes. Review intended ranking shifts and investigate regressions.
+- [ ] Record before/after index and completion performance for affected server work, following `docs/PERFORMANCE.md`. Add the release performance-history row and keep machine paths out of tracked results.
+- [ ] Check VS Code and bare LSP behavior, including clients without snippets, file links or client commands. Check the Studio-facing contract where affected, and run representative checks for the other game profiles.
+- [ ] Run `pnpm run package:test`, reload VS Code with `Developer: Reload Window`, and try the installed build. Smoke-test the standalone server artifacts and confirm each ships its required per-game data.
+- [ ] Write changelog entries for changed packages. In the release PR, record tested game versions, DLC coverage and known limitations, refresh source notices, and update protocol/embedding docs plus their wiki mirrors if contracts changed.
+- [ ] Hand the verified release PR to the maintainer for merge and release. Treat support for the new game version as verified only after the required checks pass; document any remaining unsupported features.
+
+### Working commands
+
+Run the relevant checks from the repository root. These commands verify an update; they do not fetch new game documentation or regenerate the harvests for you.
+
+```bash
+pnpm run typecheck
+pnpm run lint
+pnpm run compile
+pnpm exec vitest run
+node scripts/check-game-boundary.mjs
+pnpm run package:test
+```
+
+Use the per-game regeneration commands below for bundled data, and the measurement recipes in `docs/PERFORMANCE.md` for performance comparisons.
+
 ## Regenerating bundled data (per game patch)
 
 The per-game generators take `--game <id>` and default to `ck3`; each reads its
@@ -83,7 +158,7 @@ paths from that game's `dev-paths.json` slots. Build and run them the usual
 way:
 
 ```bash
-npx esbuild scripts/build-freqs.ts --bundle --platform=node --outfile=dist/build-freqs.cjs
+pnpm exec esbuild scripts/build-freqs.ts --bundle --platform=node --outfile=dist/build-freqs.cjs
 node dist/build-freqs.cjs                # ck3
 node dist/build-freqs.cjs --game vic3    # vic3
 ```
@@ -93,6 +168,9 @@ node dist/build-freqs.cjs --game vic3    # vic3
 | CK3 structure docs | `build-structures-json.ts` | `packages/server/data/ck3/structures.json` (CK3 only: no other game ships `_*.info` docs) |
 | GUI widget schema | `build-gui-schema.ts [--game <id>]` | `packages/server/data/<id>/guiSchema.json` |
 | Completion frequencies | `build-freqs.ts [--game <id>]` | `packages/server/data/<id>/freqs.json` |
+| Definition skeletons | `build-skeletons.ts [--game <id>]` | `packages/server/data/<id>/skeletons.json` |
+| Asset vocabulary | `build-asset-vocabulary.ts [--game <id>]` | `packages/server/data/<id>/assetVocabulary.json` |
+| CK3 bundled datatypes | `build-data-types-json.ts` | `packages/server/data/ck3/dataTypes.json`, from bundled `wikidocs/Data_types.md`, not live dumps |
 | Schema coverage audit | `audit-schema-coverage.ts [--game <id>]` | stdout; gaps should be 0 or documented |
 | EU5 schema table | `import-cwt-types.ts <path-to-cwtools-eu5-config-clone>` | `packages/server/src/games/eu5/schema.generated.ts` |
 

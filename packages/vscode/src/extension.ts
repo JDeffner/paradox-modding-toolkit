@@ -85,6 +85,7 @@ import { reduceEditorLoadCommand } from "./reduceEditorLoad";
 import { translateNextCommand } from "./translationLoop";
 import { newContentCommand } from "./scaffold/command";
 import { insertSnippetCommand } from "./insertSnippet";
+import { exportSnippetsCommand } from "./exportSnippets";
 import { createModCommand, moveModCommand } from "./modProjects/command";
 import { registerDescriptorMod } from "./descriptorMod";
 import { registerWorkshop } from "./steam/workshop";
@@ -192,6 +193,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     locLanguage: c.locLanguage,
     indexAssets: c.indexAssets,
     scopeInlayHints: c.scopeInlayHints,
+    completionMode: c.completionMode,
     calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
@@ -709,6 +711,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.runTiger", () => tiger.run(true)),
     vscode.commands.registerCommand("px.insertSnippet", () =>
       insertSnippetCommand((method, params) => lc.sendRequest(method, params))
+    ),
+    vscode.commands.registerCommand("px.exportSnippets", () =>
+      exportSnippetsCommand(context.globalStorageUri, (method, params) => lc.sendRequest(method, params))
     ),
     // Target of the "N references" hover link: open the references peek for
     // the hovered site (the LSP reference provider supplies the locations).

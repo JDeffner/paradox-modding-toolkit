@@ -6,7 +6,13 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.2.4
+
+Ships with the toolkit's 0.4.3 release.
+
+- Add `paradox/snippetCatalogue` for uncapped exports of engine templates, definition skeletons and effective scripted calls, including every variant and its preview.
+
+- Add optional `ParadoxSettings.completionMode` (`minimal`, `examples`, `names`), applied on initialization and configuration changes; the default is `minimal`.
 
 ## 0.2.3
 

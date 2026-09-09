@@ -39,6 +39,8 @@ default amount of configuration is none. Full walkthrough:
 
 ## What you get
 
+Choose minimal completion templates, full examples or names only, with insertion previews and expected-value hints. Export the generated snippets to a searchable, printable catalogue. The flag, coat-of-arms and DDS tools also offer dark, light and custom preview backgrounds.
+
 ![The Project panel](packages/vscode/media/screenshots/project-panel-compact.png)
 
 *The Project panel: the game is auto-detected, and every workspace mod carries

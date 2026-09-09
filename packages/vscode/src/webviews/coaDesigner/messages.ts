@@ -8,6 +8,7 @@
  * a `frames/<id>` texture drawn over the arms masked by `masks/<id>`, and it
  * is decoration for the preview only, never written into the script.
  */
+import type { ViewerBackground } from "../shared/viewerBackground";
 import type { DesignerFrame, FlagDatabase, FlagEntry, FlagTarget, ModTarget } from "../flagBuilder/messages";
 import type { CoaFlag } from "@px-lsp/server/coa/coa";
 import type { CreatorSaveTarget } from "../shared/creatorMessages";
@@ -32,6 +33,8 @@ export type DesignerTab = "background" | "layout" | "emblems";
 
 /** Per-user layout the host remembers across sessions. */
 export interface DesignerUiState {
+  /** Preview background only; never written into the design. */
+  background?: ViewerBackground;
   /** The RIGHT panel (the Background / Layout / Emblems tabs). */
   panelWidth: number;
   panelCollapsed: boolean;

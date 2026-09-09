@@ -73,6 +73,8 @@ import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion }
 import { assetCompletion } from "./assetLanguage";
 import { snippetSupport } from "../clientMode";
 import { blockTemplateFor } from "./blockSnippets";
+import { minimalTokenInsert, scriptedCallTemplate, syntaxInsert } from "./completionInsert";
+import { withCompletionPreview } from "./completionPreview";
 import { skeletonsAt } from "./definitionSkeletons";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */
@@ -128,7 +130,13 @@ const STRUCTURE_VALUE_HINT: Record<string, string> = {
   block: "{ … }",
 };
 
-function structureItem(spec: KeySpec, kind: string, rank: number, allowSnippet: boolean): CompletionItem {
+function structureItem(
+  spec: KeySpec,
+  kind: string,
+  rank: number,
+  allowSnippet: boolean,
+  minimal: boolean
+): CompletionItem {
   const item: CompletionItem = { label: spec.key, kind: CompletionItemKind.Keyword };
   const hint = spec.values
     ? spec.values.startsWith("enum:")
@@ -141,8 +149,9 @@ function structureItem(spec: KeySpec, kind: string, rank: number, allowSnippet: 
   item.sortText = TIER_STRUCTURE + rankBucket(rank) + SRC_MOD + spec.key;
   // A key the schema says opens a block inserts the block: zero inference, the
   // KeySpec already carries the fact.
-  if (allowSnippet && spec.values === "block") {
-    setInsert(item, `${spec.key} = {\n\t$0\n}`, `${spec.key} = {\n\t\n}`);
+  if (allowSnippet && (spec.values === "block" || minimal)) {
+    const insert = syntaxInsert(spec.key, spec.values === "block");
+    setInsert(item, insert.snippet, insert.plain);
   }
   return item;
 }
@@ -155,6 +164,7 @@ function structureItem(spec: KeySpec, kind: string, rank: number, allowSnippet: 
  */
 function setInsert(item: CompletionItem, snippet: string, plain: string): void {
   if (snippetSupport()) {
+    item.kind = CompletionItemKind.Snippet;
     item.insertText = snippet;
     item.insertTextFormat = InsertTextFormat.Snippet;
   } else {
@@ -312,6 +322,11 @@ export class CompletionFeature {
     this.settings = settings;
   }
 
+  private get insertMode(): "minimal" | "examples" | "names" {
+    const mode = this.settings?.completionMode;
+    return mode === "examples" || mode === "names" ? mode : "minimal";
+  }
+
   /**
    * Merged frequency count for `name` (§C2): MAX of the bundled per-context count
    * and the live workspace usage count. O(1) — two map hits, no scan. `fctx` is
@@ -383,7 +398,7 @@ export class CompletionFeature {
       start: pos,
       end: { line: pos.line + 1, character: 0 },
     });
-    const allowSnippet = !lineSuffix.includes("=");
+    const allowSnippet = this.insertMode !== "names" && !/[=<>]/.test(lineSuffix);
 
     // Inside a list-form ref block (`on_actions = { | }`) → the target kinds.
     const listRef = this.listRefItems(result, offset, entry);
@@ -480,7 +495,7 @@ export class CompletionFeature {
       // An engine token whose dumped `usage:` example qualifies completes as the
       // block that example shows (blockSnippets.ts); most tokens have none.
       if (allowSnippet) {
-        const tmpl = blockTemplateFor(token);
+        const tmpl = this.insertMode === "minimal" ? minimalTokenInsert(token) : blockTemplateFor(token);
         if (tmpl) setInsert(out, tmpl.snippet, tmpl.plain);
       }
       ranked.push(out);
@@ -535,15 +550,9 @@ export class CompletionFeature {
     if (!data || data.t !== "def" || !data.k || !data.n || !SNIPPET_KINDS.has(data.k)) return;
     const def = this.data.index.lookup(data.n).find((d) => d.kind === data.k);
     if (!def) return;
-    if (def.params && def.params.length > 0) {
-      const snippet = def.params.map((p, i) => `\t${p} = \${${i + 1}:${p}}`).join("\n");
-      const plain = def.params.map((p) => `\t${p} = ${p}`).join("\n");
-      setInsert(item, `${data.n} = {\n${snippet}\n}`, `${data.n} = {\n${plain}\n}`);
-      item.detail = `${item.detail} · params: ${def.params.join(", ")}`;
-    } else if (data.k !== "scripted_modifier") {
-      // Bare scripted modifiers are referenced by name, not assigned yes/no.
-      setInsert(item, `${data.n} = \${1|yes,no|}`, `${data.n} = yes`);
-    }
+    const template = scriptedCallTemplate(def, this.insertMode === "examples" ? "examples" : "minimal");
+    if (template) setInsert(item, template.snippet, template.plain);
+    if (def.params?.length) item.detail = `${item.detail} · params: ${def.params.join(", ")}`;
   }
 
   /**
@@ -552,11 +561,11 @@ export class CompletionFeature {
    */
   resolve(item: CompletionItem): CompletionItem {
     const data = item.data as { t?: string; k?: string; n?: string } | undefined;
-    if (!data || !data.n) return item;
+    if (!data || !data.n) return withCompletionPreview(item);
     if (data.t === "tok") {
       const token = this.data.tokenMap.get(data.n)?.find((t) => t.kind === data.k);
       if (token?.doc) item.documentation = token.doc;
-      return item;
+      return withCompletionPreview(item, token);
     }
     if (data.t === "tmpl") {
       const m = matchTemplatedModifier(data.n, this.data.modifierTemplates, (n) => this.data.index.lookup(n));
@@ -568,6 +577,7 @@ export class CompletionFeature {
       if (def) {
         const doc = defDocMarkdown(def);
         if (doc) item.documentation = { kind: MarkupKind.Markdown, value: doc };
+        return withCompletionPreview(item, undefined, def);
       }
     }
     return item;
@@ -600,7 +610,9 @@ export class CompletionFeature {
         if (fa !== fb) return fb - fa;
         return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
       });
-    return [...curated, ...harvested].map((spec, i) => structureItem(spec, ctx.kind, i, allowSnippet));
+    return [...curated, ...harvested].map((spec, i) =>
+      structureItem(spec, ctx.kind, i, allowSnippet, this.insertMode === "minimal")
+    );
   }
 
   /**

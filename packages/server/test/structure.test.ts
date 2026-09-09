@@ -5,7 +5,6 @@
  * character_interaction document.
  */
 import { describe, expect, it } from "vitest";
-import { CompletionItemKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseScript } from "../src/parser";
 import { ScopeModel } from "../src/scopes/model";
@@ -242,7 +241,7 @@ describe("completion wiring (§B2/§B3)", () => {
     // ahead of every non-structure item.
     const sorted = [...items].sort((a, b) => (a.sortText ?? a.label).localeCompare(b.sortText ?? b.label));
     const structLabels = new Set(
-      items.filter((i) => i.kind === CompletionItemKind.Keyword).map((i) => i.label)
+      schema.structures.keysByKindBlock.get("character_interaction")!.get("")!.keys()
     );
     const firstNonStruct = sorted.findIndex((i) => !structLabels.has(i.label));
     const isShownRank = sorted.findIndex((i) => i.label === "is_shown");

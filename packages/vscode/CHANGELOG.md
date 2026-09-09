@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.4.3 (beta) - completion templates and viewer backgrounds
+
+- Add Export Generated Snippets: save and open a searchable HTML catalogue with all available variants, value hints, copy controls and printing.
+
+- Show insertion previews and expected-value descriptions in completion details, using game documentation and scripted-effect `@param` comments. Keep preview hints out of inserted code and label undocumented types explicitly.
+
+- Add `px.completion.mode`: Minimal (the default) keeps documented fields with blank values and Tab stops, omitting fields marked optional. Examples restores full keyword snippets, and Names inserts only the keyword. Generated templates use the snippet icon. Explicit definition templates and Insert Snippet stay available.
+
+- Add a bottom-left background control to the Flag Builder, Coat of Arms Designer and DDS viewer, with dark and light presets, a custom color picker and reset to default. Each tool remembers its background in the workspace.
 
 - Use the same banner in the GitHub and Marketplace READMEs, remove the repeated title and vague LSP badge, and link directly to server installation, embedding and protocol guides.
 

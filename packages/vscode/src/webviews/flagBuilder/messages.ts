@@ -3,6 +3,7 @@
  * Everything the app knows about the game arrives in `init`; textures are
  * fetched on demand as webview URLs because the app cannot read the disk.
  */
+import type { ViewerBackground } from "../shared/viewerBackground";
 import type { CoaFlag, DesignerEntry, Rgb } from "@px-lsp/server/coa/coa";
 
 export type TextureKind = "patterns" | "colored_emblems" | "textured_emblems";
@@ -108,6 +109,8 @@ export interface FlagDatabase {
 
 /** Per-user layout the host remembers across sessions. */
 export interface UiState {
+  /** Preview background only; never written into the design. */
+  background?: ViewerBackground;
   panelWidth: number;
   panelCollapsed: boolean;
   /** The mod flags are saved into (its path), when the workspace has several. */
