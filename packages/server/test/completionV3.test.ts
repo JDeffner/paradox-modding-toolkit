@@ -9,7 +9,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { CompletionFeature, matchesTypedWord, MAX_ITEMS } from "../src/features/completion";
 import { ServerData } from "../src/serverData";
 import { loadSchema } from "../src/schema/loader";
-import type { ParadoxInitOptions } from "@px-lsp/protocol/protocol";
+import type { ParadoxInitOptions, ParadoxSettings } from "@px-lsp/protocol/protocol";
 import type { Definition, TokenData } from "@px-lsp/protocol/types";
 import { resolveClientCapabilities, setClientCapabilities } from "../src/clientMode";
 import { fuzzyScore, FuzzyScoreOptionsDefault } from "./vscodeFuzzy";
@@ -33,7 +33,22 @@ function def(name: string, kind: string, extra: Partial<Definition> = {}): Defin
   return { name, kind, file: `F:/mod/common/${kind}/x.txt`, line: 1, source: "mod", ...extra };
 }
 
-function makeEnv() {
+function setMode(completion: CompletionFeature, completionMode: ParadoxSettings["completionMode"]) {
+  completion.setSettings({
+    gamePath: null,
+    logsPath: null,
+    modPath: null,
+    parentPaths: [],
+    locLanguage: "english",
+    scopeInlayHints: false,
+    diagnosticsIgnore: [],
+    diagnosticsIgnorePatterns: [],
+    diagnosticsVanilla: false,
+    completionMode,
+  });
+}
+
+function makeEnv(mode: ParadoxSettings["completionMode"] | null = "examples") {
   const schema = loadSchema(null);
   const data = new ServerData();
   data.setTokens([
@@ -63,6 +78,7 @@ function makeEnv() {
     def("my_loc_key", "loc_key"),
   ]);
   const completion = new CompletionFeature(data, () => schema);
+  if (mode !== null) setMode(completion, mode);
   return { data, schema, completion };
 }
 
@@ -316,7 +332,9 @@ describe("completion — engine block templates from usage examples", () => {
       { ...tok("random_list", "effect"), usage: "random_list = { X1 = { effect1 } X2 = { effect2 } ... }" },
       tok("add_gold", "effect", ["character"]),
     ]);
-    return { data, schema, completion: new CompletionFeature(data, () => schema) };
+    const completion = new CompletionFeature(data, () => schema);
+    setMode(completion, "examples");
+    return { data, schema, completion };
   }
 
   it("a token whose example qualifies completes as that block", () => {
@@ -372,6 +390,72 @@ describe("completion — a client that did not declare snippetSupport", () => {
     const items = allItems();
     expect(items.find((i) => i.label === "immediate")!.insertText).toBe("immediate = {\n\t$0\n}");
     expect(items.find((i) => i.label === "immediate")!.insertTextFormat).toBe(2);
+  });
+});
+
+describe("completion insertion modes", () => {
+  const text = "e.1 = {\n\timmediate = {\n\t\tmy_eff|\n\t}\n}";
+
+  it("defaults to minimal and applies mode changes to cached completion items", () => {
+    const env = makeEnv(null);
+    const effect = () => provideAt(env, text).items.find((i) => i.label === "my_effect")!;
+    expect(effect().insertText).toBe("my_effect = $0");
+    expect(effect().kind).toBe(15); // CompletionItemKind.Snippet, including the icon.
+    setMode(env.completion, "examples");
+    expect(effect().insertText).toBe("my_effect = ${1|yes,no|}");
+    expect(effect().kind).toBe(15);
+    setMode(env.completion, "names");
+    expect(effect().insertText).toBeUndefined();
+    expect(effect().kind).not.toBe(15);
+    setMode(env.completion, "minimal");
+    expect(effect().insertText).toBe("my_effect = $0");
+  });
+
+  it("places the cursor after the first required scripted parameter", () => {
+    const env = makeEnv("minimal");
+    env.data.index.addAll([def("my_effect_params", "scripted_effect", { params: ["TARGET"] })]);
+    env.data.notifyIndexChanged();
+    expect(provideAt(env, text).items.find((i) => i.label === "my_effect_params")!.insertText).toBe(
+      "my_effect_params = {\n\tTARGET = $1\n}"
+    );
+  });
+
+  it("emits plain punctuation for clients without snippet support", () => {
+    asClient({ client: {} });
+    const item = provideAt(makeEnv("minimal"), text).items.find((i) => i.label === "my_effect")!;
+    expect(item.insertText).toBe("my_effect = ");
+    expect(item.insertTextFormat).toBeUndefined();
+    expect(item.kind).not.toBe(15);
+  });
+
+  it("marks generated engine field templates as snippets", () => {
+    const env = makeEnv("minimal");
+    env.data.setTokens([
+      {
+        ...tok("set_variable", "effect"),
+        usage: "set_variable = { name = X value = Y days = Z }",
+        doc: "An optional days where Z is the number of days or script value",
+      },
+    ]);
+    const item = provideAt(env, text.replace("my_eff|", "set_var|")).items.find(
+      (i) => i.label === "set_variable"
+    )!;
+    expect(item.kind).toBe(15);
+    expect(item.insertText).toBe("set_variable = {\n\tname = $1\n\tvalue = $2\n}");
+    expect(item.documentation).toBeUndefined();
+    const resolved = env.completion.resolve(item);
+    expect(resolved.documentation).toMatchObject({
+      kind: "markdown",
+      value: expect.stringContaining("name = <name>"),
+    });
+    expect(resolved.insertText).toBe("set_variable = {\n\tname = $1\n\tvalue = $2\n}");
+  });
+
+  it("does not duplicate a comparison operator already after the cursor", () => {
+    const item = provideAt(makeEnv("minimal"), text.replace("my_eff|", "my_eff| > 10")).items.find(
+      (i) => i.label === "my_effect"
+    )!;
+    expect(item.insertText).toBeUndefined();
   });
 });
 

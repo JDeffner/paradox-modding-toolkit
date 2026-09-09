@@ -100,6 +100,8 @@ import {
   scopeAtRequest,
   type ScopeAtParams,
   snippetsRequest,
+  snippetCatalogueRequest,
+  type SnippetCatalogueResult,
   type SnippetsParams,
   type SnippetsResult,
   type ScopeAtResult,
@@ -203,6 +205,7 @@ import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse } from "./parseCache";
 import { buildSnippetList } from "./features/snippetList";
+import { buildSnippetCatalogue } from "./features/snippetCatalogue";
 import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
@@ -301,6 +304,7 @@ function defaultSettings(): ParadoxSettings {
     scopeInlayHints: false,
     indexAssets: true,
     hoverDetail: "standard",
+    completionMode: "minimal",
     diagnosticsIgnore: [],
     diagnosticsIgnorePatterns: [],
     diagnosticsVanilla: false,
@@ -1866,6 +1870,29 @@ connection.onRequest(scopeAtRequest, (params: ScopeAtParams): ScopeAtResult | nu
     entry?.rootScopes?.length ? new Set(entry.rootScopes.map((s) => s.toLowerCase())) : null,
     entry
   );
+});
+
+connection.onRequest(snippetCatalogueRequest, (): SnippetCatalogueResult => {
+  flushModFileChanges();
+  const names = new Set(
+    data.index
+      .allDefinitions()
+      .filter((def) => ["scripted_effect", "scripted_trigger", "scripted_modifier"].includes(def.kind))
+      .map((def) => def.name)
+  );
+  return {
+    gameId: activeProfile().id,
+    gameName: activeProfile().name,
+    generatedAt: new Date().toISOString(),
+    indexing,
+    entries: indexing
+      ? []
+      : buildSnippetCatalogue(
+          data.tokens,
+          activeProfile().skeletons,
+          [...names].flatMap((name) => data.index.lookup(name))
+        ),
+  };
 });
 
 connection.onRequest(snippetsRequest, (params: SnippetsParams): SnippetsResult => {

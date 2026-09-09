@@ -13,6 +13,7 @@
  * with the Flag Builder: this panel is a different way to reach the same
  * `coat_of_arms` definition, not a second renderer.
  */
+import { viewerBackground } from "../../shared/viewerBackground";
 import {
   COLOR_SLOTS,
   colorToRgb,
@@ -2285,6 +2286,10 @@ function defaultFrame(label: string | undefined): string {
 // ---------------------------------------------------------------------------
 
 const stage = $("stage");
+const background = viewerBackground(stage, $("stageTools"), (value) => {
+  uiState = { ...uiState, background: value };
+  send({ type: "uiState", state: uiState });
+});
 const viewport = $("viewport");
 const view = { x: 0, y: 0, scale: 1 };
 
@@ -2892,6 +2897,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       if (first) {
         if (m.ui) {
           uiState = { ...uiState, ...m.ui };
+          background.restore(uiState.background);
           right.setWidth(m.ui.panelWidth);
           right.toggle(m.ui.panelCollapsed);
           if (m.ui.leftWidth !== undefined) left.setWidth(m.ui.leftWidth);

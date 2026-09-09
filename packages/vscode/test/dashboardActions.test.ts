@@ -33,6 +33,7 @@ describe("visibleActionGroups", () => {
       "px.openWiki",
       "px.openCredits",
       "px.showExamplesWiki",
+      "px.exportSnippets",
     ]);
     expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Info", "Create", "Test & Troubleshoot"]);
     // The wiki rows moved out of View, they are not listed twice.

@@ -58,9 +58,14 @@ describe("the webview bundles are built by the compile chain", () => {
     // name), so the guarded invariant is the helper call plus the exact name
     // the build produces.
     for (const name of apps) {
-      const panel = fs.readFileSync(path.join(WEBVIEWS_DIR, name, "panel.ts"), "utf8");
-      expect(panel, `${name}/panel.ts`).toContain("bundleUri(");
-      expect(panel, `${name}/panel.ts`).toContain(`"${name}"`);
+      // DDS uses a custom editor provider rather than a command-created panel.
+      const host =
+        name === "ddsPreview"
+          ? path.join(PKG_ROOT, "src", "ddsEditor.ts")
+          : path.join(WEBVIEWS_DIR, name, "panel.ts");
+      const panel = fs.readFileSync(host, "utf8");
+      expect(panel, host).toContain("bundleUri(");
+      expect(panel, host).toContain(`"${name}"`);
     }
   });
 });

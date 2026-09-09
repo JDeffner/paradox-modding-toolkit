@@ -168,6 +168,8 @@ concrete:
 
 Set `indexAssets: false` to skip graphics `.asset` definition and reference indexing in all roots. It defaults to `true` for profiles that support `.asset` files. Send the changed settings through `paradox/configChanged` to rebuild the index without a restart. This does not disable open-file syntax features or on-demand texture previews.
 
+Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
+
 The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`,
 `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in
 `docs/PROTOCOL.md`. Push the whole settings object again as
@@ -678,3 +680,7 @@ license as `NODE-LICENSE`, the bundled CK3 wiki token lists are CC BY-SA 3.0
 (`data/ck3/wikidocs/ATTRIBUTION.md`) and the EU5 schema table derives from
 MIT-licensed community CWT rules. `THIRD-PARTY-NOTICES.md` ships in both
 archives with the full texts.
+
+### Exporting generated snippets
+
+Call `paradox/snippetCatalogue` with `{}` for the full active-game catalogue, without requiring an open document or applying the cursor picker's cap. The response includes engine templates, definition and child-block skeletons, and effective indexed scripted calls. Every available variant includes snippet syntax, plain insertion text and completion-preview Markdown. An `indexing: true` response has no entries; request again after indexing finishes. VS Code uses this request for `px.exportSnippets`, which saves a self-contained, searchable HTML file with copy and print controls. See the Protocol Reference for the response fields.

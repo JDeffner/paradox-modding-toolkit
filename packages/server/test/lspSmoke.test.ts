@@ -47,6 +47,8 @@ import {
   guiWidgetInfoRequest,
   scopeAtRequest,
   snippetsRequest,
+  snippetCatalogueRequest,
+  type SnippetCatalogueResult,
   type SnippetsResult,
   statusNotification,
   type DependenciesResult,
@@ -587,14 +589,71 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       position: { line: 5, character: 2 },
     })) as { items: Array<{ label: string; insertText?: string; insertTextFormat?: number }> };
     const effect = result.items.find((i) => i.label === "my_smoke_effect")!;
-    expect(effect.insertText).toBe("my_smoke_effect = ${1|yes,no|}");
+    expect(effect.insertText).toBe("my_smoke_effect = $0");
     expect(effect.insertTextFormat).toBe(2); // InsertTextFormat.Snippet
+    expect(effect).toHaveProperty("kind", 15); // CompletionItemKind.Snippet
+    const resolved = (await conn.sendRequest("completionItem/resolve", effect)) as {
+      insertText: string;
+      documentation: { kind: string; value: string };
+    };
+    expect(resolved.documentation.kind).toBe("markdown");
+    expect(resolved.documentation.value).toContain("**Insertion preview**");
+    expect(resolved.documentation.value).toContain("my_smoke_effect = <value>");
+    expect(resolved.documentation.value).toContain("Gives gold");
+    expect(resolved.insertText).toBe(effect.insertText);
 
     const hover = (await conn.sendRequest("textDocument/hover", {
       textDocument: { uri: eventsUri },
       position: { line: 6, character: 4 },
     })) as { contents: { value: string } };
     expect(hover.contents.value).toContain("](file:");
+  });
+
+  it("exports the full generated catalogue without a cursor or open document", async () => {
+    const catalogue = await conn.sendRequest<SnippetCatalogueResult>(snippetCatalogueRequest, {});
+    expect(catalogue.indexing).toBe(false);
+    expect(catalogue.gameId).toBe("ck3");
+    expect(catalogue.entries.filter((entry) => entry.category === "Engine").length).toBeGreaterThan(60);
+    expect(catalogue.entries.some((entry) => entry.category === "Definitions")).toBe(true);
+    const effect = catalogue.entries.find(
+      (entry) => entry.id === "scripted:scripted_effect:my_smoke_effect"
+    )!;
+    expect(effect.variants[0].snippet).toBe("my_smoke_effect = $0");
+    expect(effect.variants[0].preview).toContain("Insertion preview");
+    expect(new Set(catalogue.entries.map((entry) => entry.id)).size).toBe(catalogue.entries.length);
+  });
+
+  it("changes completion mode over the wire without rebuilding the index", async () => {
+    const uri = toUri(path.join(modDir, "events", "smoke_completion_mode.txt"));
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text: "e.1 = { immediate = { my_smoke_ } }" },
+    });
+    const start = statuses.length;
+    for (const [completionMode, expected] of [
+      ["examples", "my_smoke_effect = ${1|yes,no|}"],
+      ["names", undefined],
+      ["minimal", "my_smoke_effect = $0"],
+    ] as const) {
+      await conn.sendNotification(configChangedNotification, {
+        gamePath: null,
+        logsPath: null,
+        modPath: modDir,
+        parentPaths: [parentDir, depDir],
+        workspaceMods: [parentDir],
+        locLanguage: "english",
+        scopeInlayHints: false,
+        diagnosticsIgnore: [],
+        diagnosticsIgnorePatterns: [],
+        diagnosticsVanilla: false,
+        completionMode,
+      });
+      const result = (await conn.sendRequest("textDocument/completion", {
+        textDocument: { uri },
+        position: { line: 0, character: 29 },
+      })) as { items: Array<{ label: string; insertText?: string }> };
+      expect(result.items.find((item) => item.label === "my_smoke_effect")?.insertText).toBe(expected);
+    }
+    expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
   });
 
   it("hover on the scripted effect shows its card with a references link", async () => {
@@ -1517,7 +1576,7 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
       textDocument: { uri },
       position: { line: 5, character: 2 },
     })) as { items: Array<{ label: string; insertText?: string; insertTextFormat?: number }> };
-    expect(result.items.find((i) => i.label === "my_smoke_effect")!.insertText).toBe("my_smoke_effect = yes");
+    expect(result.items.find((i) => i.label === "my_smoke_effect")!.insertText).toBe("my_smoke_effect = ");
     for (const item of result.items) {
       expect(item.insertTextFormat, item.label).toBeUndefined();
       expect(item.insertText ?? "", item.label).not.toContain("${");

@@ -39,6 +39,8 @@ export interface ParadoxSettings {
    * every distinct meaning.
    */
   hoverDetail?: "compact" | "standard" | "full";
+  /** Keyword completion inserts punctuation, documented examples, or names only. Default minimal. */
+  completionMode?: "minimal" | "examples" | "names";
   /** Custom era calendar (total-conversion mods): how script dates display in
    * game. Absent = no calendar features. Shape: calendar.ts `CalendarSetting`;
    * the server sanitizes it on intake, so clients may pass raw JSON. */
@@ -1750,6 +1752,30 @@ export interface SnippetItem {
 export interface SnippetsResult {
   /** Skeletons first (definition, then its child blocks), then engine tokens. */
   snippets: SnippetItem[];
+}
+
+/** Complete generated script-template catalogue for the active game; no cursor or cap. */
+export const snippetCatalogueRequest = "paradox/snippetCatalogue";
+export interface SnippetCatalogueEntry {
+  id: string;
+  label: string;
+  category: "Engine" | "Definitions" | "Child blocks" | "Scripted calls";
+  detail: string;
+  variants: Array<{
+    label: "Minimal" | "Examples" | "All fields" | "Template";
+    snippet: string;
+    plain: string;
+    /** Completion-details markdown, including insertion preview and value hints. */
+    preview: string;
+  }>;
+}
+export interface SnippetCatalogueResult {
+  gameId: string;
+  gameName: string;
+  generatedAt: string;
+  /** True if the snapshot was requested before the index finished. */
+  indexing: boolean;
+  entries: SnippetCatalogueEntry[];
 }
 
 /**

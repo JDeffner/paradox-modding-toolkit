@@ -39,6 +39,7 @@ export interface PxConfig {
   indexAssets: boolean;
   scopeInlayHints: boolean;
   hoverDetail: "compact" | "standard" | "full";
+  completionMode: "minimal" | "examples" | "names";
   /** `px.calendar`: custom era calendar for date display, or undefined. */
   calendar: CalendarSetting | undefined;
   tigerRunOn: "save" | "manual";
@@ -313,6 +314,7 @@ export function readConfig(): PxConfig {
     scopeInlayHints: cfg.get<boolean>("scopeInlayHints") ?? false,
     indexAssets: cfg.get<boolean>("indexAssets") ?? true,
     hoverDetail: cfg.get<"compact" | "standard" | "full">("hover.detail") ?? "standard",
+    completionMode: cfg.get<"minimal" | "examples" | "names">("completion.mode") ?? "minimal",
     calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,
     enableForWorkspace,

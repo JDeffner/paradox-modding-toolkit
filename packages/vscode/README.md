@@ -27,6 +27,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 
 ## At the cursor
 
+- **Completion templates:** choose Minimal, Examples or Names with `px.completion.mode`. Preview inserted code and expected values, or run **Paradox: Export Generated Snippets (HTML / Print)** to browse, copy and print the full catalogue.
+
 - **Completion and navigation:** scope-aware ranking, definitions, references, rename, symbols and block skeletons. Items outside the inferred scope are annotated rather than hidden.
 - **Documentation from the game:** hover descriptions, scope information, localized text and texture previews, plus searchable vanilla examples.
 - **Graphics assets:** CK3 and Victoria 3 `.asset` indexing, context-specific completion, reference navigation and DDS previews. Use `px.indexAssets` to toggle scanning.
@@ -35,6 +37,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
 
 ## Build and inspect content
+
+The Flag Builder, Coat of Arms Designer and DDS viewer have bottom-left background controls: dark, light, custom color and reset. Each tool remembers its choice in the workspace.
 
 The **Event Simulator** walks an event and its options beside the source. The **Event Graph** follows firing chains and lets you edit event content. Both are static tools; they do not execute the game.
 

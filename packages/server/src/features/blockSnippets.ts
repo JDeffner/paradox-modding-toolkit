@@ -96,7 +96,11 @@ interface Body {
 }
 
 /** Pure extractor (exported for the accept/reject table in the tests). */
-export function extractBlockTemplate(name: string, usage: string | undefined): BlockTemplate | null {
+export function extractBlockTemplate(
+  name: string,
+  usage: string | undefined,
+  minimal?: { optionalFields: ReadonlySet<string> }
+): BlockTemplate | null {
   if (!usage) return null;
   const stripped = stripOptionalComments(usage.replace(/\r/g, ""));
   if (!stripped) return null;
@@ -120,9 +124,9 @@ export function extractBlockTemplate(name: string, usage: string | undefined): B
   const open = text.indexOf("{");
   const close = matchingBrace(text, open);
   // Unbalanced, or something follows the block: not a template we can trust.
-  if (close < 0 || text.slice(close + 1).trim() !== "") return null;
+  if (close < 0 || (!minimal && text.slice(close + 1).trim() !== "")) return null;
 
-  const parser = new BodyParser(text, open + 1, optionalLines);
+  const parser = new BodyParser(text, open + 1, optionalLines, Boolean(minimal));
   const body = parser.parseBody();
   if (body === null) return null;
   // Every accepted "optional" comment must have landed on an item. One that did
@@ -130,10 +134,19 @@ export function extractBlockTemplate(name: string, usage: string | undefined): B
   // OPENS a nested block) says something about the example we cannot express.
   for (const line of optionalLines) if (!parser.markedLines.has(line)) return null;
 
-  const minimal = { snippet: render(name, body, true, false), plain: render(name, body, false, false) };
-  if (!hasOptional(body)) return minimal;
+  if (minimal) {
+    for (const item of body.items) {
+      if (item.key && (item.key.alts ?? [item.key.text]).some((key) => minimal.optionalFields.has(key))) {
+        item.optional = true;
+      }
+    }
+    return { snippet: render(name, body, true, false, true), plain: render(name, body, false, false, true) };
+  }
+
+  const standard = { snippet: render(name, body, true, false), plain: render(name, body, false, false) };
+  if (!hasOptional(body)) return standard;
   return {
-    ...minimal,
+    ...standard,
     full: { snippet: render(name, body, true, true), plain: render(name, body, false, true) },
   };
 }
@@ -212,7 +225,8 @@ class BodyParser {
   constructor(
     private readonly text: string,
     private i: number,
-    private readonly optionalLines: Set<number> = new Set()
+    private readonly optionalLines: Set<number> = new Set(),
+    private readonly omitParenthesizedOptional = false
   ) {
     this.lineAt = new Array<number>(text.length);
     let line = 0;
@@ -241,6 +255,9 @@ class BodyParser {
         return { items, truncated: false };
       }
       if (TRUNCATE.some((m) => this.text.startsWith(m, this.i))) {
+        if (this.omitParenthesizedOptional && this.text.startsWith("(optional)", this.i) && items.length) {
+          items[items.length - 1].optional = true;
+        }
         const close = matchingBrace(this.text, this.blockStart());
         if (close < 0) return null;
         this.i = close + 1;
@@ -307,8 +324,8 @@ class BodyParser {
 // ---- rendering -------------------------------------------------------------
 
 /** `all` = the "all fields" form; false drops what the example called optional. */
-function render(name: string, body: Body, snippet: boolean, all: boolean): string {
-  return `${name} = {\n${renderBody(body, "\t", snippet, { n: 0 }, all).join("")}}`;
+function render(name: string, body: Body, snippet: boolean, all: boolean, blank = false): string {
+  return `${name} = {\n${renderBody(body, "\t", snippet, { n: 0 }, all, blank).join("")}}`;
 }
 
 function renderBody(
@@ -316,24 +333,29 @@ function renderBody(
   indent: string,
   snippet: boolean,
   counter: { n: number },
-  all: boolean
+  all: boolean,
+  blank: boolean
 ): string[] {
   const lines: string[] = [];
   for (const item of body.items) {
     if (item.optional && !all) continue;
     if (item.key === null) {
-      lines.push(`${indent}${leaf(item.value, snippet, counter)}\n`);
+      lines.push(
+        `${indent}${blank ? (snippet ? `$${++counter.n}` : "") : leaf(item.value, snippet, counter)}\n`
+      );
       continue;
     }
     // A key is known text, not a hole — only an `a/b/c` key is a choice.
     const key = item.key.alts ? leaf(item.key, snippet, counter) : item.key.text;
     if ("items" in item.value) {
       lines.push(`${indent}${key} = {\n`);
-      lines.push(...renderBody(item.value, indent + "\t", snippet, counter, all));
+      lines.push(...renderBody(item.value, indent + "\t", snippet, counter, all, blank));
       lines.push(`${indent}}\n`);
       continue;
     }
-    lines.push(`${indent}${key} = ${leaf(item.value, snippet, counter)}\n`);
+    lines.push(
+      `${indent}${key} = ${blank ? (snippet ? `$${++counter.n}` : "") : leaf(item.value, snippet, counter)}\n`
+    );
   }
   // An empty or cut-short body leaves the cursor a place to land; in plain mode
   // there is nothing meaningful to write there.

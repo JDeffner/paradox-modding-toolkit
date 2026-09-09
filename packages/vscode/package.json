@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -553,6 +553,11 @@
         "title": "Insert Snippet (definition skeleton, block)"
       },
       {
+        "command": "px.exportSnippets",
+        "category": "Paradox",
+        "title": "Export Generated Snippets (HTML / Print)"
+      },
+      {
         "command": "px.createMod",
         "category": "Paradox",
         "title": "New Mod (project folder + launcher link)"
@@ -789,7 +794,7 @@
           {
             "id": "px.step.explore",
             "title": "Try it",
-            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)",
+            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)\n[Export all generated snippets](command:px.exportSnippets) as searchable HTML with previews and printing.",
             "media": {
               "markdown": "media/walkthrough/explore.md"
             },
@@ -959,6 +964,22 @@
         "title": "Editor",
         "order": 4,
         "properties": {
+          "px.completion.mode": {
+            "type": "string",
+            "enum": [
+              "minimal",
+              "examples",
+              "names"
+            ],
+            "enumDescriptions": [
+              "Insert documented fields with blank values and Tab stops. Fields marked optional are omitted.",
+              "Insert documented example blocks and scripted-call parameters.",
+              "Insert only the keyword name."
+            ],
+            "default": "minimal",
+            "order": 0,
+            "markdownDescription": "What accepting a script keyword completion inserts. Minimal keeps the fields from valid documented examples and leaves their values blank; unknown syntax stays a name. Explicit definition templates and **Paradox: Insert Snippet** still insert their full templates. Changes apply immediately."
+          },
           "px.hover.detail": {
             "type": "string",
             "enum": [
@@ -1466,6 +1487,10 @@
         {
           "command": "px.openSettings",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.exportSnippets",
+          "when": "px.isCk3Workspace"
         }
       ],
       "view/title": [
@@ -1900,6 +1925,11 @@
         "command": "px.insertSnippet",
         "key": "ctrl+alt+i",
         "when": "editorTextFocus && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
+      },
+      {
+        "command": "px.exportSnippets",
+        "key": "ctrl+alt+shift+i",
+        "when": "px.isCk3Workspace"
       }
     ]
   },

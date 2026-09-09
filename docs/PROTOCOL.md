@@ -81,6 +81,7 @@ interface ParadoxSettings {
   parentPaths: string[];       // dependency mods, load order, base first
   workspaceMods?: string[];    // mods being EDITED (reference indexing + diagnostics)
   locLanguage: string;         // "english", ...
+  completionMode?: "minimal" | "examples" | "names"; // default minimal
   scopeInlayHints: boolean;
   indexAssets?: boolean;      // default true; index .asset definitions and references
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
@@ -98,6 +99,8 @@ interface ParadoxSettings {
 ```
 
 `indexAssets` defaults to `true`. Set it to `false` to skip `.asset` definition and reference indexing across workspace mods, dependency mods and vanilla, including on-demand reference searches. Changing it through `paradox/configChanged` rebuilds the index without a restart. Open-file syntax features and on-demand texture previews remain available. Support for `.asset` indexing comes from the active game profile.
+
+`completionMode` controls ordinary script keyword insertion. `minimal` (the default) inserts the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional, with no example values. `examples` restores full documented blocks and scripted-call parameter snippets. `names` inserts only keyword names. Unknown syntax stays a name in Minimal mode. Explicit definition/child-block snippet items and `paradox/snippets` keep their full templates. Snippet-capable clients receive `CompletionItemKind.Snippet` for generated templates, so the editor shows its snippet icon. Reference/value completions are unchanged. Clients without standard LSP snippet support receive the same punctuation as plain text. Send `paradox/configChanged` to change the mode without restarting or rebuilding the index. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
 Every capability in `client` is independent and defaults to **off**, so a
 client declares exactly what it implements and the server tailors its output
@@ -797,3 +800,11 @@ capability at a time. A client declaring nothing (every field off) gets:
 - index health is mirrored to `window/logMessage` regardless: a startup line
   naming the resolved bundled-data folders (or their absence) and `status:`
   lines with token/definition counts on indexing transitions.
+
+### `paradox/snippetCatalogue`
+
+Request with `{}` to export every generated script template for the active game. No open document, cursor filter or item cap applies. The response is `{ gameId, gameName, generatedAt, indexing, entries }`; `generatedAt` is an ISO timestamp. While indexing, `indexing` is true and `entries` is empty; request again after the index finishes.
+
+Each entry has `id`, `label`, `category`, `detail`, and `variants`. Categories are `Engine`, `Definitions`, `Child blocks`, and `Scripted calls`. Each variant carries `label` (`Minimal`, `Examples`, `All fields`, or `Template`), `snippet`, `plain`, and `preview` (completion-details Markdown). Engine templates use loaded documentation, skeletons use the active profile, and scripted calls use effective indexed definitions. Unknown syntax contributes no template. Fixed JSON snippets and GUI completions are outside this script catalogue.
+
+This request is independent of `completionMode` and client snippet support: every available variant includes both insertion formats. Hosts can build searchable or printable exports from the response. The VS Code command is `px.exportSnippets` (Paradox: Export Generated Snippets).
