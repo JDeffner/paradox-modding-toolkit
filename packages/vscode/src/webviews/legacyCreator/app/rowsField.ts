@@ -15,6 +15,7 @@
  * Browser code, styled by ui.css (`.px-field`, `.px-item`, `.px-modrow`). No
  * game knowledge: every entry, word and picture arrives from the owner.
  */
+import { el } from "../../shared/dom";
 import { iconEl } from "../../shared/icons";
 import { menu, type MenuItem } from "../../shared/overlay";
 import { scrubbable } from "../../shared/scrub";
@@ -46,13 +47,6 @@ export interface RowsFieldOptions {
   image?: (value: string) => string | null;
   /** The line the game prints for the row, drawn under the controls. */
   preview?: (row: ModifierRow) => HTMLElement | null;
-}
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 export function rowsField(options: RowsFieldOptions): Field<ModifierRow[]> {

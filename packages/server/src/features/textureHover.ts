@@ -12,6 +12,7 @@ import * as path from "path";
 import { ddsFormatInfo, ddsToPngDataUri } from "../dds";
 import { getLineText } from "../documents";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
+import { readTexturePreviewBackground, type TexturePreviewBackground } from "@px-lsp/protocol/texturePreview";
 import { assetRoots, bareNameBaseDirs, resolveAssetPath, assetFileAt } from "./assetPaths";
 import { fileLink, renderHoverMarkdown, type CardInput } from "./hoverRender";
 
@@ -27,17 +28,17 @@ interface TexturePreview {
   fileBytes: number;
 }
 
-/** Preview cache keyed by fsPath:mtime. */
+/** Display thumbnails only. A setting change must not reuse the old background. */
 const cache = new Map<string, TexturePreview | null>();
 
-function cachedPreview(fsPath: string): TexturePreview | null {
+function cachedPreview(fsPath: string, background: TexturePreviewBackground): TexturePreview | null {
   let stat: fs.Stats;
   try {
     stat = fs.statSync(fsPath);
   } catch {
     return null;
   }
-  const key = `${fsPath}:${stat.mtimeMs}`;
+  const key = `${fsPath}:${stat.mtimeMs}:${background}`;
   if (cache.has(key)) return cache.get(key) ?? null;
   let entry: TexturePreview | null = null;
   try {
@@ -46,7 +47,7 @@ function cachedPreview(fsPath: string): TexturePreview | null {
     if (info) {
       let uri: string | null;
       try {
-        uri = ddsToPngDataUri(buf, 256);
+        uri = ddsToPngDataUri(buf, 256, 90_000, background);
       } catch {
         uri = null; // unsupported format → caller degrades to a file link
       }
@@ -139,7 +140,10 @@ export function provideTextureHover(
   // A client without `fileLinks` gets the resolved path as text instead of a
   // link its hover renderer would not navigate.
   const open = fileLink(resolved.fsPath, "open file", { plain: `\`${resolved.fsPath}\`` });
-  const preview = cachedPreview(resolved.fsPath);
+  const preview = cachedPreview(
+    resolved.fsPath,
+    readTexturePreviewBackground(settings.texturePreviewBackground)
+  );
   // The same card every other hover draws: badge and name, the picture, then
   // one facts line with what the file itself knows (dimensions, encoding, size
   // on disk). The picture is the one slot in the design allowed to be tall.

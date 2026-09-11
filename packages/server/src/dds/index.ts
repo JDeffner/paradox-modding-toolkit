@@ -1,5 +1,10 @@
 import { decodeDds, type DecodedImage } from "./decoder";
 import { encodePng } from "./png";
+import {
+  TEXTURE_CHECKER_SIZE,
+  texturePreviewColors,
+  type TexturePreviewBackground,
+} from "@px-lsp/protocol/texturePreview";
 
 export { decodeDds, ddsFormatInfo } from "./decoder";
 export { encodePng } from "./png";
@@ -46,13 +51,45 @@ export function downscale(img: DecodedImage, maxDim: number): DecodedImage {
  * DXT1 event scene measured ~108 KB). So we cap the URI at `maxUriLength` and
  * progressively shrink maxDim until it fits, decoding only once.
  */
-export function ddsToPngDataUri(buf: Uint8Array, maxDim = 256, maxUriLength = 90_000): string | null {
+export function ddsToPngDataUri(
+  buf: Uint8Array,
+  maxDim = 256,
+  maxUriLength = 90_000,
+  background?: TexturePreviewBackground
+): string | null {
   const decoded = decodeDds(buf);
   for (let dim = maxDim; dim >= 32; dim = Math.floor(dim * 0.75)) {
     const scaled = downscale(decoded, dim);
-    const png = encodePng(scaled.width, scaled.height, scaled.pixels);
+    const preview = background ? compositeTexturePreview(scaled, background) : scaled;
+    const png = encodePng(preview.width, preview.height, preview.pixels);
     const uri = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
     if (uri.length <= maxUriLength) return uri;
   }
   return null;
+}
+
+/** Composite a display copy after downscaling; source pixels and exports keep their alpha. */
+export function compositeTexturePreview(
+  image: DecodedImage,
+  background: TexturePreviewBackground
+): DecodedImage {
+  const colors = texturePreviewColors(background).map((hex) => [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ]);
+  const pixels = new Uint8Array(image.pixels.length);
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      const offset = (y * image.width + x) * 4;
+      const color = colors[(Math.floor(x / TEXTURE_CHECKER_SIZE) + Math.floor(y / TEXTURE_CHECKER_SIZE)) % 2];
+      const alpha = image.pixels[offset + 3] / 255;
+      for (let channel = 0; channel < 3; channel++)
+        pixels[offset + channel] = Math.round(
+          image.pixels[offset + channel] * alpha + color[channel] * (1 - alpha)
+        );
+      pixels[offset + 3] = 255;
+    }
+  }
+  return { width: image.width, height: image.height, pixels };
 }

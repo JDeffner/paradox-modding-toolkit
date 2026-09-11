@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Consolidate repeated webview element builders, texture request caches, selection geometry, script-block wrapping and mod-folder detection. Use the shared secure nonce generator in the remaining editor panels.
+
+- Refresh the onboarding walkthrough for current tools and recommend both game-data dumps. Setup and the health tooltip now distinguish toolkit-provided data from your generated script docs and data types.
+
+- Share one texture background between DDS editors and hover previews, with checkerboard as the default and transparent PNG exports. Fix localization writes after stale lookups, preserve current editor text and UTF-8 BOMs, honor plain-text completion clients, update the live editor test driver, and remove the Workshop confirmation's colored edge.
+
 ## 0.4.3 (beta) - completion templates and viewer backgrounds
 
 - Add Export Generated Snippets: save and open a searchable HTML catalogue with all available variants, value hints, copy controls and printing.

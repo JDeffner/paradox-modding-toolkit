@@ -9,11 +9,12 @@
  * to be decoration), jumping to the source is its own small button on the
  * header, and the script is colored with the shared tokenizer.
  */
+import { el } from "../../shared/dom";
 import type { EventDetail, EventStepTarget } from "@px-lsp/protocol/protocol";
 import { simulationSteps, type SimStep } from "../../eventSim/steps";
 import { tokenizeScriptLine } from "../tokenize";
 import { iconEl } from "../../shared/icons";
-import { badge, el, iconButton } from "./dom";
+import { badge, iconButton } from "./dom";
 
 export interface SimCallbacks {
   onOpen(file: string, line?: number): void;

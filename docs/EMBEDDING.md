@@ -168,6 +168,10 @@ concrete:
 
 Set `indexAssets: false` to skip graphics `.asset` definition and reference indexing in all roots. It defaults to `true` for profiles that support `.asset` files. Send the changed settings through `paradox/configChanged` to rebuild the index without a restart. This does not disable open-file syntax features or on-demand texture previews.
 
+Set `texturePreviewBackground` to `checkerboard` (the default), `dark`, `light`, or a six-digit hex color to choose the background behind texture hover images. Invalid values use checkerboard. The background is part of the generated thumbnail, so it works with ordinary Markdown image rendering. A settings update changes subsequent hovers without an index rebuild. VS Code uses the same workspace choice for its DDS editors; source files and exported PNGs retain their transparency.
+
+Declare the supported completion documentation formats in `textDocument.completion.completionItem.documentationFormat`, in preference order. Omit it or send `["plaintext"]` for plain insertion previews and value hints. The exported snippet catalogue keeps its explicitly documented Markdown format regardless of these capabilities.
+
 Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
 The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`,
@@ -274,9 +278,9 @@ that **contains** the per-game folders, not one of them.
 Both files resolve independently under `<dataDir>/<gameId>/`, and the whole
 path is re-derived when `paradox/configChanged` switches the game, so the
 override stays profile-correct. A `<gameId>/` folder holding only one of the
-two assets, or missing entirely, is a supported state and not an error: only
-CK3 ships a wiki mirror, so Vic3 and EU5 report `tokens: 0` in `paradox/status`
-until the user dumps `script_docs`.
+two assets, or missing entirely, is a supported state and not an error.
+
+CK3 and Victoria 3 ship script-doc snapshots, and all three games ship data-type dump snapshots. User-generated dumps take priority; a missing bundle remains a supported state.
 
 `wikidocsDir` is the **deprecated** predecessor. It overrides the `wikidocs/`
 folder alone, leaves `freqs.json` on the bundle root, and does not follow a
@@ -351,7 +355,7 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 | If you are building | Wire these |
 |---|---|
 | Anything at all | `paradox/configChanged` (push settings without a restart), `paradox/status` and `paradox/indexChanged` (server to client; index health and a re-query signal) |
-| A status bar or an index panel | `paradox/status`, `paradox/indexStats`, `paradox/reloadDocs` (re-parse `script_docs` after the user dumps them) |
+| A status bar or an index panel | `paradox/status`, `paradox/indexStats`, `paradox/reloadDocs` (reload both script docs and data types after the user generates them) |
 | A scope indicator | `paradox/scopeAt` (see below) |
 | An “insert a definition” command or palette | `paradox/snippets` (see below) |
 | Localization tooling | `paradox/lookupLoc`, `paradox/locCoverage` |
@@ -364,6 +368,8 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 The mod-scoped requests (`modOverview`, `locCoverage`, `overrides`) take
 `{ modRoot?: string | null }`: one workspace mod by absolute root path, or
 absent for all of them.
+
+For data health, show the script-doc and data-type sources separately. `tokensFromScriptDocs && !tokensFromBundledDumps` means a generated script dump is loaded. `StatusPayload.dataTypesSource` reports `generated`, `bundled` or `none`; absent means the server does not report it. The optional `status` in `paradox/reloadDocs` is the refreshed status, also sent through `paradox/status`. Recommend generating both dumps after game patches, then reloading. The status identifies their source, not their age.
 
 ### paradox/guiSourceEdit
 

@@ -1,18 +1,12 @@
-# The Paradox sidebar
+# Explore the Paradox sidebar
 
-Click the Paradox icon in the Activity Bar. The **Project** view at the top shows what the extension sees and what it is doing:
+Click the Paradox icon in the Activity Bar. The **Project** view shows your workspace mods, effective paths and the tools available for the active game.
 
-- **Workspace Mods** — every detected mod, with a switch to include or exclude it from indexing, and a dot to pin the views below to one mod
-- **Toggles** — the tiger baseline filter, the error.log watcher, vanilla diagnostics and scope inlay hints
-- **Tools** — launchers for content scaffolds, translation, images, reports, and the game itself
-- **Create** lists the visual creators the active game has: Trait, Dynasty Legacy, Culture, Tradition, Dynasty Tree and the Coat of Arms Designer. Each one is a form over the game's own keys, and it writes the definition and its localization into your mod.
+- **Workspace Mods** controls which mods are indexed and which mod the views focus on.
+- **Paths** shows the game, dump and mod folders actually in use, including detected paths that are not saved in settings.
+- **Create** offers content scaffolds and the visual creators supported by your game.
+- **Test & Troubleshoot** holds the available validation tools. Use the editor's Run button or **Run and Debug** to launch the game.
 
-Below it, collapsed until you need them:
+The other views cover content inventory, problems, localization coverage, overrides and dependencies. **Show Event Graph** opens event flow; **Show Mod Report** gathers the mod checks into one page.
 
-- **Mod Overview** — content inventory by kind, with counts
-- **Problems by Type** — diagnostics grouped by code instead of by file
-- **Localization Coverage** — per language: missing, orphaned, untranslated
-- **Overrides & Conflicts** — what shadows vanilla (and who wins)
-- **Dependencies** — impact view for the definition at the cursor
-
-**Show Mod Report** (the checklist button above the Mod Overview list) collects all of it into one page.
+For setup and the source of each loaded dump set, click **PX Toolkit** in the status bar.

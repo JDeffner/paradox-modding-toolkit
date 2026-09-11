@@ -194,6 +194,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     indexAssets: c.indexAssets,
     scopeInlayHints: c.scopeInlayHints,
     completionMode: c.completionMode,
+    texturePreviewBackground: c.texturePreviewBackground,
     calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
@@ -381,6 +382,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tokensFromBundledDumps: lastServerStatus.tokensFromBundledDumps ?? false,
       definitions: lastServerStatus.definitions,
       tokensWikiOnly: lastServerStatus.tokensWikiOnly,
+      dataTypesSource: lastServerStatus.dataTypesSource,
+      dataTypesCommand: metaFor(cfg.gameId).dataTypesCommand ?? "DumpDataTypes",
       indexing: lastServerStatus.indexing,
       gameOk: cfg.gamePath !== null,
       modOk: cfg.modPath !== null,
@@ -700,7 +703,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.reloadScriptDocs", async () => {
       const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
       void vscode.window.showInformationMessage(
-        `Paradox Modding Toolkit: reloaded script_docs data (${result.tokens} tokens).`
+        `Paradox Modding Toolkit: reloaded script docs and data types (${result.tokens} engine tokens).`
       );
     }),
     vscode.commands.registerCommand("px.dumpIndexStats", async () => {
@@ -874,8 +877,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     notifyChanged: notifyModFileChanged,
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
-        if (!replaceLocLineValue(file, line, value))
-          throw new Error(`line ${line + 1} is not a loc entry anymore`);
+        if (!(await replaceLocLineValue(file, line, key, value)))
+          throw new Error(`Localization key ${key} is no longer in the file`);
         notifyModFileChanged(file);
         return;
       }
@@ -897,7 +900,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const owner = modRootFor(file, cfg);
       const locCfg = owner && owner !== cfg.modPath ? { ...cfg, modPath: owner } : cfg;
       if (locCfg.modPath) {
-        const locFile = upsertNewModLoc(locCfg, optionKey, "New option");
+        const locFile = await upsertNewModLoc(locCfg, optionKey, "New option");
         notifyModFileChanged(locFile);
       }
     },
@@ -936,7 +939,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           [`${id}.desc`, desc || "Describe what is happening here."],
           ...letters.map((l): [string, string] => [`${id}.${l}`, "New option"]),
         ];
-        for (const [key, value] of writes) notifyModFileChanged(upsertNewModLoc(locCfg, key, value));
+        for (const [key, value] of writes) notifyModFileChanged(await upsertNewModLoc(locCfg, key, value));
       }
     },
   };
@@ -1369,17 +1372,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const setupDeps: SetupDeps = {
     storageDir,
     getConfig: () => cfg,
-    refresh: () => {
+    refresh: async () => {
       cfg = resolveConfig();
       tiger.resetErrorNotice();
       tiger.refreshStatus();
       updateStatus();
-      void lc.sendNotification(configChangedNotification, toSettings(cfg));
+      await lc.sendNotification(configChangedNotification, toSettings(cfg));
+      const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
+      return result.status ?? lastServerStatus;
     },
     log,
     showOutput: () => output.show(true),
-    hasBundledDumps: (gameId: string) =>
-      fs.existsSync(context.asAbsolutePath(path.join("data", gameId, "script_docs"))),
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),

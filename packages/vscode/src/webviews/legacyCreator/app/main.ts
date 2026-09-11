@@ -17,6 +17,7 @@
  * those keys gets a designed control and which falls through to the raw
  * fields, and every key reaches the modder either way (AD-5).
  */
+import { el } from "../../shared/dom";
 import type {
   DefinitionForm,
   DefinitionFormKey,
@@ -196,17 +197,6 @@ interface Perk {
   /** The effect builder again, for the loc and the keys only it knows. */
   effect: EffectField | null;
   others: Record<string, Field<string>>;
-}
-
-// ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 function trackName(): string {

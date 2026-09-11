@@ -7,6 +7,7 @@
  * script on the clipboard, write a flag into the mod's coat_of_arms folder,
  * and save an exported PNG. Rendering and editing live in app/.
  */
+import { makeNonce } from "../nonce";
 import * as vscode from "vscode";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
@@ -204,11 +205,4 @@ export class FlagBuilderPanel {
     await vscode.workspace.fs.writeFile(target, Buffer.from(base64, "base64"));
     this.post({ type: "toast", message: `Exported ${path.basename(target.fsPath)}.` });
   }
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

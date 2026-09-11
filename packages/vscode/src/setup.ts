@@ -4,50 +4,22 @@
  * user with concrete instructions. Re-runnable as a health check.
  */
 import * as vscode from "vscode";
-import * as fs from "fs";
-import * as path from "path";
 import type { PxConfig } from "./config";
-import { LOG_FILES } from "@px-lsp/protocol/constants";
+import type { StatusPayload } from "@px-lsp/protocol/protocol";
+import { dataHealthLines } from "./dataHealth";
 import { readModName } from "@px-lsp/protocol/modName";
 import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
-import { isCk3, metaFor, scriptDocsDir } from "./meta";
+import { metaFor, scriptDocsDir } from "./meta";
 
 export interface SetupDeps {
   storageDir: string;
   getConfig: () => PxConfig;
   /** Re-read config and rebuild data (called after settings were written). */
-  refresh: () => void;
+  refresh: () => Promise<StatusPayload>;
   log: (msg: string) => void;
   /** Reveal the Paradox Modding Toolkit output channel (where the report lands). */
   showOutput: () => void;
-  /** Whether the extension ships a bundled script_docs snapshot for the game. */
-  hasBundledDumps: (gameId: string) => boolean;
-}
-
-function scriptDocsPresent(logsPath: string | null): boolean {
-  if (!logsPath) return false;
-  return LOG_FILES.every(({ file }) => fs.existsSync(path.join(logsPath, file)));
-}
-
-/** The data-type dump, in any shape any game version has written it:
- * data_types.log, data_type*.txt, or a data_types/ folder — in the script_docs
- * folder or its sibling logs/ (Vic3 dumps script_docs to docs/ but data types
- * to logs/data_types). Mirrors the server's probing. */
-function dataTypesDumpPresent(logsPath: string): boolean {
-  const dirs = [logsPath];
-  const sibling = path.resolve(logsPath, "..", "logs");
-  if (sibling.toLowerCase() !== path.resolve(logsPath).toLowerCase()) dirs.push(sibling);
-  for (const dir of dirs) {
-    if (fs.existsSync(path.join(dir, "data_types.log"))) return true;
-    if (fs.existsSync(path.join(dir, "data_types"))) return true;
-    try {
-      if (fs.readdirSync(dir).some((n) => /^data_type.*\.txt$/i.test(n))) return true;
-    } catch {
-      /* unreadable dir */
-    }
-  }
-  return false;
 }
 
 export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): Promise<string | null> {
@@ -85,7 +57,7 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
     void vscode.window.showInformationMessage(
       `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
     );
-    deps.refresh();
+    await deps.refresh();
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -148,39 +120,24 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
     );
   }
 
-  // 3. Logs / script_docs. A game with bundled data (wiki tables or a bundled
-  // dump snapshot) is ready without the user's own dump — the dump is the
-  // optional exact-version upgrade. Without bundled data the how-to moves to
-  // the top action item below.
+  // Report the loaded sources, not merely the presence of dump files.
+  const status = await deps.refresh();
   cfg = deps.getConfig();
-  const docsOk = scriptDocsPresent(cfg.logsPath);
-  const bundled = isCk3(meta.id)
-    ? "bundled wiki tables"
-    : deps.hasBundledDumps(meta.id)
-      ? "bundled script_docs snapshot"
-      : null;
-  if (docsOk) {
-    report.push(`✓ script_docs ${docsDir}: ${cfg.logsPath}`);
-  } else if (cfg.logsPath) {
-    report.push(
-      bundled
-        ? `✓ engine data: ${bundled} (optional upgrade: launch ${meta.shortName} with -debug_mode, ` +
-            `open the console (\`), run "script_docs", then run "Paradox: Reload Game Data (script_docs)" ` +
-            `to match your exact game version)`
-        : `• script_docs ${docsDir}: not generated yet.`
-    );
-  } else {
-    report.push(
-      `✗ ${docsDir} folder: not found — set px.logsPath to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}`
-    );
-  }
   const dataTypesCmd = meta.dataTypesCommand ?? "DumpDataTypes";
-  if (cfg.logsPath && !dataTypesDumpPresent(cfg.logsPath)) {
-    report.push(
-      `• data types: not dumped yet${bundled ? ` (${bundled} are used meanwhile)` : ""}. ` +
-        `Run "${dataTypesCmd}" in the game console for complete [datafunction] completion in gui/localization files.`
-    );
-  }
+  const [scriptDocs, dataTypes, advice] = dataHealthLines(status, dataTypesCmd);
+  report.push(`${status.tokens > 0 ? "✓" : "✗"} ${scriptDocs}`);
+  report.push(`• ${dataTypes}`);
+  report.push(`• ${advice}`);
+  report.push(
+    `• Launch ${meta.shortName} with -debug_mode and open the game console to run both commands. ` +
+      `script_docs writes to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}; ` +
+      `${dataTypesCmd} writes under Documents/Paradox Interactive/${meta.docsFolderName}/logs.`
+  );
+  report.push(
+    cfg.logsPath
+      ? `• Dump folder in use (px.logsPath): ${cfg.logsPath}`
+      : `• Dump folder not found. Set px.logsPath to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir} after generating the dumps.`
+  );
 
   // 4. Tiger — only for games one exists for (EU5 has none; skip silently).
   const flavor = tigerFlavorFor(cfg.gameId);
@@ -197,19 +154,6 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
       );
     }
   }
-
-  // First-run guidance: without ANY bundled data (wiki or dump snapshot), the
-  // script_docs dump is what makes completion/hovers useful. Say so first.
-  if (!isCk3(meta.id) && !docsOk && !bundled) {
-    report.unshift(
-      `➜ FIRST: run script_docs in ${meta.name}. Launch it with -debug_mode, open the console (\`), ` +
-        `type "script_docs"; the dumps land in Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir}. ` +
-        `${meta.shortName} ships no bundled fallback data, so until then completion and hovers stay thin. ` +
-        `Afterwards run "Paradox: Reload Game Data (script_docs)".`
-    );
-  }
-
-  deps.refresh();
 
   deps.log("setup report:\n  " + report.join("\n  "));
   const checks = flavor ? 4 : 3;

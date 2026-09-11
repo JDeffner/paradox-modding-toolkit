@@ -67,8 +67,10 @@ export async function translateNextCommand(
     if (value === undefined) break; // Esc: stop the loop
     if (item.file !== undefined && item.line !== undefined && value !== "" && value !== item.value) {
       try {
-        if (replaceLocLineValue(item.file, item.line, value)) onLocFileChanged(item.file);
-        written++;
+        if (await replaceLocLineValue(item.file, item.line, item.key, value)) {
+          onLocFileChanged(item.file);
+          written++;
+        }
       } catch (err) {
         void vscode.window.showErrorMessage(
           `Paradox Modding Toolkit: failed to write ${item.key}: ${String(err)}`
@@ -89,7 +91,7 @@ export async function translateNextCommand(
     if (value === undefined) break;
     if (value !== "") {
       try {
-        const file = upsertNewModLoc(cfg, item.key, value, lang.language);
+        const file = await upsertNewModLoc(cfg, item.key, value, lang.language);
         onLocFileChanged(file);
         written++;
       } catch (err) {

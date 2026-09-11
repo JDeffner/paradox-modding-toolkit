@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CompletionItem } from "vscode-languageserver/node";
+import { MarkupKind, type CompletionItem } from "vscode-languageserver/node";
 import type { TokenData } from "@px-lsp/protocol/types";
 import { withCompletionPreview } from "../src/features/completionPreview";
 import { minimalTokenInsert } from "../src/features/completionInsert";
@@ -17,6 +17,29 @@ const variable: TokenData = {
 };
 
 describe("completion previews", () => {
+  it("renders plain-text previews and field descriptions without Markdown syntax", () => {
+    const item = withCompletionPreview(
+      {
+        label: variable.name,
+        insertText: minimalTokenInsert(variable)!.snippet,
+        insertTextFormat: 2,
+        documentation: variable.doc,
+      },
+      variable,
+      undefined,
+      MarkupKind.PlainText
+    );
+    expect(item.documentation).toMatchObject({ kind: "plaintext" });
+    const value = markdown(item);
+    expect(value).toContain("Insertion preview\n\nset_variable = {");
+    expect(value).toContain("name = <name>");
+    expect(value).toContain("name: the name of the variable");
+    expect(value).not.toMatch(/```|\*\*|\| Field|&lt;|\$1/);
+    const documentation = item.documentation;
+    expect(withCompletionPreview(item, variable, undefined, MarkupKind.PlainText).documentation).toEqual(
+      documentation
+    );
+  });
   it("maps game-documented placeholder descriptions to the inserted fields", () => {
     const item: CompletionItem = {
       label: variable.name,

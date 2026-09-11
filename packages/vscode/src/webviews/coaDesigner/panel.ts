@@ -8,6 +8,7 @@
  * `gfx/coat_of_arms` and so get their own key prefixes. The definition it
  * writes is a plain coat of arms: a frame is preview decoration, never script.
  */
+import { makeNonce } from "../nonce";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
@@ -497,11 +498,4 @@ function listTxt(dir: string): string[] {
   } catch {
     return [];
   }
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

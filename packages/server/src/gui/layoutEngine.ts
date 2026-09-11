@@ -422,7 +422,7 @@ export function computeGuiLayout(text: string, options?: LayoutOptions): LayoutN
   }
   const root: LayoutRect = { x: 0, y: 0, w: viewport.w, h: viewport.h };
   const chain: ExplainChain | undefined = options?.explain ? { sink: options.explain } : undefined;
-  const nodes = widgets.map((w) => arrange(w, root, "plain", measurer, undefined, chain));
+  const nodes = widgets.map((w) => arrange(w, root, measurer, undefined, chain));
   if (declared) for (const n of nodes) n.declared = true;
   if (options?.timing) {
     options.timing.parseMs = t1 - t0;
@@ -1385,12 +1385,9 @@ function explicitSize(node: WNode): { w: number; h: number } | null {
 // Arrangement, top-down
 // ---------------------------------------------------------------------------
 
-type ParentKind = "plain" | "box" | "flow";
-
 function arrange(
   node: WNode,
   content: LayoutRect,
-  parentKind: ParentKind,
   measurer: TextMeasurer,
   forced?: LayoutRect,
   chain?: ExplainChain
@@ -1490,7 +1487,7 @@ function arrange(
         w: Math.max(0, rect.w - ml - mr),
         h: Math.max(0, rect.h - mt - mb),
       };
-      out.children = node.children.map((c) => arrange(c, inner, "plain", measurer, undefined, sub));
+      out.children = node.children.map((c) => arrange(c, inner, measurer, undefined, sub));
       // A margin_widget with NO explicit size hugs its children AT the margin
       // offset: both probes (B3-Q2; 2026-08-09) saw the bg exactly
       // behind the child, never in the margin strips an origin-anchored hug
@@ -1507,7 +1504,7 @@ function arrange(
       break;
     }
     default:
-      out.children = node.children.map((c) => arrange(c, rect, "plain", measurer, undefined, sub));
+      out.children = node.children.map((c) => arrange(c, rect, measurer, undefined, sub));
       break;
   }
   return out;
@@ -1739,7 +1736,7 @@ function arrangeBoxChildren(
       const zero: LayoutRect = vertical
         ? { x: rect.x + ml, y: cursor, w: 0, h: 0 }
         : { x: cursor, y: rect.y + mt, w: 0, h: 0 };
-      out.push(arrange(child, zero, "box", measurer, zero, chain));
+      out.push(arrange(child, zero, measurer, zero, chain));
       continue;
     }
     i++;
@@ -1756,7 +1753,7 @@ function arrangeBoxChildren(
     const forced: LayoutRect = vertical
       ? { x: crossOffset, y: cursor, w: cross, h: main }
       : { x: cursor, y: crossOffset, w: main, h: cross };
-    out.push(arrange(child, forced, "box", measurer, forced, chain));
+    out.push(arrange(child, forced, measurer, forced, chain));
     cursor += main + 2 * side + spacing;
   }
   return out;
@@ -1785,7 +1782,7 @@ function arrangeFlowChildren(
     const forced: LayoutRect = flow.vertical
       ? { x: crossOffset, y: cursor, w: s.w, h: s.h }
       : { x: cursor, y: crossOffset, w: s.w, h: s.h };
-    out.push(arrange(child, forced, "flow", measurer, forced, chain));
+    out.push(arrange(child, forced, measurer, forced, chain));
     cursor += (flow.vertical ? s.h : s.w) + spacing;
   }
   return out;
@@ -1890,7 +1887,7 @@ function arrangeGridChildren(
 ): LayoutNode[] {
   return gridCells(grid, measurer).map((cell) => {
     const forced: LayoutRect = { x: rect.x + cell.x, y: rect.y + cell.y, w: cell.w, h: cell.h };
-    return arrange(cell.child, forced, "plain", measurer, forced, chain);
+    return arrange(cell.child, forced, measurer, forced, chain);
   });
 }
 

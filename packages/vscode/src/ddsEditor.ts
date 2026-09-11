@@ -13,10 +13,10 @@ import { decodeDds, ddsFormatInfo, encodePng } from "@px-lsp/server/dds";
 import { makeNonce } from "./webviews/nonce";
 import { ddsPreviewHtml } from "./webviews/ddsPreview/html";
 import { bundleUri, watchBundle, webviewSource } from "./webviews/devReload";
-import { readViewerBackground } from "./webviews/shared/viewerBackground";
+import { readTexturePreviewBackground } from "@px-lsp/protocol/texturePreview";
 import type { AppToHost } from "./webviews/ddsPreview/messages";
 
-const BACKGROUND_KEY = "px.ddsPreview.background";
+const BACKGROUND_SETTING = "texturePreview.background";
 
 class DdsDocument implements vscode.CustomDocument {
   constructor(
@@ -106,17 +106,34 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
       });
     };
 
+    const sendBackground = () => {
+      const value = readTexturePreviewBackground(
+        vscode.workspace.getConfiguration("px").get(BACKGROUND_SETTING)
+      );
+      return panel.webview.postMessage({
+        type: "background",
+        value: value === "checkerboard" ? "default" : value,
+      });
+    };
+    const backgroundChanges = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(`px.${BACKGROUND_SETTING}`)) void sendBackground();
+    });
     const messages = panel.webview.onDidReceiveMessage(async (msg: AppToHost) => {
       try {
         switch (msg?.type) {
           case "ready":
-            await panel.webview.postMessage({
-              type: "background",
-              value: readViewerBackground(this.context.workspaceState.get(BACKGROUND_KEY)),
-            });
+            await sendBackground();
             break;
           case "background":
-            await this.context.workspaceState.update(BACKGROUND_KEY, readViewerBackground(msg.value));
+            await vscode.workspace
+              .getConfiguration("px")
+              .update(
+                BACKGROUND_SETTING,
+                readTexturePreviewBackground(msg.value),
+                vscode.workspace.workspaceFolders?.length
+                  ? vscode.ConfigurationTarget.Workspace
+                  : vscode.ConfigurationTarget.Global
+              );
             break;
           case "copyPath":
             await vscode.env.clipboard.writeText(scriptPath(document.uri.fsPath));
@@ -146,6 +163,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     const watcher = watchBundle(source, "ddsPreview", render);
     panel.onDidDispose(() => {
       messages.dispose();
+      backgroundChanges.dispose();
       watcher.dispose();
     });
     render();

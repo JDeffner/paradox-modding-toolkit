@@ -93,7 +93,7 @@ Reloading game documentation updates runtime language knowledge and generated sn
 
 - [ ] Generate fresh `script_docs` from the updated game in debug mode. Check timestamps, nonempty output and parser coverage for effects, triggers, event targets and modifiers, plus on-actions where available.
 - [ ] Generate fresh `DumpDataTypes` output where supported. Check that the loader finds the game's output location and format, including a sibling logs directory when script docs are in a docs directory.
-- [ ] Run `Paradox: Reload Game Data (script_docs)`. Confirm added, changed and removed names match the fresh dumps, and that fallback wiki data does not restore removed names in a covered category.
+- [ ] Run `Paradox: Reload Game Data`. Confirm added, changed and removed names match the fresh dumps, and that fallback wiki data does not restore removed names in a covered category.
 - [ ] Check documentation format changes against the parsers. Add focused fixtures for changed syntax, parameter descriptions and optional-field markers.
 - [ ] Review bundled documentation used without local dumps. Refresh the relevant source snapshots and attribution deliberately; check fallback behavior with local logs unavailable.
 

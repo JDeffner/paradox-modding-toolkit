@@ -4,16 +4,11 @@
  * & Health Check.
  */
 import * as vscode from "vscode";
+import type { StatusPayload } from "@px-lsp/protocol/protocol";
+import { dataHealthLines } from "./dataHealth";
 
-export interface PxStatus {
-  tokens: number;
-  indexing: boolean;
-  tokensFromScriptDocs: boolean;
-  /** The script_docs tokens are the bundled snapshot, not the user's dump. */
-  tokensFromBundledDumps: boolean;
-  definitions: number;
-  /** Tokens the bundled wiki added on top of script_docs (mostly deprecated). */
-  tokensWikiOnly?: number;
+export interface PxStatus extends StatusPayload {
+  dataTypesCommand: string;
   gameOk: boolean;
   modOk: boolean;
   tigerOk: boolean;
@@ -73,18 +68,7 @@ export class PxStatusBar implements vscode.Disposable {
     const mark = (phase: string, ok: boolean) =>
       this.phaseState(phase) === "running" ? "○" : ok ? "✓" : "✗";
 
-    // Say where the tokens came from, with the split, because "script_docs +
-    // wiki" reads as though the wiki is doing half the work. It is not: with a
-    // real dump loaded the wiki contributes a handful of extra NAMES (mostly
-    // deprecated API the current patch no longer has) on top of usage examples
-    // for tokens the dump already had.
-    const wikiOnly = s.tokensWikiOnly ?? 0;
-    const own = s.tokens - wikiOnly;
-    const tokenSource = s.tokensFromBundledDumps
-      ? "bundled snapshot — run script_docs in the game console to match your patch"
-      : s.tokensFromScriptDocs
-        ? `${n(own)} from your script_docs${wikiOnly > 0 ? `, ${n(wikiOnly)} wiki-only` : ""}`
-        : "bundled wiki only — run script_docs in the game console";
+    const [scriptDocs, dataTypes, advice] = dataHealthLines(s, s.dataTypesCommand);
 
     // Loading rows first, then configuration. Each phase reports INTO its own
     // value row rather than adding a second one: "harvesting engine tokens…"
@@ -96,7 +80,7 @@ export class PxStatusBar implements vscode.Disposable {
       "",
       this.phaseState("engine") === "running"
         ? `○ harvesting engine tokens…`
-        : `${mark("engine", s.tokens > 0)} engine tokens: ${n(s.tokens)}${s.tokens > 0 ? ` (${tokenSource})` : ""}`,
+        : `${mark("engine", s.tokens > 0)} engine tokens: ${n(s.tokens)}`,
       s.indexing || this.phaseState("index") === "running"
         ? `○ indexing definitions… ${n(s.definitions)} so far`
         : `${mark("index", s.definitions > 0)} indexed definitions: ${n(s.definitions)}`,
@@ -109,6 +93,10 @@ export class PxStatusBar implements vscode.Disposable {
       );
     }
     lines.push(
+      "",
+      scriptDocs,
+      dataTypes,
+      advice,
       "",
       `${s.gameOk ? "✓" : "✗"} game path ${s.gameOk ? "configured" : "not set"}`,
       `${s.modOk ? "✓" : "✗"} mod folder ${s.modOk ? "found" : "not found"}`

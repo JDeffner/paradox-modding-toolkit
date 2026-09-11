@@ -15,6 +15,7 @@
  * Browser code, styled by ui.css (`.px-field`, `.px-item`, `.px-stack`). No
  * vscode and no host calls.
  */
+import { el } from "../../shared/dom";
 import type { EventVocabularyItem } from "@px-lsp/protocol/protocol";
 import { iconEl } from "../../shared/icons";
 import { menu, type MenuItem } from "../../shared/overlay";
@@ -32,6 +33,7 @@ import {
   writeChanceValue,
   writeConditions,
   writeEffectLines,
+  wrapBlockValue,
   type Condition,
   type ReadResult,
 } from "./script";
@@ -42,13 +44,6 @@ export interface BlockField {
   /** The block's source text (`{ … }`), or null when it says nothing. */
   get(): string | null;
   onChange(listener: () => void): void;
-}
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 function ghost(label: string, icon: Parameters<typeof iconEl>[0]): HTMLButtonElement {
@@ -423,7 +418,7 @@ export function conditionField(options: ConditionFieldOptions): BlockField {
 
   return {
     el: options.bare ? state.box : builderRow(options.label, options.doc, state.box).row,
-    get: () => (state.raw ? nullIfBlank(state.text()) : writeConditions(rows)),
+    get: () => (state.raw ? wrapBlockValue(state.text()) : writeConditions(rows)),
     onChange: (listener) => listeners.push(listener),
   };
 }
@@ -439,19 +434,6 @@ function openRaw(state: Advanced, value: string, read: () => ReadResult<unknown>
   if (answer.ok) return;
   state.setRaw(true, value);
   state.showNote(answer.line);
-}
-
-/** A script area's text as a block value, or null when the modder left it empty. */
-function nullIfBlank(text: string): string | null {
-  const trimmed = text.trim();
-  if (trimmed === "") return null;
-  if (trimmed.startsWith("{")) return trimmed.replace(/\r\n/g, "\n");
-  const body = trimmed
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => `\t\t${line.trim()}`)
-    .join("\n");
-  return `{\n${body}\n\t}`;
 }
 
 export interface EffectFieldOptions {
@@ -580,7 +562,7 @@ export function effectField(options: EffectFieldOptions): EffectField {
 
   return {
     el: options.bare ? state.box : builderRow(options.label, options.doc, state.box).row,
-    get: () => (state.raw ? nullIfBlank(state.text()) : writeEffectLines(lines.map((l) => l.key))),
+    get: () => (state.raw ? wrapBlockValue(state.text()) : writeEffectLines(lines.map((l) => l.key))),
     loc: () =>
       state.raw
         ? []
@@ -693,7 +675,7 @@ export function chanceField(options: ChanceFieldOptions): BlockField {
   openRaw(state, options.value, () => readChanceValue(options.value));
   return {
     el: built?.row ?? state.box,
-    get: () => (state.raw ? nullIfBlank(state.text()) : writeChanceValue(read())),
+    get: () => (state.raw ? wrapBlockValue(state.text()) : writeChanceValue(read())),
     onChange: (listener) => listeners.push(listener),
   };
 }

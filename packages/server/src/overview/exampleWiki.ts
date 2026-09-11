@@ -193,7 +193,7 @@ export function buildExampleWikiIndex(src: ExampleWikiSources): ExampleWikiIndex
   sources.push(
     src.dataTypes.source === "data_types.log"
       ? "Datafunctions and data types come from your own DumpDataTypes output."
-      : "Datafunctions and data types come from the bundled wiki tables. Run DumpDataTypes in the game console for the list your game version really has."
+      : "Datafunctions use toolkit-provided data where available. Generate your own data-type dump and run Reload Game Data to match your game patch."
   );
   sources.push(
     src.gamePath
@@ -231,6 +231,8 @@ function topKeys(map: Map<string, number> | undefined, cap: number): { list: str
 /** One sentence saying where a datafunction entry's facts come from. */
 function memberProvenance(member: DataTypeMember): string {
   if (member.src === "dump") return "Read from your DumpDataTypes output, so it matches your game version.";
+  if (member.src === "bundled")
+    return "Read from the toolkit-provided data-type dump, which may lag your game patch.";
   if (member.src === "macro") return "Read from a data_binding macro definition.";
   return "Read from the bundled wiki data type tables, which may lag your game version.";
 }
@@ -506,7 +508,7 @@ function dataTypeDetail(src: ExampleWikiSources, name: string, lines: LineCache)
   detail.provenance =
     src.dataTypes.source === "data_types.log"
       ? "Read from your DumpDataTypes output, so it matches your game version."
-      : "Read from the bundled wiki data type tables, which may lag your game version.";
+      : "Read from toolkit-provided data type tables, which may lag your game version.";
   return detail;
 }
 

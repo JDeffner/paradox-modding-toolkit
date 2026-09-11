@@ -21,6 +21,7 @@
  * mod's own loc fields, the picture from the layers the host resolved. Browser
  * code; the only DOM it makes is its own.
  */
+import { el } from "../../shared/dom";
 import type { FormatPart, ModifierFormat } from "@px-lsp/protocol/protocol";
 import { modifierLine, renderModifierLine, renderParts } from "../../shared/modifierLines";
 import { traditionIcon, type TraditionLayerImage } from "../../shared/traditionIcon";
@@ -74,13 +75,6 @@ export interface PreviewDeps {
   imageUrl: (texture: string) => string | null;
   /** The same for a picture drawn at full size: the tile's layers. */
   fullImageUrl?: (texture: string) => string | null;
-}
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 /**

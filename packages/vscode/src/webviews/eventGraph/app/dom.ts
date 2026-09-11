@@ -2,15 +2,9 @@
  * The handful of element builders the graph's three views share. Nothing here
  * knows about the graph: it is px-ui markup with a friendlier call shape.
  */
+import { el } from "../../shared/dom";
 import { iconEl, type IconName } from "../../shared/icons";
 import { menu, type MenuItem } from "../../shared/overlay";
-
-export function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 export function button(
   label: string,

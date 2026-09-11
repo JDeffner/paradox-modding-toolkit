@@ -46,6 +46,9 @@ describe("texture hover data-URI budget", () => {
       expect(uri).not.toBeNull();
       expect(uri!.startsWith("data:image/png;base64,")).toBe(true);
       expect(uri!.length).toBeLessThanOrEqual(CAP);
+      const backgroundUri = ddsToPngDataUri(dds, 256, CAP, "checkerboard");
+      expect(backgroundUri).not.toBeNull();
+      expect(backgroundUri!.length).toBeLessThanOrEqual(CAP);
     });
   }
 

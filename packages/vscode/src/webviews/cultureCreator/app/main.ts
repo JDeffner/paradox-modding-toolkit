@@ -16,6 +16,7 @@
  * count the window prints beside it, and the game's own description text on
  * hover.
  */
+import { el } from "../../shared/dom";
 import type { DefinitionFormKey, EventVocabularyItem } from "@px-lsp/protocol/protocol";
 import { isValidScriptDate, parseScriptDate } from "@px-lsp/protocol/calendar";
 import { iconEl } from "../../shared/icons";
@@ -256,17 +257,6 @@ function paintImages(): void {
 function traditionIcon(name: string, size: number): HTMLElement {
   const layers = init?.catalog.traditions[name]?.layers ?? [];
   return traditionIconEl(stackLayers(layers), size, (rel) => imageUrl(rel, TRADITION_DIM));
-}
-
-// ---------------------------------------------------------------------------
-// Small widgets this form needs and no other creator does
-// ---------------------------------------------------------------------------
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 function fieldRow(label: string, doc: string | undefined, control: HTMLElement): HTMLElement {

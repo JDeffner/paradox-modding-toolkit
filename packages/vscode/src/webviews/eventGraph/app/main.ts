@@ -7,6 +7,7 @@
  * edit becomes a PendingEdit in the history, undo and redo move through them,
  * and the host only ever receives a `save` with the whole list.
  */
+import { el } from "../../shared/dom";
 import type {
   EventGraph,
   EventGraphParams,
@@ -19,7 +20,7 @@ import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
-import { button, dropdown, el, iconButton, input } from "./dom";
+import { button, dropdown, iconButton, input } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";

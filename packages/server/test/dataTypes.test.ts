@@ -43,6 +43,32 @@ function fixtureUsage(): DataFnUsage {
   lines.forEach((l, i) => harvestLine(u, l, "gui/test.gui", i + 1));
   return u;
 }
+describe("data-type source reporting", () => {
+  it("distinguishes bundled and generated dumps even when names only overlap", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "px-data-sources-"));
+    const bundled = path.join(root, "bundled");
+    const local = path.join(root, "local");
+    fs.mkdirSync(bundled);
+    fs.mkdirSync(local);
+    const dump = "SourceProbe\nDefinition type: Global promote\nReturn type: Character\n";
+    try {
+      fs.writeFileSync(path.join(bundled, "data_types.log"), dump);
+      const baseline = loadDataTypes([bundled, local], bundled);
+      expect(baseline.source).toBe("bundled dump");
+      expect(baseline.globals.get("SourceProbe")?.src).toBe("bundled");
+      fs.writeFileSync(path.join(local, "data_types.log"), "not a usable dump");
+      expect(loadDataTypes([bundled, local], bundled).source).toBe("bundled dump");
+      fs.writeFileSync(path.join(local, "data_types.log"), dump);
+      const generated = loadDataTypes([bundled, local], bundled);
+      expect(generated.source).toBe("data_types.log");
+      expect(generated.count).toBe(baseline.count);
+      expect(generated.globals.get("SourceProbe")?.src).toBe("dump");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("DumpDataTypes log parser", () => {
   const DUMP = [
     "GetPlayer",

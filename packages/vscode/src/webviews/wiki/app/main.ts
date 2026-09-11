@@ -16,6 +16,7 @@
  * with no round trip. The markdown goes through the toolkit's own renderer
  * (webviews/markdown.ts), which escapes as it goes.
  */
+import { el } from "../../shared/dom";
 import { renderMarkdown } from "../../markdown";
 import { iconEl, type IconName } from "../../shared/icons";
 import type { AppToHost, HostToApp, WikiArticle, WikiCard, WikiHubEntry } from "../messages";
@@ -59,13 +60,6 @@ function matchesArticle(article: WikiArticle, needle: string): boolean {
     .join("\n")
     .toLowerCase()
     .includes(needle);
-}
-
-function el(tag: string, className?: string, text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 function pressable(node: HTMLElement, onOpen: () => void): void {

@@ -1,5 +1,6 @@
 import uiCss from "../shared/ui.css";
 import { icon } from "../shared/icons";
+import { TEXTURE_CHECKER_SIZE, texturePreviewColors } from "@px-lsp/protocol/texturePreview";
 
 export function ddsPreviewHtml(opts: {
   name: string;
@@ -10,6 +11,7 @@ export function ddsPreviewHtml(opts: {
   scriptSrc: string;
 }): string {
   const { name, meta, dataUri, error, nonce, scriptSrc } = opts;
+  const checker = texturePreviewColors("checkerboard");
   const barButton = (id: string, name_: Parameters<typeof icon>[0], label: string, tip: string): string =>
     `<button id="${id}" class="px-btn" data-variant="ghost" data-size="sm" data-tip="${tip}" data-tip-wrap>${icon(name_)}${label}</button>`;
   const toolButton = (id: string, name_: Parameters<typeof icon>[0], tip: string): string =>
@@ -72,7 +74,7 @@ ${uiCss}
     position: absolute; top: 0; left: 0; transform-origin: 0 0;
     image-rendering: auto; cursor: grab;
     /* checkerboard so alpha is visible */
-    background: repeating-conic-gradient(rgba(128,128,128,0.25) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+    background: repeating-conic-gradient(${checker[0]} 0% 25%, ${checker[1]} 0% 50%) 0 0 / ${TEXTURE_CHECKER_SIZE * 2}px ${TEXTURE_CHECKER_SIZE * 2}px;
   }
   #img.pixelated { image-rendering: pixelated; }
   #stageTools {

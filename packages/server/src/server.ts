@@ -725,7 +725,7 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 let lastLoggedStatus = "";
 
-function sendStatus(): void {
+function sendStatus(): StatusPayload {
   // stats() walks every definition in the index; it runs on every index change,
   // so its own cost is part of the trace (§A2).
   const total = perfSpan("sendStatus stats()", () => data.index.stats().total);
@@ -733,6 +733,12 @@ function sendStatus(): void {
     tokens: data.tokens.length,
     tokensFromScriptDocs,
     tokensFromBundledDumps,
+    dataTypesSource:
+      data.dataTypes.source === "data_types.log"
+        ? "generated"
+        : data.dataTypes.source === "none"
+          ? "none"
+          : "bundled",
     definitions: total,
     tokensWikiOnly,
     indexing,
@@ -754,6 +760,7 @@ function sendStatus(): void {
     lastLoggedStatus = key;
     log(line);
   }
+  return payload;
 }
 
 /**
@@ -888,7 +895,7 @@ function loadDocs(force: boolean): void {
     if (sibling.toLowerCase() !== path.resolve(settings.logsPath).toLowerCase()) dataTypeDirs.push(sibling);
     dataTypeDirs.push(settings.logsPath);
   }
-  data.dataTypes = loadDataTypes(dataTypeDirs);
+  data.dataTypes = loadDataTypes(dataTypeDirs, bundledDataTypesDir || undefined);
   // Promote game, dependency-parent and mod data_binding macros as global
   // [ … ] functions, in load order (a framework mod's macros are the case that
   // matters: the mod being edited calls them but does not define them).
@@ -900,9 +907,9 @@ function loadDocs(force: boolean): void {
   ].filter((r): r is string => r !== null);
   const macros = loadDataBindingMacros(macroRoots, data.dataTypes);
   if (macros > 0) log(`data_binding macros: ${macros} promoted into data-function completion/hover`);
-  if (data.dataTypes.source === "bundled wiki") {
+  if (data.dataTypes.source !== "data_types.log") {
     log(
-      `data types: ${data.dataTypes.count} entries from the bundled wiki tables ` +
+      `data types: ${data.dataTypes.count} entries (${data.dataTypes.source}) ` +
         `(run "${activeProfile().dataTypesCommand ?? "DumpDataTypes"}" in the game console for the ` +
         `complete, version-exact set)`
     );
@@ -1284,6 +1291,11 @@ async function buildIndex(): Promise<void> {
       data.refIndex.compact();
       perf(`compacted index buckets ${Date.now() - tCompact}ms`);
       indexing = false;
+      // A scan can finish after a document change was already indexed.
+      for (const doc of documents.all()) {
+        if (doc.languageId === "paradox-loc" && doc.uri.startsWith("file:"))
+          handleModFileChange(URI.parse(doc.uri).fsPath);
+      }
       sendProgress("index", "done");
       sendStatus();
       // §B4: the build's one and only refresh, fired from the finally so a scan
@@ -1344,7 +1356,21 @@ function rescanModFile(fsPath: string): void {
     return;
 
   const tParse = Date.now();
-  const content = fs.existsSync(fsPath) ? readFileStripBom(fsPath) : null;
+  const openLoc =
+    entry?.kind === "loc_key"
+      ? documents
+          .all()
+          .find(
+            (doc) =>
+              doc.uri.startsWith("file:") &&
+              path.normalize(URI.parse(doc.uri).fsPath).toLowerCase() === path.normalize(fsPath).toLowerCase()
+          )
+      : undefined;
+  const content = openLoc
+    ? openLoc.getText().replace(/^\uFEFF/, "")
+    : fs.existsSync(fsPath)
+      ? readFileStripBom(fsPath)
+      : null;
   const digest = contentDigest(content);
   if (rescanDigests.get(lower) === digest) {
     perf(`rescan ${path.basename(fsPath)} unchanged bytes, skipped ${Date.now() - tParse}ms`);
@@ -1639,7 +1665,7 @@ connection.onNotification(modFileChangedNotification, (params: ModFileChangePara
 
 connection.onRequest(reloadDocsRequest, (params: ReloadDocsParams): ReloadDocsResult => {
   loadDocs(params.force);
-  return { tokens: data.tokens.length };
+  return { tokens: data.tokens.length, status: sendStatus() };
 });
 
 connection.onRequest(indexStatsRequest, () => data.index.stats());
@@ -1915,12 +1941,14 @@ connection.onRequest(snippetsRequest, (params: SnippetsParams): SnippetsResult =
   };
 });
 
-connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] => {
-  return data.index
-    .lookup(params.key)
-    .filter((d) => d.kind === "loc_key")
-    .map((d) => ({ file: d.file, line: d.line, source: d.source, value: d.value }));
-});
+connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] =>
+  indexRead("lookupLoc", () => {
+    return data.index
+      .lookup(params.key)
+      .filter((d) => d.kind === "loc_key")
+      .map((d) => ({ file: d.file, line: d.line, source: d.source, value: d.value }));
+  })
+);
 
 /**
  * What paradox/locText resolves a value with: the loc index for the words, the
@@ -2348,6 +2376,8 @@ documents.onDidOpen((e) => {
 
 documents.onDidChangeContent((e) => {
   const uri = e.document.uri;
+  if (e.document.languageId === "paradox-loc" && uri.startsWith("file:"))
+    handleModFileChange(URI.parse(uri).fsPath);
   const existing = validationTimers.get(uri);
   if (existing) clearTimeout(existing);
   validationTimers.set(
@@ -2381,6 +2411,8 @@ documents.onDidSave((e) => {
 
 documents.onDidClose((e) => {
   const uri = e.document.uri;
+  if (e.document.languageId === "paradox-loc" && uri.startsWith("file:"))
+    handleModFileChange(URI.parse(uri).fsPath);
   const timer = validationTimers.get(uri);
   if (timer) clearTimeout(timer);
   validationTimers.delete(uri);

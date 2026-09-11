@@ -13,6 +13,7 @@
  * with the Flag Builder: this panel is a different way to reach the same
  * `coat_of_arms` definition, not a second renderer.
  */
+import { createTextureImages } from "../../shared/textureImages";
 import { viewerBackground } from "../../shared/viewerBackground";
 import {
   COLOR_SLOTS,
@@ -237,49 +238,7 @@ type EmblemLayer = Extract<CoaLayer, { kind: "colored_emblem" }>;
 // Textures (the host decodes; the app only ever holds images)
 // ---------------------------------------------------------------------------
 
-const images = new Map<string, HTMLImageElement | null>();
-const thumbs = new Map<string, HTMLImageElement | null>();
-const pending = { full: new Set<string>(), thumb: new Set<string>() };
-let flushTimer: ReturnType<typeof setTimeout> | undefined;
-
-function request(key: string, thumb: boolean): void {
-  const store = thumb ? thumbs : images;
-  const queue = thumb ? pending.thumb : pending.full;
-  if (store.has(key) || queue.has(key)) return;
-  queue.add(key);
-  if (!flushTimer) {
-    flushTimer = setTimeout(() => {
-      flushTimer = undefined;
-      for (const [q, isThumb] of [
-        [pending.full, false],
-        [pending.thumb, true],
-      ] as const) {
-        if (q.size) send({ type: "textures", keys: [...q], thumbs: isThumb });
-        q.clear();
-      }
-    }, 0);
-  }
-}
-
-function receiveTextures(urls: Record<string, string | null>, thumb: boolean): void {
-  const store = thumb ? thumbs : images;
-  for (const [key, url] of Object.entries(urls)) {
-    if (!url) {
-      store.set(key, null);
-      if (thumb) paintTiles();
-      continue;
-    }
-    const img = new Image();
-    img.onload = () => {
-      store.set(key, img);
-      if (thumb) paintTiles();
-      else draw();
-    };
-    img.onerror = () => store.set(key, null);
-    img.src = url;
-  }
-  if (!thumb) draw();
-}
+const { images, thumbs, request, receiveTextures } = createTextureImages(send, draw, paintTiles);
 
 const FULL_SOURCE = { image: (k: string): HTMLImageElement | null => images.get(k) ?? null };
 const THUMB_SOURCE = { image: (k: string): HTMLImageElement | null => thumbs.get(k) ?? null };

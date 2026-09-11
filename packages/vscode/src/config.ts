@@ -4,8 +4,9 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { sanitizeStringList } from "@px-lsp/protocol/suppression";
+import { readTexturePreviewBackground, type TexturePreviewBackground } from "@px-lsp/protocol/texturePreview";
 import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
-import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
+import { looksLikeModDir as looksLikeMod } from "./modProjects/core";
 import { findGameFolder } from "./steamDetect";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
@@ -40,6 +41,7 @@ export interface PxConfig {
   scopeInlayHints: boolean;
   hoverDetail: "compact" | "standard" | "full";
   completionMode: "minimal" | "examples" | "names";
+  texturePreviewBackground: TexturePreviewBackground;
   /** `px.calendar`: custom era calendar for date display, or undefined. */
   calendar: CalendarSetting | undefined;
   tigerRunOn: "save" | "manual";
@@ -315,6 +317,7 @@ export function readConfig(): PxConfig {
     indexAssets: cfg.get<boolean>("indexAssets") ?? true,
     hoverDetail: cfg.get<"compact" | "standard" | "full">("hover.detail") ?? "standard",
     completionMode: cfg.get<"minimal" | "examples" | "names">("completion.mode") ?? "minimal",
+    texturePreviewBackground: readTexturePreviewBackground(cfg.get("texturePreview.background")),
     calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,
     enableForWorkspace,
@@ -399,20 +402,6 @@ export function modRootFor(file: string, cfg: PxConfig): string | null {
     if (root && isUnder(root, file)) return root;
   }
   return null;
-}
-
-/** A folder counts as a mod if it has a descriptor (either convention) or the
- * usual content dirs. */
-export function looksLikeMod(dir: string): boolean {
-  try {
-    if (fs.existsSync(path.join(dir, "descriptor.mod"))) return true;
-    if (hasMetadataDescriptor(dir)) return true;
-    return ["common", "events", "localization", "gui", "history"].some((d) =>
-      fs.existsSync(path.join(dir, d))
-    );
-  } catch {
-    return false;
-  }
 }
 
 /**

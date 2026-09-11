@@ -16,7 +16,11 @@ import { fuzzyScore, FuzzyScoreOptionsDefault } from "./vscodeFuzzy";
 
 /** Install the capabilities a client declaring `init` would get. */
 const asClient = (init: Partial<ParadoxInitOptions>): void =>
-  setClientCapabilities(resolveClientCapabilities(init));
+  setClientCapabilities(
+    resolveClientCapabilities(init, {
+      textDocument: { completion: { completionItem: { documentationFormat: ["markdown"] } } },
+    })
+  );
 
 // The module default is all-on (the pure-render default); restore it so the
 // suites that do not care about capabilities keep seeing the rich output.
