@@ -8,6 +8,10 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+## 0.2.5
+
+Ships with the toolkit's 0.4.4 release.
+
 - Add optional dataTypesSource to status and refreshed status to reloadDocs results for clients that show dump provenance.
 
 - Add `texturePreviewBackground` and shared background helpers for DDS editors and texture hovers, with checkerboard as the default.

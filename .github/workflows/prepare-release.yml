@@ -1,0 +1,26 @@
+name: Prepare release
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+      - name: Check tag version and collect release notes
+        run: node scripts/prepare-release.mjs
+      - name: Set release notes and mark as prerelease
+        run: gh release edit "$RELEASE_TAG" --notes-file release-body.md --prerelease --latest=false

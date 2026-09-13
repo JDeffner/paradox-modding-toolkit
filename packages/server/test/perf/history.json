@@ -1207,6 +1207,34 @@
         "peakRssMb": 852,
         "rssSamples": 19
       }
+    },
+    {
+      "version": "0.4.4",
+      "recordedAt": "2026-09-13",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "local 0.4.4 release build",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 7352,
+        "definitions": 481510,
+        "completionCold": 181,
+        "completionWarm": 8,
+        "semanticTokens": 1,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 138,
+        "tokensAfterSave": 1,
+        "heapMb": 271,
+        "rssAtBuildMb": 716,
+        "internedIdentifiers": 559699,
+        "peakRssMb": 852,
+        "rssSamples": 20
+      }
     }
   ]
 }

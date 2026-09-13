@@ -1,42 +1,49 @@
-# Release pipeline. Two entry points:
-#
-#  - Push a tag `v*` (e.g. v0.1.0): builds, tests, packages the vsix and
-#    attaches it to a GitHub Release. No Marketplace interaction.
-#  - Run the workflow manually with "publish" checked: additionally publishes
-#    the vsix to the VS Code Marketplace. Needs the VSCE_PAT repo secret
-#    (Azure DevOps PAT with Marketplace > Manage scope) — see AGENTS.md
-#    "Releasing".
-#
-# The "prerelease" input controls the Marketplace pre-release flag. It is OFF by
-# default: the beta ships on the normal channel, because the pre-release channel
-# makes users opt in inside VS Code and is not worth the friction. "Beta" is said
-# in the README and the changelog instead. The flag also has to be set at PACKAGE
-# time, not just at publish time: `vsce package --pre-release` writes
-# Microsoft.VisualStudio.Code.PreRelease into the vsix manifest, and publishing
-# that file puts it on the pre-release channel whatever the publish flags say.
+# Manual publishing of a prepared release. Always build the requested tag.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish to the VS Code Marketplace"
-        type: boolean
-        default: false
+      tag:
+        description: "Prepared release tag (for example v0.4.4)"
+        type: string
+        required: true
       prerelease:
         description: "Mark as pre-release (users must opt in; off by default)"
         type: boolean
         default: false
 
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the GitHub Release
+      contents: write # attach artifacts and finalize the existing release
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Check tag version and collect release notes
+        run: node scripts/prepare-release.mjs
+
+      - name: Require a prepared GitHub prerelease
+        run: |
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,body > release.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const release = JSON.parse(readFileSync('release.json', 'utf8'));
+          const notes = readFileSync('release-body.md', 'utf8').trim();
+          if (release.isDraft || !release.isPrerelease || release.body.trim() !== notes) {
+            throw new Error('Run Prepare release successfully for this tag before publishing.');
+          }
+          NODE
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
@@ -77,7 +84,7 @@ jobs:
         run: |
           FLAG=""
           if [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
-          npx vsce package $FLAG --no-dependencies \
+          pnpm exec vsce package $FLAG --no-dependencies \
             --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode
 
       - name: Build server tarball (standalone --stdio server for other editors)
@@ -98,36 +105,25 @@ jobs:
             px-lsp-server-*.tar.gz
             px-lsp-win-x64-*.zip
 
-      # The human-written notes (docs/release/<version>.md) are the
-      # release body AND the Discord post. The H1 and the trailing "Full
-      # changelog" pointer are dropped: the release page shows the version
-      # already, and the Discord post appends its own changelog link. A tag
-      # with no notes file falls back to GitHub's generated commit list.
-      - name: Collect release notes (tag builds)
-        if: startsWith(github.ref, 'refs/tags/v')
-        id: notes
+      - name: Attach release artifacts
         run: |
-          FILE="docs/release/${GITHUB_REF_NAME#v}.md"
-          if [ -f "$FILE" ]; then
-            sed -e '1{/^# /d}' -e '/^### Full changelog/,$d' "$FILE" | sed -e '/./,$!d' > release-body.md
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::$FILE missing, release body falls back to generated notes"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
+          gh release upload "$RELEASE_TAG" packages/vscode/*.vsix \
+            px-lsp-server-*.tar.gz px-lsp-win-x64-*.zip --clobber
 
-      - name: GitHub Release (tag builds)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
-        with:
-          files: |
-            packages/vscode/*.vsix
-            px-lsp-server-*.tar.gz
-            px-lsp-win-x64-*.zip
-          # The pre-release phase ended with 0.3.6; 0.4.0 on is a normal release.
-          prerelease: false
-          body_path: ${{ steps.notes.outputs.found == 'true' && 'release-body.md' || '' }}
-          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
+      - name: Publish to Marketplace
+        id: marketplace
+        working-directory: packages/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm exec vsce publish --no-dependencies --packagePath *.vsix
+
+      - name: Set final GitHub release channel
+        env:
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          LATEST=true
+          if [ "$PRERELEASE" = "true" ]; then LATEST=false; fi
+          gh release edit "$RELEASE_TAG" --prerelease="$PRERELEASE" --latest="$LATEST"
 
       # Announce the release in the Discord server's #toolkit-updates, pinging
       # the @Paradox Toolkit role. DISCORD_RELEASE_WEBHOOK is a plain Discord
@@ -137,54 +133,31 @@ jobs:
       # own link-preview embed to a post that is meant to be embed-free.
       # Missing secret = silent skip; a failed post warns but never fails a
       # release that already shipped.
-      - name: Announce on Discord (tag builds)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Announce on Discord
+        if: success() && steps.marketplace.outcome == 'success'
         env:
           WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
-          NOTES_FOUND: ${{ steps.notes.outputs.found }}
         run: |
           [ -z "$WEBHOOK" ] && exit 0
-          URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
-          if [ "$NOTES_FOUND" = "true" ]; then
-            # head -c cuts BYTES: a multibyte character split at the boundary
-            # would reach jq as invalid UTF-8 and kill the post. iconv -c drops
-            # the incomplete sequence (the line-boundary cut below usually
-            # removes it anyway; this covers the cut landing on a newline).
-            NOTES=$(head -c 1600 release-body.md | iconv -c -f UTF-8 -t UTF-8)
-            if [ "$(wc -c < release-body.md)" -gt 1600 ]; then
-              NOTES=$(printf '%s' "$NOTES" | sed '$d')
-              NOTES="$NOTES"$'\n'"…"
-            fi
-          else
-            NOTES="See the release page for the changes."
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
+          # head -c cuts BYTES: a multibyte character split at the boundary
+          # would reach jq as invalid UTF-8 and kill the post. iconv -c drops
+          # the incomplete sequence (the line-boundary cut below usually
+          # removes it anyway; this covers the cut landing on a newline).
+          NOTES=$(head -c 1600 release-body.md | iconv -c -f UTF-8 -t UTF-8)
+          if [ "$(wc -c < release-body.md)" -gt 1600 ]; then
+            NOTES=$(printf '%s' "$NOTES" | sed '$d')
+            NOTES="$NOTES"$'\n'"…"
           fi
-          jq -n --arg tag "$GITHUB_REF_NAME" --arg url "$URL" --arg notes "$NOTES" \
+          jq -n --arg tag "$RELEASE_TAG" --arg url "$URL" --arg notes "$NOTES" \
             '{content: "<@&1534329963933864079> **Paradox Toolkit \($tag)** is out.\n\n\($notes)\n\nRelease: <\($url)>\nFull changelog: <https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/vscode/CHANGELOG.md>",
               allowed_mentions: {roles: ["1534329963933864079"]}}' \
             | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" \
             || echo "::warning::Discord release announcement failed"
 
-      - name: Publish to Marketplace
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
-        working-directory: packages/vscode
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          FLAG=""
-          if [ "${{ inputs.prerelease }}" = "true" ]; then FLAG="--pre-release"; fi
-          npx vsce publish $FLAG --no-dependencies --packagePath *.vsix
-
-      # npm publish for the LSP packages, version-guarded so a tag build is
-      # enough: @px-lsp/protocol and @px-lsp/server version independently of
-      # the extension and only bump when they changed, so "this exact version
-      # is not on npm yet" IS the publish signal. Protocol goes first because
-      # the server depends on it (pnpm rewrites the workspace:* range to the
-      # real version on pack). Needs the NPM_TOKEN repo secret (granular npm
-      # automation token with publish rights on the px-lsp scope); a missing
-      # secret warns and skips instead of failing a release that already
-      # shipped its GitHub artifacts.
+      # Package versions are independent. Publish only versions missing from npm.
+      # Missing NPM_TOKEN warns and skips without failing a Marketplace release.
       - name: Publish npm packages (only versions not on npm yet)
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |

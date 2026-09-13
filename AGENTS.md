@@ -196,8 +196,8 @@ commit a vsix.
   user-visible features changed.
 - Versioning is NOT lockstep: `packages/vscode` + root `package.json` bump
   every release; `packages/server` and `packages/protocol` bump only when
-  changed. The tag must match `packages/vscode/package.json`. Never pass
-  `--pre-release` to vsce.
+  changed. The tag must match `packages/vscode/package.json`. Pass
+  `--pre-release` to vsce only when the manual Release workflow option is selected.
 - Full runbook: `docs/RELEASING.md`.
 
 **Wiki mirrors:** `docs/EMBEDDING.md` → wiki "Embedding", `docs/PROTOCOL.md`
