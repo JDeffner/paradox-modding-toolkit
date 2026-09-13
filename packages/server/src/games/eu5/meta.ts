@@ -10,6 +10,7 @@ import { EU5_SCAFFOLDS } from "./scaffolds";
 
 export const eu5Meta: GameMeta = {
   id: "eu5",
+  compatch: null,
   name: "Europa Universalis V",
   shortName: "EU5",
   engine: "jomini",

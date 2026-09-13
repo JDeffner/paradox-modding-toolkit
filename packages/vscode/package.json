@@ -726,6 +726,89 @@
         "category": "Paradox",
         "title": "Extension Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openCompatch",
+        "title": "Open Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.newCompatch",
+        "title": "New Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "px.refreshCompatch",
+        "title": "Refresh Compatch Sources",
+        "category": "Paradox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "px.filterCompatch",
+        "title": "Filter Compatch Entries",
+        "category": "Paradox",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "px.compatchActions",
+        "title": "Compatch Entry Actions",
+        "category": "Paradox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "px.compareCompatch",
+        "title": "Compare Compatch Entry",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchScanNotes",
+        "title": "Show Compatch Scan Notes",
+        "category": "Paradox",
+        "icon": "$(output)"
+      },
+      {
+        "command": "px.compatchLanguage",
+        "title": "Choose Compatch Localization Language",
+        "category": "Paradox",
+        "icon": "$(globe)",
+        "enablement": "px.compatchSemanticSupported"
+      },
+      {
+        "command": "px.compatchPage",
+        "title": "Change Compatch Page",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchFiles",
+        "title": "Browse Compatch Folder Files",
+        "category": "Paradox",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "px.compatchGameChanges",
+        "title": "Compare Vanilla and New Game Version",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.compatchModChanges",
+        "title": "Compare Vanilla and Mod",
+        "category": "Paradox",
+        "icon": "$(history)"
+      },
+      {
+        "command": "px.compatchPreviewMerge",
+        "title": "Preview Three-Way Merge",
+        "category": "Paradox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "px.compatchApplyMerge",
+        "title": "Apply Clean Game Changes",
+        "category": "Paradox",
+        "icon": "$(check)"
       }
     ],
     "customEditors": [
@@ -1175,6 +1258,13 @@
           "icon": "media/px-view.svg",
           "visibility": "collapsed",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "id": "px.compatch",
+          "name": "Compatch",
+          "icon": "media/px-view.svg",
+          "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
         }
       ]
     },
@@ -1499,6 +1589,62 @@
         {
           "command": "px.exportSnippets",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "false"
+        },
+        {
+          "command": "px.compareCompatch",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "px.isCk3Workspace && px.compatchSemanticSupported"
+        },
+        {
+          "command": "px.compatchPage",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchFiles",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -1576,6 +1722,31 @@
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
           "group": "1_configure@2"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "view == px.compatch",
+          "group": "navigation"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "view == px.compatch",
+          "group": "2_notes"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "view == px.compatch && px.compatchSemanticSupported",
+          "group": "2_language"
         }
       ],
       "view/item/context": [
@@ -1638,6 +1809,31 @@
           "command": "px.nextProblemInFile",
           "when": "view == px.problems && viewItem == px.problemFile",
           "group": "1_navigate@2"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "view == px.compatch && (viewItem == px.compatchEntry || viewItem == px.compatchUpdate || viewItem == px.compatchUpdateFile)",
+          "group": "inline"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "view == px.compatch && (viewItem == px.compatchUpdate || viewItem == px.compatchUpdateFile)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "view == px.compatch && (viewItem == px.compatchUpdate || viewItem == px.compatchUpdateFile)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "view == px.compatch && viewItem == px.compatchUpdateFile",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "view == px.compatch && viewItem == px.compatchUpdateFile",
+          "group": "compatch"
         }
       ],
       "editor/context": [
@@ -1938,6 +2134,17 @@
         "command": "px.exportSnippets",
         "key": "ctrl+alt+shift+i",
         "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.openCompatch",
+        "key": "ctrl+alt+m",
+        "when": "px.isCk3Workspace && !inputFocus"
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "px.compatch",
+        "contents": "Update your Git-tracked mod using Vanilla and New Game Version. Edit the original mod and review changes in Source Control.\n[Open Compatch Workspace](command:px.openCompatch)"
       }
     ]
   },

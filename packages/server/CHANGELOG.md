@@ -8,6 +8,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Declare verified CK3 event and localization folders for the client's Compatch Workspace; other game profiles explicitly use file comparisons only.
+
 - Remove the unused parent-kind argument from internal GUI layout calls.
 
 - Report the loaded data-type source separately from script docs, recognize generated dumps that only override existing names, and refresh source status when game data is reloaded.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a Compatch Workspace that compares previous Vanilla, New Game Version and Mod, filters unchanged and unique files, previews three-way updates and applies clean changes to the original mod for Git review. Known-folder shortcuts and project presets speed up setup. CK3 events and localization also match across files; a separate-result mode supports manual mod-to-mod comparisons and saved reviews.
+
 - Connect all 13 bundled webviews to Live Webview in explicit development builds. Reload after successful frontend builds, with per-panel controls and restored host state. Event Graph reloads retain unsaved edits.
 
 - Consolidate repeated webview element builders, texture request caches, selection geometry, script-block wrapping and mod-folder detection. Use the shared secure nonce generator in the remaining editor panels.

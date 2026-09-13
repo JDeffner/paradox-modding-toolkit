@@ -19,6 +19,8 @@ export const ck3Meta: GameMeta = {
   // Verified on the 1.19 install: dlc_001.dds .. dlc_029.dds.
   dlcIconDir: "gfx/interface/icons/dlc",
   eventNamespaces: true,
+  // Same folders and top-level event IDs as the installed events/_events.info and schema.
+  compatch: { events: "events", localization: "localization" },
   // The engine's own default metrics: they were measured on this game's font,
   // and the layout engine reuses them for games whose probe has not run.
   uiFont: "fonts/Gitan/GitanLatin-Regular.otf",
