@@ -1,22 +1,6 @@
 # Releasing the Paradox Modding Toolkit
 
-Extension ID: `JDeffner.px-toolkit`. The 0.x series is a **beta**, and it ships
-on the **normal** Marketplace channel. The Marketplace pre-release channel is
-deliberately not used: it makes every user tick "pre-release version" inside VS
-Code, which is friction for no gain here. "Beta" is said in the README badge and
-blockquote and in the changelog instead.
-
-**Never pass `--pre-release`.** The flag is written into the vsix manifest at
-PACKAGE time (`Microsoft.VisualStudio.Code.PreRelease`), so a vsix built with it
-lands on the pre-release channel however it is published. Check a built vsix
-with:
-
-```bash
-node -e "const z=new (require('adm-zip'))('packages/vscode/px-toolkit-<version>.vsix'); \
-  console.log(/PreRelease/.test(z.getEntry('extension.vsixmanifest').getData().toString()))"
-```
-
-That must print `false`.
+Extension ID: `JDeffner.px-toolkit`. Stable Marketplace publishing is the default. Select **Mark as pre-release** in the manual Release workflow to publish on the opt-in Marketplace channel and keep the GitHub release marked as a prerelease. The workflow sets the flag when packaging the VSIX, because the manifest determines its channel.
 
 ## Branch model
 
@@ -44,15 +28,11 @@ That must print `false`.
      untouched, and the server tarball keeps its older version in the name;
      that is correct, not a mistake.
 
-   The odd/even minor convention only applies to extensions that use the
-   pre-release channel, so it does not apply here; plain increments are fine.
-
    Every release also needs, before the tag: the new section at the top of
    `packages/vscode/CHANGELOG.md` covering everything since the last tag
    (`git log v<prev>..HEAD` is the checklist), and
    `docs/release/<version>.md` (it becomes the GitHub Release body and
-   the Discord post; 0.3.2 shipped without one and fell back to a generated
-   commit list).
+   the Discord post). Missing or empty notes fail preparation.
 2. Regenerate bundled data if the game patched (see below), and check
    `THIRD-PARTY-NOTICES.md` still matches what actually ships: every imported
    or derived third-party source needs its entry, and the pinned commits in
@@ -62,15 +42,11 @@ That must print `false`.
    plus `node scripts/check-game-boundary.mjs`.
 4. Build the artifacts and smoke the tarball (below), then open the release
    PR and hand it to Joel; he squash-merges it into `main`.
-5. Tag the squash commit on `main` and push:
-   `git tag v<version> && git push origin v<version>`.
-   The tag triggers `.github/workflows/release.yml`: build, test, package,
-   and a GitHub Release with three artifacts attached: the vsix,
-   `px-lsp-server-<version>.tar.gz` (standalone server, bring your own Node)
-   (TODO: the server assets carry the server's own version while the tag
-   carries the release version; consider renaming so the two cannot be
-   confused) and `px-lsp-win-x64-<version>.zip` (the same payload plus a bundled
-   node.exe and a `px-lsp.cmd` launcher, for embedders and Windows users).
+5. Create and publish a GitHub release or prerelease for `v<version>` from the merged commit. A tag push alone does not start publishing. **Prepare release** checks the tagged extension and root package versions first. A mismatch fails without changing the release. When versions match, it loads `docs/release/<version>.md`, sets the release body, and marks the release as a prerelease with Latest disabled. Draft releases are prepared when published. After fixing a preparation failure, rerun its failed Actions run.
+6. Wait for **Prepare release** to succeed. In **Actions > Release > Run workflow**, leave the workflow branch on `main`, enter the prepared tag, and choose whether to **Mark as pre-release**. This run always builds the tag, checks its versions and prepared notes again, runs checks, and attaches the VSIX and both standalone server archives. Archive filenames use the server's independent version.
+7. The workflow uploads the VSIX to the Marketplace, then sets the final GitHub release channel. Discord is notified only after Marketplace publishing succeeds. npm packages publish afterward when their versions are absent from npm. A failed Marketplace upload leaves the GitHub release as a prerelease and sends no Discord notification.
+
+If a tag points to a commit with the wrong package version, correct the tag before preparing the release again. Changing a release's target branch does not move an existing tag.
 
 For testers who should try a build before it is released, send them the vsix
 file directly; they install it via Extensions panel → `…` menu →
@@ -283,34 +259,17 @@ One-time setup:
    (Settings → Secrets and variables → Actions) for CI publishing, or keep it
    for local use.
 
-Then, per release, one of:
+For each release, use **Actions > Release > Run workflow**, enter the prepared tag, and leave **Mark as pre-release** unchecked for stable publishing. The run uses `VSCE_PAT`; there is no separate publish checkbox.
 
-- **CI**: Actions → Release → "Run workflow" → check "publish". Uses the
-  `VSCE_PAT` secret.
-- **Local**: `npx vsce publish --no-dependencies --packagePath packages/vscode/px-toolkit-<version>.vsix`
-  (it prompts for the PAT, or set the `VSCE_PAT` env var). Name the file
-  explicitly: a `*.vsix` glob can match a stale build.
+For a local recovery, publish the exact built artifact with `pnpm exec vsce publish --no-dependencies --packagePath packages/vscode/px-toolkit-<version>.vsix`. Local publishing does not update the GitHub release or send the workflow's Discord notification.
 
 The first publish creates the Marketplace listing; it goes live after an
 automatic validation pass (usually minutes). README.md becomes the listing
 page and CHANGELOG.md the changelog tab.
 
-## If you ever DO want the pre-release channel
+## Pre-release channel
 
-Leave the `prerelease` input unchecked unless you mean it. Turning it on has two
-consequences worth knowing before you do:
-
-- The channel version must be higher than the stable one, and the Marketplace
-  convention pairs an odd minor (pre-release) with an even minor (stable). Since
-  the beta shipped stable on `0.3.x`, starting a pre-release channel later means
-  moving stable to an even minor and giving the channel the next odd one.
-- A version published as pre-release can never be re-published as stable, so the
-  two channels never share a version number.
-
-Marking the GitHub Release as a pre-release (`prerelease: true` in
-`release.yml`'s GitHub Release step) is a separate, harmless thing: it only adds
-a badge on the Releases page and has no effect on how anyone installs the
-extension.
+**Mark as pre-release** applies to both the Marketplace artifact and the final GitHub release. During preparation, the GitHub prerelease badge only indicates that manual publishing is pending. It does not publish anything to the Marketplace. Choose a version higher than the current Marketplace version when publishing a new build. See the [VS Code publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions) for channel versioning.
 
 ## Publishing the npm packages (M3b)
 
@@ -319,15 +278,7 @@ independently of the extension, starting at 0.1.0 (`packages/*/package.json`
 carry `files`, `publishConfig.access: public`, and the server's `px-lsp` bin;
 each package has its own `CHANGELOG.md`).
 
-**CI publishes them automatically.** Every tag build (and every manual
-release.yml run with "publish" checked) ends with a version-guarded npm step:
-for each package it checks whether that exact version already exists on npm
-and publishes it only when it does not, protocol before server. Bumping a
-package version in a release is therefore all it takes; a release that did
-not touch a package publishes nothing for it. The step needs the `NPM_TOKEN`
-repo secret (granular npm automation token with publish rights on the
-`px-lsp` scope, Settings → Secrets and variables → Actions); when the secret
-is missing the step warns and skips so the rest of the release still ships.
+**The manual Release workflow publishes npm packages after Marketplace publishing and notification.** Preparation does not publish them. The npm step checks whether each exact version exists and publishes only missing versions, protocol before server. The step needs the `NPM_TOKEN` repository secret with publish rights on the `px-lsp` scope. A missing secret warns and skips npm publishing.
 
 The manual procedure below stays as the fallback (first-time scope setup, or
 publishing outside a release). Publish a package only when its version bumped

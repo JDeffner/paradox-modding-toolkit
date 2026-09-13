@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.4 (beta) - editing fixes and release checks
+
+- Validate release tags against package versions, prepare notes as a GitHub prerelease, and publish manually with a pre-release option. Send Discord announcements only after Marketplace publishing succeeds.
+
 - Connect all 13 bundled webviews to Live Webview in explicit development builds. Reload after successful frontend builds, with per-panel controls and restored host state. Event Graph reloads retain unsaved edits.
 
 - Consolidate repeated webview element builders, texture request caches, selection geometry, script-block wrapping and mod-folder detection. Use the shared secure nonce generator in the remaining editor panels.
