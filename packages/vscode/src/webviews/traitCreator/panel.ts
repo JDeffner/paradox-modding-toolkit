@@ -118,7 +118,7 @@ export class TraitCreatorPanel {
     };
     render();
     // The rebooted app sends "ready" and postInit answers it; nothing else.
-    this.disposables.push(watchBundle(source, "traitCreator", render));
+    this.disposables.push(watchBundle(source, "traitCreator", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

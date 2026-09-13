@@ -39,6 +39,7 @@ describe("capability resolution", () => {
     commands: new Set<string>(),
     ownFileWatcher: false,
     snippetSupport: false,
+    completionDocumentationFormat: "plaintext",
     fileLinks: false,
     hoverIcons: false,
   };
@@ -51,6 +52,7 @@ describe("capability resolution", () => {
       commands: new Set(allClientCommandIds),
       ownFileWatcher: true,
       snippetSupport: true,
+      completionDocumentationFormat: "plaintext",
       fileLinks: true,
       hoverIcons: true,
     });
@@ -63,6 +65,24 @@ describe("capability resolution", () => {
       snippetSupport: true,
     });
     expect(resolveClientCapabilities({ client: {} }, { textDocument: { completion: {} } })).toEqual(allOff);
+  });
+
+  it("honors the standard completion documentation preference independently of custom capabilities", () => {
+    for (const documentationFormat of [
+      ["plaintext"],
+      ["plaintext", "markdown"],
+      ["markdown", "plaintext"],
+    ] as const) {
+      for (const init of [{}, { clientCommands: true }, { client: { hoverHtml: true } }]) {
+        expect(
+          resolveClientCapabilities(init, {
+            textDocument: {
+              completion: { completionItem: { documentationFormat: [...documentationFormat] } },
+            },
+          }).completionDocumentationFormat
+        ).toBe(documentationFormat[0]);
+      }
+    }
   });
 
   it("fileLinks is its own axis on the capability object", () => {

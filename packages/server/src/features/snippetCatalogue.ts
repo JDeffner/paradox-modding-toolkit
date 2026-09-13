@@ -5,6 +5,7 @@ import { renderDefinitionSkeleton, renderBlockSkeleton } from "../schema/skeleto
 import { blockTemplateFor, type BlockTemplate } from "./blockSnippets";
 import { minimalTokenInsert, scriptedCallTemplate } from "./completionInsert";
 import { withCompletionPreview } from "./completionPreview";
+import { MarkupKind } from "vscode-languageserver/node";
 
 export function buildSnippetCatalogue(
   tokens: TokenData[],
@@ -22,7 +23,8 @@ export function buildSnippetCatalogue(
     const item = withCompletionPreview(
       { label: name, insertText: template.snippet, insertTextFormat: 2 },
       token,
-      definition
+      definition,
+      MarkupKind.Markdown
     );
     const preview =
       typeof item.documentation === "string" ? item.documentation : (item.documentation?.value ?? "");

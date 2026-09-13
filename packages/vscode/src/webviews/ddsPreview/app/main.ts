@@ -27,7 +27,7 @@ const background = viewerBackground(
   (value) => {
     vscode.postMessage({ type: "background", value });
   },
-  img
+  { image: img, defaultLabel: "Checkerboard", commitOnClose: true }
 );
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   if (event.data.type === "background") background.restore(event.data.value);

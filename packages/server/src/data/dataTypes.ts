@@ -24,7 +24,7 @@ export interface DataTypeMember {
   /** Description prose from the dump, when the entry carries one. */
   desc?: string;
   /** Which source produced this entry (provenance shown in hovers). */
-  src?: "wiki" | "dump" | "macro";
+  src?: "wiki" | "dump" | "bundled" | "macro";
 }
 
 export interface DataTypesData {
@@ -34,8 +34,8 @@ export interface DataTypesData {
   types: Map<string, Map<string, DataTypeMember>>;
   /** Lowercased type name -> canonical casing (tolerant hover/completion). */
   typeNamesLower: Map<string, string>;
-  /** Where the (majority of the) data came from. */
-  source: "bundled wiki" | "data_types.log";
+  /** Highest-priority source with usable definitions. */
+  source: "none" | "bundled wiki" | "bundled dump" | "data_types.log";
   /** Total member count, for the status log line. */
   count: number;
 }
@@ -51,7 +51,7 @@ export function emptyDataTypes(): DataTypesData {
     globals: new Map(),
     types: new Map(),
     typeNamesLower: new Map(),
-    source: "bundled wiki",
+    source: "none",
     count: 0,
   };
 }
@@ -84,6 +84,7 @@ export function loadBundledDataTypes(): DataTypesData {
       data.count++;
     }
   }
+  if (data.count > 0) data.source = "bundled wiki";
   return data;
 }
 
@@ -94,7 +95,11 @@ export function loadBundledDataTypes(): DataTypesData {
  * Function|Type|Global macro>` and `Return type: <name>` lines. Tolerant: an
  * entry missing any expected part is skipped.
  */
-export function parseDataTypesDump(text: string, into?: DataTypesData): DataTypesData {
+export function parseDataTypesDump(
+  text: string,
+  into?: DataTypesData,
+  source: "bundled dump" | "data_types.log" = "data_types.log"
+): DataTypesData {
   const data = into ?? emptyDataTypes();
   for (const rawEntry of text.split(/\r?\n-{4,}\r?\n/)) {
     const entry = rawEntry.trim();
@@ -148,7 +153,7 @@ export function parseDataTypesDump(text: string, into?: DataTypesData): DataType
       ret: ret === "void" || ret === "[unregistered]" ? null : ret,
       args,
       kind,
-      src: "dump",
+      src: source === "bundled dump" ? "bundled" : "dump",
     };
     const desc = descLines.join(" ").slice(0, 300);
     // "Jomini Script System" is per-entry boilerplate, not a description.
@@ -160,8 +165,10 @@ export function parseDataTypesDump(text: string, into?: DataTypesData): DataType
       const name = signature.slice(dot + 1);
       if (name.length === 0 || name.includes(".")) continue;
       insertMember(data, typeMembers(data, owner), name, member);
+      data.source = source;
     } else if (isGlobal && dot < 0) {
       insertMember(data, data.globals, signature, member);
+      data.source = source;
     }
   }
   return data;
@@ -226,20 +233,22 @@ function dumpFilesIn(dir: string): string[] {
  * convenience. Games whose script_docs live outside logs/ (newer Jomini
  * titles) dump data types to logs/ anyway, so callers pass both folders.
  */
-export function loadDataTypes(dirs: string | null | Array<string | null>): DataTypesData {
+export function loadDataTypes(
+  dirs: string | null | Array<string | null>,
+  bundledDir?: string
+): DataTypesData {
   const data = loadBundledDataTypes();
   const list = (Array.isArray(dirs) ? dirs : [dirs]).filter((d): d is string => d !== null);
-  const dumpFiles = list.flatMap(dumpFilesIn);
-  if (dumpFiles.length === 0) return data;
-  const before = data.count;
-  for (const file of dumpFiles) {
-    try {
-      parseDataTypesDump(fs.readFileSync(file, "utf8"), data);
-    } catch {
-      /* unreadable dump: keep what we have */
+  for (const dir of list) {
+    const source = dir === bundledDir ? "bundled dump" : "data_types.log";
+    for (const file of dumpFilesIn(dir)) {
+      try {
+        parseDataTypesDump(fs.readFileSync(file, "utf8"), data, source);
+      } catch {
+        /* unreadable dump: keep what we have */
+      }
     }
   }
-  if (data.count > before) data.source = "data_types.log";
   return data;
 }
 

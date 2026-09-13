@@ -1,6 +1,6 @@
 /**
- * Live VS Code pass (Stream E / UPDATE_PLAN A0): boots the locally installed
- * VS Code with an ISOLATED profile (temp user-data/extensions dirs — the real
+ * Live VS Code pass: boots VS Code with an ISOLATED profile
+ * (temp user-data/extensions dirs, the real
  * profile is never touched), loads the extension from this repo against the
  * real mod workspace from dev-paths.json, and runs the in-host checklist in
  * scripts/live-pass-suite.ts through the real client↔server transport.
@@ -14,27 +14,27 @@ import { runTests } from "@vscode/test-electron";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { devPath, requireDevPath } from "./devPaths";
 
-const VSCODE_EXE = "C:/Users/joeld/AppData/Local/Programs/Microsoft VS Code/Code.exe";
-
-async function main(): Promise<void> {
+export async function main(): Promise<number> {
   const repoRoot = path.resolve(__dirname, "..");
-  const devPaths = JSON.parse(fs.readFileSync(path.join(repoRoot, "dev-paths.json"), "utf8"));
-  if (!devPaths.modPath || !devPaths.gamePath) {
-    console.error("live-pass: dev-paths.json needs modPath and gamePath");
-    process.exit(1);
-  }
+  const modPath = requireDevPath("modPath", "live-pass");
+  const gamePath = requireDevPath("gamePath", "live-pass");
+  // Set VSCODE_EXECUTABLE_PATH to use a local editor; otherwise test-electron
+  // downloads its isolated test installation using its normal platform discovery.
+  const vscodeExecutablePath = process.env.VSCODE_EXECUTABLE_PATH;
+  if (vscodeExecutablePath && !fs.existsSync(vscodeExecutablePath))
+    throw new Error("VSCODE_EXECUTABLE_PATH does not exist");
 
-  const scratch = path.join(os.tmpdir(), "ck3-live-pass");
-  fs.rmSync(scratch, { recursive: true, force: true });
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "px-live-pass-"));
   const userDataDir = path.join(scratch, "user-data");
   fs.mkdirSync(path.join(userDataDir, "User"), { recursive: true });
   fs.writeFileSync(
     path.join(userDataDir, "User", "settings.json"),
     JSON.stringify(
       {
-        "px.gamePath": devPaths.gamePath,
-        "px.logsPath": devPaths.logsPath ?? null,
+        "px.gamePath": gamePath,
+        "px.logsPath": devPath("logsPath"),
         "security.workspace.trust.enabled": false,
         "extensions.autoCheckUpdates": false,
         "extensions.autoUpdate": false,
@@ -50,11 +50,11 @@ async function main(): Promise<void> {
   let failed = false;
   try {
     await runTests({
-      vscodeExecutablePath: fs.existsSync(VSCODE_EXE) ? VSCODE_EXE : undefined,
+      vscodeExecutablePath,
       extensionDevelopmentPath: path.join(repoRoot, "packages", "vscode"),
       extensionTestsPath: path.join(repoRoot, "dist", "live-pass-suite.cjs"),
       launchArgs: [
-        devPaths.modPath,
+        modPath,
         "--user-data-dir",
         userDataDir,
         "--extensions-dir",
@@ -76,10 +76,13 @@ async function main(): Promise<void> {
     }
     const bad = results.filter((r) => !r.ok).length;
     console.log(`\nlive-pass: ${results.length - bad}/${results.length} checks passed`);
-    process.exit(bad > 0 ? 1 : 0);
+    return bad > 0 ? 1 : 0;
   }
   console.error("live-pass: no results file written — host crashed before the suite ran");
-  process.exit(failed ? 1 : 2);
+  return failed ? 1 : 2;
 }
 
-void main();
+if (require.main === module)
+  void main().then((code) => {
+    process.exitCode = code;
+  });

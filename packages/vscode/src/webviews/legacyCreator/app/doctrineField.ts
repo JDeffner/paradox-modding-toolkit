@@ -17,6 +17,7 @@
  * Browser code. No game knowledge: the doctrine vocabulary, the modifier list
  * and the key's own documentation all arrive from the owner.
  */
+import { el } from "../../shared/dom";
 import type { EventVocabularyItem } from "@px-lsp/protocol/protocol";
 import { iconEl } from "../../shared/icons";
 import { refField, textField, type Field, type ModifierRow } from "../../shared/fields";
@@ -92,13 +93,6 @@ interface Block {
   text: string;
   input: HTMLInputElement;
   code: HTMLElement;
-}
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 export function doctrineField(options: DoctrineFieldOptions): DoctrineField {

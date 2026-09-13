@@ -11,3 +11,4 @@ media/screenshots/**
 dist/*.cjs
 # Build-time input for dataTypes.json (bundled into dist/server.js).
 data/*/wikidocs/Data_types.md
+.webview-dev/**

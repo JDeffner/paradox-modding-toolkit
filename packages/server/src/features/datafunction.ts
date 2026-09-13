@@ -12,6 +12,7 @@
  * fall back to the vanilla member pool instead of going silent.
  */
 import { CompletionItemKind, type CompletionItem, type SignatureHelp } from "vscode-languageserver/node";
+import { activeProfile } from "../games/active";
 import { describeDataFn } from "../data/dataFnDocs";
 import {
   membersOf,
@@ -183,6 +184,7 @@ function usesSuffix(count: number): string {
 
 const SOURCE_LABEL: Record<string, string> = {
   dump: "your DumpDataTypes log",
+  bundled: "toolkit-provided data-type dump",
   wiki: "bundled wiki tables",
   macro: "game data_binding macro",
 };
@@ -547,7 +549,7 @@ function topMemberLines(usage: DataFnUsage, name: string, label: string): string
 function dumpHintFor(data: DataTypesData): string {
   return data.source === "data_types.log"
     ? "*Not in your `DumpDataTypes` dump (which is loaded), shown from vanilla usage instead.*"
-    : "*Using the bundled wiki tables. Run `DumpDataTypes` in the game console to load the complete, version-exact definitions.*";
+    : `*Using ${data.source === "bundled dump" ? "the toolkit-provided data-type dump" : data.source === "none" ? "vanilla usage without a data-type dump" : "the bundled wiki tables"}. Run \`${activeProfile().dataTypesCommand ?? "DumpDataTypes"}\` in the game console and run Reload Game Data to use your own definitions.*`;
 }
 
 /** Shared hover tail: description, observed literals, vanilla example sites. */

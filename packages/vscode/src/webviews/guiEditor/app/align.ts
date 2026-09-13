@@ -24,7 +24,7 @@ export interface AlignDelta {
 const NONE: AlignDelta = { dx: 0, dy: 0 };
 
 /** The selection's bounding box. */
-function bounds(rects: readonly SceneRect[]): SceneRect {
+export function selectionRect(rects: readonly SceneRect[]): SceneRect {
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
@@ -44,7 +44,7 @@ function bounds(rects: readonly SceneRect[]): SceneRect {
  */
 export function alignDeltas(rects: readonly SceneRect[], mode: AlignMode): AlignDelta[] {
   if (rects.length < 2) return rects.map(() => NONE);
-  const box = bounds(rects);
+  const box = selectionRect(rects);
   return rects.map((r) => {
     switch (mode) {
       case "left":

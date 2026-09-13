@@ -71,10 +71,10 @@ import type { Scope } from "../scopes/model";
 import type { ParadoxSettings } from "@px-lsp/protocol/protocol";
 import { assetDirContext, provideAssetDirCompletion, provideBareNameCompletion } from "./assetPaths";
 import { assetCompletion } from "./assetLanguage";
-import { snippetSupport } from "../clientMode";
+import { clientCapabilities, snippetSupport } from "../clientMode";
 import { blockTemplateFor } from "./blockSnippets";
 import { minimalTokenInsert, scriptedCallTemplate, syntaxInsert } from "./completionInsert";
-import { withCompletionPreview } from "./completionPreview";
+import { withCompletionPreview, withCompletionDocumentation } from "./completionPreview";
 import { skeletonsAt } from "./definitionSkeletons";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */
@@ -560,27 +560,28 @@ export class CompletionFeature {
    * from script_docs/wiki data; definition docs from the index (PdxDoc §E3).
    */
   resolve(item: CompletionItem): CompletionItem {
+    const format = clientCapabilities().completionDocumentationFormat;
     const data = item.data as { t?: string; k?: string; n?: string } | undefined;
-    if (!data || !data.n) return withCompletionPreview(item);
+    if (!data || !data.n) return withCompletionPreview(item, undefined, undefined, format);
     if (data.t === "tok") {
       const token = this.data.tokenMap.get(data.n)?.find((t) => t.kind === data.k);
       if (token?.doc) item.documentation = token.doc;
-      return withCompletionPreview(item, token);
+      return withCompletionPreview(item, token, undefined, format);
     }
     if (data.t === "tmpl") {
       const m = matchTemplatedModifier(data.n, this.data.modifierTemplates, (n) => this.data.index.lookup(n));
       if (m) item.documentation = { kind: MarkupKind.Markdown, value: templatedModifierDoc(m) };
-      return item;
+      return withCompletionDocumentation(item, format);
     }
     if (data.t === "def") {
       const def = this.data.index.lookup(data.n).find((d) => d.kind === data.k);
       if (def) {
         const doc = defDocMarkdown(def);
         if (doc) item.documentation = { kind: MarkupKind.Markdown, value: doc };
-        return withCompletionPreview(item, undefined, def);
+        return withCompletionPreview(item, undefined, def, format);
       }
     }
-    return item;
+    return withCompletionDocumentation(item, format);
   }
 
   /**

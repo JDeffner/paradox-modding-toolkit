@@ -1,6 +1,7 @@
 import { colorPicker, hexToRgb, rgbToHex } from "./colorPicker";
 import { iconEl } from "./icons";
 import { menu } from "./overlay";
+import { texturePreviewColors } from "@px-lsp/protocol/texturePreview";
 
 export type ViewerBackground = "default" | "dark" | "light" | `#${string}`;
 
@@ -13,16 +14,17 @@ export function readViewerBackground(value: unknown): ViewerBackground {
 }
 
 // Fixed contrast references, independent of the editor theme.
-const DARK = "#181818";
-const LIGHT = "#f2f2f2";
+const [DARK] = texturePreviewColors("dark");
+const [LIGHT] = texturePreviewColors("light");
 
 /** Preview-only paint. Reset releases the page's original CSS background. */
 export function viewerBackground(
   stage: HTMLElement,
   tools: HTMLElement,
   onChange: (value: ViewerBackground) => void,
-  image?: HTMLElement | null
+  options: { image?: HTMLElement | null; defaultLabel?: string; commitOnClose?: boolean } = {}
 ): { restore: (value: unknown) => void } {
+  const { image, defaultLabel } = options;
   let value: ViewerBackground = "default";
   const button = document.createElement("button");
   button.className = "px-btn";
@@ -45,7 +47,12 @@ export function viewerBackground(
       // The DDS checkerboard is on the image itself, above the stage.
       if (image) image.style.background = "none";
     }
-    const label = value.startsWith("#") ? value : value[0].toUpperCase() + value.slice(1);
+    const label =
+      value === "default" && defaultLabel
+        ? defaultLabel
+        : value.startsWith("#")
+          ? value
+          : value[0].toUpperCase() + value.slice(1);
     button.dataset.tip = `Viewer background: ${label}`;
   };
   const choose = (next: ViewerBackground): void => {
@@ -59,7 +66,7 @@ export function viewerBackground(
         { value: "dark", label: "Dark", swatch: DARK },
         { value: "light", label: "Light", swatch: LIGHT },
         { value: "custom", label: "Custom color…", swatch: value.startsWith("#") ? value : undefined },
-        { value: "default", label: "Reset to default" },
+        { value: "default", label: defaultLabel ?? "Reset to default" },
       ],
       {
         value: value.startsWith("#") ? "custom" : value,
@@ -71,7 +78,14 @@ export function viewerBackground(
           }
           const initial = hexToRgb(value === "light" ? LIGHT : value === "dark" ? DARK : value);
           colorPicker(button, initial ?? [128, 128, 128], {
-            onChange: (rgb) => choose(readViewerBackground(rgbToHex(rgb))),
+            onChange: (rgb) => {
+              const next = readViewerBackground(rgbToHex(rgb));
+              if (options.commitOnClose) restore(next);
+              else choose(next);
+            },
+            // A settings-backed preview saves once when the picker closes,
+            // rather than rewriting settings.json on every pointer movement.
+            onClose: options.commitOnClose ? () => onChange(value) : undefined,
           });
           const input = document.querySelector<HTMLInputElement>(".px-picker input");
           input?.setAttribute("aria-label", "Custom background color (hex)");

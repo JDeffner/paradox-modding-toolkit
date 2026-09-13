@@ -909,3 +909,4 @@ $("divider").addEventListener("pointerdown", (event: PointerEvent) => {
 
 input.focus();
 renderList();
+send({ type: "refresh" });

@@ -18,6 +18,29 @@ export interface ConfigDirNames {
   legacyConfigDirName?: string;
 }
 
+/** Both names are watched, including files that do not exist yet. */
+export function indexConfigWatchPatterns(names: ConfigDirNames): string[] {
+  return [names.configDirName, names.legacyConfigDirName]
+    .filter((name): name is string => !!name)
+    .map((name) => `**/${name}/{schema,playset}.json`);
+}
+
+/** Only overlays belonging to an editable workspace root can change its index. */
+export function isIndexConfigFile(file: string, roots: string[], names: ConfigDirNames): boolean {
+  const normalize = (value: string) => {
+    const resolved = path.resolve(value);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  const candidate = normalize(file);
+  return roots.some((root) =>
+    [names.configDirName, names.legacyConfigDirName].some(
+      (dir) =>
+        dir &&
+        ["schema.json", "playset.json"].some((name) => normalize(path.join(root, dir, name)) === candidate)
+    )
+  );
+}
+
 /**
  * The config dir to READ from: the current name when it exists, else the
  * legacy one when that exists, else the current name. Never touches disk.

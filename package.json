@@ -22,7 +22,9 @@
     "test": "vitest run",
     "package": "pnpm --filter px-toolkit run package",
     "testp": "pnpm --filter px-toolkit run testp",
-    "bake:browser": "esbuild scripts/bake-browser-data.ts --bundle --platform=node --outfile=dist/bake-browser-data.cjs --log-level=warning && node dist/bake-browser-data.cjs"
+    "bake:browser": "esbuild scripts/bake-browser-data.ts --bundle --platform=node --outfile=dist/bake-browser-data.cjs --log-level=warning && node dist/bake-browser-data.cjs",
+    "compile:webview-dev": "pnpm run compile && node scripts/compile-client.mjs --live",
+    "watch:webviews:live": "node scripts/compile-webviews.mjs --watch --live"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -35,6 +35,7 @@ export interface UiState {
 }
 
 export type AppToHost =
+  | { type: "ready" }
   | { type: "open"; file: string; line?: number }
   | { type: "fetch"; params: EventGraphParams }
   | { type: "export"; svg: string }
@@ -52,7 +53,7 @@ export type AppToHost =
   | { type: "uiState"; state: UiState };
 
 export type HostToApp =
-  | { type: "init"; ui?: UiState }
+  | { type: "init"; ui?: UiState; state?: GraphState }
   | { type: "graph"; graph: EventGraph; params: EventGraphParams }
   | { type: "error"; message: string }
   | { type: "loading" }
@@ -65,6 +66,4 @@ export type HostToApp =
   | { type: "valueOptions"; value: string; result: EventValueOptionsResult | null }
   /** Save result. `applied` = batch indices of the edits that reached disk;
    *  with `error` set the batch stopped there and the rest were not written. */
-  | { type: "saved"; applied: number[]; error?: string }
-  /** The user cancelled an unsaved close: put the session back as it was. */
-  | { type: "restore"; state: GraphState };
+  | { type: "saved"; applied: number[]; error?: string };

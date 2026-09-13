@@ -88,7 +88,7 @@ export class WikiPanel {
     };
     render();
     // The rebooted app sends "ready" and the content answer follows.
-    this.disposables.push(watchBundle(source, "wiki", render));
+    this.disposables.push(watchBundle(source, "wiki", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
       undefined,

@@ -38,7 +38,7 @@ export function provideInlayHints(
   rootScopes: Set<Scope> | null,
   entry: SchemaEntry | null,
   /** The mod's own `.px-toolkit/calendar.json` when it has one; defaults to the setting. */
-  calendar: CalendarSetting | undefined = settings.calendar
+  calendar: CalendarSetting | undefined = settings.calendar ?? undefined
 ): InlayHint[] {
   if (document.languageId === "paradox-loc") return translationOverlayHints(data, settings, document, range);
   const hints = locPreviewHints(data, document, range);

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import type { FormattingOptions } from "vscode-languageserver/node";
 import { provideFormattingEdits } from "../src/features/formatting";
 import { ErrorLogParser, parseErrorLogLine } from "@px-lsp/protocol/errorLogParser";
 
-function applyEdits(text: string, doc: TextDocument): string {
-  const edits = provideFormattingEdits(doc);
+function applyEdits(text: string, doc: TextDocument, options?: FormattingOptions): string {
+  const edits = provideFormattingEdits(doc, options);
   // apply in reverse order (per line, non-overlapping)
   let out = text;
   const sorted = [...edits].sort(
@@ -26,6 +27,31 @@ describe("formatter (indentation only)", () => {
     const input = "a = {\nb = {\n      x = 1\n }\n}\n";
     const doc = mkdoc(input);
     expect(applyEdits(input, doc)).toBe("a = {\n\tb = {\n\t\tx = 1\n\t}\n}\n");
+  });
+
+  it.each([
+    {
+      name: "four spaces",
+      options: { insertSpaces: true, tabSize: 4 },
+      input: "a = {\n    b = {\n        x = 1\n    }\n}\n",
+      expected: "a = {\n    b = {\n        x = 1\n    }\n}\n",
+    },
+    {
+      name: "two spaces",
+      options: { insertSpaces: true, tabSize: 2 },
+      input: "a = {\n    b = {\n        x = 1\n    }\n}\n",
+      expected: "a = {\n  b = {\n    x = 1\n  }\n}\n",
+    },
+    {
+      name: "tabs",
+      options: { insertSpaces: false, tabSize: 4 },
+      input: "a = {\n    b = {\n        x = 1\n    }\n}\n",
+      expected: "a = {\n\tb = {\n\t\tx = 1\n\t}\n}\n",
+    },
+  ])("uses $name from the client options and is idempotent", ({ options, input, expected }) => {
+    const once = applyEdits(input, mkdoc(input), options);
+    expect(once).toBe(expected);
+    expect(applyEdits(once, mkdoc(once), options)).toBe(once);
   });
 
   it("is idempotent", () => {

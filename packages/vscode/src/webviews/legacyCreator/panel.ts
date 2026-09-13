@@ -168,7 +168,7 @@ export class LegacyCreatorPanel {
     };
     render();
     // The rebooted app sends "ready" and the init answers it; nothing else.
-    this.disposables.push(watchBundle(source, "legacyCreator", render));
+    this.disposables.push(watchBundle(source, "legacyCreator", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

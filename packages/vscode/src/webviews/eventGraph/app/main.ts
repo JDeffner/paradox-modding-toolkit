@@ -7,6 +7,7 @@
  * edit becomes a PendingEdit in the history, undo and redo move through them,
  * and the host only ever receives a `save` with the whole list.
  */
+import { el } from "../../shared/dom";
 import type {
   EventGraph,
   EventGraphParams,
@@ -19,7 +20,7 @@ import { iconEl } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
 import { closePopover, isPopoverAnchor, popover, toast } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
-import { button, dropdown, el, iconButton, input } from "./dom";
+import { button, dropdown, iconButton, input } from "./dom";
 import { GraphView } from "./view";
 import { Inspector } from "./inspector";
 import { SimWindow } from "./simWindow";
@@ -60,7 +61,7 @@ let reselectAfterGraph: string | null = null;
 let renderedCluster: string | null = null;
 const hiddenKinds = new Set<string>();
 
-const history = new GraphHistory({ focus: {}, positions: {}, pending: [] });
+let history = new GraphHistory({ focus: {}, positions: {}, pending: [] });
 
 // ---------------------------------------------------------------------------
 // Panels
@@ -379,7 +380,7 @@ function openNewEventForm(anchor: HTMLElement): void {
 // History, save
 // ---------------------------------------------------------------------------
 
-function afterHistoryChange(): void {
+function afterHistoryChange(mirror = true): void {
   const count = history.pendingCount;
   saveEl.disabled = count === 0;
   saveEl.dataset.tip =
@@ -397,7 +398,7 @@ function afterHistoryChange(): void {
   redoEl.disabled = !history.canRedo;
   undoEl.dataset.tip = history.canUndo ? `Undo ${history.undoLabel}` : "Nothing to undo";
   redoEl.dataset.tip = history.canRedo ? `Redo ${history.redoLabel}` : "Nothing to redo";
-  send({ type: "state", state: history.state, dirty: count });
+  if (mirror) send({ type: "state", state: history.state, dirty: count });
 }
 
 /** Put the view back on a state undo, redo or a cancelled close produced. */
@@ -997,6 +998,11 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
   switch (msg.type) {
     case "init":
       applyUi(msg.ui);
+      if (msg.state) {
+        currentParams = msg.state.focus;
+        history = new GraphHistory(msg.state);
+        applyState(msg.state);
+      }
       return;
     case "loading":
       setFocusLine("Loading…", "");
@@ -1052,10 +1058,6 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       // created event gets its card, and put the selection back afterwards.
       reselectAfterGraph = selectedId;
       fetchGraph(currentParams);
-      return;
-    case "restore":
-      history.push("keep unsaved changes", msg.state);
-      applyState(msg.state);
       return;
     case "graph":
       currentParams = msg.params ?? {};
@@ -1141,5 +1143,6 @@ function renderGraph(graph: EventGraph, params: EventGraphParams): void {
 updatePanelToggle();
 updateRailTools();
 inspector.showPlaceholder();
-afterHistoryChange();
+afterHistoryChange(false);
 setFocusLine("Loading…", "");
+send({ type: "ready" });

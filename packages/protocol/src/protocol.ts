@@ -11,6 +11,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { IndexStats } from "./types";
 import type { DefSource } from "./types";
+import type { TexturePreviewBackground } from "./texturePreview";
 
 /** Resolved extension settings, computed client-side (path validation, Steam
  * detection fallbacks, workspace-folder default) and pushed to the server. */
@@ -24,7 +25,7 @@ export interface ParadoxSettings {
   /** Parent/dependency mod roots (load order, base first) indexed as source "parent"
    *, the submod / compatibility-patch workflow. */
   parentPaths: string[];
-  /** Workspace mod roots (subset of parentPaths): mods the user is EDITING in
+  /** Workspace mod roots: mods the user is EDITING in
    * this workspace, so they get the mod treatment, reference indexing and
    * reference diagnostics, on top of the parent definition scan. */
   workspaceMods?: string[];
@@ -41,10 +42,12 @@ export interface ParadoxSettings {
   hoverDetail?: "compact" | "standard" | "full";
   /** Keyword completion inserts punctuation, documented examples, or names only. Default minimal. */
   completionMode?: "minimal" | "examples" | "names";
+  /** Shared texture editor/hover background. Defaults to checkerboard; display only. */
+  texturePreviewBackground?: TexturePreviewBackground;
   /** Custom era calendar (total-conversion mods): how script dates display in
-   * game. Absent = no calendar features. Shape: calendar.ts `CalendarSetting`;
+   * game. Absent/null = no configured calendar. Shape: calendar.ts `CalendarSetting`;
    * the server sanitizes it on intake, so clients may pass raw JSON. */
-  calendar?: import("./calendar").CalendarSetting;
+  calendar?: import("./calendar").CalendarSetting | null;
   /** Our diagnostic codes to suppress everywhere. */
   diagnosticsIgnore: string[];
   /** Glob patterns (workspace-relative paths) whose diagnostics are suppressed. */
@@ -135,7 +138,7 @@ export interface ParadoxInitOptions {
    * and, being one fixed folder, it does NOT follow a `gameId` change.
    */
   wikidocsDir?: string;
-  settings?: ParadoxSettings;
+  settings?: Partial<ParadoxSettings>;
 }
 
 // ---- client command ids ----------------------------------------------------
@@ -163,6 +166,14 @@ export const allClientCommandIds: string[] = Object.values(clientCommands);
 /** Notification: settings changed; payload {@link ParadoxSettings}. */
 export const configChangedNotification = "paradox/configChanged";
 
+/** Standard workspace/configuration section, distinct from native VS Code px settings. */
+export const configurationSection = "pxLsp";
+
+/** workspace/didChangeConfiguration.settings: supplied fields patch configured values. */
+export interface ParadoxConfigurationSettings {
+  pxLsp?: Partial<ParadoxSettings>;
+}
+
 /** Notification: a mod file changed on disk; payload {@link ModFileChangeParams}. */
 export const modFileChangedNotification = "paradox/modFileChanged";
 export interface ModFileChangeParams {
@@ -177,6 +188,8 @@ export interface ReloadDocsParams {
 }
 export interface ReloadDocsResult {
   tokens: number;
+  /** Loaded sources after refreshing both script docs and data types. */
+  status?: StatusPayload;
 }
 
 /** Request: index statistics; no payload -> {@link IndexStats}. */
@@ -240,6 +253,8 @@ export interface StatusPayload {
   /** True when the script_docs tokens came from the BUNDLED dump snapshot
    * (data/<gameId>/script_docs) rather than the user's own dump. */
   tokensFromBundledDumps?: boolean;
+  /** Loaded data-type definitions. Generated dumps can supplement bundled entries. */
+  dataTypesSource?: "generated" | "bundled" | "none";
   definitions: number;
   /** Tokens the bundled wiki added that script_docs did not have. The wiki is
    * merged even when the user has their own dump, but its real contribution is

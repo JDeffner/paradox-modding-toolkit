@@ -139,7 +139,7 @@ export class TraditionCreatorPanel {
     };
     render();
     // The rebooted app sends "ready" and postInit answers it; nothing else.
-    this.disposables.push(watchBundle(source, "traditionCreator", render));
+    this.disposables.push(watchBundle(source, "traditionCreator", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

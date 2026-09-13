@@ -8,6 +8,7 @@
  * messages.ts. All Steam-facing plumbing is shared with the quick command
  * (steam/workshop.ts).
  */
+import { makeNonce } from "../nonce";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
@@ -167,7 +168,7 @@ export class WorkshopPanel {
     };
     render();
     // The rebooted app sends "ready" and postInit answers it; nothing else.
-    this.disposables.push(watchBundle(source, "workshop", render));
+    this.disposables.push(watchBundle(source, "workshop", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,
@@ -1398,11 +1399,4 @@ function suggestedLanguages(root: string, meta: GameMeta): string[] {
 function isInsideDir(parent: string, child: string): boolean {
   const rel = path.relative(path.resolve(parent).toLowerCase(), path.resolve(child).toLowerCase());
   return !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
-function makeNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }

@@ -9,6 +9,7 @@
  * output; server.ts installs the resolved value at initialize.
  */
 import { allClientCommandIds, type ParadoxInitOptions } from "@px-lsp/protocol/protocol";
+import { MarkupKind } from "vscode-languageserver/node";
 
 export interface ClientCapabilities {
   /** Client renders the sanitized `<span style="color:var(--*)">` hover markup. */
@@ -19,15 +20,19 @@ export interface ClientCapabilities {
   ownFileWatcher: boolean;
   /** Client expands `${1:…}` completion snippets (standard LSP capability). */
   snippetSupport: boolean;
+  /** First supported completion documentation format in the client's preference order. */
+  completionDocumentationFormat: MarkupKind;
   /** Client's hover renderer navigates `file:` links. */
   fileLinks: boolean;
   /** Client renders `$(codicon)` in hover markdown (supportThemeIcons). */
   hoverIcons: boolean;
 }
 
-/** The one standard LSP capability read here, structurally. */
+/** Standard LSP completion capabilities, structurally. */
 interface LspClientCapabilities {
-  textDocument?: { completion?: { completionItem?: { snippetSupport?: boolean } } };
+  textDocument?: {
+    completion?: { completionItem?: { snippetSupport?: boolean; documentationFormat?: MarkupKind[] } };
+  };
 }
 
 /**
@@ -45,12 +50,17 @@ export function resolveClientCapabilities(
   lspCaps?: LspClientCapabilities
 ): ClientCapabilities {
   const snippetSupport = lspCaps?.textDocument?.completion?.completionItem?.snippetSupport === true;
+  const completionDocumentationFormat =
+    lspCaps?.textDocument?.completion?.completionItem?.documentationFormat?.find(
+      (format) => format === MarkupKind.Markdown || format === MarkupKind.PlainText
+    ) ?? MarkupKind.PlainText;
   if (init.client) {
     return {
       hoverHtml: init.client.hoverHtml === true,
       commands: new Set(init.client.commands ?? []),
       ownFileWatcher: init.client.ownFileWatcher === true,
       snippetSupport,
+      completionDocumentationFormat,
       fileLinks: init.client.fileLinks === true,
       hoverIcons: init.client.hoverIcons === true,
     };
@@ -61,6 +71,7 @@ export function resolveClientCapabilities(
       commands: new Set(allClientCommandIds),
       ownFileWatcher: true,
       snippetSupport: true,
+      completionDocumentationFormat,
       fileLinks: true,
       hoverIcons: true,
     };
@@ -70,12 +81,18 @@ export function resolveClientCapabilities(
     commands: new Set(),
     ownFileWatcher: false,
     snippetSupport,
+    completionDocumentationFormat,
     fileLinks: false,
     hoverIcons: false,
   };
 }
 
-let caps: ClientCapabilities = resolveClientCapabilities({ clientCommands: true });
+let caps: ClientCapabilities = resolveClientCapabilities(
+  { clientCommands: true },
+  {
+    textDocument: { completion: { completionItem: { documentationFormat: [MarkupKind.Markdown] } } },
+  }
+);
 
 export function setClientCapabilities(value: ClientCapabilities): void {
   caps = value;

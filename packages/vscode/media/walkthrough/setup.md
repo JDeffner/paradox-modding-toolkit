@@ -1,12 +1,14 @@
-# Automatic setup
+# Check your setup and data sources
 
-**Paradox: Run Setup & Health Check** does the tedious part for you:
+Open your mod workspace, then run **Paradox: Run Setup & Health Check**. It finds the game through Steam, checks the mod folders, loads the available game data and offers to download the game's tiger validator where supported.
 
-- finds your game installation (CK3, Victoria 3 or EU5 — whichever this workspace mods) by reading Steam's library folders, on any drive
-- writes `px.gamePath` into your settings
-- locates the Paradox logs folder (redirected Documents folders included)
-- offers to download the **tiger** validator for that game (~15 MB, from github.com/amtep/tiger; EU5 has no build yet)
+The report shows two separate sources:
 
-Re-run it anytime as a health check — it reports what's configured and what's missing, with instructions.
+- **script_docs** for effects, triggers, event targets and modifiers.
+- **Data types / datafunctions** for `[ ... ]` expressions in GUI and localization files.
 
-You can watch what the extension is doing in **Output → Paradox Modding Toolkit**.
+**Toolkit-provided set** means the extension is using bundled reference data. **Your generated dump** means it loaded usable definitions from your dump folder. One set can be generated while the other still uses bundled data.
+
+Generate both sets for your installed patch: `script_docs` plus `DumpDataTypes` in CK3, or `dump_data_types` in Victoria 3 and EU5. Then run **Paradox: Reload Game Data**. The next walkthrough step gives the commands and output folders.
+
+Click **PX Toolkit** in the status bar to run this check again. Its tooltip also shows both sources. Open **Output > Paradox Modding Toolkit** for the full report and the dump folder in use.

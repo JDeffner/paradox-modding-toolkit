@@ -64,7 +64,7 @@ export function pointerModText(descriptorText: string, contentDir: string): stri
 // folder to delete by hand. The destination is authoritative from the moment it
 // verifies.
 
-/** Mirror of config.looksLikeMod, importable without vscode. */
+/** Mod-folder detection shared by configuration and project moves. */
 export function looksLikeModDir(dir: string): boolean {
   try {
     if (fs.existsSync(path.join(dir, "descriptor.mod"))) return true;

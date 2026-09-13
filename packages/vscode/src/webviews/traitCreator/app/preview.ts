@@ -14,6 +14,7 @@
  * name and description from the mod's own loc fields, and the pictures from
  * the host's decoder. Browser code; the only DOM it makes is its own.
  */
+import { el } from "../../shared/dom";
 import type { ModifierFormat } from "@px-lsp/protocol/protocol";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
 
@@ -144,13 +145,6 @@ export function frameTexture(category: string): string | null {
     default:
       return null;
   }
-}
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 /**

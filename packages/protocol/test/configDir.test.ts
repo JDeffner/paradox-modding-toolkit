@@ -2,12 +2,49 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { migrateConfigDir, resolveConfigDir } from "../src/configDir";
+import {
+  indexConfigWatchPatterns,
+  isIndexConfigFile,
+  migrateConfigDir,
+  resolveConfigDir,
+} from "../src/configDir";
 
 const names = { configDirName: ".px-toolkit", legacyConfigDirName: ".ck3modding" };
 const tmpMod = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "px-config-dir-"));
 
 describe("configDir", () => {
+  it("watches current and legacy index configuration, including absent files", () => {
+    const root = path.resolve("mod");
+    expect(indexConfigWatchPatterns(names)).toEqual([
+      "**/.px-toolkit/{schema,playset}.json",
+      "**/.ck3modding/{schema,playset}.json",
+    ]);
+    expect(indexConfigWatchPatterns({ configDirName: ".px-toolkit" })).toEqual([
+      "**/.px-toolkit/{schema,playset}.json",
+    ]);
+    for (const dir of [names.configDirName, names.legacyConfigDirName]) {
+      expect(isIndexConfigFile(path.join(root, dir, "schema.json"), [root], names)).toBe(true);
+      expect(isIndexConfigFile(path.join(root, dir, "playset.json"), [root], names)).toBe(true);
+    }
+    for (const relative of [
+      "schema.json",
+      ".px-toolkit/calendar.json",
+      ".px-toolkit/nested/schema.json",
+      "nested/.px-toolkit/playset.json",
+    ]) {
+      expect(isIndexConfigFile(path.join(root, relative), [root], names)).toBe(false);
+    }
+    expect(isIndexConfigFile(path.join(root + "-other", ".px-toolkit/schema.json"), [root], names)).toBe(
+      false
+    );
+    expect(isIndexConfigFile(path.join(root, ".PX-TOOLKIT/SCHEMA.JSON"), [root], names)).toBe(
+      process.platform === "win32"
+    );
+    expect(isIndexConfigFile(path.join(root.toUpperCase(), ".px-toolkit/schema.json"), [root], names)).toBe(
+      process.platform === "win32"
+    );
+  });
+
   it("resolves to the current name for a fresh mod without creating it", () => {
     const root = tmpMod();
     expect(resolveConfigDir(root, names)).toBe(path.join(root, ".px-toolkit"));

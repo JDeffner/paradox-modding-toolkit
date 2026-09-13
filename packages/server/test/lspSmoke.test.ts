@@ -15,6 +15,7 @@ import { fork, type ChildProcess } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { encodeDds } from "../src/dds";
 import {
   createMessageConnection,
   IPCMessageReader,
@@ -38,6 +39,9 @@ import {
   definitionFormRequest,
   definitionEditRequest,
   locTextRequest,
+  lookupLocRequest,
+  modFileChangedNotification,
+  type LocEntryInfo,
   type LocTextResult,
   modifierFormatsRequest,
   type DefinitionForm,
@@ -355,7 +359,11 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       // LSP capability, so the server must read it from here and not from the
       // paradox initializationOptions.
       capabilities: {
-        textDocument: { completion: { completionItem: { snippetSupport: true } } },
+        textDocument: {
+          completion: {
+            completionItem: { snippetSupport: true, documentationFormat: ["markdown", "plaintext"] },
+          },
+        },
       },
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-storage-")),
@@ -420,6 +428,54 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(latest).toBeDefined();
     expect(latest.tokens).toBeGreaterThan(500); // bundled wiki tokens loaded
     expect(latest.definitions).toBeGreaterThanOrEqual(5); // 2 effects + event + 2 loc keys
+  });
+
+  it("reports both loaded dump sources and refreshes them through reloadDocs", async () => {
+    const logs = path.join(modDir, "source-test-logs");
+    fs.mkdirSync(logs);
+    const settings = {
+      gamePath: null,
+      logsPath: null as string | null,
+      modPath: modDir,
+      parentPaths: [parentDir, depDir],
+      workspaceMods: [parentDir],
+      locLanguage: "english",
+      scopeInlayHints: false,
+      diagnosticsIgnore: [],
+      diagnosticsIgnorePatterns: [],
+      diagnosticsVanilla: false,
+    };
+    const reload = () =>
+      conn.sendRequest("paradox/reloadDocs", { force: true }) as Promise<{
+        tokens: number;
+        status: StatusPayload;
+      }>;
+    try {
+      const bundled = (await reload()).status;
+      expect(bundled.dataTypesSource).toBe("bundled");
+      expect(bundled.tokensFromBundledDumps).toBe(true);
+      // An empty directory must not be reported as a generated dump.
+      await conn.sendNotification("paradox/configChanged", { ...settings, logsPath: logs });
+      expect((await reload()).status.dataTypesSource).toBe("bundled");
+      fs.writeFileSync(
+        path.join(logs, "data_types.log"),
+        "SourceProbe\nDefinition type: Global promote\nReturn type: Character\n"
+      );
+      const mixed = (await reload()).status;
+      expect(mixed.dataTypesSource).toBe("generated");
+      expect(mixed.tokensFromBundledDumps).toBe(true);
+      for (const name of ["effects.log", "triggers.log", "event_targets.log", "modifiers.log"])
+        fs.copyFileSync(path.join(WIKIDOCS, "..", "script_docs", name), path.join(logs, name));
+      const generated = (await reload()).status;
+      expect(generated.dataTypesSource).toBe("generated");
+      expect(generated.tokensFromScriptDocs).toBe(true);
+      expect(generated.tokensFromBundledDumps).toBe(false);
+      expect(statuses.at(-1)).toEqual(generated);
+    } finally {
+      await conn.sendNotification("paradox/configChanged", settings);
+      await reload();
+      fs.rmSync(logs, { recursive: true, force: true });
+    }
   });
 
   it("indexes assets, navigates names and files, and handles standard watcher create/edit/delete", async () => {
@@ -629,32 +685,83 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       textDocument: { uri, languageId: "paradox", version: 1, text: "e.1 = { immediate = { my_smoke_ } }" },
     });
     const start = statuses.length;
-    for (const [completionMode, expected] of [
-      ["examples", "my_smoke_effect = ${1|yes,no|}"],
-      ["names", undefined],
-      ["minimal", "my_smoke_effect = $0"],
-    ] as const) {
-      await conn.sendNotification(configChangedNotification, {
-        gamePath: null,
-        logsPath: null,
-        modPath: modDir,
-        parentPaths: [parentDir, depDir],
-        workspaceMods: [parentDir],
-        locLanguage: "english",
-        scopeInlayHints: false,
-        diagnosticsIgnore: [],
-        diagnosticsIgnorePatterns: [],
-        diagnosticsVanilla: false,
-        completionMode,
-      });
-      const result = (await conn.sendRequest("textDocument/completion", {
-        textDocument: { uri },
-        position: { line: 0, character: 29 },
-      })) as { items: Array<{ label: string; insertText?: string }> };
-      expect(result.items.find((item) => item.label === "my_smoke_effect")?.insertText).toBe(expected);
+    for (const method of [configChangedNotification, "workspace/didChangeConfiguration"]) {
+      for (const [completionMode, expected] of [
+        ["examples", "my_smoke_effect = ${1|yes,no|}"],
+        ["names", undefined],
+        ["minimal", "my_smoke_effect = $0"],
+      ] as const) {
+        const settings = {
+          gamePath: null,
+          logsPath: null,
+          modPath: modDir,
+          parentPaths: [parentDir, depDir],
+          workspaceMods: [parentDir],
+          locLanguage: "english",
+          scopeInlayHints: false,
+          diagnosticsIgnore: [],
+          diagnosticsIgnorePatterns: [],
+          diagnosticsVanilla: false,
+          completionMode,
+        };
+        await conn.sendNotification(
+          method,
+          method === configChangedNotification ? settings : { settings: { pxLsp: { completionMode } } }
+        );
+        const result = (await conn.sendRequest("textDocument/completion", {
+          textDocument: { uri },
+          position: { line: 0, character: 29 },
+        })) as { items: Array<{ label: string; insertText?: string }> };
+        expect(result.items.find((item) => item.label === "my_smoke_effect")?.insertText).toBe(expected);
+      }
     }
     expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
   });
+
+  it.each([configChangedNotification, "workspace/didChangeConfiguration"])(
+    "changes texture hover backgrounds through %s without rebuilding the index",
+    async (method) => {
+      const file = path.join(modDir, "gfx/models/background.dds");
+      fs.writeFileSync(file, encodeDds(1, 1, new Uint8Array(4), "bgra8"));
+      const uri = toUri(path.join(modDir, "events/texture_preview.txt"));
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "paradox", version: 1, text: 'icon = "gfx/models/background.dds"' },
+      });
+      const start = statuses.length;
+      const previews: string[] = [];
+      for (const texturePreviewBackground of ["checkerboard", "dark", "light", "#376694", "checkerboard"]) {
+        const settings = {
+          gamePath: null,
+          logsPath: null,
+          modPath: modDir,
+          parentPaths: [parentDir, depDir],
+          workspaceMods: [parentDir],
+          locLanguage: "english",
+          scopeInlayHints: false,
+          diagnosticsIgnore: [],
+          diagnosticsIgnorePatterns: [],
+          diagnosticsVanilla: false,
+          texturePreviewBackground,
+        };
+        await conn.sendNotification(
+          method,
+          method === configChangedNotification
+            ? settings
+            : { settings: { pxLsp: { texturePreviewBackground } } }
+        );
+        const hover = (await conn.sendRequest("textDocument/hover", {
+          textDocument: { uri },
+          position: { line: 0, character: 18 },
+        })) as { contents: { value: string } };
+        const image = /data:image\/png;base64,[A-Za-z0-9+/=]+/.exec(hover.contents.value)?.[0];
+        expect(image).toBeDefined();
+        previews.push(image!);
+      }
+      expect(new Set(previews).size).toBe(4);
+      expect(previews[4]).toBe(previews[0]);
+      expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
+    }
+  );
 
   it("hover on the scripted effect shows its card with a references link", async () => {
     // "my_smoke_effect" on line 6, character 4.
@@ -1294,6 +1401,36 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(result.values.px_absent).toBeUndefined();
   });
 
+  it("localization lookups flush pending disk and unsaved document changes", async () => {
+    const file = path.join(modDir, "localization", "english", "fresh_l_english.yml");
+    const uri = toUri(file);
+    fs.writeFileSync(file, '\uFEFFl_english:\n fresh_key:0 "Before"\n', "utf8");
+    await conn.sendNotification(modFileChangedNotification, { fsPath: file });
+    expect(await conn.sendRequest(lookupLocRequest, { key: "fresh_key" })).toEqual([
+      { file, line: 1, source: "mod", value: "Before" },
+    ]);
+    const changed = '\uFEFFl_english:\n other_key:0 "Other"\n fresh_key:0 "On disk"\n';
+    fs.writeFileSync(file, changed, "utf8");
+    await conn.sendNotification(modFileChangedNotification, { fsPath: file });
+    const disk = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "fresh_key" });
+    expect(disk[0]).toMatchObject({ line: 2, value: "On disk" });
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox-loc", version: 1, text: changed },
+    });
+    await conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: changed.replace('"On disk"', '"Unsaved"') }],
+    });
+    const unsaved = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "fresh_key" });
+    expect(unsaved[0]).toMatchObject({ line: 2, value: "Unsaved" });
+    await conn.sendNotification(modFileChangedNotification, { fsPath: file });
+    const stillUnsaved = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "fresh_key" });
+    expect(stillUnsaved[0]).toMatchObject({ line: 2, value: "Unsaved" });
+    await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    const closed = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "fresh_key" });
+    expect(closed[0]).toMatchObject({ line: 2, value: "On disk" });
+  });
+
   it("paradox/definitionEdit round-trips a property change and an appended block", async () => {
     const edit = (await conn.sendRequest(definitionEditRequest, {
       uri: toUri(traitsFile),
@@ -1506,7 +1643,9 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
       processId: process.pid,
       rootUri: toUri(modDir),
       workspaceFolders: [{ uri: toUri(modDir), name: "caps" }],
-      capabilities: {},
+      capabilities: {
+        textDocument: { completion: { completionItem: { documentationFormat: ["plaintext"] } } },
+      },
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-caps-storage-")),
         wikidocsDir: WIKIDOCS,
@@ -1577,9 +1716,41 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
       position: { line: 5, character: 2 },
     })) as { items: Array<{ label: string; insertText?: string; insertTextFormat?: number }> };
     expect(result.items.find((i) => i.label === "my_smoke_effect")!.insertText).toBe("my_smoke_effect = ");
+    const resolved = await conn.sendRequest<{ documentation: { kind: string; value: string } }>(
+      "completionItem/resolve",
+      result.items.find((i) => i.label === "my_smoke_effect")!
+    );
+    expect(resolved.documentation.kind).toBe("plaintext");
+    expect(resolved.documentation.value).toContain("Insertion preview\n\nmy_smoke_effect = <value>");
+    expect(resolved.documentation.value).toContain("Gives gold");
+    expect(resolved.documentation.value).not.toMatch(/```|\*\*/);
     for (const item of result.items) {
       expect(item.insertTextFormat, item.label).toBeUndefined();
       expect(item.insertText ?? "", item.label).not.toContain("${");
     }
+  });
+
+  it("plain-text editor capabilities do not change Markdown catalogue exports", async () => {
+    const catalogue = await conn.sendRequest<SnippetCatalogueResult>(snippetCatalogueRequest, {});
+    expect(catalogue.entries.length).toBeGreaterThan(0);
+    expect(
+      catalogue.entries.every((entry) =>
+        entry.variants.every((variant) => variant.preview.startsWith("**Insertion preview**"))
+      )
+    ).toBe(true);
+  });
+
+  it("textDocument/formatting honors the client's indentation options", async () => {
+    const uri = "file:///formatting-options.txt";
+    const text = "root = {\n    child = {\n        value = 1\n    }\n}\n";
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text },
+    });
+    expect(
+      await conn.sendRequest("textDocument/formatting", {
+        textDocument: { uri },
+        options: { insertSpaces: true, tabSize: 4 },
+      })
+    ).toEqual([]);
   });
 });

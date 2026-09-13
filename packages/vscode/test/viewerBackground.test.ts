@@ -121,10 +121,8 @@ describe.each(["flagBuilder", "coaDesigner", "ddsPreview"] as const)("%s viewer 
     input.value = "#376694";
     input.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
     expect(stage.style.background).toBe("rgb(55, 102, 148)");
-    const saved = [...app.posted]
-      .reverse()
-      .find((m) => m.type === (name === "ddsPreview" ? "background" : "uiState"));
-    expect(saved?.state?.background ?? saved?.value).toBe("#376694");
+    if (name === "ddsPreview")
+      expect(app.posted.filter((m) => m.type === "background").at(-1)?.value).toBe("light");
     input.value = "#nope";
     input.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
     expect(stage.style.background).toBe("rgb(55, 102, 148)");
@@ -133,8 +131,12 @@ describe.each(["flagBuilder", "coaDesigner", "ddsPreview"] as const)("%s viewer 
       new app.dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
     );
     expect(app.document.querySelector(".px-popover")).toBeNull();
+    const saved = [...app.posted]
+      .reverse()
+      .find((m) => m.type === (name === "ddsPreview" ? "background" : "uiState"));
+    expect(saved?.state?.background ?? saved?.value).toBe("#376694");
 
-    app.choose("Reset to default");
+    app.choose(name === "ddsPreview" ? "Checkerboard" : "Reset to default");
     expect(stage.style.background).toBe("");
     if (image) {
       expect(image.style.background).toBe("");

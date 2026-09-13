@@ -170,7 +170,7 @@ ${uiCss}
   .lang-row[data-off] { opacity: 0.55; }
   .lang-row .px-switch { transform: scale(0.85); transform-origin: left center; }
   #enableAllBox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  #enableAllConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-left: 3px solid var(--px-destructive); font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  #enableAllConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; background: var(--px-muted); border-radius: var(--px-radius); font-size: var(--px-text-xs); color: var(--px-muted-fg); }
   #enableAllConfirm[hidden] { display: none; }
   #note { width: 100%; min-height: 56px; resize: vertical; }
   /* The changenote's three sources: the picked one's body is the only one shown. */

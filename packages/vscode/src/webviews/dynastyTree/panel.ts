@@ -198,7 +198,7 @@ export class DynastyTreePanel {
     render();
     // The rebooted app sends "ready" and gets the same answer it got the first
     // time, so a bundle reload does not lose the panel's state.
-    this.disposables.push(watchBundle(source, "dynastyTree", render));
+    this.disposables.push(watchBundle(source, "dynastyTree", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
       undefined,

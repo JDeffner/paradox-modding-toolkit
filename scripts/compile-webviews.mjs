@@ -12,9 +12,10 @@
 // the root tsconfig: they are browser code with DOM types and nothing else).
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { buildSync, context } from "esbuild";
+import { build, buildSync, context } from "esbuild";
+import { liveWebviewHelper } from "./live-webview-config.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const webviewsDir = join(root, "packages", "vscode", "src", "webviews");
@@ -42,6 +43,20 @@ function buildOptions(name) {
 const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   const apps = discoverWebviewApps();
+  const live = process.argv.includes("--live");
+  const signalAdapter = live
+    ? (await import(pathToFileURL(liveWebviewHelper("esbuild")).href)).webviewDevSignal
+    : undefined;
+  const signalPlugins = (name) =>
+    signalAdapter
+      ? [
+          signalAdapter({
+            projectRoot: join(root, "packages", "vscode"),
+            signalPath: `.webview-dev/${name}.json`,
+            buildId: name,
+          }),
+        ]
+      : [];
   if (process.argv.includes("--list")) {
     console.log(apps.join("\n"));
   } else if (process.argv.includes("--typecheck")) {
@@ -55,6 +70,7 @@ if (invokedDirectly) {
       if (result.status) process.exit(result.status);
     }
   } else if (process.argv.includes("--watch")) {
+    console.log("webview watch starting");
     for (const name of apps) {
       const ctx = await context({
         ...buildOptions(name),
@@ -69,14 +85,19 @@ if (invokedDirectly) {
               });
             },
           },
+          ...signalPlugins(name),
         ],
       });
+      // Complete the initial output before the F5 background task is ready.
+      await ctx.rebuild();
       await ctx.watch();
     }
+    console.log("webview watch ready");
     console.log(`watching ${apps.length} webview apps (${apps.join(", ")}); Ctrl+C stops`);
   } else {
     for (const name of apps) {
-      buildSync(buildOptions(name));
+      if (live) await build({ ...buildOptions(name), plugins: signalPlugins(name) });
+      else buildSync(buildOptions(name));
     }
   }
 }

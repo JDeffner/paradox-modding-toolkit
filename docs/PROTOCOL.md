@@ -62,7 +62,7 @@ interface ParadoxInitOptions {
   wikidocsDir?: string;  // DEPRECATED narrow override for the wikidocs folder alone, see below
   client?: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
   clientCommands?: boolean;           // DEPRECATED alias, see below
-  settings?: ParadoxSettings;
+  settings?: Partial<ParadoxSettings>;
 }
 
 interface ParadoxClientCapabilities {
@@ -82,10 +82,11 @@ interface ParadoxSettings {
   workspaceMods?: string[];    // mods being EDITED (reference indexing + diagnostics)
   locLanguage: string;         // "english", ...
   completionMode?: "minimal" | "examples" | "names"; // default minimal
+  texturePreviewBackground?: "checkerboard" | "dark" | "light" | `#${string}`; // default checkerboard
   scopeInlayHints: boolean;
   indexAssets?: boolean;      // default true; index .asset definitions and references
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
-  calendar?: CalendarSetting;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
+  calendar?: CalendarSetting | null;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
                                //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
                                //   that mod; the server reads it itself and re-reads it when the file changes
                                //   { epoch: number; after: string; before?: string;
@@ -99,6 +100,10 @@ interface ParadoxSettings {
 ```
 
 `indexAssets` defaults to `true`. Set it to `false` to skip `.asset` definition and reference indexing across workspace mods, dependency mods and vanilla, including on-demand reference searches. Changing it through `paradox/configChanged` rebuilds the index without a restart. Open-file syntax features and on-demand texture previews remain available. Support for `.asset` indexing comes from the active game profile.
+
+`texturePreviewBackground` sets the display background for texture hover thumbnails: `checkerboard` (default), `dark`, `light`, or a six-digit hex color such as `#376694`. Invalid values use checkerboard. The server composites the background into its bounded PNG thumbnail, so clients need no custom hover styling. Changing it through `paradox/configChanged` affects subsequent hovers without rebuilding the index. Source textures are unchanged. VS Code shares this value with its DDS editors through `px.texturePreview.background`; the editor palette updates one workspace preference, and exported PNGs retain their original transparency.
+
+Completion documentation uses the first supported format in `textDocument.completion.completionItem.documentationFormat`, falling back to plain text when none is declared. Plain-text clients receive insertion previews and value hints without Markdown tables or code fences. `paradox/snippetCatalogue` always returns Markdown in its explicitly typed `preview` field, independently of the editor's completion capabilities.
 
 `completionMode` controls ordinary script keyword insertion. `minimal` (the default) inserts the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional, with no example values. `examples` restores full documented blocks and scripted-call parameter snippets. `names` inserts only keyword names. Unknown syntax stays a name in Minimal mode. Explicit definition/child-block snippet items and `paradox/snippets` keep their full templates. Snippet-capable clients receive `CompletionItemKind.Snippet` for generated templates, so the editor shows its snippet icon. Reference/value completions are unchanged. Clients without standard LSP snippet support receive the same punctuation as plain text. Send `paradox/configChanged` to change the mode without restarting or rebuilding the index. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
@@ -129,10 +134,7 @@ Bundled data is per-game: everything the server loads from disk lives under
 `<root>/<gameId>/`, where the root is `dataDir` when the client sends one and
 otherwise `data/` next to `dist/server.js`. `wikidocs/` and `freqs.json` are
 resolved independently under that folder, and the root is re-resolved against
-the new `gameId` when the game changes. Only `ck3` ships a `wikidocs/` bundle
-today, so `vic3` and `eu5` report `tokens: 0` in `paradox/status` and never
-render wiki-token hovers — a missing `<gameId>/` folder is a supported state,
-not an error.
+the new `gameId` when the game changes. CK3 and Victoria 3 also ship `script_docs/` snapshots; all three games ship data-type dump snapshots. User-generated dumps take priority. A missing per-game bundle is supported and can leave a category without definitions.
 
 `wikidocsDir` is a **deprecated** narrow override kept for older clients: it
 replaces the `wikidocs/` folder alone, leaves `freqs.json` on the `dataDir`/
@@ -140,13 +142,31 @@ bundle root, and, being one fixed folder, does not follow a `gameId` change.
 Clients that ship the data apart from the server bundle should send `dataDir`
 instead.
 
+## Settings updates and workspace files
+
+Initialization accepts partial `ParadoxSettings` and fills omitted fields with defaults. `paradox/configChanged` replaces the configured settings: omitted fields return to defaults. Standard `workspace/didChangeConfiguration` instead accepts `{ "settings": { "pxLsp": { ... } } }`, where `pxLsp` is a partial `ParadoxSettings` update. Supplied fields replace their previous values, including whole arrays; omitted fields retain their configured values. Other sections, including the VS Code extension's native `px` section, are ignored. A malformed section or invalid known field leaves the previous configuration intact. `gamePath`, `logsPath`, and `modPath` accept `null`, which clears that configured path. `calendar: null` clears the configured calendar. `texturePreviewBackground` uses checkerboard for invalid values. Other fields do not accept `null`.
+
+Root resolution is the same at initialization and after every update. A nonempty `modPath` and the roots in `workspaceMods` are editable mods. If both are empty, the first initialization workspace folder (or `rootUri` when no folder is supplied) becomes `modPath`. This fallback is session context, so a later `workspaceMods` update can replace it. Sending `modPath: null` with `workspaceMods: []` restores the workspace fallback. Dependency roots in `parentPaths` remain read-only and keep their supplied load order.
+
+Clients with `capabilities.workspace.configuration: true` receive a `workspace/configuration` request after `initialized`, before the first index build. Its single item has `section: "pxLsp"` and the initialization workspace root as `scopeUri`, when available. Return `[partialSettings]`; this patches the initialization settings. A failed request or absent/null section preserves the current settings. An empty or null `didChangeConfiguration.settings` triggers another pull when supported. A response is ignored if a newer push, custom update, or pull started while it was pending. Dynamic registration of `workspace/didChangeConfiguration` occurs only when the client advertises its `dynamicRegistration` capability. Clients without configuration capabilities can use initialization options and either push transport.
+
+For example, this standard notification changes hover detail while retaining the game, roots, and other settings. Display-only settings do not rebuild the index; paths, game, localization language, and asset indexing changes do.
+
+```json
+{ "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": { "settings": { "pxLsp": { "hoverDetail": "compact" } } } }
+```
+
+Creation, changes, and deletion of `schema.json` or `playset.json` in an editable mod's profile config directory trigger a debounced full rebuild. The profile's legacy directory is also watched where supported. Standard `workspace/didChangeWatchedFiles` and custom `paradox/modFileChanged` events share the same debounce, so a burst across both transports rebuilds once. Custom watcher clients must include these JSON files; dynamically registered server watchers include them. Other file changes keep their existing single-file behavior.
+
+Reloading a playset does not extend the client's watched roots. A host must watch external dependency folders if it needs later edits in those files to update the index.
+
 ## Custom methods: client → server
 
 | Method | Kind | Params → Result |
 |---|---|---|
 | `paradox/configChanged` | notification | `ParadoxSettings` |
-| `paradox/modFileChanged` | notification | `{ fsPath: string }` — a mod file changed on disk (client-side watcher); triggers a single-file re-index |
-| `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number }` — re-parse script_docs logs |
+| `paradox/modFileChanged` | notification | `{ fsPath: string }` — a mod file changed on disk (client-side watcher); re-indexes the file, or rebuilds for workspace schema/playset changes |
+| `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number, status?: StatusPayload }`, reload both script docs and data types; return and notify their loaded sources |
 | `paradox/indexStats` | request | `null` → `IndexStats` (definition counts by kind/source) |
 | `paradox/lookupLoc` | request | `{ key: string }` → `LocEntryInfo[]` — localization entries for a key, mod first |
 | `paradox/locText` | request | `LocTextParams` → `LocTextResult` — the same values as the PLAYER reads them: `{ raw, text, resolved }` per key, with the game's markup stripped and its `[ … ]` datafunctions resolved. A key the loc index cannot find is absent from `values` |
@@ -726,9 +746,11 @@ interface there is part of this contract.
 
 | Method | Kind | Payload |
 |---|---|---|
-| `paradox/status` | notification | `{ tokens, tokensFromScriptDocs, definitions, indexing }` — data health for a status bar |
+| `paradox/status` | notification | `StatusPayload`, token counts, loaded dump sources and index health |
 | `paradox/indexChanged` | notification | none — definition index changed (debounced); overview views should re-query |
 | `paradox/progress` | notification | `{ phase, state: "start" \| "done", detail? }` — one coarse loading phase (`index`, `engine`, `guiStore`); `detail` carries the label, sent with `start` |
+
+`StatusPayload.tokensFromScriptDocs` and `tokensFromBundledDumps` distinguish a generated script dump from a bundled snapshot; with neither set, any tokens come from bundled wiki data. The optional `dataTypesSource` is `generated`, `bundled` or `none`. Generated data types can supplement bundled entries. These fields describe successfully loaded definitions, not just files found on disk, and do not certify that a dump matches the installed patch. Older servers can omit `dataTypesSource` and the `status` field of `paradox/reloadDocs`; clients should show an unknown source in that case.
 
 ## Client command ids
 

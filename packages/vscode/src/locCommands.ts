@@ -39,35 +39,89 @@ async function resolveKeyFromEditor(lookup: LocLookup, arg: unknown): Promise<st
   return null;
 }
 
-/** Read the full (untruncated) value of a loc entry straight from its file. */
-function readLocValueFromFile(def: LocEntryInfo): string | null {
+/** Read the full value by key, including changes not yet saved in the editor. */
+async function readLocValueFromFile(def: LocEntryInfo, key: string): Promise<string | null> {
   try {
-    const lines = fs.readFileSync(def.file, "utf8").split(/\r?\n/);
-    const m = /^(\s*[^\s:#]+:\d*\s*")(.*)("[^"]*)$/.exec(lines[def.line] ?? "");
-    return m ? m[2] : null;
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(def.file));
+    const match = locEntry(
+      doc
+        .getText()
+        .replace(/^\uFEFF/, "")
+        .split(/\r?\n/),
+      key,
+      def.line
+    );
+    return match?.parts[2] ?? null;
   } catch {
     return null;
   }
 }
 
-export function replaceLocLineValue(file: string, line: number, newValue: string): boolean {
-  const buf = fs.readFileSync(file);
-  const hadBom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
-  let text = buf.toString("utf8");
-  if (hadBom) text = text.replace(/^﻿/, "");
-  const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const lines = text.split(/\r?\n/);
-  if (line >= lines.length) return false;
-  const m = /^(\s*[^\s:#]+:\d*\s*")(.*)("[^"]*)$/.exec(lines[line]);
-  if (!m) return false;
-  lines[line] = m[1] + escapeLocValue(newValue) + m[3];
-  fs.writeFileSync(file, (hadBom ? BOM : "") + lines.join(eol), "utf8");
+function locEntry(lines: string[], key: string, hint?: number) {
+  const pattern = new RegExp(`^(\\s*${escapeRegExp(key)}:\\d*\\s*")(.*)("[^"]*)$`);
+  const line =
+    hint !== undefined && pattern.test(lines[hint] ?? "") ? hint : lines.findIndex((l) => pattern.test(l));
+  const parts = pattern.exec(lines[line] ?? "");
+  return parts ? { line, parts } : null;
+}
+
+/** Indexed positions are hints: only the requested key may be replaced. */
+export async function replaceLocLineValue(
+  file: string,
+  line: number,
+  key: string,
+  newValue: string
+): Promise<boolean> {
+  return editLocDocument(file, key, (lines) => {
+    const entry = locEntry(lines, key, line);
+    if (!entry) return false;
+    lines[entry.line] = entry.parts[1] + escapeLocValue(newValue) + entry.parts[3];
+    return true;
+  });
+}
+
+/** All loc writes use the editor's current text and save as UTF-8 with BOM. */
+async function editLocDocument(
+  file: string,
+  key: string,
+  update: (lines: string[]) => boolean
+): Promise<boolean> {
+  // Same key alphabet as the localization parser, including apostrophes.
+  if (!/^[A-Za-z0-9_.\-']+$/.test(key)) throw new Error("Invalid localization key");
+  const language = /_l_([a-z_]+)\.yml$/i.exec(file)?.[1];
+  if (!language) throw new Error("Localization files must end in _l_<language>.yml");
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+  const original = doc.getText();
+  const lines = original.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const header = lines.find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"));
+  if (!header || !new RegExp(`^[ \\t]*l_${language}:[ \\t]*(?:#.*)?$`).test(header)) {
+    throw new Error(`Localization file needs an l_${language}: header`);
+  }
+  if (!update(lines)) return false;
+  // VS Code 1.91 does not expose TextDocument.encoding. On those hosts the
+  // existing UTF-8 BOM tells us whether the encoder adds it outside getText().
+  const encoding =
+    doc.encoding ??
+    (original.startsWith(BOM) ? "utf8" : fs.readFileSync(file, "utf8").startsWith(BOM) ? "utf8bom" : "utf8");
+  if (encoding !== "utf8" && encoding !== "utf8bom")
+    throw new Error("Save localization as UTF-8 before editing it");
+  const eol = original.includes("\r\n") ? "\r\n" : "\n";
+  const text = (encoding === "utf8bom" ? "" : BOM) + lines.join(eol);
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(doc.uri, new vscode.Range(doc.positionAt(0), doc.positionAt(original.length)), text);
+  if (!(await vscode.workspace.applyEdit(edit))) throw new Error("Localization edit was rejected");
+  if (!(await doc.save())) throw new Error("Localization file could not be saved");
   return true;
 }
 
 function escapeLocValue(value: string): string {
   // Preserve already-escaped quotes; escape bare ones.
-  return value.replace(/\\"/g, '"').replace(/"/g, '\\"');
+  // Vanilla localization (for example ai_personality_l_english.yml) uses
+  // literal \\n for displayed line breaks, never physical multiline values.
+  return value
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/\\"/g, '"')
+    .replace(/"/g, '\\"');
 }
 
 /**
@@ -84,27 +138,28 @@ function modReplaceFile(cfg: PxConfig, language?: string): string {
   return path.join(dir, `zzz_px_edits_l_${lang}.yml`);
 }
 
-export function upsertInReplaceFile(cfg: PxConfig, key: string, value: string, language?: string): string {
+export async function upsertInReplaceFile(
+  cfg: PxConfig,
+  key: string,
+  value: string,
+  language?: string
+): Promise<string> {
   return upsertIntoYml(modReplaceFile(cfg, language), language ?? cfg.locLanguage, key, value);
 }
 
 /** Create-or-update `key` in a specific loc yml (BOM + `l_<lang>:` header kept). */
-function upsertIntoYml(file: string, language: string, key: string, value: string): string {
+async function upsertIntoYml(file: string, language: string, key: string, value: string): Promise<string> {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  let lines: string[];
-  if (fs.existsSync(file)) {
-    lines = fs.readFileSync(file, "utf8").replace(/^﻿/, "").split(/\r?\n/);
-  } else {
-    lines = [`l_${language}:`, ""];
-  }
-  const entry = ` ${key}:0 "${escapeLocValue(value)}"`;
-  const existing = lines.findIndex((l) => new RegExp(`^\\s*${escapeRegExp(key)}:\\d*\\s*"`).test(l));
-  if (existing >= 0) lines[existing] = entry;
-  else {
-    while (lines.length > 1 && lines[lines.length - 1].trim() === "") lines.pop();
-    lines.push(entry, "");
-  }
-  fs.writeFileSync(file, BOM + lines.join("\n"), "utf8");
+  if (!fs.existsSync(file)) fs.writeFileSync(file, `${BOM}l_${language}:\n`, "utf8");
+  await editLocDocument(file, key, (lines) => {
+    const existing = locEntry(lines, key);
+    if (existing) lines[existing.line] = existing.parts[1] + escapeLocValue(value) + existing.parts[3];
+    else {
+      while (lines.length > 1 && lines[lines.length - 1].trim() === "") lines.pop();
+      lines.push(` ${key}:0 "${escapeLocValue(value)}"`, "");
+    }
+    return true;
+  });
   return file;
 }
 
@@ -139,7 +194,12 @@ function modLocFiles(cfg: PxConfig, language: string): string[] {
  * `localization/replace/` is reserved for overriding vanilla keys — new keys
  * there would only clutter the mod layout.
  */
-export function upsertNewModLoc(cfg: PxConfig, key: string, value: string, language?: string): string {
+export async function upsertNewModLoc(
+  cfg: PxConfig,
+  key: string,
+  value: string,
+  language?: string
+): Promise<string> {
   const lang = language ?? cfg.locLanguage;
   return upsertIntoYml(newModLocFile(cfg, key, lang), lang, key, value);
 }
@@ -208,7 +268,10 @@ export async function writeLocSmart(
 ): Promise<string> {
   const defs = await lookup(key);
   const modDef = defs.find((d) => d.source === "mod");
-  if (modDef && replaceLocLineValue(modDef.file, modDef.line, value)) return modDef.file;
+  if (modDef) {
+    if (await replaceLocLineValue(modDef.file, modDef.line, key, value)) return modDef.file;
+    return upsertIntoYml(modDef.file, cfg.locLanguage, key, value);
+  }
   if (defs.length > 0) return upsertInReplaceFile(cfg, key, value);
   if (newKeyFile) return upsertIntoYml(newKeyFile, cfg.locLanguage, key, value);
   return upsertNewModLoc(cfg, key, value);
@@ -251,7 +314,7 @@ export async function editLocalizationCommand(
 
   const defs = await lookup(key);
   const modDef = defs.find((d) => d.source === "mod");
-  const currentValue = modDef ? (readLocValueFromFile(modDef) ?? modDef.value ?? "") : (defs[0]?.value ?? "");
+  const currentValue = modDef ? ((await readLocValueFromFile(modDef, key)) ?? "") : (defs[0]?.value ?? "");
 
   const newValue = await vscode.window.showInputBox({
     title: `Localization: ${key}`,

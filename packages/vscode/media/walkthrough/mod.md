@@ -1,14 +1,9 @@
-# Your mod is the workspace
+# Open your mod workspace
 
-Open the mod folder — the one containing `common/`, `events/`, `localization/` — as your VS Code workspace root.
+Open the mod folder containing its game content, such as `common/`, `events/` and `localization/`. You can also open a project whose content is in a `mod/` subfolder, add several mod folders to one workspace, or open a folder that contains your mod projects.
 
-The extension then:
+The toolkit detects the mods, sets the Paradox language modes and indexes definitions and localization. **Project > Workspace Mods** shows what is included. Select a mod to focus the views and use the include switch to control indexing.
 
-- switches its `.txt` and localization `.yml` files to the Paradox language modes (files elsewhere are untouched)
-- indexes every scripted effect, trigger, event, on_action, script value and loc key
-- re-indexes files as you save them
-- lets your definitions **shadow** vanilla ones with the same name, exactly like the game does
+Starting fresh? **Paradox: New Mod** can create a project with content in `<project>/mod`, separate Git and Workshop listing files, and a launcher link to the game. Set `px.modProjectsDir` to keep new projects together.
 
-If your mod lives somewhere else, set `px.modPath` instead.
-
-Starting fresh? **Paradox: New Mod** creates the mod for you in the game's mod folder, with a `.pxignore` file that keeps git, editor and toolkit files out of Workshop uploads made through the toolkit. It can also create a mod project instead, where the content lives in `<project>/mod` and everything else stays next to it, linked from the game's mod folder.
+If detection selects the wrong folder or game, set `px.modPath` or `px.gameId`, then run **Setup & Health Check**. The game installation and dependency mods are indexed separately from your editable content.

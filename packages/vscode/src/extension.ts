@@ -59,6 +59,7 @@ import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { declareCalendarCommand, generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
+import { initializeWebviewDevelopment } from "./webviews/devReload";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
 import { TraditionCreatorPanel } from "./webviews/traditionCreator/panel";
@@ -69,7 +70,7 @@ import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
 import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
 import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
-import { migrateConfigDir } from "@px-lsp/protocol/configDir";
+import { indexConfigWatchPatterns, migrateConfigDir } from "@px-lsp/protocol/configDir";
 import { hasDesignerFiles, type FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
@@ -194,6 +195,7 @@ function toSettings(c: PxConfig): ParadoxSettings {
     indexAssets: c.indexAssets,
     scopeInlayHints: c.scopeInlayHints,
     completionMode: c.completionMode,
+    texturePreviewBackground: c.texturePreviewBackground,
     calendar: c.calendar,
     diagnosticsIgnore: c.diagnosticsIgnore,
     diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
@@ -206,6 +208,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   setTabIconRoot(context.extensionUri);
   output = vscode.window.createOutputChannel("Paradox Modding Toolkit", { log: true });
   context.subscriptions.push(output);
+  await initializeWebviewDevelopment(context, log);
 
   const storageDir = context.globalStorageUri.fsPath;
 
@@ -381,6 +384,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tokensFromBundledDumps: lastServerStatus.tokensFromBundledDumps ?? false,
       definitions: lastServerStatus.definitions,
       tokensWikiOnly: lastServerStatus.tokensWikiOnly,
+      dataTypesSource: lastServerStatus.dataTypesSource,
+      dataTypesCommand: metaFor(cfg.gameId).dataTypesCommand ?? "DumpDataTypes",
       indexing: lastServerStatus.indexing,
       gameOk: cfg.gamePath !== null,
       modOk: cfg.modPath !== null,
@@ -622,7 +627,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
       // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
       // which the server caches per mod until the file changes.
-      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/gfx/**/*.asset", "**/calendar.json"]) {
+      for (const glob of [
+        "**/*.{txt,yml,gui,mod}",
+        "**/gfx/**/*.asset",
+        "**/calendar.json",
+        ...indexConfigWatchPatterns(metaFor(cfg.gameId)),
+      ]) {
         const w = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(vscode.Uri.file(root), glob)
         );
@@ -636,7 +646,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   wireModWatcher();
   context.subscriptions.push({ dispose: () => modWatchers.forEach((w) => w.dispose()) });
 
-  const watchedRoots = (c: PxConfig) => [c.modPath ?? "", ...c.parentPaths].join(";");
+  const watchedRoots = (c: PxConfig) => [c.gameId, c.modPath ?? "", ...c.parentPaths].join(";");
 
   // Recompute config-dependent state when settings change.
   context.subscriptions.push(
@@ -700,7 +710,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.reloadScriptDocs", async () => {
       const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
       void vscode.window.showInformationMessage(
-        `Paradox Modding Toolkit: reloaded script_docs data (${result.tokens} tokens).`
+        `Paradox Modding Toolkit: reloaded script docs and data types (${result.tokens} engine tokens).`
       );
     }),
     vscode.commands.registerCommand("px.dumpIndexStats", async () => {
@@ -874,8 +884,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     notifyChanged: notifyModFileChanged,
     async editLoc(key: string, value: string, file?: string, line?: number): Promise<void> {
       if (file !== undefined && line !== undefined) {
-        if (!replaceLocLineValue(file, line, value))
-          throw new Error(`line ${line + 1} is not a loc entry anymore`);
+        if (!(await replaceLocLineValue(file, line, key, value)))
+          throw new Error(`Localization key ${key} is no longer in the file`);
         notifyModFileChanged(file);
         return;
       }
@@ -897,7 +907,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const owner = modRootFor(file, cfg);
       const locCfg = owner && owner !== cfg.modPath ? { ...cfg, modPath: owner } : cfg;
       if (locCfg.modPath) {
-        const locFile = upsertNewModLoc(locCfg, optionKey, "New option");
+        const locFile = await upsertNewModLoc(locCfg, optionKey, "New option");
         notifyModFileChanged(locFile);
       }
     },
@@ -936,7 +946,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           [`${id}.desc`, desc || "Describe what is happening here."],
           ...letters.map((l): [string, string] => [`${id}.${l}`, "New option"]),
         ];
-        for (const [key, value] of writes) notifyModFileChanged(upsertNewModLoc(locCfg, key, value));
+        for (const [key, value] of writes) notifyModFileChanged(await upsertNewModLoc(locCfg, key, value));
       }
     },
   };
@@ -1369,17 +1379,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const setupDeps: SetupDeps = {
     storageDir,
     getConfig: () => cfg,
-    refresh: () => {
+    refresh: async () => {
       cfg = resolveConfig();
       tiger.resetErrorNotice();
       tiger.refreshStatus();
       updateStatus();
-      void lc.sendNotification(configChangedNotification, toSettings(cfg));
+      await lc.sendNotification(configChangedNotification, toSettings(cfg));
+      const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
+      return result.status ?? lastServerStatus;
     },
     log,
     showOutput: () => output.show(true),
-    hasBundledDumps: (gameId: string) =>
-      fs.existsSync(context.asAbsolutePath(path.join("data", gameId, "script_docs"))),
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),

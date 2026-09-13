@@ -152,10 +152,7 @@ concrete:
   definitions. Vic3/EU5 write script_docs to `Documents/.../docs`; the
   data-type dump lands under `logs/` and the server probes the sibling
   `logs/` folder of a docs-style `logsPath` automatically.
-- **`modPath`** is the mod root. Absent, the server falls back to the first
-  workspace folder, then to nothing, and features that need a known mod
-  (reference diagnostics, required-localization checks, the localization quick
-  fix) stay silent because the open file belongs to no mod it knows.
+- **`modPath`** is the mod root. A nonempty value and any `workspaceMods` take precedence over the workspace fallback. When both are empty, the server uses the first initialization workspace folder, or `rootUri` when no folder is supplied. The fallback survives later settings updates. Sending `modPath: null` with `workspaceMods: []` restores it. Without any root, features that require a known mod stay silent.
 - **`workspaceMods`** are the roots being *edited*. Listing a root here is what
   upgrades it from a plain definition scan to reference indexing plus reference
   diagnostics. `modPath` itself always gets that treatment, so a single-mod
@@ -168,13 +165,27 @@ concrete:
 
 Set `indexAssets: false` to skip graphics `.asset` definition and reference indexing in all roots. It defaults to `true` for profiles that support `.asset` files. Send the changed settings through `paradox/configChanged` to rebuild the index without a restart. This does not disable open-file syntax features or on-demand texture previews.
 
+Set `texturePreviewBackground` to `checkerboard` (the default), `dark`, `light`, or a six-digit hex color to choose the background behind texture hover images. Invalid values use checkerboard. The background is part of the generated thumbnail, so it works with ordinary Markdown image rendering. A settings update changes subsequent hovers without an index rebuild. VS Code uses the same workspace choice for its DDS editors; source files and exported PNGs retain their transparency.
+
+Declare the supported completion documentation formats in `textDocument.completion.completionItem.documentationFormat`, in preference order. Omit it or send `["plaintext"]` for plain insertion previews and value hints. The exported snippet catalogue keeps its explicitly documented Markdown format regardless of these capabilities.
+
 Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
-The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`,
-`diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in
-`docs/PROTOCOL.md`. Push the whole settings object again as
-`paradox/configChanged` whenever the user changes any of it; the server
-re-resolves without a restart.
+The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`, `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in `docs/PROTOCOL.md`. Existing hosts can continue to send the whole settings object through `paradox/configChanged`; omitted fields return to defaults.
+
+For standard LSP updates, send a partial settings object under `pxLsp`. This example changes hover detail without clearing roots, changing the selected game, or rebuilding the index:
+
+```json
+{ "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": { "settings": { "pxLsp": { "hoverDetail": "compact" } } } }
+```
+
+Standard updates retain omitted fields and replace supplied arrays in full. `gamePath`, `logsPath`, and `modPath` accept `null` to clear a configured path before root fallback is applied. `calendar: null` clears the configured calendar. Invalid `texturePreviewBackground` values use checkerboard. Unrelated sections and other malformed updates are ignored. The `pxLsp` shape is `Partial<ParadoxSettings>`, separate from the VS Code extension's native `px` configuration.
+
+If the host advertises `capabilities.workspace.configuration: true`, answer `workspace/configuration` requests for section `pxLsp` with `[partialSettings]`. The server requests it after `initialized`, before its first build, using the initialization workspace URI as `scopeUri` when available. Returned fields patch initialization settings; absent/null results and request failures preserve them. Send an empty or null `didChangeConfiguration.settings` to request another pull. Late responses cannot overwrite a newer push, custom update, or pull. The server dynamically registers configuration notifications only when `workspace.didChangeConfiguration.dynamicRegistration` is true. Hosts without these capabilities can continue to use initialization options and pushed updates.
+
+Include `<mod>/<configDir>/schema.json` and `playset.json` in a host-owned file watcher, including the profile's legacy config directory where supported. Send creation, change, and deletion events through `workspace/didChangeWatchedFiles` or `paradox/modFileChanged`. The server reloads the schema, dependency roots, and dependent data in one debounced rebuild for the burst. Its dynamically registered file watcher includes these files automatically.
+
+A playset reload does not extend the client's watched roots. Hosts must also watch dependency files outside their existing watched folders to report later edits in those dependencies.
 
 ### storageDir: put it somewhere persistent
 
@@ -274,9 +285,9 @@ that **contains** the per-game folders, not one of them.
 Both files resolve independently under `<dataDir>/<gameId>/`, and the whole
 path is re-derived when `paradox/configChanged` switches the game, so the
 override stays profile-correct. A `<gameId>/` folder holding only one of the
-two assets, or missing entirely, is a supported state and not an error: only
-CK3 ships a wiki mirror, so Vic3 and EU5 report `tokens: 0` in `paradox/status`
-until the user dumps `script_docs`.
+two assets, or missing entirely, is a supported state and not an error.
+
+CK3 and Victoria 3 ship script-doc snapshots, and all three games ship data-type dump snapshots. User-generated dumps take priority; a missing bundle remains a supported state.
 
 `wikidocsDir` is the **deprecated** predecessor. It overrides the `wikidocs/`
 folder alone, leaves `freqs.json` on the bundle root, and does not follow a
@@ -351,7 +362,7 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 | If you are building | Wire these |
 |---|---|
 | Anything at all | `paradox/configChanged` (push settings without a restart), `paradox/status` and `paradox/indexChanged` (server to client; index health and a re-query signal) |
-| A status bar or an index panel | `paradox/status`, `paradox/indexStats`, `paradox/reloadDocs` (re-parse `script_docs` after the user dumps them) |
+| A status bar or an index panel | `paradox/status`, `paradox/indexStats`, `paradox/reloadDocs` (reload both script docs and data types after the user generates them) |
 | A scope indicator | `paradox/scopeAt` (see below) |
 | An “insert a definition” command or palette | `paradox/snippets` (see below) |
 | Localization tooling | `paradox/lookupLoc`, `paradox/locCoverage` |
@@ -364,6 +375,8 @@ can ignore all of them. Full payload shapes are in `docs/PROTOCOL.md` and
 The mod-scoped requests (`modOverview`, `locCoverage`, `overrides`) take
 `{ modRoot?: string | null }`: one workspace mod by absolute root path, or
 absent for all of them.
+
+For data health, show the script-doc and data-type sources separately. `tokensFromScriptDocs && !tokensFromBundledDumps` means a generated script dump is loaded. `StatusPayload.dataTypesSource` reports `generated`, `bundled` or `none`; absent means the server does not report it. The optional `status` in `paradox/reloadDocs` is the refreshed status, also sent through `paradox/status`. Recommend generating both dumps after game patches, then reloading. The status identifies their source, not their age.
 
 ### paradox/guiSourceEdit
 

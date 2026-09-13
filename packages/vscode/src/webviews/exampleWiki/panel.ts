@@ -77,19 +77,13 @@ export class ExampleWikiPanel {
       });
     };
     render();
-    this.disposables.push(
-      watchBundle(source, "exampleWiki", () => {
-        render();
-        void this.loadIndex();
-      })
-    );
+    this.disposables.push(watchBundle(source, "exampleWiki", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (msg: AppToHost) => void this.onMessage(msg),
       undefined,
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
-    void this.loadIndex();
   }
 
   /** Open the wiki, on `target`'s article when a caller named one. */

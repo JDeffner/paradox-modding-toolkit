@@ -1,3 +1,4 @@
+import { el } from "./dom";
 /**
  * The form controls every visual content creator is built from.
  *
@@ -122,17 +123,6 @@ export function titleCaseFromName(name: string): string {
     .filter((word) => word !== "")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
-}
-
-// ---------------------------------------------------------------------------
-// Shared plumbing
-// ---------------------------------------------------------------------------
-
-function el(tag: string, cls = "", text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 /**

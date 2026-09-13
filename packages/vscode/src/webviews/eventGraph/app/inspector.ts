@@ -23,6 +23,7 @@
  * graph on it) is NOT here: those are the tools rail's, and one button per job
  * beats the same button in two places.
  */
+import { el } from "../../shared/dom";
 import type {
   EventDetail,
   EventGateInfo,
@@ -37,7 +38,7 @@ import type {
 import type { PendingEdit } from "../history";
 import { menu, type MenuItem } from "../../shared/overlay";
 import { iconEl } from "../../shared/icons";
-import { attachSuggest, badge, button, dropdown, el, iconButton, input } from "./dom";
+import { attachSuggest, badge, button, dropdown, iconButton, input } from "./dom";
 import { fieldRowKey, locRowKey, pendingOverlay, type PendingOverlay } from "./pendingView";
 
 export interface InspectorCallbacks {

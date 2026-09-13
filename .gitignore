@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+.webview-dev/
 .claude/
 # docs/ is local-only by default: working notes and design history never land
 # in git (plans belong in PR descriptions). Tracked exceptions:

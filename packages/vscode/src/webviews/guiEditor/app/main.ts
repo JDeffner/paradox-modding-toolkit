@@ -38,6 +38,8 @@
  * a mode the painter tests once, and why the halo's own requests are debounced
  * on selection change and never fire inside a drag frame.
  */
+import { selectionRect } from "./align";
+import { el } from "../../shared/dom";
 import type {
   GuiDependenciesResult,
   GuiLayoutNode,
@@ -401,7 +403,7 @@ function paintScene(): void {
   // A multi-selection's grips sit on the bounds of the whole set, and the
   // bounds follow the preview: they are the rect the grips were dragged from.
   const bounds =
-    others.length > 0 && rect ? unionRect([rect, ...others.map((i) => otherRect(i, shift))]) : undefined;
+    others.length > 0 && rect ? selectionRect([rect, ...others.map((i) => otherRect(i, shift))]) : undefined;
   drawScene(
     ctx,
     scene,
@@ -473,25 +475,11 @@ function otherRect(index: number, shift: { dx: number; dy: number } | undefined)
   return shifted(hitRect(scene.items[index]), shift);
 }
 
-function unionRect(rects: readonly SceneRect[]): SceneRect {
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -Infinity;
-  let y1 = -Infinity;
-  for (const r of rects) {
-    x0 = Math.min(x0, r.x);
-    y0 = Math.min(y0, r.y);
-    x1 = Math.max(x1, r.x + r.w);
-    y1 = Math.max(y1, r.y + r.h);
-  }
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-}
-
 /** The bounds of the whole selection, where a multi-selection's grips sit. */
 function selectionBounds(): SceneRect | null {
   const members = allSelected();
   if (members.length < 2) return null;
-  return unionRect(members.map((i) => hitRect(scene.items[i])));
+  return selectionRect(members.map((i) => hitRect(scene.items[i])));
 }
 
 /**
@@ -549,16 +537,6 @@ function fitRect(rect: SceneRect): void {
   panX = (w - rect.w * zoom) / 2 - rect.x * zoom;
   panY = (h - rect.h * zoom) / 2 - rect.y * zoom;
   draw();
-}
-
-// ---- panels ----------------------------------------------------------------
-
-function el(tag: string, className?: string, text?: string): HTMLElement {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  // textContent, never innerHTML: widget names are document text.
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 interface ButtonOptions {

@@ -72,12 +72,16 @@ function cell(text: string): string {
 export function withCompletionPreview(
   item: CompletionItem,
   token?: TokenData,
-  definition?: Definition
+  definition?: Definition,
+  format: MarkupKind = MarkupKind.Markdown
 ): CompletionItem {
+  withCompletionDocumentation(item, format);
   const preview = previewText(item);
   if (!preview) return item;
   const existing = typeof item.documentation === "string" ? item.documentation : item.documentation?.value;
-  if (existing?.startsWith("**Insertion preview**\n")) return item;
+  if (existing?.startsWith("**Insertion preview**\n") || existing?.startsWith("Insertion preview\n"))
+    return item;
+  const markdown = format === MarkupKind.Markdown;
   const descriptions = new Map<string, string>();
   // script_docs describes example placeholders as "Where X is ..." / "Y can be ...".
   for (const match of (token?.doc ?? "").matchAll(
@@ -99,13 +103,39 @@ export function withCompletionPreview(
     if (!hint && token && path === token.name) hint = /^Traits:\s*(.+)$/im.exec(token.traits ?? "")?.[1];
     if (!hint && example?.startsWith("<") && example.endsWith(">")) hint = example.slice(1, -1);
     if (!hint) hint = example ? `Type not documented. Example: ${example}` : "Type not documented.";
-    rows.push(`| ${cell(field.replace(/\[\]$/, " (contents)"))} | ${cell(hint)} |`);
+    const label = field.replace(/\[\]$/, " (contents)");
+    rows.push(markdown ? `| ${cell(label)} | ${cell(hint)} |` : `${label}: ${hint}`);
   }
   const fence = "`".repeat(Math.max(3, ...[...preview.matchAll(/`+/g)].map((m) => m[0].length + 1)));
-  const parts = [`**Insertion preview**\n\n${fence}paradox\n${preview}\n${fence}`];
+  const parts = [
+    markdown
+      ? `**Insertion preview**\n\n${fence}paradox\n${preview}\n${fence}`
+      : `Insertion preview\n\n${preview}`,
+  ];
   if (rows.length)
-    parts.push(`**Expected values**\n\n| Field | From documentation |\n| --- | --- |\n${rows.join("\n")}`);
+    parts.push(
+      markdown
+        ? `**Expected values**\n\n| Field | From documentation |\n| --- | --- |\n${rows.join("\n")}`
+        : `Expected values\n\n${rows.join("\n")}`
+    );
   if (existing) parts.push(existing);
-  item.documentation = { kind: MarkupKind.Markdown, value: parts.join("\n\n") };
+  item.documentation = { kind: format, value: parts.join("\n\n") };
+  return item;
+}
+
+/** Strip the Markdown constructs our documentation renderers add for bare clients. */
+export function withCompletionDocumentation(item: CompletionItem, format: MarkupKind): CompletionItem {
+  const doc = item.documentation;
+  if (typeof doc === "object" && doc.kind === MarkupKind.Markdown && format === MarkupKind.PlainText) {
+    item.documentation = {
+      kind: format,
+      value: doc.value
+        .replace(/^`{3,}[^\n]*\n/gm, "")
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/^#{1,6}\s+/gm, ""),
+    };
+  }
   return item;
 }
