@@ -59,6 +59,7 @@ import { GuiTreePanel } from "./webviews/guiTree/panel";
 import { GuiEditorPanel } from "./webviews/guiEditor/panel";
 import { declareCalendarCommand, generateCalendarLocCommand, insertDateCommand } from "./calendarInsert";
 import { setTabIconRoot } from "./webviews/tabIcons";
+import { initializeWebviewDevelopment } from "./webviews/devReload";
 import { FlagBuilderPanel } from "./webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "./webviews/coaDesigner/panel";
 import { TraditionCreatorPanel } from "./webviews/traditionCreator/panel";
@@ -69,7 +70,7 @@ import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
 import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
 import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
-import { migrateConfigDir } from "@px-lsp/protocol/configDir";
+import { indexConfigWatchPatterns, migrateConfigDir } from "@px-lsp/protocol/configDir";
 import { hasDesignerFiles, type FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { convertToDdsCommand } from "./ddsConvert";
@@ -207,6 +208,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   setTabIconRoot(context.extensionUri);
   output = vscode.window.createOutputChannel("Paradox Modding Toolkit", { log: true });
   context.subscriptions.push(output);
+  await initializeWebviewDevelopment(context, log);
 
   const storageDir = context.globalStorageUri.fsPath;
 
@@ -625,7 +627,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // .mod included so origin labels (descriptor name= in hovers) stay fresh.
       // calendar.json: the mod's display calendar (.px-toolkit/calendar.json),
       // which the server caches per mod until the file changes.
-      for (const glob of ["**/*.{txt,yml,gui,mod}", "**/gfx/**/*.asset", "**/calendar.json"]) {
+      for (const glob of [
+        "**/*.{txt,yml,gui,mod}",
+        "**/gfx/**/*.asset",
+        "**/calendar.json",
+        ...indexConfigWatchPatterns(metaFor(cfg.gameId)),
+      ]) {
         const w = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(vscode.Uri.file(root), glob)
         );
@@ -639,7 +646,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   wireModWatcher();
   context.subscriptions.push({ dispose: () => modWatchers.forEach((w) => w.dispose()) });
 
-  const watchedRoots = (c: PxConfig) => [c.modPath ?? "", ...c.parentPaths].join(";");
+  const watchedRoots = (c: PxConfig) => [c.gameId, c.modPath ?? "", ...c.parentPaths].join(";");
 
   // Recompute config-dependent state when settings change.
   context.subscriptions.push(

@@ -685,68 +685,83 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       textDocument: { uri, languageId: "paradox", version: 1, text: "e.1 = { immediate = { my_smoke_ } }" },
     });
     const start = statuses.length;
-    for (const [completionMode, expected] of [
-      ["examples", "my_smoke_effect = ${1|yes,no|}"],
-      ["names", undefined],
-      ["minimal", "my_smoke_effect = $0"],
-    ] as const) {
-      await conn.sendNotification(configChangedNotification, {
-        gamePath: null,
-        logsPath: null,
-        modPath: modDir,
-        parentPaths: [parentDir, depDir],
-        workspaceMods: [parentDir],
-        locLanguage: "english",
-        scopeInlayHints: false,
-        diagnosticsIgnore: [],
-        diagnosticsIgnorePatterns: [],
-        diagnosticsVanilla: false,
-        completionMode,
-      });
-      const result = (await conn.sendRequest("textDocument/completion", {
-        textDocument: { uri },
-        position: { line: 0, character: 29 },
-      })) as { items: Array<{ label: string; insertText?: string }> };
-      expect(result.items.find((item) => item.label === "my_smoke_effect")?.insertText).toBe(expected);
+    for (const method of [configChangedNotification, "workspace/didChangeConfiguration"]) {
+      for (const [completionMode, expected] of [
+        ["examples", "my_smoke_effect = ${1|yes,no|}"],
+        ["names", undefined],
+        ["minimal", "my_smoke_effect = $0"],
+      ] as const) {
+        const settings = {
+          gamePath: null,
+          logsPath: null,
+          modPath: modDir,
+          parentPaths: [parentDir, depDir],
+          workspaceMods: [parentDir],
+          locLanguage: "english",
+          scopeInlayHints: false,
+          diagnosticsIgnore: [],
+          diagnosticsIgnorePatterns: [],
+          diagnosticsVanilla: false,
+          completionMode,
+        };
+        await conn.sendNotification(
+          method,
+          method === configChangedNotification ? settings : { settings: { pxLsp: { completionMode } } }
+        );
+        const result = (await conn.sendRequest("textDocument/completion", {
+          textDocument: { uri },
+          position: { line: 0, character: 29 },
+        })) as { items: Array<{ label: string; insertText?: string }> };
+        expect(result.items.find((item) => item.label === "my_smoke_effect")?.insertText).toBe(expected);
+      }
     }
     expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
   });
 
-  it("changes texture hover backgrounds over the wire without rebuilding the index", async () => {
-    const file = path.join(modDir, "gfx/models/background.dds");
-    fs.writeFileSync(file, encodeDds(1, 1, new Uint8Array(4), "bgra8"));
-    const uri = toUri(path.join(modDir, "events/texture_preview.txt"));
-    await conn.sendNotification("textDocument/didOpen", {
-      textDocument: { uri, languageId: "paradox", version: 1, text: 'icon = "gfx/models/background.dds"' },
-    });
-    const start = statuses.length;
-    const previews: string[] = [];
-    for (const texturePreviewBackground of ["checkerboard", "dark", "light", "#376694", "checkerboard"]) {
-      await conn.sendNotification(configChangedNotification, {
-        gamePath: null,
-        logsPath: null,
-        modPath: modDir,
-        parentPaths: [parentDir, depDir],
-        workspaceMods: [parentDir],
-        locLanguage: "english",
-        scopeInlayHints: false,
-        diagnosticsIgnore: [],
-        diagnosticsIgnorePatterns: [],
-        diagnosticsVanilla: false,
-        texturePreviewBackground,
+  it.each([configChangedNotification, "workspace/didChangeConfiguration"])(
+    "changes texture hover backgrounds through %s without rebuilding the index",
+    async (method) => {
+      const file = path.join(modDir, "gfx/models/background.dds");
+      fs.writeFileSync(file, encodeDds(1, 1, new Uint8Array(4), "bgra8"));
+      const uri = toUri(path.join(modDir, "events/texture_preview.txt"));
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "paradox", version: 1, text: 'icon = "gfx/models/background.dds"' },
       });
-      const hover = (await conn.sendRequest("textDocument/hover", {
-        textDocument: { uri },
-        position: { line: 0, character: 18 },
-      })) as { contents: { value: string } };
-      const image = /data:image\/png;base64,[A-Za-z0-9+/=]+/.exec(hover.contents.value)?.[0];
-      expect(image).toBeDefined();
-      previews.push(image!);
+      const start = statuses.length;
+      const previews: string[] = [];
+      for (const texturePreviewBackground of ["checkerboard", "dark", "light", "#376694", "checkerboard"]) {
+        const settings = {
+          gamePath: null,
+          logsPath: null,
+          modPath: modDir,
+          parentPaths: [parentDir, depDir],
+          workspaceMods: [parentDir],
+          locLanguage: "english",
+          scopeInlayHints: false,
+          diagnosticsIgnore: [],
+          diagnosticsIgnorePatterns: [],
+          diagnosticsVanilla: false,
+          texturePreviewBackground,
+        };
+        await conn.sendNotification(
+          method,
+          method === configChangedNotification
+            ? settings
+            : { settings: { pxLsp: { texturePreviewBackground } } }
+        );
+        const hover = (await conn.sendRequest("textDocument/hover", {
+          textDocument: { uri },
+          position: { line: 0, character: 18 },
+        })) as { contents: { value: string } };
+        const image = /data:image\/png;base64,[A-Za-z0-9+/=]+/.exec(hover.contents.value)?.[0];
+        expect(image).toBeDefined();
+        previews.push(image!);
+      }
+      expect(new Set(previews).size).toBe(4);
+      expect(previews[4]).toBe(previews[0]);
+      expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
     }
-    expect(new Set(previews).size).toBe(4);
-    expect(previews[4]).toBe(previews[0]);
-    expect(statuses.slice(start).some((status) => status.indexing)).toBe(false);
-  });
+  );
 
   it("hover on the scripted effect shows its card with a references link", async () => {
     // "my_smoke_effect" on line 6, character 4.
@@ -1723,5 +1738,19 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
         entry.variants.every((variant) => variant.preview.startsWith("**Insertion preview**"))
       )
     ).toBe(true);
+  });
+
+  it("textDocument/formatting honors the client's indentation options", async () => {
+    const uri = "file:///formatting-options.txt";
+    const text = "root = {\n    child = {\n        value = 1\n    }\n}\n";
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox", version: 1, text },
+    });
+    expect(
+      await conn.sendRequest("textDocument/formatting", {
+        textDocument: { uri },
+        options: { insertSpaces: true, tabSize: 4 },
+      })
+    ).toEqual([]);
   });
 });

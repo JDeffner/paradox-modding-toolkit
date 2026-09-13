@@ -62,7 +62,7 @@ interface ParadoxInitOptions {
   wikidocsDir?: string;  // DEPRECATED narrow override for the wikidocs folder alone, see below
   client?: ParadoxClientCapabilities; // what this client implements; absent = plain LSP client
   clientCommands?: boolean;           // DEPRECATED alias, see below
-  settings?: ParadoxSettings;
+  settings?: Partial<ParadoxSettings>;
 }
 
 interface ParadoxClientCapabilities {
@@ -86,7 +86,7 @@ interface ParadoxSettings {
   scopeInlayHints: boolean;
   indexAssets?: boolean;      // default true; index .asset definitions and references
   hoverDetail?: "compact" | "standard" | "full"; // how much a hover shows; default "standard"
-  calendar?: CalendarSetting;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
+  calendar?: CalendarSetting | null;  // FALLBACK custom era calendar for date display (inlay hints + hover); absent = off.
                                //   A mod's own <mod>/.px-toolkit/calendar.json (same shape) wins for files under
                                //   that mod; the server reads it itself and re-reads it when the file changes
                                //   { epoch: number; after: string; before?: string;
@@ -142,12 +142,30 @@ bundle root, and, being one fixed folder, does not follow a `gameId` change.
 Clients that ship the data apart from the server bundle should send `dataDir`
 instead.
 
+## Settings updates and workspace files
+
+Initialization accepts partial `ParadoxSettings` and fills omitted fields with defaults. `paradox/configChanged` replaces the configured settings: omitted fields return to defaults. Standard `workspace/didChangeConfiguration` instead accepts `{ "settings": { "pxLsp": { ... } } }`, where `pxLsp` is a partial `ParadoxSettings` update. Supplied fields replace their previous values, including whole arrays; omitted fields retain their configured values. Other sections, including the VS Code extension's native `px` section, are ignored. A malformed section or invalid known field leaves the previous configuration intact. `gamePath`, `logsPath`, and `modPath` accept `null`, which clears that configured path. `calendar: null` clears the configured calendar. `texturePreviewBackground` uses checkerboard for invalid values. Other fields do not accept `null`.
+
+Root resolution is the same at initialization and after every update. A nonempty `modPath` and the roots in `workspaceMods` are editable mods. If both are empty, the first initialization workspace folder (or `rootUri` when no folder is supplied) becomes `modPath`. This fallback is session context, so a later `workspaceMods` update can replace it. Sending `modPath: null` with `workspaceMods: []` restores the workspace fallback. Dependency roots in `parentPaths` remain read-only and keep their supplied load order.
+
+Clients with `capabilities.workspace.configuration: true` receive a `workspace/configuration` request after `initialized`, before the first index build. Its single item has `section: "pxLsp"` and the initialization workspace root as `scopeUri`, when available. Return `[partialSettings]`; this patches the initialization settings. A failed request or absent/null section preserves the current settings. An empty or null `didChangeConfiguration.settings` triggers another pull when supported. A response is ignored if a newer push, custom update, or pull started while it was pending. Dynamic registration of `workspace/didChangeConfiguration` occurs only when the client advertises its `dynamicRegistration` capability. Clients without configuration capabilities can use initialization options and either push transport.
+
+For example, this standard notification changes hover detail while retaining the game, roots, and other settings. Display-only settings do not rebuild the index; paths, game, localization language, and asset indexing changes do.
+
+```json
+{ "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": { "settings": { "pxLsp": { "hoverDetail": "compact" } } } }
+```
+
+Creation, changes, and deletion of `schema.json` or `playset.json` in an editable mod's profile config directory trigger a debounced full rebuild. The profile's legacy directory is also watched where supported. Standard `workspace/didChangeWatchedFiles` and custom `paradox/modFileChanged` events share the same debounce, so a burst across both transports rebuilds once. Custom watcher clients must include these JSON files; dynamically registered server watchers include them. Other file changes keep their existing single-file behavior.
+
+Reloading a playset does not extend the client's watched roots. A host must watch external dependency folders if it needs later edits in those files to update the index.
+
 ## Custom methods: client → server
 
 | Method | Kind | Params → Result |
 |---|---|---|
 | `paradox/configChanged` | notification | `ParadoxSettings` |
-| `paradox/modFileChanged` | notification | `{ fsPath: string }` — a mod file changed on disk (client-side watcher); triggers a single-file re-index |
+| `paradox/modFileChanged` | notification | `{ fsPath: string }` — a mod file changed on disk (client-side watcher); re-indexes the file, or rebuilds for workspace schema/playset changes |
 | `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number, status?: StatusPayload }`, reload both script docs and data types; return and notify their loaded sources |
 | `paradox/indexStats` | request | `null` → `IndexStats` (definition counts by kind/source) |
 | `paradox/lookupLoc` | request | `{ key: string }` → `LocEntryInfo[]` — localization entries for a key, mod first |

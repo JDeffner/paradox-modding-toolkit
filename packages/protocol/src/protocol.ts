@@ -25,7 +25,7 @@ export interface ParadoxSettings {
   /** Parent/dependency mod roots (load order, base first) indexed as source "parent"
    *, the submod / compatibility-patch workflow. */
   parentPaths: string[];
-  /** Workspace mod roots (subset of parentPaths): mods the user is EDITING in
+  /** Workspace mod roots: mods the user is EDITING in
    * this workspace, so they get the mod treatment, reference indexing and
    * reference diagnostics, on top of the parent definition scan. */
   workspaceMods?: string[];
@@ -45,9 +45,9 @@ export interface ParadoxSettings {
   /** Shared texture editor/hover background. Defaults to checkerboard; display only. */
   texturePreviewBackground?: TexturePreviewBackground;
   /** Custom era calendar (total-conversion mods): how script dates display in
-   * game. Absent = no calendar features. Shape: calendar.ts `CalendarSetting`;
+   * game. Absent/null = no configured calendar. Shape: calendar.ts `CalendarSetting`;
    * the server sanitizes it on intake, so clients may pass raw JSON. */
-  calendar?: import("./calendar").CalendarSetting;
+  calendar?: import("./calendar").CalendarSetting | null;
   /** Our diagnostic codes to suppress everywhere. */
   diagnosticsIgnore: string[];
   /** Glob patterns (workspace-relative paths) whose diagnostics are suppressed. */
@@ -138,7 +138,7 @@ export interface ParadoxInitOptions {
    * and, being one fixed folder, it does NOT follow a `gameId` change.
    */
   wikidocsDir?: string;
-  settings?: ParadoxSettings;
+  settings?: Partial<ParadoxSettings>;
 }
 
 // ---- client command ids ----------------------------------------------------
@@ -165,6 +165,14 @@ export const allClientCommandIds: string[] = Object.values(clientCommands);
 
 /** Notification: settings changed; payload {@link ParadoxSettings}. */
 export const configChangedNotification = "paradox/configChanged";
+
+/** Standard workspace/configuration section, distinct from native VS Code px settings. */
+export const configurationSection = "pxLsp";
+
+/** workspace/didChangeConfiguration.settings: supplied fields patch configured values. */
+export interface ParadoxConfigurationSettings {
+  pxLsp?: Partial<ParadoxSettings>;
+}
 
 /** Notification: a mod file changed on disk; payload {@link ModFileChangeParams}. */
 export const modFileChangedNotification = "paradox/modFileChanged";

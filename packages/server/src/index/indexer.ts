@@ -261,7 +261,7 @@ export function scanRoot(root: string, source: DefSource, opts: ScanOptions): De
 }
 
 // ---------------------------------------------------------------------------
-// Vanilla index cache (compact JSON, keyed by game version)
+// Vanilla index cache (compact JSON, keyed by installation and extraction schema)
 // ---------------------------------------------------------------------------
 
 // Bumped to 4 for §E doc/tags columns; a v3 cache is silently rejected and rebuilt.
@@ -272,6 +272,11 @@ export function scanRoot(root: string, source: DefSource, opts: ScanOptions): De
 // Named .asset definitions are absent from older caches.
 const INDEX_CACHE_FORMAT = 8;
 
+export interface IndexCacheIdentity {
+  gameRoot: string;
+  schemaHash: string;
+}
+
 /** Compact "absent" marker inside cache rows. */
 type Absent = 0;
 
@@ -281,6 +286,7 @@ type CachedTags = Array<[string, string]> | Absent;
 interface IndexCacheFile {
   cacheFormat: number;
   gameVersion: string;
+  identity: IndexCacheIdentity;
   /** Kind string table (schema-driven, open set). */
   kinds: string[];
   files: string[];
@@ -304,7 +310,12 @@ interface IndexCacheFile {
  * If the save or the load ever shows up in the perf trace, the answer is
  * newline-delimited rows parsed in batches inside the scan's yieldNow rhythm.
  */
-export function saveIndexCache(cacheFile: string, gameVersion: string, defs: Definition[]): void {
+export function saveIndexCache(
+  cacheFile: string,
+  gameVersion: string,
+  identity: IndexCacheIdentity,
+  defs: Definition[]
+): void {
   const kindIdx = new Map<string, number>();
   const kinds: string[] = [];
   const fileIdx = new Map<string, number>();
@@ -335,12 +346,23 @@ export function saveIndexCache(cacheFile: string, gameVersion: string, defs: Def
       tags,
     ]);
   }
-  const payload: IndexCacheFile = { cacheFormat: INDEX_CACHE_FORMAT, gameVersion, kinds, files, defs: rows };
+  const payload: IndexCacheFile = {
+    cacheFormat: INDEX_CACHE_FORMAT,
+    gameVersion,
+    identity,
+    kinds,
+    files,
+    defs: rows,
+  };
   fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
   fs.writeFileSync(cacheFile, JSON.stringify(payload));
 }
 
-export function loadIndexCache(cacheFile: string, expectedGameVersion: string): Definition[] | null {
+export function loadIndexCache(
+  cacheFile: string,
+  expectedGameVersion: string,
+  identity: IndexCacheIdentity
+): Definition[] | null {
   let payload: IndexCacheFile;
   try {
     payload = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
@@ -348,6 +370,11 @@ export function loadIndexCache(cacheFile: string, expectedGameVersion: string): 
     return null;
   }
   if (payload.cacheFormat !== INDEX_CACHE_FORMAT || payload.gameVersion !== expectedGameVersion) return null;
+  if (
+    payload.identity?.gameRoot !== identity.gameRoot ||
+    payload.identity?.schemaHash !== identity.schemaHash
+  )
+    return null;
   if (!Array.isArray(payload.files) || !Array.isArray(payload.defs) || !Array.isArray(payload.kinds))
     return null;
   const defs: Definition[] = [];

@@ -156,7 +156,7 @@ export class CultureCreatorPanel {
     };
     render();
     // The rebooted app sends "ready" and the host answers it with the form.
-    this.disposables.push(watchBundle(source, "cultureCreator", render));
+    this.disposables.push(watchBundle(source, "cultureCreator", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

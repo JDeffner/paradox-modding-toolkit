@@ -12,6 +12,8 @@ version (up to 0.3.2); that history is in the extension changelog
 
 - Add `texturePreviewBackground` and shared background helpers for DDS editors and texture hovers, with checkerboard as the default.
 
+- Define the `pxLsp` section for standard LSP configuration updates and document settings precedence, workspace root fallback, and schema/playset reload notifications. Keep `paradox/configChanged` as a full settings replacement for existing clients.
+
 ## 0.2.4
 
 Ships with the toolkit's 0.4.3 release.

@@ -86,7 +86,7 @@ export class FlagBuilderPanel {
     };
     render();
     // The rebooted app sends "ready" and postInit answers it; nothing else.
-    this.disposables.push(watchBundle(source, "flagBuilder", render));
+    this.disposables.push(watchBundle(source, "flagBuilder", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

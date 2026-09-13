@@ -2,6 +2,30 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "compile live webviews",
+      "type": "shell",
+      "command": "pnpm run compile:webview-dev",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "live webviews",
+      "type": "shell",
+      "command": "pnpm run watch:webviews:live",
+      "dependsOn": "compile live webviews",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "live-webviews",
+        "pattern": { "regexp": "^(.+):(\\d+): (.+)$", "file": 1, "line": 2, "message": 3 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^webview watch starting$",
+          "endsPattern": "^webview watch ready$"
+        }
+      },
+      "presentation": { "reveal": "silent" }
+    },
+    {
       "label": "compile",
       "type": "shell",
       "command": "pnpm run compile",

@@ -216,7 +216,7 @@ export class GuiEditorPanel {
     };
     render();
     // The rebooted app sends "ready", which the host answers with a layout.
-    this.disposables.push(watchBundle(bundleSource, "guiEditor", render));
+    this.disposables.push(watchBundle(bundleSource, "guiEditor", this.panel, render));
 
     // onMessage awaits openTextDocument outside its own try, and the .gui can
     // stop being openable while the panel is up (a branch switch, a rename, a

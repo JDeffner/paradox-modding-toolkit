@@ -10,6 +10,7 @@
 import {
   createConnection,
   DidChangeWatchedFilesNotification,
+  DidChangeConfigurationNotification,
   MarkupKind,
   ProposedFeatures,
   TextDocuments,
@@ -30,6 +31,7 @@ import { pushAll } from "@px-lsp/protocol/arrays";
 import { iterFiles } from "@px-lsp/protocol/fsWalk";
 import {
   configChangedNotification,
+  configurationSection,
   indexChangedNotification,
   indexStatsRequest,
   locTextRequest,
@@ -155,6 +157,7 @@ import {
   loadIndexCache,
   saveIndexCache,
 } from "./index/indexer";
+import { createIndexCacheIdentity, indexCacheKey } from "./index/cacheIdentity";
 import { internedCount, resetInternTable } from "./index/intern";
 import { extractDefinitions } from "./index/extract";
 import { extractReferences } from "./index/references";
@@ -164,8 +167,9 @@ import { ModOriginResolver } from "./index/modOrigin";
 import { loadSchema, type SchemaData } from "./schema/loader";
 import { VARIABLE_KINDS } from "./games/jomini/variables";
 import { activeProfile, setActiveProfile } from "./games/active";
-import { resolveConfigDir } from "@px-lsp/protocol/configDir";
-import { resolveProfile } from "./games/registry";
+import { indexConfigWatchPatterns, isIndexConfigFile, resolveConfigDir } from "@px-lsp/protocol/configDir";
+import { defaultSettings, isSettingsObject, readSettings, resolveSettings } from "./settings";
+import { allProfiles, resolveProfile } from "./games/registry";
 import type { SchemaEntry } from "./schema/types";
 import { URI } from "vscode-uri";
 import { ServerData } from "./serverData";
@@ -173,7 +177,7 @@ import { CompletionFeature } from "./features/completion";
 import { provideHover } from "./features/hover";
 import { setHoverDetail } from "./features/hoverRender";
 import { provideDateHover } from "./features/calendarDates";
-import { sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 import { isCalendarFile, readCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { provideTextureHover } from "./features/textureHover";
 import { assetDefinitions, assetHover } from "./features/assetLanguage";
@@ -293,24 +297,11 @@ function injectScanFault(): void {
   else throw err;
 }
 
-function defaultSettings(): ParadoxSettings {
-  return {
-    gamePath: null,
-    logsPath: null,
-    modPath: null,
-    parentPaths: [],
-    workspaceMods: [],
-    locLanguage: "english",
-    scopeInlayHints: false,
-    indexAssets: true,
-    hoverDetail: "standard",
-    completionMode: "minimal",
-    diagnosticsIgnore: [],
-    diagnosticsIgnorePatterns: [],
-    diagnosticsVanilla: false,
-    tracePerf: false,
-  };
-}
+let configuredSettings: Partial<ParadoxSettings> = {};
+let workspaceRoot: string | null = null;
+let workspaceRootUri: string | undefined;
+let settingsRevision = 0;
+let settingsReady = false;
 let settings: ParadoxSettings = defaultSettings();
 let storageDir = "";
 let wikidocsDir = "";
@@ -521,6 +512,7 @@ function parentRoots(): string[] {
     roots.push(p);
   };
   for (const p of settings.parentPaths ?? []) add(p);
+  for (const p of workspaceModRoots()) add(p);
   for (const mod of [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()]) {
     for (const p of readPlaysetCached(mod)) add(p);
   }
@@ -635,7 +627,7 @@ function calendarFor(fsPath: string): { calendar: CalendarSetting | undefined; s
     }
     if (cached) return cached;
   }
-  return { calendar: settings.calendar, source: "px.calendar" };
+  return { calendar: settings.calendar ?? undefined, source: "px.calendar" };
 }
 
 /** Schema entry for the folder a file lives in (structure/ambient/root-scope seed). */
@@ -1234,11 +1226,12 @@ async function buildIndex(): Promise<void> {
       const gamePath = settings.gamePath;
       const t0 = Date.now();
       const version = detectGameVersion(gamePath);
+      const cacheIdentity = createIndexCacheIdentity(gamePath, indexSchema.entries);
       const cacheFile = path.join(
         storageDir,
-        `vanillaIndex${activeProfile().cacheSuffix}-${settings.locLanguage}${settings.indexAssets === false ? "-no-assets" : ""}.json`
+        `vanillaIndex${activeProfile().cacheSuffix}-${settings.locLanguage}${settings.indexAssets === false ? "-no-assets" : ""}-${indexCacheKey(cacheIdentity)}.json`
       );
-      let defs = loadIndexCache(cacheFile, version);
+      let defs = loadIndexCache(cacheFile, version, cacheIdentity);
       if (defs) {
         log(
           `loaded vanilla index from cache: ${defs.length} definitions, game ${version} (${Date.now() - t0}ms)`
@@ -1271,7 +1264,7 @@ async function buildIndex(): Promise<void> {
         }
         if (defs === null) return; // superseded
         try {
-          saveIndexCache(cacheFile, version, defs);
+          saveIndexCache(cacheFile, version, cacheIdentity, defs);
         } catch (err) {
           log(`could not write vanilla index cache: ${String(err)}`);
         }
@@ -1296,6 +1289,7 @@ async function buildIndex(): Promise<void> {
         if (doc.languageId === "paradox-loc" && doc.uri.startsWith("file:"))
           handleModFileChange(URI.parse(doc.uri).fsPath);
       }
+      for (const doc of documents.all()) validateDocument(doc);
       sendProgress("index", "done");
       sendStatus();
       // §B4: the build's one and only refresh, fired from the finally so a scan
@@ -1442,6 +1436,8 @@ let bundledDumpsDir = "";
 let bundledDataTypesDir = "";
 let clientOwnFileWatcher = false;
 let clientWatchedFilesDynamic = false;
+let clientConfiguration = false;
+let clientConfigurationDynamic = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const init = (params.initializationOptions ?? {}) as Partial<ParadoxInitOptions>;
@@ -1456,11 +1452,17 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   clientOwnFileWatcher = clientCaps.ownFileWatcher;
   clientWatchedFilesDynamic =
     params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
-  // Merge onto the defaults: bare clients may send partial settings (e.g.
-  // only gameId), and every downstream consumer assumes the full shape.
-  if (init.settings) settings = { ...defaultSettings(), ...init.settings };
+  clientConfiguration = params.capabilities.workspace?.configuration === true;
+  clientConfigurationDynamic =
+    params.capabilities.workspace?.didChangeConfiguration?.dynamicRegistration === true;
+  const rootUri = params.workspaceFolders?.[0]?.uri ?? params.rootUri ?? null;
+  if (rootUri?.startsWith("file:")) {
+    workspaceRootUri = rootUri;
+    workspaceRoot = URI.parse(rootUri).fsPath;
+  }
+  configuredSettings = readSettings(init.settings) ?? {};
+  settings = resolveSettings(configuredSettings, workspaceRoot);
   setHoverDetail(settings.hoverDetail ?? "standard");
-  settings.calendar = sanitizeCalendar(settings.calendar);
   setActiveProfile(resolveProfile(settings.gameId));
   deriveBundledDataDirs();
   if (!storageDir) {
@@ -1470,10 +1472,6 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
     } catch {
       storageDir = "";
     }
-  }
-  if (!settings.modPath && !settings.workspaceMods?.length) {
-    const rootUri = params.workspaceFolders?.[0]?.uri ?? params.rootUri ?? null;
-    if (rootUri?.startsWith("file:")) settings.modPath = URI.parse(rootUri).fsPath;
   }
 
   return {
@@ -1509,7 +1507,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   };
 });
 
-connection.onInitialized(() => {
+connection.onInitialized(async () => {
   // Self-diagnosis for bare clients: the resolved bundled-data locations are
   // the difference between "knows the engine" and silent degraded mode.
   if (wikidocsDir || freqsDir) {
@@ -1530,9 +1528,19 @@ connection.onInitialized(() => {
         { globPattern: "**/gfx/**/*.asset" },
         { globPattern: "**/metadata.json" },
         { globPattern: "**/calendar.json" },
+        ...[...new Set(allProfiles().flatMap(indexConfigWatchPatterns))].map((globPattern) => ({
+          globPattern,
+        })),
       ],
     });
   }
+  if (clientConfigurationDynamic) {
+    void connection.client.register(DidChangeConfigurationNotification.type, {}).catch((err) => {
+      log(`configuration watcher registration failed: ${String(err)}`);
+    });
+  }
+  if (clientConfiguration) await pullSettings();
+  settingsReady = true;
   // Bundled frequency tables for completion ranking (§C3); fail-soft to empty.
   applyFreqs();
   completion.setSettings(settings);
@@ -1549,14 +1557,17 @@ connection.onDidChangeWatchedFiles((params) => {
 
 // ---- custom protocol ----------------------------------------------------------
 
-connection.onNotification(configChangedNotification, (incoming: ParadoxSettings) => {
-  const newSettings: ParadoxSettings = { ...defaultSettings(), ...incoming };
+/** Both transports compare resolved settings, never a mixture of configured and inferred roots. */
+function applySettings(incoming: Partial<ParadoxSettings>, replace: boolean): void {
+  settingsRevision++;
+  configuredSettings = replace ? incoming : { ...configuredSettings, ...incoming };
+  const newSettings = resolveSettings(configuredSettings, workspaceRoot);
   const gameChanged = resolveProfile(newSettings.gameId) !== activeProfile();
   if (gameChanged) {
     setActiveProfile(resolveProfile(newSettings.gameId));
     // Bundled wiki/freqs are per-game; re-derive and re-rank for the new one.
     deriveBundledDataDirs();
-    applyFreqs();
+    if (settingsReady) applyFreqs();
   }
   const pathsChanged =
     gameChanged ||
@@ -1574,19 +1585,51 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
   const assetIndexChanged = (newSettings.indexAssets !== false) !== (settings.indexAssets !== false);
   settings = newSettings;
   setHoverDetail(settings.hoverDetail ?? "standard");
-  settings.calendar = sanitizeCalendar(settings.calendar);
   completion.setSettings(settings);
+  if (!settingsReady) return;
   if (pathsChanged) {
     log("paths changed; rebuilding data...");
+    clearPathCaches();
     loadDocs(false);
     startIndexBuild("paths changed");
   } else if (assetIndexChanged) {
     startIndexBuild("asset indexing changed");
   }
-  // Re-validate open documents so suppression/vanilla changes apply immediately.
-  if (diagChanged || pathsChanged) {
+  // Index-dependent diagnostics wait for the completed build; suppression-only updates stay immediate.
+  if (diagChanged && !indexing) {
     for (const doc of documents.all()) validateDocument(doc);
   }
+}
+
+async function pullSettings(): Promise<void> {
+  const revision = ++settingsRevision;
+  try {
+    const raw: unknown = await connection.workspace.getConfiguration({
+      section: configurationSection,
+      scopeUri: workspaceRootUri,
+    });
+    if (revision !== settingsRevision) return;
+    const incoming = readSettings(raw);
+    if (incoming) applySettings(incoming, false);
+  } catch (err) {
+    log(`configuration pull failed: ${String(err)}`);
+  }
+}
+
+connection.onDidChangeConfiguration((params) => {
+  const raw: unknown = params.settings;
+  if (raw == null || (isSettingsObject(raw) && Object.keys(raw).length === 0)) {
+    if (clientConfiguration) void pullSettings();
+    return;
+  }
+  if (!isSettingsObject(raw) || !(configurationSection in raw)) return;
+  const incoming = readSettings(raw[configurationSection]);
+  if (incoming) applySettings(incoming, false);
+});
+
+connection.onNotification(configChangedNotification, (raw: unknown) => {
+  const incoming = readSettings(raw);
+  if (incoming) applySettings(incoming, true);
 });
 
 /**
@@ -1596,10 +1639,25 @@ connection.onNotification(configChangedNotification, (incoming: ParadoxSettings)
  * from being parsed into the index and immediately parsed again.
  */
 const MOD_CHANGE_DEBOUNCE_MS = 150;
+let pendingConfigChange: ReturnType<typeof setTimeout> | undefined;
 const pendingModChanges = new Map<string, { fsPath: string; timer: ReturnType<typeof setTimeout> }>();
 
 function handleModFileChange(fsPath: string): void {
   perf(`modFileChanged ${perfName(fsPath)}`);
+  const roots = [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()];
+  if (isIndexConfigFile(fsPath, roots, activeProfile())) {
+    // Startup reads these files after the initial configuration pull finishes.
+    if (!settingsReady) return;
+    if (pendingConfigChange) clearTimeout(pendingConfigChange);
+    pendingConfigChange = setTimeout(() => {
+      pendingConfigChange = undefined;
+      clearPathCaches();
+      invalidateGuiDefsCache();
+      loadDocs(false);
+      startIndexBuild("workspace schema or playset changed");
+    }, MOD_CHANGE_DEBOUNCE_MS);
+    return;
+  }
   const key = fsPath.toLowerCase();
   const pending = pendingModChanges.get(key);
   if (pending) clearTimeout(pending.timer);
@@ -2227,7 +2285,7 @@ connection.onDocumentSymbol((params) => {
 connection.onDocumentFormatting((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc || !isScriptLanguage(doc.languageId)) return [];
-  return provideFormattingEdits(doc);
+  return provideFormattingEdits(doc, params.options);
 });
 
 connection.onFoldingRanges((params) => {

@@ -152,10 +152,7 @@ concrete:
   definitions. Vic3/EU5 write script_docs to `Documents/.../docs`; the
   data-type dump lands under `logs/` and the server probes the sibling
   `logs/` folder of a docs-style `logsPath` automatically.
-- **`modPath`** is the mod root. Absent, the server falls back to the first
-  workspace folder, then to nothing, and features that need a known mod
-  (reference diagnostics, required-localization checks, the localization quick
-  fix) stay silent because the open file belongs to no mod it knows.
+- **`modPath`** is the mod root. A nonempty value and any `workspaceMods` take precedence over the workspace fallback. When both are empty, the server uses the first initialization workspace folder, or `rootUri` when no folder is supplied. The fallback survives later settings updates. Sending `modPath: null` with `workspaceMods: []` restores it. Without any root, features that require a known mod stay silent.
 - **`workspaceMods`** are the roots being *edited*. Listing a root here is what
   upgrades it from a plain definition scan to reference indexing plus reference
   diagnostics. `modPath` itself always gets that treatment, so a single-mod
@@ -174,11 +171,21 @@ Declare the supported completion documentation formats in `textDocument.completi
 
 Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
-The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`,
-`diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in
-`docs/PROTOCOL.md`. Push the whole settings object again as
-`paradox/configChanged` whenever the user changes any of it; the server
-re-resolves without a restart.
+The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`, `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in `docs/PROTOCOL.md`. Existing hosts can continue to send the whole settings object through `paradox/configChanged`; omitted fields return to defaults.
+
+For standard LSP updates, send a partial settings object under `pxLsp`. This example changes hover detail without clearing roots, changing the selected game, or rebuilding the index:
+
+```json
+{ "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": { "settings": { "pxLsp": { "hoverDetail": "compact" } } } }
+```
+
+Standard updates retain omitted fields and replace supplied arrays in full. `gamePath`, `logsPath`, and `modPath` accept `null` to clear a configured path before root fallback is applied. `calendar: null` clears the configured calendar. Invalid `texturePreviewBackground` values use checkerboard. Unrelated sections and other malformed updates are ignored. The `pxLsp` shape is `Partial<ParadoxSettings>`, separate from the VS Code extension's native `px` configuration.
+
+If the host advertises `capabilities.workspace.configuration: true`, answer `workspace/configuration` requests for section `pxLsp` with `[partialSettings]`. The server requests it after `initialized`, before its first build, using the initialization workspace URI as `scopeUri` when available. Returned fields patch initialization settings; absent/null results and request failures preserve them. Send an empty or null `didChangeConfiguration.settings` to request another pull. Late responses cannot overwrite a newer push, custom update, or pull. The server dynamically registers configuration notifications only when `workspace.didChangeConfiguration.dynamicRegistration` is true. Hosts without these capabilities can continue to use initialization options and pushed updates.
+
+Include `<mod>/<configDir>/schema.json` and `playset.json` in a host-owned file watcher, including the profile's legacy config directory where supported. Send creation, change, and deletion events through `workspace/didChangeWatchedFiles` or `paradox/modFileChanged`. The server reloads the schema, dependency roots, and dependent data in one debounced rebuild for the burst. Its dynamically registered file watcher includes these files automatically.
+
+A playset reload does not extend the client's watched roots. Hosts must also watch dependency files outside their existing watched folders to report later edits in those dependencies.
 
 ### storageDir: put it somewhere persistent
 

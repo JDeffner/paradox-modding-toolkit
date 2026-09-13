@@ -149,19 +149,15 @@ carrying a Dark/Light toggle that stands in for the VS Code theme:
   (game and mod paths come from `dev-paths.json` or `--game`/`--mod`).
   Nothing is written; edit gestures answer with an honest refusal.
 
-You get actual browser devtools, which webviews never give you. What this
-loop cannot exercise is the host: use the next one for anything that
-touches `panel.ts` behavior.
+Use the browser's developer tools to inspect the page. In VS Code, **Developer: Open Webview Developer Tools** provides the equivalent tools. This browser loop uses a stub host; use the next loop to test real host behavior.
 
-**Live panels, for app work.** Run `pnpm run watch:webviews` and press F5.
-Panels in the Extension Development Host reload themselves when a bundle is
-rebuilt, and come back where you were: the app re-requests its state on boot
-and the host still has it (the same contract that survives close/reopen).
-The same loop works against an installed test vsix: set
-`px.dev.webviewSource` in your VS Code settings to the checkout's
-`packages/vscode/dist/webview` folder, and the installed extension loads and
-watches the checkout's bundles. Extension-host code itself (`panel.ts`,
-`extension.ts`) cannot hot-swap: rebuild and `Developer: Reload Window`.
+**Live Webview, for app work in VS Code.** Build the companion checkout with `pnpm build`, package it with `pnpm package`, and install its `artifacts/live-webview-<version>.vsix` into the VS Code profile used by the Extension Development Host. The companion's current extension ID is `local.live-webview`. Set `liveWebviewPath` in this repo's ignored `dev-paths.json` to that checkout root, or set `PX_LIVE_WEBVIEW_PATH` before starting VS Code. This local helper is optional and unpublished; normal builds need no helper installation.
+
+Select **Run Extension + Live Webview** in Run and Debug, then press F5. The launch task builds the toolkit with the helper enabled and starts `pnpm run watch:webviews:live`. Open a mod folder in the development host, then open the panel you want to test. Each successful app build writes its own signal under `packages/vscode/.webview-dev/`; the companion reloads the registered instances of that app. Failed builds leave the current panel running. Use the **Live Webview** Explorer view to pause, resume, or reload an instance, and **Live Webview: Open Logs** to inspect callbacks. Stop the debug session and terminate the **live webviews** task when finished.
+
+The command-line equivalent is `pnpm run compile:webview-dev`, followed by `pnpm run watch:webviews:live` and an Extension Development Host that loads `packages/vscode`. Changes to host code, HTML generators, or CSS imported by those generators require another `compile:webview-dev` and a host restart. Host-inline panels have the same limit. Reload restores only state the app already saves or requests from its host; unsaved DOM state can be lost.
+
+The existing loop remains available: run `pnpm run watch:webviews` and use **Run Extension**. An installed test VSIX can load and watch these bundles through `px.dev.webviewSource`, set to the checkout's `packages/vscode/dist/webview` folder. The companion takes over reload scheduling only in the explicit Live Webview development build. Normal compilation and packaging remove the helper, and the VSIX excludes build signals.
 
 **The real artifact.** `pnpm run package:test` builds a .vsix and installs
 it into your own VS Code. Do this before calling a panel done; it is the

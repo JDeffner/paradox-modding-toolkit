@@ -168,7 +168,7 @@ export class WorkshopPanel {
     };
     render();
     // The rebooted app sends "ready" and postInit answers it; nothing else.
-    this.disposables.push(watchBundle(source, "workshop", render));
+    this.disposables.push(watchBundle(source, "workshop", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

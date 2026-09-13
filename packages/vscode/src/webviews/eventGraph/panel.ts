@@ -81,6 +81,7 @@ export class EventGraphPanel {
     this.fetchGraph = fetchGraph;
     this.actions = actions;
     this.lastParams = params;
+    this.session.focus = params;
     this.state = context.workspaceState;
     this.textures = new GuiTextureCache(
       context.globalStorageUri.fsPath,
@@ -102,15 +103,10 @@ export class EventGraphPanel {
 
     this.panel.iconPath = tabIcon("event-graph");
     this.panel.webview.html = this.buildHtml(this.panel.webview);
-    this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY) });
-    // The app receives its graph by push, not request, so a dev reload
-    // replays the constructor's boot sequence.
+    // Every boot requests its session after installing the message listener.
     this.disposables.push(
-      watchBundle(this.source, "eventGraph", () => {
+      watchBundle(this.source, "eventGraph", this.panel, () => {
         this.panel.webview.html = this.buildHtml(this.panel.webview);
-        this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY) });
-        void this.load(this.lastParams);
-        void this.sendVocabulary();
       })
     );
 
@@ -120,9 +116,6 @@ export class EventGraphPanel {
       this.disposables
     );
     this.panel.onDidDispose(() => void this.onDispose(), undefined, this.disposables);
-
-    void this.load(params);
-    void this.sendVocabulary();
   }
 
   /** Create or reveal the singleton panel and load the graph for `params`. */
@@ -176,7 +169,6 @@ export class EventGraphPanel {
     const session = this.session;
     const reopened = EventGraphPanel.show(this.context, this.fetchGraph, this.lastParams, this.actions);
     reopened.session = session;
-    reopened.post({ type: "restore", state: session });
   }
 
   /** Fetch a graph and push it (or an error) to the webview. */
@@ -210,6 +202,11 @@ export class EventGraphPanel {
 
   private async onMessage(msg: AppToHost): Promise<void> {
     switch (msg.type) {
+      case "ready":
+        this.post({ type: "init", ui: this.state.get<UiState>(UI_KEY), state: this.session });
+        void this.load(this.lastParams);
+        void this.sendVocabulary();
+        break;
       case "open":
         await this.openDocument(msg.file, msg.line);
         break;

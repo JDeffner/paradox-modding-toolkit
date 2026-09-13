@@ -160,7 +160,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
         );
       }
     });
-    const watcher = watchBundle(source, "ddsPreview", render);
+    const watcher = watchBundle(source, "ddsPreview", panel, render);
     panel.onDidDispose(() => {
       messages.dispose();
       backgroundChanges.dispose();

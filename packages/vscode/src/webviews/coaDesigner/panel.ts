@@ -120,7 +120,7 @@ export class CoaDesignerPanel {
       });
     };
     render();
-    this.disposables.push(watchBundle(source, "coaDesigner", render));
+    this.disposables.push(watchBundle(source, "coaDesigner", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => void this.onMessage(message),
       undefined,

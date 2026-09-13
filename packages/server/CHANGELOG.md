@@ -14,6 +14,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 - Composite texture hover thumbnails over the configured background without changing source images or rebuilding the index. Honor completion documentation formats and flush pending file changes before localization lookups.
 
+- Honor formatting options, reload schema and playset files through both watcher transports, preserve workspace root inference across settings changes, and validate vanilla caches against their installation and schema. Accept standard LSP configuration updates through the `pxLsp` section alongside `paradox/configChanged`.
+
 ## 0.3.4
 
 Ships with the toolkit's 0.4.3 release.
