@@ -113,86 +113,34 @@ const completionProvider: vscode.CompletionItemProvider = {
   },
 };
 
-/**
- * The singleton preview panel, markdown-preview style: follows edits live.
- * `sideBySide` false opens it in the ACTIVE column (the md "Open Preview"
- * that visually replaces the source); true opens Beside, keeping focus.
- */
-class BBCodePreview {
-  private static instance: BBCodePreview | undefined;
-  private panel: vscode.WebviewPanel;
-  private uri: vscode.Uri;
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private readonly disposables: vscode.Disposable[] = [];
+/** A preview is another view of VS Code's text document, including dirty edits. */
+export class BBCodePreviewProvider implements vscode.CustomTextEditorProvider {
+  static readonly viewType = "px.bbcodePreview";
 
-  static show(context: vscode.ExtensionContext, document: vscode.TextDocument, sideBySide: boolean): void {
-    const existing = BBCodePreview.instance;
-    if (existing) {
-      existing.retarget(document);
-      existing.panel.reveal(sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, sideBySide);
-      return;
-    }
-    BBCodePreview.instance = new BBCodePreview(context, document, sideBySide);
-  }
-
-  /** The preview's source, back in a text editor (the title-bar button). */
-  static showSource(): void {
-    const p = BBCodePreview.instance;
-    if (!p) return;
-    void vscode.window.showTextDocument(p.uri, {
-      viewColumn: p.panel.viewColumn ?? vscode.ViewColumn.Active,
-      preview: false,
-    });
-  }
-
-  private constructor(_context: vscode.ExtensionContext, document: vscode.TextDocument, sideBySide: boolean) {
-    this.uri = document.uri;
-    this.panel = vscode.window.createWebviewPanel(
-      "px.bbcodePreview",
-      previewTitle(document),
-      {
-        viewColumn: sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
-        preserveFocus: sideBySide,
-      },
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
-    this.panel.iconPath = tabIcon("bbcode-preview");
-    this.panel.webview.html = shellHtml();
-    this.disposables.push(
-      vscode.workspace.onDidChangeTextDocument((e) => {
-        if (e.document.uri.toString() === this.uri.toString()) this.queueUpdate(e.document);
+  resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): void {
+    panel.webview.options = { enableScripts: true, localResourceRoots: [] };
+    panel.iconPath = tabIcon("bbcode-preview");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = (): void => {
+      void panel.webview.postMessage({ type: "render", html: bbcodeToHtml(document.getText()) });
+    };
+    const subscriptions = [
+      vscode.workspace.onDidChangeTextDocument((event) => {
+        if (event.document.uri.toString() !== document.uri.toString()) return;
+        clearTimeout(timer);
+        timer = setTimeout(update, 150);
       }),
-      // Like the markdown preview, follow whichever .bbcode file is active.
-      vscode.window.onDidChangeActiveTextEditor((ed) => {
-        if (ed && isBBCode(ed.document)) this.retarget(ed.document);
-      })
-    );
-    this.panel.onDidDispose(() => {
-      clearTimeout(this.timer);
-      for (const d of this.disposables.splice(0)) d.dispose();
-      BBCodePreview.instance = undefined;
+      // Wait for the shell listener, including when VS Code restores an editor.
+      panel.webview.onDidReceiveMessage((message) => {
+        if (message?.type === "ready") update();
+      }),
+    ];
+    panel.onDidDispose(() => {
+      clearTimeout(timer);
+      for (const subscription of subscriptions) subscription.dispose();
     });
-    this.update(document);
+    panel.webview.html = shellHtml();
   }
-
-  private retarget(document: vscode.TextDocument): void {
-    this.uri = document.uri;
-    this.panel.title = previewTitle(document);
-    this.update(document);
-  }
-
-  private queueUpdate(document: vscode.TextDocument): void {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.update(document), 150);
-  }
-
-  private update(document: vscode.TextDocument): void {
-    void this.panel.webview.postMessage({ type: "render", html: bbcodeToHtml(document.getText()) });
-  }
-}
-
-function previewTitle(document: vscode.TextDocument): string {
-  return `Preview ${document.uri.path.split("/").pop() ?? "BBCode"}`;
 }
 
 /**
@@ -228,10 +176,12 @@ ${BBPREV_CSS}
 <body>
 <div id="page"><div id="content" class="bbprev"></div></div>
 <script nonce="${nonce}">
+const vscode = acquireVsCodeApi();
 window.addEventListener("message", (ev) => {
   const m = ev.data;
   if (m && m.type === "render") document.getElementById("content").innerHTML = m.html;
 });
+vscode.postMessage({ type: "ready" });
 </script>
 </body>
 </html>`;
@@ -324,42 +274,61 @@ class MarkdownMirror implements vscode.FileSystemProvider {
   }
 }
 
-/** "Edit as Markdown": the active .bbcode file, as Markdown, beside it. */
-async function editAsMarkdown(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor || !isBBCode(editor.document) || editor.document.uri.scheme !== "file") {
+/** Explicit file targets take precedence over the editor that has focus. */
+async function targetDocument(target?: vscode.Uri): Promise<vscode.TextDocument | undefined> {
+  if (target) return vscode.workspace.openTextDocument(target);
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputCustom && input.viewType === BBCodePreviewProvider.viewType) {
+    return vscode.workspace.openTextDocument(input.uri);
+  }
+  return vscode.window.activeTextEditor?.document;
+}
+
+/** "Edit as Markdown": the selected .bbcode file, as Markdown, beside it. */
+async function editAsMarkdown(target?: vscode.Uri): Promise<void> {
+  const document = await targetDocument(target);
+  if (!document || !isBBCode(document) || document.uri.scheme !== "file") {
     void vscode.window.showInformationMessage(
       "Paradox Modding Toolkit: open a saved .bbcode file to edit it as Markdown."
     );
     return;
   }
-  const doc = await vscode.workspace.openTextDocument(mirrorUri(editor.document.uri));
+  const doc = await vscode.workspace.openTextDocument(mirrorUri(document.uri));
   await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
 }
 
 /** From the Markdown face back to the .bbcode file it edits. */
-async function backToBBCode(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.uri.scheme !== MIRROR_SCHEME) return;
-  await vscode.window.showTextDocument(sourceUri(editor.document.uri), { preview: false });
+async function backToBBCode(target?: vscode.Uri): Promise<void> {
+  const document = await targetDocument(target);
+  if (!document || document.uri.scheme !== MIRROR_SCHEME) return;
+  await vscode.window.showTextDocument(sourceUri(document.uri), { preview: false });
 }
 
-/**
- * The rendered text of the active .bbcode file. The Markdown face of that
- * file (the pxmd mirror) previews the file behind it, so the button works on
- * both editors of the one document.
- */
-async function openPreview(context: vscode.ExtensionContext, sideBySide: boolean): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
+async function showSource(target?: vscode.Uri): Promise<void> {
+  const document = await targetDocument(target);
+  if (!document || !isBBCode(document)) return;
+  await vscode.commands.executeCommand("vscode.openWith", document.uri, "default", {
+    viewColumn: vscode.window.tabGroups.activeTabGroup.viewColumn,
+    preview: false,
+  });
+}
+
+/** The preview command and native editor picker use the same file-backed view. */
+async function openPreview(sideBySide: boolean, target?: vscode.Uri): Promise<void> {
+  const selected = await targetDocument(target);
   const document =
-    editor && editor.document.uri.scheme === MIRROR_SCHEME
-      ? await vscode.workspace.openTextDocument(sourceUri(editor.document.uri))
-      : editor?.document;
+    selected?.uri.scheme === MIRROR_SCHEME
+      ? await vscode.workspace.openTextDocument(sourceUri(selected.uri))
+      : selected;
   if (!document || !isBBCode(document)) {
     void vscode.window.showInformationMessage("Paradox Modding Toolkit: open a .bbcode file to preview it.");
     return;
   }
-  BBCodePreview.show(context, document, sideBySide);
+  await vscode.commands.executeCommand("vscode.openWith", document.uri, BBCodePreviewProvider.viewType, {
+    viewColumn: sideBySide ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
+    preserveFocus: sideBySide,
+    preview: false,
+  });
 }
 
 /**
@@ -368,19 +337,18 @@ async function openPreview(context: vscode.ExtensionContext, sideBySide: boolean
  * writing the `.md` is what switches a listing over, and deleting the
  * `.bbcode` is the modder's call.
  */
-async function convertActive(to: "md" | "bbcode"): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  const isFrom =
-    editor && (to === "md" ? isBBCode(editor.document) : editor.document.languageId === "markdown");
+async function convertActive(to: "md" | "bbcode", uri?: vscode.Uri): Promise<void> {
+  const document = await targetDocument(uri);
+  const isFrom = document && (to === "md" ? isBBCode(document) : document.languageId === "markdown");
   // A file on disk, since the converted copy is written next to it: an
   // untitled buffer has no folder to be next to.
-  if (!editor || !isFrom || editor.document.uri.scheme !== "file") {
+  if (!document || !isFrom || document.uri.scheme !== "file") {
     void vscode.window.showInformationMessage(
       `Paradox Modding Toolkit: open a saved ${to === "md" ? ".bbcode" : "Markdown"} file to convert it.`
     );
     return;
   }
-  const source = editor.document.uri.fsPath;
+  const source = document.uri.fsPath;
   const target = source.slice(0, source.length - path.extname(source).length) + `.${to}`;
   if (fs.existsSync(target)) {
     const answer = await vscode.window.showWarningMessage(
@@ -390,7 +358,7 @@ async function convertActive(to: "md" | "bbcode"): Promise<void> {
     );
     if (answer !== "Overwrite") return;
   }
-  const text = editor.document.getText();
+  const text = document.getText();
   fs.writeFileSync(target, to === "md" ? bbcodeToMarkdown(text) : markdownToBBCode(text), "utf8");
   await vscode.window.showTextDocument(vscode.Uri.file(target), {
     viewColumn: vscode.ViewColumn.Beside,
@@ -409,15 +377,23 @@ async function convertActive(to: "md" | "bbcode"): Promise<void> {
 export function registerBBCodeSupport(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider("bbcode", completionProvider, "[", "/"),
-    vscode.commands.registerCommand("px.openBBCodePreview", () => void openPreview(context, false)),
-    vscode.commands.registerCommand("px.openBBCodePreviewSide", () => void openPreview(context, true)),
+    vscode.window.registerCustomEditorProvider(BBCodePreviewProvider.viewType, new BBCodePreviewProvider(), {
+      webviewOptions: { retainContextWhenHidden: true },
+      supportsMultipleEditorsPerDocument: true,
+    }),
+    vscode.commands.registerCommand("px.openBBCodePreview", (uri?: vscode.Uri) => openPreview(false, uri)),
+    vscode.commands.registerCommand("px.openBBCodePreviewSide", (uri?: vscode.Uri) => openPreview(true, uri)),
     vscode.commands.registerCommand(
       "px.openBBCodeHelp",
       () => void vscode.commands.executeCommand("px.openWiki", STEAM_BBCODE_ARTICLE)
     ),
-    vscode.commands.registerCommand("px.openBBCodeSource", () => BBCodePreview.showSource()),
-    vscode.commands.registerCommand("px.convertBBCodeToMarkdown", () => convertActive("md")),
-    vscode.commands.registerCommand("px.convertMarkdownToBBCode", () => convertActive("bbcode")),
+    vscode.commands.registerCommand("px.openBBCodeSource", showSource),
+    vscode.commands.registerCommand("px.convertBBCodeToMarkdown", (uri?: vscode.Uri) =>
+      convertActive("md", uri)
+    ),
+    vscode.commands.registerCommand("px.convertMarkdownToBBCode", (uri?: vscode.Uri) =>
+      convertActive("bbcode", uri)
+    ),
     vscode.workspace.registerFileSystemProvider(MIRROR_SCHEME, new MarkdownMirror(), {
       isCaseSensitive: false,
     }),

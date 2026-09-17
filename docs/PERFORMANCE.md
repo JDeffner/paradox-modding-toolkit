@@ -6,7 +6,7 @@ long as the window is open. On an ordinary mod nobody notices. On a workspace
 holding a total conversion or a dozen mods, the index is the whole performance
 story, so this page says what it costs and which settings make it smaller.
 
-All numbers below were measured on 2026-08-07 (Ryzen 7 5800X, 32 GB, NVMe,
+The initial tables were measured on 2026-08-07 (Ryzen 7 5800X, 32 GB, NVMe,
 warm file cache, CK3 1.19) with the bench in
 `packages/server/test/perf/benchHarness.ts`. Your wall clock will differ; the
 shape will not.
@@ -176,6 +176,115 @@ measured 121 B down to 27 B per reference on a model, about 710 MB here, and
 would move those bytes into ArrayBuffers where the 4096 MB heap ceiling does
 not bind. Both are larger changes than this round took on.
 
+## Localization coverage and intermittent stalls (2026-09-16)
+
+The earlier index improvements did not cover `paradox/locCoverage`. That request still read and parsed every localization file synchronously on each refresh, including translations outside the configured completion language. A visible coverage view could therefore delay suggestions, hover and other server requests after an edit.
+
+Coverage now loads files asynchronously in batches of eight and caches their parsed entries. Unchanged requests reuse the completed result. Script edits recompute coverage without rereading translations; localization changes relist files and read only changed or new files. An edit during a pending read retains the other files already loaded. The cache uses open editor text, observes every localization language, and is cleared on index rebuilds. At most two completed mod caches are retained. Large reference, definition and translation loops yield to other requests. The first read still parses each individual file synchronously.
+
+### Coverage measurements
+
+Baseline: `61362a5`, the fetched main revision on September 16. Its runtime source matches 0.4.4. Both builds ran on the machine above, Windows, Node 24.12.0, with a 4096 MB server heap and 16 filesystem worker threads. Each table contains one sequential before/after run. The OS file cache was not evicted, so startup and first-read comparisons are not controlled cold-cache measurements.
+
+The driver forks the real bundled server over IPC and waits for indexing to finish. During each coverage request it attempts an `indexStats` request every 20 ms, with one probe in flight at a time. The maximum probe round trip measures how long another request waits while coverage runs. It is not a renderer frame-time measurement. A dash means coverage finished before the first probe could be sent.
+
+The generated fixture contains 90 files, 180,000 entries across English, French and German, and one script reference. The French edit adds one entry. The AGOT run adds an unmodified real mod as a second workspace root and queries its coverage: 465,788 entries across three languages. The script edit remains in the generated root and invalidates the shared index revision. It tests cache invalidation under a large reference index without writing to the real mod. Normalized coverage response hashes were identical before and after for every case.
+
+| Corpus and operation | Coverage before | Coverage after | Longest probe before | Longest probe after |
+|---|---:|---:|---:|---:|
+| Generated, first request | 229 ms | 224 ms | 212 ms | 13 ms |
+| Generated, unchanged | 190 ms | 3 ms | 158 ms | - |
+| Generated, after script save | 167 ms | 86 ms | 136 ms | 3 ms |
+| Generated, after French save | 171 ms | 112 ms | 140 ms | 7 ms |
+| Generated, unchanged after French save | 162 ms | 3 ms | 136 ms | - |
+| AGOT, first request | 4165 ms | 2812 ms | 4132 ms | 187 ms |
+| AGOT, unchanged | 2026 ms | 10 ms | 1998 ms | - |
+| AGOT, after script save | 1915 ms | 2130 ms | 1885 ms | 6 ms |
+
+The large post-save request takes 2.13 seconds to finish, slightly longer than before in this run. Other requests can now run during that work. The 187 ms first-load probe delay is also a remaining limit; this run does not isolate its cause. Retaining parsed translations trades memory for fewer reads and parses, and the two-mod limit bounds cache count, not bytes.
+
+Reproduce from a compiled checkout. Keep a copy of the baseline server beside its bundled data before rebuilding. Replace the placeholders with local paths; the corpus is read-only and generated files are removed after the run.
+
+```bash
+node packages/server/test/perf/profileLocalization.mjs <before-output-dir> --server <baseline-server>
+node packages/server/test/perf/profileLocalization.mjs <after-output-dir>
+node packages/server/test/perf/profileLocalization.mjs <before-agot-output-dir> --server <baseline-server> --corpus <agot-mod-root>
+node packages/server/test/perf/profileLocalization.mjs <after-agot-output-dir> --corpus <agot-mod-root>
+```
+
+Each output directory contains `results.json` and `server.log`. Unit tests verify all three game profiles, required and inherited keys, issue caps, duplicate precedence, shared concurrent requests, edits during a pending read, and create/delete/rename invalidation. Real stdio tests cover standard and custom watcher notifications, rapid unsaved edits, close, and language changes for CK3, Victoria 3 and EU5.
+
+### Game error-log bursts
+
+The optional game log watcher previously drained all available bytes synchronously and searched the accumulated diagnostics array for each duplicate. A burst of distinct errors therefore grew much more expensive as the list grew. It now reads at most 256 KiB per turn, schedules further reads after 10 ms, tracks duplicates in sets, and publishes only changed files.
+
+The benchmark runs the actual watcher with real temporary files and timers. A stub VS Code API accepts diagnostics without IPC or rendering, so these measurements cover extension-host processing only. Each row adds distinct errors targeting one file after the watcher starts. All expected diagnostics were retained.
+
+| New errors | Drain before | Drain after | Longest processing turn before | Longest processing turn after | Publications after |
+|---|---:|---:|---:|---:|---:|
+| 5,000 | 712 ms | 42 ms | 712 ms | 31 ms | 2 |
+| 10,000 | 2162 ms | 89 ms | 2162 ms | 34 ms | 3 |
+| 20,000 | 4893 ms | 153 ms | 4893 ms | 30 ms | 6 |
+
+Drain time starts at the first poll, excluding the normal one-second polling wait. A 10 ms heartbeat recorded maximum delays of 702/37, 2152/32 and 4898/28 ms before/after. Timing noise can make a heartbeat delay exceed the measured processing turn. Repeated errors, log truncation, partial UTF-8 reads, stop during catch-up, and clearing diagnostics have regression tests.
+
+```bash
+node packages/vscode/test/perf/profileErrorLog.mjs <before.json> <baseline-checkout>
+node packages/vscode/test/perf/profileErrorLog.mjs <after.json>
+```
+
+Large diagnostic collections still incur VS Code transport and rendering costs. Tiger validation also remains separate: running it on save can compete for CPU, and its result publication was not changed here. These findings identify reproducible stalls in the extension, but do not establish the cause of the original user's report without their settings, workspace or performance trace.
+
+### Live editor and general regression checks
+
+The live test uses the installed VS Code executable with isolated user data and extensions. It opens a real mod and the installed game, disables autosave, and changes documents only in memory. The checks cover activation, command registration, script and localization completion/hover, GUI completion/definition/editor, the dependency view, event graph and mod report. The localization loop makes 12 edits with tag completion requests, separated by 700 ms to exercise the debounce. It records editor-edit round trips, completion round trips, and a 20 ms extension-host heartbeat.
+
+| Live workspace and phase | Longest edit round trip | Longest completion round trip | Longest host heartbeat delay |
+|---|---:|---:|---:|
+| Cultivation, near startup | 7 ms | 567 ms | 15 ms |
+| AGOT, near startup (final traced run) | 5 ms | 2549 ms | 14 ms |
+| AGOT, after indexing and the mod report | 44 ms | 39 ms | 15 ms |
+
+All 14 checks in the first Cultivation run and all 16 checks in the expanded AGOT run passed. These are functional passes, not latency thresholds. The AGOT trace shows the startup edits overlapped the initial index build. Tag completion itself took about 0.3 ms on the server, but some requests waited seconds to run. The host heartbeat and edit round trips stayed responsive. This reproduces delayed suggestions during startup, not a whole-window freeze.
+
+The first visible AGOT coverage request took 31.9 seconds while indexing and edits repeatedly invalidated its pending result. A concurrent mod-report request joined that work and waited 8.7 seconds; the following unchanged request was logged below 0.1 ms on the server. This is a different workload from the isolated post-index benchmark above. Coverage can still take a long time to produce its first stable result while the index and documents are changing.
+
+The earlier real multi-root workspace check measured: 481,510 definitions and 271 MB post-GC heap both before and after. Cold/warm/after-save completion measured 154/7/133 ms before and 164/6/198 ms after. These single-run values do not show a general completion speedup. Startup was 28.0 seconds before and 6.7 seconds after, with uncontrolled disk cache state, so that difference is not attributed to this change.
+
+Run the live pass after compiling; use `VSCODE_EXECUTABLE_PATH` for a local editor and `PX_CK3_MOD_PATH` to select a different test mod. Unset `ELECTRON_RUN_AS_NODE` in the test shell if it is inherited from another Electron application. The launcher prints the path to `results.json`; VS Code traces are beside it under `user-data/logs`.
+
+```bash
+pnpm exec esbuild scripts/live-pass.ts --bundle --platform=node --outfile=dist/live-pass.cjs
+pnpm exec esbuild scripts/live-pass-suite.ts --bundle --platform=node --external:vscode --outfile=dist/live-pass-suite.cjs
+node dist/live-pass.cjs
+```
+
+The broader regression command is `pnpm exec vitest run`, including the existing Tiger parser/runner, localization, indexing and completion suites. The full run passed 2,328 tests, skipped seven, and failed the existing large-root packaged-server test under parallel load (it observed zero definitions). A focused rerun passed all 28 tests across large-root scanning, coverage and configuration. Typechecking, lint and `node scripts/check-game-boundary.mjs` passed. `pnpm run package:test` built and installed the test extension. The new server behavior is tested through standard stdio LSP as well as the rich VS Code client; no protocol shape or client capability changed.
+
+## Incremental localization parsing (2026-09-17)
+
+The open-document localization cache reparses a changed line with the existing parser and shifts later UTF-16 ranges. Header edits, multiline changes and missing version history use a full parse. The server applies sequential LSP changes against the matching cached version, rebuilds the line index, and evicts all state on close. No worker threads, worker settings or experimental worker bundles ship.
+
+The preceding experiment used baseline `bc59fa3` and six isolated VS Code sessions, two per strategy. It tested generated 2,000-entry and 50,000-entry files and a real CK3 English character-name file with 44,003 entries. All 360 timed edits, 18 diagnostic repair checks and outline/folding comparisons passed. These measurements describe the experiment, not a fresh measurement of the production integration.
+
+| CK3 file, 44,003 entries | Full parse | Incremental parse |
+|---|---:|---:|
+| Parse preparation, median | 12.54 ms | 2.80 ms |
+| Completion, median | 257.21 ms | 255.27 ms |
+| Unrelated LSP requests, p95 | 281 ms | 276 ms |
+
+Faster parsing did not produce a consistent editor speedup. The trace measured `rescanModFile` at 100 to 128 ms per edit for the real file and 117 to 166 ms for the generated stress file. It removes and rebuilds every localization definition in the edited file. Completion enters `indexRead`, which flushes pending rescans synchronously before answering. This work remains unchanged.
+
+The next bounded experiment is to update only definitions affected by an edit, while preserving duplicate-key precedence, references, ranges and revision invalidation. Another candidate is to avoid flushing the index for requests that do not read it. Both need request-latency measurements and correctness tests before implementation; neither improvement is claimed here.
+
+Workers remain deferred. In the parser benchmark, the largest CK3 sample spent a median 11.89 ms parsing inside the worker but 110 ms returning the full result. The live sessions showed mixed request latency and higher edit latency in some cases. Rapid overlapping edits, stale results, cancellation and worker failures were not exercised sufficiently. Keeping data inside a worker and returning small deltas would be a separate architecture experiment.
+
+Production regression coverage is in `incrementalLoc.test.ts` and the ranged-edit LSP smoke test. It compares the full parser's values, errors, UTF-16 ranges, header and BOM through LF, CRLF, bare CR, Unicode, malformed entries, batched changes, header edits, multiline edits, full replacements, cache-version gaps, close/reopen and a 50,000-entry file. The worker experiment scripts remain outside this release.
+
+A single sequential before/after run of the integrated changes on the Cultivation multi-root workspace retained 481,510 definitions and a 271 MB post-GC heap in both builds. Index time was 6,793/7,076 ms; cold, warm and after-save completion were 165/166, 7/8 and 139/208 ms. This run confirms neither a general completion speedup nor an improvement to the remaining localization definition rebuild. Disk caches were not controlled.
+
+The paired CK3 ranking evaluation retained identical output apart from timing across 1,400 sampled positions, 915,909 definitions and 3,760,505 references. Frequency regeneration was byte-identical before and after, and matched the shipped table apart from its generation date.
+
 ## Version history
 
 The rounds above each measured one change on one workspace. This table is the
@@ -197,6 +306,9 @@ named at the top of this page.
 | 0.4.0 | 8.1 s | 252 ms | 184 ms | 10 ms | 267 MB | 852 MB |
 | 0.4.0 + realign-coa-editor | 7.8 s | 225 ms | 167 ms | 8 ms | 267 MB | 850 MB |
 | 0.4.1 | 5.9 s | 150 ms | 138 ms | 7 ms | 268 MB | 813 MB |
+| 0.5.0 | 12.3 s | 260 ms | 194 ms | 13 ms | 271 MB | 846 MB |
+
+The 0.5.0 row was recorded on 2026-09-17 with 481,510 definitions. Its two runs took 14.4 and 10.2 seconds to index, with after-save completion at 216 and 172 ms. These release samples were slower than the earlier paired integration measurements above; the cache state and system load were not controlled across sessions. They do not establish a general speedup or isolate a regression. The localization changes address repeated parsing, coverage scans and log processing. Full-file definition rebuilding remains a separate cost.
 
 What the rows say:
 
@@ -208,21 +320,20 @@ What the rows say:
   buckets. Peak RSS moved the other way by about 50 MB, which is the fused
   single-pass scan holding both extractors' output at once; on this workspace
   the heap ceiling is nowhere near.
-- **Time to indexed is flat at about 8 s.** The 25 s figure a cold-cache run
+- **The initial releases indexed in about 8 s.** The 25 s figure a cold-cache run
   of the same build produced is not in the table: the first run after the game
   files leave the page cache pays for the disk, every run after it does not.
 - **0.4.0 and the working branch are within noise of each other.** The branch
   changes webviews only; the server is byte-identical in what it does.
 
-Warm completion, hover and semantic tokens sit at 1 to 11 ms on every version
-and are not the numbers to watch.
+Warm completion, hover and semantic tokens remain much cheaper than the first completion after an index change.
 
 ### Adding a row
 
 After `pnpm run compile`, from the repo root:
 
 ```bash
-pnpm run perf:history -- "<path>/cultivation.code-workspace" <outDir> --label <version> --history packages/server/test/perf/history.json
+pnpm run perf:history "<path>/cultivation.code-workspace" <outDir> --label <version> --history packages/server/test/perf/history.json
 ```
 
 Run it twice and let the doc carry the median. To measure a past release, build
@@ -230,6 +341,7 @@ its server in a worktree (`git worktree add --detach <dir> v<x>`, then
 `pnpm install --no-frozen-lockfile --ignore-scripts` and `pnpm -C packages/server run compile`
 inside it) and pass `--server <dir>/packages/server/dist/server.js`. Any
 `.code-workspace` works; a row is only comparable with rows on the same one.
+Replace any absolute path in a recorded `build` label with a portable label before committing the history.
 
 ## Configuring a big workspace
 

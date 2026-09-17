@@ -20,6 +20,7 @@ import type {
 import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
+import { matchesSourceFile } from "../sourceFile";
 
 /**
  * Blocks rendered as a step of their own: the union across game profiles,
@@ -59,8 +60,16 @@ const MAX_BLOCK_LINES = 60;
 const MAX_TARGETS = 40;
 const MAX_FIRES = 24;
 
-export function computeEventDetail(data: ServerData, schema: SchemaData, id: string): EventDetail | null {
-  const def = data.index.lookup(id).find((d) => d.kind === "event");
+export function computeEventDetail(
+  data: ServerData,
+  schema: SchemaData,
+  id: string,
+  file?: string
+): EventDetail | null {
+  const definitions = file === undefined ? data.index.lookup(id) : data.index.lookupAll(id);
+  const def = definitions.find(
+    (d) => d.kind === "event" && (file === undefined || matchesSourceFile(d.file, file))
+  );
   if (!def) return null;
   let text: string;
   try {

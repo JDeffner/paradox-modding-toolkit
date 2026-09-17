@@ -163,6 +163,7 @@ function boot(): Booted {
         unobserve(): void {}
         disconnect(): void {}
       };
+      win.HTMLElement.prototype.scrollIntoView = () => undefined;
       const noop = (): undefined => undefined;
       (win.Element.prototype as unknown as Record<string, unknown>).setPointerCapture = noop;
       (win.Element.prototype as unknown as Record<string, unknown>).releasePointerCapture = noop;
@@ -394,5 +395,48 @@ describe("the Coat of Arms Designer boots on the game's own catalog", () => {
     const text = app.document.querySelector(".px-dialog")?.textContent ?? "";
     expect(text).toContain("Nothing here yet");
     expect(text).toContain("C:/docs/px-toolkit/coat_of_arms");
+  });
+});
+
+describe("coat of arms source and instance menus", () => {
+  it("exposes the opened definition on the focusable preview", () => {
+    const app = boot();
+    app.push({
+      type: "opened",
+      entry: { name: "selected_arms", file: "/mod/selected.txt", source: "mod" },
+      flag: { ...TEMPLATE, name: "selected_arms" },
+    });
+    const canvas = app.document.getElementById("canvas")!;
+    expect(canvas.tabIndex).toBe(0);
+    expect(JSON.parse(canvas.getAttribute("data-vscode-context")!)).toEqual({
+      webviewSection: "px.coaDefinition",
+      pxSourceFile: "/mod/selected.txt",
+      pxDefinitionId: "selected_arms",
+      pxDefinitionKind: "coat_of_arms",
+    });
+    let target: EventTarget | null = null;
+    app.document.addEventListener("contextmenu", (event) => {
+      target = event.target;
+    });
+    canvas.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true }));
+    expect(target).toBe(canvas);
+  });
+
+  it("right-click offers removal and changes nothing until the action is chosen", () => {
+    const app = boot();
+    app.tab("layout");
+    app.click("#layoutGrid .tile");
+    const before = app.current();
+    const tile = app.document.querySelector<HTMLElement>("#placement .instTile")!;
+    tile.dispatchEvent(new app.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    expect(app.document.querySelectorAll("#placement .instances .instTile")).toHaveLength(
+      before.layers[0].instances.length + 1
+    );
+    const remove = [...app.document.querySelectorAll<HTMLElement>(".px-menu-item")].find((row) =>
+      row.textContent?.includes("Remove instance")
+    )!;
+    expect(remove).toBeDefined();
+    remove.click();
+    expect(app.current().layers[0].instances).toHaveLength(before.layers[0].instances.length - 1);
   });
 });

@@ -378,6 +378,10 @@ absent for all of them.
 
 For data health, show the script-doc and data-type sources separately. `tokensFromScriptDocs && !tokensFromBundledDumps` means a generated script dump is loaded. `StatusPayload.dataTypesSource` reports `generated`, `bundled` or `none`; absent means the server does not report it. The optional `status` in `paradox/reloadDocs` is the refreshed status, also sent through `paradox/status`. Recommend generating both dumps after game patches, then reloading. The status identifies their source, not their age.
 
+When opening a specific indexed definition, pass its source as `file` (absolute path or file URI) to `paradox/eventDetail` alongside `id`, or to `paradox/definitionForm` alongside `kind` and `name`. This avoids selecting another mod's definition with the same ID. An exact source that cannot be loaded returns `null` for event detail or leaves the form's `current` absent. Omitting `file` preserves the existing lookup behavior.
+
+For a localization row in a specific language, pass `language` with `key` to `paradox/lookupLoc`. Omitting it uses the configured completion language. An explicit identifier uses lowercase letters and underscores; missing translations and invalid identifiers return an empty list. The request includes open unsaved text and does not change the completion language.
+
 ### paradox/guiSourceEdit
 
 The server never writes a file. A designer gesture goes out as an op and comes

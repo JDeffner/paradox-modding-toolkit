@@ -39,6 +39,10 @@ default amount of configuration is none. Full walkthrough:
 
 ## What you get
 
+Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows workspace health and the current mod, with less-used commands in **All Tools**. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.
+
+Use **Paradox: Update Mod for New Game Version** to compare your mod with old and new game data in the **Paradox Review** panel. Compatch keeps named sessions, review queues, editable conflict results and separate validation evidence. CK3 also compares events and localization keys across files. Source files remain available in the editor for review.
+
 Choose minimal completion templates, full examples or names only, with insertion previews and expected-value hints. Export the generated snippets to a searchable, printable catalogue. The flag, coat-of-arms and DDS tools also offer dark, light and custom preview backgrounds.
 
 ![The Project panel](packages/vscode/media/screenshots/project-panel-compact.png)

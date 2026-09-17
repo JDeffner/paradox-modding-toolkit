@@ -100,7 +100,7 @@ export class CultureCreatorPanel {
   private static readonly viewType = "px.cultureCreator";
 
   private readonly panel: vscode.WebviewPanel;
-  private readonly actions: CultureCreatorActions;
+  private actions: CultureCreatorActions;
   private readonly textures: GuiTextureCache;
   private cfg: PxConfig;
   /** The culture to load on the next `ready` (a deep-linked command argument). */
@@ -177,6 +177,7 @@ export class CultureCreatorPanel {
     const existing = CultureCreatorPanel.instance;
     if (existing) {
       existing.cfg = cfg;
+      existing.actions = actions;
       existing.panel.reveal(vscode.ViewColumn.Active);
       void existing.load(name);
       return;

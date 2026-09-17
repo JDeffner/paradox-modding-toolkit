@@ -7,6 +7,7 @@
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { locCoverageRequest, type LocCoverage } from "@px-lsp/protocol/protocol";
+import { samePath, containsPath } from "./commandTargets";
 import type { PxConfig } from "./config";
 import { replaceLocLineValue, upsertNewModLoc } from "./locCommands";
 
@@ -18,7 +19,8 @@ function displayLanguage(language: string): string {
 export async function translateNextCommand(
   lc: LanguageClient,
   cfg: PxConfig,
-  onLocFileChanged: (file: string) => void
+  onLocFileChanged: (file: string) => void,
+  selectedFile?: string
 ): Promise<void> {
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
@@ -26,8 +28,21 @@ export async function translateNextCommand(
     );
     return;
   }
-  const coverage = await lc.sendRequest<LocCoverage[]>(locCoverageRequest);
-  const candidates = coverage.filter((l) => l.untranslated.length + l.missing.length > 0);
+  const coverage = await lc.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: cfg.modPath });
+  const language = selectedFile ? /_l_([a-z_]+)\.yml$/i.exec(selectedFile)?.[1] : undefined;
+  const candidates = coverage
+    .filter((l) => !language || l.language === language)
+    .map((l) => ({
+      ...l,
+      untranslated: l.untranslated.filter(
+        (entry) =>
+          entry.file &&
+          containsPath(cfg.modPath!, entry.file) &&
+          (!selectedFile || samePath(selectedFile, entry.file))
+      ),
+      missing: selectedFile ? [] : l.missing,
+    }))
+    .filter((l) => l.untranslated.length + l.missing.length > 0);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
       "Paradox Modding Toolkit: localization coverage is complete — nothing to translate."

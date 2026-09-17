@@ -35,6 +35,8 @@ export async function main(): Promise<number> {
       {
         "px.gamePath": gamePath,
         "px.logsPath": devPath("logsPath"),
+        "px.trace.perf": true,
+        "files.autoSave": "off",
         "security.workspace.trust.enabled": false,
         "extensions.autoCheckUpdates": false,
         "extensions.autoUpdate": false,
@@ -47,6 +49,7 @@ export async function main(): Promise<number> {
   );
 
   const resultsFile = path.join(scratch, "results.json");
+  console.log(`live-pass results: ${resultsFile}`);
   let failed = false;
   try {
     await runTests({

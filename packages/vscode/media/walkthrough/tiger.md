@@ -9,3 +9,5 @@ Each game has its own binary: `ck3-tiger` for Crusader Kings III, `vic3-tiger` f
 - Runs when you ask: **Paradox Tiger: Run Validation** (Ctrl+Alt+V) or the tiger item in the status bar. Set `px.tigerRunOn` to `save` to validate on every save (debounced), which is good for small and medium mods
 - Already have tiger? Point `px.tigerPath` at your binary; the setting always wins over the downloaded copy
 - macOS has no prebuilt binary. Build from source and set `px.tigerPath`
+
+This step completes when the extension resolves a validator binary. It stays incomplete after a cancelled or failed download. The step is hidden for games whose profile has no validator.

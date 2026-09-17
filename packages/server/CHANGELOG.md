@@ -6,7 +6,17 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.3.6
+
+Ships with the toolkit's 0.5.0 release.
+
+- Declare verified CK3 event and localization folders for the client's Compatch Workspace; other game profiles explicitly use file comparisons only.
+
+- Accept an optional source file when loading event details or creator forms, so duplicate names resolve to the selected definition. Existing clients retain their current lookup behavior.
+
+- Resolve explicit localization languages, including unsaved text, without substituting values from another language or changing the completion index.
+
+- Keep localization coverage responsive during large scans and reuse unchanged localization lines after edits. Preserve full-parse results when incremental reuse is not safe.
 
 ## 0.3.5
 

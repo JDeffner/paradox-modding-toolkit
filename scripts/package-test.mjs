@@ -15,7 +15,7 @@ const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: "inherit", shell: true });
 
 run("pnpm run compile", ext);
 run(
-  `npx vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode -o "${out}"`,
+  `pnpm exec vsce package --no-dependencies --githubBranch main --baseImagesUrl https://github.com/JDeffner/paradox-modding-toolkit/raw/main/packages/vscode -o "${out}"`,
   ext
 );
 run(`code --install-extension "${out}" --force`, ext);

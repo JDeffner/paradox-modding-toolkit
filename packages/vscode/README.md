@@ -35,8 +35,12 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
+- **Context actions:** right-click files, definitions, overrides and localization references to open, compare or edit the selected source. Project shows workspace health and the current mod, with less-used commands in **All Tools**.
+- **BBCode preview:** choose **BBCode Preview** from VS Code's editor selector or open it beside the source. Preview includes unsaved edits and preserves the BBCode language mode.
 
 ## Build and inspect content
+
+Use **Paradox: Update Mod for New Game Version** to compare your mod with old and new game data in the **Paradox Review** panel. Compatch provides named sessions, review queues, changed-file refresh, editable conflict results and separate validation evidence. CK3 also matches events and localization keys across files. You can compare game-data snapshots; target validation requires a compatible validator and a full game installation.
 
 The Flag Builder, Coat of Arms Designer and DDS viewer have bottom-left background controls: dark, light, custom color and reset. Each tool remembers its choice in the workspace.
 

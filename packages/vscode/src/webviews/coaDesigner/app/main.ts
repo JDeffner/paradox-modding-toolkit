@@ -13,6 +13,7 @@
  * with the Flag Builder: this panel is a different way to reach the same
  * `coat_of_arms` definition, not a second renderer.
  */
+import { setSourceContext, sourceContextKeys } from "../../shared/sourceContext";
 import { createTextureImages } from "../../shared/textureImages";
 import { viewerBackground } from "../../shared/viewerBackground";
 import {
@@ -329,6 +330,11 @@ const CANVAS_SIZE = 512;
 const canvas = $<HTMLCanvasElement>("canvas");
 canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
+canvas.tabIndex = 0;
+canvas.setAttribute("aria-label", "Coat of arms preview");
+canvas.addEventListener("keydown", (ev) => {
+  sourceContextKeys(ev, canvas);
+});
 
 /** The GUI editor's selection colors, so the editors read as one product. */
 const SELECT_STROKE = "#4fc1ff";
@@ -1454,8 +1460,20 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
   const count = Math.max(1, layer.instances.length);
   for (let i = 0; i < count; i++) {
     const tile = el("div", "instTile", String(i + 1));
+    tile.tabIndex = 0;
+    tile.setAttribute("role", "button");
+    tile.setAttribute("aria-label", `Emblem instance ${i + 1}`);
+    tile.setAttribute("aria-haspopup", "menu");
+    tile.addEventListener("keydown", (ev) => {
+      if (sourceContextKeys(ev, tile)) return;
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        tile.click();
+      }
+    });
     tile.dataset.tip =
-      "Click to edit, Shift-click for every instance up to here, Ctrl-click to add or remove, right-click to remove";
+      "Click to edit, Shift-click for every instance up to here, Ctrl-click to add or remove, right-click for actions";
     if (isSelected({ layer: layerIndex, instance: i })) tile.setAttribute("aria-selected", "true");
     tile.onclick = (e) => {
       const ref = (n: number): ElementRef => ({ layer: layerIndex, instance: n });
@@ -1471,17 +1489,32 @@ function instanceGrid(layer: EmblemLayer): HTMLElement {
       draw();
     };
     tile.oncontextmenu = (e) => {
-      e.preventDefault();
       if (layer.instances.length <= 1) return;
-      layer.instances.splice(i, 1);
-      instIndex = 0;
-      selection = [];
-      refresh();
+      e.preventDefault();
+      menu(tile, [{ value: "remove", label: "Remove instance" }], {
+        search: false,
+        onPick: () => {
+          layer.instances.splice(i, 1);
+          instIndex = 0;
+          selection = [];
+          refresh();
+        },
+      });
     };
     grid.append(tile);
   }
   const add = el("div", "instTile", "+");
   add.dataset.tip = "Add Emblem";
+  add.tabIndex = 0;
+  add.setAttribute("role", "button");
+  add.setAttribute("aria-label", "Add emblem instance");
+  add.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      add.click();
+    }
+  });
   add.onclick = () => {
     materialize(layer);
     const from = layer.instances[instIndex] ?? DEFAULT_INSTANCE;
@@ -1840,6 +1873,17 @@ function startFromScratch(): void {
 }
 
 function updateOrigin(): void {
+  setSourceContext(
+    canvas,
+    opened
+      ? {
+          webviewSection: "px.coaDefinition",
+          pxSourceFile: opened.file,
+          pxDefinitionId: opened.name,
+          pxDefinitionKind: "coat_of_arms",
+        }
+      : null
+  );
   const label = target?.label ? `for ${target.label}` : "";
   const from = opened ? `from ${opened.source}` : "";
   $("target").textContent = [label, from].filter(Boolean).join(" · ");
@@ -1936,6 +1980,23 @@ function showLibrary(dir: string, items: LibraryItem[]): void {
   let close = (): void => undefined;
   for (const item of items) {
     const wrap = el("div", "libItem");
+    setSourceContext(wrap, {
+      webviewSection: "px.coaDefinition",
+      pxSourceFile: item.file,
+      pxDefinitionId: item.name,
+      pxDefinitionKind: "coat_of_arms",
+    });
+    wrap.tabIndex = 0;
+    wrap.setAttribute("role", "button");
+    wrap.setAttribute("aria-label", item.name);
+    wrap.addEventListener("keydown", (ev) => {
+      if (sourceContextKeys(ev, wrap)) return;
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        wrap.querySelector<HTMLElement>(".tile")?.click();
+      }
+    });
     const stored = item.flag;
     if (!stored) {
       const broken = el("div", "libBroken", "cannot read");

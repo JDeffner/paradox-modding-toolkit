@@ -7,17 +7,25 @@
  * (formerly Tools) is a webview — see webviews/dashboard/view.ts.
  */
 import * as vscode from "vscode";
+import {
+  targetPosition,
+  targetUri,
+  writableRoot,
+  containsPath,
+  samePath,
+  CREATOR_COMMANDS,
+  type DefinitionTarget,
+} from "./commandTargets";
+import { creatorSupported } from "./meta";
 import { kindStyle } from "@px-lsp/protocol/kinds";
 import * as path from "path";
 import type { LanguageClient } from "vscode-languageclient/node";
 import * as fs from "fs";
 import {
-  dependenciesRequest,
   indexChangedNotification,
   locCoverageRequest,
   modOverviewRequest,
   overridesRequest,
-  type DependenciesParams,
   type DependenciesResult,
   type DependencyGroup,
   type LocCoverage,
@@ -77,7 +85,7 @@ export class FocusMod {
   }
 
   isPinned(): boolean {
-    return this.pinned !== null;
+    return this.pinned !== null && this.current() !== null && samePath(this.pinned, this.current()!);
   }
 
   /** The raw pinned root (may point at an excluded/removed mod), or null = follow. */
@@ -115,7 +123,12 @@ function openCommand(file: string, line: number): vscode.Command {
   };
 }
 
-class Node extends vscode.TreeItem {
+class Node extends vscode.TreeItem implements DefinitionTarget {
+  pxKind?: string;
+  pxLanguage?: string;
+  modRoot?: string;
+  pxOverride?: OverrideInfo;
+  pxSource?: OverrideInfo["mod"];
   children: Node[] = [];
   /** For loc-coverage items: the loc key, consumed by px.addLocalizationFromView. */
   pxKey?: string;
@@ -154,7 +167,8 @@ abstract class BaseProvider implements vscode.TreeDataProvider<Node> {
 class OverviewProvider extends BaseProvider {
   constructor(
     private readonly lc: LanguageClient,
-    private readonly focus: FocusMod
+    private readonly focus: FocusMod,
+    private readonly getCfg: () => PxConfig
   ) {
     super();
   }
@@ -162,9 +176,7 @@ class OverviewProvider extends BaseProvider {
   protected async roots(): Promise<Node[]> {
     const overview = await this.lc.sendRequest<ModOverview>(modOverviewRequest, this.focus.params());
     if (overview.kinds.length === 0) {
-      const empty = new Node("No mod content indexed");
-      empty.iconPath = new vscode.ThemeIcon("info");
-      return [empty];
+      return [];
     }
     return overview.kinds.map((k) => {
       const node = new Node(
@@ -177,6 +189,10 @@ class OverviewProvider extends BaseProvider {
         child.description = path.basename(d.file);
         child.command = openCommand(d.file, d.line);
         child.iconPath = new vscode.ThemeIcon(kindStyle(k.kind).codicon);
+        child.pxKey = d.name;
+        child.pxKind = k.kind;
+        child.pxLoc = { file: d.file, line: d.line };
+        child.contextValue = `px.definition.${k.kind}${creatorSupported(this.getCfg().gameId, k.kind) ? ".creator" : ""}`;
         return child;
       });
       if (k.count > k.defs.length) {
@@ -277,9 +293,7 @@ class LocCoverageProvider extends BaseProvider {
   protected async roots(): Promise<Node[]> {
     const coverage = await this.lc.sendRequest<LocCoverage[]>(locCoverageRequest, this.focus.params());
     if (coverage.length === 0) {
-      const empty = new Node("No localization files in the mod");
-      empty.iconPath = new vscode.ThemeIcon("info");
-      return [empty];
+      return [];
     }
     return coverage.map((lang) => {
       const issues = lang.missing.length + lang.orphaned.length + lang.untranslated.length;
@@ -305,6 +319,9 @@ class LocCoverageProvider extends BaseProvider {
           item.iconPath = new vscode.ThemeIcon("symbol-string");
           item.contextValue = contextValue;
           item.pxKey = i.key;
+          item.pxLanguage = lang.language;
+          item.modRoot = this.focus.current() ?? undefined;
+          if (i.file !== undefined && i.line !== undefined) item.pxLoc = { file: i.file, line: i.line };
           return item;
         });
         node.children.push(cat);
@@ -362,10 +379,19 @@ class OverridesProvider extends BaseProvider {
         node.iconPath = new vscode.ThemeIcon(won ? "arrow-swap" : "warning");
         node.tooltip = o.note;
         node.command = openCommand(o.mod.file, o.mod.line);
+        node.pxKey = o.name;
+        node.pxLoc = o.mod;
+        node.pxOverride = o;
+        node.contextValue = `px.override${o.shadowed.some((s) => s.source === "vanilla") ? ".vanilla" : ""}`;
         node.children = o.shadowed.map((s) => {
           const site = new Node(`${s.label ?? s.source}: ${path.basename(s.file)}`);
           site.command = openCommand(s.file, s.line);
           site.iconPath = new vscode.ThemeIcon("references");
+          site.pxKey = o.name;
+          site.pxLoc = s;
+          site.pxOverride = o;
+          site.pxSource = s;
+          site.contextValue = "px.overrideSource";
           return site;
         });
         return node;
@@ -394,11 +420,7 @@ class DependenciesProvider extends BaseProvider {
 
   protected async roots(): Promise<Node[]> {
     const r = this.result;
-    if (!r || !r.def) {
-      const empty = new Node("Place the cursor on a definition, then run “Paradox: Show Dependencies”.");
-      empty.iconPath = new vscode.ThemeIcon("info");
-      return [empty];
-    }
+    if (!r || !r.def) return [];
     const count = (groups: DependencyGroup[]) => groups.reduce((n, g) => n + g.items.length, 0);
     const header = new Node(r.def.name);
     header.description = r.def.kind.replace(/_/g, " ");
@@ -471,7 +493,7 @@ export function registerPxViews(
   getCfg: () => PxConfig,
   focus: FocusMod
 ): PxViews {
-  const overview = new OverviewProvider(lc, focus);
+  const overview = new OverviewProvider(lc, focus, getCfg);
   // The Wiki panel's diagnostic articles are the same files, one per code, so
   // the folder listing IS the set of explainable codes. Read once: it ships in
   // the vsix and cannot change while the extension host runs.
@@ -498,7 +520,7 @@ export function registerPxViews(
   const overridesView = vscode.window.createTreeView("px.overrides", { treeDataProvider: overrides });
   const updateDescriptions = () => {
     const label = focus.label();
-    const suffix = focus.isPinned() ? `${label} (pinned)` : label;
+    const suffix = label ? `${focus.isPinned() ? "Pin" : "Follow"}: ${label}` : "No mod selected";
     overviewView.description = suffix;
     locCoverageView.description = suffix;
     overridesView.description = suffix;
@@ -512,7 +534,7 @@ export function registerPxViews(
     vscode.window.registerTreeDataProvider("px.problems", problems),
     vscode.window.registerTreeDataProvider("px.dependencies", dependencies),
     vscode.commands.registerCommand("px.addLocalizationFromView", (node?: { pxKey?: string }) =>
-      vscode.commands.executeCommand("px.editLocalization", node?.pxKey)
+      vscode.commands.executeCommand("px.editLocalization", node)
     ),
 
     // ---- Dependencies view actions ----
@@ -529,45 +551,92 @@ export function registerPxViews(
     // Re-roots the view on the clicked row. The server resolves from a cursor
     // position, so the row's file+line is turned back into one: the first word
     // on that line is the definition's name.
-    vscode.commands.registerCommand("px.dependenciesForItem", async (node?: Node) => {
-      const loc = node?.pxLoc;
-      if (!loc) return;
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(loc.file));
-      const line = Math.min(loc.line, Math.max(doc.lineCount - 1, 0));
-      const at = doc.getWordRangeAtPosition(
-        new vscode.Position(line, doc.lineAt(line).firstNonWhitespaceCharacterIndex),
-        /[A-Za-z0-9_.-]+/
-      );
-      const params: DependenciesParams = {
-        uri: doc.uri.toString(),
-        position: { line, character: at?.start.character ?? 0 },
-      };
-      const result = await lc.sendRequest<DependenciesResult>(dependenciesRequest, params);
-      if (!result.def) {
-        void vscode.window.showInformationMessage(
-          "Paradox Modding Toolkit: no indexed definition at that location."
+    vscode.commands.registerCommand("px.dependenciesForItem", (node?: unknown) =>
+      vscode.commands.executeCommand("px.showDependencies", node)
+    ),
+    vscode.commands.registerCommand("px.openFromView", async (node?: unknown) => {
+      const target = await targetPosition(node);
+      if (target)
+        await vscode.window.showTextDocument(target.document, {
+          selection: new vscode.Range(target.position, target.position),
+        });
+    }),
+    vscode.commands.registerCommand("px.openToSideFromView", async (node?: unknown) => {
+      const target = await targetPosition(node);
+      if (target)
+        await vscode.window.showTextDocument(target.document, {
+          viewColumn: vscode.ViewColumn.Beside,
+          selection: new vscode.Range(target.position, target.position),
+        });
+    }),
+    vscode.commands.registerCommand("px.findReferencesFromView", async (node?: unknown) => {
+      const target = await targetPosition(node);
+      if (target)
+        await vscode.commands.executeCommand(
+          "editor.action.findReferences",
+          target.document.uri,
+          target.position
         );
-        return;
+    }),
+    vscode.commands.registerCommand(
+      "px.copyNameFromView",
+      async (node?: Node & { pxDefinitionId?: string }) => {
+        const name = node?.pxKey ?? node?.pxDefinitionId;
+        if (name) await vscode.env.clipboard.writeText(name);
       }
-      dependencies.setResult(result);
+    ),
+    vscode.commands.registerCommand("px.editDefinitionFromView", async (node?: Node) => {
+      if (
+        !node?.pxKind ||
+        !node.pxKey ||
+        !writableRoot(targetUri(node), getCfg()) ||
+        !creatorSupported(getCfg().gameId, node.pxKind)
+      )
+        return;
+      if (CREATOR_COMMANDS[node.pxKind])
+        await vscode.commands.executeCommand(CREATOR_COMMANDS[node.pxKind], { ...node, name: node.pxKey });
     }),
-    vscode.commands.registerCommand("px.openFromView", async (node?: Node) => {
-      const loc = node?.pxLoc;
-      if (!loc) return;
-      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(loc.file), {
-        selection: new vscode.Range(loc.line, 0, loc.line, 0),
-      } satisfies vscode.TextDocumentShowOptions);
-    }),
-    vscode.commands.registerCommand("px.findReferencesFromView", async (node?: Node) => {
-      const loc = node?.pxLoc;
-      if (!loc) return;
-      await vscode.commands.executeCommand("px.openFromView", node);
-      await vscode.commands.executeCommand("editor.action.referenceSearch.trigger");
-    }),
-    vscode.commands.registerCommand("px.copyNameFromView", async (node?: Node) => {
-      const name = node?.pxKey ?? (typeof node?.label === "string" ? node.label : undefined);
-      if (name) await vscode.env.clipboard.writeText(name);
-    }),
+    ...(
+      [
+        "px.compareOverrideSource",
+        "px.compareOverrideVanilla",
+        "px.openOverrideBoth",
+        "px.compatchOverride",
+      ] as const
+    ).map((id) =>
+      vscode.commands.registerCommand(id, async (node?: Node) => {
+        const override = node?.pxOverride;
+        const source =
+          id === "px.compareOverrideVanilla"
+            ? override?.shadowed.find((s) => s.source === "vanilla")
+            : node?.pxSource;
+        if (!override || !source) return;
+        if (id === "px.compatchOverride") {
+          const cfg = getCfg();
+          const roots = [cfg.modPath, ...cfg.workspaceMods, ...cfg.parentPaths, cfg.gamePath].filter(
+            (r): r is string => !!r
+          );
+          const owner = (file: string) =>
+            roots.filter((r) => containsPath(r, file)).sort((a, b) => b.length - a.length)[0];
+          const sourceA = owner(override.mod.file),
+            sourceB = owner(source.file);
+          if (sourceA && sourceB && !samePath(sourceA, sourceB))
+            await vscode.commands.executeCommand("px.newCompatch", { sourceA, sourceB });
+          return;
+        }
+        if (id === "px.openOverrideBoth") {
+          await vscode.commands.executeCommand("px.openFromView", { pxLoc: override.mod });
+          await vscode.commands.executeCommand("px.openToSideFromView", { pxLoc: source });
+        } else
+          await vscode.commands.executeCommand(
+            "vscode.diff",
+            vscode.Uri.file(source.file),
+            vscode.Uri.file(override.mod.file),
+            `${override.name}: ${source.label ?? source.source} / mod`,
+            { selection: new vscode.Range(override.mod.line, 0, override.mod.line, 0) }
+          );
+      })
+    ),
 
     // ---- Problems view actions ----
     vscode.commands.registerCommand("px.openProblemsPanel", () =>

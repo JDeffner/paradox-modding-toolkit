@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StatusPayload } from "@px-lsp/protocol/protocol";
 import type { PxConfig } from "../src/config";
-import { dataHealthLines } from "../src/dataHealth";
+import { dataHealthLines, onboardingReadiness } from "../src/dataHealth";
 
 vi.mock("vscode", () => ({
+  commands: { executeCommand: vi.fn(async () => undefined) },
   workspace: { getConfiguration: () => ({ get: () => "configured" }) },
   window: {
     showInformationMessage: vi.fn(async () => undefined),
@@ -92,4 +93,35 @@ describe.each([
     }
     tooltip.mockRestore();
   });
+});
+
+it("keeps failed or incomplete setup unfinished and recognizes an already configured workspace", () => {
+  const ready = { ...status, gameOk: true, modOk: true, tigerOk: true, tigerName: "validator" };
+  expect(onboardingReadiness(ready)).toMatchObject({
+    "px.setupReady": true,
+    "px.modReady": true,
+    "px.tigerReady": true,
+    "px.dumpsReady": false,
+  });
+  for (const incomplete of [
+    { gameOk: false },
+    { modOk: false },
+    { tigerOk: false },
+    { tokens: 0 },
+    { indexing: true },
+  ]) {
+    expect(onboardingReadiness({ ...ready, ...incomplete })["px.setupReady"]).toBe(false);
+  }
+  expect(onboardingReadiness({ ...ready, tigerName: null, tigerOk: false })).toMatchObject({
+    "px.setupReady": true,
+    "px.tigerReady": false,
+  });
+  expect(
+    onboardingReadiness({ ...ready, tokensFromBundledDumps: false, dataTypesSource: "generated" })[
+      "px.dumpsReady"
+    ]
+  ).toBe(true);
+  expect(
+    onboardingReadiness({ ...ready, tokensFromBundledDumps: false, dataTypesSource: "none" })["px.dumpsReady"]
+  ).toBe(false);
 });

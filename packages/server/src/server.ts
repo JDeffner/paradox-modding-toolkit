@@ -207,13 +207,14 @@ import {
 import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
-import { evictParse, getLocParse, getParse } from "./parseCache";
+import { evictParse, getLocParse, getParse, updateDocumentWithParseCache } from "./parseCache";
 import { buildSnippetList } from "./features/snippetList";
 import { buildSnippetCatalogue } from "./features/snippetCatalogue";
 import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
 import { isIgnoredByConfig, isSuppressedInline, scanInlineSuppressions } from "@px-lsp/protocol/suppression";
 import { computeModOverview } from "./overview/modOverview";
-import { computeLocCoverage } from "./overview/locCoverage";
+import { LocalizationCoverage } from "./overview/locCoverageCache";
+import { lookupLocLanguage, type LocalizationRoot } from "./overview/lookupLocLanguage";
 import { computeOverrides } from "./overview/overrides";
 import { computeEventGraph } from "./overview/eventGraph";
 import { computeDynastyTree } from "./overview/dynastyTree";
@@ -246,7 +247,7 @@ if (
 }
 
 const connection = createConnection(ProposedFeatures.all);
-const documents = new TextDocuments(TextDocument);
+const documents = new TextDocuments({ create: TextDocument.create, update: updateDocumentWithParseCache });
 
 // ---- crash visibility (perf campaign §A1) -----------------------------------
 
@@ -320,6 +321,15 @@ let indexSchema: SchemaData = schema;
 const namespacesByFile = new Map<string, string[]>();
 
 const data = new ServerData();
+const localizationCoverage = new LocalizationCoverage(data, async (file) => {
+  const uri = URI.file(file).toString();
+  const open =
+    documents.get(uri) ??
+    (process.platform === "win32"
+      ? documents.all().find((doc) => doc.uri.toLowerCase() === uri.toLowerCase())
+      : undefined);
+  return open ? open.getText() : fs.promises.readFile(file, "utf8");
+});
 const completion = new CompletionFeature(data, () => schema);
 /** Mod display names for hover/completion origin labels ("· My Mod" instead of
  * "· mod"); roots re-resolved on path changes and descriptor.mod edits. */
@@ -796,6 +806,10 @@ data.onDidChange(() => {
   // index walk behind an already-saturated event loop — the "semantic
   // highlighting never arrives" reports. buildIndex's finally fires exactly
   // one refresh when the index is complete instead.
+  scheduleRefresh();
+});
+
+function scheduleRefresh(): void {
   if (indexing) return;
   // Debounce editor refreshes and the index-changed signal: scans fire many changes.
   if (refreshTimer) clearTimeout(refreshTimer);
@@ -803,7 +817,7 @@ data.onDidChange(() => {
     refreshTimer = null;
     fireRefresh("idle");
   }, REFRESH_DEBOUNCE_MS);
-});
+}
 
 // ---- data loading -----------------------------------------------------------
 
@@ -1161,6 +1175,7 @@ function readPlayset(modPath: string): string[] {
 async function buildIndex(): Promise<void> {
   const tBuild = Date.now();
   const generation = ++scanGeneration;
+  localizationCoverage.clear();
   clearPathCaches();
   calendarByRoot.clear();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
@@ -1673,9 +1688,9 @@ function handleModFileChange(fsPath: string): void {
 /**
  * Freshness guard (§B3): a request that reads the index runs the pending
  * rescans first, so the debounce can never answer out of a stale index. Costs
- * a map size check except in the ~150ms after a save. The view/webview
- * requests do not call this: they are refreshed by the index-changed
- * notification the rescan itself fires.
+ * a map size check except in the ~150ms after a save. Coverage also calls
+ * this guard so translation actions see the latest open buffers. Other views
+ * refresh through the index-changed notification the rescan itself fires.
  */
 function flushModFileChanges(): void {
   if (pendingModChanges.size === 0) return;
@@ -1702,6 +1717,7 @@ function mentionsTextFormatting(fsPath: string): boolean {
 }
 
 function applyModFileChange(fsPath: string): void {
+  if (localizationCoverage.invalidate(fsPath)) scheduleRefresh();
   rescanModFile(fsPath);
   const lower = fsPath.toLowerCase();
   if (lower.endsWith(".mod") || lower.endsWith("metadata.json")) refreshModOrigin();
@@ -1732,11 +1748,17 @@ connection.onRequest(modOverviewRequest, (params: ModScopedParams | null) =>
   computeModOverview(data, focusFilter(params?.modRoot))
 );
 
-connection.onRequest(locCoverageRequest, (params: ModScopedParams | null) => {
+connection.onRequest(locCoverageRequest, async (params: ModScopedParams | null) => {
+  flushModFileChanges();
+  const started = performance.now();
   // Coverage is inherently per-mod: default to the first workspace mod when
   // the client sends no focus (older clients, tests).
   const root = params?.modRoot ?? settings.modPath ?? workspaceModRoots()[0] ?? null;
-  return computeLocCoverage(data, root, settings.locLanguage, schema.entries, focusFilter(root));
+  try {
+    return await localizationCoverage.get(root, settings.locLanguage, schema.entries, focusFilter(root));
+  } finally {
+    perf(`locCoverage ${(performance.now() - started).toFixed(1)}ms`);
+  }
 });
 
 connection.onRequest(overridesRequest, (params: ModScopedParams | null) =>
@@ -1910,7 +1932,7 @@ connection.onRequest(guiWidgetEditRequest, (params: GuiWidgetEditParams) =>
 );
 
 connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>
-  params?.id ? computeEventDetail(data, schema, params.id) : null
+  params?.id ? computeEventDetail(data, schema, params.id, params.file) : null
 );
 
 // The Examples Wiki: one row per name the server knows (the search catalog),
@@ -1999,8 +2021,30 @@ connection.onRequest(snippetsRequest, (params: SnippetsParams): SnippetsResult =
   };
 });
 
-connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] =>
+connection.onRequest(lookupLocRequest, (params: LookupLocParams): LocEntryInfo[] | Promise<LocEntryInfo[]> =>
   indexRead("lookupLoc", () => {
+    if (params.language !== undefined && !/^[a-z_]+$/.test(params.language)) return [];
+    if (params.language !== undefined && params.language !== settings.locLanguage) {
+      const roots: LocalizationRoot[] = [
+        ...[settings.modPath, ...workspaceModRoots()]
+          .filter((root): root is string => !!root)
+          .map((root) => ({ path: root, source: "mod" as const })),
+        ...dependencyParentRoots().map((root) => ({ path: root, source: "parent" as const })),
+        ...[settings.gamePath, ...engineRoots()]
+          .filter((root): root is string => !!root)
+          .map((root) => ({ path: root, source: "vanilla" as const })),
+      ];
+      const open = new Map(
+        documents
+          .all()
+          .filter((doc) => doc.languageId === "paradox-loc" && doc.uri.startsWith("file:"))
+          .map((doc) => [URI.parse(doc.uri).fsPath, doc.getText()])
+      );
+      const folders = [
+        ...new Set(schema.entries.filter((entry) => entry.kind === "loc_key").map((entry) => entry.path)),
+      ];
+      return lookupLocLanguage(params.key, params.language, roots, folders, open);
+    }
     return data.index
       .lookup(params.key)
       .filter((d) => d.kind === "loc_key")

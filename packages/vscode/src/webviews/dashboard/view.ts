@@ -9,21 +9,22 @@ import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import uiCss from "../shared/ui.css";
 import { icon, ICON_NAMES } from "../shared/icons";
-import { visibleActionGroups, type ActionGroup } from "./actions";
+import { actionGroups, dashboardCollapsed, visibleActionGroups, type ActionGroup } from "./actions";
+import type { StatusPayload } from "@px-lsp/protocol/protocol";
 import { makeNonce } from "../nonce";
 import { tipScript } from "../shared/tips";
-import { helpScript, type HelpSpec } from "../shared/help";
 
 /** A collapsible section: the static ones ("mods", "toggles", "paths") plus
  * one id per tool group, slugged from its label by the webview script. */
 type SectionId = string;
 
-/** workspaceState key holding the per-section collapse flags (absent = expanded). */
+/** workspaceState key holding the per-section collapse flags (absent = section default). */
 const COLLAPSED_KEY = "px.dashboardCollapsed";
 
 /** Messages the webview sends to the host. */
 type InboundMessage =
   | { type: "ready" }
+  | { type: "help" }
   | { type: "run"; command: string }
   | { type: "focus"; root: string | null }
   | { type: "exclude"; root: string; excluded: boolean }
@@ -60,6 +61,9 @@ interface DashboardState {
   /** Active game (full name) and whether it came from auto-detection. */
   gameName: string;
   gameAuto: boolean;
+  health: string;
+  healthDetail: string;
+  focusLabel: string;
   paths: PathRow[];
   mods: ModState[];
   /** Raw pin, or null = follow the active editor. */
@@ -75,12 +79,13 @@ interface DashboardState {
   scopeInlayHints: boolean;
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
-  /** Persisted per-section collapse flags; every section defaults to expanded. */
+  /** Persisted per-section collapse flags; explicit choices override compact defaults. */
   collapsed: Record<SectionId, boolean>;
 }
 
 export interface DashboardDeps {
   getCfg: () => PxConfig;
+  getStatus: () => StatusPayload;
   focus: FocusMod;
   errorLog: ErrorLogWatcher;
   workspaceState: vscode.Memento;
@@ -113,7 +118,9 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
 
   refresh(): void {
     if (!this.view) return;
-    const msg: OutboundMessage = { type: "state", state: this.collectState() };
+    const state = this.collectState();
+    this.view.description = state.focusLabel;
+    const msg: OutboundMessage = { type: "state", state };
     void this.view.webview.postMessage(msg);
   }
 
@@ -140,7 +147,34 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+    const status = this.deps.getStatus();
+    const focusRoot = this.deps.focus.current();
+    const pinned = this.deps.focus.pinnedRoot();
+    const focusLabel = focusRoot
+      ? `${pinned && normKey(pinned) === normKey(focusRoot) ? "Pin" : "Follow"}: ${readModName(focusRoot)}`
+      : "No mod selected";
+    const missing = [
+      !cfg.gamePath && "game folder",
+      !focusRoot && "mod folder",
+      status.tokens === 0 && "game data",
+      meta.tiger && !cfg.tigerPath && "validator",
+    ].filter(Boolean);
+    const actions = visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()).map((group) => ({
+      ...group,
+      items: group.items.map((item) =>
+        item.command === "px.runTiger" && focusRoot
+          ? { ...item, label: `Validate ${readModName(focusRoot)}` }
+          : item
+      ),
+    }));
     return {
+      health: status.indexing ? "Loading game data..." : missing.length ? "Setup needs attention" : "Ready",
+      healthDetail: status.indexing
+        ? "Wait for indexing to finish."
+        : missing.length
+          ? `Check ${missing.join(", ")}.`
+          : `${status.definitions.toLocaleString()} definitions indexed.`,
+      focusLabel,
       gameName: meta.name,
       gameAuto: (vscode.workspace.getConfiguration("px").get<string>("gameId") ?? "auto") === "auto",
       paths: collectPaths(cfg, meta.tiger !== undefined),
@@ -153,13 +187,13 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       watcherAvailable: cfg.logsPath !== null,
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
-      actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
+      actions,
       collapsed: this.collapsedState(),
     };
   }
 
   private collapsedState(): Record<SectionId, boolean> {
-    return this.deps.workspaceState.get<Record<SectionId, boolean>>(COLLAPSED_KEY) ?? {};
+    return dashboardCollapsed(this.deps.workspaceState.get<Record<SectionId, boolean>>(COLLAPSED_KEY) ?? {});
   }
 
   private async onMessage(msg: InboundMessage): Promise<void> {
@@ -167,10 +201,32 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "ready":
         this.refresh();
         return;
-      case "run":
-        await vscode.commands.executeCommand(msg.command);
+      case "help":
+        await vscode.commands.executeCommand(
+          "workbench.action.openWalkthrough",
+          "JDeffner.px-toolkit#px.gettingStarted",
+          false
+        );
+        return;
+      case "run": {
+        const allowed = actionGroups(
+          metaFor(this.deps.getCfg().gameId),
+          this.deps.errorLog.problemCount
+        ).flatMap((group) => group.items.map((item) => item.command));
+        if (
+          ![
+            ...allowed,
+            "px.allTools",
+            "px.customizeSidebar",
+            "px.createDescriptor",
+            "workbench.action.files.openFolder",
+          ].includes(msg.command)
+        )
+          return;
+        await runDashboardAction(msg.command, this.deps);
         this.refresh();
         return;
+      }
       case "focus":
         await this.deps.focus.pin(msg.root);
         return; // onDidPin refreshes
@@ -268,7 +324,7 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
   const rows = [
     row("Game", "px.gamePath", cfg.gamePath),
     row("script_docs logs", "px.logsPath", cfg.logsPath),
-    row("Mod", "px.modPath", cfg.modPath),
+    row("Configured mod", "px.modPath", cfg.modPath),
     {
       label: "Mod projects",
       setting: "px.modProjectsDir",
@@ -318,6 +374,18 @@ async function updateSetting(section: string, value: unknown): Promise<void> {
   await cfg.update(section, value, target);
 }
 
+/** Sidebar tasks use the visible mod as their explicit target. */
+async function runDashboardAction(command: string, deps: DashboardDeps): Promise<void> {
+  const root = deps.focus.current();
+  const target =
+    root && command === "px.showEventGraph"
+      ? { modRoot: root }
+      : root && ["px.runTiger", "px.newContent"].includes(command)
+        ? vscode.Uri.file(root)
+        : undefined;
+  await vscode.commands.executeCommand(command, target);
+}
+
 export function registerDashboardView(
   context: vscode.ExtensionContext,
   deps: DashboardDeps
@@ -325,6 +393,24 @@ export function registerDashboardView(
   const provider = new DashboardViewProvider(deps);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("px.tools", provider),
+    vscode.commands.registerCommand("px.allTools", async () => {
+      const groups = actionGroups(metaFor(deps.getCfg().gameId), deps.errorLog.problemCount);
+      const items = groups.flatMap((group) =>
+        group.items.map((item) => ({
+          label: item.label,
+          description: group.label,
+          detail: item.tip,
+          command: item.command,
+        }))
+      );
+      const picked = await vscode.window.showQuickPick(items, {
+        title: "Paradox: All Tools",
+        placeHolder: "Find a task",
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+      if (picked) await runDashboardAction(picked.command, deps);
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("px")) provider.refresh();
     }),
@@ -343,105 +429,6 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
-/**
- * The ? button's tutorial. Every claim here is what the code above and the
- * webview script below actually do; the tooltips only name their control, so
- * this is where the depth lives.
- */
-const HELP: HelpSpec = {
-  title: "The Project panel",
-  intro:
-    "One place for what this workspace looks like and what the toolkit is doing with it: the game and folders in use, the mods it indexes, the switches that change its behaviour, and a row for every tool.",
-  sections: [
-    {
-      title: "Game and paths",
-      items: [
-        {
-          lead: "The top row",
-          text: "names the game the workspace mods, with a badge saying whether it was detected or set by hand. Click it to open the toolkit's settings.",
-        },
-        {
-          lead: "Paths",
-          text: "lists the folders and binaries actually in use: the game, the script_docs logs, the mod, the mod projects folder, the Workshop listing folder, and tiger. The badge says where each value came from, so an auto-detected folder is visible even though its setting is empty.",
-        },
-        {
-          lead: "Click a path row",
-          text: "to browse for a new value. The pick is written to the matching px setting.",
-        },
-      ],
-    },
-    {
-      title: "Workspace Mods",
-      items: [
-        {
-          lead: "Every mod",
-          text: "with a descriptor in the workspace is listed. An indexed mod is treated as yours: completion, navigation, diagnostics and the localization tools work across all of them.",
-        },
-        {
-          lead: "The switch",
-          text: "on a row indexes that mod or skips it entirely. A skipped folder that later disappears stays in the list, struck through, so you can switch it back and forget it.",
-        },
-        {
-          lead: "The dot",
-          text: "picks the mod the other sidebar views describe (Mod Overview, Localization Coverage, Overrides). It appears once more than one mod is indexed. Follow active editor hands that choice to whichever file you are editing.",
-        },
-      ],
-    },
-    {
-      title: "Toggles",
-      items: [
-        {
-          lead: "Tiger: new problems only",
-          text: "hides every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot with the Create Tiger Baseline row.",
-        },
-        {
-          lead: "Watch game error.log",
-          text: "tails the running game's error.log and reports new entries as Problems on your files. They outlive the watch on purpose, so you can work through them with the game closed; the Clear Game Problems row removes them.",
-        },
-        {
-          lead: "Diagnose vanilla files",
-          text: "also checks files under the game folder. Off, only your mod files are checked.",
-        },
-        {
-          lead: "Scope inlay hints",
-          text: "shows the inferred scope after a scope-changing block opener. Best-effort inference, display only.",
-        },
-      ],
-    },
-    {
-      title: "Tool rows",
-      items: [
-        {
-          lead: "Every tool",
-          text: "the toolkit has is one row here, grouped by what it is for. The editor title buttons, the status bar and the keyboard chords stay the fast path; these rows are how you find a tool without knowing where its button hides.",
-        },
-        {
-          lead: "Rows you never use",
-          text: "go away with the command Paradox: Customize Project Panel Rows. A group whose rows are all hidden disappears with them.",
-        },
-        {
-          lead: "Some rows are conditional:",
-          text: "tiger rows only appear for a game that has a tiger, and Clear Game Problems only while there is something to clear.",
-        },
-      ],
-    },
-    {
-      title: "The sections",
-      items: [
-        {
-          lead: "Click a section title",
-          text: "to fold it away. The panel remembers each fold for this workspace.",
-        },
-        {
-          lead: "The ⓘ button",
-          text: "beside a section title says what that section is for.",
-        },
-      ],
-    },
-  ],
-};
-
-/** The ⓘ beside a section title: an icon button whose tooltip is the explanation. */
 function hintButton(tip: string): string {
   return `<button class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="${escapeAttr(
     tip
@@ -556,6 +543,9 @@ ${uiCss}
     "circleHelp"
   )}</button>
 </div>
+<div id="focus" class="empty"></div>
+<div id="health" class="px-item" role="button" tabindex="0" data-tip-wrap></div>
+<div class="px-list" id="quick-tools"></div>
 <div class="section" id="section-mods">
   ${sectionHead(
     "mods",
@@ -566,7 +556,7 @@ ${uiCss}
 </div>
 <!-- One .section per tool group, rendered by script before #section-toggles. -->
 <div class="section" id="section-toggles">
-  ${sectionHead("toggles", "Toggles")}
+  ${sectionHead("toggles", "Advanced Settings")}
   <div class="section-body px-list" id="body-toggles">
     ${toggleRow(
       "baseline",
@@ -591,16 +581,14 @@ ${uiCss}
   <div class="section-body px-list" id="body-paths"></div>
 </div>
 ${tipScript(nonce)}
-${helpScript(nonce)}
+
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 // Compile-time constants from the host, safe as markup.
 const ICONS = ${JSON.stringify(icons)};
-const HELP = ${JSON.stringify(HELP)};
 let state = null;
 
-// pxHelpDialog comes from helpScript(): the one dialog every webview uses.
-document.getElementById("help").addEventListener("click", () => pxHelpDialog(HELP));
+document.getElementById("help").addEventListener("click", () => vscode.postMessage({ type: "help" }));
 
 function iconEl(name) {
   const t = document.createElement("template");
@@ -702,7 +690,6 @@ function buildSection(id, title) {
 }
 function renderActions() {
   for (const old of document.querySelectorAll(".tools-section")) old.remove();
-  const anchor = document.getElementById("section-toggles");
   for (const group of state.actions) {
     const id = sectionSlug(group.label);
     const section = buildSection(id, group.label);
@@ -717,6 +704,7 @@ function renderActions() {
       }
       body.appendChild(row);
     }
+    const anchor = document.getElementById(group.label === "Tasks" ? "section-mods" : "section-toggles");
     anchor.parentNode.insertBefore(section, anchor);
   }
 }
@@ -765,6 +753,7 @@ function renderGame() {
 function radio(on, tipText, onClick) {
   const b = el("button", "radio");
   b.setAttribute("role", "radio");
+  b.setAttribute("aria-label", tipText);
   b.setAttribute("aria-checked", String(on));
   b.setAttribute("data-tip", tipText);
   b.setAttribute("data-tip-wrap", "");
@@ -775,8 +764,10 @@ function renderMods() {
   const box = document.getElementById("body-mods");
   box.textContent = "";
   if (!state.mods.length) {
-    box.appendChild(el("div", "empty", "No mod descriptor found in this workspace."));
-    box.appendChild(actionRow("plus", "Create descriptor.mod",
+    box.appendChild(el("div", "empty", "No mod found. Open a mod folder or create a new mod."));
+    box.appendChild(actionRow("folderOpen", "Open Mod...", "Open a mod folder.", () => vscode.postMessage({ type: "run", command: "workbench.action.files.openFolder" })));
+    box.appendChild(actionRow("plus", "New Mod...", "Create a mod project.", () => vscode.postMessage({ type: "run", command: "px.createMod" })));
+    box.appendChild(actionRow("plus", "Create Mod Descriptor",
       "Create the file that marks this folder as a mod.",
       () => vscode.postMessage({ type: "run", command: "px.createDescriptor" })));
     return;
@@ -838,12 +829,23 @@ function renderMods() {
   }
 }
 
+const healthRow = document.getElementById("health");
+const openHealth = () => vscode.postMessage({ type: "run", command: "px.setup" });
+healthRow.addEventListener("click", openHealth);
+healthRow.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openHealth(); } });
+const quickTools = document.getElementById("quick-tools");
+quickTools.appendChild(actionRow("search", "All Tools...", "Find any supported tool, including rows hidden with Customize.", () => vscode.postMessage({ type: "run", command: "px.allTools" })));
+quickTools.appendChild(actionRow("settings", "Customize...", "Choose which tool rows appear in Project.", () => vscode.postMessage({ type: "run", command: "px.customizeSidebar" })));
 function render() {
+  document.getElementById("focus").textContent = state.focusLabel;
+  healthRow.textContent = state.health;
+  healthRow.setAttribute("data-tip", state.healthDetail + " Run Setup & Health Check.");
   renderGame();
   renderPaths();
   renderMods();
   renderActions();
   for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
+  if (!state.mods.length) setCollapsed("mods", false);
   document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
   setSwitch("baseline", state.tigerBaseline, false);
   setSwitch("watcher", state.watcherOn, !state.watcherAvailable,
