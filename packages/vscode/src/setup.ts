@@ -10,6 +10,7 @@ import { dataHealthLines } from "./dataHealth";
 import { readModName } from "@px-lsp/protocol/modName";
 import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
+import { StartupNotices } from "./notifications";
 import { metaFor, scriptDocsDir } from "./meta";
 
 export interface SetupDeps {
@@ -54,10 +55,11 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
         )
     );
     deps.log(`tiger ${result.version} installed at ${result.binaryPath}`);
-    void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
-    );
     await deps.refresh();
+    void vscode.window.setStatusBarMessage(
+      `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready. Diagnostics are enabled.`,
+      5000
+    );
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -170,19 +172,19 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
 /** One-time nudge on first activation without a configured game path. Only in
  * actual mod workspaces — fresh installs must not be nagged in unrelated
  * projects. */
-export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: PxConfig): void {
-  if (!cfg.isCk3Workspace) return;
-  if (cfg.gamePath) return;
-  if (context.globalState.get<boolean>("px.setupNudged")) return;
-  void context.globalState.update("px.setupNudged", true);
+export function maybeNudgeSetup(
+  context: vscode.ExtensionContext,
+  cfg: PxConfig,
+  notices?: StartupNotices
+): void {
+  if (!cfg.isCk3Workspace || cfg.gamePath) return;
+  const queue = notices ?? new StartupNotices(context, () => undefined);
   const meta = metaFor(cfg.gameId);
-  void vscode.window
-    .showInformationMessage(
-      `The Paradox Modding Toolkit can configure itself (find ${meta.name}${meta.tiger ? ", set up tiger" : ""}).`,
-      "Run Setup & Health Check",
-      "Later"
-    )
-    .then((choice) => {
-      if (choice === "Run Setup & Health Check") void vscode.commands.executeCommand("px.setup");
-    });
+  queue.add({
+    message: `Paradox Modding Toolkit can find ${meta.name}${meta.tiger ? " and set up its validator" : ""}. Run Setup & Health Check to check this workspace.`,
+    key: "px.setupNudged",
+    label: "Setup & Health Check",
+    command: "px.setup",
+  });
+  if (!notices) void queue.show();
 }

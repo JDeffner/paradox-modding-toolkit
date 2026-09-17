@@ -196,6 +196,11 @@ export class DefinitionIndex {
     return out;
   }
 
+  /** All sources, without allocating a second array for cooperative consumers. */
+  *all(): IterableIterator<Definition> {
+    for (const list of this.byFile.values()) yield* list;
+  }
+
   /** Definitions in one file. */
   inFile(file: string): Definition[] {
     return this.byFile.get(normFile(file)) ?? [];

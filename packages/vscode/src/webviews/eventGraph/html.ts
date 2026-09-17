@@ -77,7 +77,7 @@ ${uiCss}
     --eg-other: oklch(0.74 0.15 60);
     --eg-hit: oklch(0.8 0.16 90);
   }
-  body.vscode-light {
+  body.vscode-light, body.vscode-high-contrast-light {
     --eg-event: oklch(0.55 0.16 250);
     --eg-on_action: oklch(0.55 0.16 310);
     --eg-decision: oklch(0.55 0.15 150);
@@ -196,6 +196,9 @@ ${uiCss}
      as a bar on the left and as the border's hue, so it survives a banner
      behind the card and a colorblind reader alike. */
   .node { cursor: pointer; }
+  .node:focus-visible, .node.dim:focus-visible { outline: 2px solid var(--px-ring); outline-offset: 4px; opacity: 1; }
+  .node:focus-visible .node-rect, .node.selected:focus-visible .node-rect { stroke: var(--px-ring) !important; stroke-width: 3; stroke-dasharray: none; }
+  .node:focus-visible .card-open { opacity: 1; }
   .node-rect { fill: var(--px-popover); stroke-width: 1; }
   .node:hover .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 0.55; }
   .node.selected .node-rect { stroke: var(--px-fg) !important; stroke-opacity: 1; stroke-width: 2; }
@@ -405,6 +408,14 @@ ${uiCss}
   #inspector .px-list { padding: 0; }
   #inspector .px-item > .px-item-kind { width: 64px; }
   #inspector .px-item > .px-item-label.px-xs { color: var(--px-muted-fg); flex: 0 0 auto; }
+  @media (max-width: 640px) {
+    #queryWrap { width: 100%; max-width: none; flex: 1 1 12rem; }
+    #main { flex-wrap: wrap; overflow: auto; }
+    #graphWrap { min-width: calc(100% - 40px); min-height: 260px; }
+    #side:not([data-collapsed]) { max-width: 100%; width: 100%; flex-basis: 100%; max-height: 45%; }
+    #kinds { flex-wrap: wrap; }
+    #changeList { max-width: calc(100vw - 24px); }
+  }
 </style>
 </head>
 <body>

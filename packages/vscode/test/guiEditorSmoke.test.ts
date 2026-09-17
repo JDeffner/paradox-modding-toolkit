@@ -2870,3 +2870,30 @@ describe("textbox text", () => {
     });
   });
 });
+
+describe("widget source menus", () => {
+  it("keeps keyboard focus on the navigated widget and exposes its exact source", () => {
+    serveLayout(editor, TEXT);
+    const rows = [...editor.document.querySelectorAll<HTMLElement>("#tree .row")];
+    const KeyboardEvent = editor.document.defaultView!.KeyboardEvent;
+    rows[0].focus();
+    rows[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(editor.document.activeElement).toBe(rows[1]);
+    expect(rows[1].getAttribute("tabindex")).toBe("0");
+    const sourceRow = rows.find((row) => row.hasAttribute("data-vscode-context"))!;
+    const source = JSON.parse(sourceRow.getAttribute("data-vscode-context")!);
+    expect(source).toMatchObject({ webviewSection: "px.guiWidget", pxSourceFile: "templates-types.gui" });
+    let target: EventTarget | null = null;
+    editor.document.addEventListener("contextmenu", (event) => {
+      target = event.target;
+    });
+    sourceRow.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    expect(target).toBe(sourceRow);
+    sourceRow.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(lastOfType(editor, "revealAt")).toEqual({
+      type: "revealAt",
+      file: "templates-types.gui",
+      line: source.pxSourceLine,
+    });
+  });
+});

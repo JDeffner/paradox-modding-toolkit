@@ -5,7 +5,7 @@
  */
 import * as vscode from "vscode";
 import type { StatusPayload } from "@px-lsp/protocol/protocol";
-import { dataHealthLines } from "./dataHealth";
+import { dataHealthLines, onboardingReadiness } from "./dataHealth";
 
 export interface PxStatus extends StatusPayload {
   dataTypesCommand: string;
@@ -54,6 +54,9 @@ export class PxStatusBar implements vscode.Disposable {
 
   update(s: PxStatus): void {
     this.last = s;
+    for (const [key, ready] of Object.entries(onboardingReadiness(s))) {
+      void vscode.commands.executeCommand("setContext", key, ready);
+    }
     const healthy = s.gameOk && s.modOk && (s.tigerName === null || s.tigerOk) && s.tokens > 0;
     const running = [...this.phases.values()].some((p) => !p.done);
     this.item.text =

@@ -8,6 +8,7 @@ import type { EventGraph, EventGraphEdge, EventGraphNode, EventGraphParams } fro
 import { NODE_H, NODE_W, rankNodes, type LayoutPos } from "../layout";
 import { ForceSim } from "../force";
 import { iconEl } from "../../shared/icons";
+import { setSourceContext, sourceContextKeys } from "../../shared/sourceContext";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 /**
@@ -37,7 +38,6 @@ type Kind = "event" | "on_action" | "decision" | "other";
 export interface ViewCallbacks {
   onSelect(id: string | null): void;
   onOpen(file: string, line?: number): void;
-  onRefocus(id: string): void;
   /** A node was dragged to a new place in graph coordinates. */
   onMove(id: string, x: number, y: number): void;
   /** A theme whose illustration has not been asked for yet. */
@@ -201,6 +201,7 @@ export class GraphView {
   private draw(refit: boolean): void {
     const graph = this.lastGraph;
     if (!graph) return;
+    const focusedId = (document.activeElement as SVGElement | null)?.dataset?.id;
     this.nodeRects.clear();
     this.nodeGroups.clear();
     this.edgeItems = [];
@@ -278,6 +279,7 @@ export class GraphView {
     this.applyFocus();
     if (refit) this.fit();
     this.applyTransform();
+    if (focusedId) this.nodeGroups.get(focusedId)?.focus();
   }
 
   /**
@@ -288,6 +290,12 @@ export class GraphView {
    */
   private animate(): void {
     if (this.frame !== null || !this.sim) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      this.sim.settle();
+      this.positions = this.sim.positions();
+      this.placeAll();
+      return;
+    }
     const step = (): void => {
       this.frame = null;
       const sim = this.sim;
@@ -524,6 +532,20 @@ export class GraphView {
     });
     group.dataset.id = node.id;
     group.dataset.kind = kind;
+    group.setAttribute("role", "button");
+    group.setAttribute("aria-label", `${node.id}${node.title ? `: ${node.title}` : ""}, ${node.kind}`);
+    group.setAttribute(
+      "aria-description",
+      "Arrow keys move between nodes. Enter opens source. Space inspects. Shift+F10 opens actions."
+    );
+    group.setAttribute("aria-haspopup", "menu");
+    setSourceContext(group, {
+      webviewSection: "px.graphNode",
+      pxSourceFile: node.file,
+      pxSourceLine: node.line === undefined ? undefined : Math.max(0, node.line - 1),
+      pxDefinitionId: node.id,
+      pxDefinitionKind: node.kind,
+    });
 
     const rect = svgEl("rect", {
       class: "node-rect",
@@ -540,7 +562,7 @@ export class GraphView {
       (node.title ? ": " + node.title : "") +
       `  [${node.kind} · ${node.source}]` +
       (node.file ? `\n${node.file}${node.line ? ":" + node.line : ""}` : "") +
-      "\nclick: focus and inspect · drag: move · double-click: open source · right-click: re-centre";
+      "\nclick: focus and inspect · drag: move · double-click: open source · right-click or Shift+F10: actions";
     rect.appendChild(tip);
     group.appendChild(rect);
     this.nodeRects.set(node.id, { rect, node });
@@ -693,10 +715,32 @@ export class GraphView {
       ev.stopPropagation();
       if (node.file) this.cb.onOpen(node.file, node.line);
     });
-    group.addEventListener("contextmenu", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.cb.onRefocus(node.id);
+    group.addEventListener("keydown", (ev) => {
+      if (sourceContextKeys(ev, group)) return;
+      const ids = [...this.nodeGroups.keys()];
+      const index = ids.indexOf(node.id);
+      const next =
+        ev.key === "Home"
+          ? 0
+          : ev.key === "End"
+            ? ids.length - 1
+            : ev.key === "ArrowRight" || ev.key === "ArrowDown"
+              ? Math.min(ids.length - 1, index + 1)
+              : ev.key === "ArrowLeft" || ev.key === "ArrowUp"
+                ? Math.max(0, index - 1)
+                : null;
+      if (next !== null) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.cb.onSelect(ids[next]);
+        this.centerOn(ids[next]);
+        this.nodeGroups.get(ids[next])?.focus();
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.cb.onSelect(node.id);
+        if (ev.key === "Enter" && node.file) this.cb.onOpen(node.file, node.line);
+      }
     });
     group.addEventListener("pointerdown", (ev) => this.beginNodeDrag(ev, node));
     return group;
@@ -864,8 +908,11 @@ export class GraphView {
         }
       }
     }
+    const tabId = id ?? this.rootId ?? this.nodeGroups.keys().next().value;
     const lit = (nid: string): boolean => nid === id || anc.has(nid) || desc.has(nid);
     this.nodeGroups.forEach((group, nid) => {
+      group.setAttribute("tabindex", nid === tabId ? "0" : "-1");
+      group.setAttribute("aria-pressed", String(nid === id));
       group.classList.toggle("selected", id !== null && nid === id);
       group.classList.toggle(
         "dim",
@@ -914,6 +961,15 @@ export class GraphView {
     this.view.x = cx - (cx - this.view.x) * (next / this.view.scale);
     this.view.y = cy - (cy - this.view.y) * (next / this.view.scale);
     this.view.scale = next;
+    this.applyTransform();
+  }
+
+  private centerOn(id: string): void {
+    const position = this.positions.get(id);
+    if (!position) return;
+    const rect = this.svg.getBoundingClientRect();
+    this.view.x = (rect.width || 800) / 2 - position.x * this.view.scale;
+    this.view.y = (rect.height || 600) / 2 - position.y * this.view.scale;
     this.applyTransform();
   }
 

@@ -793,6 +793,50 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(defs[0].range.start.line).toBe(0);
   });
 
+  it("keeps localization symbols fresh across ranged edits and a full replacement", async () => {
+    const uri = toUri(path.join(modDir, "localization", "english", "incremental_l_english.yml"));
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n a:0 "one"\n b:0 "two"\n',
+      },
+    });
+    const symbols = () =>
+      conn.sendRequest<
+        Array<{
+          name: string;
+          children: Array<{
+            name: string;
+            detail: string;
+            selectionRange: { start: { line: number; character: number } };
+          }>;
+        }>
+      >("textDocument/documentSymbol", { textDocument: { uri } });
+    expect((await symbols())[0].children).toHaveLength(2);
+    await conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [
+        { range: { start: { line: 1, character: 6 }, end: { line: 1, character: 9 } }, text: "🌍" },
+        { range: { start: { line: 2, character: 1 }, end: { line: 2, character: 2 } }, text: "renamed" },
+      ],
+    });
+    expect((await symbols())[0].children).toMatchObject([
+      { name: "a", detail: "🌍" },
+      { name: "renamed", detail: "two", selectionRange: { start: { line: 2, character: 1 } } },
+    ]);
+    await conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 3 },
+      contentChanges: [{ text: 'l_french:\n c:0 "trois"' }],
+    });
+    expect((await symbols())[0]).toMatchObject({
+      name: "l_french",
+      children: [{ name: "c", detail: "trois" }],
+    });
+    await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+  });
+
   it("go-to-definition jumps to the scripted effect", async () => {
     const defs = (await conn.sendRequest("textDocument/definition", {
       textDocument: { uri: eventsUri },
@@ -967,6 +1011,13 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(detail!.options).toHaveLength(1);
     expect(detail!.options[0].name?.key).toBe("smoke.1.a");
     expect(detail!.refs.some((r) => r.kind === "scripted_effect" && r.name === "my_smoke_effect")).toBe(true);
+  });
+
+  it("paradox/eventDetail respects an exact source selector over the wire", async () => {
+    expect(await conn.sendRequest("paradox/eventDetail", { id: "smoke.1", file: eventsUri })).toMatchObject({
+      file: eventsFile,
+    });
+    expect(await conn.sendRequest("paradox/eventDetail", { id: "smoke.1", file: traitsFile })).toBeNull();
   });
 
   it("paradox/eventDetail carries rendered blocks and step-into targets", async () => {
@@ -1351,6 +1402,22 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(await conn.sendRequest(definitionFormRequest, { kind: "not_a_kind" })).toBeNull();
   });
 
+  it("paradox/definitionForm respects an exact source selector over the wire", async () => {
+    expect(
+      await conn.sendRequest(definitionFormRequest, {
+        kind: "trait",
+        name: "px_smoke_bold",
+        file: toUri(traitsFile),
+      })
+    ).toMatchObject({ current: { file: traitsFile } });
+    const form = await conn.sendRequest<DefinitionForm>(definitionFormRequest, {
+      kind: "trait",
+      name: "px_smoke_bold",
+      file: eventsFile,
+    });
+    expect(form.current).toBeUndefined();
+  });
+
   it("paradox/snippets answers with the measured event skeleton and its blocks", async () => {
     const result = (await conn.sendRequest(snippetsRequest, {
       uri: eventsUri,
@@ -1429,6 +1496,25 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
     const closed = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "fresh_key" });
     expect(closed[0]).toMatchObject({ line: 2, value: "On disk" });
+  });
+
+  it("lookupLoc honors an explicit language without changing the configured index", async () => {
+    const directory = path.join(modDir, "localization", "german");
+    fs.mkdirSync(directory, { recursive: true });
+    const file = path.join(directory, "requested_l_german.yml");
+    fs.writeFileSync(file, '\uFEFFl_german:\n smoke.1.t:0 "Deutsch"\n');
+    const english = await conn.sendRequest<LocEntryInfo[]>(lookupLocRequest, { key: "smoke.1.t" });
+    expect(english[0].value).toBe("Smoke");
+    expect(await conn.sendRequest(lookupLocRequest, { key: "smoke.1.t", language: "german" })).toEqual([
+      { file, line: 1, source: "mod", value: "Deutsch" },
+    ]);
+    expect(await conn.sendRequest(lookupLocRequest, { key: "smoke.1.t", language: "../english" })).toEqual(
+      []
+    );
+    expect(await conn.sendRequest(lookupLocRequest, { key: "smoke.1.t", language: "custom_absent" })).toEqual(
+      []
+    );
+    expect(await conn.sendRequest(lookupLocRequest, { key: "smoke.1.t" })).toEqual(english);
   });
 
   it("paradox/definitionEdit round-trips a property change and an appended block", async () => {

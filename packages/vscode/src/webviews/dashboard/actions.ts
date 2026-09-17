@@ -48,23 +48,45 @@ export interface ActionGroup {
   items: ActionItem[];
 }
 
-/**
- * Every command launcher the panel offers, built per game (labels carry the
- * active game's name). The panel is the discoverable home for EVERY tool:
- * editor-title buttons, the status bar and the keyboard chords stay as the
- * fast path in context, and a row here is the place you find the tool when
- * you do not already know where its button hides. Rows you never use go away
- * via `px.sidebar.hidden` (the Customize command), so a longer list costs
- * nothing. Two rows are still conditional on facts, not taste: tiger's
- * occasional commands need a game with a tiger, and clearing the error.log
- * Problems only appears while there is something to clear. The error.log
- * watcher itself is a toggle above, not a launcher.
- */
+/** The discoverable tool catalogue, gated by the active profile. */
 export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
-  return [
+  const groups: ActionGroup[] = [
+    {
+      label: "Tasks",
+      items: [
+        {
+          label: "New Content…",
+          command: "px.newContent",
+          icon: "plus",
+          tip: "Scaffold an event, decision or trait into the right folder.",
+        },
+        {
+          label: "Setup & Health Check",
+          command: "px.setup",
+          icon: "settings",
+          tip: "Check the game, mod, loaded data and validator.",
+        },
+        ...(meta.tiger
+          ? [
+              {
+                label: "Validate Mod",
+                command: "px.runTiger",
+                icon: "search",
+                tip: "Run the validator on the focused mod.",
+              } satisfies ActionItem,
+            ]
+          : []),
+      ],
+    },
     {
       label: "View",
       items: [
+        {
+          label: "Compatch Workspace",
+          command: "px.openCompatch",
+          icon: "listTree",
+          tip: "Update a mod for a new game version in place, or compare sources and write a separate result mod.",
+        },
         {
           label: "Event Graph",
           command: "px.showEventGraph",
@@ -81,13 +103,13 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "GUI Widget Tree",
           command: "px.showGuiTree",
           icon: "listTree",
-          tip: "The widget tree of the .gui file you are editing.",
+          tip: "Choose a .gui file to inspect its widget tree.",
         },
         {
           label: "GUI Editor",
           command: "px.openGuiEditor",
           icon: "layoutTemplate",
-          tip: "Render and edit the .gui window you are editing.",
+          tip: "Choose a .gui file to render and edit its windows.",
         },
         {
           label: "Convert Image to DDS",
@@ -158,13 +180,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "package",
           tip: "Create a new mod folder with its descriptor.",
         },
-        {
-          label: "New Content…",
-          command: "px.newContent",
-          icon: "plus",
-          tip: "Scaffold an event, decision or trait into the right folder.",
-        },
-        // The visual creators follow the two scaffolds: same group, richer tool.
+        // Visual creators use the active game's own definitions.
         ...creatorItems(meta),
         // ONE row for the designer, in Create. It used to be listed twice (a
         // View row that opened the blank canvas and a Create row that asked
@@ -204,8 +220,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-        // Tiger quick actions — only for games a tiger exists for. Setup &
-        // Health Check has no row: the PX Toolkit status bar item runs it.
+        // Validator tools follow the active profile.
         ...(meta.tiger
           ? ([
               {
@@ -237,6 +252,29 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
   ];
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (item.command === "px.openGuiEditor") return meta.guiTextMetrics !== undefined;
+      if (item.command === "px.newContent") return (meta.scaffolds?.length ?? 0) > 0;
+      return true;
+    }),
+  }));
+}
+
+/** Defaults apply only to sections for which the user has not saved a choice. */
+export function dashboardCollapsed(saved: Record<string, boolean>): Record<string, boolean> {
+  return {
+    mods: true,
+    view: true,
+    share: true,
+    info: true,
+    create: true,
+    "test-troubleshoot": true,
+    toggles: true,
+    paths: true,
+    ...saved,
+  };
 }
 
 /**

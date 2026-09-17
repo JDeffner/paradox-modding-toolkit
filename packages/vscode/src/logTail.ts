@@ -61,6 +61,8 @@ export interface TailRead {
 }
 
 export class LogTail {
+  /** A bounded read filled its allowance; the caller can schedule a catch-up. */
+  hasMore = false;
   private offset = 0;
   private ino = 0;
   private pending = "";
@@ -142,7 +144,9 @@ export class LogTail {
     }
   }
 
-  read(): TailRead {
+  read(maxBytes = Infinity): TailRead {
+    this.hasMore = false;
+    if (!(maxBytes > 0)) throw new RangeError("Log tail read allowance must be positive");
     let fd: number;
     try {
       fd = fs.openSync(this.file, "r");
@@ -175,11 +179,13 @@ export class LogTail {
 
       let text = this.pending;
       this.pending = "";
-      const buf = Buffer.allocUnsafe(CHUNK_BYTES);
+      const buf = Buffer.allocUnsafe(Math.min(CHUNK_BYTES, maxBytes));
+      let consumed = 0;
       try {
-        for (;;) {
-          const n = fs.readSync(fd, buf, 0, buf.length, this.offset);
+        while (consumed < maxBytes) {
+          const n = fs.readSync(fd, buf, 0, Math.min(buf.length, maxBytes - consumed), this.offset);
           if (n <= 0) break;
+          consumed += n;
           this.offset += n;
           text += this.decoder.write(buf.subarray(0, n));
         }
@@ -189,6 +195,7 @@ export class LogTail {
         // Swallowing it into "missing" here would discard decoded text the
         // offset has moved past, and bury a reset the caller must act on.
       }
+      this.hasMore = consumed === maxBytes;
       if (this.stripBom && text.length > 0) {
         if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
         this.stripBom = false;

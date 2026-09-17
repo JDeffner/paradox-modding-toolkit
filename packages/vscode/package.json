@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -272,7 +272,7 @@
       {
         "command": "px.runTiger",
         "category": "Paradox Tiger",
-        "title": "Run Validation"
+        "title": "Validate Mod"
       },
       {
         "command": "px.editLocalization",
@@ -669,6 +669,113 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "px.customizeSidebar",
+        "category": "Paradox",
+        "title": "Customize Project Panel Rows",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "px.openSettings",
+        "category": "Paradox",
+        "title": "Extension Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openCompatch",
+        "title": "Open Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.newCompatch",
+        "title": "New Compatch Workspace",
+        "category": "Paradox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "px.refreshCompatch",
+        "title": "Refresh Compatch Sources",
+        "category": "Paradox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "px.filterCompatch",
+        "title": "Filter Compatch Entries",
+        "category": "Paradox",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "px.compatchActions",
+        "title": "Compatch Entry Actions",
+        "category": "Paradox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "px.compareCompatch",
+        "title": "Compare Compatch Entry",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchScanNotes",
+        "title": "Show Compatch Scan Notes",
+        "category": "Paradox",
+        "icon": "$(output)"
+      },
+      {
+        "command": "px.compatchLanguage",
+        "title": "Choose Compatch Localization Language",
+        "category": "Paradox",
+        "icon": "$(globe)",
+        "enablement": "px.compatchSemanticSupported"
+      },
+      {
+        "command": "px.compatchPage",
+        "title": "Change Compatch Page",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchFiles",
+        "title": "Browse Compatch Folder Files",
+        "category": "Paradox",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "px.compatchGameChanges",
+        "title": "Compare Vanilla and New Game Version",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.compatchModChanges",
+        "title": "Compare Vanilla and Mod",
+        "category": "Paradox",
+        "icon": "$(history)"
+      },
+      {
+        "command": "px.compatchPreviewMerge",
+        "title": "Preview Three-Way Merge",
+        "category": "Paradox",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "px.compatchApplyMerge",
+        "title": "Apply Clean Game Changes",
+        "category": "Paradox",
+        "icon": "$(check)"
+      },
+      {
+        "command": "px.compatchEditorActions",
+        "title": "Compatch: File Actions",
+        "category": "Paradox",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "px.compatchSourceControl",
+        "title": "Compatch: Review in Source Control",
+        "category": "Paradox",
+        "icon": "$(source-control)"
+      },
+      {
         "command": "px.openBBCodePreview",
         "category": "Paradox",
         "title": "Open BBCode Preview",
@@ -695,13 +802,13 @@
       {
         "command": "px.editBBCodeAsMarkdown",
         "category": "Paradox",
-        "title": "Edit as Markdown",
+        "title": "Edit BBCode as Markdown",
         "icon": "$(markdown)"
       },
       {
         "command": "px.backToBBCode",
         "category": "Paradox",
-        "title": "Back to BBCode",
+        "title": "Show BBCode Source",
         "icon": "$(go-to-file)"
       },
       {
@@ -712,20 +819,220 @@
       {
         "command": "px.convertMarkdownToBBCode",
         "category": "Paradox",
-        "title": "Convert to BBCode",
+        "title": "Convert to BBCode File",
         "icon": "$(file-code)"
       },
       {
-        "command": "px.customizeSidebar",
-        "category": "Paradox",
-        "title": "Customize Project Panel Rows",
-        "icon": "$(list-selection)"
+        "command": "px.validateCompatchTarget",
+        "title": "Compatch: Validate Against New Game Data",
+        "category": "Paradox"
       },
       {
-        "command": "px.openSettings",
+        "command": "px.openToSideFromView",
+        "title": "Open to the Side",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.editDefinitionFromView",
+        "title": "Edit in Creator",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compareOverrideSource",
+        "title": "Compare with This Source",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compareOverrideVanilla",
+        "title": "Compare with Vanilla",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.openOverrideBoth",
+        "title": "Open Both Sources",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compatchOverride",
+        "title": "Start Compatch from These Sources",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.focusThisMod",
+        "title": "Focus This Mod",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.includeThisMod",
+        "title": "Include This Mod in Indexing",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.excludeThisMod",
+        "title": "Exclude This Mod from Indexing",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.addThisModAsDependency",
+        "title": "Add This Mod as Read-Only Dependency",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.copyLocalizationKey",
+        "title": "Copy Localization Key",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.updateThisMod",
+        "title": "Update This Mod for New Game Version",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.allTools",
         "category": "Paradox",
-        "title": "Extension Settings",
-        "icon": "$(settings-gear)"
+        "title": "All Tools"
+      },
+      {
+        "command": "px.eventGraph.focusNode",
+        "title": "Focus Here",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.eventGraph.simulateNode",
+        "title": "Simulate",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.updateModForGame",
+        "title": "Update Mod for New Game Version",
+        "category": "Paradox",
+        "icon": "$(versions)"
+      },
+      {
+        "command": "px.compatchSessions",
+        "title": "Resume Compatch Session",
+        "category": "Paradox",
+        "icon": "$(history)"
+      },
+      {
+        "command": "px.compatchRenameSession",
+        "title": "Rename Compatch Session",
+        "category": "Paradox",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "px.compatchQueue",
+        "title": "Filter Compatch Review Status",
+        "category": "Paradox",
+        "icon": "$(list-filter)"
+      },
+      {
+        "command": "px.compatchLens",
+        "title": "Review Compatch by File or Definition",
+        "category": "Paradox",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "px.compatchNext",
+        "title": "Next Unreviewed Compatch Item",
+        "category": "Paradox",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "px.compatchRefreshChanged",
+        "title": "Refresh Changed Compatch Sources",
+        "category": "Paradox",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "px.compatchRecovery",
+        "title": "Check Compatch Git Recovery",
+        "category": "Paradox",
+        "icon": "$(source-control)"
+      },
+      {
+        "command": "px.compatchCoverage",
+        "title": "Show Compatch Coverage and Validation",
+        "category": "Paradox",
+        "icon": "$(info)"
+      },
+      {
+        "command": "px.compatchValidate",
+        "title": "Validate Against New Game Data",
+        "category": "Paradox",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "px.compatchRuntimeTest",
+        "title": "Record Compatch Runtime Test",
+        "category": "Paradox",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "px.compatchApplyResolved",
+        "title": "Apply Resolved Result",
+        "category": "Paradox",
+        "icon": "$(check)"
+      },
+      {
+        "command": "px.compatchNextConflict",
+        "title": "Next Compatch Conflict",
+        "category": "Paradox",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "px.compatchPreviousConflict",
+        "title": "Previous Compatch Conflict",
+        "category": "Paradox",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "px.compatchResolutionInputs",
+        "title": "Open Compatch Resolution Inputs",
+        "category": "Paradox",
+        "icon": "$(files)"
+      },
+      {
+        "command": "px.compatchMarkReviewed",
+        "title": "Mark Reviewed",
+        "category": "Paradox",
+        "icon": "$(check)"
+      },
+      {
+        "command": "px.compatchSkip",
+        "title": "Skip for Now",
+        "category": "Paradox",
+        "icon": "$(debug-step-over)"
+      },
+      {
+        "command": "px.compatchReopen",
+        "title": "Reopen Review",
+        "category": "Paradox",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "px.compatchOpen",
+        "title": "Open Comparison",
+        "category": "Paradox",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "px.compatchRelocate",
+        "title": "Find Possible Replacement",
+        "category": "Paradox",
+        "icon": "$(search)"
+      },
+      {
+        "command": "px.compatchPreviewKey",
+        "title": "Preview This Key",
+        "category": "Paradox",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "px.compatchApplyKey",
+        "title": "Apply This Key",
+        "category": "Paradox",
+        "icon": "$(check)"
       }
     ],
     "customEditors": [
@@ -738,6 +1045,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "px.bbcodePreview",
+        "displayName": "BBCode Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.bbcode"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "walkthroughs": [
@@ -748,13 +1065,13 @@
         "steps": [
           {
             "id": "px.step.setup",
-            "title": "Run automatic setup",
+            "title": "Check workspace readiness",
             "description": "Detects your game install, reports whether each dump set is toolkit-provided or generated by you, and offers the game's tiger validator.\n[Run Setup & Health Check](command:px.setup)",
             "media": {
               "markdown": "media/walkthrough/setup.md"
             },
             "completionEvents": [
-              "onCommand:px.setup"
+              "onContext:px.setupReady"
             ]
           },
           {
@@ -765,7 +1082,7 @@
               "markdown": "media/walkthrough/mod.md"
             },
             "completionEvents": [
-              "onCommand:workbench.action.files.openFolder"
+              "onContext:px.modReady"
             ]
           },
           {
@@ -776,25 +1093,25 @@
               "markdown": "media/walkthrough/scriptdocs.md"
             },
             "completionEvents": [
-              "onCommand:px.reloadScriptDocs"
+              "onContext:px.dumpsReady"
             ]
           },
           {
             "id": "px.step.tiger",
             "title": "Enable tiger diagnostics",
-            "description": "tiger validates your whole mod and shows problems as squiggles. Run it with Ctrl+Alt+V or from the tiger item in the status bar; set px.tigerRunOn to 'save' to run it on every save. EU5 has no tiger build yet.\n[Download tiger](command:px.downloadTiger)",
+            "description": "The game's validator checks your mod and shows problems in the editor. Download it, then use Validate Mod in Project or the validator in the status bar.\n[Download validator](command:px.downloadTiger)",
             "media": {
               "markdown": "media/walkthrough/tiger.md"
             },
             "completionEvents": [
-              "onCommand:px.downloadTiger",
-              "onSettingChanged:px.tigerPath"
-            ]
+              "onContext:px.tigerReady"
+            ],
+            "when": "px.hasTiger"
           },
           {
             "id": "px.step.explore",
             "title": "Try it",
-            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)\n[Export all generated snippets](command:px.exportSnippets) as searchable HTML with previews and printing.",
+            "description": "Open an event file, hover an effect, then right-click an event or localization key and choose an action from the Paradox menu. Press Shift+F10 for the same menu from the keyboard.\n[Insert Snippet](command:px.insertSnippet)\n[Export Generated Snippets](command:px.exportSnippets)",
             "media": {
               "markdown": "media/walkthrough/explore.md"
             },
@@ -861,6 +1178,12 @@
               "Europa Universalis V (community-sourced schema; not yet verified against a live install)"
             ],
             "markdownDescription": "Which game this workspace mods. `auto` detects from the mod's descriptor shape and is right for almost everyone; set explicitly when detection guesses wrong. `px.gamePath`/`px.logsPath`/`px.tigerPath` always describe the ACTIVE game and are honored when set; unset paths are auto-detected per game (Steam library / Documents). Games without a tiger build (EU5) skip tiger integration."
+          },
+          "px.notifications.startup": {
+            "type": "boolean",
+            "default": true,
+            "scope": "window",
+            "markdownDescription": "Show optional setup notices when a mod workspace opens. Configuration errors still appear. Notice details are recorded in the Paradox Modding Toolkit output."
           }
         }
       },
@@ -1129,6 +1452,13 @@
           "title": "Paradox Modding Toolkit",
           "icon": "media/px-view.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "px-review",
+          "title": "Paradox Review",
+          "icon": "media/px-view.svg"
+        }
       ]
     },
     "views": {
@@ -1174,6 +1504,15 @@
           "name": "Dependencies",
           "icon": "media/px-view.svg",
           "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
+        }
+      ],
+      "px-review": [
+        {
+          "id": "px.compatch",
+          "name": "Compatch",
+          "icon": "media/px-view.svg",
+          "visibility": "visible",
           "when": "px.isCk3Workspace"
         }
       ]
@@ -1310,7 +1649,7 @@
         },
         {
           "command": "px.showEventGraph",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.eventGraphSupported"
         },
         {
           "command": "px.showExamplesWiki",
@@ -1326,7 +1665,7 @@
         },
         {
           "command": "px.simulateEvent",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.eventGraphSupported"
         },
         {
           "command": "px.showDependencies",
@@ -1457,38 +1796,6 @@
           "when": "px.isCk3Workspace"
         },
         {
-          "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.editBBCodeAsMarkdown",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.backToBBCode",
-          "when": "resourceScheme == pxmd"
-        },
-        {
-          "command": "px.openBBCodeSource",
-          "when": "activeWebviewPanelId == px.bbcodePreview"
-        },
-        {
-          "command": "px.openBBCodeHelp",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
-        },
-        {
-          "command": "px.convertBBCodeToMarkdown",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.convertMarkdownToBBCode",
-          "when": "editorLangId == markdown"
-        },
-        {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
         },
@@ -1499,6 +1806,254 @@
         {
           "command": "px.exportSnippets",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "false"
+        },
+        {
+          "command": "px.compareCompatch",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "px.isCk3Workspace && px.compatchSemanticSupported"
+        },
+        {
+          "command": "px.compatchPage",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchFiles",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchEditorActions",
+          "when": "px.compatchEditor"
+        },
+        {
+          "command": "px.compatchSourceControl",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeCustomEditorId == px.bbcodePreview"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown && resourceScheme == file"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.validateCompatchTarget",
+          "when": "false"
+        },
+        {
+          "command": "px.openToSideFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.editDefinitionFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.compareOverrideSource",
+          "when": "false"
+        },
+        {
+          "command": "px.compareOverrideVanilla",
+          "when": "false"
+        },
+        {
+          "command": "px.openOverrideBoth",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchOverride",
+          "when": "false"
+        },
+        {
+          "command": "px.focusThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.includeThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.excludeThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.addThisModAsDependency",
+          "when": "false"
+        },
+        {
+          "command": "px.copyLocalizationKey",
+          "when": "false"
+        },
+        {
+          "command": "px.updateThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.allTools",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.eventGraph.focusNode",
+          "when": "false"
+        },
+        {
+          "command": "px.eventGraph.simulateNode",
+          "when": "false"
+        },
+        {
+          "command": "px.updateModForGame",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchSessions",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchRenameSession",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchQueue",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchLens",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchNext",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchRefreshChanged",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchRecovery",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchCoverage",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchValidate",
+          "when": "px.compatchCanValidate"
+        },
+        {
+          "command": "px.compatchRuntimeTest",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.compatchApplyResolved",
+          "when": "px.compatchResolution"
+        },
+        {
+          "command": "px.compatchNextConflict",
+          "when": "px.compatchResolution"
+        },
+        {
+          "command": "px.compatchPreviousConflict",
+          "when": "px.compatchResolution"
+        },
+        {
+          "command": "px.compatchResolutionInputs",
+          "when": "px.compatchResolution"
+        },
+        {
+          "command": "px.compatchMarkReviewed",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchSkip",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchReopen",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchOpen",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchRelocate",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchPreviewKey",
+          "when": "false"
+        },
+        {
+          "command": "px.compatchApplyKey",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -1510,27 +2065,27 @@
         {
           "command": "px.refreshViews",
           "when": "view =~ /^px\\./",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.showEventGraph",
-          "when": "view == px.overview",
-          "group": "navigation"
+          "when": "view == px.overview && px.eventGraphSupported",
+          "group": "1_actions"
         },
         {
           "command": "px.modReport",
           "when": "view == px.overview",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.createTranslation",
           "when": "view == px.locCoverage",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.translateNext",
           "when": "view == px.locCoverage",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.createTranslationMod",
@@ -1545,12 +2100,12 @@
         {
           "command": "px.dependenciesClear",
           "when": "view == px.dependencies",
-          "group": "navigation@2"
+          "group": "1_actions"
         },
         {
           "command": "px.dependenciesInfo",
           "when": "view == px.dependencies",
-          "group": "navigation@3"
+          "group": "1_actions"
         },
         {
           "command": "px.openProblemsPanel",
@@ -1565,7 +2120,7 @@
         {
           "command": "px.openKeybindings",
           "when": "view == px.tools",
-          "group": "navigation@2"
+          "group": "1_actions"
         },
         {
           "command": "px.openSettings",
@@ -1576,6 +2131,91 @@
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
           "group": "1_configure@2"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "view == px.compatch && !px.compatchSession",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "view == px.compatch",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "view == px.compatch",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "view == px.compatch",
+          "group": "2_notes"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "view == px.compatch && px.compatchSemanticSupported",
+          "group": "2_language"
+        },
+        {
+          "command": "px.compatchSourceControl",
+          "when": "view == px.compatch",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchSessions",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRenameSession",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchQueue",
+          "when": "view == px.compatch",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchLens",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchNext",
+          "when": "view == px.compatch && px.compatchSession",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.compatchRefreshChanged",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRecovery",
+          "when": "view == px.compatch && px.compatchUpdate",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchCoverage",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchValidate",
+          "when": "view == px.compatch && px.compatchCanValidate",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRuntimeTest",
+          "when": "view == px.compatch",
+          "group": "compatch"
+        },
+        {
+          "command": "px.allTools",
+          "when": "view == px.tools",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -1638,12 +2278,132 @@
           "command": "px.nextProblemInFile",
           "when": "view == px.problems && viewItem == px.problemFile",
           "group": "1_navigate@2"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.openToSideFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@4"
+        },
+        {
+          "command": "px.showEventGraph",
+          "when": "view == px.overview && viewItem == px.definition.event && px.eventGraphSupported",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.simulateEvent",
+          "when": "view == px.overview && viewItem == px.definition.event && px.eventGraphSupported",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.editDefinitionFromView",
+          "when": "view == px.overview && viewItem =~ /\\.creator$/",
+          "group": "paradox@2"
+        },
+        {
+          "command": "px.compareOverrideSource",
+          "when": "view == px.overrides && viewItem == px.overrideSource",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.openOverrideBoth",
+          "when": "view == px.overrides && viewItem == px.overrideSource",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.compatchOverride",
+          "when": "view == px.overrides && viewItem == px.overrideSource",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.compareOverrideVanilla",
+          "when": "view == px.overrides && viewItem == px.override.vanilla",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.overrides && viewItem =~ /^px\\.override/",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/",
+          "group": "inline@2"
+        },
+        {
+          "command": "px.compatchOpen",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchMarkReviewed",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/",
+          "group": "inline@1"
+        },
+        {
+          "command": "px.compatchSkip",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchReopen",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.reviewed/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.update/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.update/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.merge/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.merge/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRelocate",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.(missing|linked)/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviewKey",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.key/ && viewItem =~ /\\.update/",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchApplyKey",
+          "when": "view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.key/ && viewItem =~ /\\.update/",
+          "group": "compatch"
         }
       ],
       "editor/context": [
         {
-          "command": "px.simulateEvent",
-          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.isCk3Workspace",
+          "submenu": "px.editorActions",
+          "when": "px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)",
           "group": "1_modification"
         }
       ],
@@ -1666,44 +2426,9 @@
       ],
       "editor/title": [
         {
-          "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
-          "group": "navigation@2"
-        },
-        {
-          "command": "px.backToBBCode",
-          "when": "resourceScheme == pxmd",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodePreviewSide",
-          "when": "resourceScheme == pxmd",
-          "group": "navigation@2"
-        },
-        {
-          "command": "px.openBBCodeHelp",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
-          "group": "navigation@3"
-        },
-        {
-          "command": "px.convertMarkdownToBBCode",
-          "when": "resourceFilename == description.md",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodeSource",
-          "when": "activeWebviewPanelId == px.bbcodePreview",
-          "group": "navigation"
-        },
-        {
           "command": "px.showGuiTree",
-          "when": "resourceExtname == .gui && px.isCk3Workspace",
-          "group": "navigation"
+          "when": "resourceExtname == .gui && px.isCk3Workspace && px.guiEditorSupported",
+          "group": "1_actions@1"
         },
         {
           "command": "px.openGuiEditor",
@@ -1712,18 +2437,88 @@
         },
         {
           "command": "px.showEventGraph",
-          "when": "resourceExtname == .txt && resourcePath =~ /events|on_action|decisions/ && px.isCk3Workspace",
+          "when": "resourceExtname == .txt && resourcePath =~ /events|on_action|decisions/ && px.isCk3Workspace && px.eventGraphSupported && !px.compatchEditor",
           "group": "navigation"
         },
         {
           "command": "px.openInfoDocs",
           "when": "px.hasInfoDoc && (resourceLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || resourceLangId == paradox-gui || resourceLangId == paradox-loc)",
-          "group": "navigation"
+          "group": "2_help@1"
         },
         {
           "command": "px.openVanillaExamples",
           "when": "resourceLangId == paradox-info",
           "group": "navigation"
+        },
+        {
+          "command": "px.compatchEditorActions",
+          "when": "px.compatchEditor && !px.compatchResolution",
+          "group": "navigation"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "((editorLangId == bbcode || resourceExtname == .bbcode) && activeCustomEditorId != px.bbcodePreview) || resourceScheme == pxmd",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeCustomEditorId == px.bbcodePreview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "((editorLangId == bbcode || resourceExtname == .bbcode) && activeCustomEditorId != px.bbcodePreview) || resourceScheme == pxmd",
+          "group": "1_bbcode@1"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd",
+          "group": "1_bbcode@2"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file",
+          "group": "1_bbcode@3"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file",
+          "group": "1_bbcode@4"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown && resourceScheme == file",
+          "group": "1_bbcode@5"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
+          "group": "2_help@1"
+        },
+        {
+          "command": "px.compatchApplyResolved",
+          "when": "px.compatchResolution",
+          "group": "navigation"
+        },
+        {
+          "command": "px.compatchNextConflict",
+          "when": "px.compatchResolution",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviousConflict",
+          "when": "px.compatchResolution",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchResolutionInputs",
+          "when": "px.compatchResolution",
+          "group": "compatch"
+        },
+        {
+          "command": "px.showGuiTree",
+          "when": "resourceExtname == .gui && px.isCk3Workspace && !px.guiEditorSupported",
+          "group": "navigation@1"
         }
       ],
       "explorer/context": [
@@ -1731,6 +2526,177 @@
           "command": "px.convertToDds",
           "when": "resourceExtname =~ /\\.(png|jpe?g|webp)$/i",
           "group": "7_modification"
+        },
+        {
+          "command": "px.openGuiEditor",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceExtname == .gui && px.guiEditorSupported",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.showGuiTree",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceExtname == .gui",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.showEventGraph",
+          "when": "px.isCk3Workspace && resourceScheme == file && px.eventGraphSupported && resourceExtname == .txt && resourcePath =~ /[\\\\/]events[\\\\/]/",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.translateNext",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceFilename =~ /_l_[a-z_]+\\.yml$/",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.newContent",
+          "when": "px.isCk3Workspace && resourceScheme == file && explorerResourceIsFolder && resourcePath in px.contentFolders",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.focusThisMod",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourcePath in px.indexedModResources",
+          "group": "paradox@1"
+        },
+        {
+          "submenu": "px.modActions",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources",
+          "group": "paradox@5"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "paradox@2"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "paradox@2"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "paradox@2"
+        }
+      ],
+      "px.modActions": [
+        {
+          "command": "px.runTiger",
+          "when": "resourcePath in px.indexedModResources && px.hasTiger",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.openWorkshopManager",
+          "when": "resourcePath in px.indexedModResources",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.updateThisMod",
+          "when": "resourcePath in px.indexedModResources",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.excludeThisMod",
+          "when": "resourcePath in px.indexedModResources",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.includeThisMod",
+          "when": "resourcePath in px.excludedModResources",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.addThisModAsDependency",
+          "when": "resourcePath in px.modResources",
+          "group": "paradox@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.eventGraph.focusNode",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.eventGraph.simulateNode",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxDefinitionKind == event && px.eventGraphSupported",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxSourceFile && pxDefinitionKind",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.guiWidget && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.guiWidget && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.definition && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.definition && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxSourceFile && pxDefinitionKind",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxDefinitionId",
+          "group": "3_copy@1"
+        }
+      ],
+      "px.editorActions": [
+        {
+          "command": "px.simulateEvent",
+          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.isCk3Workspace && px.eventGraphSupported",
+          "group": "1_modification"
+        },
+        {
+          "command": "px.editLocalization",
+          "when": "px.localizationReference",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.openLocalizationSideBySide",
+          "when": "px.localizationReference",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.jumpToScriptReference",
+          "when": "px.localizationDefinition",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.copyLocalizationKey",
+          "when": "px.localizationDefinition",
+          "group": "paradox@1"
         }
       ]
     },
@@ -1938,6 +2904,39 @@
         "command": "px.exportSnippets",
         "key": "ctrl+alt+shift+i",
         "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.openCompatch",
+        "key": "ctrl+alt+m",
+        "when": "px.isCk3Workspace && !inputFocus"
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "px.compatch",
+        "contents": "Compare source versions and review each change. To update a mod, select its old and new game data.\n[Update Mod for New Game Version](command:px.updateModForGame)\n[Compare Folders](command:px.newCompatch)\n[Resume Session](command:px.compatchSessions)"
+      },
+      {
+        "view": "px.overview",
+        "contents": "No mod content is indexed.\n[Open Mod Folder](command:vscode.openFolder)\n[Create Mod](command:px.createMod)"
+      },
+      {
+        "view": "px.locCoverage",
+        "contents": "No localization files in this mod.\n[Add Language](command:px.createTranslation)"
+      },
+      {
+        "view": "px.dependencies",
+        "contents": "Choose a definition in Mod Overview and use Show Dependencies from its menu.\n[Show Dependencies at Cursor](command:px.showDependencies)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "px.modActions",
+        "label": "Paradox Mod"
+      },
+      {
+        "id": "px.editorActions",
+        "label": "Paradox"
       }
     ]
   },

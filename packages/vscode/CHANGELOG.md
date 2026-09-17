@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (beta) - compatch review and editor workflows
+
+- Add Compatch in the Paradox Review panel. Compare folders or update a Git-tracked mod against old and new game data, with named sessions, review queues, changed-file refresh and read-only Git recovery checks. CK3 also matches events and localization keys across files.
+- Preview and apply clean updates, resolve conflicts in an editable result, link possible replacements and apply individual localization keys while preserving sibling entries. Keep review, target validation and runtime-test evidence separate, and invalidate results when sources change.
+- Add context actions to Mod Overview, Overrides, Explorer and localization references. Commands use the selected file or definition, including creator edits and source comparisons. Add native source menus and keyboard navigation to Event Graph, GUI Editor and Coat of Arms Designer.
+- Offer BBCode Preview through VS Code's editor selector, with source and side-by-side preview actions. Preview reflects unsaved edits and leaves the file's language unchanged.
+- Make Project compact, show the current mod and workspace health, and collect supported tools in All Tools. Add useful empty views, readiness-based walkthrough steps, fewer toolbar icons and one optional setup notice instead of several startup prompts.
+- Improve localization and game-log responsiveness with cooperative coverage scans, bounded log processing and incremental localization parsing. Worker-based parsing remains deferred.
 
 ## 0.4.4 (beta) - editing fixes and release checks
 

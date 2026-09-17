@@ -6,7 +6,13 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.2.6
+
+Ships with the toolkit's 0.5.0 release.
+
+- Add optional file selectors to event-detail and definition-form requests. Clients can address an exact source without changing requests that use the existing name-based lookup.
+
+- Add an optional language to localization lookups, so a selected translation can be edited without changing the configured completion language.
 
 ## 0.2.5
 

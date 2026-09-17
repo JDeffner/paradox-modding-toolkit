@@ -13,6 +13,7 @@ import { escapeRegExp } from "@px-lsp/protocol/regex";
 import { hasKindStyle, kindStyle } from "@px-lsp/protocol/kinds";
 import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
 import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
+import { templatesForFolder, samePath, containsPath } from "../commandTargets";
 import { metaFor } from "../meta";
 
 const BOM = "﻿";
@@ -231,7 +232,8 @@ async function materialize(
 
 export async function newContentCommand(
   cfg: PxConfig,
-  onFileChanged: (fsPath: string) => void
+  onFileChanged: (fsPath: string) => void,
+  destination?: string
 ): Promise<void> {
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
@@ -241,7 +243,9 @@ export async function newContentCommand(
   }
 
   const meta = metaFor(cfg.gameId);
-  const templates = meta.scaffolds ?? [];
+  const folder = destination && !samePath(destination, cfg.modPath) ? destination : undefined;
+  if (folder && (!containsPath(cfg.modPath, folder) || !fs.statSync(folder).isDirectory())) return;
+  const templates = folder ? templatesForFolder(cfg, folder) : (meta.scaffolds ?? []);
   if (templates.length === 0) {
     void vscode.window.showWarningMessage(
       `Paradox Modding Toolkit: no content templates are verified for ${meta.name} yet, ` +
@@ -250,7 +254,7 @@ export async function newContentCommand(
     return;
   }
 
-  const template = await pickKind(templates);
+  const template = folder && templates.length === 1 ? templates[0] : await pickKind(templates);
   if (!template) return;
 
   const prefix = await askPrefix(cfg);
@@ -266,6 +270,15 @@ export async function newContentCommand(
     stageRoot: meta.stageRoots?.[0],
   });
 
+  if (folder) {
+    const script = result.files.find((file) => file.relPath === result.cursor.relPath);
+    if (!script) return;
+    const relPath = path
+      .relative(cfg.modPath, path.join(folder, path.basename(script.relPath)))
+      .replace(/\\/g, "/");
+    script.relPath = relPath;
+    result.cursor.relPath = relPath;
+  }
   try {
     await materialize(result, cfg, onFileChanged);
   } catch (err) {

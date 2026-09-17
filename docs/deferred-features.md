@@ -1,8 +1,6 @@
 # Deferred features
 
-Features that exist in the code but are hidden from users because they are not
-fleshed out yet. Each entry says where the off switch is, so re-enabling one is
-a two-line change.
+Features and experiments that are not ready to expose. Each entry identifies the current implementation boundary and the work needed before release.
 
 ## GUI editor: Interact mode (hidden 2026-08-24)
 
@@ -34,3 +32,7 @@ Hidden by:
 The host side (pickSave, `px.guiEditor.save` state, the merge under the mod's
 preview table) still runs; a save chosen before the button was hidden keeps
 feeding values.
+
+## Localization parser workers (deferred 2026-09-17)
+
+Worker parsing remains an external experiment. No worker implementation, setting or bundle is included in this release. Full-result transfer cost exceeded the parser cost in the benchmark, and live editor results varied by file. Rapid overlapping edits, stale-result handling, cancellation and worker failures still need tests. The release uses synchronous incremental localization parsing and cached coverage instead. See [Performance](PERFORMANCE.md#incremental-localization-parsing-2026-09-17) for measurements and the remaining full-file definition rebuild cost.

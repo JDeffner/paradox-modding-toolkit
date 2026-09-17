@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
 import { PATHS } from "../src/webviews/shared/icons";
-import { actionGroups, visibleActionGroups } from "../src/webviews/dashboard/actions";
+import { actionGroups, dashboardCollapsed, visibleActionGroups } from "../src/webviews/dashboard/actions";
 
 /** Every command id the panel offers for a game, groups flattened. */
 function commands(groups: ReturnType<typeof actionGroups>): string[] {
@@ -35,7 +36,14 @@ describe("visibleActionGroups", () => {
       "px.showExamplesWiki",
       "px.exportSnippets",
     ]);
-    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Info", "Create", "Test & Troubleshoot"]);
+    expect(groups.map((g) => g.label)).toEqual([
+      "Tasks",
+      "View",
+      "Share",
+      "Info",
+      "Create",
+      "Test & Troubleshoot",
+    ]);
     // The wiki rows moved out of View, they are not listed twice.
     const view = groups.find((g) => g.label === "View");
     expect(view?.items.map((it) => it.command)).not.toContain("px.openWiki");
@@ -78,11 +86,10 @@ describe("visibleActionGroups", () => {
     expect(groups.map((g) => g.label)).not.toContain("Test & Troubleshoot");
   });
 
-  it("lists the game's creators in the Create group, after the two scaffolds", () => {
+  it("lists the game's creators after New Mod, with New Content in daily tasks", () => {
     const create = actionGroups(ck3Meta, 0).find((g) => g.label === "Create");
     expect(create?.items.map((it) => it.command)).toEqual([
       "px.createMod",
-      "px.newContent",
       "px.createTrait",
       "px.createDynastyLegacy",
       "px.createCulture",
@@ -102,11 +109,7 @@ describe("visibleActionGroups", () => {
   it("a game with no creators keeps the Create group it had", () => {
     expect(eu5Meta.creators).toBeUndefined();
     const create = actionGroups(eu5Meta, 0).find((g) => g.label === "Create");
-    expect(create?.items.map((it) => it.command)).toEqual([
-      "px.createMod",
-      "px.newContent",
-      "px.createCoatOfArms",
-    ]);
+    expect(create?.items.map((it) => it.command)).toEqual(["px.createMod", "px.createCoatOfArms"]);
   });
 
   it("shows the error.log clear row only while there are problems", () => {
@@ -114,3 +117,31 @@ describe("visibleActionGroups", () => {
     expect(commands(visibleActionGroups(ck3Meta, 3, []))).toContain("px.clearGameProblems");
   });
 });
+
+it("starts with daily tasks while respecting every saved section choice", () => {
+  const defaults = dashboardCollapsed({});
+  expect(defaults.tasks ?? false).toBe(false);
+  for (const section of ["paths", "toggles", "share", "info", "view", "create"])
+    expect(defaults[section]).toBe(true);
+  expect(dashboardCollapsed({ paths: false, info: false, tasks: true })).toMatchObject({
+    paths: false,
+    info: false,
+    tasks: true,
+  });
+  expect(
+    actionGroups(ck3Meta, 0)
+      .find((group) => group.label === "Tasks")
+      ?.items.map((item) => item.command)
+  ).toEqual(["px.newContent", "px.setup", "px.runTiger"]);
+});
+
+it.each([ck3Meta, vic3Meta, eu5Meta])(
+  "offers only the GUI editor and validator capabilities supplied by $id",
+  (meta) => {
+    const ids = commands(actionGroups(meta, 0));
+    expect(ids.includes("px.openGuiEditor")).toBe(meta.guiTextMetrics !== undefined);
+    expect(ids.includes("px.runTiger")).toBe(meta.tiger !== undefined);
+    expect(ids.includes("px.newContent")).toBe((meta.scaffolds?.length ?? 0) > 0);
+    expect(new Set(ids).size).toBe(ids.length);
+  }
+);

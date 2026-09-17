@@ -4,73 +4,39 @@
  * keys (value identical to the source language). Feeds the coverage tree and
  * the translation workflow.
  */
-import * as path from "path";
-import * as fs from "fs";
 import type { LocCoverage, LocIssue } from "@px-lsp/protocol/protocol";
 import type { SchemaEntry } from "../schema/types";
-import { listFiles } from "@px-lsp/protocol/fsWalk";
-import { detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
-import { parseLoc } from "../parser";
 import type { ServerData } from "../serverData";
 
 const ISSUE_CAP = 500;
 
-interface LocEntrySite {
+export interface LocEntrySite {
   key: string;
   value: string;
   file: string;
   line: number;
 }
 
-/** The mod-relative localization roots, from the profile's loc_key schema entries
- * (some games nest localization under a load-stage folder rather than the top level). */
-function locRoots(schemaEntries: SchemaEntry[]): string[] {
-  const roots = schemaEntries.filter((e) => e.kind === "loc_key").map((e) => e.path);
-  return roots.length > 0 ? [...new Set(roots)] : ["localization"];
-}
+export type LocLanguages = Map<string, Map<string, LocEntrySite>>;
 
-/** All loc entries in the mod, grouped per language (read fresh — mods are small). */
-function modLocByLanguage(
-  modPath: string,
-  schemaEntries: SchemaEntry[]
-): Map<string, Map<string, LocEntrySite>> {
-  const byLang = new Map<string, Map<string, LocEntrySite>>();
-  for (const root of locRoots(schemaEntries)) {
-    const locDir = path.join(modPath, root);
-    for (const file of listFiles(locDir, ".yml")) {
-      const lang = detectLocFileLanguage(file);
-      if (!lang) continue;
-      let content: string;
-      try {
-        content = fs.readFileSync(file, "utf8");
-      } catch {
-        continue;
-      }
-      let entries = byLang.get(lang);
-      if (!entries) byLang.set(lang, (entries = new Map()));
-      for (const e of parseLoc(content).entries) {
-        entries.set(e.key, { key: e.key, value: e.value, file, line: e.line });
-      }
-    }
-  }
-  return byLang;
-}
+const yieldNow = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-export function computeLocCoverage(
+export async function computeLocCoverage(
   data: ServerData,
-  modPath: string | null,
+  byLang: LocLanguages,
   sourceLanguage: string,
   schemaEntries: SchemaEntry[],
   inFocus: (file: string) => boolean = () => true
-): LocCoverage[] {
-  if (!modPath) return [];
-  const byLang = modLocByLanguage(modPath, schemaEntries);
+): Promise<LocCoverage[]> {
   if (byLang.size === 0) return [];
 
   // Keys this mod's script uses (recorded loc references), plus schema-required
   // keys — both restricted to the focus mod's own files in multi-mod workspaces.
   const referenced = new Map<string, { file: string; line: number }>();
-  for (const ref of data.refIndex.allOfKind("loc_key")) {
+  let visited = 0;
+  for (const ref of data.refIndex.all()) {
+    if (++visited % 1024 === 0) await yieldNow();
+    if (!ref.kinds.includes("loc_key")) continue;
     if (!inFocus(ref.file)) continue;
     if (!referenced.has(ref.name)) referenced.set(ref.name, { file: ref.file, line: ref.line });
   }
@@ -78,7 +44,8 @@ export function computeLocCoverage(
   for (const e of schemaEntries) {
     if (e.requiredLoc && e.requiredLoc.length > 0) requiredByKind.set(e.kind, e.requiredLoc);
   }
-  for (const def of data.index.allDefinitions()) {
+  for (const def of data.index.all()) {
+    if (++visited % 1024 === 0) await yieldNow();
     if (def.source !== "mod" || !inFocus(def.file)) continue;
     const patterns = requiredByKind.get(def.kind);
     if (!patterns) continue;
@@ -99,6 +66,7 @@ export function computeLocCoverage(
   for (const [language, entries] of [...byLang.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const missing: LocIssue[] = [];
     for (const [key, site] of referenced) {
+      if (++visited % 1024 === 0) await yieldNow();
       if (entries.has(key)) continue;
       if (inheritedLoc(key)) continue;
       if (missing.length >= ISSUE_CAP) break;
@@ -107,6 +75,7 @@ export function computeLocCoverage(
 
     const orphaned: LocIssue[] = [];
     for (const [key, site] of entries) {
+      if (++visited % 1024 === 0) await yieldNow();
       if (referenced.has(key)) continue;
       if (inheritedLoc(key)) continue; // overriding vanilla text is intentional
       if (data.refIndex.lookup(key).length > 0) continue; // referenced under a non-loc kind
@@ -117,6 +86,7 @@ export function computeLocCoverage(
     const untranslated: LocIssue[] = [];
     if (language !== sourceLanguage) {
       for (const [key, site] of entries) {
+        if (++visited % 1024 === 0) await yieldNow();
         const src = source.get(key);
         if (!src) continue;
         // Untranslated = still the source text verbatim, OR a blank value

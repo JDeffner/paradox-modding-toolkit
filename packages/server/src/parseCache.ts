@@ -6,8 +6,9 @@
  * Keyed by document version (equivalent to a content hash for open documents,
  * and cheaper). Entries are evicted when the document closes.
  */
-import type { TextDocument } from "vscode-languageserver-textdocument";
-import { LineIndex, parseLoc, parseScript, type LocParseResult, type ParseResult } from "./parser";
+import { TextDocument, type TextDocumentContentChangeEvent } from "vscode-languageserver-textdocument";
+import { LineIndex, parseScript, type LocParseResult, type ParseResult } from "./parser";
+import { IncrementalLoc } from "./parser/incrementalLoc";
 import { collectSavedScopeTypes, type InferenceContext } from "./scopes/inference";
 import type { Scope, ScopeModel } from "./scopes/model";
 
@@ -26,7 +27,7 @@ export interface CachedLocParse {
 }
 
 const scriptCache = new Map<string, CachedParse>();
-const locCache = new Map<string, CachedLocParse>();
+const locCache = new Map<string, CachedLocParse & { incremental: IncrementalLoc }>();
 
 export function getParse(document: TextDocument): CachedParse {
   const cached = scriptCache.get(document.uri);
@@ -45,13 +46,62 @@ export function getLocParse(document: TextDocument): CachedLocParse {
   const cached = locCache.get(document.uri);
   if (cached && cached.version === document.version) return cached;
   const text = document.getText();
-  const entry: CachedLocParse = {
+  const incremental = new IncrementalLoc(text);
+  const entry = {
     version: document.version,
-    result: parseLoc(text),
+    result: incremental.result,
     lineIndex: new LineIndex(text),
+    incremental,
   };
   locCache.set(document.uri, entry);
   return entry;
+}
+
+/** LSP document update boundary: reuse a matching loc parse and keep version/range changes atomic. */
+export function updateDocumentWithParseCache(
+  document: TextDocument,
+  changes: TextDocumentContentChangeEvent[],
+  version: number
+): TextDocument {
+  const cached = locCache.get(document.uri);
+  const canReuse = cached?.version === document.version;
+  const updated = TextDocument.update(document, changes, version);
+  if (!cached || !canReuse) return updated;
+  const state = cached.incremental;
+  for (const change of changes) {
+    if (!("range" in change)) {
+      state.reset(change.text);
+      continue;
+    }
+    const { start, end } = change.range;
+    const startLine = state.lines[start.line];
+    const endLine = state.lines[end.line];
+    if (
+      startLine === undefined ||
+      endLine === undefined ||
+      start.character < 0 ||
+      end.character < 0 ||
+      start.character > startLine.replace(/[\r\n]+$/, "").length ||
+      end.character > endLine.replace(/[\r\n]+$/, "").length ||
+      end.line < start.line ||
+      (start.line === end.line && end.character < start.character)
+    ) {
+      state.reset(updated.getText());
+      break;
+    }
+    const remove = state.starts[end.line] + end.character - state.starts[start.line] - start.character;
+    state.edit(start.line, start.character, remove, change.text);
+  }
+  const text = updated.getText();
+  // Keep the authoritative TextDocument contract for clamped or unusual client ranges.
+  if (state.text !== text) state.reset(text);
+  locCache.set(document.uri, {
+    version,
+    result: state.result,
+    lineIndex: new LineIndex(text),
+    incremental: state,
+  });
+  return updated;
 }
 
 export function evictParse(uri: string): void {

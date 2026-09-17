@@ -1,12 +1,13 @@
-# Explore the Paradox sidebar
+# Use the Project view
 
-Click the Paradox icon in the Activity Bar. The **Project** view shows your workspace mods, effective paths and the tools available for the active game.
+Open the Paradox icon in the Activity Bar. **Project** shows the active game, the selected mod and data health. **Follow** tracks the active editor. Expand **Workspace Mods** and select a mod to **Pin** the views to it.
 
-- **Workspace Mods** controls which mods are indexed and which mod the views focus on.
-- **Paths** shows the game, dump and mod folders actually in use, including detected paths that are not saved in settings.
-- **Create** offers content scaffolds and the visual creators supported by your game.
-- **Test & Troubleshoot** holds the available validation tools. Use the editor's Run button or **Run and Debug** to launch the game.
+Use **New Content**, **Validate Mod** or **Setup & Health Check** for common tasks. The validation label names the mod it will check. **All Tools** opens a searchable list of supported tools, including rows hidden with **Customize**.
 
-The other views cover content inventory, problems, localization coverage, overrides and dependencies. **Show Event Graph** opens event flow; **Show Mod Report** gathers the mod checks into one page.
+Other tool groups, **Advanced Settings** and **Paths** start collapsed. Project remembers each section you expand or collapse. **Paths** shows effective detected and configured folders; select a path to change it.
 
-For setup and the source of each loaded dump set, click **PX Toolkit** in the status bar.
+Right-click a definition in **Mod Overview**, a localization key or a file in Explorer to find actions for that object. Keyboard users can select it and press **Shift+F10**.
+
+**Compatch Workspace** supports two tasks: update a mod in place for a new game version, or compare sources and write a separate result mod. The review view names the source roles and destination before you apply a change.
+
+Use **Show Event Graph** to follow event links, or **Show Mod Report** for an overview of the selected mod.

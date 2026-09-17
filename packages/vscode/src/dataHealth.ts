@@ -23,3 +23,29 @@ export function dataHealthLines(status: StatusPayload, dataTypesCommand: string)
     `${ownDocs && status.dataTypesSource === "generated" ? "Refresh" : "Recommended: generate"} both dumps after each game patch: script_docs and ${dataTypesCommand}. Then run Paradox: Reload Game Data.`,
   ];
 }
+
+/** Readiness comes from loaded data and resolved configuration, never command invocation. */
+export function onboardingReadiness(
+  status: StatusPayload & {
+    gameOk: boolean;
+    modOk: boolean;
+    tigerOk: boolean;
+    tigerName: string | null;
+  }
+): Record<"px.setupReady" | "px.modReady" | "px.dumpsReady" | "px.tigerReady", boolean> {
+  return {
+    "px.setupReady":
+      !status.indexing &&
+      status.gameOk &&
+      status.modOk &&
+      status.tokens > 0 &&
+      (status.tigerName === null || status.tigerOk),
+    "px.modReady": status.modOk && !status.indexing,
+    "px.dumpsReady":
+      status.tokens > 0 &&
+      status.tokensFromScriptDocs &&
+      !status.tokensFromBundledDumps &&
+      status.dataTypesSource === "generated",
+    "px.tigerReady": status.tigerName !== null && status.tigerOk,
+  };
+}
