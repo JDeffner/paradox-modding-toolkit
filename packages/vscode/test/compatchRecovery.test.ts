@@ -3,7 +3,6 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { promisify } from "node:util";
 import { inspectRecovery } from "../src/compatch/recovery";
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -11,10 +10,15 @@ vi.mock("node:child_process", async (importOriginal) => {
   return { ...actual, execFile: vi.fn(actual.execFile) };
 });
 
-const run = promisify(execFile);
 let root: string;
 let mod: string;
-const git = (...args: string[]) => run("git", args, { cwd: root, windowsHide: true });
+const git = (...args: string[]) =>
+  new Promise<string>((resolve, reject) => {
+    execFile("git", args, { cwd: root, encoding: "utf8", windowsHide: true }, (error, stdout) => {
+      if (error) reject(error);
+      else resolve(stdout);
+    });
+  });
 
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "px-recovery-"));
@@ -76,7 +80,8 @@ describe("compatch recovery inspection", () => {
   it("accepts the stage-zero index as a baseline before the first commit", async () => {
     await fs.writeFile(path.join(mod, "[literal].txt"), "staged");
     await fs.writeFile(path.join(mod, "l.txt"), "untracked");
-    await git("add", "--", "mods/selected mod/[literal].txt");
+    await git("--literal-pathspecs", "add", "--", "mods/selected mod/[literal].txt");
+    expect(await git("ls-files", "-z")).toBe("mods/selected mod/[literal].txt\0");
     const result = await inspectRecovery(mod, ["[literal].txt", "l.txt"]);
     expect(result).toMatchObject({
       available: true,
