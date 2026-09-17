@@ -43,6 +43,7 @@ const fileKey = (file: string): string => {
  * focus cannot retain every translation in a large playset. */
 export class LocalizationCoverage {
   private states = new Map<string, CoverageState>();
+  private generation = 0;
 
   constructor(
     private readonly data: ServerData,
@@ -51,6 +52,7 @@ export class LocalizationCoverage {
   ) {}
 
   clear(): void {
+    this.generation++;
     for (const state of this.states.values()) state.version++;
     this.states.clear();
   }
@@ -76,6 +78,7 @@ export class LocalizationCoverage {
     inFocus: (file: string) => boolean = () => true
   ): Promise<LocCoverage[]> {
     if (!root) return [];
+    const generation = this.generation;
     const key = fileKey(root);
     let state = this.states.get(key);
     if (!state || state.schema !== schema) {
@@ -86,6 +89,8 @@ export class LocalizationCoverage {
     const current = state;
     try {
       for (;;) {
+        // A rebuild detached this state; its loaded files cannot serve the new generation.
+        if (generation !== this.generation) return this.get(root, language, schema, inFocus);
         const { index, refIndex: refs } = this.data;
         const cached = current.result;
         if (

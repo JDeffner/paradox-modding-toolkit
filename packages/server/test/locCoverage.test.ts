@@ -189,6 +189,46 @@ describe("localization coverage", () => {
     expect(turns).toBeGreaterThan(1);
   });
 
+  it("restarts pending readers after clear and includes edits made after the reset", async () => {
+    const f = fixture();
+    const file = f.write("source", "english", ' old:0 "Old"');
+    let release!: () => void;
+    let entered!: () => void;
+    const enteredRead = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reads = 0;
+    const cache = new LocalizationCoverage(f.data, async (name) => {
+      const text = await fs.promises.readFile(name, "utf8");
+      if (++reads === 1) {
+        entered();
+        await gate;
+      }
+      return text;
+    });
+    const first = cache.get(f.root, "english", f.schema);
+    const joined = cache.get(f.root, "english", f.schema);
+    await enteredRead;
+    cache.clear();
+    f.write("source", "english", ' new:0 "New"');
+    expect(cache.invalidate(file)).toBe(false);
+    release();
+    const results = await Promise.all([first, joined]);
+    expect(results[0][0].orphaned.map((issue) => issue.key)).toEqual(["new"]);
+    expect(results[1]).toEqual(results[0]);
+    expect(reads).toBe(2);
+    // The restarted request belongs to the live cache, so later edits reach it too.
+    f.write("source", "english", ' newest:0 "Newest"');
+    expect(cache.invalidate(file)).toBe(true);
+    expect((await cache.get(f.root, "english", f.schema))[0].orphaned.map((issue) => issue.key)).toEqual([
+      "newest",
+    ]);
+    expect(reads).toBe(3);
+  });
+
   it("evicts old mod caches and drops cached translations on rebuild", async () => {
     const mods = [fixture(), fixture(), fixture()];
     for (const f of mods) f.write("source", "english", ' key:0 "Value"');

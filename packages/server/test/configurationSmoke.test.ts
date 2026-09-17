@@ -11,6 +11,7 @@ import {
   configurationSection,
   indexStatsRequest,
   locCoverageRequest,
+  lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
   type ParadoxSettings,
@@ -164,6 +165,48 @@ async function client(
 }
 
 describe.skipIf(!fs.existsSync(SERVER))("configuration over stdio", () => {
+  it("keeps distinct case-sensitive localization buffers in their own indexed files", async (context) => {
+    const f = fixture();
+    const upper = f.write("mod/localization/A_l_english.yml", 'l_english:\n upper_disk:0 "Upper disk"\n');
+    const lower = path.join(path.dirname(upper), "a_l_english.yml");
+    try {
+      fs.writeFileSync(lower, 'l_english:\n lower_disk:0 "Lower disk"\n', { flag: "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      context.skip();
+      return;
+    }
+    const c = await client(f, { settings: { modPath: f.mod, locLanguage: "english" } });
+    await c.built(1);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(upper).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n upper_buffer:0 "Upper buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(lower).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n lower_buffer:0 "Lower buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "lower_buffer" })).toEqual([
+      { file: lower, line: 1, source: "mod", value: "Lower buffer" },
+    ]);
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    const coverage = await c.conn.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: f.mod });
+    expect(coverage[0].orphaned.map((issue) => issue.key).sort()).toEqual(["lower_buffer", "upper_buffer"]);
+  });
+
   it.each(allProfiles())(
     "keeps $id coverage fresh for translations, open buffers and rebuilds",
     async (profile) => {

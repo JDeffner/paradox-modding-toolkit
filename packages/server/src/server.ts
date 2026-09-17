@@ -208,6 +208,7 @@ import { provideReferences } from "./features/references";
 import { prepareRename, provideRename } from "./features/rename";
 import { provideWorkspaceSymbols } from "./features/workspaceSymbols";
 import { evictParse, getLocParse, getParse, updateDocumentWithParseCache } from "./parseCache";
+import { matchesSourceFile } from "./sourceFile";
 import { buildSnippetList } from "./features/snippetList";
 import { buildSnippetCatalogue } from "./features/snippetCatalogue";
 import { resolveClientCapabilities, setClientCapabilities } from "./clientMode";
@@ -1367,13 +1368,7 @@ function rescanModFile(fsPath: string): void {
   const tParse = Date.now();
   const openLoc =
     entry?.kind === "loc_key"
-      ? documents
-          .all()
-          .find(
-            (doc) =>
-              doc.uri.startsWith("file:") &&
-              path.normalize(URI.parse(doc.uri).fsPath).toLowerCase() === path.normalize(fsPath).toLowerCase()
-          )
+      ? documents.all().find((doc) => doc.uri.startsWith("file:") && matchesSourceFile(fsPath, doc.uri))
       : undefined;
   const content = openLoc
     ? openLoc.getText().replace(/^\uFEFF/, "")
