@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.
+
+- Keep Problems in open scripts current when an event or required localization changes in another file, including unsaved edits and discarded changes.
+
 - Start Here offers Add to Current Workspace or Open in New Window after creating or finding a mod. Cancelling leaves existing windows unchanged; a newly created mod remains on disk.
 
 - Project shows a visible selected focus indicator, compact New Mod and Add Existing Mod buttons beside Workspace Mods, a package icon for All Tools, and a distinct Getting Started icon. Row customization is in the overflow menu and lists only Project rows.

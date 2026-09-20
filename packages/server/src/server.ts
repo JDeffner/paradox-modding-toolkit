@@ -816,6 +816,14 @@ function scheduleRefresh(): void {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     refreshTimer = null;
+    // Other open scripts can gain or lose missing-event/localization warnings
+    // when this file changes. Flush once before the shared idle validation pass;
+    // namespace-only edits matter even if the definition revision is unchanged.
+    flushModFileChanges();
+    for (const doc of documents.all()) {
+      if (isScriptLanguage(doc.languageId) && workspaceRootOf(URI.parse(doc.uri).fsPath))
+        validateDocumentNow(doc);
+    }
     fireRefresh("idle");
   }, REFRESH_DEBOUNCE_MS);
 }

@@ -165,6 +165,133 @@ async function client(
 }
 
 describe.skipIf(!fs.existsSync(SERVER))("configuration over stdio", () => {
+  it.each(["event", "localization"] as const)(
+    "refreshes untouched script diagnostics after cross-file %s changes",
+    async (kind) => {
+      const f = fixture();
+      const trait = allProfiles()
+        .find((profile) => profile.id === "ck3")!
+        .schema.find((entry) => entry.kind === "trait")!;
+      const traitName = "px_cfg_trait";
+      const locKey = trait.requiredLoc![0].replace("$", traitName);
+      const callerText =
+        kind === "event"
+          ? "namespace = px_diag\npx_diag.1 = { immediate = { trigger_event = px_diag.2 } }\n"
+          : `${traitName} = { category = personality martial = 2 }\n`;
+      const callerFile = f.write(
+        kind === "event" ? "mod/events/caller.txt" : `mod/${trait.path}/trait.txt`,
+        "\uFEFF" + callerText
+      );
+      const sourcePath =
+        kind === "event" ? "mod/events/target.txt" : "mod/localization/english/target_l_english.yml";
+      const emptyText = kind === "event" ? "" : "l_english:\n";
+      const definedText =
+        kind === "event" ? "px_diag.2 = {}\n" : `l_english:\n ${locKey}:0 "Fixture trait"\n`;
+      const sourceFile = f.write(sourcePath, "\uFEFF" + emptyText);
+      const callerUri = URI.file(callerFile).toString();
+      const sourceUri = URI.file(sourceFile).toString();
+      const code = kind === "event" ? "unknown-event" : "missing-required-loc";
+      const c = await client(f, { settings: { modPath: f.mod, locLanguage: "english" } });
+      await c.built(1);
+      const published: Array<Array<{ code?: string | number }>> = [];
+      c.conn.onNotification(
+        "textDocument/publishDiagnostics",
+        (params: { uri: string; diagnostics: Array<{ code?: string | number }> }) => {
+          if (params.uri === callerUri) published.push(params.diagnostics);
+        }
+      );
+      const missing = () => published.at(-1)?.some((diagnostic) => diagnostic.code === code);
+      const expectMissing = (value: boolean) => expect.poll(missing, { timeout: 5000 }).toBe(value);
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri: callerUri, version: 1, languageId: "paradox", text: callerText },
+      });
+      await expectMissing(true);
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: sourceUri,
+          version: 1,
+          languageId: kind === "event" ? "paradox" : "paradox-loc",
+          text: emptyText,
+        },
+      });
+      // Do not let the caller's initial typing debounce validate a later source edit.
+      await c.barrier();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const change = (version: number, text: string) =>
+        c.conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri: sourceUri, version },
+          contentChanges: [{ text }],
+        });
+      await change(2, definedText);
+      await expectMissing(false);
+      await change(3, emptyText);
+      await expectMissing(true);
+      await change(4, definedText);
+      await expectMissing(false);
+      // Discard the unsaved definition by closing; the disk source is still empty.
+      await c.conn.sendNotification("textDocument/didClose", { textDocument: { uri: sourceUri } });
+      await expectMissing(true);
+      fs.unlinkSync(sourceFile);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 3 }],
+      });
+      await c.barrier();
+      f.write(sourcePath, "\uFEFF" + definedText);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 1 }],
+      });
+      await expectMissing(false);
+      fs.unlinkSync(sourceFile);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 3 }],
+      });
+      await expectMissing(true);
+      expect(c.starts).toBe(1);
+    },
+    30_000
+  );
+
+  it("refreshes untouched event diagnostics after a namespace-only edit", async () => {
+    const f = fixture();
+    const text = "px_diag_caller = { trigger_event = px_diag.2 }\n";
+    const caller = f.write("mod/common/scripted_effects/caller.txt", "\uFEFF" + text);
+    const namespaceText = "namespace = px_diag\n";
+    const namespace = f.write("mod/events/namespace.txt", "\uFEFF" + namespaceText);
+    const callerUri = URI.file(caller).toString();
+    const namespaceUri = URI.file(namespace).toString();
+    const c = await client(f, { settings: { modPath: f.mod } });
+    await c.built(1);
+    let unknown: boolean | undefined;
+    c.conn.onNotification(
+      "textDocument/publishDiagnostics",
+      (params: { uri: string; diagnostics: Array<{ code?: string | number }> }) => {
+        if (params.uri === callerUri)
+          unknown = params.diagnostics.some((diagnostic) => diagnostic.code === "unknown-event");
+      }
+    );
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: callerUri, version: 1, languageId: "paradox", text },
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(true);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: namespaceUri, version: 1, languageId: "paradox", text: namespaceText },
+    });
+    // Settle both opens before the edit, so they cannot cause its diagnostic refresh.
+    await c.barrier();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await c.conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: namespaceUri, version: 2 },
+      contentChanges: [{ text: "namespace = px_other\n" }],
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(false);
+    await c.conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: namespaceUri, version: 3 },
+      contentChanges: [{ text: namespaceText }],
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(true);
+    expect(c.starts).toBe(1);
+  }, 20_000);
+
   it("keeps distinct case-sensitive localization buffers in their own indexed files", async (context) => {
     const f = fixture();
     const upper = f.write("mod/localization/A_l_english.yml", 'l_english:\n upper_disk:0 "Upper disk"\n');

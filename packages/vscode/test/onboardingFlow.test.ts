@@ -75,6 +75,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   vi.mocked(vscode.window.showQuickPick).mockReset();
   vi.mocked(vscode.window.showInformationMessage).mockReset();
+  vi.mocked(vscode.commands.executeCommand).mockReset().mockResolvedValue(undefined);
   vi.mocked(vscode.workspace.updateWorkspaceFolders).mockReset().mockReturnValue(true);
   state.settings = {};
   state.folders = [];
@@ -190,6 +191,7 @@ it.each(
   "creates a $gameId mod with launcher registration and destination $destination",
   async ({ gameId, destination }) => {
     vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items, options) => {
+      expect(options?.ignoreFocusOut).toBe(true);
       const choices = (await items) as unknown as {
         meta?: { id: string };
         mode?: string;
@@ -205,6 +207,9 @@ it.each(
     });
     vi.mocked(vscode.window.showInputBox).mockResolvedValue("First Mod");
     await createModCommand(cfg, () => undefined);
+    expect(vscode.window.showInputBox).toHaveBeenCalledWith(
+      expect.objectContaining({ ignoreFocusOut: true })
+    );
     const folder = path.join(state.root, gameId, "mod/first_mod");
     expect(JSON.parse(await fs.readFile(path.join(folder, ".vscode/settings.json"), "utf8"))).toEqual({
       "px.gameId": gameId,
@@ -221,13 +226,54 @@ it.each(
         expect.objectContaining({ fsPath: folder }),
         { forceNewWindow: true }
       );
+    else if (destination === "workspace")
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith("workbench.view.explorer");
     else expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     if (destination === "workspace")
       expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledWith(0, 0, {
         uri: expect.objectContaining({ fsPath: folder }),
       });
     else expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
+    if (destination === "cancel")
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        expect.stringContaining(folder),
+        "Add to Current Workspace",
+        "Open in New Window"
+      );
     expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+  }
+);
+
+it.each(["Add to Current Workspace", "Open in New Window"])(
+  "recovers a first mod from the creation notification with %s",
+  async (action) => {
+    vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command) => {
+      if (command === "px.createMod") await createModCommand(cfg, () => undefined);
+      return undefined;
+    });
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue("First Mod");
+    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items, options) => {
+      const choices = (await items) as unknown as { meta?: { id: string }; mode?: string }[];
+      if (options?.title === "Which game?") return choices.find((item) => item.meta?.id === "ck3") as never;
+      if (options?.title === "New Mod: location")
+        return choices.find((item) => item.mode === "game") as never;
+      expect(options?.ignoreFocusOut).toBe(true);
+      return undefined;
+    });
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(action as never);
+    await startFirstMod();
+    const folder = path.join(state.root, "ck3/mod/first_mod");
+    expect(await fs.readFile(path.join(folder, "descriptor.mod"), "utf8")).toContain("First Mod");
+    if (action === "Add to Current Workspace")
+      expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledWith(0, 0, {
+        uri: expect.objectContaining({ fsPath: folder }),
+      });
+    else
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        "vscode.openFolder",
+        expect.objectContaining({ fsPath: folder }),
+        { forceNewWindow: true }
+      );
   }
 );
 
@@ -241,6 +287,44 @@ it("preserves an existing launcher link and creates no partial mod when the name
   expect(await fs.readFile(path.join(mods, "first_mod.mod"), "utf8")).toBe("keep this link");
   expect(await fs.readdir(mods)).toEqual(["first_mod.mod"]);
   expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+});
+
+it.each(["workspace", "window"])(
+  "keeps the created mod and reports its path when opening in %s fails",
+  async (destination) => {
+    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items, options) => {
+      const choices = (await items) as unknown as { mode?: string; destination?: string }[];
+      return options?.title === "New Mod: location"
+        ? (choices.find((item) => item.mode === "game") as never)
+        : undefined;
+    });
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+      (destination === "workspace" ? "Add to Current Workspace" : "Open in New Window") as never
+    );
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue("First Mod");
+    vi.mocked(vscode.workspace.updateWorkspaceFolders).mockReturnValue(false);
+    vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command) => {
+      if (command === "vscode.openFolder") throw new Error("Window unavailable");
+      return undefined;
+    });
+    await createModCommand({ ...cfg, isCk3Workspace: true }, () => undefined);
+    const folder = path.join(state.root, "ck3/mod/first_mod");
+    expect(await fs.readFile(path.join(folder, "descriptor.mod"), "utf8")).toContain("First Mod");
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining(folder));
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining("failed to create")
+    );
+    if (destination === "workspace") expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalled();
+  }
+);
+
+it("does not create files or report success when creation is canceled before choosing a location", async () => {
+  vi.mocked(vscode.window.showInputBox).mockResolvedValue("First Mod");
+  vi.mocked(vscode.window.showQuickPick).mockResolvedValue(undefined);
+  await createModCommand({ ...cfg, isCk3Workspace: true }, () => undefined);
+  expect(await fs.readdir(state.root)).toEqual([]);
+  expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
 });
 
 const gamePath = devPath("gamePath");

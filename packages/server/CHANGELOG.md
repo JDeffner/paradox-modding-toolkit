@@ -8,6 +8,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Refresh missing-event and required-localization diagnostics in other open mod scripts after unsaved edits, discarded edits, file creation or deletion, and namespace changes.
+
 ### Symbol resolution and live documents
 
 - Apply source priority within each definition kind. A localization key no longer hides a same-name trait, and a scripted GUI does not stand in for a scripted trigger. Preserve all same-kind override sites for navigation.

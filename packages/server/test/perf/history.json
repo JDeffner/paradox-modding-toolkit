@@ -1459,6 +1459,62 @@
         "peakRssMb": 854,
         "rssSamples": 25
       }
+    },
+    {
+      "version": "cross-file-diagnostics-before",
+      "recordedAt": "2026-09-20",
+      "workspace": "agot.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 41616,
+        "definitions": 961758,
+        "completionCold": 1106,
+        "completionWarm": 18,
+        "semanticTokens": 2,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 712,
+        "tokensAfterSave": 1,
+        "heapMb": 1074,
+        "rssAtBuildMb": 2142,
+        "internedIdentifiers": 1018888,
+        "peakRssMb": 3358,
+        "rssSamples": 106
+      }
+    },
+    {
+      "version": "cross-file-diagnostics-after",
+      "recordedAt": "2026-09-20",
+      "workspace": "agot.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 50096,
+        "definitions": 961758,
+        "completionCold": 888,
+        "completionWarm": 18,
+        "semanticTokens": 2,
+        "hover": 5,
+        "documentSymbol": 2,
+        "completionAfterSave": 732,
+        "tokensAfterSave": 1,
+        "heapMb": 1074,
+        "rssAtBuildMb": 3002,
+        "internedIdentifiers": 1018888,
+        "peakRssMb": 3610,
+        "rssSamples": 126
+      }
     }
   ]
 }

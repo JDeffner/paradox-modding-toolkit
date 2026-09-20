@@ -70,7 +70,7 @@ async function pickGame(cfg: PxConfig): Promise<GameMeta | null> {
   type Item = vscode.QuickPickItem & { meta: GameMeta };
   const pick = await vscode.window.showQuickPick<Item>(
     Object.values(GAME_METAS).map((meta) => ({ label: meta.name, meta })),
-    { title: "Which game?", placeHolder: "The game the mod is for" }
+    { title: "Which game?", placeHolder: "The game the mod is for", ignoreFocusOut: true }
   );
   return pick?.meta ?? null;
 }
@@ -140,6 +140,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
 
   const raw = await vscode.window.showInputBox({
     title: `New ${meta.shortName} Mod: name`,
+    ignoreFocusOut: true,
     prompt: "Display name shown in the launcher and on the Workshop.",
     validateInput: (v) => (v.trim().length >= 3 ? null : "At least 3 characters (Workshop minimum)."),
   });
@@ -170,7 +171,11 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
         mode: "project",
       },
     ],
-    { title: "New Mod: location", placeHolder: "Use the detected game folder, or keep a separate project" }
+    {
+      title: "New Mod: location",
+      placeHolder: "Use the detected game folder, or keep a separate project",
+      ignoreFocusOut: true,
+    }
   );
   if (!loc) return;
 
