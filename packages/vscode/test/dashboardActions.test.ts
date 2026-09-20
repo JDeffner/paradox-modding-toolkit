@@ -30,6 +30,7 @@ describe("visibleActionGroups", () => {
     const groups = actionGroups(ck3Meta, 0);
     const info = groups.find((g) => g.label === "Info");
     expect(info?.items.map((it) => it.command)).toEqual([
+      "px.getStarted",
       "px.openDiscord",
       "px.openWiki",
       "px.openCredits",
@@ -102,7 +103,7 @@ describe("visibleActionGroups", () => {
       actionGroups(ck3Meta, 0)
         .find((g) => g.label === "Workspace Mods")
         ?.items.map((it) => it.command)
-    ).toEqual(["px.createMod"]);
+    ).toEqual(["px.openMod", "px.createMod"]);
   });
 
   it("every creator row names an icon the client actually ships", () => {

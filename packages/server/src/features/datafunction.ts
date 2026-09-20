@@ -28,25 +28,6 @@ import { fileLink, renderHoverMarkdown, scopeType, type CardInput } from "./hove
 import * as path from "path";
 
 /**
- * Functions whose single quoted argument names a script definition, so the
- * literal completes from the definition index (the mod's own defs plus vanilla)
- * rather than only from harvested vanilla literals. Keyed by the function name
- * (the last chain segment), so it fires for any owner: `Scope.ScriptValue`,
- * `TopScope.ScriptValue`, `GetPlayer.MakeScope.ScriptValue`, … all map alike.
- *
- * Add an entry only when the dump signature or a vanilla example proves the
- * argument's kind. Verified against the 1.19 DumpDataTypes output:
- *  - ScriptValue( Arg0 ) → CFixedPoint, macro "Calculates the named script
- *    value" — Arg0 is a script_value key;
- *  - GetTrait( Arg0 ) → Trait, "Get the Trait object with the provided key" —
- *    Arg0 is a trait key.
- */
-const ARG_INDEX_KIND: Record<string, string> = {
-  ScriptValue: "script_value",
-  GetTrait: "trait",
-};
-
-/**
  * The expression text when `linePrefix` ends inside an unclosed [ ... ], else
  * null. Datafunction expressions never span lines, so the line prefix is
  * enough context.
@@ -267,7 +248,7 @@ export function provideDataFnCompletion(
     const fn = call.chain[call.chain.length - 1];
     const items: CompletionItem[] = [];
     const seen = new Set<string>();
-    const indexKind = ARG_INDEX_KIND[fn];
+    const indexKind = call.argIndex === 0 ? activeProfile().dataFunctionRefs?.[fn] : undefined;
     if (indexKind && index) {
       const kindLabel = indexKind.replace(/_/g, " ");
       for (const def of index.entries((d) => d.kind === indexKind)) {

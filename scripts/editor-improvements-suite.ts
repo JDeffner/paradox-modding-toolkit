@@ -156,7 +156,6 @@ async function checks(): Promise<void> {
       await pick(index);
       if (background) await pick(1);
       await pick(1);
-      await pick(0);
       const result = await pending;
       assert.equal(result?.written.length, 1, JSON.stringify(result));
       assert.equal(result.failed.length, 0);
@@ -166,14 +165,24 @@ async function checks(): Promise<void> {
       else assert.equal(output[0], 137);
     }
     assert.deepEqual(await fs.readFile(source), Buffer.from(sourceBytes));
-    // Default skip protects existing outputs through the public command.
+    // Only a real output collision prompts; the toast can preserve existing files.
     const again = vscode.commands.executeCommand<BatchResult>(
       "px.convertDdsToImage",
       vscode.Uri.file(source)
     );
     await pick(0);
     await pick(1);
-    await pick(0);
+    await pause(400);
+    const conflict = await cdp.send("Runtime.evaluate", {
+      expression: "document.body.innerText",
+      returnByValue: true,
+    });
+    assert.match(conflict.result.value, /An output already exists:/);
+    await cdp.send("Runtime.evaluate", {
+      expression:
+        "[...document.querySelectorAll('.notifications-toasts .monaco-button')].find(e => e.textContent === 'Skip Existing').click()",
+      returnByValue: true,
+    });
     const skipped = await again;
     assert.equal(skipped?.skipped.length, 1);
     const input = path.join(dir, "other.png");
@@ -181,7 +190,6 @@ async function checks(): Promise<void> {
     const toDds = vscode.commands.executeCommand<BatchResult>("px.convertToDds", vscode.Uri.file(input));
     await pick(3);
     await pick(1);
-    await pick(0);
     assert.equal((await toDds)?.written.length, 1);
     const corrupt = path.join(dir, "broken.dds");
     await fs.writeFile(corrupt, "bad DDS");
@@ -191,7 +199,6 @@ async function checks(): Promise<void> {
     );
     await pick(0);
     await pick(1);
-    await pick(0);
     // Error summaries are notifications; close them after collecting the result.
     await pause(500);
     await vscode.commands.executeCommand("notifications.clearAll");

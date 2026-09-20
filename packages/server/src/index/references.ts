@@ -23,8 +23,9 @@ import {
 import { activeProfile } from "../games/active";
 import { isLocProperty } from "@px-lsp/protocol/locProperties";
 import { isStructuralKeyword } from "../contextKeywords";
+import { contextFromStatements } from "../context";
 import { intern, shareDefinitionStrings, shareReferenceStrings } from "./intern";
-import type { SchemaData } from "../schema/loader";
+import { schemaEntryForPath, type SchemaData } from "../schema/loader";
 import {
   LineIndex,
   parseScript,
@@ -53,6 +54,8 @@ const VAR_PREFIXES = new Set(Object.keys(VAR_PREFIX_KINDS));
 
 /** What a key-position call (`my_effect = yes`) may refer to. */
 const CALL_KINDS = ["scripted_effect", "scripted_trigger", "scripted_modifier"];
+const TRIGGER_CALL_KINDS = ["scripted_trigger"];
+const EFFECT_CALL_KINDS = ["scripted_effect"];
 
 /**
  * Shared `kinds` arrays for the sites that used to build one per reference
@@ -63,6 +66,19 @@ const CALL_KINDS = ["scripted_effect", "scripted_trigger", "scripted_modifier"];
  */
 const SAVED_SCOPE_KINDS = ["saved_scope"];
 const LOC_KEY_KINDS = ["loc_key"];
+
+/** Declaration-valued fields share their namespace with the implicit index. */
+export function implicitKindsForField(key: string, parentKey?: string): string[] | null {
+  if (SAVE_SCOPE_KEYS.has(key) || (key === "name" && SAVE_SCOPE_VALUE_KEYS.has(parentKey ?? "")))
+    return SAVED_SCOPE_KINDS;
+  if (FLAG_SET_KEY.test(key) || (key === "flag" && FLAG_SET_KEY.test(parentKey ?? ""))) return ["flag"];
+  if (LIST_SET_KEYS.has(key)) return ["list"];
+  const owner = key === "name" ? (parentKey ?? key) : key;
+  const kind = VARIABLE_SET_KINDS[owner] ?? VARIABLE_LIST_SET_KINDS[owner];
+  if (kind) return VARIABLE_LIST_SET_KINDS[owner] ? [kind, kind.replace("_list", "")] : [kind];
+  if (key === "name" && VARIABLE_READ_KINDS[owner]) return variableReadKinds(VARIABLE_READ_KINDS[owner]);
+  return null;
+}
 
 export interface ExtractedRefs {
   references: Reference[];
@@ -105,6 +121,7 @@ export function extractReferencesParsed(
   const references: Reference[] = [];
   const implicitDefs: Definition[] = [];
   const namespaces: string[] = [];
+  const entry = schemaEntryForPath(file, schema);
 
   // Named asset blocks contain graphics properties, never script call sites.
   const normalizedFile = file.replace(/\\/g, "/").toLowerCase();
@@ -418,7 +435,11 @@ export function extractReferencesParsed(
       !isEngineToken?.(key)
     ) {
       // The chain lets call-site scope aggregation type the CALLED definition.
-      pushRef(key, CALL_KINDS, stmt.key.range.start, true, enclosingKeyChain(ancestors));
+      const chain = enclosingKeyChain(ancestors);
+      const context = contextFromStatements(root, ancestors, entry?.kind).context;
+      const kinds =
+        context === "trigger" ? TRIGGER_CALL_KINDS : context === "effect" ? EFFECT_CALL_KINDS : CALL_KINDS;
+      pushRef(key, kinds, stmt.key.range.start, true, chain);
     }
 
     if (value?.kind === "scalar") {

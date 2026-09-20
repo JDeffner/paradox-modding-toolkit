@@ -43,7 +43,8 @@ import {
   metaFor,
 } from "./meta";
 import { GAME_METAS } from "./gameDetect";
-import { downloadTigerCommand, maybeNudgeSetup, runSetup, type SetupDeps } from "./setup";
+import { downloadTigerCommand, maybeNudgeSetup, runSetup, selectGameFolder, type SetupDeps } from "./setup";
+import { registerOnboarding } from "./onboarding";
 import { StartupNotices } from "./notifications";
 import { PxStatusBar } from "./statusBar";
 import { TigerRunner } from "./tiger/runner";
@@ -64,7 +65,7 @@ import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
-import { registerDashboardView, hiddenRows } from "./webviews/dashboard/view";
+import { registerDashboardView, hiddenRows, PROJECT_GROUPS } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel, type EventGraphActions } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
@@ -241,6 +242,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   cfg = resolveConfig();
+  registerOnboarding(context, log);
   const startupNotices = new StartupNotices(context, log);
   if (cfg.warnings.length > 0) {
     // Fail soft: features degrade, extension still activates.
@@ -401,7 +403,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       dataTypesCommand: metaFor(cfg.gameId).dataTypesCommand ?? "DumpDataTypes",
       indexing: lastServerStatus.indexing,
       gameOk: cfg.gamePath !== null,
-      modOk: cfg.modPath !== null,
+      modOk: cfg.isCk3Workspace && cfg.modPath !== null,
       tigerOk: cfg.tigerPath !== null,
       tigerName: metaFor(cfg.gameId).tiger?.binaryName ?? null,
     });
@@ -953,14 +955,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       type Item = vscode.QuickPickItem & { command: string };
       const hidden = new Set(hiddenRows());
       const items: Item[] = [
-        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount).flatMap((g) =>
-          g.items.map((it) => ({
-            label: `${g.label}: ${it.label}`,
-            description: it.command,
-            picked: !hidden.has(it.command),
-            command: it.command,
-          }))
-        ),
+        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount)
+          .filter((g) => PROJECT_GROUPS.includes(g.label))
+          .flatMap((g) =>
+            g.items.map((it) => ({
+              label: `${g.label}: ${it.label}`,
+              description: it.command,
+              picked: !hidden.has(it.command),
+              command: it.command,
+            }))
+          ),
       ];
       const picked = await vscode.window.showQuickPick(items, {
         canPickMany: true,
@@ -1609,6 +1613,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   context.subscriptions.push(
     vscode.commands.registerCommand("px.setup", () => runSetup(setupDeps)),
+    vscode.commands.registerCommand("px.selectGameFolder", () => selectGameFolder(setupDeps)),
     vscode.commands.registerCommand("px.downloadTiger", () => downloadTigerCommand(setupDeps, false))
   );
   maybeNudgeSetup(context, cfg, startupNotices);

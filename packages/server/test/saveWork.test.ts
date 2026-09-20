@@ -134,11 +134,17 @@ describe.skipIf(!hasServer)("the work one save costs (§B3/§B4)", () => {
 
   it("parses the saved file once, however many watcher events it produces (§B3)", async () => {
     const text = `${EFFECTS_TXT}\nsave_added_effect = {\n\tadd_prestige = 1\n}\n`;
+    const typingMark = logs.length;
     void conn.sendNotification("textDocument/didChange", {
       textDocument: { uri: effectsUri, version: 2 },
       contentChanges: [{ text }],
     });
     await sleep(450); // the typing debounce (300ms) validates here, as while typing
+    const unsaved = await conn.sendRequest<Array<{ name: string }>>("workspace/symbol", {
+      query: "save_added_effect",
+    });
+    expect(unsaved.map((s) => s.name)).toContain("save_added_effect");
+    expect(count(typingMark, /perf rescan .*parse\+extract/), since(typingMark).join("\n")).toBe(1);
     fs.writeFileSync(effectsFile, text, "utf8");
 
     const mark = logs.length;
@@ -156,7 +162,8 @@ describe.skipIf(!hasServer)("the work one save costs (§B3/§B4)", () => {
     expect(symbols.map((s) => s.name)).toContain("save_added_effect");
 
     await sleep(400);
-    expect(count(mark, /perf rescan .*parse\+extract/), since(mark).join("\n")).toBe(1);
+    // The unsaved buffer was already indexed; saving identical text needs no rescan.
+    expect(count(mark, /perf rescan .*parse\+extract/), since(mark).join("\n")).toBe(0);
     // The typing debounce already validated this exact version against this
     // exact index, so the save does not redo it.
     expect(count(mark, /perf validate /), since(mark).join("\n")).toBe(0);

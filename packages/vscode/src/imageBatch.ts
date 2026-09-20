@@ -21,6 +21,7 @@ export interface BatchResult {
 export interface BatchControl {
   cancelled(): boolean;
   report(file: string, completed: number, total: number): void;
+  resolveConflict?(file: string): Promise<"skip" | "overwrite" | "cancel">;
 }
 export interface BatchCodec {
   decode(bytes: Uint8Array, ext: string): Promise<ImagePixels>;
@@ -75,6 +76,9 @@ export async function convertImageBatch(
   const result: BatchResult = { written: [], skipped: [], failed: [], cancelled: false };
   const sources = new Set(inputs.map((input) => pathKey(input.file)));
   const outputs = new Set<string>();
+  let collisionPolicy: "skip" | "overwrite" | "cancel" | undefined = options.overwrite
+    ? "overwrite"
+    : undefined;
   const ext = options.format === "jpeg" ? ".jpg" : `.${options.format}`;
   for (const [index, input] of inputs.entries()) {
     if (control.cancelled()) break;
@@ -89,11 +93,18 @@ export async function convertImageBatch(
       continue;
     }
     outputs.add(key);
+    let overwrite = options.overwrite;
     let temporary: string | undefined;
     try {
       try {
         const existing = await fs.lstat(target);
-        if (!options.overwrite) {
+        collisionPolicy ??= (await control.resolveConflict?.(target)) ?? "skip";
+        if (collisionPolicy === "cancel" || control.cancelled()) {
+          result.cancelled = true;
+          break;
+        }
+        overwrite = collisionPolicy === "overwrite";
+        if (!overwrite) {
           result.skipped.push(target);
           continue;
         }
@@ -110,7 +121,7 @@ export async function convertImageBatch(
       temporary = path.join(path.dirname(target), `.px-image-${randomUUID()}.tmp`);
       await fs.writeFile(temporary, encoded, { flag: "wx" });
       if (control.cancelled()) break;
-      if (options.overwrite) await fs.rename(temporary, target);
+      if (overwrite) await fs.rename(temporary, target);
       else {
         // Exclusive copy also works on filesystems without hard-link support.
         try {
@@ -144,6 +155,6 @@ export async function convertImageBatch(
       }
     }
   }
-  result.cancelled = control.cancelled();
+  result.cancelled ||= control.cancelled();
   return result;
 }

@@ -1,15 +1,23 @@
-# Try the editing tools
+# Make a small change, then inspect it
 
-Open an event or scripted-effect file in your mod:
+## Start with a template
 
-- Hover an effect or trigger to read its documentation and supported scopes.
-- Press **Ctrl+Alt+I** on an empty line to insert a snippet derived from the game's definitions. Fill the fields with Tab. `px.completion.mode` selects Minimal, Examples or Names.
-- Type inside a trigger or effect block to see context-aware suggestions. Scope information ranks and labels suggestions.
-- Press **F12** on a referenced definition to open its source.
-- Right-click an event or localization key and open the **Paradox** menu. Choose an action for that object. For keyboard access, place the cursor on it and press **Shift+F10**.
-- Look beside a localization key for its text. Use the lightbulb to edit the value without leaving the script file.
-- Hover a DDS texture path to preview it. Open the DDS file and use the background palette to change the shared editor and hover background; checkerboard is the default.
+In your mod window, select **New Content**, then choose one of the templates offered for your game. Give it a unique prefix when asked. The prefix keeps your file names and identifiers separate from other mods. The toolkit creates the file in the correct folder and opens it.
 
-**Paradox: Export Generated Snippets** opens a searchable HTML catalogue with previews, copy controls and printing.
+For an existing mod, open one of your script files instead. You do not need a tutorial project.
 
-In GUI or localization files, try completion inside `[ ... ]`. The data-type dump supplies function signatures and return types. If expected names are missing, check both dump sources in the **PX Toolkit** tooltip.
+## Try the editing loop
+
+1. Put the cursor on a script keyword and hover it. Read what it does and which values or scopes it accepts.
+2. Type part of a keyword inside a block. Choose a suggestion with Enter or Tab; use Tab to move through any fields it inserts. Press Ctrl+Space to ask for suggestions manually.
+3. Put the cursor on a referenced definition and press F12 to inspect its source. A source in the game folder is a reference, not the place to make your mod's changes.
+4. For CK3 or Victoria 3 events, type in a title, description or option-name value to see localization-key suggestions. A new key is only a reference until you add its displayed text.
+5. Save the file. Open **View > Problems** to check structural errors. Use the lightbulb for available fixes, including saving a script or localization file as UTF-8 with BOM.
+
+Right-click a definition or localization key for actions labelled **PX:**. Shift+F10 opens the same menu from the keyboard. **Project > Settings > Suggestion verbosity** lets you choose names, minimal fields or full examples.
+
+## Test what the player sees
+
+Enable the mod in a playset in the game's launcher before testing. A saved file or an empty Problems list does not prove that the game loads or runs it correctly. Check the feature in game; the validator step adds another useful check.
+
+For more examples, open **Paradox: Export Generated Snippets**. It creates a searchable catalogue from the available game definitions.

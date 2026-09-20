@@ -1,16 +1,16 @@
-# Check your setup and data sources
+# Connect the game to your mod
 
-Open your mod workspace, then run **Paradox: Run Setup & Health Check**. It finds the game through Steam, checks the mod folders, loads the available game data and offers to download the game's tiger validator where supported.
+The toolkit needs two different folders: your **mod**, where you write changes, and the **game installation**, which it reads for definitions and references.
 
-The report shows two separate sources:
+1. Open your mod and check the game name at the top of **PX Toolkit > Project**.
+2. Select **Check Setup**. The toolkit looks for the game in your Steam libraries and reports what it found.
+3. If the game was not found, select **Choose Game Folder** and browse to its installation or `game` data folder. A custom installation is fine.
+4. Wait for indexing to finish. Hover **PX Toolkit** in the status bar to see progress and loaded data sources. Use **Show details** in the setup result for the full report.
 
-- **script_docs** for effects, triggers, event targets and modifiers.
-- **Data types / datafunctions** for `[ ... ]` expressions in GUI and localization files.
+If the game name is wrong, set **Paradox: Game Id** in Toolkit Settings before choosing the installation. A newly created mod remembers the game you chose.
 
-**Toolkit-provided set** means the extension is using bundled reference data. **Your generated dump** means it loaded usable definitions from your dump folder. One set can be generated while the other still uses bundled data.
+You can start with the reference data included in the toolkit. **Toolkit-provided set** means bundled data; **your generated dump** means data loaded from your game. Missing generated dumps do not prevent your first edit. Later steps explain how to refresh them and add a validator.
 
-Generate both sets for your installed patch: `script_docs` plus `DumpDataTypes` in CK3, or `dump_data_types` in Victoria 3 and EU5. Then run **Paradox: Reload Game Data**. The next walkthrough step gives the commands and output folders.
+If no usable reference data is available for your game, generate its dumps before relying on completion. If the toolkit is disabled for this workspace, enable **Paradox: Enable For Workspace** in Settings.
 
-Setup is complete when the game folder, mod, loaded game data and supported validator are available. Cancelling setup does not mark it complete. The dump step completes only after both generated dump sets load.
-
-Click **PX Toolkit** in the status bar to run this check again. Its tooltip also shows both sources. Open **Output > Paradox Modding Toolkit** for the full report and the dump folder in use.
+This step completes when the game, mod and script reference data are ready. Installing a validator is a separate optional step. Run Check Setup again whenever paths or game versions change.

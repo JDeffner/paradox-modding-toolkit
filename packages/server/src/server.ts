@@ -352,7 +352,7 @@ function refreshLazyRefs(): void {
     source: "parent" as const,
   }));
   if (settings.gamePath) roots.push({ root: settings.gamePath, source: "vanilla" });
-  lazyRefs.setRoots(roots, isEngineToken, settings.indexAssets !== false);
+  lazyRefs.setRoots(roots, isEngineToken, settings.indexAssets !== false, schema);
 }
 
 /** Bundled frequency tables: completion ranks with them, the Examples Wiki
@@ -1302,8 +1302,10 @@ async function buildIndex(): Promise<void> {
       indexing = false;
       // A scan can finish after a document change was already indexed.
       for (const doc of documents.all()) {
-        if (doc.languageId === "paradox-loc" && doc.uri.startsWith("file:"))
+        if (doc.uri.startsWith("file:")) {
+          rescanDigests.delete(URI.parse(doc.uri).fsPath.toLowerCase());
           handleModFileChange(URI.parse(doc.uri).fsPath);
+        }
       }
       for (const doc of documents.all()) validateDocument(doc);
       sendProgress("index", "done");
@@ -1351,6 +1353,9 @@ function contentDigest(content: string | null): string {
 }
 
 function rescanModFile(fsPath: string): void {
+  // URI decoding lowercases Windows drive letters. Preserve the spelling
+  // already published by the disk index for consumers that retain source paths.
+  fsPath = data.index.inFile(fsPath)[0]?.file ?? fsPath;
   const lower = fsPath.toLowerCase();
   if (settings.indexAssets === false && lower.endsWith(".asset")) return;
   const wsRoot = workspaceRootOf(fsPath);
@@ -1366,12 +1371,11 @@ function rescanModFile(fsPath: string): void {
     return;
 
   const tParse = Date.now();
-  const openLoc =
-    entry?.kind === "loc_key"
-      ? documents.all().find((doc) => doc.uri.startsWith("file:") && matchesSourceFile(fsPath, doc.uri))
-      : undefined;
-  const content = openLoc
-    ? openLoc.getText().replace(/^\uFEFF/, "")
+  const open = documents
+    .all()
+    .find((doc) => doc.uri.startsWith("file:") && matchesSourceFile(fsPath, doc.uri));
+  const content = open
+    ? open.getText().replace(/^\uFEFF/, "")
     : fs.existsSync(fsPath)
       ? readFileStripBom(fsPath)
       : null;
@@ -1653,6 +1657,7 @@ let pendingConfigChange: ReturnType<typeof setTimeout> | undefined;
 const pendingModChanges = new Map<string, { fsPath: string; timer: ReturnType<typeof setTimeout> }>();
 
 function handleModFileChange(fsPath: string): void {
+  lazyRefs.invalidateFile(fsPath);
   perf(`modFileChanged ${perfName(fsPath)}`);
   const roots = [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()];
   if (isIndexConfigFile(fsPath, roots, activeProfile())) {
@@ -2208,7 +2213,7 @@ connection.onDefinition((params) =>
     if (!doc) return [];
     // Loc files: navigate [ ... ] datafunction names (custom loc, saved scopes).
     // Plain loc-key jumps stay with the client-side script-usage provider.
-    if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position);
+    if (doc.languageId === "paradox-loc") return provideLocDefinition(data, doc, params.position, schema);
     if (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui") return [];
     const constant = provideConstantDefinition(doc, params.position);
     if (constant) return constant;
@@ -2221,8 +2226,12 @@ connection.onDefinition((params) =>
       const gui = provideGuiDefinition(doc, params.position, guiPaths());
       if (gui) return gui;
     }
-    return provideDefinition(data, doc, params.position, (word) =>
-      docLocalDefs(doc).filter((d) => d.name === word)
+    return provideDefinition(
+      data,
+      doc,
+      params.position,
+      (word) => docLocalDefs(doc).filter((d) => d.name === word),
+      schema
     );
   })
 );
@@ -2236,7 +2245,7 @@ connection.onSignatureHelp((params) => {
     return provideDataFnSignature(data.dataTypes, data.dataFnUsage, lineText, params.position.character);
   }
   if (!isScriptLanguage(doc.languageId)) return null;
-  return provideSignatureHelp(data, doc, params.position);
+  return provideSignatureHelp(data, doc, params.position, schema);
 });
 
 connection.onCodeAction((params) => {
@@ -2285,9 +2294,20 @@ connection.onReferences((params) =>
   indexRead(`references ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
     // Loc files too: references on a loc key line list its script usage sites.
-    if (!doc || (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-loc")) return [];
-    return provideReferences(data, doc, params.position, params.context.includeDeclaration, (name) =>
-      lazyRefs.lookup(name)
+    if (
+      !doc ||
+      (!isScriptLanguage(doc.languageId) &&
+        doc.languageId !== "paradox-loc" &&
+        doc.languageId !== "paradox-gui")
+    )
+      return [];
+    return provideReferences(
+      data,
+      doc,
+      params.position,
+      params.context.includeDeclaration,
+      (name) => lazyRefs.lookup(name),
+      schema
     );
   })
 );
@@ -2296,14 +2316,22 @@ connection.onPrepareRename((params) => {
   flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc || !isScriptLanguage(doc.languageId)) return null;
-  return prepareRename(data, doc, params.position);
+  return prepareRename(data, doc, params.position, schema);
 });
 
 connection.onRenameRequest((params) => {
   flushModFileChanges();
   const doc = documents.get(params.textDocument.uri);
   if (!doc || !isScriptLanguage(doc.languageId)) return null;
-  return provideRename(data, doc, params.position, params.newName, (uri) => documents.get(uri));
+  return provideRename(
+    data,
+    doc,
+    params.position,
+    params.newName,
+    (uri) => documents.all().find((open) => matchesSourceFile(URI.parse(uri).fsPath, open.uri)),
+    schema,
+    (file) => workspaceRootOf(file) !== null
+  );
 });
 
 connection.onWorkspaceSymbol((params) => {
@@ -2473,8 +2501,7 @@ documents.onDidOpen((e) => {
 
 documents.onDidChangeContent((e) => {
   const uri = e.document.uri;
-  if (e.document.languageId === "paradox-loc" && uri.startsWith("file:"))
-    handleModFileChange(URI.parse(uri).fsPath);
+  if (uri.startsWith("file:")) handleModFileChange(URI.parse(uri).fsPath);
   const existing = validationTimers.get(uri);
   if (existing) clearTimeout(existing);
   validationTimers.set(
@@ -2508,8 +2535,7 @@ documents.onDidSave((e) => {
 
 documents.onDidClose((e) => {
   const uri = e.document.uri;
-  if (e.document.languageId === "paradox-loc" && uri.startsWith("file:"))
-    handleModFileChange(URI.parse(uri).fsPath);
+  if (uri.startsWith("file:")) handleModFileChange(URI.parse(uri).fsPath);
   const timer = validationTimers.get(uri);
   if (timer) clearTimeout(timer);
   validationTimers.delete(uri);

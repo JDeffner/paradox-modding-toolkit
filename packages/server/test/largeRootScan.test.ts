@@ -146,7 +146,10 @@ describe("large-root scan (§B1)", () => {
         });
         await conn.sendNotification("initialized", {});
 
-        const indexed = await waitFor(() => statuses.some((p) => !p.indexing), 180_000);
+        const indexed = await waitFor(() => {
+          const began = statuses.findIndex((p) => p.indexing);
+          return began >= 0 && statuses.slice(began + 1).some((p) => !p.indexing);
+        }, 180_000);
         // The status flips in the scan's `finally`, one turn before a rejection
         // reaches the §A1 catch: let any failure line land before reading them.
         await new Promise((r) => setTimeout(r, 500));

@@ -34,12 +34,7 @@ export function onboardingReadiness(
   }
 ): Record<"px.setupReady" | "px.modReady" | "px.dumpsReady" | "px.tigerReady", boolean> {
   return {
-    "px.setupReady":
-      !status.indexing &&
-      status.gameOk &&
-      status.modOk &&
-      status.tokens > 0 &&
-      (status.tigerName === null || status.tigerOk),
+    "px.setupReady": !status.indexing && status.gameOk && status.modOk && status.tokens > 0,
     "px.modReady": status.modOk && !status.indexing,
     "px.dumpsReady":
       status.tokens > 0 &&

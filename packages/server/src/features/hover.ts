@@ -23,9 +23,8 @@ import { structureContextAt } from "../structure";
 import { inferScopeAt } from "../scopes/inference";
 import { inferenceContextFor, variableTypes } from "../scopes/varTypes";
 import { nodeAtOffset, walkStatements } from "../parser";
-import type { RefField } from "../schema/types";
+
 import { VAR_PREFIX_KINDS } from "../games/jomini/variables";
-import { activeProfile } from "../games/active";
 import { keywordArticle, scopeWordDoc } from "../data/keywordDocs";
 import { matchTemplatedModifier, templatedModifierDoc } from "../data/modifierTemplates";
 import type { Scope } from "../scopes/model";
@@ -43,6 +42,8 @@ import {
 import { definitionBody } from "./definitionBody";
 import type { Definition } from "@px-lsp/protocol/types";
 import type { DefineEntry } from "../data/defines";
+import { definitionsAt, expectedKindsAt } from "./symbolResolution";
+import { loadSchema } from "../schema/loader";
 
 export function provideHover(
   data: ServerData,
@@ -132,9 +133,9 @@ export function provideHover(
   // `add_trait = brave`), the schema names the kinds it can reference — show
   // only those meanings instead of every same-named symbol (the `faith` event
   // target is noise on `theme = faith`). Falls through when nothing matches.
-  const expected = getSchema ? refKindsAt(document, position, getSchema().refFields) : null;
-  let defs = data.index.lookup(word);
-  if (defs.length === 0 && docDefs) defs = docDefs(word);
+  const schema = getSchema?.() ?? loadSchema(null);
+  const expected = expectedKindsAt(document, position, schema, entry);
+  const defs = definitionsAt(data, document, position, schema, false, docDefs);
   const expectedDefs = expected ? defs.filter((d) => expected.includes(d.kind)) : [];
   // Anchor for the "N references" command link: the hovered site itself, so
   // the client can drive the references view from it.
@@ -331,8 +332,7 @@ function atKeyPosition(document: TextDocument, position: Position): boolean {
 /**
  * Cards for a set of same-named definitions: one card per KIND, with N same-kind
  * sites collapsed into a single card ("33 sites") instead of 33 identical cards.
- * The name-wide reference count renders once, on the first card, because it is
- * a property of the name, not of any one definition.
+ * The first card links to references for the resolved symbol type.
  */
 export function definitionCards(
   data: ServerData,
@@ -369,10 +369,11 @@ export function definitionCards(
 function referencesFooter(
   data: ServerData,
   name: string,
+  kind: string,
   at?: { uri: string; line: number; character: number }
 ): string | null {
   if (!canRunCommand(clientCommands.showReferences)) return null;
-  const refs = data.refIndex.lookup(name).length;
+  const refs = data.refIndex.lookup(name).filter((r) => r.kinds.includes(kind)).length;
   if (refs === 0) return null;
   const label = `${refs.toLocaleString("en-US")} reference${refs === 1 ? "" : "s"}`;
   return at
@@ -419,7 +420,7 @@ function definitionGroupCard(
   const links = group.slice(0, 3).map(provenance);
   if (group.length > 3) links.push(`+${group.length - 3} more`);
   if (withRefs) {
-    const refs = referencesFooter(data, def.name, at);
+    const refs = referencesFooter(data, def.name, def.kind, at);
     if (refs) links.push(refs);
   }
   card.provenance = links.join(" · ");
@@ -492,7 +493,7 @@ function definitionCard(
   // Only the hover's first definition card carries it: the count belongs to
   // the NAME, so repeating it per meaning taught nothing.
   if (withRefs) {
-    const refs = referencesFooter(data, def.name, at);
+    const refs = referencesFooter(data, def.name, def.kind, at);
     if (refs) links.push(refs);
   }
   card.provenance = links.join(" · ");
@@ -654,15 +655,14 @@ function macroParamCard(
   if (offset < last.key.range.start || offset > last.key.range.end) return null;
   const enclosing = hit!.path[hit!.path.length - 2];
   if (!enclosing || enclosing.kind !== "assignment" || enclosing.key.quoted) return null;
-  const callee = enclosing.key.text;
-  for (const def of data.index.lookup(callee)) {
+  for (const def of definitionsAt(data, document, document.positionAt(enclosing.key.range.start))) {
     if (def.kind !== "scripted_effect" && def.kind !== "scripted_trigger") continue;
     if (!def.params?.includes(word)) continue;
     return {
       kind: "macro_param",
       badgeLabel: "parameter",
       name: word,
-      headTail: `of ${def.kind.replace(/_/g, " ")} \`${callee}\``,
+      headTail: `of ${def.kind.replace(/_/g, " ")} \`${def.name}\``,
       doc: `Replaces \`$${word}$\` in the ${def.kind.replace(/_/g, " ")}'s body.`,
     };
   }
@@ -811,53 +811,6 @@ function keywordCard(word: string): CardInput | null {
   // The name reads as written, the article is the canonical spelling: `not`
   // and `NOT` are one keyword.
   return { kind: "keyword", name: word, doc: article.doc, wiki: { name: article.name, kind: "keyword" } };
-}
-
-/**
- * The definition kinds a ref field expects at this position, when the cursor
- * sits on the VALUE of such a field (`theme = X` scalar form, `events = { X }`
- * list form). null anywhere else — key position, non-ref keys, quoted values.
- */
-function refKindsAt(
-  document: TextDocument,
-  position: Position,
-  refFields: Map<string, RefField>
-): string[] | null {
-  const { result, lineIndex } = getParse(document);
-  const offset = lineIndex.offsetAt(position);
-  const hit = nodeAtOffset(result.root, offset);
-  if (!hit) return null;
-  const last = hit.path[hit.path.length - 1];
-
-  // `key = word` — scalar value of an assignment.
-  if (
-    last.kind === "assignment" &&
-    !last.key.quoted &&
-    last.value?.kind === "scalar" &&
-    !last.value.quoted &&
-    offset >= last.value.range.start &&
-    offset <= last.value.range.end
-  ) {
-    const field = refFields.get(last.key.text);
-    if (field) return field.form !== "list" ? field.kinds : null;
-    // Block-scoped ref keys (`trigger_event = { id = X }`,
-    // `override_background = { reference = X }`).
-    const enclosing = hit.path[hit.path.length - 2];
-    if (enclosing?.kind === "assignment" && !enclosing.key.quoted) {
-      return activeProfile().blockRefFields[enclosing.key.text.toLowerCase()]?.[last.key.text] ?? null;
-    }
-    return null;
-  }
-
-  // `key = { word ... }` — bare list element; the owning assignment is one up.
-  if (last.kind === "value" && last.value.kind === "scalar" && !last.value.quoted) {
-    const parent = hit.path[hit.path.length - 2];
-    if (parent?.kind === "assignment" && !parent.key.quoted) {
-      const field = refFields.get(parent.key.text);
-      return field && field.form !== "scalar" ? field.kinds : null;
-    }
-  }
-  return null;
 }
 
 /** The inferred scope set at the cursor, or null when inference is unavailable. */

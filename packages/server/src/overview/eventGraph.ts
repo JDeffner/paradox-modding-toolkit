@@ -403,7 +403,7 @@ export function computeEventGraph(
   const factsOf = fileFacts();
   for (const id of selected) {
     const defs = data.index.lookup(id);
-    const def = defs[0];
+    const def = defs.find((d) => d.kind === "event" || d.kind === "on_action");
     const node: EventGraphNode = {
       id,
       kind: def?.kind ?? "unknown",

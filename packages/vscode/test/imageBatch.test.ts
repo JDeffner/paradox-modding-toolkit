@@ -178,3 +178,45 @@ it("reports an unwritable destination as a failure", async () => {
   expect(result.written).toEqual([]);
   expect(await fs.readFile(destination, "utf8")).toBe("keep");
 });
+
+it("asks about conflicts only when an output exists and remembers the batch choice", async () => {
+  const a = await dds("a.dds");
+  const b = await dds("b.dds");
+  const resolveConflict = vi.fn(async () => "skip" as const);
+  await convertImageBatch([{ file: a, relative: "a.dds" }], encoding, new ImageCodec(), {
+    ...control,
+    resolveConflict,
+  });
+  expect(resolveConflict).not.toHaveBeenCalled();
+  await fs.writeFile(path.join(root, "b.png"), "keep");
+  const result = await convertImageBatch(
+    [
+      { file: a, relative: "a.dds" },
+      { file: b, relative: "b.dds" },
+    ],
+    encoding,
+    new ImageCodec(),
+    { ...control, resolveConflict }
+  );
+  expect(resolveConflict).toHaveBeenCalledTimes(1);
+  expect(result.skipped).toHaveLength(2);
+  expect(await fs.readFile(path.join(root, "b.png"), "utf8")).toBe("keep");
+});
+
+it.each(["cancel", "overwrite"] as const)(
+  "handles the conflict toast choice %s without changing the source",
+  async (choice) => {
+    const file = await dds("a.dds");
+    const before = await fs.readFile(file);
+    const target = path.join(root, "a.png");
+    await fs.writeFile(target, "existing");
+    const result = await convertImageBatch([{ file, relative: "a.dds" }], encoding, new ImageCodec(), {
+      ...control,
+      resolveConflict: async () => choice,
+    });
+    expect(result.cancelled).toBe(choice === "cancel");
+    expect(result.written).toHaveLength(choice === "overwrite" ? 1 : 0);
+    if (choice === "cancel") expect(await fs.readFile(target, "utf8")).toBe("existing");
+    expect(await fs.readFile(file)).toEqual(before);
+  }
+);

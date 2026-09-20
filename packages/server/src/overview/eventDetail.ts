@@ -21,6 +21,7 @@ import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 import { matchesSourceFile } from "../sourceFile";
+import { detectContextFromParse, type BlockContext } from "../context";
 
 /**
  * Blocks rendered as a step of their own: the union across game profiles,
@@ -118,7 +119,13 @@ export function computeEventDetail(
     else if (key === "option" && sub) detail.options.push(option(data, schema, sub, lineOf));
   }
 
-  detail.refs = collectRefs(data, id, block, lineOf);
+  detail.refs = collectRefs(
+    data,
+    id,
+    block,
+    lineOf,
+    (offset) => detectContextFromParse(parse, offset).context
+  );
   return detail;
 }
 
@@ -425,7 +432,8 @@ function collectRefs(
   data: ServerData,
   selfId: string,
   block: BlockNode,
-  lineOf: (o: number) => number
+  lineOf: (o: number) => number,
+  contextAt: (offset: number) => BlockContext
 ): EventRefInfo[] {
   const refs = new Map<string, EventRefInfo>();
 
@@ -460,7 +468,12 @@ function collectRefs(
     const defs = data.index.lookup(textValue);
     if (defs.length === 0) return;
     if (isKey) {
-      const scripted = defs.find((d) => d.kind === "scripted_effect" || d.kind === "scripted_trigger");
+      const context = contextAt(offset);
+      const scripted = defs.find(
+        (d) =>
+          (d.kind === "scripted_effect" && context !== "trigger") ||
+          (d.kind === "scripted_trigger" && context !== "effect")
+      );
       if (scripted) {
         add(scripted.kind as "scripted_effect" | "scripted_trigger", textValue, offset, [scripted.kind]);
       }

@@ -69,7 +69,8 @@ beforeAll(() => {
     { name: "my_effect", kind: "scripted_effect", file: effectFile, line: 0, source: "mod" },
     { name: "brave", kind: "trait", file: traitFile, line: 0, source: "mod" },
   ]);
-  // Schema-captured references (add_trait = brave) power the trait's dependents.
+  // Populate all mod references, as the server does for calls and ref fields.
+  data.refIndex.addAll(extractReferences(EVENTS_TXT, eventsFile, "mod", schema).references);
   data.refIndex.addAll(extractReferences(EFFECT_TXT, effectFile, "mod", schema).references);
 });
 

@@ -16,6 +16,7 @@ import type { StructureIndex } from "../schema/loader";
 import type { ServerData } from "../serverData";
 import { walkStatements, type AssignmentNode, type BlockNode, type ScalarNode } from "../parser";
 import { getParse } from "../parseCache";
+import { contextFromStatements, inlineKind } from "../context";
 
 const TOKEN_TYPES = [
   "method", // engine effects
@@ -132,7 +133,17 @@ export function provideSemanticTokens(
       return;
     }
     if (stmt.kind === "assignment") {
-      pushScalar(stmt.key);
+      const context = contextFromStatements(result.root, ancestors, entry?.kind).context;
+      const declarationKind =
+        inlineKind(result.root, stmt) ?? (ancestors.length === 0 ? entry?.kind : undefined);
+      const keyKinds = declarationKind
+        ? [declarationKind]
+        : context === "trigger"
+          ? ["scripted_trigger"]
+          : context === "effect"
+            ? ["scripted_effect"]
+            : undefined;
+      pushScalar(stmt.key, keyKinds);
       if (stmt.value?.kind === "scalar") {
         const key = stmt.key;
         const value = stmt.value;
@@ -181,8 +192,8 @@ function classify(
     return { type: TYPE_INDEX[ENGINE_TYPE[tokens[0].kind]], modifiers: VANILLA_BIT };
   }
   const defs = data.index.lookup(word);
-  if (defs.length > 0) {
-    const def = defs[0];
+  const def = defs.find((d) => !expectedKinds || expectedKinds.includes(d.kind));
+  if (def) {
     return {
       type: TYPE_INDEX[DEF_TYPE[def.kind] ?? DEF_TYPE_FALLBACK],
       modifiers: def.source === "mod" ? 0 : VANILLA_BIT,

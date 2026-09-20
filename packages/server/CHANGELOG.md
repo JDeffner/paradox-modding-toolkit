@@ -8,13 +8,33 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
-- Warn about missing UTF-8 BOMs in mod script `.txt` files across all game profiles, using the existing `missing-bom` diagnostic code. Other script file types and files outside the mod are excluded.
+### Symbol resolution and live documents
 
-- Accept an optional source file when loading event details or creator forms, so duplicate names resolve to the selected definition. Existing clients retain their current lookup behavior.
+- Apply source priority within each definition kind. A localization key no longer hides a same-name trait, and a scripted GUI does not stand in for a scripted trigger. Preserve all same-kind override sites for navigation.
+- Use grammar and schema reference types consistently in definition lookup, references, hover, signature help, semantic tokens, event lookup and dependencies. Keep unknown or ambiguous contexts from silently choosing an unrelated kind.
+- Preserve trigger/effect context inside scripted definitions and weighted random-list bodies. Return no unrelated candidates when a typed reference field has no definitions.
+- Index open script buffers from `textDocument/didChange`, including their references. On `didClose`, restore disk content or remove unsaved-only definitions. File watcher updates retain the current open buffer and invalidate cached dependency references.
 
-- Resolve explicit localization languages, including unsaved text, without substituting values from another language or changing the completion index.
+### Rename contract
 
-- Keep localization coverage responsive during large scans and reuse unchanged localization lines after edits. Preserve full-parse results when incremental reuse is not safe.
+- Rename one symbol kind at a time and validate current declaration sites and reference text before returning edits. Reject ambiguous types, stale or unreadable text, read-only sources and target names already used by the same kind.
+- Return versioned `TextDocumentEdit` entries when the client declares `workspace.workspaceEdit.documentChanges`. Use the open document's version and `null` for closed files. Without this capability, require open sources to match disk and return plain `WorkspaceEdit.changes`.
+- Keep graphics and GUI kinds with incomplete reference coverage unavailable for rename. Reject declarations with multiple occurrences of the name on one line until the declaration is split across lines.
+
+### Completion and source selectors
+
+- Propose event localization keys from the current document's event ID and option order, including incomplete or unsaved text. Use verified CK3 and Victoria 3 profile conventions, including Victoria 3 flavor text, and avoid names assigned to another option. EU5 has no assumed new-key convention.
+- Label proposed keys as new, preserve existing keys' definition metadata and insert only the reference. Do not create localization files, add definitions to the index or require client commands.
+- Accept an optional absolute path or file URI for event details and creator forms. Select that exact source; a missing match returns no selected definition instead of falling back to a duplicate elsewhere. Omitted selectors retain existing lookup behavior.
+- Resolve an explicit localization language from saved and unsaved text, including new open files, without substituting another language or changing the completion index. Match open paths according to the platform's case rules.
+- Warn about missing UTF-8 BOMs in mod script `.txt` files across all game profiles through the existing `missing-bom` diagnostic. Exclude other script file types and files outside the mod.
+
+### Localization performance
+
+- Cache coverage per mod and language. Script-only edits reuse translations while recomputing required and inherited keys. Localization creation, edits, renames and deletion refresh the affected language and preserve duplicate-key precedence.
+- Share concurrent coverage loads, retry reads interrupted by file changes and restart pending readers after cache resets. Clear translations on index rebuilds and evict old mod caches.
+- Yield during large coverage calculations so other requests can run, while retaining issue caps.
+- Reuse unchanged localization lines after edits, falling back to a full parse when reuse is unsafe. Keep the parse cache keyed by URI and version. Whole-file definition rebuilding remains; worker parsing is deferred.
 
 ## 0.3.5
 

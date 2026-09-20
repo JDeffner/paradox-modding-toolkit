@@ -23,9 +23,14 @@ import { PARADOX_SCRIPT_LANGS } from "../src/langIds";
 interface Manifest {
   contributes: {
     languages: Array<{ id: string; aliases?: string[]; icon?: { light: string; dark: string } }>;
-    grammars: Array<{ language?: string; scopeName: string; path: string }>;
+    grammars: Array<{
+      language?: string;
+      scopeName: string;
+      path: string;
+      tokenTypes?: Record<string, string>;
+    }>;
     snippets: Array<{ language: string; path: string }>;
-    configurationDefaults: Record<string, unknown>;
+    configurationDefaults: Record<string, Record<string, unknown>>;
   };
 }
 
@@ -102,13 +107,20 @@ describe("manifest script languages", () => {
       for (const s of snippets) {
         expect(fs.existsSync(path.join(PKG_ROOT, s.path)), s.path).toBe(true);
       }
-      expect(c.configurationDefaults[`[${id}]`], id).toBeDefined();
+      expect(c.configurationDefaults[`[${id}]`]?.["editor.wordBasedSuggestions"], id).toBeUndefined();
     }
   });
 
   it("gives every grammar its own scopeName", () => {
     const scopes = c.grammars.map((g) => g.scopeName);
     expect(new Set(scopes).size).toBe(scopes.length);
+  });
+
+  it("treats unquoted script identifiers as code for automatic suggestions", () => {
+    for (const id of [...PARADOX_SCRIPT_LANGS, "paradox-gui"]) {
+      const grammar = c.grammars.find((entry) => entry.language === id);
+      expect(grammar?.tokenTypes?.["string.unquoted"], id).toBe("other");
+    }
   });
 
   it("labels the per-game ids with the game names the server owns", () => {

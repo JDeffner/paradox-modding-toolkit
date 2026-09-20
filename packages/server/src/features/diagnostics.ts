@@ -128,7 +128,7 @@ export function computeReferenceDiagnostics(references: Reference[], data: Serve
     if (dot <= 0) continue;
     const ns = ref.name.slice(0, dot);
     if (!data.modNamespaces.has(ns)) continue;
-    if (data.index.lookupAll(ref.name).length > 0) continue;
+    if (data.index.lookupAll(ref.name).some((d) => d.kind === "event")) continue;
     out.push(
       diag(
         {

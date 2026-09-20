@@ -19,7 +19,38 @@ export const DASHBOARD_SECTIONS = {
   "px.test": "Test & Troubleshoot",
   "px.paths": "Paths",
 } as const;
-const PROJECT_GROUPS = ["View", "Create", "Publish", "Info"] as const;
+export const PROJECT_GROUPS: readonly string[] = ["View", "Create", "Publish", "Info"];
+const EDITOR_CHOICES = {
+  completionMode: {
+    label: "Suggestion verbosity",
+    section: "completion.mode",
+    tip: "Choose what accepting a script keyword suggestion inserts.",
+    items: [
+      { label: "Names only", value: "names", detail: "Insert only the keyword name." },
+      {
+        label: "Minimal fields",
+        value: "minimal",
+        detail: "Insert documented fields with blank values and Tab stops. Omit optional fields.",
+      },
+      {
+        label: "Full examples",
+        value: "examples",
+        detail: "Insert documented examples and call parameters.",
+      },
+    ],
+  },
+  hoverDetail: {
+    label: "Hover detail",
+    section: "hover.detail",
+    tip: "Choose how much information appears when you hover over script.",
+    items: [
+      { label: "Compact", value: "compact", detail: "Show the heading, key facts and source." },
+      { label: "Standard", value: "standard", detail: "Include short documentation and example previews." },
+      { label: "Full", value: "full", detail: "Show longer examples, all meanings and the scope chain." },
+    ],
+  },
+} as const;
+type EditorChoice = keyof typeof EDITOR_CHOICES;
 
 export type DashboardSection = keyof typeof DASHBOARD_SECTIONS;
 
@@ -31,6 +62,7 @@ type InboundMessage =
   | { type: "focus"; root: string | null }
   | { type: "exclude"; root: string; excluded: boolean }
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
+  | { type: "pickSetting"; key: EditorChoice }
   | { type: "watcher" }
   | { type: "baseline" }
   | { type: "openSettings" }
@@ -76,6 +108,8 @@ interface DashboardState {
   watcherAvailable: boolean;
   diagnosticsVanilla: boolean;
   scopeInlayHints: boolean;
+  completionMode: PxConfig["completionMode"];
+  hoverDetail: PxConfig["hoverDetail"];
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
 }
@@ -166,6 +200,8 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       watcherAvailable: cfg.logsPath !== null,
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
+      completionMode: cfg.completionMode,
+      hoverDetail: cfg.hoverDetail,
       actions,
     };
   }
@@ -187,8 +223,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
           metaFor(this.deps.getCfg().gameId),
           this.deps.errorLog.problemCount
         ).flatMap((group) => group.items.map((item) => item.command));
-        if (![...allowed, "px.createDescriptor", "workbench.action.files.openFolder"].includes(msg.command))
-          return;
+        if (![...allowed, "px.createDescriptor", "px.addModToWorkspace"].includes(msg.command)) return;
         await runDashboardAction(msg.command, this.deps);
         this.refresh();
         return;
@@ -211,8 +246,23 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
           diagnosticsVanilla: "diagnostics.vanilla",
           scopeInlayHints: "scopeInlayHints",
         } as const;
-        await updateSetting(sections[msg.key], msg.value);
-        this.refresh();
+        if (!Object.hasOwn(sections, msg.key) || typeof msg.value !== "boolean") return;
+        await this.saveSetting(sections[msg.key], msg.value);
+        return;
+      }
+      case "pickSetting": {
+        if (!Object.hasOwn(EDITOR_CHOICES, msg.key)) return;
+        const setting = EDITOR_CHOICES[msg.key];
+        const current = this.deps.getCfg()[msg.key];
+        const items = setting.items.map((item) => ({
+          ...item,
+          description: item.value === current ? "Current" : undefined,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          title: setting.label,
+          placeHolder: setting.tip,
+        });
+        if (picked) await this.saveSetting(setting.section, picked.value);
         return;
       }
       case "watcher":
@@ -251,6 +301,15 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.refresh();
         return;
     }
+  }
+
+  private async saveSetting(section: string, value: unknown): Promise<void> {
+    try {
+      await updateSetting(section, value);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Could not save px.${section}: ${String(error)}`);
+    }
+    this.refresh();
   }
 }
 
@@ -456,6 +515,10 @@ ${uiCss}
   .toggle-row:has(> .px-switch > input:disabled) { cursor: not-allowed; }
   .toggle-row:has(> .px-switch > input:disabled) > .px-switch { opacity: 0.5; }
   .toggle-row > .px-switch { flex: 0 0 auto; }
+  .setting-choice, .settings-all { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .setting-choice { height: auto; padding-top: 5px; padding-bottom: 5px; }
+  .setting-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+  .setting-value { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
      is the part that tells paths apart). */
   .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
@@ -477,8 +540,9 @@ ${uiCss}
   .project-group { border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--px-border)); }
   .project-group > summary { display: flex; align-items: center; gap: 4px; padding: 5px 8px; cursor: pointer; list-style: none; font-weight: 600; }
   .project-group > summary::-webkit-details-marker { display: none; }
-  .project-group > summary svg { width: 14px; height: 14px; flex-shrink: 0; transform: rotate(-90deg); }
-  .project-group[open] > summary svg { transform: none; }
+  .project-group > summary > svg { width: 14px; height: 14px; flex-shrink: 0; transform: rotate(-90deg); }
+  .project-group[open] > summary > svg { transform: none; }
+  .mod-actions { display: flex; margin-left: auto; gap: 2px; }
   .project-group > summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   /* shadcn RadioGroupItem: the focus pin, one per mod plus "follow". */
   .radio {
@@ -487,9 +551,8 @@ ${uiCss}
     transition: border-color var(--px-ease), box-shadow var(--px-ease);
   }
   .radio[aria-checked="true"] { border-color: var(--px-primary); }
-  .radio[aria-checked="true"]::after {
-    content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
-  }
+  .radio-dot { position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary); visibility: hidden; }
+  .radio[aria-checked="true"] > .radio-dot { visibility: visible; }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
   /* The mod the views are on: its row is lit and its name is bold, so the pin
      reads from across the panel and not only from a 14px ring. */
@@ -513,7 +576,10 @@ ${
 ${
   section === "px.tools"
     ? `<details class="project-group" id="section-mods" open>
-  <summary>${icon("chevronDown")}Workspace Mods</summary>
+  <summary>${icon("chevronDown")}Workspace Mods<span class="mod-actions">
+    <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.createMod" aria-label="New Mod" data-tip="New Mod">${icon("plus")}</button>
+    <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.addModToWorkspace" aria-label="Add Existing Mod to Workspace" data-tip="Add Existing Mod to Workspace">${icon("folderOpen")}</button>
+  </span></summary>
   <div class="section-body px-list" id="body-mods"></div>
 </details>
 ${PROJECT_GROUPS.map(
@@ -522,9 +588,26 @@ ${PROJECT_GROUPS.map(
   ) => `<details class="project-group" id="group-${label.toLowerCase()}"${label === "View" || label === "Create" ? " open" : ""}>
   <summary>${icon("chevronDown")}${label}</summary>
   <div class="px-list" data-actions="${label}"></div>
-  ${label === "View" ? toggleRow("inlay", "Scope inlay hints", "Show inferred target types beside scope-changing script blocks. Labels do not change the script.") : ""}
 </details>`
 ).join("")}
+<details class="project-group" id="group-settings">
+  <summary>${icon("chevronDown")}Settings</summary>
+  <div class="px-list">
+    ${toggleRow("inlay", "Scope inlay hints", "Show inferred target types beside scope-changing script blocks. Labels do not change the script.")}
+    ${Object.entries(EDITOR_CHOICES)
+      .map(
+        ([
+          key,
+          setting,
+        ]) => `<button type="button" class="px-item setting-choice" data-setting="${key}" aria-labelledby="${key}-label ${key}-value" data-tip="${escapeAttr(setting.tip)}" data-tip-wrap>
+      <span class="setting-text"><span id="${key}-label">${setting.label}</span><span class="setting-value" id="${key}-value"></span></span>
+      ${icon("chevronDown")}
+    </button>`
+      )
+      .join("")}
+    <button type="button" class="px-item settings-all" id="all-settings">${icon("settings")}<span class="px-item-label">All settings</span></button>
+  </div>
+</details>
 `
     : ""
 }
@@ -568,6 +651,7 @@ const vscode = acquireVsCodeApi();
 const ICONS = ${JSON.stringify(icons)};
 const SECTION = ${JSON.stringify(section)};
 const SECTION_LABEL = ${JSON.stringify(DASHBOARD_SECTIONS[section])};
+const EDITOR_CHOICES = ${JSON.stringify(EDITOR_CHOICES)};
 let state = null;
 const saved = vscode.getState() ?? {};
 for (const group of document.querySelectorAll(".project-group")) {
@@ -579,6 +663,17 @@ for (const group of document.querySelectorAll(".project-group")) {
 }
 
 document.getElementById("help")?.addEventListener("click", () => vscode.postMessage({ type: "help" }));
+document.getElementById("all-settings")?.addEventListener("click", () => vscode.postMessage({ type: "openSettings" }));
+for (const button of document.querySelectorAll("[data-mod-command]")) {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    vscode.postMessage({ type: "run", command: button.dataset.modCommand });
+  });
+}
+for (const row of document.querySelectorAll("[data-setting]")) {
+  row.addEventListener("click", () => vscode.postMessage({ type: "pickSetting", key: row.dataset.setting }));
+}
 
 function iconEl(name) {
   const t = document.createElement("template");
@@ -649,7 +744,7 @@ function renderActions() {
   if (SECTION === "px.tools") {
     for (const box of document.querySelectorAll("[data-actions]")) {
       renderActionGroup(box, box.dataset.actions);
-      box.parentElement.classList.toggle("hidden", !box.children.length && box.dataset.actions !== "View");
+      box.parentElement.classList.toggle("hidden", !box.children.length);
     }
     return;
   }
@@ -705,6 +800,7 @@ function radio(on, tipText, onClick) {
   b.setAttribute("aria-checked", String(on));
   b.setAttribute("data-tip", tipText);
   b.setAttribute("data-tip-wrap", "");
+  b.appendChild(el("span", "radio-dot"));
   b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
   return b;
 }
@@ -713,14 +809,8 @@ function renderMods() {
   const focusedId = box.contains(document.activeElement) ? document.activeElement.id : null;
   const scrollTop = box.scrollTop;
   box.textContent = "";
-  const newMod = state.actions.find((group) => group.label === "Workspace Mods");
-  for (const item of newMod?.items ?? []) {
-    box.appendChild(actionRow(item.icon, item.label, item.tip,
-      () => vscode.postMessage({ type: "run", command: item.command })));
-  }
   if (!state.mods.length) {
     box.appendChild(el("div", "empty", "No mod found. Open a mod folder or create a new mod."));
-    box.appendChild(actionRow("folderOpen", "Open Mod...", "Open a mod folder.", () => vscode.postMessage({ type: "run", command: "workbench.action.files.openFolder" })));
     box.appendChild(actionRow("plus", "Create Mod Descriptor",
       "Create the file that marks this folder as a mod.",
       () => vscode.postMessage({ type: "run", command: "px.createDescriptor" })));
@@ -804,7 +894,13 @@ function render() {
     setSwitch("watcher", state.watcherOn, !state.watcherAvailable, "Game logs folder not found (set px.logsPath).");
     setSwitch("vanilla", state.diagnosticsVanilla, false);
   }
-  if (SECTION === "px.tools") setSwitch("inlay", state.scopeInlayHints, false);
+  if (SECTION === "px.tools") {
+    setSwitch("inlay", state.scopeInlayHints, false);
+    for (const [key, setting] of Object.entries(EDITOR_CHOICES)) {
+      const selected = setting.items.find((item) => item.value === state[key]);
+      document.getElementById(key + "-value").textContent = selected?.label ?? state[key];
+    }
+  }
 }
 
 window.addEventListener("message", (ev) => {

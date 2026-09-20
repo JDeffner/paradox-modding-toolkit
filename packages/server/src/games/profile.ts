@@ -237,6 +237,10 @@ export interface GameProfile extends GameMeta {
   prefixRefs: Record<string, string[]>;
   /** Block-local ref fields (outer key → inner key → kinds). */
   blockRefFields: Record<string, Record<string, string[]>>;
+  /** First quoted arguments verified in this game's data-type dump or GUI files. */
+  dataFunctionRefs?: Record<string, string>;
+  /** Event localization naming measured in vanilla; absent = no proposed new keys. */
+  eventLocalization?: { fields: Record<string, string>; optionSuffix: string };
   /** Hover provenance labels per definition kind (`_*.info` folder names). */
   structureSources: Record<string, string>;
   /**

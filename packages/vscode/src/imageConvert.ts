@@ -15,17 +15,12 @@ export async function convertImagesCommand(
   );
   let sources = multi?.length ? multi : arg ? [arg] : [];
   if (!sources.length) {
-    const choice = await vscode.window.showQuickPick(["Select files", "Select folder"], {
-      title: "Convert images",
-    });
-    if (!choice) return;
     sources =
       (await vscode.window.showOpenDialog({
-        canSelectFiles: choice === "Select files",
-        canSelectFolders: choice === "Select folder",
-        canSelectMany: choice === "Select files",
-        filters:
-          choice === "Select files" ? { Images: [...extensions].map((ext) => ext.slice(1)) } : undefined,
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: true,
+        filters: { Images: [...extensions].map((ext) => ext.slice(1)) },
         title: "Select images to convert",
       })) ?? [];
   }
@@ -99,11 +94,6 @@ export async function convertImagesCommand(
       if (!picked?.length) return;
       destination = picked[0].fsPath;
     }
-    const collision = await vscode.window.showQuickPick(
-      ["Skip existing files", "Overwrite existing outputs"],
-      { title: "If an output already exists", placeHolder: "Source files are always preserved" }
-    );
-    if (!collision) return;
     const codec = new ImageCodec();
     let result: BatchResult;
     try {
@@ -119,12 +109,24 @@ export async function convertImagesCommand(
           );
           return convertImageBatch(
             inputs,
-            { ...encoding, destination, overwrite: collision === "Overwrite existing outputs" },
+            { ...encoding, destination, overwrite: false },
             {
               decode: (bytes, ext) => codec.decode(bytes, ext, token),
               encode: (image, options) => codec.encode(image, options, token),
             },
             {
+              resolveConflict: async (file) => {
+                const choice = await vscode.window.showWarningMessage(
+                  `An output already exists: ${path.basename(file)}. Choose how to handle existing outputs in this batch. Source images are always preserved.`,
+                  "Skip Existing",
+                  "Overwrite Outputs"
+                );
+                return choice === "Skip Existing"
+                  ? "skip"
+                  : choice === "Overwrite Outputs"
+                    ? "overwrite"
+                    : "cancel";
+              },
               cancelled: () => token.isCancellationRequested,
               report: (file, _completed, total) =>
                 progress.report({ message: path.basename(file), increment: 100 / total }),

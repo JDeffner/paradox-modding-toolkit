@@ -55,6 +55,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       label: "Workspace Mods",
       items: [
         {
+          label: "Find Existing Mod...",
+          command: "px.openMod",
+          icon: "folderOpen",
+          tip: "Find local mods by name or browse to a project folder.",
+        },
+        {
           label: "New Mod…",
           command: "px.createMod",
           icon: "package",
@@ -146,6 +152,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
     {
       label: "Info",
       items: [
+        {
+          label: "Getting Started",
+          command: "px.getStarted",
+          icon: "flag",
+          tip: "Create your first mod or connect an existing workflow.",
+        },
         {
           label: "Join the Discord",
           command: "px.openDiscord",

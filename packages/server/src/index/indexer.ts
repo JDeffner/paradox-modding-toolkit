@@ -121,12 +121,18 @@ export class DefinitionIndex {
 
   /** Only the highest-ranked source present: mod shadows parent shadows vanilla. */
   private shadowResolve(list: Definition[]): Definition[] {
+    if (list.length < 2) return list;
+    if (list.some((d) => d.kind !== list[0].kind)) {
+      const best = new Map<string, number>();
+      for (const d of list) best.set(d.kind, Math.max(best.get(d.kind) ?? -1, SOURCE_RANK[d.source]));
+      return list.filter((d) => SOURCE_RANK[d.source] === best.get(d.kind));
+    }
     let best = -1;
     for (const d of list) best = Math.max(best, SOURCE_RANK[d.source]);
     return list.filter((d) => SOURCE_RANK[d.source] === best);
   }
 
-  /** All definitions for a name after shadow resolution. */
+  /** All definitions for a name, with source priority applied within each kind. */
   lookup(name: string): Definition[] {
     const list = this.byName.get(name);
     if (!list || list.length === 0) return [];
@@ -138,23 +144,28 @@ export class DefinitionIndex {
     return this.byName.get(name) ?? [];
   }
 
-  /** Iterate one shadow-resolved definition per name, optionally filtered. */
+  /** Iterate one shadow-resolved definition per name and kind, optionally filtered. */
   *entries(filter?: (def: Definition) => boolean): IterableIterator<Definition> {
     for (const list of this.byName.values()) {
-      // Apply the filter across ALL shadow-resolved defs of the name, not just
-      // the first: a name can carry several kinds (vanilla `brave` is a loc_key
-      // AND a trait), and a kind-filtered caller must still see the matching one.
       const resolved = this.shadowResolve(list);
-      const def = filter ? resolved.find(filter) : resolved[0];
-      if (def) yield def;
+      if (resolved.length === 1) {
+        if (!filter || filter(resolved[0])) yield resolved[0];
+      } else {
+        const seen = new Set<string>();
+        for (const def of resolved) {
+          if (seen.has(def.kind) || (filter && !filter(def))) continue;
+          seen.add(def.kind);
+          yield def;
+        }
+      }
     }
   }
 
   /**
    * Scripted-list definitions, shadow-resolved. Identical to
    * `entries((d) => d.kind === "scripted_list")` — same shadow resolution over
-   * the full name list, so a mod loc_key still shadows a vanilla scripted list
-   * of the same name — but it only visits the names that carry one (§B2).
+   * each kind, so a localization key cannot shadow a scripted list. It only
+   * visits names that carry a scripted list (§B2).
    */
   *scriptedLists(): IterableIterator<Definition> {
     for (const name of this.trackedNames.keys()) {

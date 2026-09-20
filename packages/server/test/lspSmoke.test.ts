@@ -16,6 +16,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { encodeDds } from "../src/dds";
+import type { CompletionList, Location, TextDocumentEdit, WorkspaceEdit } from "vscode-languageserver/node";
 import {
   createMessageConnection,
   IPCMessageReader,
@@ -359,6 +360,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       // LSP capability, so the server must read it from here and not from the
       // paradox initializationOptions.
       capabilities: {
+        workspace: { workspaceEdit: { documentChanges: true } },
         textDocument: {
           completion: {
             completionItem: { snippetSupport: true, documentationFormat: ["markdown", "plaintext"] },
@@ -419,6 +421,175 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fs.rmSync(depDir, { recursive: true, force: true });
   });
 
+  it("separates same-name kinds and refreshes unsaved script definitions and references", async () => {
+    const files: string[] = [];
+    const opened: string[] = [];
+    const write = async (root: string, rel: string, text: string) => {
+      const file = path.join(root, rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "\uFEFF" + text);
+      files.push(file);
+      await conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: toUri(file), type: 1 }],
+      });
+      return toUri(file);
+    };
+    const open = async (uri: string, text: string, languageId = "paradox-ck3") => {
+      opened.push(uri);
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, text, languageId, version: 1 },
+      });
+    };
+    const change = (uri: string, text: string, version: number) =>
+      conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri, version },
+        contentChanges: [{ text }],
+      });
+    const symbol = "px_wire_shared";
+    const body = `${symbol} = { always = yes }`;
+    try {
+      const trigger = await write(modDir, "common/scripted_triggers/px_wire.txt", body);
+      const gui = await write(
+        modDir,
+        "common/scripted_guis/px_wire.txt",
+        `${symbol} = { scope = character }`
+      );
+      await write(depDir, "common/traits/px_wire.txt", "shrewd = { martial = 1 }");
+      await write(
+        modDir,
+        "localization/english/px_wire_l_english.yml",
+        'l_english:\n shrewd:0 "Mod translation"'
+      );
+      const eventText = `namespace = wire\nwire.1 = {\n trigger = { ${symbol} = yes }\n immediate = { random_list = { 10 = { add_trait = shre } } }\n}`;
+      const event = await write(modDir, "events/px_wire.txt", eventText);
+      await open(event, eventText);
+      const request = <T>(method: string, line: number, character: number, extra = {}) =>
+        conn.sendRequest<T>(method, {
+          textDocument: { uri: event },
+          position: { line, character },
+          ...extra,
+        });
+      const complete = () =>
+        request<CompletionList>("textDocument/completion", 3, eventText.split("\n")[3].indexOf("shre") + 4);
+      expect((await complete()).items.map((i) => i.label)).toContain("shrewd");
+      expect(
+        (await request<Location[]>("textDocument/definition", 2, 17)).map((l) =>
+          decodeURIComponent(l.uri).toLowerCase()
+        )
+      ).toEqual([decodeURIComponent(trigger).toLowerCase()]);
+      const guiText = `window = { onclick = "[GetScriptedGui('${symbol}').Execute(GuiScope.End)]" }`;
+      const guiUri = await write(modDir, "gui/px_wire.gui", guiText);
+      await open(guiUri, guiText, "paradox-gui");
+      const guiDefs = await conn.sendRequest<Location[]>("textDocument/definition", {
+        textDocument: { uri: guiUri },
+        position: { line: 0, character: guiText.indexOf(symbol) + 3 },
+      });
+      expect(guiDefs.map((l) => decodeURIComponent(l.uri).toLowerCase())).toEqual([
+        decodeURIComponent(gui).toLowerCase(),
+      ]);
+      const symbols = await conn.sendRequest<Array<{ name: string }>>("workspace/symbol", { query: symbol });
+      expect(symbols.filter((s) => s.name === symbol)).toHaveLength(2);
+
+      await open(trigger, body);
+      const rename = () =>
+        conn.sendRequest<WorkspaceEdit>("textDocument/rename", {
+          textDocument: { uri: trigger },
+          position: { line: 0, character: 4 },
+          newName: "px_wire_renamed",
+        });
+      const edit = (await rename()).documentChanges as TextDocumentEdit[];
+      expect(edit.map((e) => decodeURIComponent(e.textDocument.uri).toLowerCase()).sort()).toEqual(
+        [event, trigger].map((u) => decodeURIComponent(u).toLowerCase()).sort()
+      );
+      expect(edit.every((e) => e.textDocument.version === 1)).toBe(true);
+      const changed = eventText.replace(`${symbol} = yes`, "px_wire_unrelated = yes");
+      await change(event, changed, 2);
+      expect(
+        ((await rename()).documentChanges as TextDocumentEdit[]).map((e) =>
+          decodeURIComponent(e.textDocument.uri).toLowerCase()
+        )
+      ).toEqual([decodeURIComponent(trigger).toLowerCase()]);
+      expect(fs.readFileSync(path.join(modDir, "events/px_wire.txt"), "utf8")).toContain(symbol);
+
+      const trait = await write(modDir, "common/traits/px_wire_unsaved.txt", "shrewd_saved = { }");
+      await open(trait, "shrewd_saved = { }");
+      await change(trait, "shrewd_unsaved = { }", 2);
+      const names = (await complete()).items.map((i) => i.label);
+      expect(names).toContain("shrewd_unsaved");
+      expect(names).not.toContain("shrewd_saved");
+      await conn.sendNotification("textDocument/didClose", { textDocument: { uri: trait } });
+      opened.splice(opened.indexOf(trait), 1);
+      const restored = (await complete()).items.map((i) => i.label);
+      expect(restored).toContain("shrewd_saved");
+      expect(restored).not.toContain("shrewd_unsaved");
+    } finally {
+      for (const uri of opened)
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+      for (const file of files) {
+        fs.unlinkSync(file);
+        await conn.sendNotification("workspace/didChangeWatchedFiles", {
+          changes: [{ uri: toUri(file), type: 3 }],
+        });
+      }
+      await conn.sendRequest("workspace/symbol", { query: "px_wire" });
+    }
+  });
+
+  it("invalidates lazy parent references on edit, creation and deletion", async () => {
+    const file = path.join(depDir, "events", "px_lazy.txt");
+    const second = path.join(depDir, "events", "px_lazy_new.txt");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const name = "smoke_can_pay_trigger";
+    const text = `lazy.1 = {\n trigger = { ${name} = yes }\n}`;
+    const notify = (file: string, type: number) =>
+      conn.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: toUri(file), type }] });
+    const refs = () =>
+      conn.sendRequest<Location[]>("textDocument/references", {
+        textDocument: { uri: eventsUri },
+        position: { line: 26, character: 21 },
+        context: { includeDeclaration: false },
+      });
+    try {
+      fs.writeFileSync(file, text);
+      await notify(file, 1);
+      expect(
+        (await refs())
+          .filter(
+            (l) => decodeURIComponent(l.uri).toLowerCase() === decodeURIComponent(toUri(file)).toLowerCase()
+          )
+          .map((l) => l.range.start.line)
+      ).toEqual([1]);
+      fs.writeFileSync(file, "# moved\n" + text);
+      await notify(file, 2);
+      expect(
+        (await refs())
+          .filter(
+            (l) => decodeURIComponent(l.uri).toLowerCase() === decodeURIComponent(toUri(file)).toLowerCase()
+          )
+          .map((l) => l.range.start.line)
+      ).toEqual([2]);
+      fs.writeFileSync(second, text);
+      await notify(second, 1);
+      expect(
+        (await refs()).some(
+          (l) => decodeURIComponent(l.uri).toLowerCase() === decodeURIComponent(toUri(second)).toLowerCase()
+        )
+      ).toBe(true);
+      fs.unlinkSync(file);
+      await notify(file, 3);
+      expect(
+        (await refs()).some(
+          (l) => decodeURIComponent(l.uri).toLowerCase() === decodeURIComponent(toUri(file)).toLowerCase()
+        )
+      ).toBe(false);
+    } finally {
+      for (const f of [file, second]) {
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+        await notify(f, 3);
+      }
+    }
+  });
+
   it("initialize announces serverInfo (PROTOCOL.md §Initialization)", () => {
     expect(initResult.serverInfo).toEqual({ name: "px-lsp", version: PKG_VERSION });
   });
@@ -472,8 +643,19 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       expect(generated.tokensFromBundledDumps).toBe(false);
       expect(statuses.at(-1)).toEqual(generated);
     } finally {
+      const start = statuses.length;
       await conn.sendNotification("paradox/configChanged", settings);
       await reload();
+      await expect
+        .poll(
+          () => {
+            const updates = statuses.slice(start);
+            const began = updates.findIndex((s) => s.indexing);
+            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
+          },
+          { timeout: 20_000 }
+        )
+        .toBe(true);
       fs.rmSync(logs, { recursive: true, force: true });
     }
   });

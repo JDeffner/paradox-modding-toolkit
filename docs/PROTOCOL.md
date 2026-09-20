@@ -45,6 +45,14 @@ full contract below including `serverInfo` in the `initialize` result, the
   `.yml`), `paradox-gui` (`.gui`). The client decides which files get which
   id; the server keys per-request behavior off it.
 
+### Symbol lookup and rename
+
+Symbol identity includes its definition kind. Source priority applies within each kind, so a mod localization key does not hide a vanilla trait with the same name. Definition and reference requests use the schema and grammar at the cursor when the type is known. Definition results retain all same-kind override sites. Scope inference continues to rank and annotate candidates without removing them.
+
+Open script and localization documents are indexed from their current text. Send `didChange` before requesting completion, navigation or rename; a file watcher does not replace an open document's text. `didClose` restores the saved content or removes an unsaved-only definition. Watcher notifications also invalidate cached reference searches in dependency roots.
+
+For rename, declare standard `capabilities.workspace.workspaceEdit.documentChanges: true` and enforce each returned `TextDocumentEdit.textDocument.version`. Closed files carry a null version. Without this capability, rename returns `WorkspaceEdit.changes` only when all open sources match disk; otherwise the request fails and asks the user to save first. Rename rejects ambiguous symbol types, stale or unreadable source text, read-only targets and a target name already used by that kind. Graphics and GUI symbol types whose reference forms are not fully indexed cannot be renamed. A declaration with several occurrences of its name on one line must be split across lines before rename.
+
 ## Initialization
 
 The `initialize` result carries standard LSP `serverInfo`:
@@ -104,6 +112,8 @@ interface ParadoxSettings {
 `texturePreviewBackground` sets the display background for texture hover thumbnails: `checkerboard` (default), `dark`, `light`, or a six-digit hex color such as `#376694`. Invalid values use checkerboard. The server composites the background into its bounded PNG thumbnail, so clients need no custom hover styling. Changing it through `paradox/configChanged` affects subsequent hovers without rebuilding the index. Source textures are unchanged. VS Code shares this value with its DDS editors through `px.texturePreview.background`; the editor palette updates one workspace preference, and exported PNGs retain their original transparency.
 
 Completion documentation uses the first supported format in `textDocument.completion.completionItem.documentationFormat`, falling back to plain text when none is declared. Plain-text clients receive insertion previews and value hints without Markdown tables or code fences. `paradox/snippetCatalogue` always returns Markdown in its explicitly typed `preview` field, independently of the editor's completion capabilities.
+
+Standard event value completions include proposed localization keys for the current event's title, description and option names where the game profile has a verified convention (CK3 and Victoria 3, including Victoria 3 flavor text). New keys have a `detail` identifying them as new localization keys, with no file edits or client commands. Existing keys retain their definition metadata. Proposals use the current document's event ID and option order, skip names assigned to another option, and do not add entries to the definition index or localization files.
 
 `completionMode` controls ordinary script keyword insertion. `minimal` (the default) inserts the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional, with no example values. `examples` restores full documented blocks and scripted-call parameter snippets. `names` inserts only keyword names. Unknown syntax stays a name in Minimal mode. Explicit definition/child-block snippet items and `paradox/snippets` keep their full templates. Snippet-capable clients receive `CompletionItemKind.Snippet` for generated templates, so the editor shows its snippet icon. Reference/value completions are unchanged. Clients without standard LSP snippet support receive the same punctuation as plain text. Send `paradox/configChanged` to change the mode without restarting or rebuilding the index. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 

@@ -57,7 +57,7 @@ export class PxStatusBar implements vscode.Disposable {
     for (const [key, ready] of Object.entries(onboardingReadiness(s))) {
       void vscode.commands.executeCommand("setContext", key, ready);
     }
-    const healthy = s.gameOk && s.modOk && (s.tigerName === null || s.tigerOk) && s.tokens > 0;
+    const healthy = s.gameOk && s.modOk && s.tokens > 0;
     const running = [...this.phases.values()].some((p) => !p.done);
     this.item.text =
       s.indexing || running
@@ -105,7 +105,9 @@ export class PxStatusBar implements vscode.Disposable {
       `${s.modOk ? "✓" : "✗"} mod folder ${s.modOk ? "found" : "not found"}`
     );
     if (s.tigerName !== null) {
-      lines.push(`${s.tigerOk ? "✓" : "✗"} ${s.tigerName} ${s.tigerOk ? "available" : "not set up"}`);
+      lines.push(
+        `${s.tigerOk ? "✓" : "○"} ${s.tigerName} ${s.tigerOk ? "available" : "optional, not set up"}`
+      );
     }
     // Any phase the server adds later still gets a row, so a new one is never
     // silently dropped; the three above are the ones with a value row.

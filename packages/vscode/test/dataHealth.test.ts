@@ -55,6 +55,7 @@ describe.each([
       workspaceMods: [],
       parentPaths: [],
       tigerPath: "/tiger",
+      isCk3Workspace: true,
     } as unknown as PxConfig;
     const bar = new PxStatusBar();
     // The status item is private; capture the public API that receives the tooltip.
@@ -86,7 +87,7 @@ describe.each([
       expect(reports.at(-1)?.match(new RegExp(expected, "g"))).toHaveLength(2);
       expect(reports.at(-1)).toContain(`script_docs and ${command}`);
       expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toContain(
-        gameId === "eu5" ? "3/3 ready" : "4/4 ready"
+        "ready to edit"
       );
       expect(tooltip.mock.calls.at(-1)?.[0]).toContain(expected);
       expect(tooltip.mock.calls.at(-1)?.[0]).toContain(`script_docs and ${command}`);
@@ -103,15 +104,13 @@ it("keeps failed or incomplete setup unfinished and recognizes an already config
     "px.tigerReady": true,
     "px.dumpsReady": false,
   });
-  for (const incomplete of [
-    { gameOk: false },
-    { modOk: false },
-    { tigerOk: false },
-    { tokens: 0 },
-    { indexing: true },
-  ]) {
+  for (const incomplete of [{ gameOk: false }, { modOk: false }, { tokens: 0 }, { indexing: true }]) {
     expect(onboardingReadiness({ ...ready, ...incomplete })["px.setupReady"]).toBe(false);
   }
+  expect(onboardingReadiness({ ...ready, tigerOk: false })).toMatchObject({
+    "px.setupReady": true,
+    "px.tigerReady": false,
+  });
   expect(onboardingReadiness({ ...ready, tigerName: null, tigerOk: false })).toMatchObject({
     "px.setupReady": true,
     "px.tigerReady": false,

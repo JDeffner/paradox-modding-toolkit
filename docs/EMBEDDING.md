@@ -14,6 +14,14 @@ The wire types are the contract. TypeScript hosts should import them from
 `@px-lsp/protocol/protocol`; everyone else reads `docs/PROTOCOL.md`, which
 mirrors that file method by method.
 
+## Live documents and symbol identity
+
+Send each unsaved script or localization change through `textDocument/didChange` with a new version before requesting language features. The server refreshes definitions and script references from that buffer; closing it restores the saved file. File watcher events update closed files and invalidate cached dependency searches. They do not replace an open buffer.
+
+Definition kinds have independent names and override chains. A localization key and a trait may share a name, as may a scripted GUI and a scripted trigger. Navigation uses the type required at the cursor and still returns the mod, parent and vanilla declarations of that type.
+
+Declare `workspace.workspaceEdit.documentChanges: true` in standard LSP capabilities if the host can enforce document versions when applying rename. The server supplies versions for open files and null for closed files. Without that capability, rename requires open sources to match disk and returns plain `changes`. Show rename errors to the user; do not apply a partial edit after an error. See [the rename contract](PROTOCOL.md#symbol-lookup-and-rename) for unsupported and ambiguous cases.
+
 ## The process contract
 
 ### Spawning
@@ -172,6 +180,8 @@ Declare the supported completion documentation formats in `textDocument.completi
 Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
 The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`, `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in `docs/PROTOCOL.md`. Existing hosts can continue to send the whole settings object through `paradox/configChanged`; omitted fields return to defaults.
+
+Event localization value completion can propose a key before its localization entry exists. CK3 uses `<event ID>.t`, `.desc`, and successive option suffixes `.a` through `.z`; Victoria 3 uses `.t`, `.d`, `.f`, and the same option suffixes. The current unsaved document supplies the event ID and option order. Proposed keys are labelled as new, existing keys keep their definition information, and accepting a suggestion inserts only the reference. The user still supplies its localization text. No new-key convention is assumed for EU5.
 
 For standard LSP updates, send a partial settings object under `pxLsp`. This example changes hover detail without clearing roots, changing the selected game, or rebuilding the index:
 
